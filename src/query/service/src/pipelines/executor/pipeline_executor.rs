@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -21,23 +23,23 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::PlanProfile;
 use log::info;
+use log::warn;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::QueriesPipelineExecutor;
+use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Box<dyn FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
+    Box<dyn FnOnce(&Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 pub struct QueryWrapper {
-    // TODO: will remove it after refactoring queries pipeline executor
-    executor: Arc<QueriesPipelineExecutor>,
     graph: Arc<RunningGraph>,
     settings: ExecutorSettings,
     on_init_callback: Mutex<Option<InitCallback>>,
@@ -54,7 +56,7 @@ pub enum PipelineExecutor {
 
 impl PipelineExecutor {
     pub fn create(mut pipeline: Pipeline, settings: ExecutorSettings) -> Result<Self> {
-        if !settings.enable_new_executor {
+        if !settings.enable_queries_executor {
             Ok(PipelineExecutor::QueryPipelineExecutor(
                 QueryPipelineExecutor::create(pipeline, settings)?,
             ))
@@ -74,7 +76,6 @@ impl PipelineExecutor {
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {
-                executor: QueriesPipelineExecutor::create(settings.clone())?,
                 graph,
                 settings,
                 on_init_callback: Mutex::new(on_init_callback),
@@ -89,7 +90,7 @@ impl PipelineExecutor {
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
     ) -> Result<Self> {
-        if !settings.enable_new_executor {
+        if !settings.enable_queries_executor {
             Ok(PipelineExecutor::QueryPipelineExecutor(
                 QueryPipelineExecutor::from_pipelines(pipelines, settings)?,
             ))
@@ -137,7 +138,6 @@ impl PipelineExecutor {
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {
-                executor: QueriesPipelineExecutor::create(settings.clone())?,
                 graph,
                 settings,
                 on_init_callback: Mutex::new(on_init_callback),
@@ -177,9 +177,7 @@ impl PipelineExecutor {
                     &query_wrapper.on_init_callback,
                     &query_wrapper.settings.query_id,
                 )?;
-                query_wrapper
-                    .executor
-                    .send_graph(query_wrapper.graph.clone())?;
+                GlobalQueriesExecutor::instance().send_graph(query_wrapper.graph.clone())?;
 
                 let (lock, cvar) = &*query_wrapper.finish_condvar_wait;
                 let mut finished = lock.lock();
@@ -188,24 +186,25 @@ impl PipelineExecutor {
                 }
 
                 let may_error = query_wrapper.graph.get_error();
-                match may_error {
+                return match may_error {
                     None => {
                         let guard = query_wrapper.on_finished_callback.lock().take();
                         if let Some(on_finished_callback) = guard {
                             catch_unwind(move || {
-                                on_finished_callback(&Ok(query_wrapper.graph.get_proc_profiles()))
+                                on_finished_callback(&Ok(self.get_plans_profile()))
                             })??;
                         }
+                        Ok(())
                     }
                     Some(cause) => {
                         let guard = query_wrapper.on_finished_callback.lock().take();
+                        let cause_clone = cause.clone();
                         if let Some(on_finished_callback) = guard {
-                            catch_unwind(move || on_finished_callback(&Err(cause)))??;
+                            catch_unwind(move || on_finished_callback(&Err(cause_clone)))??;
                         }
+                        Err(cause)
                     }
-                }
-
-                Ok(())
+                };
             }
         }
     }
@@ -253,6 +252,48 @@ impl PipelineExecutor {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_profiles(),
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
                 query_wrapper.graph.get_proc_profiles()
+            }
+        }
+    }
+
+    pub fn get_plans_profile(&self) -> Vec<PlanProfile> {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_plans_profile(),
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                let mut plans_profile: HashMap<u32, PlanProfile> =
+                    HashMap::<u32, PlanProfile>::new();
+
+                for profile in query_wrapper.graph.get_proc_profiles() {
+                    if let Some(plan_id) = &profile.plan_id {
+                        match plans_profile.entry(*plan_id) {
+                            Entry::Occupied(mut v) => {
+                                v.get_mut().accumulate(&profile);
+                            }
+                            Entry::Vacant(v) => {
+                                let plan_profile = v.insert(PlanProfile::create(&profile));
+
+                                if let Some(metrics_registry) = &profile.metrics_registry {
+                                    match metrics_registry.dump_sample() {
+                                        Ok(metrics) => {
+                                            plan_profile.add_metrics(
+                                                query_wrapper.settings.executor_node_id.clone(),
+                                                metrics,
+                                            );
+                                        }
+                                        Err(error) => {
+                                            warn!(
+                                                "Dump {:?} plan metrics error, cause {:?}",
+                                                plan_profile.name, error
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        };
+                    };
+                }
+
+                plans_profile.into_values().collect::<Vec<_>>()
             }
         }
     }

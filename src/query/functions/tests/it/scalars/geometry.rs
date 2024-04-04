@@ -26,13 +26,21 @@ use crate::scalars::run_ast;
 fn test_geometry() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geometry.txt").unwrap();
+    test_st_geomfromgeohash(file);
     test_st_makeline(file);
     test_st_makepoint(file);
     test_to_string(file);
+    test_st_geometryfromwkb(file);
     test_st_geometryfromwkt(file);
     // test_st_transform(file);
 }
-
+fn test_st_geomfromgeohash(file: &mut impl Write) {
+    run_ast(file, "st_geomfromgeohash('9q60y60rhs')", &[]);
+    run_ast(file, "st_geomfromgeohash(a)", &[(
+        "a",
+        StringType::from_data(vec!["9q60y60rhs", "u4pruydqqvj0"]),
+    )]);
+}
 fn test_st_makeline(file: &mut impl Write) {
     run_ast(
         file,
@@ -71,6 +79,44 @@ fn test_to_string(file: &mut impl Write) {
     run_ast(file, "to_string(st_makegeompoint(a, b))", &[
         ("a", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
         ("b", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
+    ]);
+}
+
+fn test_st_geometryfromwkb(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_geometryfromwkb('0101000020797f000066666666a9cb17411f85ebc19e325641')",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "st_geometryfromwkb('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)",
+        &[],
+    );
+
+    run_ast(file, "st_geometryfromwkb(a, b)", &[
+        (
+            "a",
+            StringType::from_data(vec![
+                "0101000020797f000066666666a9cb17411f85ebc19e325641",
+                "0101000020797f000066666666a9cb17411f85ebc19e325641",
+                "0101000020797f000066666666a9cb17411f85ebc19e325641",
+            ]),
+        ),
+        ("b", Int32Type::from_data(vec![32633, 4326, 3857])),
     ]);
 }
 

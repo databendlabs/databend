@@ -131,9 +131,8 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) 
                     }
 
                     let settings = ctx_cloned.get_settings();
-                    let query_id = ctx_cloned.get_id();
                     build_res.set_max_threads(settings.get_max_threads()? as usize);
-                    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+                    let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
 
                     if build_res.main_pipeline.is_complete_pipeline()? {
                         let mut pipelines = build_res.sources_pipelines;
@@ -159,9 +158,8 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) 
                     }
 
                     let settings = ctx_cloned.get_settings();
-                    let query_id = ctx_cloned.get_id();
                     build_res.set_max_threads(settings.get_max_threads()? as usize);
-                    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+                    let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
 
                     if build_res.main_pipeline.is_complete_pipeline()? {
                         let mut pipelines = build_res.sources_pipelines;
@@ -301,12 +299,8 @@ async fn generate_refresh_virtual_column_plan(
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;
     let catalog = ctx.get_catalog(&desc.catalog).await?;
-    let res = catalog
-        .list_virtual_columns(ListVirtualColumnsReq {
-            tenant: ctx.get_tenant().name().to_string(),
-            table_id: Some(table_info.get_id()),
-        })
-        .await?;
+    let req = ListVirtualColumnsReq::new(ctx.get_tenant(), Some(table_info.get_id()));
+    let res = catalog.list_virtual_columns(req).await?;
 
     if res.is_empty() || res[0].virtual_columns.is_empty() {
         return Ok(None);

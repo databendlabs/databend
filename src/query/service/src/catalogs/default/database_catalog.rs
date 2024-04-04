@@ -26,8 +26,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -478,19 +476,6 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
         self.mutable_catalog.drop_table_index(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
-        if req.tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while count tables)",
-            ));
-        }
-
-        let res = self.mutable_catalog.count_tables(req).await?;
-
-        Ok(res)
     }
 
     #[async_backtrace::framed]

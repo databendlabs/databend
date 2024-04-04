@@ -29,7 +29,6 @@ use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_cache_manager::InvertedIndexFilterMeter;
 use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_table_meta::meta::IndexInfo;
-use databend_storages_common_table_meta::meta::IndexSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
 
@@ -68,11 +67,10 @@ pub async fn load_inverted_index_info(
 pub(crate) async fn load_inverted_index_filter(
     dal: Operator,
     index_loc: String,
-    index_segments: Vec<IndexSegmentInfo>,
 ) -> Result<Arc<InvertedIndexDirectory>> {
     let storage_runtime = GlobalIORuntime::instance();
     let filter = {
-        let reader = InvertedIndexFilter::new(index_loc, dal, index_segments);
+        let reader = InvertedIndexFilter::new(index_loc, dal);
         async move { reader.read().await }
     }
     .execute_in_runtime(&storage_runtime)
@@ -108,15 +106,8 @@ pub struct InvertedIndexFilter {
 }
 
 impl InvertedIndexFilter {
-    pub fn new(
-        index_loc: String,
-        operator: Operator,
-        index_segments: Vec<IndexSegmentInfo>,
-    ) -> Self {
-        let loader = InvertedIndexFilterLoader {
-            operator,
-            index_segments,
-        };
+    pub fn new(index_loc: String, operator: Operator) -> Self {
+        let loader = InvertedIndexFilterLoader { operator };
 
         let cached_reader = CachedReader::new(InvertedIndexDirectory::cache(), loader);
 
@@ -142,7 +133,6 @@ impl InvertedIndexFilter {
 /// Loader read inverted index data and create InvertedIndexDirectory
 pub struct InvertedIndexFilterLoader {
     pub operator: Operator,
-    pub index_segments: Vec<IndexSegmentInfo>,
 }
 
 #[async_trait::async_trait]
@@ -151,7 +141,7 @@ impl Loader<InvertedIndexDirectory> for InvertedIndexFilterLoader {
     async fn load(&self, params: &LoadParams) -> Result<InvertedIndexDirectory> {
         let bytes = self.operator.read_with(&params.location).await?;
 
-        let directory = InvertedIndexDirectory::try_create(bytes, self.index_segments.clone())?;
+        let directory = InvertedIndexDirectory::try_create(bytes)?;
         Ok(directory)
     }
 

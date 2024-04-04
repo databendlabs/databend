@@ -102,6 +102,7 @@ use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::GrantShareObjectPlan;
 use crate::plans::Insert;
+use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
 use crate::plans::MergeInto;
 use crate::plans::ModifyTableColumnPlan;
@@ -176,9 +177,6 @@ pub enum Plan {
         plan: Box<Plan>,
     },
 
-    CopyIntoTable(Box<CopyIntoTablePlan>),
-    CopyIntoLocation(CopyIntoLocationPlan),
-
     // Call is rewrite into Query
     // Call(Box<CallPlan>),
 
@@ -221,10 +219,15 @@ pub enum Plan {
 
     // Insert
     Insert(Box<Insert>),
+    InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
     MergeInto(Box<MergeInto>),
+
+    CopyIntoTable(Box<CopyIntoTablePlan>),
+    CopyIntoLocation(CopyIntoLocationPlan),
+
     // Views
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),

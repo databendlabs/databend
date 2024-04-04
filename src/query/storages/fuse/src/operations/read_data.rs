@@ -34,7 +34,6 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
-use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
 use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
@@ -149,7 +148,6 @@ impl FuseTable {
         put_cache: bool,
     ) -> Result<()> {
         let snapshot_loc = plan.statistics.snapshot.clone();
-        let index_info_locations = plan.statistics.index_info_locations.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
         for part in &plan.parts.partitions {
@@ -170,29 +168,6 @@ impl FuseTable {
 
             // TODO: need refactor
             pipeline.set_on_init(move || {
-                let is_inverted = push_downs
-                    .as_ref()
-                    .map(|p| p.inverted_index.is_some())
-                    .unwrap_or_default();
-                // First create an inverted index pruner, so that it can be
-                // shared among partitions to avoid duplicate index initialize.
-                let inverted_index_pruner = if is_inverted {
-                    let dal = dal.clone();
-                    let push_downs = push_downs.clone();
-                    Runtime::with_default_worker_threads()?.block_on(async move {
-                        let inverted_index_pruner = InvertedIndexPruner::try_create(
-                            dal,
-                            &push_downs,
-                            &index_info_locations,
-                        )
-                        .await?;
-
-                        Result::<_, ErrorCode>::Ok(inverted_index_pruner)
-                    })?
-                } else {
-                    None
-                };
-
                 let table = table.clone();
                 let table_schema = table_schema.clone();
                 let ctx = query_ctx.clone();
@@ -209,7 +184,6 @@ impl FuseTable {
                             table_schema,
                             lazy_init_segments,
                             0,
-                            inverted_index_pruner,
                         )
                         .await?;
 

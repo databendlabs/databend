@@ -193,6 +193,7 @@ build_exceptions! {
     // Index related errors.
     UnsupportedIndex(1601),
     RefreshIndexError(1602),
+    IndexOptionInvalid(1603),
 
     // Cloud control error codes
     CloudControlConnectError(1701),
@@ -352,6 +353,9 @@ build_exceptions! {
     TenantQuotaUnknown(2902),
     TenantQuotaExceeded(2903),
 
+    // Script error codes.
+    ScriptSemanticError(3001),
+    ScriptExecutionError(3002),
 }
 
 // Storage errors [3001, 4000].

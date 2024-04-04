@@ -79,6 +79,25 @@ from
 1
 
 statement ok
+CREATE OR REPLACE TABLE sales (
+    sale_id INT UNSIGNED NOT NULL,
+    product_id INT UNSIGNED NOT NULL,
+    customer_id INT UNSIGNED NOT NULL,
+    sale_date DATE NOT NULL,
+    quantity INT NOT NULL,
+    net_paid DECIMAL(10, 2) NOT NULL
+)
+
+statement ok
+SELECT net_paid,
+      truncate(SUM(net_paid) OVER (PARTITION BY sale_id ORDER BY sale_date), 4)   AS running_sum,
+      truncate(AVG(net_paid) OVER (PARTITION BY sale_id ORDER BY sale_date), 4)   AS running_avg
+FROM sales
+order by net_paid
+    LIMIT 10
+
+
+statement ok
 USE default
 
 statement ok

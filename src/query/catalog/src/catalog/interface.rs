@@ -19,8 +19,6 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -284,8 +282,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply>;
 
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply>;
-
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
 
     async fn get_table_copied_file_info(
         &self,

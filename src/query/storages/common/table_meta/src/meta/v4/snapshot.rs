@@ -87,9 +87,10 @@ pub struct TableSnapshot {
     /// The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
-    /// The index info locations.
-    /// One table may have multiple indexes, the key is the index name.
-    pub index_info_locations: Option<BTreeMap<String, Location>>,
+
+    /// The inverted index infos, key is the index name,
+    /// value is the index info location.
+    pub inverted_indexes: Option<BTreeMap<String, Location>>,
 }
 
 impl TableSnapshot {
@@ -103,7 +104,7 @@ impl TableSnapshot {
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
-        index_info_locations: Option<BTreeMap<String, Location>>,
+        inverted_indexes: Option<BTreeMap<String, Location>>,
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
@@ -124,7 +125,7 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
             table_statistics_location,
-            index_info_locations,
+            inverted_indexes,
         }
     }
 
@@ -157,7 +158,7 @@ impl TableSnapshot {
             clone.segments,
             clone.cluster_key_meta,
             clone.table_statistics_location,
-            clone.index_info_locations,
+            clone.inverted_indexes,
         )
     }
 
@@ -237,7 +238,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            index_info_locations: None,
+            inverted_indexes: None,
         }
     }
 }
@@ -260,7 +261,7 @@ where T: Into<v3::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            index_info_locations: None,
+            inverted_indexes: None,
         }
     }
 }

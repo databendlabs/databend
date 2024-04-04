@@ -1265,6 +1265,7 @@ CreateInvertedIndex(
             },
         ],
         sync_creation: true,
+        index_options: {},
     },
 )
 
@@ -4518,7 +4519,7 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH DEFAULT_ROLE = role1;
+ALTER USER u1 WITH default_role = role1;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
 ---------- AST ------------

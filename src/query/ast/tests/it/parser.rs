@@ -179,7 +179,7 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int default 1);"#,
         r#"create table abc as (select * from xyz limit 10)"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
-        r#"ALTER USER u1 WITH DEFAULT_ROLE = role1;"#,
+        r#"ALTER USER u1 WITH default_role = role1;"#,
         r#"ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;"#,
         r#"ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';"#,
         r#"ALTER USER u1 WITH UNSET NETWORK POLICY;"#,
@@ -699,6 +699,7 @@ fn test_statement_error() {
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
+        r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
@@ -782,7 +783,7 @@ fn test_statement_error() {
 #[test]
 fn test_raw_insert_stmt() {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("raw_insert.txt").unwrap();
+    let file = &mut mint.new_goldenfile("raw-insert.txt").unwrap();
     let cases = &[
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
@@ -978,9 +979,58 @@ fn test_expr() {
 }
 
 #[test]
-fn test_experimental_expr() {
+fn test_expr_error() {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("experimental-expr.txt").unwrap();
+    let file = &mut mint.new_goldenfile("expr-error.txt").unwrap();
+
+    let cases = &[
+        r#"5 * (a and ) 1"#,
+        r#"a + +"#,
+        r#"CAST(col1 AS foo)"#,
+        r#"1 a"#,
+        r#"CAST(col1)"#,
+        r#"a.add(b)"#,
+        r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
+        r#"
+            G.E.B IS NOT NULL
+            AND col1 NOT BETWEEN col2 AND
+            AND 1 + col3 DIV sum(col4)
+        "#,
+    ];
+
+    for case in cases {
+        run_parser(file, expr, case);
+    }
+}
+
+#[test]
+fn test_dialect() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("dialect.txt").unwrap();
+
+    let cases = &[
+        r#"'a'"#,
+        r#""a""#,
+        r#"`a`"#,
+        r#"'a''b'"#,
+        r#"'a""b'"#,
+        r#"'a\'b'"#,
+        r#"'a"b'"#,
+        r#"'a`b'"#,
+        r#""a''b""#,
+        r#""a""b""#,
+        r#""a'b""#,
+        r#""a\"b""#,
+        r#""a`b""#,
+    ];
+
+    for case in cases {
+        run_parser_with_dialect(file, expr, Dialect::PostgreSQL, ParseMode::Default, case);
+    }
+
+    for case in cases {
+        run_parser_with_dialect(file, expr, Dialect::MySQL, ParseMode::Default, case);
+    }
 
     let cases = &[
         r#"a"#,
@@ -995,31 +1045,6 @@ fn test_experimental_expr() {
 
     for case in cases {
         run_parser_with_dialect(file, expr, Dialect::Experimental, ParseMode::Default, case);
-    }
-}
-
-#[test]
-fn test_expr_error() {
-    let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("expr-error.txt").unwrap();
-
-    let cases = &[
-        r#"5 * (a and ) 1"#,
-        r#"a + +"#,
-        r#"CAST(col1 AS foo)"#,
-        r#"1 a"#,
-        r#"CAST(col1)"#,
-        r#"a.add(b)"#,
-        r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
-        r#"
-            G.E.B IS NOT NULL AND
-                col1 NOT BETWEEN col2 AND
-                    AND 1 + col3 DIV sum(col4)
-        "#,
-    ];
-
-    for case in cases {
-        run_parser(file, expr, case);
     }
 }
 

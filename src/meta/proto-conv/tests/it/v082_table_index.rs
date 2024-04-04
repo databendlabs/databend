@@ -94,7 +94,9 @@ fn test_decode_v82_table_meta() -> anyhow::Result<()> {
         indexes: btreemap! {s("idx1") => mt::TableIndex {
             name: "idx1".to_string(),
             column_ids: vec![1, 2],
-            sync_creation: false
+            sync_creation: false,
+            version: "".to_string(),
+            options: btreemap! {},
         }},
     };
     common::test_pb_from_to(func_name!(), want())?;

@@ -281,6 +281,12 @@ pub struct TableIndex {
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
     pub sync_creation: bool,
+    // if the index columns or options change,
+    // the index data needs to be regenerated,
+    // version is used to identify each change.
+    pub version: String,
+    // index options specify the index configs, like tokenizer.
+    pub options: BTreeMap<String, String>,
 }
 
 impl TableMeta {
@@ -749,24 +755,33 @@ pub struct CreateTableIndexReq {
     pub name: String,
     pub column_ids: Vec<u32>,
     pub sync_creation: bool,
+    pub options: BTreeMap<String, String>,
 }
 
 impl Display for CreateTableIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
             CreateOption::Create => {
-                write!(f, "create_table_index:{}={:?}", self.name, self.column_ids)
+                write!(
+                    f,
+                    "create_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
             }
-            CreateOption::CreateIfNotExists => write!(
-                f,
-                "create_table_index_if_not_exists:{}={:?}",
-                self.name, self.column_ids
-            ),
-            CreateOption::CreateOrReplace => write!(
-                f,
-                "create_or_replace_table_index:{}={:?}",
-                self.name, self.column_ids
-            ),
+            CreateOption::CreateIfNotExists => {
+                write!(
+                    f,
+                    "create_table_index_if_not_exists: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
+            }
+            CreateOption::CreateOrReplace => {
+                write!(
+                    f,
+                    "create_or_replace_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
+            }
         }
     }
 }
@@ -896,36 +911,6 @@ pub struct GcDroppedTableReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GcDroppedTableResp {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct CountTablesKey {
-    pub tenant: String,
-}
-
-impl Display for CountTablesKey {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'", self.tenant)
-    }
-}
-
-impl CountTablesKey {
-    pub fn new(tenant: impl ToString) -> Self {
-        Self {
-            tenant: tenant.to_string(),
-        }
-    }
-}
-
-/// count tables for a tenant
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CountTablesReq {
-    pub tenant: String,
-}
-
-#[derive(Debug)]
-pub struct CountTablesReply {
-    pub count: u64,
-}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TableIdToName {
     pub table_id: u64,
@@ -991,7 +976,6 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::primitive::Id;
-    use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
     use crate::schema::LeastVisibleTime;
@@ -1113,29 +1097,31 @@ mod kvapi_key_impl {
         }
     }
 
+    /// Reserved removed key, never reused:
     /// "__fd_table_count/<tenant>" -> <table_count>
+    ///
+    /// It was used for count number of tables belonging to a tenant
+    #[derive(Debug)]
+    struct CountTablesKey {
+        #[allow(dead_code)]
+        tenant: Tenant,
+    }
+
     impl kvapi::Key for CountTablesKey {
         const PREFIX: &'static str = "__fd_table_count";
 
         type ValueType = Id;
 
         fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+            None
         }
 
         fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_raw(&self.tenant)
-                .done()
+            unimplemented!("removed and reserved")
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            p.done()?;
-
-            Ok(CountTablesKey { tenant })
+        fn from_str_key(_s: &str) -> Result<Self, kvapi::KeyError> {
+            unimplemented!("removed and reserved")
         }
     }
 

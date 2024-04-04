@@ -199,33 +199,6 @@ where R: Read + Unpin + Send {
     })
 }
 
-pub struct IndexHeader {
-    pub version: u64,
-    pub encoding: MetaEncoding,
-    pub compression: MetaCompression,
-    pub schema_size: u64,
-    pub indexes_size: u64,
-    pub indexed_segments_size: u64,
-}
-
-pub fn decode_index_header<R>(reader: &mut R) -> Result<IndexHeader>
-where R: Read + Unpin + Send {
-    let version = reader.read_scalar::<u64>()?;
-    let encoding = MetaEncoding::try_from(reader.read_scalar::<u8>()?)?;
-    let compression = MetaCompression::try_from(reader.read_scalar::<u8>()?)?;
-    let schema_size: u64 = reader.read_scalar::<u64>()?;
-    let indexes_size: u64 = reader.read_scalar::<u64>()?;
-    let indexed_segments_size: u64 = reader.read_scalar::<u64>()?;
-    Ok(IndexHeader {
-        version,
-        encoding,
-        compression,
-        schema_size,
-        indexes_size,
-        indexed_segments_size,
-    })
-}
-
 pub async fn load_json<T>(bytes: &[u8], _v: &PhantomData<T>) -> Result<T>
 where T: DeserializeOwned {
     Ok(serde_json::from_slice::<T>(bytes)?)

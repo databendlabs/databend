@@ -29,9 +29,9 @@ use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
 use databend_storages_common_txn::TxnManagerRef;
 use futures::StreamExt;
+use log::debug;
 use log::error;
 use log::info;
-use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
@@ -223,10 +223,18 @@ impl Executor {
     pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         {
             let guard = this.read().await;
-            warn!(
-                "{}: http query change state to Stopped, reason {:?}",
-                &guard.query_id, reason
-            );
+            if let Stopped(s) = &guard.state {
+                debug!(
+                    "{}: http query already stopped, reason {:?}, new reason {:?}",
+                    &guard.query_id, s.reason, reason
+                );
+                return;
+            } else {
+                info!(
+                    "{}: http query change state to Stopped, reason {:?}",
+                    &guard.query_id, reason
+                );
+            }
         }
 
         let mut guard = this.write().await;
@@ -279,12 +287,7 @@ impl Executor {
                     affect: r.ctx.get_affect(),
                 }))
             }
-            Stopped(s) => {
-                warn!(
-                    "{}: http query already stopped, reason {:?}, new reason {:?}",
-                    &guard.query_id, s.reason, reason
-                );
-            }
+            Stopped(_) => {}
         }
     }
 }
@@ -299,19 +302,34 @@ impl ExecuteState {
         block_sender: SizedChannelSender<DataBlock>,
         format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
     ) -> Result<()> {
-        let entry = QueryEntry::create(&ctx)?;
-        let queue_guard = QueriesQueueManager::instance().acquire(entry).await?;
+        info!("{}: http query prepare to plan sql", &ctx.get_id());
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, _) = interpreter_plan_sql(ctx.clone(), &sql)
+        let (plan, extras) = interpreter_plan_sql(ctx.clone(), &sql)
             .await
             .map_err(|err| err.display_with_sql(&sql))?;
 
+        let query_queue_manager = QueriesQueueManager::instance();
+
+        info!(
+            "{}: http query preparing to acquire from query queue, length: {}",
+            &ctx.get_id(),
+            query_queue_manager.length()
+        );
+
+        let entry = QueryEntry::create(&ctx, &plan, &extras)?;
+        let queue_guard = query_queue_manager.acquire(entry).await?;
         {
             // set_var may change settings
             let mut guard = format_settings.write();
             *guard = Some(ctx.get_format_settings()?);
         }
+        info!(
+            "{}: http query finished acquiring from queue, length: {}",
+            &ctx.get_id(),
+            query_queue_manager.length()
+        );
+
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let running_state = ExecuteRunning {
             session,
