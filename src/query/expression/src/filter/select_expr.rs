@@ -64,7 +64,9 @@ impl SelectExprBuilder {
                 ..
             } => {
                 let func_name = function.signature.name.as_str();
-                if matches!(func_name, "and" | "and_filters") || func_name == "or" && not {
+                if !not && matches!(func_name, "and" | "and_filters")
+                    || not && matches!(func_name, "or")
+                {
                     let mut and_args = vec![];
                     let mut has_or = false;
                     let mut can_reorder = true;
@@ -87,7 +89,9 @@ impl SelectExprBuilder {
                     SelectExprBuildResult::new(select_expr)
                         .has_or(has_or)
                         .can_push_down_not(can_push_down_not)
-                } else if func_name == "or" || matches!(func_name, "and" | "and_filters") && not {
+                } else if !not && matches!(func_name, "or")
+                    || not && matches!(func_name, "and" | "and_filters")
+                {
                     let mut or_args = vec![];
                     let mut can_reorder = true;
                     let mut can_push_down_not = true;
