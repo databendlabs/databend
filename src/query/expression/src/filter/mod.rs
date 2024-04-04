@@ -21,8 +21,8 @@ mod select_value;
 mod selector;
 
 pub use filter_executor::FilterExecutor;
-pub use select_expr::build_select_expr;
 pub use select_expr::SelectExpr;
+pub use select_expr::SelectExprBuilder;
 pub use select_op::SelectOp;
 pub use selector::SelectStrategy;
 pub use selector::Selector;

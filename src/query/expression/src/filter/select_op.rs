@@ -52,6 +52,18 @@ impl SelectOp {
             SelectOp::Lte => SelectOp::Gte,
         }
     }
+
+    #[inline]
+    pub fn not(&self) -> Self {
+        match &self {
+            SelectOp::Equal => SelectOp::Equal,
+            SelectOp::NotEqual => SelectOp::NotEqual,
+            SelectOp::Gt => SelectOp::Lte,
+            SelectOp::Lt => SelectOp::Gte,
+            SelectOp::Gte => SelectOp::Lt,
+            SelectOp::Lte => SelectOp::Gt,
+        }
+    }
 }
 
 #[macro_export]
