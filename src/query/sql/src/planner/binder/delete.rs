@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::DeleteStmt;
@@ -36,10 +37,11 @@ use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::RelOperator::Filter as RelOperatorFilter;
 use crate::plans::RelOperator::Scan;
 use crate::plans::SubqueryDesc;
 use crate::plans::SubqueryExpr;
-use crate::plans::VisitorWithParent;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -51,16 +53,17 @@ impl<'a> Binder {
         filter: &'a Option<Expr>,
         table_expr: SExpr,
         scalar_binder: &mut ScalarBinder<'_>,
-    ) -> Result<(Option<ScalarExpr>, Vec<SubqueryDesc>)> {
-        Ok(if let Some(expr) = filter {
+    ) -> Result<(Option<ScalarExpr>, Option<SubqueryDesc>)> {
+        if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            let mut subquery_desc = vec![];
-            self.subquery_desc(&scalar, table_expr, &mut subquery_desc)
-                .await?;
-            (Some(scalar), subquery_desc)
+            if !self.has_subquery_in_selection(&scalar)? {
+                return Ok((None, None));
+            }
+            let subquery_desc = self.process_subquery(scalar.clone(), table_expr).await?;
+            Ok((Some(scalar), Some(subquery_desc)))
         } else {
-            (None, vec![])
-        })
+            Ok((None, None))
+        }
     }
 
     #[async_backtrace::framed]
@@ -128,47 +131,39 @@ impl<'a> Binder {
 }
 
 impl Binder {
+    // The method will find all subquery in filter
+    fn has_subquery_in_selection(&self, scalar: &ScalarExpr) -> Result<bool> {
+        struct FindSubqueryVisitor {
+            found_subquery: bool,
+        }
+
+        impl<'a> Visitor<'a> for FindSubqueryVisitor {
+            fn visit_subquery(&mut self, _subquery: &'a SubqueryExpr) -> Result<()> {
+                self.found_subquery = true;
+                Ok(())
+            }
+        }
+
+        let mut find_subquery = FindSubqueryVisitor {
+            found_subquery: false,
+        };
+        find_subquery.visit(scalar)?;
+
+        Ok(find_subquery.found_subquery)
+    }
+
     #[async_backtrace::framed]
     async fn process_subquery(
         &self,
-        parent: Option<&ScalarExpr>,
-        subquery_expr: &SubqueryExpr,
+        predicate: ScalarExpr,
         mut table_expr: SExpr,
     ) -> Result<SubqueryDesc> {
-        let predicate = if subquery_expr.data_type()
-            == DataType::Nullable(Box::new(DataType::Boolean))
-        {
-            subquery_expr.clone().into()
-        } else if let Some(scalar) = parent {
-            if let Ok(data_type) = scalar.data_type() {
-                if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
-                    scalar.clone()
-                } else {
-                    return Err(ErrorCode::from_string(
-                        "subquery data type in delete/update statement should be boolean"
-                            .to_string(),
-                    ));
-                }
-            } else {
-                return Err(ErrorCode::from_string(
-                    "subquery data type in delete/update statement should be boolean".to_string(),
-                ));
-            }
-        } else {
-            return Err(ErrorCode::from_string(
-                "subquery data type in delete/update statement should be boolean".to_string(),
-            ));
-        };
-
-        let mut outer_columns = Default::default();
-        if let Some(child_expr) = &subquery_expr.child_expr {
-            outer_columns = child_expr.used_columns();
-        };
-        outer_columns.extend(subquery_expr.outer_columns.iter());
+        let mut outer_columns: HashSet<usize> = Default::default();
 
         let filter = Filter {
-            predicates: vec![predicate],
+            predicates: vec![predicate.clone()],
         };
+
         debug_assert_eq!(table_expr.plan.rel_op(), RelOp::Scan);
         let mut scan = match &*table_expr.plan {
             Scan(scan) => scan.clone(),
@@ -201,12 +196,17 @@ impl Binder {
         // Add row_id column to scan's column set
         scan.columns.insert(row_id_index.unwrap());
         table_expr.plan = Arc::new(Scan(scan.clone()));
-
         let filter_expr =
             SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr.clone()));
         let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
         let filter_expr = rewriter.rewrite(&filter_expr)?;
 
+        let subquery_filter = match &*filter_expr.plan {
+            RelOperatorFilter(filter) => filter.predicates[0].clone(),
+            _ => unreachable!(),
+        };
+
+        // join the result
         // _row_id
         let row_id_column_binding = ColumnBinding {
             database_name: None,
@@ -239,7 +239,7 @@ impl Binder {
         // use filter children as join right child, and add filter predicate result into outer_columns
         let input_expr = SExpr::create_binary(
             Arc::new(join),
-            Arc::new(table_expr),
+            Arc::new(table_expr.clone()),
             Arc::new(filter_expr.children[0].as_ref().clone()),
         );
         let predicate_columns = if let RelOperator::Filter(filter) = filter_expr.plan.as_ref() {
@@ -249,18 +249,6 @@ impl Binder {
                 "subquery data type in delete/update statement should be boolean".to_string(),
             ));
         };
-        let (marker_index, from_correlated_subquery, subquery_join_type) =
-            if let RelOperator::Join(join) = filter_expr.children[0].plan.as_ref() {
-                (
-                    join.marker_index,
-                    join.from_correlated_subquery,
-                    join.join_type.clone(),
-                )
-            } else {
-                return Err(ErrorCode::from_string(
-                    "subquery should be a join operation".to_string(),
-                ));
-            };
 
         // add all table columns into outer columns
         let metadata = self.metadata.read();
@@ -270,61 +258,14 @@ impl Binder {
                 outer_columns.insert(column.column_index);
             }
         }
-        let predicate_with_marker = marker_index.map_or(false, |marker_index| {
-            predicate_columns.contains(&marker_index) || outer_columns.contains(&marker_index)
-        });
 
         Ok(SubqueryDesc {
             input_expr,
+            table_expr: filter_expr.children[0].as_ref().clone(),
             outer_columns,
             predicate_columns,
             index: row_id_index.unwrap(),
-            compare_op: subquery_expr.compare_op,
-            typ: subquery_expr.typ.clone(),
-            predicate_with_marker,
-            from_correlated_subquery,
-            subquery_join_type,
+            filter: subquery_filter,
         })
-    }
-
-    // The method will find all subquery in filter
-    #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
-    async fn subquery_desc(
-        &self,
-        scalar: &ScalarExpr,
-        table_expr: SExpr,
-        subquery_desc: &mut Vec<SubqueryDesc>,
-    ) -> Result<()> {
-        struct FindSubqueryVisitor<'a> {
-            subqueries: Vec<(Option<&'a ScalarExpr>, &'a SubqueryExpr)>,
-        }
-
-        impl<'a> VisitorWithParent<'a> for FindSubqueryVisitor<'a> {
-            fn visit_subquery(
-                &mut self,
-                parent: Option<&'a ScalarExpr>,
-                current: &'a ScalarExpr,
-                subquery: &'a SubqueryExpr,
-            ) -> Result<()> {
-                self.subqueries.push((parent, subquery));
-                if let Some(child_expr) = subquery.child_expr.as_ref() {
-                    self.visit_with_parent(Some(current), child_expr)?;
-                }
-                Ok(())
-            }
-        }
-
-        let mut find_subquery = FindSubqueryVisitor { subqueries: vec![] };
-        find_subquery.visit(scalar)?;
-
-        for subquery in find_subquery.subqueries {
-            let desc = self
-                .process_subquery(subquery.0, subquery.1, table_expr.clone())
-                .await?;
-            subquery_desc.push(desc);
-        }
-
-        Ok(())
     }
 }

@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::ComparisonOp;
-use super::JoinType;
-use super::SubqueryType;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
@@ -24,16 +21,11 @@ use crate::MetadataRef;
 #[derive(Clone, Debug)]
 pub struct SubqueryDesc {
     pub input_expr: SExpr,
+    pub table_expr: SExpr,
     pub outer_columns: ColumnSet,
     pub predicate_columns: ColumnSet,
     pub index: IndexType,
-    // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
-    pub compare_op: Option<ComparisonOp>,
-    pub typ: SubqueryType,
-    // true if `marker` column in `predicate_columns` or `outer_columns`
-    pub predicate_with_marker: bool,
-    pub from_correlated_subquery: bool,
-    pub subquery_join_type: JoinType,
+    pub filter: ScalarExpr,
 }
 
 #[derive(Clone, Debug)]
@@ -43,5 +35,5 @@ pub struct DeletePlan {
     pub table_name: String,
     pub metadata: MetadataRef,
     pub selection: Option<ScalarExpr>,
-    pub subquery_desc: Vec<SubqueryDesc>,
+    pub subquery_desc: Option<SubqueryDesc>,
 }

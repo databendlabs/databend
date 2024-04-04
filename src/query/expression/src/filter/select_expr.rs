@@ -35,6 +35,40 @@ pub enum SelectExpr {
     BooleanScalar((Scalar, DataType)),
 }
 
+impl SelectExpr {
+    pub fn num_referenced_columns(&self) -> usize {
+        match self {
+            SelectExpr::And((select_exprs, _)) => select_exprs
+                .iter()
+                .map(|select_expr| select_expr.num_referenced_columns())
+                .sum(),
+            SelectExpr::Or((select_exprs, _)) => select_exprs
+                .iter()
+                .map(|select_expr| select_expr.num_referenced_columns())
+                .sum(),
+            SelectExpr::Compare((_, exprs, _)) => {
+                exprs.iter().map(SelectExpr::count_referenced_columns).sum()
+            }
+            SelectExpr::Others(expr) => SelectExpr::count_referenced_columns(expr),
+            _ => 1,
+        }
+    }
+
+    fn count_referenced_columns(expr: &Expr) -> usize {
+        match expr {
+            Expr::FunctionCall { args, .. } => {
+                args.iter().map(SelectExpr::count_referenced_columns).sum()
+            }
+            Expr::LambdaFunctionCall { args, .. } => {
+                args.iter().map(SelectExpr::count_referenced_columns).sum()
+            }
+            // ignore Constant expr
+            Expr::Constant { .. } => 0,
+            _ => 1,
+        }
+    }
+}
+
 pub struct SelectExprBuildResult {
     select_expr: SelectExpr,
     has_or: bool,

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
@@ -35,8 +34,6 @@ use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::Exchange;
@@ -44,27 +41,20 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::optimizer::optimize_query;
-use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::plans::SubqueryDesc;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SubqueryMutation;
-use databend_common_storages_fuse::operations::TableMutationAggregator;
-use databend_common_storages_fuse::operations::TransformMutationSubquery;
-use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::create_push_down_filters;
+use crate::interpreters::modify_by_subquery;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -116,7 +106,7 @@ impl Interpreter for UpdateInterpreter {
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
-        if !self.plan.subquery_desc.is_empty() {
+        if let Some(subquery_desc) = &self.plan.subquery_desc {
             let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
                 return Err(ErrorCode::from_string(format!(
@@ -125,7 +115,17 @@ impl Interpreter for UpdateInterpreter {
                 )));
             }
 
-            let mut build_res = self.update_by_subquery(tbl.clone()).await?;
+            let table = FuseTable::try_from_table(tbl.as_ref())?;
+            let operators = self.generate_operators(table, subquery_desc)?;
+
+            let mut build_res = modify_by_subquery(
+                tbl.clone(),
+                subquery_desc.clone(),
+                self.plan.metadata.clone(),
+                self.ctx.clone(),
+                SubqueryMutation::Update(operators.clone()),
+            )
+            .await?;
             build_res.main_pipeline.add_lock_guard(lock_guard);
             return Ok(build_res);
         }
@@ -160,12 +160,12 @@ impl Interpreter for UpdateInterpreter {
 }
 
 impl UpdateInterpreter {
-    fn generate_operators(&self, table: &FuseTable) -> Result<Vec<BlockOperator>> {
-        let mut col_indices: Vec<usize> = self.plan.subquery_desc[0]
-            .outer_columns
-            .clone()
-            .into_iter()
-            .collect();
+    fn generate_operators(
+        &self,
+        table: &FuseTable,
+        subquery_desc: &SubqueryDesc,
+    ) -> Result<Vec<BlockOperator>> {
+        let mut col_indices: Vec<usize> = subquery_desc.outer_columns.clone().into_iter().collect();
         col_indices.sort();
         debug_assert!(!col_indices.is_empty());
 
@@ -276,111 +276,8 @@ impl UpdateInterpreter {
         Ok(ops)
     }
 
-    async fn update_by_subquery(&self, table: Arc<dyn Table>) -> Result<PipelineBuildResult> {
-        let subquery_desc = &self.plan.subquery_desc[0];
-        let input_expr = &subquery_desc.input_expr;
-        let mut outer_columns = subquery_desc.outer_columns.clone();
-        outer_columns.extend(subquery_desc.predicate_columns.iter());
-        let ctx = &self.ctx;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot = if let Some(snapshot) = table.read_table_snapshot().await? {
-            snapshot
-        } else {
-            return Err(ErrorCode::from_string(format!(
-                "read table {:?} snapshot failed",
-                table.name()
-            )));
-        };
-
-        let operators = self.generate_operators(table)?;
-
-        // 1. build sub query join input
-        let mut builder =
-            PhysicalPlanBuilder::new(self.plan.metadata.clone(), self.ctx.clone(), false);
-        let opt_ctx = OptimizerContext::new(ctx.clone(), self.plan.metadata.clone())
-            .with_enable_distributed_optimization(false)
-            .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
-            .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
-
-        let input_expr = optimize_query(opt_ctx, input_expr.clone())?;
-        let join_input = builder.build(&input_expr, outer_columns).await?;
-
-        let pipeline_builder = PipelineBuilder::create(
-            ctx.get_function_context()?,
-            ctx.get_settings(),
-            ctx.clone(),
-            vec![],
-        );
-        let mut build_res = pipeline_builder.finalize(&join_input)?;
-
-        // 2. add TransformMutationSubquery
-        build_res.main_pipeline.add_transform(|input, output| {
-            TransformMutationSubquery::try_create(
-                ctx.get_function_context()?,
-                input,
-                output,
-                SubqueryMutation::Update(operators.clone()),
-                subquery_desc.clone(),
-            )?
-            .into_processor()
-        })?;
-
-        // 3. add TransformSerializeBlock
-        let block_thresholds = table.get_block_thresholds();
-        let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
-        build_res.main_pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::try_create(
-                ctx.clone(),
-                input,
-                output,
-                table,
-                cluster_stats_gen.clone(),
-                MutationKind::Replace,
-            )?;
-            proc.into_processor()
-        })?;
-
-        // 4. add TransformSerializeSegment
-        build_res.main_pipeline.try_resize(1)?;
-        build_res.main_pipeline.add_transform(|input, output| {
-            let proc =
-                TransformSerializeSegment::new(ctx.clone(), input, output, table, block_thresholds);
-            proc.into_processor()
-        })?;
-
-        // 5. add TableMutationAggregator
-        build_res.main_pipeline.add_transform(|input, output| {
-            let aggregator =
-                TableMutationAggregator::new(table, ctx.clone(), vec![], MutationKind::Replace);
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input, output, aggregator,
-            )))
-        })?;
-
-        // 6. add CommitSink
-        let snapshot_gen = MutationGenerator::new(snapshot, true);
-        let lock = None;
-        build_res.main_pipeline.add_sink(|input| {
-            databend_common_storages_fuse::operations::CommitSink::try_create(
-                table,
-                ctx.clone(),
-                None,
-                vec![],
-                snapshot_gen.clone(),
-                input,
-                None,
-                lock.clone(),
-                None,
-                None,
-            )
-        })?;
-
-        Ok(build_res)
-    }
-
     pub async fn get_physical_plan(&self) -> Result<Option<PhysicalPlan>> {
-        debug_assert!(self.plan.subquery_desc.is_empty());
+        debug_assert!(self.plan.subquery_desc.is_none());
 
         let catalog_name = self.plan.catalog.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -409,15 +306,7 @@ impl UpdateInterpreter {
                 ));
             }
 
-            let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
-                let mut col_indices = HashSet::new();
-                for subquery_desc in &self.plan.subquery_desc {
-                    col_indices.extend(subquery_desc.outer_columns.iter());
-                }
-                col_indices.into_iter().collect()
-            } else {
-                scalar.used_columns().into_iter().collect()
-            };
+            let col_indices: Vec<usize> = scalar.used_columns().into_iter().collect();
             (Some(filters), col_indices)
         } else {
             (None, vec![])

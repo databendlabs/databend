@@ -21,6 +21,10 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::build_select_expr;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -36,6 +40,11 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::optimize_query;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::Filter;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::SubqueryDesc;
+use databend_common_sql::MetadataRef;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SubqueryMutation;
@@ -109,7 +118,7 @@ impl Interpreter for DeleteInterpreter {
         // check mutability
         tbl.check_mutable()?;
 
-        if !self.plan.subquery_desc.is_empty() {
+        if let Some(subquery_desc) = &self.plan.subquery_desc {
             let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
                 return Err(ErrorCode::from_string(format!(
@@ -118,9 +127,15 @@ impl Interpreter for DeleteInterpreter {
                 )));
             }
 
-            let mut build_res = self.delete_by_subquery(tbl.clone()).await?;
+            let mut build_res = modify_by_subquery(
+                tbl.clone(),
+                subquery_desc.clone(),
+                self.plan.metadata.clone(),
+                self.ctx.clone(),
+                SubqueryMutation::Delete,
+            )
+            .await?;
             build_res.main_pipeline.add_lock_guard(lock_guard);
-
             return Ok(build_res);
         }
 
@@ -240,108 +255,126 @@ impl Interpreter for DeleteInterpreter {
     }
 }
 
-impl DeleteInterpreter {
-    async fn delete_by_subquery(&self, table: Arc<dyn Table>) -> Result<PipelineBuildResult> {
-        let subquery_desc = &self.plan.subquery_desc[0];
-        let input_expr = &subquery_desc.input_expr;
-        let mut outer_columns = subquery_desc.outer_columns.clone();
-        outer_columns.extend(subquery_desc.predicate_columns.iter());
-        let ctx = &self.ctx;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot = if let Some(snapshot) = table.read_table_snapshot().await? {
-            snapshot
-        } else {
-            return Err(ErrorCode::from_string(format!(
-                "read table {:?} snapshot failed",
-                table.name()
-            )));
-        };
+pub async fn modify_by_subquery(
+    table: Arc<dyn Table>,
+    subquery_desc: SubqueryDesc,
+    metadata: MetadataRef,
+    ctx: Arc<QueryContext>,
+    typ: SubqueryMutation,
+) -> Result<PipelineBuildResult> {
+    let mut subquery_desc = subquery_desc;
+    subquery_desc
+        .outer_columns
+        .extend(subquery_desc.predicate_columns.iter());
 
-        // 1. build sub query join input
-        let mut builder =
-            PhysicalPlanBuilder::new(self.plan.metadata.clone(), self.ctx.clone(), false);
-        let opt_ctx = OptimizerContext::new(ctx.clone(), self.plan.metadata.clone())
-            .with_enable_distributed_optimization(false)
-            .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
-            .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
+    // optimize subquery expression
+    let input_expr = &subquery_desc.input_expr;
+    let outer_columns = &subquery_desc.outer_columns;
+    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
+        .with_enable_distributed_optimization(false)
+        .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
+        .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
+    let input_expr = optimize_query(opt_ctx, input_expr.clone())?;
 
-        let input_expr = optimize_query(opt_ctx, input_expr.clone())?;
-        let join_input = builder.build(&input_expr, outer_columns).await?;
+    // first: build filter executor
+    let filter_executor = build_filter_executor(
+        subquery_desc.clone(),
+        metadata.clone(),
+        input_expr.clone(),
+        ctx.clone(),
+    )
+    .await?;
 
-        let pipeline_builder = PipelineBuilder::create(
+    let table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = if let Some(snapshot) = table.read_table_snapshot().await? {
+        snapshot
+    } else {
+        return Err(ErrorCode::from_string(format!(
+            "read table {:?} snapshot failed",
+            table.name()
+        )));
+    };
+
+    // second: build pipelines
+
+    // 2.1. build sub query join input
+    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+    let join_input = builder.build(&input_expr, outer_columns.clone()).await?;
+
+    let pipeline_builder = PipelineBuilder::create(
+        ctx.get_function_context()?,
+        ctx.get_settings(),
+        ctx.clone(),
+        vec![],
+    );
+    let mut build_res = pipeline_builder.finalize(&join_input)?;
+
+    // 2.2. add TransformMutationSubquery
+    build_res.main_pipeline.add_transform(|input, output| {
+        TransformMutationSubquery::try_create(
             ctx.get_function_context()?,
-            ctx.get_settings(),
+            input,
+            output,
+            typ.clone(),
+            filter_executor.clone(),
+        )?
+        .into_processor()
+    })?;
+
+    // 3. add TransformSerializeBlock
+    let block_thresholds = table.get_block_thresholds();
+    let cluster_stats_gen = table.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, None)?;
+    build_res.main_pipeline.add_transform(|input, output| {
+        let proc = TransformSerializeBlock::try_create(
             ctx.clone(),
+            input,
+            output,
+            table,
+            cluster_stats_gen.clone(),
+            MutationKind::Replace,
+        )?;
+        proc.into_processor()
+    })?;
+
+    // 4. add TransformSerializeSegment
+    build_res.main_pipeline.try_resize(1)?;
+    build_res.main_pipeline.add_transform(|input, output| {
+        let proc =
+            TransformSerializeSegment::new(ctx.clone(), input, output, table, block_thresholds);
+        proc.into_processor()
+    })?;
+
+    // 5. add TableMutationAggregator
+    build_res.main_pipeline.add_transform(|input, output| {
+        let aggregator =
+            TableMutationAggregator::new(table, ctx.clone(), vec![], MutationKind::Replace);
+        Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+            input, output, aggregator,
+        )))
+    })?;
+
+    // 6. add CommitSink
+    let snapshot_gen = MutationGenerator::new(snapshot, true);
+    let lock = None;
+    build_res.main_pipeline.add_sink(|input| {
+        databend_common_storages_fuse::operations::CommitSink::try_create(
+            table,
+            ctx.clone(),
+            None,
             vec![],
-        );
-        let mut build_res = pipeline_builder.finalize(&join_input)?;
+            snapshot_gen.clone(),
+            input,
+            None,
+            lock.clone(),
+            None,
+            None,
+        )
+    })?;
 
-        // 2. add TransformMutationSubquery
-        build_res.main_pipeline.add_transform(|input, output| {
-            TransformMutationSubquery::try_create(
-                ctx.get_function_context()?,
-                input,
-                output,
-                SubqueryMutation::Delete,
-                subquery_desc.clone(),
-            )?
-            .into_processor()
-        })?;
+    Ok(build_res)
+}
 
-        // 3. add TransformSerializeBlock
-        let block_thresholds = table.get_block_thresholds();
-        let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
-        build_res.main_pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::try_create(
-                ctx.clone(),
-                input,
-                output,
-                table,
-                cluster_stats_gen.clone(),
-                MutationKind::Replace,
-            )?;
-            proc.into_processor()
-        })?;
-
-        // 4. add TransformSerializeSegment
-        build_res.main_pipeline.try_resize(1)?;
-        build_res.main_pipeline.add_transform(|input, output| {
-            let proc =
-                TransformSerializeSegment::new(ctx.clone(), input, output, table, block_thresholds);
-            proc.into_processor()
-        })?;
-
-        // 5. add TableMutationAggregator
-        build_res.main_pipeline.add_transform(|input, output| {
-            let aggregator =
-                TableMutationAggregator::new(table, ctx.clone(), vec![], MutationKind::Replace);
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input, output, aggregator,
-            )))
-        })?;
-
-        // 6. add CommitSink
-        let snapshot_gen = MutationGenerator::new(snapshot, true);
-        let lock = None;
-        build_res.main_pipeline.add_sink(|input| {
-            databend_common_storages_fuse::operations::CommitSink::try_create(
-                table,
-                ctx.clone(),
-                None,
-                vec![],
-                snapshot_gen.clone(),
-                input,
-                None,
-                lock.clone(),
-                None,
-                None,
-            )
-        })?;
-
-        Ok(build_res)
-    }
-
+impl DeleteInterpreter {
     #[allow(clippy::too_many_arguments)]
     pub fn build_physical_plan(
         &self,
@@ -354,7 +387,7 @@ impl DeleteInterpreter {
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
-        debug_assert!(self.plan.subquery_desc.is_empty());
+        debug_assert!(self.plan.subquery_desc.is_none());
         let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
             parts: partitions,
@@ -391,5 +424,63 @@ impl DeleteInterpreter {
         }));
         plan.adjust_plan_id(&mut 0);
         Ok(plan)
+    }
+}
+
+async fn build_filter_executor(
+    subquery: SubqueryDesc,
+    metadata: MetadataRef,
+    subquery_expression: SExpr,
+    ctx: Arc<QueryContext>,
+) -> Result<FilterExecutor> {
+    let predicate = &subquery.filter;
+    let outer_columns = subquery.outer_columns.clone();
+    let table_expr = subquery.table_expr.clone();
+    let func_ctx = ctx.get_function_context()?;
+    let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
+
+    let filter = Filter {
+        predicates: vec![predicate.clone()],
+    };
+    let filter_expr = match subquery_expression.plan() {
+        RelOperator::Filter(_) => {
+            SExpr::create_unary(Arc::new(filter.clone().into()), Arc::new(table_expr))
+        }
+        // in SQL like `update t1 set a = a + 1 where 200 > (select avg(a) from t1);`,
+        // which subquery datatype is not boolean, so must filter the result as boolean.
+        _ => SExpr::create_unary(Arc::new(filter.into()), Arc::new(subquery_expression)),
+    };
+
+    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+    let filter = builder.build(&filter_expr, outer_columns).await?;
+
+    if let PhysicalPlan::Filter(filter) = filter {
+        let predicate = filter
+            .predicates
+            .iter()
+            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+            .try_reduce(|lhs, rhs| {
+                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+            })
+            .transpose()
+            .unwrap_or_else(|| {
+                Err(ErrorCode::Internal(
+                    "Invalid empty predicate list".to_string(),
+                ))
+            })?;
+        assert_eq!(predicate.data_type(), &DataType::Boolean);
+        let (select_expr, has_or) = build_select_expr(&predicate).into();
+
+        Ok(FilterExecutor::new(
+            select_expr,
+            func_ctx,
+            has_or,
+            max_block_size,
+            None,
+            &BUILTIN_FUNCTIONS,
+            true,
+        ))
+    } else {
+        unreachable!()
     }
 }

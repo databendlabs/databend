@@ -40,8 +40,8 @@ use crate::ScalarExpr;
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct SExpr {
-    pub(crate) plan: Arc<RelOperator>,
-    pub(crate) children: Vec<Arc<SExpr>>,
+    pub plan: Arc<RelOperator>,
+    pub children: Vec<Arc<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,
 
