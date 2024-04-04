@@ -335,6 +335,8 @@ build_exceptions! {
     UnknownIndex(2722),
     DropIndexWithDropTime(2723),
     GetIndexWithDropTime(2724),
+    DuplicatedIndexColumnId(2725),
+    IndexColumnIdNotFound(2726),
 
     // Stream error codes.
     UnknownStream(2730),
