@@ -43,7 +43,7 @@ CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content) tokenizer = 'chinese'
 query TT
 SHOW CREATE TABLE t
 ----
-t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) tokenizer = 'chinese') ENGINE=FUSE
+t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) tokenizer = 'chinese' ) ENGINE=FUSE
 
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
