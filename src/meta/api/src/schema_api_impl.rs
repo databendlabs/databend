@@ -32,9 +32,11 @@ use databend_common_meta_app::app_error::DatabaseAlreadyExists;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
 use databend_common_meta_app::app_error::DropIndexWithDropTime;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
+use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::GetIndexWithDropTime;
 use databend_common_meta_app::app_error::IndexAlreadyExists;
+use databend_common_meta_app::app_error::IndexColumnIdNotFound;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
@@ -1085,7 +1087,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // get an index with drop time
         if index_meta.dropped_on.is_some() {
-            return Err(KVAppError::AppError(AppError::GetIndexWithDropTIme(
+            return Err(KVAppError::AppError(AppError::GetIndexWithDropTime(
                 GetIndexWithDropTime::new(&tenant_index.index_name),
             )));
         }
@@ -3215,33 +3217,23 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // check the index column id exists
             for column_id in &req.column_ids {
                 if table_meta.schema.is_column_deleted(*column_id) {
-                    return Err(KVAppError::AppError(AppError::UnknownIndex(
-                        UnknownIndex::new(
-                            &req.name,
-                            format!("table index column id {} is not exist", column_id),
-                        ),
+                    return Err(KVAppError::AppError(AppError::IndexColumnIdNotFound(
+                        IndexColumnIdNotFound::new(*column_id, &req.name),
                     )));
                 }
             }
 
-            let mut other_column_ids = HashSet::new();
+            // column_id can not be duplicated
             for (name, index) in indexes.iter() {
                 if *name == req.name {
                     continue;
                 }
-                for column_id in &index.column_ids {
-                    other_column_ids.insert(column_id);
-                }
-            }
-            // column_id can not be duplicated
-            for column_id in &req.column_ids {
-                if other_column_ids.contains(column_id) {
-                    return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
-                        IndexAlreadyExists::new(
-                            &req.name,
-                            format!("column {} already exist in other indexes", column_id),
-                        ),
-                    )));
+                for column_id in &req.column_ids {
+                    if index.column_ids.contains(column_id) {
+                        return Err(KVAppError::AppError(AppError::DuplicatedIndexColumnId(
+                            DuplicatedIndexColumnId::new(*column_id, &req.name),
+                        )));
+                    }
                 }
             }
 
