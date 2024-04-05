@@ -57,7 +57,7 @@ impl<'a> Binder {
         if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
             if !self.has_subquery_in_selection(&scalar)? {
-                return Ok((None, None));
+                return Ok((Some(scalar), None));
             }
             let subquery_desc = self.process_subquery(scalar.clone(), table_expr).await?;
             Ok((Some(scalar), Some(subquery_desc)))

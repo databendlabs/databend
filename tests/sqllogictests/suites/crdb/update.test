@@ -152,6 +152,46 @@ select * from t1 order by a;
 8
 
 statement ok
+truncate table t1;
+
+statement ok
+insert into t1 values(1), (2), (3), (8);
+
+statement ok
+update t1 set a = a + 1 where a = any(select b from t2 where t1.a = t2.b) or a > 1;
+
+query I
+select * from t1 order by a;
+----
+1
+3
+4
+9
+
+statement ok
+truncate table t1;
+
+statement ok
+insert into t1 values(1), (2), (3), (8);
+
+statement ok
+update t1 set a = a + 1 where a = any(select b from t2 where t1.a = t2.b) or a < any(select b from t2);
+
+query I
+select * from t1 order by a;
+----
+2
+3
+4
+8
+
+statement ok
+truncate table t1;
+
+statement ok
+insert into t1 values(1), (2), (3), (8);
+
+statement ok
 update t1 set a = a + 1 where exists(select b from t2 where a = b);
 
 query I
@@ -161,3 +201,9 @@ select * from t1 order by a;
 3
 4
 8
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
