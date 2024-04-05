@@ -84,13 +84,14 @@ impl FilterExecutor {
 
     // Mark a DataBlock, return the origin DataBlock with
     // filter columns removed and mark column as last column.
-    pub fn mark(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+    pub fn mark(&mut self, data_block: DataBlock, num_fields: usize) -> Result<DataBlock> {
+        let num_exprs = data_block.num_columns() - num_fields;
+        let num_referenced_columns = self.select_expr.num_referenced_columns();
         let origin_count = data_block.num_rows();
-        let result_count = self.select(&data_block)?;
         let mut data_block = data_block;
+        let result_count = self.select(&data_block)?;
 
-        // remove filter columns used in select_expr, ignore `Constant` and `BooleanScalar`
-        let num_exprs = self.select_expr.num_referenced_columns();
+        // remove filter columns used in select_expr
         if num_exprs > 0 {
             data_block.pop_columns(num_exprs);
         }

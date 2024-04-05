@@ -206,8 +206,7 @@ impl Binder {
             _ => unreachable!(),
         };
 
-        // join the result
-        // _row_id
+        // join the result with _row_id
         let row_id_column_binding = ColumnBinding {
             database_name: None,
             table_name: None,

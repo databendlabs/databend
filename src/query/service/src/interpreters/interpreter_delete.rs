@@ -384,6 +384,7 @@ pub async fn modify_by_subquery(
             output,
             typ.clone(),
             filter_executor.clone(),
+            table.schema().num_fields(),
         )?
         .into_processor()
     })?;

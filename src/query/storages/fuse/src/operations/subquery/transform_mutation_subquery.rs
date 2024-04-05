@@ -46,6 +46,7 @@ pub struct TransformMutationSubquery {
     mutation: SubqueryMutation,
     filter_executor: FilterExecutor,
     func_ctx: FunctionContext,
+    num_fields: usize,
 }
 
 impl TransformMutationSubquery {
@@ -55,6 +56,7 @@ impl TransformMutationSubquery {
         output: Arc<OutputPort>,
         mutation: SubqueryMutation,
         filter_executor: FilterExecutor,
+        num_fields: usize,
     ) -> Result<Self> {
         Ok(TransformMutationSubquery {
             input,
@@ -64,6 +66,7 @@ impl TransformMutationSubquery {
             mutation,
             filter_executor,
             func_ctx,
+            num_fields,
         })
     }
 
@@ -89,7 +92,7 @@ impl TransformMutationSubquery {
     }
 
     pub fn split_not_matched_block(&mut self, block: DataBlock) -> Result<DataBlock> {
-        let data_block = self.filter_executor.mark(block.clone())?;
+        let data_block = self.filter_executor.mark(block.clone(), self.num_fields)?;
 
         let num_columns = data_block.num_columns();
         let filter_entry = data_block.get_by_offset(num_columns - 1);
@@ -164,7 +167,7 @@ impl Processor for TransformMutationSubquery {
             let output_data = match &self.mutation {
                 SubqueryMutation::Delete => self.split_not_matched_block(data_block)?,
                 SubqueryMutation::Update(operators) => {
-                    let data_block = self.filter_executor.mark(data_block)?;
+                    let data_block = self.filter_executor.mark(data_block, self.num_fields)?;
 
                     operators
                         .iter()
