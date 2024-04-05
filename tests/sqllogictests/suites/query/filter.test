@@ -32,3 +32,36 @@ select a from t where a = 0 or 3 / a > 2 order by a
 
 statement ok
 drop table if exists t;
+
+# Boolean comparison
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(a boolean, b boolean);
+
+statement ok
+insert into t values(true, true), (true, false), (false, false);
+
+query I
+select count(*) from t where a > b;
+----
+1
+
+query II
+select count(*) from t where a >= b;
+----
+3
+
+query III
+select count(*) from t where a < b;
+----
+0
+
+query I?
+select count(*) from t where a <= b;
+----
+2
+
+statement ok
+drop table if exists t;
