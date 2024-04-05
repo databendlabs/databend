@@ -36,6 +36,7 @@ pub enum SelectExpr {
 }
 
 impl SelectExpr {
+    // count referenced columns, ignore `Constant` and `BooleanScalar`, cause they didnot reference a column
     pub fn num_referenced_columns(&self) -> usize {
         match self {
             SelectExpr::And((select_exprs, _)) => select_exprs
@@ -50,6 +51,8 @@ impl SelectExpr {
                 exprs.iter().map(SelectExpr::count_referenced_columns).sum()
             }
             SelectExpr::Others(expr) => SelectExpr::count_referenced_columns(expr),
+            // ignore BooleanScalar
+            SelectExpr::BooleanScalar(_) => 0,
             _ => 1,
         }
     }

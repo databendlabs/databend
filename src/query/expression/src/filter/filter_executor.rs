@@ -82,15 +82,18 @@ impl FilterExecutor {
         self.take(data_block, origin_count, result_count)
     }
 
-    // Mark a DataBlock, return the origin DataBlock remove filter column and plus mark column as last column.
+    // Mark a DataBlock, return the origin DataBlock with
+    // filter columns removed and mark column as last column.
     pub fn mark(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let origin_count = data_block.num_rows();
         let result_count = self.select(&data_block)?;
         let mut data_block = data_block;
 
-        // remove filter columns used in select_expr, ignore `Constant`
+        // remove filter columns used in select_expr, ignore `Constant` and `BooleanScalar`
         let num_exprs = self.select_expr.num_referenced_columns();
-        data_block.pop_columns(num_exprs);
+        if num_exprs > 0 {
+            data_block.pop_columns(num_exprs);
+        }
 
         let bytes = vec![0; origin_count];
         let mut bitmap = MutableBitmap::from_vec(bytes, origin_count);
