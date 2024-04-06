@@ -86,7 +86,6 @@ impl FilterExecutor {
     // filter columns removed and mark column as last column.
     pub fn mark(&mut self, data_block: DataBlock, num_fields: usize) -> Result<DataBlock> {
         let num_exprs = data_block.num_columns() - num_fields;
-        let num_referenced_columns = self.select_expr.num_referenced_columns();
         let origin_count = data_block.num_rows();
         let mut data_block = data_block;
         let result_count = self.select(&data_block)?;

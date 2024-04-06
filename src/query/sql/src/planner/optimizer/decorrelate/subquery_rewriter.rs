@@ -23,7 +23,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
-use databend_common_functions::aggregates::AggregateCountFunction;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
@@ -38,7 +37,6 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
-use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -396,105 +394,51 @@ impl SubqueryRewriter {
         match subquery.typ {
             SubqueryType::Scalar => self.rewrite_uncorrelated_scalar_subquery(left, subquery),
             SubqueryType::Exists | SubqueryType::NotExists => {
-                let mut subquery_expr = *subquery.subquery.clone();
-                // Wrap Limit to current subquery
-                let limit = Limit {
-                    limit: Some(1),
-                    offset: 0,
-                    before_exchange: false,
+                let correlated_columns = subquery.outer_columns.clone();
+                let mut flatten_info = FlattenInfo {
+                    from_count_func: false,
                 };
-                subquery_expr =
-                    SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr.clone()));
+                let flatten_plan = self.flatten_plan(
+                    &subquery.subquery,
+                    &correlated_columns,
+                    &mut flatten_info,
+                    false,
+                )?;
+                // Construct mark join
+                let mut left_conditions = Vec::with_capacity(correlated_columns.len());
+                let mut right_conditions = Vec::with_capacity(correlated_columns.len());
+                self.add_equi_conditions(
+                    subquery.span,
+                    &correlated_columns,
+                    &mut left_conditions,
+                    &mut right_conditions,
+                )?;
 
-                // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
-                // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
-                // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
-                let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
-                let agg_func_index = self
-                    .metadata
-                    .write()
-                    .add_derived_column("count(*)".to_string(), agg_func.return_type()?);
-
-                let agg = Aggregate {
-                    group_items: vec![],
-                    aggregate_functions: vec![ScalarItem {
-                        scalar: AggregateFunction {
-                            display_name: "count(*)".to_string(),
-                            func_name: "count".to_string(),
-                            distinct: false,
-                            params: vec![],
-                            args: vec![],
-                            return_type: Box::new(agg_func.return_type()?),
-                        }
-                        .into(),
-                        index: agg_func_index,
-                    }],
-                    from_distinct: false,
-                    mode: AggregateMode::Initial,
-                    limit: None,
-                    grouping_sets: None,
+                let marker_index = if let Some(idx) = subquery.projection_index {
+                    idx
+                } else {
+                    self.metadata.write().add_derived_column(
+                        "marker".to_string(),
+                        DataType::Nullable(Box::new(DataType::Boolean)),
+                    )
                 };
-
-                let compare = FunctionCall {
-                    span: subquery.span,
-                    func_name: if subquery.typ == SubqueryType::Exists {
-                        "eq".to_string()
-                    } else {
-                        "noteq".to_string()
-                    },
-                    params: vec![],
-                    arguments: vec![
-                        BoundColumnRef {
-                            span: subquery.span,
-                            column: ColumnBindingBuilder::new(
-                                "count(*)".to_string(),
-                                agg_func_index,
-                                Box::new(agg_func.return_type()?),
-                                Visibility::Visible,
-                            )
-                            .build(),
-                        }
-                        .into(),
-                        ConstantExpr {
-                            span: subquery.span,
-                            value: Scalar::Number(NumberScalar::UInt64(1)),
-                        }
-                        .into(),
-                    ],
-                };
-                let filter = Filter {
-                    predicates: vec![compare.into()],
-                };
-
-                // Filter: COUNT(*) = 1 or COUNT(*) != 1
-                //     Aggregate: COUNT(*)
-                let rewritten_subquery = SExpr::create_unary(
-                    Arc::new(filter.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(agg.into()),
-                        Arc::new(subquery_expr),
-                    )),
-                );
-                let cross_join = Join {
-                    left_conditions: vec![],
-                    right_conditions: vec![],
+                let join_plan = Join {
+                    left_conditions: right_conditions,
+                    right_conditions: left_conditions,
                     non_equi_conditions: vec![],
-                    join_type: JoinType::Cross,
-                    marker_index: None,
-                    from_correlated_subquery: false,
+                    join_type: JoinType::RightMark,
+                    marker_index: Some(marker_index),
+                    from_correlated_subquery: true,
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
-                }
-                .into();
-                Ok((
-                    SExpr::create_binary(
-                        Arc::new(cross_join),
-                        Arc::new(left.clone()),
-                        Arc::new(rewritten_subquery),
-                    ),
-                    UnnestResult::SimpleJoin,
-                ))
+                };
+                let s_expr = SExpr::create_binary(
+                    Arc::new(join_plan.into()),
+                    Arc::new(left.clone()),
+                    Arc::new(flatten_plan),
+                );
+                Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
                 let output_column = subquery.output_column.clone();
