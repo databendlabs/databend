@@ -61,7 +61,16 @@ select a, b, change$action, change$is_update from t changes(information => appen
 3 3 INSERT 0
 
 statement ok
+create stream s1 on table t append_only = false
+
+statement error 1005
+select a, b, change$action, change$is_update from t changes(information => default) at(stream => s) end(stream => s1)
+
+statement ok
 DROP STREAM s
+
+statement ok
+DROP STREAM s1
 
 statement ok
 DROP TABLE t ALL
