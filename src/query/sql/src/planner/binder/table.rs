@@ -55,10 +55,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_expression::is_stream_column;
+use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -1402,11 +1404,48 @@ impl Binder {
                         ))
                     }
 
-                    other => Err(ErrorCode::InvalidArgument(format!(
-                        "TimeTravelPoint for 'Timestamp' must resolve to a constant timestamp value. Provided expression '{:?}' is not a constant timestamp. Ensure the expression is a constant and of type timestamp.",
-                        other
+                    _ => Err(ErrorCode::InvalidArgument(format!(
+                        "TimeTravelPoint for 'Timestamp' must resolve to a constant timestamp value. \
+                        Provided expression '{}' is not a constant timestamp. \
+                        Ensure the expression is a constant and of type timestamp",
+                        expr
                     ))),
                 }
+            }
+            TimeTravelPoint::Offset(expr) => {
+                let mut type_checker = TypeChecker::try_create(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                    false,
+                )?;
+                let box (scalar, _) = type_checker.resolve(expr).await?;
+                let scalar_expr = scalar.as_expr()?;
+
+                let (new_expr, _) = ConstantFolder::fold(
+                    &scalar_expr,
+                    &self.ctx.get_function_context()?,
+                    &BUILTIN_FUNCTIONS,
+                );
+
+                let v = check_number::<_, i64>(
+                    None,
+                    &FunctionContext::default(),
+                    &new_expr,
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                if v > 0 {
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "TimeTravelPoint for 'Offset' must resolve to a constant negative integer. \
+                        Provided expression '{}' does not meet this requirement. \
+                        Ensure the expression is a constant and negative integer",
+                        expr
+                    )));
+                }
+                let nanos = Utc::now().timestamp_nanos_opt().unwrap() + v * 1_000_000;
+                Ok(NavigationPoint::TimePoint(Utc.timestamp_nanos(nanos)))
             }
             TimeTravelPoint::Stream {
                 catalog,
