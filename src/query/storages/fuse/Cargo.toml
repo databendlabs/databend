@@ -42,6 +42,7 @@ databend-storages-common-pruner = { path = "../common/pruner" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 ahash = "0.8.3"
+arrow = { workspace = true }
 arrow-array = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
@@ -58,18 +59,17 @@ log = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
-parquet-format-safe = "0.2"
 parquet_rs = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"
 siphasher = "0.3.10"
-streaming-decompression = "0.1.2"
 sys-info = "0.9"
 tantivy = "0.21.1"
 tantivy-common = "0.6.0"
 tantivy-jieba = "0.10.0"
+thrift = "0.17.0"
 typetag = { workspace = true }
 uuid = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }

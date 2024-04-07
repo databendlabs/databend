@@ -35,6 +35,8 @@ xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features 
     "cbordata",
 ], tag = "databend-alpha.4" }
 
+parquet = { workspace = true }
+
 [dev-dependencies]
 criterion = "0.4"
 databend-common-arrow = { path = "../../../../common/arrow" }

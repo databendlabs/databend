@@ -9,6 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
+bytes = { workspace = true }
 databend-common-arrow = { path = "../../../common/arrow" }
 databend-common-catalog = { path = "../../catalog" }
 databend-common-exception = { path = "../../../common/exception" }
@@ -23,6 +24,7 @@ databend-common-pipeline-sources = { path = "../../pipeline/sources" }
 databend-common-storage = { path = "../../../common/storage" }
 databend-storages-common-blocks = { path = "../common/blocks" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
+parquet_rs = { workspace = true }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
