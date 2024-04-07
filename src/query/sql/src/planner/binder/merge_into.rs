@@ -192,8 +192,7 @@ impl Binder {
             database: database.clone(),
             table: table_ident.clone(),
             alias: target_alias.clone(),
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };

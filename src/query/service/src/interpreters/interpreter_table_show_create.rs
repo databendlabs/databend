@@ -104,9 +104,11 @@ impl ShowCreateTableInterpreter {
             )
         }
 
-        // Append columns.
+        let table_info = table.get_table_info();
+
+        // Append columns and indexes.
         {
-            let mut columns = vec![];
+            let mut create_defs = vec![];
             for (idx, field) in schema.fields().iter().enumerate() {
                 let nullable = if field.is_nullable() {
                     " NULL".to_string()
@@ -140,7 +142,7 @@ impl ShowCreateTableInterpreter {
                 } else {
                     "".to_string()
                 };
-                let column = format!(
+                let column_str = format!(
                     "  {} {}{}{}{}{}",
                     format_name(field.name(), quoted_ident_case_sensitive, sql_dialect),
                     field.data_type().remove_recursive_nullable().sql_name(),
@@ -150,21 +152,51 @@ impl ShowCreateTableInterpreter {
                     comment
                 );
 
-                columns.push(column);
+                create_defs.push(column_str);
             }
+
+            for index_field in table_info.meta.indexes.values() {
+                let sync = if index_field.sync_creation {
+                    "SYNC"
+                } else {
+                    "ASYNC"
+                };
+                let mut column_names = Vec::with_capacity(index_field.column_ids.len());
+                for column_id in index_field.column_ids.iter() {
+                    let field = schema.field_of_column_id(*column_id)?;
+                    column_names.push(field.name().to_string());
+                }
+                let column_names_str = column_names.join(", ").to_string();
+                let mut options = Vec::with_capacity(index_field.options.len());
+                for (key, value) in index_field.options.iter() {
+                    let option = format!("{} = '{}'", key, value);
+                    options.push(option);
+                }
+                let mut index_str = format!(
+                    "  {} INVERTED INDEX {} ({})",
+                    sync,
+                    format_name(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
+                    column_names_str
+                );
+                if !options.is_empty() {
+                    let options_str = options.join(", ").to_string();
+                    index_str.push(' ');
+                    index_str.push_str(&options_str);
+                }
+                create_defs.push(index_str);
+            }
+
             // Format is:
             //  (
             //      x,
             //      y
             //  )
-            let columns_str = format!("{}\n", columns.join(",\n"));
-            table_create_sql.push_str(&columns_str);
+            let create_defs_str = format!("{}\n", create_defs.join(",\n"));
+            table_create_sql.push_str(&create_defs_str);
         }
-
         let table_engine = format!(") ENGINE={}", engine);
         table_create_sql.push_str(table_engine.as_str());
 
-        let table_info = table.get_table_info();
         if let Some((_, cluster_keys_str)) = table_info.meta.cluster_key() {
             table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
         }

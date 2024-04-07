@@ -414,6 +414,8 @@ pub enum TokenKind {
     CATALOGS,
     #[token("CENTURY", ignore(ascii_case))]
     CENTURY,
+    #[token("CHANGES", ignore(ascii_case))]
+    CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
     #[token("COMMENT", ignore(ascii_case))]
@@ -648,6 +650,8 @@ pub enum TokenKind {
     IN,
     #[token("INDEX", ignore(ascii_case))]
     INDEX,
+    #[token("INFORMATION", ignore(ascii_case))]
+    INFORMATION,
     #[token("INNER", ignore(ascii_case))]
     INNER,
     #[token("INSERT", ignore(ascii_case))]

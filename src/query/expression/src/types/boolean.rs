@@ -173,7 +173,7 @@ impl ValueType for BooleanType {
 
     #[inline(always)]
     fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        (left & !right) || (left & right)
+        left | !right
     }
 
     #[inline(always)]
@@ -183,7 +183,7 @@ impl ValueType for BooleanType {
 
     #[inline(always)]
     fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        (!left & right) || (left & right)
+        !left | right
     }
 }
 

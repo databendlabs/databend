@@ -295,8 +295,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             database: None,
             table: Identifier::from_name(None, table.name.clone()),
             alias: None,
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };
@@ -497,8 +496,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             database: None,
             table: Identifier::from_name(None, table.name.clone()),
             alias: None,
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };
