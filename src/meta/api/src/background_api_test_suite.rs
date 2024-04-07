@@ -207,9 +207,7 @@ impl BackgroundApiTestSuite {
 
         info!("--- list background jobs when their is no tasks");
         {
-            let req = ListBackgroundJobsReq {
-                tenant: tenant_name.to_string(),
-            };
+            let req = ListBackgroundJobsReq::new(&tenant);
 
             let res = mt.list_background_jobs(req).await;
             assert!(res.is_ok());
@@ -332,9 +330,7 @@ impl BackgroundApiTestSuite {
 
         info!("--- list background jobs when their is 1 tasks");
         {
-            let req = ListBackgroundJobsReq {
-                tenant: tenant_name.to_string(),
-            };
+            let req = ListBackgroundJobsReq::new(&tenant);
 
             let res = mt.list_background_jobs(req).await;
             assert!(res.is_ok());
