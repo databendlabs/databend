@@ -241,7 +241,7 @@ impl ListIndexesReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListIndexesByIdReq {
     pub tenant: String,
     pub table_id: MetaId,

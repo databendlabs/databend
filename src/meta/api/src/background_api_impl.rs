@@ -261,7 +261,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         &self,
         req: ListBackgroundTasksReq,
     ) -> Result<Vec<(u64, String, BackgroundTaskInfo)>, KVAppError> {
-        let prefix = format!("{}/{}", BackgroundTaskIdent::PREFIX, req.tenant);
+        let ident = BackgroundTaskIdent::new(&req.tenant, "dummy");
+        let prefix = ident.tenant_prefix();
+
         let reply = self.prefix_list_kv(&prefix).await?;
         let mut res = vec![];
         for (k, v) in reply {

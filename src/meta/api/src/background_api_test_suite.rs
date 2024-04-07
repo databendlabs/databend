@@ -113,13 +113,11 @@ impl BackgroundApiTestSuite {
         let tenant = Tenant::new_literal(tenant_name);
 
         let task_id = "uuid1";
-        let task_ident = BackgroundTaskIdent::new(tenant, task_id);
+        let task_ident = BackgroundTaskIdent::new(&tenant, task_id);
 
         info!("--- list background tasks when their is no tasks");
         {
-            let req = ListBackgroundTasksReq {
-                tenant: tenant_name.to_string(),
-            };
+            let req = ListBackgroundTasksReq::new(&tenant);
 
             let res = mt.list_background_tasks(req).await;
             assert!(res.is_ok());
@@ -176,9 +174,7 @@ impl BackgroundApiTestSuite {
             );
         }
         {
-            let req = ListBackgroundTasksReq {
-                tenant: tenant_name.to_string(),
-            };
+            let req = ListBackgroundTasksReq::new(&tenant);
 
             let res = mt.list_background_tasks(req).await;
             info!("update log res: {:?}", res);
