@@ -131,10 +131,7 @@ impl Table for RandomTable {
             .iter()
             .map(|f| {
                 let data_type: DataType = f.data_type().into();
-                let column = match self.seed {
-                    None => Column::random(&data_type, 1),
-                    Some(seed) => Column::random_with_seed(&data_type, 1, seed),
-                };
+                let column = Column::random(&data_type, 1, self.seed.clone());
                 BlockEntry::new(data_type.clone(), Value::Column(column))
             })
             .collect::<Vec<_>>();
@@ -243,12 +240,7 @@ impl SyncSource for RandomSource {
             .iter()
             .map(|f| {
                 let data_type = f.data_type().into();
-                let value = match self.seed {
-                    None => Value::Column(Column::random(&data_type, self.rows)),
-                    Some(seed) => {
-                        Value::Column(Column::random_with_seed(&data_type, self.rows, seed))
-                    }
-                };
+                let value = Value::Column(Column::random(&data_type, self.rows, self.seed));
                 BlockEntry::new(data_type, value)
             })
             .collect();
