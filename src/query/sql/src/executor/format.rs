@@ -141,7 +141,7 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("RangeJoin: {}", plan.join_type,),
+                    format!("RangeJoin: {}", plan.join_type, ),
                     children,
                 ))
             }
@@ -1033,7 +1033,7 @@ fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<S
         FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
     ];
 
-    // format is like "pruning stats: [segments: <range pruning: 0 to 0>, blocks: <range pruning: 0 to 0>]"
+    // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
     let mut blocks_pruning_description = String::new();
 
     // range pruning status.
