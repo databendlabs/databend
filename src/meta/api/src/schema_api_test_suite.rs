@@ -1462,7 +1462,9 @@ impl SchemaApiTestSuite {
         assert_eq!(got.name_ident.tenant, "tenant1");
         assert_eq!(got.name_ident.catalog_name, "catalog1");
 
-        let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
+        let got = mt
+            .list_catalogs(ListCatalogReq::new(tenant.clone()))
+            .await?;
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].name_ident.tenant, "tenant1");
         assert_eq!(got[0].name_ident.catalog_name, "catalog1");
@@ -1474,7 +1476,9 @@ impl SchemaApiTestSuite {
             })
             .await?;
 
-        let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
+        let got = mt
+            .list_catalogs(ListCatalogReq::new(tenant.clone()))
+            .await?;
         assert_eq!(got.len(), 0);
 
         Ok(())
