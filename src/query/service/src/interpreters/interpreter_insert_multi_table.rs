@@ -16,10 +16,14 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::SendableDataBlockStream;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::physical_plans::CastSchema;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
@@ -55,6 +59,7 @@ use crate::sql::executor::physical_plans::ChunkFilter;
 use crate::sql::executor::physical_plans::Duplicate;
 use crate::sql::executor::physical_plans::Shuffle;
 use crate::storages::Table;
+use crate::stream::DataBlockStream;
 pub struct InsertMultiTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertMultiTable,
@@ -82,6 +87,18 @@ impl Interpreter for InsertMultiTableInterpreter {
         let build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         Ok(build_res)
+    }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        let mut columns = vec![];
+        let status = self.ctx.get_multi_table_insert_status();
+        let guard = status.lock();
+        for (tid, _) in &self.plan.target_tables {
+            let insert_rows = guard.insert_rows.get(tid).cloned().unwrap_or_default();
+            columns.push(UInt32Type::from_data(vec![insert_rows as u32]));
+        }
+        let blocks = vec![DataBlock::new_from_columns(columns)];
+        Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
 

@@ -82,6 +82,7 @@ use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
@@ -96,6 +97,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
@@ -930,6 +932,24 @@ impl TableContext for QueryContext {
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
         self.shared.merge_status.clone()
+    }
+
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: usize) {
+        let mut multi_table_insert_status = self.shared.multi_table_insert_status.lock();
+        match multi_table_insert_status.insert_rows.get_mut(&table_id) {
+            Some(v) => {
+                *v += num_rows;
+            }
+            None => {
+                multi_table_insert_status
+                    .insert_rows
+                    .insert(table_id, num_rows);
+            }
+        }
+    }
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
+        self.shared.multi_table_insert_status.clone()
     }
 
     fn get_license_key(&self) -> String {

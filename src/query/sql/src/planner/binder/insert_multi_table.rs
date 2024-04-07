@@ -146,7 +146,9 @@ impl Binder {
             )
             .await?;
 
-        let ordered_target_tables = target_tables.into_iter().collect::<Vec<_>>();
+        let mut ordered_target_tables = target_tables.into_iter().collect::<Vec<_>>();
+        // convenient for testing
+        ordered_target_tables.sort_by_key(|(_, (d, t))| format!("{}.{}", d, t));
 
         let plan = InsertMultiTable {
             input_source,

@@ -164,13 +164,15 @@ create or replace table s(c3 int,c4 int);
 statement ok
 insert into s values(1,2),(3,4),(5,6);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1
     WHEN c3 > 0 THEN
       INTO t2
 SELECT * from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -196,13 +198,15 @@ create or replace table s(c3 int,c4 int);
 statement ok
 insert into s values(1,2),(3,4),(5,6);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1 values(c4,c3)
     WHEN c3 > 0 THEN
       INTO t2 values(c4,c3)
 SELECT * from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -222,13 +226,15 @@ create or replace table t1(c1 bigint,c2 int);
 statement ok
 create or replace table t2(c1 int,c2 bigint);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1 values(c4,c3)
     WHEN c3 > 0 THEN
       INTO t2 values(c4,c3)
 SELECT * from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -248,13 +254,15 @@ create or replace table t1(c1 bigint,c2 int);
 statement ok
 create or replace table t2(c1 int,c2 bigint);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1 (c2) values(c4)
     WHEN c3 > 0 THEN
       INTO t2 (c2,c1) values(c4,c3)
 SELECT * from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -280,13 +288,15 @@ create or replace table s(c3 int,c4 int);
 statement ok
 insert into s values(3,4),(1,2),(5,6);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1 (c2) values(c4)
     WHEN c3 > 0 THEN
       INTO t2 (c2,c1) values(c4,c3)
 SELECT * from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -315,13 +325,15 @@ begin transaction;
 statement ok
 insert into s values(3,4),(1,2),(5,6);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1 (c2) values(c4)
     WHEN c3 > 0 THEN
       INTO t2 (c2,c1) values(c4,c3)
 SELECT * from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -360,13 +372,15 @@ create or replace table s(c3 int,c4 int);
 statement ok
 insert into s values(1,2),(3,4),(5,6);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 6 THEN
       INTO t1
     WHEN c3 > 0 THEN
       INTO t2
 SELECT (c3 + 1) as c3, (c4 + 2) as c4 from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -393,7 +407,7 @@ create or replace table s(c3 int,c4 int);
 statement ok
 insert into s values(1,2),(3,4),(5,6);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1
@@ -401,6 +415,8 @@ INSERT FIRST
       INTO t2
       INTO t1
 SELECT * from s;
+----
+3 2
 
 query II
 select * from t1 order by c1;
@@ -428,13 +444,15 @@ create or replace table s(c3 int,c4 int);
 statement ok
 insert into s values(1,2),(3,4),(5,6);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1 values(123,c3)
     WHEN c3 > 0 THEN
       INTO t2 values(c4,456)
 SELECT * from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -460,13 +478,15 @@ create or replace table s(c3 int,c4 int);
 statement ok
 insert into s values(1,2),(3,4),(5,6);
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1 values(123,DEFAULT)
     WHEN c3 > 0 THEN
       INTO t2 values(c4 + 1,456)
 SELECT * from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
@@ -493,7 +513,7 @@ VALUES    (101, 1, 250.00, '2023-01-01'),
           (104, 3, 750.00, '2023-01-04'),
           (105, 2, 50.00, '2023-01-05');
 
-statement ok
+query I
 INSERT FIRST
 WHEN order_amount > 1000 THEN INTO processing_updates VALUES (order_id, 'PriorityHandling')
 WHEN order_amount > 500 THEN INTO processing_updates VALUES (order_id, 'ExpressHandling') 
@@ -502,6 +522,8 @@ ELSE INTO processing_updates VALUES (order_id, 'ReviewNeeded')
 SELECT    order_id,
           order_amount
 FROM      orders_placed;
+----
+5
 
 query IT
 select * from processing_updates order by order_id;
@@ -541,13 +563,15 @@ INSERT FIRST
 SELECT * from s;
 
 
-statement ok
+query II
 INSERT FIRST
     WHEN c3 = 5 THEN
       INTO t1
     WHEN c3 > 0 THEN
       INTO t2 values(c3, c4)
 SELECT c3,default as c4 from s;
+----
+1 2
 
 query II
 select * from t1 order by c1;
