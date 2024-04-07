@@ -500,14 +500,6 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
 }
 
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
-    let at_snapshot = map(
-        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
-        |(_, _, _, s, _)| TimeTravelPoint::Snapshot(s),
-    );
-    let at_timestamp = map(
-        rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
-        |(_, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
-    );
     let at_stream = map(
         rule! { "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_3 ~ ")" },
         |(_, _, _, (catalog, database, name), _)| TimeTravelPoint::Stream {
@@ -518,7 +510,22 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     );
 
     rule!(
-        #at_stream | #at_snapshot | #at_timestamp
+        #at_stream | #at_snapshot_or_ts
+    )(i)
+}
+
+pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
+    let at_snapshot = map(
+        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
+        |(_, _, _, s, _)| TimeTravelPoint::Snapshot(s),
+    );
+    let at_timestamp = map(
+        rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
+    );
+
+    rule!(
+        #at_snapshot | #at_timestamp
     )(i)
 }
 
@@ -532,7 +539,7 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
 
     let changes = map(
         rule! {
-            CHANGES ~ "(" ~ INFORMATION ~ "=>" ~ ( DEFAULT | APPEND_ONLY ) ~ ")" ~ AT ~ ^#travel_point ~ (END ~ ^#travel_point)?
+            CHANGES ~ "(" ~ INFORMATION ~ "=>" ~ ( DEFAULT | APPEND_ONLY ) ~ ")" ~ AT ~ ^#travel_point ~ (END ~ ^#at_snapshot_or_ts)?
         },
         |(_, _, _, _, changes_type, _, _, at_point, opt_end_point)| {
             let append_only = matches!(changes_type.kind, APPEND_ONLY);
