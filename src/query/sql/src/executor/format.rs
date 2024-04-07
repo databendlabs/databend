@@ -1033,16 +1033,67 @@ fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<S
         FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
     ];
 
-    if info.pruning_stats.segments_range_pruning_before > 0 {
-        items.push(FormatTreeNode::new(format!(
-            "pruning stats: [segments: <range pruning: {} to {}>, blocks: <range pruning: {} to {}, bloom pruning: {} to {}>]",
-            info.pruning_stats.segments_range_pruning_before,
-            info.pruning_stats.segments_range_pruning_after,
+    // format is like "pruning stats: [segments: <range pruning: 0 to 0>, blocks: <range pruning: 0 to 0>]"
+    let mut blocks_pruning_description = String::new();
+
+    // range pruning status.
+    if info.pruning_stats.blocks_range_pruning_before > 0 {
+        blocks_pruning_description += &format!(
+            "range pruning: {} to {}",
             info.pruning_stats.blocks_range_pruning_before,
-            info.pruning_stats.blocks_range_pruning_after,
+            info.pruning_stats.blocks_range_pruning_after
+        );
+    }
+
+    // bloom pruning status.
+    if info.pruning_stats.blocks_bloom_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "bloom pruning: {} to {}",
             info.pruning_stats.blocks_bloom_pruning_before,
-            info.pruning_stats.blocks_bloom_pruning_after,
-        )))
+            info.pruning_stats.blocks_bloom_pruning_after
+        );
+    }
+
+    // inverted index pruning status.
+    if info.pruning_stats.blocks_inverted_index_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "inverted pruning: {} to {}",
+            info.pruning_stats.blocks_inverted_index_pruning_before,
+            info.pruning_stats.blocks_inverted_index_pruning_after
+        );
+    }
+
+    // Combine segment pruning and blocks pruning descriptions if any
+    if info.pruning_stats.segments_range_pruning_before > 0
+        || !blocks_pruning_description.is_empty()
+    {
+        let mut pruning_description = String::new();
+
+        if info.pruning_stats.segments_range_pruning_before > 0 {
+            pruning_description += &format!(
+                "segments: <range pruning: {} to {}>",
+                info.pruning_stats.segments_range_pruning_before,
+                info.pruning_stats.segments_range_pruning_after
+            );
+        }
+
+        if !blocks_pruning_description.is_empty() {
+            if !pruning_description.is_empty() {
+                pruning_description += ", ";
+            }
+            pruning_description += &format!("blocks: <{}>", blocks_pruning_description);
+        }
+
+        items.push(FormatTreeNode::new(format!(
+            "pruning stats: [{}]",
+            pruning_description
+        )));
     }
 
     items
