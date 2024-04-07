@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,7 +23,6 @@ use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -33,14 +31,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_storages_common_blocks::ParquetFileMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
-use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
-use opendal::Operator;
 
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::io::SegmentsIO;
-use crate::io::SnapshotsIO;
 use crate::FuseStorageFormat;
 
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
@@ -239,70 +233,4 @@ pub async fn read_block(
             ErrorCode::Internal("unexpected, failed to read block for merge into")
                 .add_message_back(e.to_string())
         })?
-}
-
-pub async fn collect_incremental_blocks(
-    ctx: Arc<dyn TableContext>,
-    fuse_segment_io: SegmentsIO,
-    op: Operator,
-    latest: &Option<String>,
-    base: &Option<String>,
-) -> Result<(Vec<(String, u64)>, Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
-    let latest_segments = if let Some(snapshot) = latest {
-        let (sn, _) = SnapshotsIO::read_snapshot(snapshot.to_string(), op.clone()).await?;
-        HashSet::from_iter(sn.segments.clone())
-    } else {
-        HashSet::new()
-    };
-
-    let base_segments = if let Some(snapshot) = base {
-        let (sn, _) = SnapshotsIO::read_snapshot(snapshot.to_string(), op.clone()).await?;
-        HashSet::from_iter(sn.segments.clone())
-    } else {
-        HashSet::new()
-    };
-
-    let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
-
-    let mut base_blocks = HashMap::new();
-    let diff_in_base = base_segments
-        .difference(&latest_segments)
-        .cloned()
-        .collect::<Vec<_>>();
-    for chunk in diff_in_base.chunks(chunk_size) {
-        let segments = fuse_segment_io
-            .read_segments::<SegmentInfo>(chunk, true)
-            .await?;
-        for segment in segments {
-            let segment = segment?;
-            segment.blocks.into_iter().for_each(|block| {
-                base_blocks.insert(block.location.clone(), block);
-            })
-        }
-    }
-
-    let mut add_blocks = Vec::new();
-    let diff_in_latest = latest_segments
-        .difference(&base_segments)
-        .cloned()
-        .collect::<Vec<_>>();
-    for chunk in diff_in_latest.chunks(chunk_size) {
-        let segments = fuse_segment_io
-            .read_segments::<SegmentInfo>(chunk, true)
-            .await?;
-
-        for segment in segments {
-            let segment = segment?;
-            segment.blocks.into_iter().for_each(|block| {
-                if base_blocks.contains_key(&block.location) {
-                    base_blocks.remove(&block.location);
-                } else {
-                    add_blocks.push(block);
-                }
-            });
-        }
-    }
-
-    let del_blocks = base_blocks.into_values().collect::<Vec<_>>();
-    Ok((diff_in_latest, del_blocks, add_blocks))
 }

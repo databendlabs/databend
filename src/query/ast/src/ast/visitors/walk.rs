@@ -256,7 +256,7 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
             database,
             table,
             alias,
-            travel_point,
+            temporal,
             ..
         } => {
             if let Some(catalog) = catalog {
@@ -273,8 +273,8 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
                 visitor.visit_identifier(&alias.name);
             }
 
-            if let Some(travel_point) = travel_point {
-                visitor.visit_time_travel_point(travel_point);
+            if let Some(temporal) = temporal {
+                visitor.visit_temporal_clause(temporal);
             }
         }
         TableReference::Subquery {
@@ -303,6 +303,22 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
             visitor.visit_join(join);
         }
         TableReference::Location { .. } => {}
+    }
+}
+
+pub fn walk_temporal_clause<'a, V: Visitor<'a>>(visitor: &mut V, clause: &'a TemporalClause) {
+    match clause {
+        TemporalClause::TimeTravel(point) => visitor.visit_time_travel_point(point),
+        TemporalClause::Changes(ChangesInterval {
+            at_point,
+            end_point,
+            ..
+        }) => {
+            visitor.visit_time_travel_point(at_point);
+            if let Some(end_point) = end_point {
+                visitor.visit_time_travel_point(end_point);
+            }
+        }
     }
 }
 

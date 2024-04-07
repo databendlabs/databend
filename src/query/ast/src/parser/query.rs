@@ -522,6 +522,34 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     )(i)
 }
 
+pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
+    let time_travel = map(
+        rule! {
+            AT ~ ^#travel_point
+        },
+        |(_, travel_point)| TemporalClause::TimeTravel(travel_point),
+    );
+
+    let changes = map(
+        rule! {
+            CHANGES ~ "(" ~ INFORMATION ~ "=>" ~ ( DEFAULT | APPEND_ONLY ) ~ ")" ~ AT ~ ^#travel_point ~ (END ~ ^#travel_point)?
+        },
+        |(_, _, _, _, changes_type, _, _, at_point, opt_end_point)| {
+            let append_only = matches!(changes_type.kind, APPEND_ONLY);
+            TemporalClause::Changes(ChangesInterval {
+                append_only,
+                at_point,
+                end_point: opt_end_point.map(|p| p.1),
+            })
+        },
+    );
+
+    rule!(
+        #time_travel
+        | #changes
+    )(i)
+}
+
 pub fn alias_name(i: Input) -> IResult<Identifier> {
     let short_alias = map(
         rule! {
@@ -633,8 +661,7 @@ pub enum TableReferenceElement {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
-        travel_point: Option<TimeTravelPoint>,
-        since_point: Option<TimeTravelPoint>,
+        temporal: Option<TemporalClause>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -693,16 +720,15 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ (AT ~ ^#travel_point)?  ~ (SINCE ~ ^#travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |((catalog, database, table), travel_point_opt, since_point_opt, alias, pivot, unpivot)| {
+        |((catalog, database, table), temporal, alias, pivot, unpivot)| {
             TableReferenceElement::Table {
                 catalog,
                 database,
                 table,
                 alias,
-                travel_point: travel_point_opt.map(|p| p.1),
-                since_point: since_point_opt.map(|p| p.1),
+                temporal,
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
             }
@@ -812,8 +838,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot,
                 unpivot,
             } => TableReference::Table {
@@ -822,8 +847,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot,
                 unpivot,
             },

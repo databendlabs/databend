@@ -31,7 +31,7 @@ pub enum ChangeType {
     Delete,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum StreamMode {
     AppendOnly,
     Standard,
