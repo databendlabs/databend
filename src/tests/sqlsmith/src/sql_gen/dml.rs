@@ -578,7 +578,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     fn gen_columns(&mut self, data_types: &[DataType], row_count: usize) -> Vec<Column> {
         data_types
             .iter()
-            .map(|ty| Column::random(ty, row_count))
+            .map(|ty| Column::random(ty, row_count, None))
             .collect()
     }
 }
