@@ -25,6 +25,12 @@ fi
 
 echo "Bumping version to $VERSION"
 
+git status
+git checkout main
+git fetch upstream
+git rebase upstream/main
+git checkout -b "bump-$VERSION"
+
 if [[ "$OSTYPE" == "darwin"* ]]; then
   sed -i '' "s/version = \".*\"/version = \"$VERSION\"/g" Cargo.toml
   sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/g" bindings/nodejs/package.json
@@ -35,11 +41,6 @@ else
   sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/g" bindings/nodejs/npm/*/package.json
 fi
 
-git status
-git checkout main
-git fetch upstream
-git rebase upstream/main
-git checkout -b "bump-$VERSION"
 git status
 git add Cargo.toml bindings/nodejs/package.json bindings/nodejs/npm/*/package.json
 git commit -m "chore: bump version to $VERSION"
