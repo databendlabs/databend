@@ -36,9 +36,9 @@ async fn prepare_client(presigned: bool) -> Option<Client> {
     Some(client)
 }
 
-async fn prepare_table(client: &Client) -> String {
+async fn prepare_table(client: &Client, prefix: &str) -> String {
     let conn = client.get_conn().await.unwrap();
-    let table = format!("books_{}", Utc::now().format("%Y%m%d%H%M%S%9f"));
+    let table = format!("books_{}_{}", prefix, Utc::now().format("%Y%m%d%H%M%S%9f"));
     let sql = format!(
         "CREATE TABLE `{}` (
             title VARCHAR NULL,
@@ -121,7 +121,7 @@ async fn check_result(table: &str, client: &Client) {
 #[tokio::test]
 async fn load_csv_with_presign() {
     if let Some(client) = prepare_client(true).await {
-        let table = prepare_table(&client).await;
+        let table = prepare_table(&client, "load_csv_with_presign").await;
         prepare_data_with_file(&table, "csv", &client).await;
         check_result(&table, &client).await;
     }
@@ -130,7 +130,7 @@ async fn load_csv_with_presign() {
 #[tokio::test]
 async fn load_csv_without_presign() {
     if let Some(client) = prepare_client(false).await {
-        let table = prepare_table(&client).await;
+        let table = prepare_table(&client, "load_csv_without_presign").await;
         prepare_data_with_file(&table, "csv", &client).await;
         check_result(&table, &client).await;
     }
@@ -139,7 +139,7 @@ async fn load_csv_without_presign() {
 #[tokio::test]
 async fn stream_load_with_presign() {
     if let Some(client) = prepare_client(true).await {
-        let table = prepare_table(&client).await;
+        let table = prepare_table(&client, "stream_load_with_presign").await;
         prepare_data(&table, &client).await;
         check_result(&table, &client).await;
     }

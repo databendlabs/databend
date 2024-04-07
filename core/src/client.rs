@@ -50,10 +50,11 @@ static VERSION: Lazy<String> = Lazy::new(|| {
 #[derive(Clone)]
 pub struct APIClient {
     pub cli: HttpClient,
-    scheme: String,
-    endpoint: Url,
+    pub scheme: String,
     pub host: String,
     pub port: u16,
+
+    endpoint: Url,
 
     auth: Arc<dyn Auth>,
 
