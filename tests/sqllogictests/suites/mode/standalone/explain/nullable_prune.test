@@ -23,7 +23,7 @@ TableScan
 ├── read bytes: 76
 ├── partitions total: 2
 ├── partitions scanned: 2
-├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
+├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 6.00
 
@@ -41,7 +41,7 @@ Filter
     ├── read bytes: 44
     ├── partitions total: 2
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_not_null(t_nullable_prune.a (#0))], limit: NONE]
     └── estimated rows: 6.00
 
@@ -59,7 +59,7 @@ Filter
     ├── read bytes: 32
     ├── partitions total: 2
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [NOT is_not_null(t_nullable_prune.a (#0))], limit: NONE]
     └── estimated rows: 6.00
 

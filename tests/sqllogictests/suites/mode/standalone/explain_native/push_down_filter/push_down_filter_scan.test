@@ -22,7 +22,7 @@ Filter
     ├── read bytes: 24
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_true(t.x (#0) > 1)], limit: NONE]
     └── estimated rows: 2.00
 
