@@ -3120,8 +3120,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot,
                 unpivot,
             } => {
@@ -3148,15 +3147,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 }
 
                 let mut children = Vec::new();
-                if let Some(travel_point) = travel_point {
-                    self.visit_time_travel_point(travel_point);
+
+                if let Some(temporal) = temporal {
+                    self.visit_temporal_clause(temporal);
                     children.push(self.children.pop().unwrap());
                 }
 
-                if let Some(travel_point) = since_point {
-                    self.visit_time_travel_point(travel_point);
-                    children.push(self.children.pop().unwrap());
-                }
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(
                         name,
@@ -3270,6 +3266,36 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
     }
 
+    fn visit_temporal_clause(&mut self, clause: &'ast TemporalClause) {
+        match clause {
+            TemporalClause::TimeTravel(point) => {
+                self.visit_time_travel_point(point);
+                let child = self.children.pop().unwrap();
+                let name = "TimeTravel".to_string();
+                let format_ctx = AstFormatContext::with_children(name, 1);
+                let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+                self.children.push(node);
+            }
+            TemporalClause::Changes(ChangesInterval {
+                at_point,
+                end_point,
+                ..
+            }) => {
+                let mut children = Vec::new();
+                self.visit_time_travel_point(at_point);
+                children.push(self.children.pop().unwrap());
+                if let Some(end_point) = end_point {
+                    self.visit_time_travel_point(end_point);
+                    children.push(self.children.pop().unwrap());
+                }
+                let name = "Changes".to_string();
+                let format_ctx = AstFormatContext::with_children(name, children.len());
+                let node = FormatTreeNode::with_children(format_ctx, children);
+                self.children.push(node);
+            }
+        }
+    }
+
     fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint) {
         match time {
             TimeTravelPoint::Snapshot(sid) => {
@@ -3290,7 +3316,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 catalog,
                 database,
                 name,
-            } => self.visit_table_ref(catalog, database, name),
+            } => {
+                self.visit_table_ref(catalog, database, name);
+                let child = self.children.pop().unwrap();
+                let name = "Stream".to_string();
+                let format_ctx = AstFormatContext::with_children(name, 1);
+                let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+                self.children.push(node);
+            }
         }
     }
 

@@ -4174,7 +4174,6 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
- "log",
  "minitrace",
 ]
 
