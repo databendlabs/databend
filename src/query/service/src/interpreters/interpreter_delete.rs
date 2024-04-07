@@ -382,13 +382,7 @@ pub async fn modify_by_subquery(
         });
     }
 
-    let pipeline_builder = PipelineBuilder::create(
-        ctx.get_function_context()?,
-        ctx.get_settings(),
-        ctx.clone(),
-        vec![],
-    );
-    let mut build_res = pipeline_builder.finalize(&root)?;
+    let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &root).await?;
 
     // 3.2: add TransformMutationSubquery
     build_res.main_pipeline.add_transform(|input, output| {
@@ -419,7 +413,6 @@ pub async fn modify_by_subquery(
     })?;
 
     // 3.4: add TransformSerializeSegment
-    build_res.main_pipeline.try_resize(1)?;
     build_res.main_pipeline.add_transform(|input, output| {
         let proc =
             TransformSerializeSegment::new(ctx.clone(), input, output, table, block_thresholds);

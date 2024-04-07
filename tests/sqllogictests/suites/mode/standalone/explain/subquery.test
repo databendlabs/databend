@@ -196,8 +196,8 @@ explain select t.number from numbers(1) as t where exists (select * from numbers
 HashJoin
 ├── output columns: [t.number (#0)]
 ├── join type: LEFT SEMI
-├── build keys: [numbers.number (#1)]
-├── probe keys: [t.number (#0)]
+├── build keys: [number (#1)]
+├── probe keys: [number (#0)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
