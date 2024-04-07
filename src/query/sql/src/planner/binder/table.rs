@@ -1444,8 +1444,8 @@ impl Binder {
                         expr
                     )));
                 }
-                let nanos = Utc::now().timestamp_nanos_opt().unwrap() + v * 1_000_000;
-                Ok(NavigationPoint::TimePoint(Utc.timestamp_nanos(nanos)))
+                let micros = Utc::now().timestamp_micros() + v * 1_000_000;
+                Ok(NavigationPoint::TimePoint(Utc.timestamp_nanos(micros * 1000)))
             }
             TimeTravelPoint::Stream {
                 catalog,
