@@ -229,6 +229,7 @@ impl InsertMultiTableInterpreter {
             overwrite: _,
             is_first,
             intos,
+            target_tables: _,
         } = &self.plan;
         let mut branches = InsertIntoBranches::default();
         let mut condition_intos = vec![];

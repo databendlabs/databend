@@ -464,6 +464,7 @@ impl Plan {
             Plan::DescNotification(plan) => plan.schema(),
             Plan::DescConnection(plan) => plan.schema(),
             Plan::ShowConnections(plan) => plan.schema(),
+            Plan::InsertMultiTable(plan) => plan.schema(),
 
             other => {
                 debug_assert!(!other.has_result_set());
@@ -506,6 +507,7 @@ impl Plan {
                 | Plan::DescConnection(_)
                 | Plan::ShowConnections(_)
                 | Plan::MergeInto(_)
+                | Plan::InsertMultiTable(_)
         )
     }
 }
