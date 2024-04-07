@@ -201,7 +201,7 @@ impl Binder {
         let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
         let filter_expr = rewriter.rewrite(&filter_expr)?;
 
-        let subquery_filter = match &*filter_expr.plan {
+        let predicate = match &*filter_expr.plan {
             RelOperatorFilter(filter) => filter.predicates[0].clone(),
             _ => unreachable!(),
         };
@@ -260,11 +260,10 @@ impl Binder {
 
         Ok(SubqueryDesc {
             input_expr,
-            table_expr: filter_expr.children[0].as_ref().clone(),
             outer_columns,
             predicate_columns,
             index: row_id_index.unwrap(),
-            filter: subquery_filter,
+            predicate,
         })
     }
 }

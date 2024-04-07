@@ -124,6 +124,7 @@ impl Interpreter for UpdateInterpreter {
                 self.plan.metadata.clone(),
                 self.ctx.clone(),
                 SubqueryMutation::Update(operators.clone()),
+                !self.ctx.get_cluster().is_empty(),
             )
             .await?;
             build_res.main_pipeline.add_lock_guard(lock_guard);

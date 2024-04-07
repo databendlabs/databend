@@ -134,6 +134,7 @@ impl Interpreter for DeleteInterpreter {
                 self.plan.metadata.clone(),
                 self.ctx.clone(),
                 SubqueryMutation::Delete,
+                is_distributed,
             )
             .await?;
             build_res.main_pipeline.add_lock_guard(lock_guard);
@@ -328,13 +329,14 @@ pub async fn modify_by_subquery(
     metadata: MetadataRef,
     ctx: Arc<QueryContext>,
     typ: SubqueryMutation,
+    is_distributed: bool,
 ) -> Result<PipelineBuildResult> {
     let mut subquery_desc = subquery_desc;
     subquery_desc
         .outer_columns
         .extend(subquery_desc.predicate_columns.iter());
 
-    // optimize subquery expression
+    // 1: optimize subquery expression
     let input_expr = &subquery_desc.input_expr;
     let outer_columns = &subquery_desc.outer_columns;
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
@@ -343,7 +345,7 @@ pub async fn modify_by_subquery(
         .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
     let input_expr = optimize_query(opt_ctx, input_expr.clone()).await?;
 
-    // first: build filter executor
+    // 2: build filter executor with optimized subquery expression
     let filter_executor = build_filter_executor(
         subquery_desc.clone(),
         metadata.clone(),
@@ -362,11 +364,23 @@ pub async fn modify_by_subquery(
         )));
     };
 
-    // second: build pipelines
+    // 3: build pipelines
 
-    // 2.1. build sub query join input
+    // 3.1: build sub query join input
     let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
-    let join_input = builder.build(&input_expr, outer_columns.clone()).await?;
+    let mut root = builder.build(&input_expr, outer_columns.clone()).await?;
+
+    // distribute the root source
+    if is_distributed {
+        root = PhysicalPlan::Exchange(Exchange {
+            plan_id: 0,
+            input: Box::new(root),
+            kind: FragmentKind::Merge,
+            keys: vec![],
+            allow_adjust_parallelism: true,
+            ignore_exchange: false,
+        });
+    }
 
     let pipeline_builder = PipelineBuilder::create(
         ctx.get_function_context()?,
@@ -374,9 +388,9 @@ pub async fn modify_by_subquery(
         ctx.clone(),
         vec![],
     );
-    let mut build_res = pipeline_builder.finalize(&join_input)?;
+    let mut build_res = pipeline_builder.finalize(&root)?;
 
-    // 2.2. add TransformMutationSubquery
+    // 3.2: add TransformMutationSubquery
     build_res.main_pipeline.add_transform(|input, output| {
         TransformMutationSubquery::try_create(
             ctx.get_function_context()?,
@@ -389,7 +403,7 @@ pub async fn modify_by_subquery(
         .into_processor()
     })?;
 
-    // 3. add TransformSerializeBlock
+    // 3.3: add TransformSerializeBlock
     let block_thresholds = table.get_block_thresholds();
     let cluster_stats_gen = table.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, None)?;
     build_res.main_pipeline.add_transform(|input, output| {
@@ -404,7 +418,7 @@ pub async fn modify_by_subquery(
         proc.into_processor()
     })?;
 
-    // 4. add TransformSerializeSegment
+    // 3.4: add TransformSerializeSegment
     build_res.main_pipeline.try_resize(1)?;
     build_res.main_pipeline.add_transform(|input, output| {
         let proc =
@@ -412,7 +426,7 @@ pub async fn modify_by_subquery(
         proc.into_processor()
     })?;
 
-    // 5. add TableMutationAggregator
+    // 3.5: add TableMutationAggregator
     build_res.main_pipeline.add_transform(|input, output| {
         let aggregator =
             TableMutationAggregator::new(table, ctx.clone(), vec![], MutationKind::Replace);
@@ -421,7 +435,7 @@ pub async fn modify_by_subquery(
         )))
     })?;
 
-    // 6. add CommitSink
+    // 3.6: add CommitSink
     let snapshot_gen = MutationGenerator::new(snapshot, true);
     let lock = None;
     build_res.main_pipeline.add_sink(|input| {
@@ -448,22 +462,21 @@ async fn build_filter_executor(
     subquery_expression: SExpr,
     ctx: Arc<QueryContext>,
 ) -> Result<FilterExecutor> {
-    let predicate = &subquery.filter;
+    let predicate = &subquery.predicate;
     let outer_columns = subquery.outer_columns.clone();
-    let table_expr = subquery.table_expr.clone();
     let func_ctx = ctx.get_function_context()?;
     let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
 
-    let filter = Filter {
-        predicates: vec![predicate.clone()],
-    };
     let filter_expr = match subquery_expression.plan() {
-        RelOperator::Filter(_) => {
-            SExpr::create_unary(Arc::new(filter.clone().into()), Arc::new(table_expr))
-        }
+        RelOperator::Filter(_) => subquery_expression,
         // in SQL like `update t1 set a = a + 1 where 200 > (select avg(a) from t1);`,
-        // which subquery datatype is not boolean, so must filter the result as boolean.
-        _ => SExpr::create_unary(Arc::new(filter.into()), Arc::new(subquery_expression)),
+        // which subquery datatype is not boolean, in this case MUST filter the result as boolean.
+        _ => {
+            let filter = Filter {
+                predicates: vec![predicate.clone()],
+            };
+            SExpr::create_unary(Arc::new(filter.into()), Arc::new(subquery_expression))
+        }
     };
 
     let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);

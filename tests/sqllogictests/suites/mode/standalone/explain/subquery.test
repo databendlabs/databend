@@ -109,52 +109,34 @@ query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0)
 ----
 HashJoin
-├── output columns: [t.number (#0)]
-├── join type: CROSS
-├── build keys: []
-├── probe keys: []
-├── filters: []
-├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: []
-│   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.00
-│   └── AggregateFinal
-│       ├── output columns: [count(*) (#2)]
-│       ├── group by: []
-│       ├── aggregate functions: [count()]
-│       ├── estimated rows: 1.00
-│       └── AggregatePartial
-│           ├── group by: []
-│           ├── aggregate functions: [count()]
-│           ├── estimated rows: 1.00
-│           └── Limit
-│               ├── output columns: []
-│               ├── limit: 1
-│               ├── offset: 0
-│               ├── estimated rows: 0.00
-│               └── Filter
-│                   ├── output columns: []
-│                   ├── filters: [numbers.number (#1) = 0]
-│                   ├── estimated rows: 0.00
-│                   └── TableScan
-│                       ├── table: default.system.numbers
-│                       ├── output columns: [number (#1)]
-│                       ├── read rows: 1
-│                       ├── read bytes: 8
-│                       ├── partitions total: 1
-│                       ├── partitions scanned: 1
-│                       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
-│                       └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 1.00
+├── output columns: [t.number (#0)]                                               
+├── join type: LEFT SEMI                                                          
+├── build keys: []                                                                
+├── probe keys: []                                                                
+├── filters: []                                                                   
+├── estimated rows: 0.00                                                          
+├── Filter(Build)                                                                
+│   ├── output columns: []                                                        
+│   ├── filters: [numbers.number (#1) = 0]                                        
+│   ├── estimated rows: 0.00                                                      
+│   └── TableScan                                                                 
+│       ├── table: default.system.numbers                                         
+│       ├── output columns: [number (#1)]                                         
+│       ├── read rows: 1                                                          
+│       ├── read bytes: 8                                                         
+│       ├── partitions total: 1                                                   
+│       ├── partitions scanned: 1                                                 
+│       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]         
+│       └── estimated rows: 1.00                                                  
+└── TableScan(Probe)                                                              
+ ├── table: default.system.numbers                                             
+ ├── output columns: [number (#0)]                                             
+ ├── read rows: 1                                                              
+ ├── read bytes: 8                                                             
+ ├── partitions total: 1                                                      
+ ├── partitions scanned: 1                                                     
+ ├── push downs: [filters: [], limit: NONE]                                    
+ └── estimated rows: 1.00                                                      
 
 query T
 explain select t.number from numbers(2) as t where number = (select * from numbers(1) where number = 0)

@@ -21,11 +21,10 @@ use crate::MetadataRef;
 #[derive(Clone, Debug)]
 pub struct SubqueryDesc {
     pub input_expr: SExpr,
-    pub table_expr: SExpr,
     pub outer_columns: ColumnSet,
     pub predicate_columns: ColumnSet,
     pub index: IndexType,
-    pub filter: ScalarExpr,
+    pub predicate: ScalarExpr,
 }
 
 #[derive(Clone, Debug)]

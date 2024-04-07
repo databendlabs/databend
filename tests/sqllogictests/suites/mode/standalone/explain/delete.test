@@ -19,27 +19,34 @@ insert into t2 values(2), (3);
 query T
 explain delete from t1 where a in (select b from t2);
 ----
-DeletePlan:
-EvalScalar
-├── scalars: [t1._row_id (#2) AS (#0)]
-└── Filter
-    ├── filters: [3 (#3)]
-    └── Join(RightMark)
-        ├── build keys: [CAST(subquery_1 (#1) AS Int32 NULL)]
-        ├── probe keys: [t1.a (#0)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── EvalScalar
-            ├── scalars: [t2.b (#1) AS (#1)]
-            └── Scan
-                ├── table: default.t2
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+DeletePlan:                                                         
+EvalScalar                                                          
+├── scalars: [t1._row_id (#2) AS (#0)]                              
+└── Join(Left)                                                      
+ ├── build keys: [_row_id (#2)]                                  
+ ├── probe keys: [_row_id (#2)]                                  
+ ├── other filters: []                                           
+ ├── Scan                                                        
+ │   ├── table: default.t1                                       
+ │   ├── filters: []                                             
+ │   ├── order by: []                                            
+ │   └── limit: NONE                                             
+ └── Join(RightMark)                                             
+     ├── build keys: [CAST(subquery_1 (#1) AS Int32 NULL)]       
+     ├── probe keys: [t1.a (#0)]                                 
+     ├── other filters: []                                       
+     ├── Scan                                                    
+     │   ├── table: default.t1                                   
+     │   ├── filters: []                                         
+     │   ├── order by: []                                        
+     │   └── limit: NONE                                         
+     └── EvalScalar                                              
+         ├── scalars: [t2.b (#1) AS (#1)]                        
+         └── Scan                                                
+             ├── table: default.t2                               
+             ├── filters: []                                     
+             ├── order by: []                                    
+             └── limit: NONE                                     
 
 
 query T
