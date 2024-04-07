@@ -830,7 +830,7 @@ impl IndexAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("CreateIndexWithDropTime: create {index_name} with drop time")]
+#[error("UnknownIndex: `{index_name}` while `{context}`")]
 pub struct UnknownIndex {
     index_name: String,
     context: String,
@@ -868,6 +868,38 @@ pub struct GetIndexWithDropTime {
 impl GetIndexWithDropTime {
     pub fn new(index_name: impl Into<String>) -> Self {
         Self {
+            index_name: index_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DuplicatedIndexColumnId: {column_id} is duplicated with index {index_name}")]
+pub struct DuplicatedIndexColumnId {
+    column_id: u32,
+    index_name: String,
+}
+
+impl DuplicatedIndexColumnId {
+    pub fn new(column_id: u32, index_name: impl Into<String>) -> Self {
+        Self {
+            column_id,
+            index_name: index_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("IndexColumnIdNotFound: index {index_name} column id {column_id} is not found")]
+pub struct IndexColumnIdNotFound {
+    column_id: u32,
+    index_name: String,
+}
+
+impl IndexColumnIdNotFound {
+    pub fn new(column_id: u32, index_name: impl Into<String>) -> Self {
+        Self {
+            column_id,
             index_name: index_name.into(),
         }
     }
@@ -1035,7 +1067,13 @@ pub enum AppError {
     DropIndexWithDropTime(#[from] DropIndexWithDropTime),
 
     #[error(transparent)]
-    GetIndexWithDropTIme(#[from] GetIndexWithDropTime),
+    GetIndexWithDropTime(#[from] GetIndexWithDropTime),
+
+    #[error(transparent)]
+    DuplicatedIndexColumnId(#[from] DuplicatedIndexColumnId),
+
+    #[error(transparent)]
+    IndexColumnIdNotFound(#[from] IndexColumnIdNotFound),
 
     #[error(transparent)]
     DatamaskAlreadyExists(#[from] DatamaskAlreadyExists),
@@ -1361,6 +1399,24 @@ impl AppErrorMessage for GetIndexWithDropTime {
     }
 }
 
+impl AppErrorMessage for DuplicatedIndexColumnId {
+    fn message(&self) -> String {
+        format!(
+            "{} is duplicated with index '{}'",
+            self.column_id, self.index_name
+        )
+    }
+}
+
+impl AppErrorMessage for IndexColumnIdNotFound {
+    fn message(&self) -> String {
+        format!(
+            "index '{}' column id {} is not found",
+            self.index_name, self.column_id
+        )
+    }
+}
+
 impl AppErrorMessage for DatamaskAlreadyExists {
     fn message(&self) -> String {
         format!("Datamask '{}' already exists", self.name)
@@ -1483,7 +1539,12 @@ impl From<AppError> for ErrorCode {
             AppError::IndexAlreadyExists(err) => ErrorCode::IndexAlreadyExists(err.message()),
             AppError::UnknownIndex(err) => ErrorCode::UnknownIndex(err.message()),
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
-            AppError::GetIndexWithDropTIme(err) => ErrorCode::GetIndexWithDropTime(err.message()),
+            AppError::GetIndexWithDropTime(err) => ErrorCode::GetIndexWithDropTime(err.message()),
+            AppError::DuplicatedIndexColumnId(err) => {
+                ErrorCode::DuplicatedIndexColumnId(err.message())
+            }
+            AppError::IndexColumnIdNotFound(err) => ErrorCode::IndexColumnIdNotFound(err.message()),
+
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
 
