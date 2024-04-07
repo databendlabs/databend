@@ -131,7 +131,7 @@ impl Table for RandomTable {
             .iter()
             .map(|f| {
                 let data_type: DataType = f.data_type().into();
-                let column = Column::random(&data_type, 1, self.seed.clone());
+                let column = Column::random(&data_type, 1, self.seed);
                 BlockEntry::new(data_type.clone(), Value::Column(column))
             })
             .collect::<Vec<_>>();
@@ -188,7 +188,7 @@ impl Table for RandomTable {
                     output,
                     output_schema.clone(),
                     parts.rows,
-                    self.seed.clone(),
+                    self.seed,
                 )?,
             );
         }
@@ -197,7 +197,7 @@ impl Table for RandomTable {
             let output = OutputPort::create();
             builder.add_source(
                 output.clone(),
-                RandomSource::create(ctx.clone(), output, output_schema, 0, self.seed.clone())?,
+                RandomSource::create(ctx.clone(), output, output_schema, 0, self.seed)?,
             );
         }
 
