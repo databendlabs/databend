@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
@@ -49,6 +48,7 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Versioned;
+use parquet::format::FileMetaData;
 
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::Filter;
@@ -63,10 +63,10 @@ pub struct BloomIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
 }
 
-impl TryFrom<ThriftFileMetaData> for BloomIndexMeta {
+impl TryFrom<FileMetaData> for BloomIndexMeta {
     type Error = databend_common_exception::ErrorCode;
 
-    fn try_from(mut meta: ThriftFileMetaData) -> std::result::Result<Self, Self::Error> {
+    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
         let rg = meta.row_groups.remove(0);
         let mut col_metas = Vec::with_capacity(rg.columns.len());
         for x in &rg.columns {

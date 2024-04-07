@@ -546,18 +546,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("fuse_write_use_parquet2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when writing data with fuse engine.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("fuse_read_use_parquet2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when reading data with fuse engine.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_replace_into_partitioning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
