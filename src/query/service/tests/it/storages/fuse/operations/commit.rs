@@ -708,7 +708,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn update_multi_table_insert_status(&self, _table_id: u64, _num_rows: usize) {
+    fn update_multi_table_insert_status(&self, _table_id: u64, _num_rows: u64) {
         todo!()
     }
 

@@ -934,7 +934,7 @@ impl TableContext for QueryContext {
         self.shared.merge_status.clone()
     }
 
-    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: usize) {
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
         let mut multi_table_insert_status = self.shared.multi_table_insert_status.lock();
         match multi_table_insert_status.insert_rows.get_mut(&table_id) {
             Some(v) => {

@@ -19,5 +19,5 @@ use serde::Serialize;
 
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct MultiTableInsertStatus {
-    pub insert_rows: HashMap<u64, usize>,
+    pub insert_rows: HashMap<u64, u64>,
 }

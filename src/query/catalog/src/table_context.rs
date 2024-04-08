@@ -250,7 +250,7 @@ pub trait TableContext: Send + Sync {
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
 
-    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: usize);
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64);
 
     fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>>;
 

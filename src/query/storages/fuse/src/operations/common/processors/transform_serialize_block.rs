@@ -348,10 +348,9 @@ impl Processor for TransformSerializeBlock {
                         .incr(&progress_values);
 
                     if let Some(tid) = self.table_id {
-                        self.block_builder.ctx.update_multi_table_insert_status(
-                            tid,
-                            serialized.block_meta.row_count as usize,
-                        );
+                        self.block_builder
+                            .ctx
+                            .update_multi_table_insert_status(tid, serialized.block_meta.row_count);
                     }
 
                     DataBlock::empty_with_meta(Box::new(serialized.block_meta))
