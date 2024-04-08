@@ -61,7 +61,7 @@ impl InsertMultiTable {
             let field_name = format!("number of rows inserted into {}.{}", t.1.0, t.1.1);
             fields.push(DataField::new(
                 &field_name,
-                DataType::Number(NumberDataType::Int32),
+                DataType::Number(NumberDataType::UInt64),
             ));
         }
         DataSchemaRefExt::create(fields)
