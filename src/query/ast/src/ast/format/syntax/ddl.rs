@@ -223,6 +223,7 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
         AlterTableAction::FlashbackTo { point } => match point {
             TimeTravelPoint::Snapshot(sid) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
             TimeTravelPoint::Timestamp(ts) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
+            TimeTravelPoint::Offset(num) => RcDoc::text(format!(" AT (OFFSET => {num})")),
             TimeTravelPoint::Stream {
                 catalog,
                 database,
@@ -358,6 +359,7 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
         .append(match stmt.travel_point {
             Some(TimeTravelPoint::Snapshot(sid)) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
             Some(TimeTravelPoint::Timestamp(ts)) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
+            Some(TimeTravelPoint::Offset(num)) => RcDoc::text(format!(" AT (OFFSET => {num})")),
             Some(TimeTravelPoint::Stream {
                 catalog,
                 database,

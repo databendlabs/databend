@@ -496,6 +496,7 @@ impl Display for Indirection {
 pub enum TimeTravelPoint {
     Snapshot(#[drive(skip)] String),
     Timestamp(Box<Expr>),
+    Offset(Box<Expr>),
     Stream {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
@@ -511,6 +512,9 @@ impl Display for TimeTravelPoint {
             }
             TimeTravelPoint::Timestamp(ts) => {
                 write!(f, "(TIMESTAMP => {ts})")?;
+            }
+            TimeTravelPoint::Offset(num) => {
+                write!(f, "(OFFSET => {num})")?;
             }
             TimeTravelPoint::Stream {
                 catalog,

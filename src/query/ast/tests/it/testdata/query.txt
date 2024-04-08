@@ -396,6 +396,103 @@ Query {
 
 
 ---------- Input ----------
+select * from customer at(offset => -10 * 30)
+---------- Output ---------
+SELECT * FROM customer AT (OFFSET => - 10 * 30)
+---------- AST ------------
+Query {
+    span: Some(
+        0..45,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..45,
+            ),
+            hints: None,
+            distinct: false,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..45,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            14..22,
+                        ),
+                        name: "customer",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    alias: None,
+                    temporal: Some(
+                        TimeTravel(
+                            Offset(
+                                BinaryOp {
+                                    span: Some(
+                                        40..41,
+                                    ),
+                                    op: Multiply,
+                                    left: UnaryOp {
+                                        span: Some(
+                                            36..37,
+                                        ),
+                                        op: Minus,
+                                        expr: Literal {
+                                            span: Some(
+                                                37..39,
+                                            ),
+                                            value: UInt64(
+                                                10,
+                                            ),
+                                        },
+                                    },
+                                    right: Literal {
+                                        span: Some(
+                                            42..44,
+                                        ),
+                                        value: UInt64(
+                                            30,
+                                        ),
+                                    },
+                                },
+                            ),
+                        ),
+                    ),
+                    pivot: None,
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
 select * from customer inner join orders
 ---------- Output ---------
 SELECT * FROM customer INNER JOIN orders

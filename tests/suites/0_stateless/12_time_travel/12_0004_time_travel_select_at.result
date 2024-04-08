@@ -7,3 +7,5 @@ counting the data set of first insertion, which should contain 2 rows
 2
 counting the data set of first insertion by timestamp, which should contains 2 rows
 2
+counting the data set of first insertion by offset, which should contains 2 rows
+2
