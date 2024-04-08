@@ -59,6 +59,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -353,6 +354,8 @@ impl CreateTableInterpreter {
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema)?;
         is_valid_change_tracking(&table_meta.options)?;
+        // check random seed
+        is_valid_random_seed(&table_meta.options)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -471,6 +474,8 @@ pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new
     r.insert(OPT_KEY_LOCATION);
     r.insert(OPT_KEY_CONNECTION_NAME);
 
+    r.insert(OPT_KEY_RANDOM_SEED);
+
     r.insert("transient");
     r
 });
@@ -530,6 +535,13 @@ pub fn is_valid_bloom_index_columns(
 pub fn is_valid_change_tracking(options: &BTreeMap<String, String>) -> Result<()> {
     if let Some(value) = options.get(OPT_KEY_CHANGE_TRACKING) {
         value.to_lowercase().parse::<bool>()?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_random_seed(options: &BTreeMap<String, String>) -> Result<()> {
+    if let Some(value) = options.get(OPT_KEY_RANDOM_SEED) {
+        value.parse::<u64>()?;
     }
     Ok(())
 }

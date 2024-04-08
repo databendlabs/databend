@@ -216,7 +216,10 @@ fn replace_const_to_const_and_column_ref(
                 }
             } else {
                 // Replace the child to `Constant`
-                let scalar = Column::random(data_type, 1).index(0).unwrap().to_owned();
+                let scalar = Column::random(data_type, 1, None)
+                    .index(0)
+                    .unwrap()
+                    .to_owned();
                 Expr::Constant {
                     span: None,
                     scalar,

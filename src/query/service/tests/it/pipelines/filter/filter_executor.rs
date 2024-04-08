@@ -44,7 +44,7 @@ pub fn test_filter_executor() -> databend_common_exception::Result<()> {
 
             // 1. Generate a random `DataBlock`.
             let columns = (0..num_columns)
-                .map(|_| Column::random(data_type, num_rows))
+                .map(|_| Column::random(data_type, num_rows, None))
                 .collect_vec();
             let block = DataBlock::new_from_columns(columns);
             block.check_valid()?;

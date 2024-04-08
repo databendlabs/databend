@@ -46,6 +46,8 @@ pub const OPT_KEY_ENGINE_META: &str = "engine_meta";
 ///
 /// If both OPT_KEY_SNAPSHOT_LOC and OPT_KEY_SNAPSHOT_LOCATION exist, the latter will be used
 pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
+// the following are used in for random engine
+pub const OPT_KEY_RANDOM_SEED: &str = "seed";
 
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specified this option keys in DDL
