@@ -11484,8 +11484,7 @@ checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 [[package]]
 name = "reqsign"
 version = "0.14.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43e319d9de9ff4d941abf4ac718897118b0fe04577ea3f8e0f5788971784eef5"
+source = "git+https://github.com/Xuanwo/reqsign?rev=122dc12#122dc12e4e4dfbcaa12e6ce2f0f314009f51f1c5"
 dependencies = [
  "anyhow",
  "async-trait",
