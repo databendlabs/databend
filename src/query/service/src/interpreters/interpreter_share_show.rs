@@ -75,7 +75,7 @@ impl Interpreter for ShowSharesInterpreter {
         }
 
         let req = ShowSharesReq {
-            tenant: tenant.name().to_string(),
+            tenant: tenant.clone(),
         };
         let resp = meta_api.show_shares(req).await?;
 

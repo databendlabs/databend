@@ -15,7 +15,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::tenant_key::TenantResource;
+use crate::tenant_key::resource::TenantResource;
 
 /// Error occurred when a record already exists for a key.
 #[derive(Clone, PartialEq, Eq, thiserror::Error)]
