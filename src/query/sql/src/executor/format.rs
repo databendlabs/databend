@@ -141,7 +141,7 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("RangeJoin: {}", plan.join_type, ),
+                    format!("RangeJoin: {}", plan.join_type),
                     children,
                 ))
             }
