@@ -23,6 +23,14 @@ statement error 2013
 select * from t at(offset => -30 * 60)
 
 statement ok
+select sleep(1)
+
+query I
+select * from t at(offset => -1)
+----
+1
+
+statement ok
 DROP TABLE t ALL
 
 statement ok
