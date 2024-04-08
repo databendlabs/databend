@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
 
@@ -62,6 +63,7 @@ use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::F32;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -895,8 +897,21 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_lambda_function(*span, func_name, &args, lambda)
                         .await?
                 } else if GENERAL_SEARCH_FUNCTIONS.contains(&func_name) {
-                    self.resolve_search_function(*span, func_name, &args)
-                        .await?
+                    match func_name {
+                        "score" => {
+                            self.resolve_score_search_function(*span, func_name, &args)
+                                .await?
+                        }
+                        "match" => {
+                            self.resolve_match_search_function(*span, func_name, &args)
+                                .await?
+                        }
+                        "query" => {
+                            self.resolve_query_search_function(*span, func_name, &args)
+                                .await?
+                        }
+                        _ => unreachable!(),
+                    }
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -1994,41 +2009,52 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_search_function(
+    async fn resolve_score_search_function(
         &mut self,
         span: Span,
         func_name: &str,
         args: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if func_name == "score" {
-            if !args.is_empty() {
-                return Err(ErrorCode::SemanticError(format!(
-                    "invalid arguments for search function, {} expects 0 argument, but got {}",
-                    func_name,
-                    args.len()
-                ))
-                .set_span(span));
-            }
-            let internal_column =
-                InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore);
-
-            let internal_column_binding = InternalColumnBinding {
-                database_name: None,
-                table_name: None,
-                internal_column,
-            };
-            let column = self.bind_context.add_internal_column_binding(
-                &internal_column_binding,
-                self.metadata.clone(),
-                false,
-            )?;
-
-            let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span, column });
-            let data_type = DataType::Number(NumberDataType::Float32);
-            return Ok(Box::new((scalar_expr, data_type)));
+        if !args.is_empty() {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, {} expects 0 argument, but got {}",
+                func_name,
+                args.len()
+            ))
+            .set_span(span));
         }
+        let internal_column =
+            InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore);
 
-        // match function
+        let internal_column_binding = InternalColumnBinding {
+            database_name: None,
+            table_name: None,
+            internal_column,
+        };
+        let column = self.bind_context.add_internal_column_binding(
+            &internal_column_binding,
+            self.metadata.clone(),
+            false,
+        )?;
+
+        let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span, column });
+        let data_type = DataType::Number(NumberDataType::Float32);
+        Ok(Box::new((scalar_expr, data_type)))
+    }
+
+    /// Resolve match search function.
+    /// The first argument is the field or fields to match against,
+    /// multiple fields can have a optional per-field boosting that
+    /// gives preferential weight to fields being searched in.
+    /// For example: title^5, content^1.2
+    /// The scond argument is the query text without query syntax.
+    #[async_backtrace::framed]
+    async fn resolve_match_search_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
             return Err(ErrorCode::SemanticError(format!(
                 "search function {} can only be used in where clause",
@@ -2050,54 +2076,241 @@ impl<'a> TypeChecker<'a> {
         let field_arg = args[0];
         let query_arg = args[1];
 
-        // TODO: support multiple fields
         let box (field_scalar, _) = self.resolve(field_arg).await?;
-        let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
-            return Err(ErrorCode::SemanticError(
-                "invalid arguments for search function, field must be a column".to_string(),
-            )
-            .set_span(span));
+        let column_refs = match field_scalar {
+            // single field without boost
+            ScalarExpr::BoundColumnRef(column_ref) => {
+                vec![(column_ref, None)]
+            }
+            // constant multiple fields with boosts
+            ScalarExpr::ConstantExpr(constant_expr) => {
+                let Some(constant_field) = constant_expr.value.as_string() else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "invalid arguments for search function, field must be a column or constant string, but got {}",
+                        constant_expr.value
+                    ))
+                    .set_span(constant_expr.span));
+                };
+
+                // fields are separated by commas and boost is separated by ^
+                let field_strs: Vec<&str> = constant_field.split(',').collect();
+                let mut column_refs = Vec::with_capacity(field_strs.len());
+                for field_str in field_strs {
+                    let field_boosts: Vec<&str> = field_str.split('^').collect();
+                    if field_boosts.len() > 2 {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "invalid arguments for search function, field string must have only one boost, but got {}",
+                            constant_field
+                        ))
+                        .set_span(constant_expr.span));
+                    }
+                    let column_expr = Expr::ColumnRef {
+                        span: constant_expr.span,
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: ColumnID::Name(Identifier::from_name(
+                                constant_expr.span,
+                                field_boosts[0].trim(),
+                            )),
+                        },
+                    };
+                    let box (field_scalar, _) = self.resolve(&column_expr).await?;
+                    let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
+                        return Err(ErrorCode::SemanticError(
+                            "invalid arguments for search function, field must be a column"
+                                .to_string(),
+                        )
+                        .set_span(constant_expr.span));
+                    };
+                    let boost = if field_boosts.len() == 2 {
+                        match f32::from_str(field_boosts[1].trim()) {
+                            Ok(boost) => Some(F32::from(boost)),
+                            Err(_) => {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "invalid arguments for search function, boost must be a float value, but got {}",
+                                    field_boosts[1]
+                                ))
+                                .set_span(constant_expr.span));
+                            }
+                        }
+                    } else {
+                        None
+                    };
+                    column_refs.push((column_ref, boost));
+                }
+                column_refs
+            }
+            _ => {
+                return Err(ErrorCode::SemanticError(
+                    "invalid arguments for search function, field must be a column or constant string".to_string(),
+                )
+                .set_span(span));
+            }
         };
-        if column_ref.column.table_index.is_none() {
-            return Err(ErrorCode::SemanticError(
-                "invalid arguments for search function, column must in a table".to_string(),
-            )
-            .set_span(span));
-        }
-        let table_index = column_ref.column.table_index.unwrap();
-
-        let table_entry = self.metadata.read().table(table_index).clone();
-        let table = table_entry.table();
-        let table_info = table.get_table_info();
-
-        let table_schema = table_info.schema();
-        let table_indexes = &table_info.meta.indexes;
-
-        let column_name = column_ref.column.column_name;
-        let column_id = table_schema.column_id_of(&column_name)?;
 
         let box (query_scalar, _) = self.resolve(query_arg).await?;
-        let Ok(query_expr) = ConstantExpr::try_from(query_scalar) else {
+        let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(span));
+            .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(span));
+            .set_span(query_scalar.span()));
         };
+
+        // match function didn't support query syntax,
+        // convert query text to lowercase and remove punctuation characters,
+        // so that tantivy query parser can parse the query text as plain text
+        // without syntax
+        let formated_query_text: String = query_text
+            .to_lowercase()
+            .chars()
+            .map(|v| if v.is_ascii_punctuation() { ' ' } else { v })
+            .collect();
+
+        self.resolve_search_function(span, column_refs, &formated_query_text)
+            .await
+    }
+
+    /// Resolve query search function.
+    /// The first argument query text with query syntax.
+    /// The following query syntax is supported:
+    /// 1. simple terms, like `title:quick`
+    /// 2. bool operator terms, like `title:fox AND dog OR cat`
+    /// 3. must and negative operator terms, like `title:+fox -cat`
+    /// 4. phrase terms, like `title:"quick brown fox"`
+    /// 5. mutliple field with boost terms, like `title:fox^5 content:dog^2`
+    #[async_backtrace::framed]
+    async fn resolve_query_search_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
+            return Err(ErrorCode::SemanticError(format!(
+                "search function {} can only be used in where clause",
+                func_name
+            ))
+            .set_span(span));
+        }
+
+        // TODO: support options field
+        if args.len() != 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, {} expects 1 argument, but got {}",
+                func_name,
+                args.len()
+            ))
+            .set_span(span));
+        }
+
+        let query_arg = args[0];
+
+        let box (query_scalar, _) = self.resolve(query_arg).await?;
+        let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(query_scalar.span()));
+        };
+        let Some(query_text) = query_expr.value.as_string() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(query_scalar.span()));
+        };
+
+        let field_strs: Vec<&str> = query_text.split(' ').collect();
+        let mut column_refs = Vec::with_capacity(field_strs.len());
+        for field_str in field_strs {
+            if !field_str.contains(':') {
+                continue;
+            }
+            let field_names: Vec<&str> = field_str.split(':').collect();
+            let column_expr = Expr::ColumnRef {
+                span: query_scalar.span(),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(Identifier::from_name(
+                        query_scalar.span(),
+                        field_names[0].trim(),
+                    )),
+                },
+            };
+            let box (field_scalar, _) = self.resolve(&column_expr).await?;
+            let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
+                return Err(ErrorCode::SemanticError(
+                    "invalid arguments for search function, field must be a column".to_string(),
+                )
+                .set_span(query_scalar.span()));
+            };
+            column_refs.push((column_ref, None));
+        }
+
+        self.resolve_search_function(span, column_refs, query_text)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_search_function(
+        &mut self,
+        span: Span,
+        column_refs: Vec<(BoundColumnRef, Option<F32>)>,
+        query_text: &String,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if column_refs.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "invalid arguments for search function, must specify at least one search column"
+                    .to_string(),
+            )
+            .set_span(span));
+        }
+        if !column_refs.windows(2).all(|c| {
+            c[0].0.column.table_index.is_some()
+                && c[0].0.column.table_index == c[1].0.column.table_index
+        }) {
+            return Err(ErrorCode::SemanticError(
+                "invalid arguments for search function, all columns must in a table".to_string(),
+            )
+            .set_span(span));
+        }
+        let table_index = column_refs[0].0.column.table_index.unwrap();
+
+        let table_entry = self.metadata.read().table(table_index).clone();
+        let table = table_entry.table();
+        let table_info = table.get_table_info();
+        let table_schema = table_info.schema();
+        let table_indexes = &table_info.meta.indexes;
+
+        let mut query_fields = Vec::with_capacity(column_refs.len());
+        let mut column_ids = Vec::with_capacity(column_refs.len());
+        for (column_ref, boost) in &column_refs {
+            let column_name = &column_ref.column.column_name;
+            let column_id = table_schema.column_id_of(column_name)?;
+            column_ids.push(column_id);
+            query_fields.push((column_name.clone(), *boost));
+        }
 
         // find inverted index and check schema
         let mut index_name = "".to_string();
         let mut index_version = "".to_string();
         let mut index_schema = None;
         for table_index in table_indexes.values() {
-            if table_index.column_ids.contains(&column_id) {
+            if column_ids
+                .iter()
+                .all(|id| table_index.column_ids.contains(id))
+            {
                 index_name = table_index.name.clone();
                 index_version = table_index.version.clone();
 
@@ -2113,13 +2326,13 @@ impl<'a> TypeChecker<'a> {
         }
 
         if index_schema.is_none() {
+            let column_names = query_fields.iter().map(|c| c.0.clone()).join(", ");
             return Err(ErrorCode::SemanticError(format!(
-                "column {} don't have inverted index",
-                column_name
+                "columns {} don't have inverted index",
+                column_names
             ))
             .set_span(span));
         }
-        let query_columns = vec![column_name.clone()];
 
         if self
             .bind_context
@@ -2135,7 +2348,7 @@ impl<'a> TypeChecker<'a> {
             index_name,
             index_version,
             index_schema: index_schema.unwrap(),
-            query_columns,
+            query_fields,
             query_text: query_text.to_string(),
         };
 
@@ -2147,8 +2360,8 @@ impl<'a> TypeChecker<'a> {
             InternalColumn::new(SEARCH_MATCHED_COL_NAME, InternalColumnType::SearchMatched);
 
         let internal_column_binding = InternalColumnBinding {
-            database_name: column_ref.column.database_name,
-            table_name: column_ref.column.table_name,
+            database_name: column_refs[0].0.column.database_name.clone(),
+            table_name: column_refs[0].0.column.table_name.clone(),
             internal_column,
         };
         let column = self.bind_context.add_internal_column_binding(
