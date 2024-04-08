@@ -37,7 +37,7 @@ impl ViewsTable {
             0 AS is_trigger_updatable,
             0 AS is_trigger_deletable,
             0 AS is_trigger_insertable_into
-        FROM system.tables
+        FROM system.views
         WHERE engine LIKE '%View';";
 
         let mut options = BTreeMap::new();

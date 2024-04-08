@@ -63,6 +63,8 @@ use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TracingTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
+use databend_common_storages_system::ViewsTableWithHistory;
+use databend_common_storages_system::ViewsTableWithoutHistory;
 use databend_common_storages_system::VirtualColumnsTable;
 
 use crate::catalogs::InMemoryMetas;
@@ -137,6 +139,8 @@ impl SystemDatabase {
             UserFunctionsTable::create(sys_db_meta.next_table_id()),
             NotificationsTable::create(sys_db_meta.next_table_id()),
             NotificationHistoryTable::create(sys_db_meta.next_table_id()),
+            ViewsTableWithHistory::create(sys_db_meta.next_table_id()),
+            ViewsTableWithoutHistory::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();
