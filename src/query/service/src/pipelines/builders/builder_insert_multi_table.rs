@@ -242,7 +242,7 @@ impl PipelineBuilder {
                 sort_builders.push(Box::new(self.dummy_transform_builder()?));
             }
             serialize_block_builders.push(Box::new(
-                self.serialize_block_transform_builder(table, cluster_stats_gen)?,
+                self.with_tid_serialize_block_transform_builder(table, cluster_stats_gen)?,
             ));
         }
         self.main_pipeline

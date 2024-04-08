@@ -120,6 +120,7 @@ use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -133,6 +134,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -703,6 +705,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+        todo!()
+    }
+
+    fn update_multi_table_insert_status(&self, _table_id: u64, _num_rows: u64) {
+        todo!()
+    }
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
         todo!()
     }
 

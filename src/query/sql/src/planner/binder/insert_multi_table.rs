@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::InsertMultiTableStmt;
@@ -49,6 +50,8 @@ impl Binder {
             is_first,
             into_clauses,
         } = stmt;
+
+        let mut target_tables = HashMap::new();
 
         let (input_source, bind_context) = {
             let table_ref = TableReference::Subquery {
@@ -113,6 +116,7 @@ impl Binder {
                     &when_clause.into_clauses,
                     source_schema.clone(),
                     &mut source_bind_context,
+                    &mut target_tables,
                 )
                 .await?;
             whens.push(When { condition, intos });
@@ -125,6 +129,7 @@ impl Binder {
                         &else_clause.into_clauses,
                         source_schema.clone(),
                         &mut source_bind_context,
+                        &mut target_tables,
                     )
                     .await?;
                 Some(Else { intos })
@@ -132,19 +137,27 @@ impl Binder {
             None => None,
         };
 
+        let intos = self
+            .bind_into_clauses(
+                into_clauses,
+                source_schema.clone(),
+                &mut source_bind_context,
+                &mut target_tables,
+            )
+            .await?;
+
+        let mut ordered_target_tables = target_tables.into_iter().collect::<Vec<_>>();
+        // convenient for testing
+        ordered_target_tables.sort_by(|(_, l), (_, r)| l.0.cmp(&r.0).then_with(|| l.1.cmp(&r.1)));
+
         let plan = InsertMultiTable {
             input_source,
             whens,
             opt_else,
             overwrite: *overwrite,
             is_first: *is_first,
-            intos: self
-                .bind_into_clauses(
-                    into_clauses,
-                    source_schema.clone(),
-                    &mut source_bind_context,
-                )
-                .await?,
+            intos,
+            target_tables: ordered_target_tables,
         };
         Ok(Plan::InsertMultiTable(Box::new(plan)))
     }
@@ -156,6 +169,7 @@ impl Binder {
         into_clauses: &[IntoClause],
         source_schema: DataSchemaRef,
         source_bind_context: &mut BindContext,
+        target_tables: &mut HashMap<u64, (String, String)>,
     ) -> Result<Vec<Into>> {
         let mut intos = vec![];
         for into_clause in into_clauses {
@@ -173,6 +187,10 @@ impl Binder {
                 .ctx
                 .get_table(&catalog_name, &database_name, &table_name)
                 .await?;
+            target_tables.insert(
+                target_table.get_id(),
+                (database_name.clone(), table_name.clone()),
+            );
 
             let n_target_col = if target_columns.is_empty() {
                 target_table.schema().fields().len()

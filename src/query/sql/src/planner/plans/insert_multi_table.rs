@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
 use super::Plan;
 use crate::ScalarExpr;
@@ -25,6 +29,7 @@ pub struct InsertMultiTable {
     pub whens: Vec<When>,
     pub opt_else: Option<Else>,
     pub intos: Vec<Into>,
+    pub target_tables: Vec<(u64, (String, String))>, /* (table_id, (database, table)), statement returns result set in this order */
 }
 
 #[derive(Clone, Debug)]
@@ -47,4 +52,18 @@ pub struct Into {
 #[derive(Clone, Debug)]
 pub struct Else {
     pub intos: Vec<Into>,
+}
+
+impl InsertMultiTable {
+    pub fn schema(&self) -> DataSchemaRef {
+        let mut fields = vec![];
+        for (_, (db, tbl)) in self.target_tables.iter() {
+            let field_name = format!("number of rows inserted into {}.{}", db, tbl);
+            fields.push(DataField::new(
+                &field_name,
+                DataType::Number(NumberDataType::UInt64),
+            ));
+        }
+        DataSchemaRefExt::create(fields)
+    }
 }
