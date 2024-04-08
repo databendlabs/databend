@@ -266,6 +266,7 @@ impl RoleApi for RoleMgr {
     ) -> databend_common_exception::Result<()> {
         let mut trials = txn_backoff(None, func_name!());
         loop {
+            trials.next().unwrap()?.await;
             let mut if_then = vec![];
             let mut condition = vec![];
             let seq_owns = self.get_ownerships().await.map_err(|e| {
@@ -280,7 +281,7 @@ impl RoleApi for RoleMgr {
                     let owner_value = serialize_struct(
                         &OwnershipInfo {
                             object,
-                            role: "account_admin".to_string(),
+                            role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
                         },
                         ErrorCode::IllegalUserInfoFormat,
                         || "",
@@ -292,7 +293,6 @@ impl RoleApi for RoleMgr {
             }
 
             if need_transfer {
-                trials.next().unwrap()?.await;
                 let txn_req = TxnRequest {
                     condition: condition.clone(),
                     if_then: if_then.clone(),
