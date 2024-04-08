@@ -27,6 +27,7 @@ fn test_geometry() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geometry.txt").unwrap();
     test_st_geomfromgeohash(file);
+    test_st_geompointfromgeohash(file);
     test_st_makeline(file);
     test_st_makepoint(file);
     test_to_string(file);
@@ -40,6 +41,10 @@ fn test_st_geomfromgeohash(file: &mut impl Write) {
         "a",
         StringType::from_data(vec!["9q60y60rhs", "u4pruydqqvj0"]),
     )]);
+}
+
+fn test_st_geompointfromgeohash(file: &mut impl Write) {
+    run_ast(file, "st_geompointfromgeohash('s02equ0')", &[]);
 }
 fn test_st_makeline(file: &mut impl Write) {
     run_ast(
