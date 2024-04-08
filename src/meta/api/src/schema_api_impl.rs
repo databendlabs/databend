@@ -1134,7 +1134,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // Get index id list by `prefix_list` "<prefix>/<tenant>"
         let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
             .push_str(req.tenant.name())
-            .push_raw("")
+            .push_str("")
             .done();
 
         let id_list = self.prefix_list_kv(&prefix_key).await?;
