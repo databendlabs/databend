@@ -43,23 +43,19 @@ async fn test_catalogs_get_database() -> Result<()> {
     let catalog = create_catalog().await?;
 
     // get system database
-    let database = catalog.get_database(tenant_name, "system").await?;
+    let database = catalog.get_database(&tenant, "system").await?;
     assert_eq!(database.name(), "system");
 
     let db_list = catalog.list_databases(&tenant).await?;
     assert_eq!(db_list.len(), 3);
 
     // get default database
-    let db_2 = catalog.get_database(tenant_name, "default").await?;
+    let db_2 = catalog.get_database(&tenant, "default").await?;
     assert_eq!(db_2.name(), "default");
 
     // get non-exist database
-    let db_3 = catalog.get_database("test", "test").await;
+    let db_3 = catalog.get_database(&tenant, "test").await;
     assert!(db_3.is_err());
-
-    // tenant is empty.
-    let res = catalog.get_database("", "system").await;
-    assert!(res.is_err());
 
     Ok(())
 }
@@ -150,10 +146,10 @@ async fn test_catalogs_table() -> Result<()> {
 
     // Check system/default.
     {
-        let table_list = catalog.list_tables(tenant_name, "system").await?;
+        let table_list = catalog.list_tables(&tenant, "system").await?;
         assert!(!table_list.is_empty());
 
-        let table_list_1 = catalog.list_tables(tenant_name, "default").await?;
+        let table_list_1 = catalog.list_tables(&tenant, "default").await?;
         assert!(table_list_1.is_empty());
     }
 
@@ -187,11 +183,9 @@ async fn test_catalogs_table() -> Result<()> {
         assert!(res.is_ok());
 
         // list tables
-        let table_list_3 = catalog.list_tables(tenant_name, "default").await?;
+        let table_list_3 = catalog.list_tables(&tenant, "default").await?;
         assert_eq!(table_list_3.len(), 1);
-        let table = catalog
-            .get_table(tenant_name, "default", "test_table")
-            .await?;
+        let table = catalog.get_table(&tenant, "default", "test_table").await?;
         assert_eq!(table.name(), "test_table");
         let table = catalog.get_table_by_info(table.get_table_info())?;
         assert_eq!(table.name(), "test_table");
@@ -199,10 +193,8 @@ async fn test_catalogs_table() -> Result<()> {
 
     // Drop.
     {
-        let tbl = catalog
-            .get_table(tenant_name, "default", "test_table")
-            .await?;
-        let db = catalog.get_database(tenant_name, "default").await?;
+        let tbl = catalog.get_table(&tenant, "default", "test_table").await?;
+        let db = catalog.get_database(&tenant, "default").await?;
         let res = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
@@ -213,7 +205,7 @@ async fn test_catalogs_table() -> Result<()> {
             })
             .await;
         assert!(res.is_ok());
-        let table_list_4 = catalog.list_tables(tenant_name, "default").await?;
+        let table_list_4 = catalog.list_tables(&tenant, "default").await?;
         assert!(table_list_4.is_empty());
     }
 

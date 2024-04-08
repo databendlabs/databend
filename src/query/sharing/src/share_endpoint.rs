@@ -22,11 +22,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::GetShareEndpointReq;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::TableInfoMap;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_storage::ShareTableConfig;
 use databend_common_users::UserApiProvider;
 use http::header::AUTHORIZATION;
@@ -65,17 +66,17 @@ impl ShareEndpointManager {
     #[async_backtrace::framed]
     async fn get_share_endpoint_config(
         &self,
-        from_tenant: &str,
-        to_tenant: Option<String>,
+        from_tenant: &Tenant,
+        to_tenant: Option<&Tenant>,
     ) -> Result<Vec<EndpointConfig>> {
-        if let Some(ref to_tenant) = to_tenant {
-            if to_tenant == from_tenant {
+        if let Some(to_tenant) = to_tenant {
+            if to_tenant.name() == from_tenant.name() {
                 match ShareTableConfig::share_endpoint_address() {
                     Some(url) => {
                         return Ok(vec![EndpointConfig {
                             url: format!("http://{}/", url),
                             token: ShareTableConfig::share_endpoint_token(),
-                            tenant: from_tenant.to_string(),
+                            tenant: from_tenant.name().to_string(),
                         }]);
                     }
                     None => return Ok(vec![]),
@@ -83,11 +84,10 @@ impl ShareEndpointManager {
             }
         }
 
-        let tenant = Tenant::new_or_err(from_tenant, "get_share_endpoint_config")?;
         let req = GetShareEndpointReq {
-            tenant,
+            tenant: from_tenant.clone(),
             endpoint: None,
-            to_tenant,
+            to_tenant: to_tenant.cloned(),
         };
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let resp = meta_api.get_share_endpoint(req).await?;
@@ -95,7 +95,7 @@ impl ShareEndpointManager {
         for (_, endpoint_meta) in resp.share_endpoint_meta_vec.iter() {
             share_endpoint_config_vec.push(EndpointConfig {
                 url: endpoint_meta.url.clone(),
-                token: RefreshableToken::Direct(from_tenant.to_owned()),
+                token: RefreshableToken::Direct(from_tenant.name().to_string()),
                 tenant: endpoint_meta.tenant.clone(),
             });
         }
@@ -105,22 +105,27 @@ impl ShareEndpointManager {
     #[async_backtrace::framed]
     pub async fn get_table_info_map(
         &self,
-        from_tenant: &str,
+        from_tenant: &Tenant,
         db_info: &DatabaseInfo,
         tables: Vec<String>,
     ) -> Result<TableInfoMap> {
-        let to_tenant = &db_info.meta.from_share.as_ref().unwrap().tenant;
-        let share_name = &db_info.meta.from_share.as_ref().unwrap().share_name;
+        let share_name_ident_raw = db_info.meta.from_share.as_ref().unwrap();
+
+        let share_name_ident = share_name_ident_raw.clone().to_tident(());
+
+        let to_tenant = share_name_ident.tenant();
+        let share_name = share_name_ident.share_name();
 
         let endpoint_meta_config_vec = self
-            .get_share_endpoint_config(from_tenant, Some(to_tenant.name().to_string()))
+            .get_share_endpoint_config(from_tenant, Some(to_tenant))
             .await?;
         let endpoint_config = match endpoint_meta_config_vec.first() {
             Some(endpoint_meta_config) => endpoint_meta_config,
             None => {
                 return Err(ErrorCode::UnknownShareEndpoint(format!(
-                    "Unknown share endpoint on accessing shared database from tenant {:?} to target tenant {:?}",
-                    from_tenant, to_tenant
+                    "Unknown share endpoint on accessing shared database from tenant '{}' to target tenant '{}'",
+                    from_tenant.name(),
+                    to_tenant.name()
                 )));
             }
         };
@@ -175,15 +180,15 @@ impl ShareEndpointManager {
     #[async_backtrace::framed]
     pub async fn get_inbound_shares(
         &self,
-        from_tenant: &str,
-        to_tenant: Option<String>,
+        from_tenant: &Tenant,
+        to_tenant: Option<&Tenant>,
         share_name: Option<ShareNameIdent>,
     ) -> Result<Vec<(String, ShareSpec)>> {
         let mut endpoint_meta_config_vec = vec![];
         // If `to_tenant` is None, query from same tenant for inbound shares
         if to_tenant.is_none() {
             if let Ok(config_vec) = self
-                .get_share_endpoint_config(from_tenant, Some(from_tenant.to_string()))
+                .get_share_endpoint_config(from_tenant, Some(from_tenant))
                 .await
             {
                 endpoint_meta_config_vec.extend(config_vec);
@@ -196,7 +201,11 @@ impl ShareEndpointManager {
         let mut share_spec_vec = vec![];
         let share_names: Vec<String> = vec![];
         for endpoint_config in endpoint_meta_config_vec {
-            let url = format!("{}tenant/{}/share_spec", endpoint_config.url, from_tenant);
+            let url = format!(
+                "{}tenant/{}/share_spec",
+                endpoint_config.url,
+                from_tenant.display()
+            );
             let bs = Bytes::from(serde_json::to_vec(&share_names)?);
             let auth = endpoint_config.token.to_header().await?;
             let requester = GlobalConfig::instance()
@@ -219,8 +228,8 @@ impl ShareEndpointManager {
                     let ret: Vec<ShareSpec> = serde_json::from_slice(&bs)?;
                     for share_spec in ret {
                         if let Some(ref share_name) = share_name {
-                            if share_spec.name == share_name.share_name
-                                && endpoint_config.tenant == share_name.tenant.name()
+                            if share_spec.name == share_name.share_name()
+                                && endpoint_config.tenant == share_name.tenant_name()
                             {
                                 share_spec_vec.push((endpoint_config.tenant.clone(), share_spec));
                                 return Ok(share_spec_vec);

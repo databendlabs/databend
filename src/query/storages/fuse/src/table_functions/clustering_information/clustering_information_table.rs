@@ -171,7 +171,7 @@ impl AsyncSource for ClusteringInformationSource {
             .get_catalog(CATALOG_DEFAULT)
             .await?
             .get_table(
-                tenant_id.name(),
+                &tenant_id,
                 self.arg_database_name.as_str(),
                 self.arg_table_name.as_str(),
             )

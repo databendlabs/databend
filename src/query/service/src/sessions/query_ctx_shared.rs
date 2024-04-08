@@ -340,7 +340,7 @@ impl QueryContextShared {
             .catalog_manager
             .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
             .await?;
-        let cache_table = catalog.get_table(tenant.name(), database, table).await?;
+        let cache_table = catalog.get_table(&tenant, database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
 
@@ -373,9 +373,7 @@ impl QueryContextShared {
                 let source_table = match catalog.get_stream_source_table(stream_desc)? {
                     Some(source_table) => source_table,
                     None => {
-                        let source_table = catalog
-                            .get_table(tenant.name(), database, table_name)
-                            .await?;
+                        let source_table = catalog.get_table(&tenant, database, table_name).await?;
                         catalog.cache_stream_source_table(
                             stream.get_table_info().clone(),
                             source_table.get_table_info().clone(),

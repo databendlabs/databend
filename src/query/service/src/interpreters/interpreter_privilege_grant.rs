@@ -48,7 +48,7 @@ impl GrantPrivilegeInterpreter {
 
     async fn convert_to_ownerobject(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         object: &GrantObject,
         catalog_name: Option<String>,
     ) -> Result<OwnershipObject> {
@@ -197,7 +197,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
             PrincipalIdentity::Role(role) => {
                 if plan.priv_types.has_privilege(Ownership) && plan.priv_types.len() == 1 {
                     let owner_object = self
-                        .convert_to_ownerobject(tenant.name(), &plan.on, plan.on.catalog())
+                        .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
                         .await?;
                     if self.ctx.get_current_role().is_some() {
                         self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)

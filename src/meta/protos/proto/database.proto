@@ -21,6 +21,7 @@ syntax = "proto3";
 package databend_proto;
 
 import "share.proto";
+import "tenant.proto";
 
 message DatabaseNameIdent {
   uint64 ver = 100;
@@ -61,7 +62,7 @@ message DatabaseMeta {
 
   repeated uint64 shared_by = 24;
 
-  optional ShareNameIdent from_share = 25;
+  optional TIdent from_share = 25;
 
   // Now the owner is stored independently in the meta. Prefix with __fd_object_owners
   // optional Ownership owner = 26;

@@ -109,7 +109,7 @@ impl AsyncSystemTable for StreamsTable {
                         }
                     });
                     for db in db_name {
-                        if let Ok(database) = ctl.get_database(tenant.name(), db.as_str()).await {
+                        if let Ok(database) = ctl.get_database(&tenant, db.as_str()).await {
                             dbs.push(database);
                         }
                     }
@@ -134,7 +134,7 @@ impl AsyncSystemTable for StreamsTable {
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let name: &str = Box::leak(name);
-                let tables = match ctl.list_tables(tenant.name(), name).await {
+                let tables = match ctl.list_tables(&tenant, name).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // Swallow the errors related with sharing. Listing tables in a shared database

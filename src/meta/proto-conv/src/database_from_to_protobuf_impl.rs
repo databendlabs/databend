@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::share;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
@@ -86,7 +86,7 @@ impl FromToProto for mt::DatabaseMeta {
             comment: p.comment,
             shared_by: BTreeSet::from_iter(p.shared_by),
             from_share: match p.from_share {
-                Some(from_share) => Some(share::ShareNameIdent::from_pb(from_share)?),
+                Some(from_share) => Some(ShareNameIdentRaw::from_pb(from_share)?),
                 None => None,
             },
         };

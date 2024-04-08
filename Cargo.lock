@@ -2740,6 +2740,7 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "fast-float",
+ "geos",
  "goldenfile",
  "indent",
  "itertools 0.10.5",

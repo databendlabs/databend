@@ -2563,7 +2563,7 @@ CreateDatabase(
                 tenant: Tenant {
                     tenant: "a",
                 },
-                share_name: "s",
+                name: "s",
             },
         ),
     },

@@ -390,7 +390,7 @@ impl Binder {
                 self.ctx
                     .get_catalog(&ctl_name)
                     .await?
-                    .get_database(self.ctx.get_tenant().name(), &database)
+                    .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
             }
@@ -586,7 +586,7 @@ impl Binder {
             // safely eliminate this "FUSE" constant and the table meta option entry.
             let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
-                .get_database(self.ctx.get_tenant().name(), &database)
+                .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());

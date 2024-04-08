@@ -29,7 +29,7 @@ pub struct CreateViewPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterViewPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub view_name: String,

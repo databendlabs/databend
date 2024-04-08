@@ -95,7 +95,7 @@ impl Interpreter for SetOptionsInterpreter {
         let database = self.plan.database.as_str();
         let table_name = self.plan.table.as_str();
         let table = catalog
-            .get_table(self.ctx.get_tenant().name(), database, table_name)
+            .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
 
         let table_version = table.get_table_info().ident.seq;
@@ -124,7 +124,7 @@ impl Interpreter for SetOptionsInterpreter {
         };
 
         catalog
-            .upsert_table_option(self.ctx.get_tenant().name(), database, req)
+            .upsert_table_option(&self.ctx.get_tenant(), database, req)
             .await?;
         Ok(PipelineBuildResult::create())
     }

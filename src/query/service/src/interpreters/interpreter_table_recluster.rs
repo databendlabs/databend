@@ -108,7 +108,7 @@ impl Interpreter for ReclusterTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
         let mut table = catalog
-            .get_table(tenant.name(), &self.plan.database, &self.plan.table)
+            .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
 
         // check mutability
@@ -204,7 +204,7 @@ impl Interpreter for ReclusterTableInterpreter {
 
             // refresh table.
             table = catalog
-                .get_table(tenant.name(), &self.plan.database, &self.plan.table)
+                .get_table(&tenant, &self.plan.database, &self.plan.table)
                 .await?;
         }
 

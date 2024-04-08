@@ -176,8 +176,8 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareGrantObject;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_app::tenant::Tenant;
@@ -1593,10 +1593,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // cannot operate on shared database
             if let Some(from_share) = db_meta.data.from_share {
                 return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(
-                        from_share.tenant.name(),
-                        &from_share.share_name,
-                    ),
+                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
                 )));
             }
 
@@ -1777,10 +1774,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
                 return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(
-                        from_share.tenant.name(),
-                        &from_share.share_name,
-                    ),
+                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
                 )));
             }
 
@@ -1915,10 +1909,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
                 return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(
-                        from_share.tenant.name(),
-                        &from_share.share_name,
-                    ),
+                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
                 )));
             }
 
@@ -2114,9 +2105,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         let table_id = match db_meta.from_share {
-            Some(ref share) => {
-                get_table_id_from_share_by_name(self, share, &tenant_dbname_tbname.table_name)
-                    .await?
+            Some(ref share_name_ident_raw) => {
+                let share_ident = share_name_ident_raw.clone().to_tident(());
+                get_table_id_from_share_by_name(
+                    self,
+                    &share_ident,
+                    &tenant_dbname_tbname.table_name,
+                )
+                .await?
             }
             None => {
                 // Get table by tenant,db_id, table_name to assert presence.
@@ -2153,7 +2149,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let db_type = db_meta
             .from_share
             .map_or(DatabaseType::NormalDB, |share_ident| {
-                DatabaseType::ShareDB(share_ident.into())
+                DatabaseType::ShareDB(share_ident)
             });
 
         let tb_info = TableInfo {
@@ -2279,7 +2275,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             .from_share
                             .clone()
                             .map_or(DatabaseType::NormalDB, |share_ident| {
-                                DatabaseType::ShareDB(share_ident.into())
+                                DatabaseType::ShareDB(share_ident)
                             });
 
                         let tb_info = TableInfo {
@@ -2330,7 +2326,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let tb_infos = match db_meta.from_share {
             None => list_tables_from_unshare_db(self, db_id, tenant_dbname).await?,
-            Some(share) => list_tables_from_share_db(self, share, tenant_dbname).await?,
+            Some(share) => {
+                let share_ident = share.to_tident(());
+                list_tables_from_share_db(self, share_ident, tenant_dbname).await?
+            }
         };
 
         Ok(tb_infos)
@@ -3821,7 +3820,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let if_then = vec![
                     txn_op_put(name_key, serialize_u64(catalog_id)?), /* (tenant, catalog_name) -> catalog_id */
                     txn_op_put(&id_key, serialize_struct(&req.meta)?), /* (catalog_id) -> catalog_meta */
-                    txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
+                    txn_op_put(&id_to_name_key, serialize_struct(&name_key.to_raw())?), /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
                 ];
 
                 let txn_req = TxnRequest {
@@ -4211,7 +4210,7 @@ async fn construct_drop_table_txn_operations(
     // cannot operate on shared database
     if let Some(from_share) = db_meta.from_share {
         return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-            ShareHasNoGrantedPrivilege::new(from_share.tenant.name(), &from_share.share_name),
+            ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
         )));
     }
 
@@ -4678,7 +4677,7 @@ async fn get_share_table_info_map(
             },
         };
         share_table_info_map_vec
-            .push(get_share_table_info(kv_api, &share_name, &share_meta).await?);
+            .push(get_share_table_info(kv_api, &share_name.to_tident(()), &share_meta).await?);
     }
 
     Ok(Some(share_table_info_map_vec))
@@ -4692,7 +4691,7 @@ async fn get_table_id_from_share_by_name(
     let res = get_share_or_err(
         kv_api,
         share,
-        format!("list_tables_from_share_db: {}", &share),
+        format!("list_tables_from_share_db: {}", share.display()),
     )
     .await;
 

@@ -28,6 +28,9 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::share::share_end_point_ident::ShareEndpointIdentRaw;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::share::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
@@ -141,10 +144,7 @@ impl ShareApiTestSuite {
         let tenant = Tenant::new_literal(tenant);
 
         let share1 = "share1";
-        let share_name = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share1.to_string(),
-        };
+        let share_name = ShareNameIdent::new(&tenant, share1);
         let share_id: u64;
 
         info!("--- show share when there are no share");
@@ -180,7 +180,7 @@ impl ShareApiTestSuite {
             let (share_name_seq, share_name_ret) =
                 get_share_id_to_name_or_err(mt.as_kv_api(), share_id, "").await?;
             assert!(share_name_seq > 0);
-            assert_eq!(share_name, share_name_ret)
+            assert_eq!(ShareNameIdentRaw::from(share_name.clone()), share_name_ret)
         }
 
         info!("--- show share again");
@@ -400,9 +400,9 @@ impl ShareApiTestSuite {
             };
             let meta: ShareEndpointMeta = get_kv_data(mt.as_kv_api(), &old_id_key).await?;
             assert_eq!(meta.url, url);
-            let name_key: ShareEndpointIdent =
+            let name_key: ShareEndpointIdentRaw =
                 get_kv_data(mt.as_kv_api(), &oldid_to_name_key).await?;
-            assert_eq!(name_key, endpoint);
+            assert_eq!(name_key, endpoint.clone().into());
 
             let req = GetShareEndpointReq {
                 tenant: tenant1.clone(),
@@ -442,7 +442,7 @@ impl ShareApiTestSuite {
             let meta: Result<ShareEndpointMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &old_id_key).await;
             assert!(meta.is_err());
-            let name_key: Result<ShareEndpointIdent, KVAppError> =
+            let name_key: Result<ShareEndpointIdentRaw, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &oldid_to_name_key).await;
             assert!(name_key.is_err());
 
@@ -451,8 +451,9 @@ impl ShareApiTestSuite {
             let id_to_name_key = ShareEndpointIdToName { share_endpoint_id };
             let meta: ShareEndpointMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
             assert_eq!(meta.url, url);
-            let name_key: ShareEndpointIdent = get_kv_data(mt.as_kv_api(), &id_to_name_key).await?;
-            assert_eq!(name_key, endpoint);
+            let name_key: ShareEndpointIdentRaw =
+                get_kv_data(mt.as_kv_api(), &id_to_name_key).await?;
+            assert_eq!(name_key, endpoint.clone().into());
         }
         Ok(())
     }
@@ -472,18 +473,9 @@ impl ShareApiTestSuite {
         let share2 = "share2";
         let account = "account1";
         let account2 = "account2";
-        let share_name = ShareNameIdent {
-            tenant: tenant1.clone(),
-            share_name: share1.to_string(),
-        };
-        let share_name2 = ShareNameIdent {
-            tenant: tenant1.clone(),
-            share_name: share2.to_string(),
-        };
-        let share_name3 = ShareNameIdent {
-            tenant: tenant2.clone(),
-            share_name: share2.to_string(),
-        };
+        let share_name = ShareNameIdent::new(&tenant1, share1);
+        let share_name2 = ShareNameIdent::new(&tenant1, share2);
+        let share_name3 = ShareNameIdent::new(&tenant2, share2);
         let comment1 = "comment1";
         let comment2 = "comment2";
         let comment3 = "comment3";
@@ -761,10 +753,7 @@ impl ShareApiTestSuite {
         let db2_name = "db2";
         let tbl2_name = "table2";
 
-        let share_name = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share1.to_string(),
-        };
+        let share_name = ShareNameIdent::new(&tenant, share1);
         let share_id: u64;
         let db_id: u64;
         let table_id: u64;
@@ -788,7 +777,7 @@ impl ShareApiTestSuite {
             let (share_name_seq, share_name_ret) =
                 get_share_id_to_name_or_err(mt.as_kv_api(), share_id, "").await?;
             assert!(share_name_seq > 0);
-            assert_eq!(share_name, share_name_ret);
+            assert_eq!(ShareNameIdentRaw::from(share_name.clone()), share_name_ret);
 
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
@@ -889,10 +878,7 @@ impl ShareApiTestSuite {
         info!("--- grant unknown share2");
         {
             let req = GrantShareObjectReq {
-                share_name: ShareNameIdent {
-                    tenant: tenant.clone(),
-                    share_name: "share2".to_string(),
-                },
+                share_name: ShareNameIdent::new(&tenant, "share2"),
                 object: ShareGrantObjectName::Database("db2".to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
@@ -930,7 +916,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.share_name);
+            assert_eq!(res.share_table_info.0, share_name.name());
             assert!(res.share_table_info.1.unwrap().is_empty());
 
             let tbl_ob_name =
@@ -945,7 +931,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
 
-            assert_eq!(res.share_table_info.0, share_name.share_name);
+            assert_eq!(res.share_table_info.0, share_name.name());
             assert_eq!(res.share_table_info.1.as_ref().unwrap().len(), 1);
             assert!(
                 res.share_table_info
@@ -1049,7 +1035,7 @@ impl ShareApiTestSuite {
 
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.share_name);
+            assert_eq!(res.share_table_info.0, share_name.name());
             assert!(res.share_table_info.1.unwrap().is_empty());
 
             let (_share_meta_seq, share_meta) =
@@ -1128,7 +1114,7 @@ impl ShareApiTestSuite {
 
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.share_name);
+            assert_eq!(res.share_table_info.0, share_name.name());
             assert!(res.share_table_info.1.is_none());
 
             // assert share_meta.database is none, and share_meta.entries is empty
@@ -1172,10 +1158,7 @@ impl ShareApiTestSuite {
         let db_name = "db1";
         let tbl_name = "table1";
 
-        let share_name = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share1.to_string(),
-        };
+        let share_name = ShareNameIdent::new(&tenant, share1);
 
         info!("--- get unknown share");
         {
@@ -1304,18 +1287,9 @@ impl ShareApiTestSuite {
         let tbl_name = "table1";
         let share_id;
 
-        let share_name1 = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share1.to_string(),
-        };
-        let share_name2 = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share2.to_string(),
-        };
-        let share_name3 = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share3.to_string(),
-        };
+        let share_name1 = ShareNameIdent::new(&tenant, share1);
+        let share_name2 = ShareNameIdent::new(&tenant, share2);
+        let share_name3 = ShareNameIdent::new(&tenant, share3);
 
         info!("--- get unknown object");
         {
@@ -1482,7 +1456,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: db_name2.clone(),
                 meta: DatabaseMeta {
-                    from_share: Some(share_name1.clone()),
+                    from_share: Some(share_name1.clone().into()),
                     ..Default::default()
                 },
             };
@@ -1581,14 +1555,8 @@ impl ShareApiTestSuite {
         let db_id: u64;
         let table_id: u64;
 
-        let share_name = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share1.to_string(),
-        };
-        let share_name2 = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share2.to_string(),
-        };
+        let share_name = ShareNameIdent::new(&tenant, share1);
+        let share_name2 = ShareNameIdent::new(&tenant, share2);
 
         info!("--- create share1 and share2");
         let create_on = Utc::now();
