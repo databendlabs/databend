@@ -101,7 +101,7 @@ impl PipelineBuilder {
         })
     }
 
-    pub(crate) fn serialize_block_transform_builder(
+    pub(crate) fn with_tid_serialize_block_transform_builder(
         &self,
         table: Arc<dyn Table>,
         cluster_stats_gen: ClusterStatsGenerator,
@@ -109,7 +109,7 @@ impl PipelineBuilder {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let proc = TransformSerializeBlock::try_create(
+            let proc = TransformSerializeBlock::try_create_with_tid(
                 ctx.clone(),
                 input,
                 output,
