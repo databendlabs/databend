@@ -254,43 +254,60 @@ impl RoleApi for RoleMgr {
     /// If a role is dropped, but the owner object is exists,
     ///
     /// The owner role need to update to account_admin.
+    ///
+    /// get_ownerships use prefix_list_kv that will generate once meta call
+    ///
+    /// According to Txn reduce meta call. If role own n objects, will generate once meta call.
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn transfer_ownership_to_admin(
         &self,
-        objects: &[(u64, OwnershipObject)],
+        role: &str,
     ) -> databend_common_exception::Result<()> {
-        // Ensure accurate matching of a key
-        let mut if_then = vec![];
-        let mut condition = vec![];
-        for (seq, object) in objects {
-            let owner_key = self.ownership_object_key(object);
-            let owner_value = serialize_struct(
-                &OwnershipInfo {
-                    object: object.clone(),
-                    role: "account_admin".to_string(),
-                },
-                ErrorCode::IllegalUserInfoFormat,
-                || "",
-            )?;
-            condition.push(txn_cond_seq(&owner_key, Eq, *seq));
-            if_then.push(txn_op_put(&owner_key, owner_value))
-        }
         let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?.await;
-            let txn_req = TxnRequest {
-                condition: condition.clone(),
-                if_then: if_then.clone(),
-                else_then: vec![],
-            };
-            let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
-            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
-            debug!(
-                succ = succ;
-                "transfer_ownership_to_admin"
-            );
-            if succ {
+            let mut if_then = vec![];
+            let mut condition = vec![];
+            let seq_owns = self.get_ownerships().await.map_err(|e| {
+                e.add_message_back("(while in transfer_ownership_to_admin get ownerships).")
+            })?;
+            let mut need_transfer = false;
+            for own in seq_owns {
+                if own.data.role == *role {
+                    need_transfer = true;
+                    let object = own.data.object;
+                    let owner_key = self.ownership_object_key(&object);
+                    let owner_value = serialize_struct(
+                        &OwnershipInfo {
+                            object,
+                            role: "account_admin".to_string(),
+                        },
+                        ErrorCode::IllegalUserInfoFormat,
+                        || "",
+                    )?;
+                    // Ensure accurate matching of a key
+                    condition.push(txn_cond_seq(&owner_key, Eq, own.seq));
+                    if_then.push(txn_op_put(&owner_key, owner_value))
+                }
+            }
+
+            if need_transfer {
+                trials.next().unwrap()?.await;
+                let txn_req = TxnRequest {
+                    condition: condition.clone(),
+                    if_then: if_then.clone(),
+                    else_then: vec![],
+                };
+                let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
+                let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+                debug!(
+                    succ = succ;
+                    "transfer_ownership_to_admin"
+                );
+                if succ {
+                    break;
+                }
+            } else {
                 break;
             }
         }
