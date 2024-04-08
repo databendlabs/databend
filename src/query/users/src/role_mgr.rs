@@ -273,11 +273,14 @@ impl UserApiProvider {
     pub async fn drop_role(&self, tenant: &Tenant, role: String, if_exists: bool) -> Result<()> {
         let client = self.role_api(tenant);
         // get_ownerships use prefix_list_kv that will generate once meta call
-        let ownerships = self.get_ownerships(tenant).await?;
+        let seq_owns = client
+            .get_ownerships()
+            .await
+            .map_err(|e| e.add_message_back("(while get ownerships)."))?;
         let mut objects = vec![];
-        for (k, v) in ownerships {
-            if v == role {
-                objects.push(k);
+        for own in seq_owns {
+            if own.data.role == role {
+                objects.push((own.seq, own.data.object));
             }
         }
         if !objects.is_empty() {

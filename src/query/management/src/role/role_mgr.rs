@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
+use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
@@ -41,6 +42,7 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
+use log::debug;
 use minitrace::func_name;
 
 use crate::role::role_api::RoleApi;
@@ -256,11 +258,12 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn transfer_ownership_to_admin(
         &self,
-        objects: &[OwnershipObject],
+        objects: &[(u64, OwnershipObject)],
     ) -> databend_common_exception::Result<()> {
         // Ensure accurate matching of a key
         let mut if_then = vec![];
-        for object in objects {
+        let mut condition = vec![];
+        for (seq, object) in objects {
             let owner_key = self.ownership_object_key(object);
             let owner_value = serialize_struct(
                 &OwnershipInfo {
@@ -270,29 +273,29 @@ impl RoleApi for RoleMgr {
                 ErrorCode::IllegalUserInfoFormat,
                 || "",
             )?;
+            condition.push(txn_cond_seq(&owner_key, Eq, *seq));
             if_then.push(txn_op_put(&owner_key, owner_value))
         }
-
-        let mut retry = 0;
-
-        let txn_req = TxnRequest {
-            condition: vec![],
-            if_then: if_then.clone(),
-            else_then: vec![],
-        };
-
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+            let txn_req = TxnRequest {
+                condition: condition.clone(),
+                if_then: if_then.clone(),
+                else_then: vec![],
+            };
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+            debug!(
+                succ = succ;
+                "transfer_ownership_to_admin"
+            );
             if succ {
-                return Ok(());
+                break;
             }
         }
 
-        Err(ErrorCode::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("transfer_ownership_to_admin", TXN_MAX_RETRY_TIMES).to_string(),
-        ))
+        Ok(())
     }
 
     #[async_backtrace::framed]
