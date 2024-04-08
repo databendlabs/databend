@@ -82,7 +82,7 @@ impl HttpClient {
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
 
-        let url = "http://192.168.2.51:8000/v1/query".to_string();
+        let url = "http://127.0.0.1:8000/v1/query".to_string();
         let mut parsed_rows = vec![];
         let mut response = self.post_query(sql, &url).await?;
         self.handle_response(&response, &mut parsed_rows)?;

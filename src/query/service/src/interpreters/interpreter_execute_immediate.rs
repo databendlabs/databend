@@ -124,10 +124,7 @@ impl Interpreter for ExecuteImmediateInterpreter {
             }
         };
 
-        res.map_err(|err| {
-            panic!("{}", err.to_string());
-            err.display_with_sql(&self.plan.script)
-        })
+        res.map_err(|err| err.display_with_sql(&self.plan.script))
     }
 }
 
