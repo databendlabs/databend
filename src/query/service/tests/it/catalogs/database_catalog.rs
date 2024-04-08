@@ -178,6 +178,7 @@ async fn test_catalogs_table() -> Result<()> {
                 created_on,
                 ..TableMeta::default()
             },
+            as_dropped: false,
         };
         let res = catalog.create_table(req.clone()).await;
         assert!(res.is_ok());

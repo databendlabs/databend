@@ -79,6 +79,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -460,6 +461,20 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.undrop_table(req).await;
         }
         self.mutable_catalog.undrop_table(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        info!("Undrop table by id from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(req.tenant.name(), &req.db_name)
+            .await?
+        {
+            return self.immutable_catalog.undrop_table_by_id(req).await;
+        }
+        self.mutable_catalog.undrop_table_by_id(req).await
     }
 
     #[async_backtrace::framed]

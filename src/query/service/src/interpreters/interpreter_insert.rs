@@ -89,10 +89,16 @@ impl Interpreter for InsertInterpreter {
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
-        let table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
-            .await?;
+        let table = if let Some(table_info) = &self.plan.table_info {
+            self.ctx
+                .get_catalog(&self.plan.catalog)
+                .await?
+                .get_table_by_info(table_info)?
+        } else {
+            self.ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?
+        };
 
         // check mutability
         table.check_mutable()?;

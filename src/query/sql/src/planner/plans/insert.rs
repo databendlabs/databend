@@ -19,7 +19,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_meta_types::MetaId;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_sources::input_formats::InputContext;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -56,10 +56,10 @@ pub struct Insert {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub table_id: MetaId,
     pub schema: TableSchemaRef,
     pub overwrite: bool,
     pub source: InsertInputSource,
+    pub table_info: Option<TableInfo>,
 }
 
 impl PartialEq for Insert {

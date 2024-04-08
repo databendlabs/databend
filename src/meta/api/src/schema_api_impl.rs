@@ -162,6 +162,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -1518,7 +1519,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let mut key_table_id: Option<TableId> = None;
 
-        if req.table_meta.drop_on.is_some() {
+        if !req.as_dropped && req.table_meta.drop_on.is_some() {
             return Err(KVAppError::AppError(AppError::CreateTableWithDropTime(
                 CreateTableWithDropTime::new(&tenant_dbname_tbname.table_name),
             )));
@@ -1615,6 +1616,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         CreateOption::CreateIfNotExists => {
                             return Ok(CreateTableReply {
                                 table_id: *id.data,
+                                table_id_seq: id.seq,
+                                db_id: db_id.data,
                                 new_table: false,
                                 spec_vec: None,
                             });
@@ -1672,16 +1675,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     // db has not to change, i.e., no new table is created.
                     // Renaming db is OK and does not affect the seq of db_meta.
                     txn_cond_seq(&key_dbid, Eq, db_meta.seq),
-                    // no other table with the same name is inserted.
-                    txn_cond_seq(&key_dbid_tbname, Eq, tb_id_seq),
                     // no other table id with the same name is append.
                     txn_cond_seq(&key_table_id_list, Eq, tb_id_list.seq),
+                    // no other table with the same name is inserted.
+                    txn_cond_seq(&key_dbid_tbname, Eq, tb_id_seq),
                 ]);
+
                 if_then.extend( vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         txn_op_put(&key_dbid, serialize_struct(&db_meta.data)?), /* (db_id) -> db_meta */
-                        txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
                         txn_op_put(
                             key_table_id.as_ref().unwrap(),
                             serialize_struct(&req.table_meta)?,
@@ -1691,6 +1694,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
                         txn_op_put(&key_table_id_to_name, serialize_struct(&key_dbid_tbname)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ]);
+
+                // To create the table in a "dropped" state, we intentionally omit the tuple (key_dbid_name, table_id).
+                // This ensures the table remains invisible, and available to be vacuumed.
+                if !req.as_dropped {
+                    // (tenant, db_id, tb_name) -> tb_id
+                    if_then.push(txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?))
+                }
 
                 let txn_req = TxnRequest {
                     condition,
@@ -1711,6 +1721,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 if succ {
                     return Ok(CreateTableReply {
                         table_id,
+                        table_id_seq: tb_id_seq,
+                        db_id: db_id.data,
                         new_table: tb_id_seq == 0,
                         spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
                             Some((spec_vec, mut_share_table_info))
@@ -1876,6 +1888,125 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     succ = succ;
                     "undrop_table"
                 );
+
+                if succ {
+                    return Ok(UndropTableReply {});
+                }
+            }
+        }
+    }
+
+    // TODO duplicated code
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
+    async fn undrop_table_by_id(
+        &self,
+        req: UndropTableByIdReq,
+    ) -> Result<UndropTableReply, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        let db_id = req.db_id;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            // Get db by name to ensure presence
+
+            let (db_meta_seq, db_meta) =
+                get_db_by_id_or_err(self, req.db_id, "undrop_table_by_id").await?;
+
+            // cannot operate on shared database
+            if let Some(from_share) = db_meta.from_share {
+                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                    ShareHasNoGrantedPrivilege::new(
+                        from_share.tenant.name(),
+                        &from_share.share_name,
+                    ),
+                )));
+            }
+
+            // Get table by tenant,db_id, table_name to assert presence.
+
+            let dbid_tbname = DBIdTableName {
+                db_id,
+                table_name: req.table_name.clone(),
+            };
+
+            // If table id already exists, return error.
+            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+            if tb_id_seq > 0 || table_id > 0 {
+                return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
+                    UndropTableAlreadyExists::new(&req.table_name),
+                )));
+            }
+
+            // get table id list from _fd_table_id_list/db_id/table_name
+            let dbid_tbname_idlist = TableIdListKey {
+                db_id,
+                table_name: req.table_name.clone(),
+            };
+            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
+                get_pb_value(self, &dbid_tbname_idlist).await?;
+
+            let mut tb_id_list = if tb_id_list_seq == 0 {
+                return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                    UndropTableHasNoHistory::new(&req.table_name),
+                )));
+            } else {
+                tb_id_list_opt.ok_or_else(|| {
+                    KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                        UndropTableHasNoHistory::new(&req.table_name),
+                    ))
+                })?
+            };
+
+            // Return error if there is no table id history.
+            let table_id = match tb_id_list.last() {
+                Some(table_id) => *table_id,
+                None => {
+                    return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                        UndropTableHasNoHistory::new(&req.table_name),
+                    )));
+                }
+            };
+
+            // get tb_meta of the last table id
+            let tbid = TableId { table_id };
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+
+            {
+                // reset drop on time
+                let mut tb_meta = tb_meta.unwrap();
+                // undrop a table with no drop_on time
+                if tb_meta.drop_on.is_none() {
+                    return Err(KVAppError::AppError(AppError::UndropTableWithNoDropTime(
+                        UndropTableWithNoDropTime::new(&req.table_name),
+                    )));
+                }
+                tb_meta.drop_on = None;
+
+                let txn_req = TxnRequest {
+                    condition: vec![
+                        // db has not to change, i.e., no new table is created.
+                        // Renaming db is OK and does not affect the seq of db_meta.
+                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
+                        // still this table id
+                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
+                        // table is not changed
+                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                    ],
+                    if_then: vec![
+                        // Changing a table in a db has to update the seq of db_meta,
+                        // to block the batch-delete-tables when deleting a db.
+                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
+                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
+                        // txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
+                        txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
+                    ],
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 if succ {
                     return Ok(UndropTableReply {});
