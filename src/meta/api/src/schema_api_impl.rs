@@ -1179,12 +1179,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<u64>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        // Get index id list by `prefix_list` "<prefix>/<tenant>"
-        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-            .push_str(&req.tenant)
-            .done();
+        let ident = IndexNameIdent::new(req.tenant.clone(), "");
+        let prefix = ident.to_string_key();
 
-        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let id_list = self.prefix_list_kv(&prefix).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
         for (key, seq) in id_list.iter() {
             let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
@@ -1194,7 +1192,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             id_name_list.push((index_id.0, name_ident.index_name));
         }
 
-        debug!(ident :% =(&prefix_key); "list_indexes");
+        debug!(ident :% =(&prefix); "list_indexes");
 
         if id_name_list.is_empty() {
             return Ok(vec![]);
@@ -1220,12 +1218,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        // Get index id list by `prefix_list` "<prefix>/<tenant>"
-        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-            .push_str(&req.tenant)
-            .done();
+        let ident = IndexNameIdent::new(req.tenant.clone(), "");
+        let prefix = ident.to_string_key();
 
-        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let id_list = self.prefix_list_kv(&prefix).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
         for (key, seq) in id_list.iter() {
             let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
@@ -1235,7 +1231,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             id_name_list.push((index_id.0, name_ident.index_name));
         }
 
-        debug!(ident :% =(&prefix_key); "list_indexes");
+        debug!(ident :% =(&prefix); "list_indexes");
 
         if id_name_list.is_empty() {
             return Ok(vec![]);

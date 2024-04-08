@@ -6059,10 +6059,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list indexes by table id");
-            let req = ListIndexesByIdReq {
-                tenant: tenant_name.to_string(),
-                table_id,
-            };
+            let req = ListIndexesByIdReq::new(&tenant, table_id);
 
             let res = mt.list_indexes_by_table_id(req).await?;
             assert_eq!(2, res.len());
