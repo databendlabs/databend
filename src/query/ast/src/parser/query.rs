@@ -523,9 +523,13 @@ pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
         rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
         |(_, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
     );
+    let at_offset = map(
+        rule! { "(" ~ OFFSET ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| TimeTravelPoint::Offset(Box::new(e)),
+    );
 
     rule!(
-        #at_snapshot | #at_timestamp
+        #at_snapshot | #at_timestamp | #at_offset
     )(i)
 }
 
