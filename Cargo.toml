@@ -268,4 +268,6 @@ async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", re
 z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 geozero = { git = "https://github.com/georust/geozero", rev = "1d78b36" }
+# Hot fix for cos, remove this during opendal 0.46 upgrade.
+opendal = { git = "https://github.com/apache/opendal", rev = "53377ca" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }
