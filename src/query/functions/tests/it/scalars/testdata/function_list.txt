@@ -3512,6 +3512,8 @@ Functions overloads:
 3 st_geometryfromwkt(String NULL, Int32 NULL) :: Geometry NULL
 0 st_geomfromgeohash(String) :: Geometry
 1 st_geomfromgeohash(String NULL) :: Geometry NULL
+0 st_geompointfromgeohash(String) :: Geometry
+1 st_geompointfromgeohash(String NULL) :: Geometry NULL
 0 st_makegeompoint(Float64, Float64) :: Geometry
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 st_makeline(Geometry, Geometry) :: Geometry
