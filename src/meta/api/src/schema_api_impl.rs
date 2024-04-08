@@ -3141,14 +3141,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 else_then: vec![],
             };
 
-            let _ = update_mask_policy(
-                self,
-                &req.action,
-                &mut txn_req,
-                req.tenant.clone(),
-                req.table_id,
-            )
-            .await;
+            let _ = update_mask_policy(self, &req.action, &mut txn_req, &req.tenant, req.table_id)
+                .await;
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
@@ -5347,11 +5341,9 @@ async fn update_mask_policy(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     action: &SetTableColumnMaskPolicyAction,
     txn_req: &mut TxnRequest,
-    tenant: String,
+    tenant: &Tenant,
     table_id: u64,
 ) -> Result<(), KVAppError> {
-    let tenant = Tenant::new_or_err(&tenant, func_name!())?;
-
     /// Fetch and update the table id list with `f`, and fill in the txn preconditions and operations.
     async fn update_table_ids(
         kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),

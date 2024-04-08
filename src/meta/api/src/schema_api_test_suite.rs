@@ -2802,7 +2802,7 @@ impl SchemaApiTestSuite {
             table_id_1 = table_id;
 
             let req = SetTableColumnMaskPolicyReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 column: "number".to_string(),
@@ -2844,7 +2844,7 @@ impl SchemaApiTestSuite {
             table_id_2 = table_id;
 
             let req = SetTableColumnMaskPolicyReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 column: "number".to_string(),
@@ -2884,7 +2884,7 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
 
             let req = SetTableColumnMaskPolicyReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 column: "number".to_string(),
@@ -2932,7 +2932,7 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
 
             let req = SetTableColumnMaskPolicyReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 column: "number".to_string(),

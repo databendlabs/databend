@@ -726,7 +726,7 @@ pub enum SetTableColumnMaskPolicyAction {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub table_id: u64,
     pub seq: MatchSeq,
     pub column: String,
