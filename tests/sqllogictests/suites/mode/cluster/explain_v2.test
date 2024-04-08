@@ -27,7 +27,7 @@ Exchange
         ├── read bytes: 251
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
         └── estimated rows: 100.00
 
@@ -62,7 +62,7 @@ Exchange
         │           ├── read bytes: 504
         │           ├── partitions total: 3
         │           ├── partitions scanned: 3
-        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         │           ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
         │           └── estimated rows: 100.00
         └── Filter(Probe)
@@ -76,7 +76,7 @@ Exchange
                 ├── read bytes: 504
                 ├── partitions total: 3
                 ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                 ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
                 └── estimated rows: 100.00
 
@@ -103,7 +103,7 @@ Exchange
     │       ├── read bytes: 504
     │       ├── partitions total: 3
     │       ├── partitions scanned: 3
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
@@ -113,7 +113,7 @@ Exchange
         ├── read bytes: 504
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -196,7 +196,7 @@ Limit
                         ├── read bytes: 251
                         ├── partitions total: 3
                         ├── partitions scanned: 3
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                         ├── push downs: [filters: [], limit: NONE]
                         └── estimated rows: 100.00
 
@@ -240,7 +240,7 @@ Limit
                     │       ├── read bytes: 251
                     │       ├── partitions total: 3
                     │       ├── partitions scanned: 3
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                     │       ├── push downs: [filters: [], limit: NONE]
                     │       └── estimated rows: 100.00
                     └── TableScan(Probe)
@@ -250,7 +250,7 @@ Limit
                         ├── read bytes: 504
                         ├── partitions total: 3
                         ├── partitions scanned: 3
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                         ├── push downs: [filters: [], limit: NONE]
                         └── estimated rows: 100.00
 
@@ -280,7 +280,7 @@ Exchange
     │       ├── read bytes: 504
     │       ├── partitions total: 3
     │       ├── partitions scanned: 3
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
@@ -290,7 +290,7 @@ Exchange
         ├── read bytes: 504
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -426,7 +426,7 @@ Exchange
         ├── read bytes: 88
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3.00
 

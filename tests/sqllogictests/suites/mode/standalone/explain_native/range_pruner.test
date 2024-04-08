@@ -18,7 +18,7 @@ EvalScalar
     ├── read bytes: 0
     ├── partitions total: 1
     ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 0>]
     ├── push downs: [filters: [is_true(range_t.c (#0) > 'efg')], limit: NONE]
     └── estimated rows: 0.40
 
@@ -36,7 +36,7 @@ EvalScalar
     ├── read bytes: 0
     ├── partitions total: 1
     ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 0>]
     ├── push downs: [filters: [is_true(range_t.i (#1) > 20)], limit: NONE]
     └── estimated rows: 0.40
 
