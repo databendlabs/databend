@@ -39,6 +39,7 @@ use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::background::UpdateBackgroundTaskReply;
 use databend_common_meta_app::background::UpdateBackgroundTaskReq;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
@@ -206,7 +207,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         &self,
         req: ListBackgroundJobsReq,
     ) -> Result<Vec<(u64, String, BackgroundJobInfo)>, KVAppError> {
-        let prefix = format!("{}/{}", BackgroundJobIdent::PREFIX, req.tenant);
+        let ident = BackgroundJobIdent::new(&req.tenant, "dummy");
+        let prefix = ident.tenant_prefix();
+
         let reply = self.prefix_list_kv(&prefix).await?;
         let mut res = vec![];
         for (k, v) in reply {
@@ -258,7 +261,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         &self,
         req: ListBackgroundTasksReq,
     ) -> Result<Vec<(u64, String, BackgroundTaskInfo)>, KVAppError> {
-        let prefix = format!("{}/{}", BackgroundTaskIdent::PREFIX, req.tenant);
+        let ident = BackgroundTaskIdent::new(&req.tenant, "dummy");
+        let prefix = ident.tenant_prefix();
+
         let reply = self.prefix_list_kv(&prefix).await?;
         let mut res = vec![];
         for (k, v) in reply {

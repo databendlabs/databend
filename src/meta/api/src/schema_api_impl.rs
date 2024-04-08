@@ -44,7 +44,6 @@ use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
 use databend_common_meta_app::app_error::TableLockExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
-use databend_common_meta_app::app_error::TenantIsEmpty;
 use databend_common_meta_app::app_error::UndropDbHasNoHistory;
 use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
@@ -196,7 +195,6 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
@@ -1135,7 +1133,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Get index id list by `prefix_list` "<prefix>/<tenant>"
         let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-            .push_str(&req.tenant)
+            .push_str(req.tenant.name())
+            .push_str("")
             .done();
 
         let id_list = self.prefix_list_kv(&prefix_key).await?;
@@ -3960,10 +3959,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<Arc<CatalogInfo>>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant = Tenant::new_nonempty(
-            NonEmptyString::new(req.tenant)
-                .map_err(|_e| AppError::from(TenantIsEmpty::new("SchemaApi::list_catalogs")))?,
-        );
+        let tenant = req.tenant;
         let name_key = CatalogNameIdent::new(tenant, "");
 
         // Pairs of catalog-name and catalog_id with seq

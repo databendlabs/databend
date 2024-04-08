@@ -39,6 +39,9 @@ impl Tenant {
         Ok(t)
     }
 
+    /// Create a `Tenant` without checking if it is empty, if debug mode is disabled.
+    ///
+    /// This method should only be used for testing
     pub fn new_literal(tenant: &str) -> Self {
         debug_assert!(!tenant.is_empty());
         Self {
@@ -66,6 +69,7 @@ impl Tenant {
     }
 }
 
+/// A trait convert other types to [`Tenant`].
 pub trait ToTenant {
     fn to_tenant(self) -> Tenant;
 }

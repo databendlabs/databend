@@ -1462,7 +1462,9 @@ impl SchemaApiTestSuite {
         assert_eq!(got.name_ident.tenant, "tenant1");
         assert_eq!(got.name_ident.catalog_name, "catalog1");
 
-        let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
+        let got = mt
+            .list_catalogs(ListCatalogReq::new(tenant.clone()))
+            .await?;
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].name_ident.tenant, "tenant1");
         assert_eq!(got[0].name_ident.catalog_name, "catalog1");
@@ -1474,7 +1476,9 @@ impl SchemaApiTestSuite {
             })
             .await?;
 
-        let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
+        let got = mt
+            .list_catalogs(ListCatalogReq::new(tenant.clone()))
+            .await?;
         assert_eq!(got.len(), 0);
 
         Ok(())
@@ -5987,10 +5991,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index with no create before");
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListIndexesReq::new(&tenant, Some(table_id));
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())
@@ -6045,18 +6046,12 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index");
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
-                table_id: None,
-            };
+            let req = ListIndexesReq::new(&tenant, None);
 
             let res = mt.list_indexes(req).await?;
             assert_eq!(2, res.len());
 
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
-                table_id: Some(u64::MAX),
-            };
+            let req = ListIndexesReq::new(&tenant, Some(u64::MAX));
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())
@@ -6086,10 +6081,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index after drop one");
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListIndexesReq::new(&tenant, Some(table_id));
 
             let res = mt.list_indexes(req).await?;
             assert_eq!(1, res.len());
@@ -6097,10 +6089,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- check list index content");
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListIndexesReq::new(&tenant, Some(table_id));
 
             let res = mt.list_indexes(req).await?;
             assert_eq!(1, res.len());
@@ -6120,10 +6109,7 @@ impl SchemaApiTestSuite {
             let res = mt.drop_index(req).await;
             assert!(res.is_ok());
 
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListIndexesReq::new(&tenant, Some(table_id));
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())

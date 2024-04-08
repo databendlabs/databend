@@ -25,6 +25,8 @@ use crate::background::BackgroundJobIdent;
 use crate::background::BackgroundTaskIdent;
 use crate::background::ManualTriggerParams;
 use crate::schema::TableStatistics;
+use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 #[derive(
     serde::Serialize,
@@ -195,19 +197,19 @@ pub struct GetBackgroundTaskReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListBackgroundTasksReq {
-    pub tenant: String,
+    pub tenant: Tenant,
 }
 
 impl Display for ListBackgroundTasksReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "list_background_tasks({})", self.tenant)
+        write!(f, "list_background_tasks({})", self.tenant.name())
     }
 }
 
 impl ListBackgroundTasksReq {
-    pub fn new(tenant: impl Into<String>) -> ListBackgroundTasksReq {
+    pub fn new(tenant: impl ToTenant) -> ListBackgroundTasksReq {
         ListBackgroundTasksReq {
-            tenant: tenant.into(),
+            tenant: tenant.to_tenant(),
         }
     }
 }
