@@ -57,8 +57,8 @@ pub struct Else {
 impl InsertMultiTable {
     pub fn schema(&self) -> DataSchemaRef {
         let mut fields = vec![];
-        for t in self.target_tables.iter() {
-            let field_name = format!("number of rows inserted into {}.{}", t.1.0, t.1.1);
+        for (_, (db, tbl)) in self.target_tables.iter() {
+            let field_name = format!("number of rows inserted into {}.{}", db, tbl);
             fields.push(DataField::new(
                 &field_name,
                 DataType::Number(NumberDataType::UInt64),
