@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::F32;
 use databend_common_expression::DataSchema;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -69,12 +70,26 @@ pub struct PrewhereInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
+/// Information about inverted index.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InvertedIndexInfo {
+    /// The index name.
     pub index_name: String,
+    /// The index version.
     pub index_version: String,
+    /// The index schema.
     pub index_schema: DataSchema,
-    pub query_columns: Vec<String>,
+    /// The query field names and optional boost value, and if boost is set,
+    /// the score for the field is multiplied by the boost value.
+    /// For example, if set `title^5.0, description^2.0`,
+    /// it means that the score for `title` field is multiplied by 5.0,
+    /// and the score for `description` field is multiplied by 2.0.
+    pub query_fields: Vec<(String, Option<F32>)>,
+    /// The search query keywords, it contains the following forms:
+    /// 1. simple terms, like `a b`
+    /// 2. phrase terms, like `"a b c"`
+    /// 3. must and negative term, like `+a`, `+a -b`
+    /// 4. bool operators, like `(a AND b) OR c`
     pub query_text: String,
 }
 
