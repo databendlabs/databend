@@ -39,7 +39,7 @@ UnionAll
 │       ├── read bytes: 0
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
-│       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+│       ├── pruning stats: [segments: <range pruning: 1 to 0>]
 │       ├── push downs: [filters: [is_true(t1.a (#0) > t1.b (#1))], limit: NONE]
 │       └── estimated rows: 2.00
 └── Filter
@@ -53,7 +53,7 @@ UnionAll
         ├── read bytes: 0
         ├── partitions total: 1
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 0>]
         ├── push downs: [filters: [is_true(t2.a (#2) > t2.b (#3))], limit: NONE]
         └── estimated rows: 2.00
 
@@ -74,7 +74,7 @@ UnionAll
 │       ├── read bytes: 80
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
 │       └── estimated rows: 2.00
 └── Filter
@@ -88,7 +88,7 @@ UnionAll
         ├── read bytes: 80
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [is_true(t2.a (#2) > 1)], limit: NONE]
         └── estimated rows: 2.00
 
@@ -115,7 +115,7 @@ Limit
     │       ├── read bytes: 80
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     │       ├── push downs: [filters: [], limit: 3]
     │       └── estimated rows: 2.00
     └── Limit
@@ -130,7 +130,7 @@ Limit
             ├── read bytes: 80
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [], limit: 3]
             └── estimated rows: 2.00
 
@@ -157,7 +157,7 @@ Limit
     │       ├── read bytes: 80
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     │       ├── push downs: [filters: [], limit: 4]
     │       └── estimated rows: 2.00
     └── Limit
@@ -172,7 +172,7 @@ Limit
             ├── read bytes: 80
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [], limit: 4]
             └── estimated rows: 2.00
 
@@ -199,7 +199,7 @@ Limit
     │       ├── read bytes: 80
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     │       ├── push downs: [filters: [], limit: 1]
     │       └── estimated rows: 2.00
     └── Limit
@@ -214,7 +214,7 @@ Limit
             ├── read bytes: 80
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 2.00
 

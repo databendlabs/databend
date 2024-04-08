@@ -16,14 +16,15 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::InsertMultiTableStmt;
 use databend_common_ast::ast::IntoClause;
+use databend_common_ast::ast::SourceExpr;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::TableSchema;
 
 use crate::binder::ScalarBinder;
-use crate::normalize_identifier;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::plans::Else;
@@ -80,6 +81,15 @@ impl Binder {
         };
 
         let source_schema = input_source.schema();
+        for field in source_schema.fields.iter() {
+            if field.name().to_lowercase() == "default" {
+                return Err(ErrorCode::BadArguments(
+                    "The column name in source of multi-table insert can't be 'default'"
+                        .to_string(),
+                ));
+            }
+        }
+
         let mut source_bind_context = bind_context.clone();
         let mut whens = vec![];
         for when_clause in when_clauses {
@@ -99,7 +109,11 @@ impl Binder {
                 ));
             }
             let intos = self
-                .bind_into_clauses(&when_clause.into_clauses, source_schema.clone())
+                .bind_into_clauses(
+                    &when_clause.into_clauses,
+                    source_schema.clone(),
+                    &mut source_bind_context,
+                )
                 .await?;
             whens.push(When { condition, intos });
         }
@@ -107,7 +121,11 @@ impl Binder {
         let opt_else = match else_clause {
             Some(else_clause) => {
                 let intos = self
-                    .bind_into_clauses(&else_clause.into_clauses, source_schema.clone())
+                    .bind_into_clauses(
+                        &else_clause.into_clauses,
+                        source_schema.clone(),
+                        &mut source_bind_context,
+                    )
                     .await?;
                 Some(Else { intos })
             }
@@ -121,7 +139,11 @@ impl Binder {
             overwrite: *overwrite,
             is_first: *is_first,
             intos: self
-                .bind_into_clauses(into_clauses, source_schema.clone())
+                .bind_into_clauses(
+                    into_clauses,
+                    source_schema.clone(),
+                    &mut source_bind_context,
+                )
                 .await?,
         };
         Ok(Plan::InsertMultiTable(Box::new(plan)))
@@ -133,6 +155,7 @@ impl Binder {
         &mut self,
         into_clauses: &[IntoClause],
         source_schema: DataSchemaRef,
+        source_bind_context: &mut BindContext,
     ) -> Result<Vec<Into>> {
         let mut intos = vec![];
         for into_clause in into_clauses {
@@ -151,42 +174,88 @@ impl Binder {
                 .get_table(&catalog_name, &database_name, &table_name)
                 .await?;
 
-            let casted_schema = if target_columns.is_empty() {
-                target_table.schema()
+            let n_target_col = if target_columns.is_empty() {
+                target_table.schema().fields().len()
             } else {
-                self.schema_project(&target_table.schema(), target_columns.as_ref())?
+                target_columns.len()
             };
-
-            let projection = if source_columns.is_empty() {
-                None
+            let n_source_col = if source_columns.is_empty() {
+                source_schema.fields().len()
             } else {
-                let mut indices = vec![];
-                for source_column in source_columns {
-                    let index = source_schema.index_of(
-                        &normalize_identifier(source_column, &self.name_resolution_ctx).name,
-                    )?;
-                    indices.push(index);
-                }
-                Some(indices)
+                source_columns.len()
             };
-
-            if casted_schema.fields().len()
-                != projection
-                    .as_ref()
-                    .map(|p| p.len())
-                    .unwrap_or(source_schema.fields().len())
-            {
+            if n_target_col != n_source_col {
                 return Err(ErrorCode::BadArguments(
                     "The number of columns in the target and the source must be the same"
                         .to_string(),
                 ));
             }
 
+            let mut casted_schema = if target_columns.is_empty() {
+                target_table.schema()
+            } else {
+                self.schema_project(&target_table.schema(), target_columns.as_ref())?
+            };
+
+            let default_indices = source_columns
+                .iter()
+                .enumerate()
+                .filter_map(|(i, col)| {
+                    if matches!(col, SourceExpr::Default) {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            if !default_indices.is_empty() {
+                let mut casted_schema_fields = vec![];
+                for (i, field) in casted_schema.fields().iter().enumerate() {
+                    if default_indices.contains(&i) {
+                        continue;
+                    }
+                    casted_schema_fields.push(field.clone());
+                }
+                casted_schema = Arc::new(TableSchema {
+                    fields: casted_schema_fields,
+                    metadata: casted_schema.metadata.clone(),
+                    next_column_id: casted_schema.next_column_id(),
+                });
+            }
+
+            let source_scalar_exprs = if source_columns.is_empty() {
+                None
+            } else {
+                let mut scalar_binder = ScalarBinder::new(
+                    source_bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                    self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
+                );
+                let mut source_scalar_exprs = vec![];
+                for source_column in source_columns {
+                    match source_column {
+                        SourceExpr::Expr(expr) => {
+                            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+                            source_scalar_exprs.push(scalar_expr);
+                        }
+                        SourceExpr::Default => {
+                            continue;
+                        }
+                    }
+                }
+                Some(source_scalar_exprs)
+            };
+
             intos.push(Into {
                 catalog: catalog_name,
                 database: database_name,
                 table: table_name,
-                projection,
+                source_scalar_exprs,
                 casted_schema: Arc::new(casted_schema.into()),
             });
         }

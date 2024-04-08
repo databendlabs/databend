@@ -70,9 +70,9 @@ impl Display for ShareConsumer {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowSharesReq {
-    pub tenant: String,
+    pub tenant: Tenant,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

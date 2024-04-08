@@ -118,7 +118,7 @@ EvalScalar
         ├── read bytes: 0
         ├── partitions total: 3
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 0, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 0>]
         ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 0)], limit: NONE]
         └── estimated rows: 8.00
 
@@ -204,7 +204,7 @@ EvalScalar
         ├── read bytes: 88
         ├── partitions total: 2
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
         ├── push downs: [filters: [is_true(bloom_test_alter_t1.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
@@ -238,7 +238,7 @@ EvalScalar
         ├── read bytes: 88
         ├── partitions total: 2
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
         ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
@@ -295,7 +295,7 @@ EvalScalar
         ├── read bytes: 132
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 7)], limit: NONE]
         └── estimated rows: 9.00
 

@@ -38,7 +38,12 @@ INSERT INTO t VALUES
 (10, 'An apple a day keeps the doctor away')
 
 statement ok
-CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content)
+CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content) tokenizer = 'chinese'
+
+query TT
+SHOW CREATE TABLE t
+----
+t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) tokenizer = 'chinese' ) ENGINE=FUSE
 
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
@@ -168,8 +173,54 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 2.002842 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
+# Test pruning status
+
+statement ok
+CREATE TABLE t_small_blocks (id int, content string) row_per_block=2
+
+statement ok
+CREATE INVERTED INDEX IF NOT EXISTS inverted_idx2 ON t_small_blocks(content) tokenizer = 'chinese'
+
+statement ok
+INSERT INTO t_small_blocks VALUES
+(1, 'The quick brown fox jumps over the lazy dog'),
+(2, 'A picture is worth a thousand words'),
+(3, 'The early bird catches the worm'),
+(4, 'Actions speak louder than words'),
+(5, 'Time flies like an arrow; fruit flies like a banana'),
+(6, 'Beauty is in the eye of the beholder'),
+(7, 'When life gives you lemons, make lemonade'),
+(8, 'Put all your eggs in one basket'),
+(9, 'You can not judge a book by its cover'),
+(10, 'An apple a day keeps the doctor away')
+
+query IFT
+SELECT id, content FROM t WHERE match(content, '"early bird"')
+----
+3 The early bird catches the worm
+
+query IFT
+EXPLAIN SELECT id, content FROM t WHERE match(content, '"early bird"')
+----
+Filter
+├── output columns: [t.id (#0), t.content (#1)]
+├── filters: [t._search_matched (#2)]
+├── estimated rows: 29.00
+└── TableScan
+    ├── table: default.test_index.t
+    ├── output columns: [id (#0), content (#1), _search_matched (#2)]
+    ├── read rows: 10
+    ├── read bytes: 383
+    ├── partitions total: 3
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, inverted pruning: 3 to 1>]
+    ├── push downs: [filters: [t._search_matched (#2)], limit: NONE]
+    └── estimated rows: 29.00
+
 statement ok
 use default
 
 statement ok
 drop database test_index
+
+

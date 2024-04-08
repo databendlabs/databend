@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use databend_common_ast::ast::CreateIndexStmt;
 use databend_common_ast::ast::CreateInvertedIndexStmt;
@@ -116,7 +116,7 @@ impl Binder {
                 {
                     let indexes = self
                         .resolve_table_indexes(
-                            self.ctx.get_tenant().name(),
+                            &self.ctx.get_tenant(),
                             catalog.as_str(),
                             table.get_id(),
                         )
@@ -376,6 +376,7 @@ impl Binder {
             table,
             columns,
             sync_creation,
+            index_options,
         } = stmt;
 
         let (catalog, database, table) =
@@ -389,8 +390,7 @@ impl Binder {
             )));
         }
         let table_schema = table.schema();
-        let mut column_set = HashSet::with_capacity(columns.len());
-        let mut column_ids = Vec::with_capacity(columns.len());
+        let mut column_set = BTreeSet::new();
         for column in columns {
             match table_schema.field_with_name(&column.name) {
                 Ok(field) => {
@@ -400,14 +400,13 @@ impl Binder {
                             column, field.data_type
                         )));
                     }
-                    if column_set.contains(&column.name) {
+                    if column_set.contains(&field.column_id) {
                         return Err(ErrorCode::UnsupportedIndex(format!(
                             "Inverted index column must be unique, but column {} is duplicate",
                             column.name
                         )));
                     }
-                    column_set.insert(column.name.clone());
-                    column_ids.push(field.column_id);
+                    column_set.insert(field.column_id);
                 }
                 Err(_) => {
                     return Err(ErrorCode::UnsupportedIndex(format!(
@@ -417,6 +416,8 @@ impl Binder {
                 }
             }
         }
+        let column_ids = Vec::from_iter(column_set.into_iter());
+
         let table_id = table.get_id();
         let index_name = self.normalize_object_identifier(index_name);
 
@@ -427,6 +428,7 @@ impl Binder {
             column_ids,
             table_id,
             sync_creation: *sync_creation,
+            index_options: index_options.clone(),
         };
         Ok(Plan::CreateTableIndex(Box::new(plan)))
     }

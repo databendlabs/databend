@@ -106,9 +106,7 @@ where TablesTable<T>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs = catalog_mgr
-            .list_catalogs(tenant.name(), ctx.txn_mgr())
-            .await?;
+        let catalogs = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
         Ok(self

@@ -24,6 +24,8 @@ use cron::Schedule;
 use crate::background::BackgroundJobIdent;
 use crate::background::BackgroundTaskType;
 use crate::principal::UserIdentity;
+use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, num_derive::FromPrimitive)]
 pub enum BackgroundJobState {
@@ -338,12 +340,20 @@ pub struct DeleteBackgroundJobReply {}
 // list
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListBackgroundJobsReq {
-    pub tenant: String,
+    pub tenant: Tenant,
+}
+
+impl ListBackgroundJobsReq {
+    pub fn new(tenant: impl ToTenant) -> Self {
+        Self {
+            tenant: tenant.to_tenant(),
+        }
+    }
 }
 
 impl Display for ListBackgroundJobsReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "list_background_job({})", self.tenant)
+        write!(f, "list_background_job({})", self.tenant.name())
     }
 }
 

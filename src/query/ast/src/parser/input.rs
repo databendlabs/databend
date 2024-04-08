@@ -144,4 +144,11 @@ impl Dialect {
             Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => false,
         }
     }
+
+    pub fn default_ident_quote(&self) -> char {
+        match self {
+            Dialect::MySQL | Dialect::Hive => '`',
+            Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => '"',
+        }
+    }
 }

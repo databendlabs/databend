@@ -178,9 +178,6 @@ pub enum Plan {
         plan: Box<Plan>,
     },
 
-    CopyIntoTable(Box<CopyIntoTablePlan>),
-    CopyIntoLocation(CopyIntoLocationPlan),
-
     // Call is rewrite into Query
     // Call(Box<CallPlan>),
 
@@ -228,6 +225,10 @@ pub enum Plan {
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
     MergeInto(Box<MergeInto>),
+
+    CopyIntoTable(Box<CopyIntoTablePlan>),
+    CopyIntoLocation(CopyIntoLocationPlan),
+
     // Views
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),

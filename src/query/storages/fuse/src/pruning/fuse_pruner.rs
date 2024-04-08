@@ -71,7 +71,7 @@ pub struct PruningContext {
 
 impl PruningContext {
     #[allow(clippy::too_many_arguments)]
-    pub async fn try_create(
+    pub fn try_create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
@@ -79,7 +79,6 @@ impl PruningContext {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
-        inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
         max_concurrency: usize,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
@@ -143,6 +142,9 @@ impl PruningContext {
             cluster_keys,
         )?;
 
+        // inverted index pruner, used to search matched rows in block
+        let inverted_index_pruner = InvertedIndexPruner::try_create(dal.clone(), push_down)?;
+
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
         let internal_column_pruner =
@@ -187,13 +189,12 @@ pub struct FusePruner {
 
 impl FusePruner {
     // Create normal fuse pruner.
-    pub async fn create(
+    pub fn create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
-        inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     ) -> Result<Self> {
         Self::create_with_pages(
             ctx,
@@ -203,13 +204,11 @@ impl FusePruner {
             None,
             vec![],
             bloom_index_cols,
-            inverted_index_pruner,
         )
-        .await
     }
 
     // Create fuse pruner with pages.
-    pub async fn create_with_pages(
+    pub fn create_with_pages(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
@@ -217,7 +216,6 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
-        inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -240,10 +238,8 @@ impl FusePruner {
             cluster_key_meta,
             cluster_keys,
             bloom_index_cols,
-            inverted_index_pruner,
             max_concurrency,
-        )
-        .await?;
+        )?;
 
         Ok(FusePruner {
             max_concurrency,
@@ -305,15 +301,6 @@ impl FusePruner {
 
                         async move {
                             // Build pruning tasks.
-                            if let Some(inverted_index_pruner) = &pruning_ctx.inverted_index_pruner
-                            {
-                                batch = batch
-                                    .into_iter()
-                                    .filter(|segment| {
-                                        inverted_index_pruner.should_keep(&segment.location.0)
-                                    })
-                                    .collect::<Vec<_>>();
-                            }
                             if let Some(internal_column_pruner) =
                                 &pruning_ctx.internal_column_pruner
                             {
@@ -500,6 +487,11 @@ impl FusePruner {
         let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
         let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
 
+        let blocks_inverted_index_pruning_before =
+            stats.get_blocks_inverted_index_pruning_before() as usize;
+        let blocks_inverted_index_pruning_after =
+            stats.get_blocks_inverted_index_pruning_after() as usize;
+
         databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,
             segments_range_pruning_after,
@@ -507,6 +499,8 @@ impl FusePruner {
             blocks_range_pruning_after,
             blocks_bloom_pruning_before,
             blocks_bloom_pruning_after,
+            blocks_inverted_index_pruning_before,
+            blocks_inverted_index_pruning_after,
         }
     }
 

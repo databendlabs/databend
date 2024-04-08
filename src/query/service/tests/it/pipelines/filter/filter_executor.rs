@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::build_select_expr;
 use databend_common_expression::filter::FilterExecutor;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -23,6 +22,7 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::SelectExprBuilder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 use rand::Rng;
@@ -44,7 +44,7 @@ pub fn test_filter_executor() -> databend_common_exception::Result<()> {
 
             // 1. Generate a random `DataBlock`.
             let columns = (0..num_columns)
-                .map(|_| Column::random(data_type, num_rows))
+                .map(|_| Column::random(data_type, num_rows, None))
                 .collect_vec();
             let block = DataBlock::new_from_columns(columns);
             block.check_valid()?;
@@ -59,7 +59,7 @@ pub fn test_filter_executor() -> databend_common_exception::Result<()> {
             let block_1 = block.clone().filter_boolean_value(&filter)?;
 
             // 3.2 Execute the filter expr by `FilterExecutor`.
-            let (select_expr, has_or) = build_select_expr(&expr).into();
+            let (select_expr, has_or) = SelectExprBuilder::new().build(&expr).into();
             let mut filter_executor = FilterExecutor::new(
                 select_expr,
                 func_ctx.clone(),

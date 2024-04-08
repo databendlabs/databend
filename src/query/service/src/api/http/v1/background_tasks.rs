@@ -20,14 +20,17 @@ use databend_common_meta_app::background::BackgroundTaskInfo;
 use databend_common_meta_app::background::BackgroundTaskState;
 use databend_common_meta_app::background::BackgroundTaskType;
 use databend_common_meta_app::background::ListBackgroundTasksReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use log::debug;
+use minitrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::web::Query;
 use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackgroundTaskQuery {
     timestamp: Option<DateTime<Utc>>,
@@ -45,18 +48,16 @@ pub struct ListBackgroundTasksResponse {
 
 #[async_backtrace::framed]
 async fn load_background_tasks(
-    tenant: &str,
+    tenant: &Tenant,
     params: Query<BackgroundTaskQuery>,
 ) -> Result<ListBackgroundTasksResponse> {
     let meta_api = UserApiProvider::instance().get_meta_store_client();
     let tasks = meta_api
-        .list_background_tasks(ListBackgroundTasksReq {
-            tenant: tenant.to_string(),
-        })
+        .list_background_tasks(ListBackgroundTasksReq::new(tenant))
         .await?;
     debug!(
         "list_background_tasks: tenant: {}, candidate tasks: {}",
-        tenant,
+        tenant.name(),
         tasks.len()
     );
     let mut task_infos = Vec::with_capacity(tasks.len());
@@ -107,6 +108,9 @@ pub async fn list_background_tasks(
             params: params.0,
         }));
     }
+
+    // Safe unwrap: tenant is not empty
+    let tenant = Tenant::new_or_err(tenant, func_name!()).unwrap();
 
     let resp = load_background_tasks(&tenant, params)
         .await

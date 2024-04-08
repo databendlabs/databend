@@ -42,7 +42,7 @@ use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 impl FuseTable {
     #[minitrace::trace]
     #[async_backtrace::framed]
-    pub async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<FuseTable>> {
+    pub async fn navigate_to_point(&self, point: &NavigationPoint) -> Result<Arc<FuseTable>> {
         match point {
             NavigationPoint::SnapshotID(snapshot_id) => {
                 self.navigate_to_snapshot(snapshot_id.as_str()).await

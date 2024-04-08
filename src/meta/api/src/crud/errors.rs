@@ -15,9 +15,9 @@
 use std::error::Error;
 
 use databend_common_exception::ErrorCode;
-use databend_common_meta_app::tenant_key::TenantResource;
-use databend_common_meta_app::tenant_key_errors::ExistError;
-use databend_common_meta_app::tenant_key_errors::UnknownError;
+use databend_common_meta_app::tenant_key::errors::ExistError;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
+use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_types::MetaError;
 
 /// CRUD Error that can be an API level error or a business error.

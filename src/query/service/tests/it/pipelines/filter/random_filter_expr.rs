@@ -65,18 +65,25 @@ pub fn random_filter_expr(
 enum PredicateNode {
     And(Vec<PredicateNode>),
     Or(Vec<PredicateNode>),
+    Not(Box<PredicateNode>),
     Leaf,
 }
 
 // Generate a random predicate tree with the given depth.
 fn random_predicate_tree_with_depth(depth: usize) -> PredicateNode {
     let mut rng = rand::thread_rng();
+    // The probability of generating a `Not` node is 5%.
+    if rng.gen_bool(0.05) {
+        return PredicateNode::Not(Box::new(random_predicate_tree_with_depth(depth)));
+    }
+    // The probability of generating a `Leaf` node is 25%.
     if depth == 0 || rng.gen_bool(0.25) {
         return PredicateNode::Leaf;
     }
     let children = (0..2)
         .map(|_| random_predicate_tree_with_depth(depth - 1))
         .collect_vec();
+    // Generate a `And` or `Or` node.
     if rng.gen_bool(0.5) {
         PredicateNode::And(children)
     } else {
@@ -113,6 +120,15 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 func_name: "or".to_string(),
                 params: vec![],
                 arguments: or_args,
+            })
+        }
+        PredicateNode::Not(child) => {
+            let child_expr = convert_predicate_tree_to_scalar_expr(*child, data_type);
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "not".to_string(),
+                params: vec![],
+                arguments: vec![child_expr],
             })
         }
         PredicateNode::Leaf => {
@@ -216,7 +232,10 @@ fn replace_const_to_const_and_column_ref(
                 }
             } else {
                 // Replace the child to `Constant`
-                let scalar = Column::random(data_type, 1).index(0).unwrap().to_owned();
+                let scalar = Column::random(data_type, 1, None)
+                    .index(0)
+                    .unwrap()
+                    .to_owned();
                 Expr::Constant {
                     span: None,
                     scalar,

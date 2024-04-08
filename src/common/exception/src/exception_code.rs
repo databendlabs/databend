@@ -193,6 +193,7 @@ build_exceptions! {
     // Index related errors.
     UnsupportedIndex(1601),
     RefreshIndexError(1602),
+    IndexOptionInvalid(1603),
 
     // Cloud control error codes
     CloudControlConnectError(1701),
@@ -334,6 +335,8 @@ build_exceptions! {
     UnknownIndex(2722),
     DropIndexWithDropTime(2723),
     GetIndexWithDropTime(2724),
+    DuplicatedIndexColumnId(2725),
+    IndexColumnIdNotFound(2726),
 
     // Stream error codes.
     UnknownStream(2730),

@@ -17,23 +17,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use databend_common_meta_kvapi::kvapi;
-
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
-
-/// Defines the in-meta-service data for some resource that belongs to a tenant.
-/// Such as `PasswordPolicy`.
-///
-/// It includes a prefix to store the `ValueType`.
-/// This trait is used to define a concrete [`TIdent`] can be used as a `kvapi::Key`.
-pub trait TenantResource {
-    /// The key prefix to store in meta-service.
-    const PREFIX: &'static str;
-
-    /// The type of the value for the key [`TIdent<R: TenantResource>`](TIdent).
-    type ValueType: kvapi::Value;
-}
 
 /// `[T]enant[Ident]` is a common meta-service key structure in form of `<PREFIX>/<TENANT>/<NAME>`.
 pub struct TIdent<R> {
@@ -109,9 +94,9 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyError;
 
-    use super::TIdent;
     use crate::tenant::Tenant;
-    use crate::tenant_key::TenantResource;
+    use crate::tenant_key::ident::TIdent;
+    use crate::tenant_key::resource::TenantResource;
     use crate::KeyWithTenant;
 
     impl<R> kvapi::Key for TIdent<R>
@@ -153,8 +138,8 @@ mod tests {
     use databend_common_meta_types::NonEmptyString;
 
     use crate::tenant::Tenant;
-    use crate::tenant_key::TIdent;
-    use crate::tenant_key::TenantResource;
+    use crate::tenant_key::ident::TIdent;
+    use crate::tenant_key::resource::TenantResource;
 
     #[test]
     fn test_tenant_ident() {

@@ -15,7 +15,6 @@
 mod agg_index;
 mod datasource;
 mod internal_column;
-mod inverted_index;
 mod partition;
 mod partition_statistics;
 mod projection;
@@ -26,7 +25,6 @@ mod stream_column;
 pub use agg_index::*;
 pub use datasource::*;
 pub use internal_column::*;
-pub use inverted_index::*;
 pub use partition::*;
 pub use partition_statistics::PartStatistics;
 pub use projection::Projection;

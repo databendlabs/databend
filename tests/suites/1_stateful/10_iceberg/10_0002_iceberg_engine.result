@@ -21,9 +21,9 @@
 6	d
 <<<<
 >>>> show create table test_iceberg;
-test_iceberg	CREATE TABLE `test_iceberg` (
-  `id` INT NOT NULL,
-  `data` VARCHAR NOT NULL
+test_iceberg	CREATE TABLE test_iceberg (
+  id INT NOT NULL,
+  data VARCHAR NOT NULL
 ) ENGINE=ICEBERG CONNECTION_NAME='iceberg_conn' LOCATION='s3://testbucket/iceberg_ctl/iceberg_db/iceberg_tbl/'
 <<<<
 >>>> drop table test_iceberg;

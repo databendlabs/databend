@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::filter::build_select_expr;
+use databend_common_expression::filter::SelectExprBuilder;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
@@ -31,6 +31,7 @@ use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::ColumnSet;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -66,7 +67,7 @@ impl PipelineBuilder {
         assert_eq!(predicate.data_type(), &DataType::Boolean);
 
         let max_block_size = self.settings.get_max_block_size()? as usize;
-        let (select_expr, has_or) = build_select_expr(&predicate).into();
+        let (select_expr, has_or) = SelectExprBuilder::new().build(&predicate).into();
         let fun_ctx = self.func_ctx.clone();
         Ok(move |input, output| {
             Ok(ProcessorPtr::create(TransformFilter::create(
@@ -154,20 +155,26 @@ impl PipelineBuilder {
         })
     }
 
-    pub(crate) fn project_transform_builder(
+    pub(crate) fn map_transform_builder(
         &self,
-        projection: Vec<usize>,
         num_input_columns: usize,
+        remote_exprs: Vec<RemoteExpr>,
+        projections: Option<ColumnSet>,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let func_ctx = self.func_ctx.clone();
+        let exprs = remote_exprs
+            .iter()
+            .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS))
+            .collect::<Vec<_>>();
         Ok(move |input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
                 num_input_columns,
                 func_ctx.clone(),
-                vec![BlockOperator::Project {
-                    projection: projection.clone(),
+                vec![BlockOperator::Map {
+                    exprs: exprs.clone(),
+                    projections: projections.clone(),
                 }],
             )))
         })

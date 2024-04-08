@@ -20,6 +20,7 @@ use chrono::Utc;
 
 use crate::schema::CatalogNameIdent;
 use crate::storage::StorageParams;
+use crate::tenant::Tenant;
 use crate::KeyWithTenant;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -259,16 +260,14 @@ impl GetCatalogReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListCatalogReq {
-    pub tenant: String,
+    pub tenant: Tenant,
 }
 
 impl ListCatalogReq {
-    pub fn new(tenant: impl Into<String>) -> ListCatalogReq {
-        ListCatalogReq {
-            tenant: tenant.into(),
-        }
+    pub fn new(tenant: Tenant) -> ListCatalogReq {
+        ListCatalogReq { tenant }
     }
 }
 

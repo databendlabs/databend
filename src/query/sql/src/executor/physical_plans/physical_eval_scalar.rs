@@ -121,7 +121,6 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let input_schema = input.output_schema()?;
-
         let exprs = eval_scalar
             .items
             .iter()

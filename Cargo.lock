@@ -3235,6 +3235,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
+ "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-meta-app",
@@ -3850,6 +3851,7 @@ name = "databend-common-storages-fuse"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.10",
+ "arrow 50.0.0",
  "arrow-array 50.0.0",
  "async-backtrace",
  "async-trait-fn",
@@ -3895,17 +3897,16 @@ dependencies = [
  "minitrace",
  "opendal",
  "parquet",
- "parquet-format-safe",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "sha2",
  "siphasher",
- "streaming-decompression",
  "sys-info",
  "tantivy",
  "tantivy-common",
  "tantivy-jieba",
+ "thrift",
  "typetag",
  "uuid",
  "xorf",
@@ -4077,6 +4078,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
+ "databend-storages-common-table-meta",
  "serde",
  "typetag",
 ]
@@ -4087,6 +4089,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bytes",
  "databend-common-arrow",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4102,6 +4105,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "opendal",
+ "parquet",
  "serde",
  "serde_json",
  "sha2",
@@ -4174,7 +4178,6 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
- "log",
  "minitrace",
 ]
 
@@ -4653,6 +4656,7 @@ dependencies = [
  "mysql_async",
  "naive-cityhash",
  "num",
+ "num_cpus",
  "once_cell",
  "opendal",
  "opensrv-mysql",
@@ -4795,13 +4799,10 @@ dependencies = [
 name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
- "databend-common-arrow",
- "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
  "parquet",
- "parquet-format-safe",
 ]
 
 [[package]]
@@ -4856,6 +4857,7 @@ dependencies = [
  "log",
  "match-template",
  "minitrace",
+ "parquet",
  "rand 0.8.5",
  "serde",
  "tantivy",
@@ -7454,9 +7456,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.24"
+version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2c4422095b67ee78da96fbb51a4cc413b3b25883c7717ff7ca1ab31022c9c9"
+checksum = "81fe527a889e1532da5c525686d96d4c2e74cdd345badf8dfef9f6b39dd5f5e8"
 dependencies = [
  "bytes",
  "fnv",

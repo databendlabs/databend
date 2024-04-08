@@ -20,14 +20,9 @@ mod block_reader_merge_io_sync;
 mod block_reader_native;
 mod block_reader_native_deserialize;
 mod block_reader_parquet_deserialize;
-mod decompressor;
 pub mod parquet;
-pub mod parquet2;
 
 pub use block_reader::BlockReader;
-pub use block_reader_deserialize::DeserializedArray;
-pub use block_reader_deserialize::FieldDeserializationContext;
 pub use block_reader_merge_io::MergeIOReadResult;
 pub use block_reader_native::NativeReaderExt;
 pub use block_reader_native::NativeSourceData;
-pub use decompressor::UncompressedBuffer;

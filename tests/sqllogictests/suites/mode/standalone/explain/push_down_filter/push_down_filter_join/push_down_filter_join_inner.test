@@ -39,7 +39,7 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
-│       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+│       ├── pruning stats: [segments: <range pruning: 1 to 0>]
 │       ├── push downs: [filters: [is_true(t2.a (#2) > 3)], limit: NONE]
 │       └── estimated rows: 3.00
 └── Filter(Probe)
@@ -53,7 +53,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 1
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 0>]
         ├── push downs: [filters: [is_true(t1.a (#0) > 3)], limit: NONE]
         └── estimated rows: 4.00
 
@@ -83,7 +83,7 @@ Filter
     │       ├── read bytes: 80
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     │       ├── push downs: [filters: [is_true(t2.a (#2) <= 2 OR t2.a (#2) > 1)], limit: NONE]
     │       └── estimated rows: 3.00
     └── Filter(Probe)
@@ -97,7 +97,7 @@ Filter
             ├── read bytes: 88
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [is_true(t1.a (#0) <= 2 OR t1.a (#0) > 1)], limit: NONE]
             └── estimated rows: 4.00
 

@@ -356,11 +356,12 @@ impl InteractiveWorkerBase {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
 
-                let entry = QueryEntry::create(&context)?;
+                // Use interpreter_plan_sql, we can write the query log if an error occurs.
+                let (plan, extras) = interpreter_plan_sql(context.clone(), query).await?;
+
+                let entry = QueryEntry::create(&context, &plan, &extras)?;
                 let _guard = QueriesQueueManager::instance().acquire(entry).await?;
 
-                // Use interpreter_plan_sql, we can write the query log if an error occurs.
-                let (plan, _) = interpreter_plan_sql(context.clone(), query).await?;
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
 
                 let has_result_set = plan.has_result_set();
