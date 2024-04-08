@@ -44,7 +44,6 @@ use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
 use databend_common_meta_app::app_error::TableLockExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
-use databend_common_meta_app::app_error::TenantIsEmpty;
 use databend_common_meta_app::app_error::UndropDbHasNoHistory;
 use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
@@ -196,7 +195,6 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
@@ -1135,7 +1133,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Get index id list by `prefix_list` "<prefix>/<tenant>"
         let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-            .push_str(&req.tenant)
+            .push_str(req.tenant.name())
+            .push_str("")
             .done();
 
         let id_list = self.prefix_list_kv(&prefix_key).await?;
@@ -1180,12 +1179,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<u64>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        // Get index id list by `prefix_list` "<prefix>/<tenant>"
-        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-            .push_str(&req.tenant)
-            .done();
+        let ident = IndexNameIdent::new(req.tenant.clone(), "");
+        let prefix = ident.to_string_key();
 
-        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let id_list = self.prefix_list_kv(&prefix).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
         for (key, seq) in id_list.iter() {
             let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
@@ -1195,7 +1192,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             id_name_list.push((index_id.0, name_ident.index_name));
         }
 
-        debug!(ident :% =(&prefix_key); "list_indexes");
+        debug!(ident :% =(&prefix); "list_indexes");
 
         if id_name_list.is_empty() {
             return Ok(vec![]);
@@ -1221,12 +1218,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        // Get index id list by `prefix_list` "<prefix>/<tenant>"
-        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-            .push_str(&req.tenant)
-            .done();
+        let ident = IndexNameIdent::new(req.tenant.clone(), "");
+        let prefix = ident.to_string_key();
 
-        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let id_list = self.prefix_list_kv(&prefix).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
         for (key, seq) in id_list.iter() {
             let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
@@ -1236,7 +1231,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             id_name_list.push((index_id.0, name_ident.index_name));
         }
 
-        debug!(ident :% =(&prefix_key); "list_indexes");
+        debug!(ident :% =(&prefix); "list_indexes");
 
         if id_name_list.is_empty() {
             return Ok(vec![]);
@@ -3146,14 +3141,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 else_then: vec![],
             };
 
-            let _ = update_mask_policy(
-                self,
-                &req.action,
-                &mut txn_req,
-                req.tenant.clone(),
-                req.table_id,
-            )
-            .await;
+            let _ = update_mask_policy(self, &req.action, &mut txn_req, &req.tenant, req.table_id)
+                .await;
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
@@ -3960,10 +3949,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<Arc<CatalogInfo>>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant = Tenant::new_nonempty(
-            NonEmptyString::new(req.tenant)
-                .map_err(|_e| AppError::from(TenantIsEmpty::new("SchemaApi::list_catalogs")))?,
-        );
+        let tenant = req.tenant;
         let name_key = CatalogNameIdent::new(tenant, "");
 
         // Pairs of catalog-name and catalog_id with seq
@@ -5355,11 +5341,9 @@ async fn update_mask_policy(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     action: &SetTableColumnMaskPolicyAction,
     txn_req: &mut TxnRequest,
-    tenant: String,
+    tenant: &Tenant,
     table_id: u64,
 ) -> Result<(), KVAppError> {
-    let tenant = Tenant::new_or_err(&tenant, func_name!())?;
-
     /// Fetch and update the table id list with `f`, and fill in the txn preconditions and operations.
     async fn update_table_ids(
         kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),

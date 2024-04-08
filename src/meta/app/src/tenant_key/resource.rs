@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod filter_executor;
-mod select;
-mod select_expr;
-mod select_expr_permutation;
-mod select_op;
-mod select_value;
-mod selector;
+use databend_common_meta_kvapi::kvapi;
 
-pub use filter_executor::FilterExecutor;
-pub use select_expr::SelectExpr;
-pub use select_expr::SelectExprBuilder;
-pub use select_op::SelectOp;
-pub use selector::SelectStrategy;
-pub use selector::Selector;
+// For doc
+#[allow(unused_imports)]
+use crate::tenant_key::ident::TIdent;
+
+/// Defines the in-meta-service data for some resource that belongs to a tenant.
+/// Such as `PasswordPolicy`.
+///
+/// It includes a prefix to store the `ValueType`.
+/// This trait is used to define a concrete [`TIdent`] can be used as a `kvapi::Key`.
+pub trait TenantResource {
+    /// The key prefix to store in meta-service.
+    const PREFIX: &'static str;
+
+    /// The type of the value for the key [`TIdent<R: TenantResource>`](TIdent).
+    type ValueType: kvapi::Value;
+}

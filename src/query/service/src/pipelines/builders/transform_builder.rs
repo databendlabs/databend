@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::filter::build_select_expr;
+use databend_common_expression::filter::SelectExprBuilder;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
@@ -67,7 +67,7 @@ impl PipelineBuilder {
         assert_eq!(predicate.data_type(), &DataType::Boolean);
 
         let max_block_size = self.settings.get_max_block_size()? as usize;
-        let (select_expr, has_or) = build_select_expr(&predicate).into();
+        let (select_expr, has_or) = SelectExprBuilder::new().build(&predicate).into();
         let fun_ctx = self.func_ctx.clone();
         Ok(move |input, output| {
             Ok(ProcessorPtr::create(TransformFilter::create(

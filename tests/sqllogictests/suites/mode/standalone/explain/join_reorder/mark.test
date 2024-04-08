@@ -113,7 +113,7 @@ EvalScalar
     │       │       ├── read bytes: 44
     │       │       ├── partitions total: 1
     │       │       ├── partitions scanned: 1
-    │       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     │       │       ├── push downs: [filters: [is_true(t1.a (#2) = t1.a (#2))], limit: NONE]
     │       │       └── estimated rows: 3.00
     │       └── HashJoin(Probe)
@@ -140,7 +140,7 @@ EvalScalar
     │                       ├── read bytes: 48
     │                       ├── partitions total: 1
     │                       ├── partitions scanned: 1
-    │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     │                       ├── push downs: [filters: [], limit: NONE]
     │                       └── estimated rows: 4.00
     └── TableScan(Probe)
@@ -150,7 +150,7 @@ EvalScalar
         ├── read bytes: 48
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 

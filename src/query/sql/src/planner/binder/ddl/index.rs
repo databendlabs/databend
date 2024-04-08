@@ -116,7 +116,7 @@ impl Binder {
                 {
                     let indexes = self
                         .resolve_table_indexes(
-                            self.ctx.get_tenant().name(),
+                            &self.ctx.get_tenant(),
                             catalog.as_str(),
                             table.get_id(),
                         )

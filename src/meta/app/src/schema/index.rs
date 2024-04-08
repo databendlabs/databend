@@ -22,6 +22,7 @@ use databend_common_meta_types::MetaId;
 
 use super::CreateOption;
 use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 use crate::KeyWithTenant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -225,31 +226,31 @@ pub struct UpdateIndexReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateIndexReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListIndexesReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub table_id: Option<MetaId>,
 }
 
 impl ListIndexesReq {
-    pub fn new(tenant: impl Into<String>, table_id: Option<MetaId>) -> ListIndexesReq {
+    pub fn new(tenant: impl ToTenant, table_id: Option<MetaId>) -> ListIndexesReq {
         ListIndexesReq {
-            tenant: tenant.into(),
+            tenant: tenant.to_tenant(),
             table_id,
         }
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListIndexesByIdReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub table_id: MetaId,
 }
 
 impl ListIndexesByIdReq {
-    pub fn new(tenant: impl Into<String>, table_id: MetaId) -> Self {
+    pub fn new(tenant: impl ToTenant, table_id: MetaId) -> Self {
         Self {
-            tenant: tenant.into(),
+            tenant: tenant.to_tenant(),
             table_id,
         }
     }

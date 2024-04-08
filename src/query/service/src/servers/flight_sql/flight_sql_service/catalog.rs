@@ -62,7 +62,7 @@ impl CatalogInfoProvider {
             )]
         } else {
             catalog_mgr
-                .list_catalogs(tenant.name(), ctx.txn_mgr())
+                .list_catalogs(&tenant, ctx.txn_mgr())
                 .await?
                 .iter()
                 .map(|r| (r.name(), r.clone()))

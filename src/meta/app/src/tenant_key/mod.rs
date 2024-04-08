@@ -12,17 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod filter_executor;
-mod select;
-mod select_expr;
-mod select_expr_permutation;
-mod select_op;
-mod select_value;
-mod selector;
+//! Tenant key is an abstraction of key in form `<PREFIX>/<TENANT>/<NAME>`.
 
-pub use filter_executor::FilterExecutor;
-pub use select_expr::SelectExpr;
-pub use select_expr::SelectExprBuilder;
-pub use select_op::SelectOp;
-pub use selector::SelectStrategy;
-pub use selector::Selector;
+pub mod errors;
+pub mod ident;
+pub mod resource;

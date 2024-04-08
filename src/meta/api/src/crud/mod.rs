@@ -20,10 +20,10 @@ use std::sync::Arc;
 
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::TIdent;
-use databend_common_meta_app::tenant_key::TenantResource;
-use databend_common_meta_app::tenant_key_errors::ExistError;
-use databend_common_meta_app::tenant_key_errors::UnknownError;
+use databend_common_meta_app::tenant_key::errors::ExistError;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
+use databend_common_meta_app::tenant_key::ident::TIdent;
+use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::ValueWithName;

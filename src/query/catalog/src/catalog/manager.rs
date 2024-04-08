@@ -241,7 +241,7 @@ impl CatalogManager {
     #[async_backtrace::framed]
     pub async fn list_catalogs(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         txn_mgr: TxnManagerRef,
     ) -> Result<Vec<Arc<dyn Catalog>>> {
         let mut catalogs = vec![self.get_default_catalog(txn_mgr.clone())?];
@@ -252,7 +252,10 @@ impl CatalogManager {
         }
 
         // fecth catalogs from metasrv.
-        let infos = self.meta.list_catalogs(ListCatalogReq::new(tenant)).await?;
+        let infos = self
+            .meta
+            .list_catalogs(ListCatalogReq::new(tenant.clone()))
+            .await?;
 
         for info in infos {
             catalogs.push(self.build_catalog(&info, txn_mgr.clone())?);

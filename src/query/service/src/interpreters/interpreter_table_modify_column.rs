@@ -117,7 +117,7 @@ impl ModifyTableColumnInterpreter {
                 None
             };
         let req = SetTableColumnMaskPolicyReq {
-            tenant: self.ctx.get_tenant().name().to_string(),
+            tenant: self.ctx.get_tenant(),
             seq: MatchSeq::Exact(table_version),
             table_id,
             column,
@@ -162,7 +162,7 @@ impl ModifyTableColumnInterpreter {
 
         if let Some(prev_column_mask_name) = prev_column_mask_name {
             let req = SetTableColumnMaskPolicyReq {
-                tenant: self.ctx.get_tenant().name().to_string(),
+                tenant: self.ctx.get_tenant(),
                 seq: MatchSeq::Exact(table_version),
                 table_id,
                 column,

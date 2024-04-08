@@ -72,6 +72,7 @@ use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StageFileInfo;
@@ -1471,13 +1472,13 @@ impl Binder {
     #[async_backtrace::framed]
     pub(crate) async fn resolve_table_indexes(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         catalog_name: &str,
         table_id: MetaId,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         let catalog = self
             .catalogs
-            .get_catalog(tenant, catalog_name, self.ctx.txn_mgr())
+            .get_catalog(tenant.name(), catalog_name, self.ctx.txn_mgr())
             .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
