@@ -110,7 +110,7 @@ members = [
 # databend maintains
 jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "a7325f4" }
 
-opendal = { version = "0.45.0", features = [
+opendal = { version = "0.45.1", features = [
     "layers-minitrace",
     "layers-prometheus-client",
     "layers-async-backtrace",

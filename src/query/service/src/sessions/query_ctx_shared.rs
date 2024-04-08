@@ -45,6 +45,7 @@ use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
@@ -102,6 +103,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
     pub(in crate::sessions) copy_status: Arc<CopyStatus>,
     pub(in crate::sessions) merge_status: Arc<RwLock<MergeStatus>>,
+    pub(in crate::sessions) multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
@@ -170,6 +172,7 @@ impl QueryContextShared {
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
             merge_into_join: Default::default(),
+            multi_table_insert_status: Default::default(),
         }))
     }
 

@@ -45,11 +45,13 @@ use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_txn::TxnManagerRef;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
@@ -247,6 +249,10 @@ pub trait TableContext: Send + Sync {
     fn add_merge_status(&self, merge_status: MergeStatus);
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
+
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64);
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>>;
 
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
