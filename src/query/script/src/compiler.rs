@@ -82,12 +82,20 @@ impl Compiler {
         for line in code {
             match line {
                 ScriptStatement::LetVar { declare, .. } => {
-                    let to_var = VarRef::new(declare.name.span, &declare.name.name, &mut self.ref_allocator);
+                    let to_var = VarRef::new(
+                        declare.name.span,
+                        &declare.name.name,
+                        &mut self.ref_allocator,
+                    );
                     output.append(&mut self.compile_expr(&declare.default, to_var.clone())?);
                     self.declare_ref(&declare.name, RefItem::Var(to_var))?;
                 }
                 ScriptStatement::LetStatement { declare } => {
-                    let to_set = SetRef::new(declare.name.span, &declare.name.name, &mut self.ref_allocator);
+                    let to_set = SetRef::new(
+                        declare.name.span,
+                        &declare.name.name,
+                        &mut self.ref_allocator,
+                    );
                     output.append(&mut self.compile_sql_statement(
                         declare.span,
                         &declare.stmt,
@@ -96,7 +104,8 @@ impl Compiler {
                     self.declare_ref(&declare.name, RefItem::Set(to_set))?;
                 }
                 ScriptStatement::RunStatement { span, stmt } => {
-                    let to_set = SetRef::new_internal(*span, "unused_result", &mut self.ref_allocator);
+                    let to_set =
+                        SetRef::new_internal(*span, "unused_result", &mut self.ref_allocator);
                     output.append(&mut self.compile_sql_statement(*span, stmt, to_set)?);
                 }
                 ScriptStatement::Assign { name, value, .. } => {
@@ -110,7 +119,8 @@ impl Compiler {
                     value: Some(ReturnItem::Var(expr)),
                     ..
                 } => {
-                    let to_var = VarRef::new_internal(expr.span(), "return_val", &mut self.ref_allocator);
+                    let to_var =
+                        VarRef::new_internal(expr.span(), "return_val", &mut self.ref_allocator);
                     output.append(&mut self.compile_expr(expr, to_var.clone())?);
                     output.push(ScriptIR::ReturnVar { var: to_var });
                 }
@@ -286,7 +296,8 @@ impl Compiler {
         });
 
         // ITER expr_result, expr_result_iter
-        let iter_ref = IterRef::new_internal(expr.span(), "expr_result_iter", &mut self.ref_allocator);
+        let iter_ref =
+            IterRef::new_internal(expr.span(), "expr_result_iter", &mut self.ref_allocator);
         output.push(ScriptIR::Iter {
             set: set_ref,
             to_iter: iter_ref.clone(),
@@ -369,7 +380,7 @@ impl Compiler {
             ignore_result: false,
         }));
         let stmt = StatementTemplate::new(variable.span, select_stmt);
-        let to_set =  SetRef::new_internal(variable.span, "for_index_set", &mut self.ref_allocator);
+        let to_set = SetRef::new_internal(variable.span, "for_index_set", &mut self.ref_allocator);
         output.push(ScriptIR::Query {
             stmt,
             to_set: to_set.clone(),
@@ -414,7 +425,9 @@ impl Compiler {
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: loop_item.break_label });
+        output.push(ScriptIR::Label {
+            label: loop_item.break_label,
+        });
 
         self.pop_scope();
 
@@ -470,7 +483,9 @@ impl Compiler {
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: loop_item.break_label });
+        output.push(ScriptIR::Label {
+            label: loop_item.break_label,
+        });
 
         self.pop_scope();
 
@@ -501,7 +516,11 @@ impl Compiler {
         // <let break_condition := NOT is_true(<condition>)>
         // JUMP_IF_TRUE break_condition, LOOP_END
         let break_condition = wrap_not(wrap_is_true(condition.clone()));
-        let break_condition_var = VarRef::new_internal(break_condition.span(), "break_condition", &mut self.ref_allocator);
+        let break_condition_var = VarRef::new_internal(
+            break_condition.span(),
+            "break_condition",
+            &mut self.ref_allocator,
+        );
         output.append(&mut self.compile_expr(&break_condition, break_condition_var.clone())?);
         output.push(ScriptIR::JumpIfTrue {
             condition: break_condition_var,
@@ -517,7 +536,9 @@ impl Compiler {
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: loop_item.break_label });
+        output.push(ScriptIR::Label {
+            label: loop_item.break_label,
+        });
 
         self.pop_scope();
 
@@ -551,7 +572,11 @@ impl Compiler {
         // <let break_condition := is_true(until_condition)>
         // JUMP_IF_TRUE break_condition, LOOP_END
         let break_condition = wrap_is_true(until_condition.clone());
-        let break_condition_var = VarRef::new_internal(break_condition.span(), "break_condition", &mut self.ref_allocator);
+        let break_condition_var = VarRef::new_internal(
+            break_condition.span(),
+            "break_condition",
+            &mut self.ref_allocator,
+        );
         output.append(&mut self.compile_expr(&break_condition, break_condition_var.clone())?);
         output.push(ScriptIR::JumpIfTrue {
             condition: break_condition_var,
@@ -564,7 +589,9 @@ impl Compiler {
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: loop_item.break_label });
+        output.push(ScriptIR::Label {
+            label: loop_item.break_label,
+        });
 
         self.pop_scope();
 
@@ -600,7 +627,9 @@ impl Compiler {
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: loop_item.break_label });
+        output.push(ScriptIR::Label {
+            label: loop_item.break_label,
+        });
 
         self.pop_scope();
 
@@ -630,7 +659,8 @@ impl Compiler {
             // <let condition := is_true(condition)>
             // JUMP_IF_TRUE condition, IF_THEN
             let condition = wrap_is_true(condition.clone());
-        let condition_var = VarRef::new_internal(condition.span(), "condition", &mut self.ref_allocator);
+            let condition_var =
+                VarRef::new_internal(condition.span(), "condition", &mut self.ref_allocator);
             output.append(&mut self.compile_expr(&condition, condition_var.clone())?);
             output.push(ScriptIR::JumpIfTrue {
                 condition: condition_var,
@@ -884,7 +914,9 @@ impl Compiler {
     fn lookup_loop(&self, ident: &Identifier) -> Result<LoopItem> {
         let name = self.normalize_ident(ident);
         for scope in self.scopes.iter().rev() {
-            if let Some(item) = &scope.loop_item && item.name.as_ref() == Some(&name){
+            if let Some(item) = &scope.loop_item
+                && item.name.as_ref() == Some(&name)
+            {
                 return Ok(item.clone());
             }
         }
@@ -948,8 +980,11 @@ impl Compiler {
                     } => {
                         let res = try {
                             // READ <iter>, <column>, to_var
-                            let to_var = VarRef::new_internal(column.span, &format!("{iter}.{column}"), &mut self
-                                .compiler.ref_allocator);
+                            let to_var = VarRef::new_internal(
+                                column.span,
+                                &format!("{iter}.{column}"),
+                                &mut self.compiler.ref_allocator,
+                            );
                             let iter = self.compiler.lookup_iter(iter)?;
                             let column =
                                 ColumnAccess::Name(self.compiler.normalize_ident(column).0);
