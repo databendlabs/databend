@@ -1408,12 +1408,12 @@ async fn get_outbound_share_info_by_name(
 
 async fn get_outbound_share_infos_by_tenant(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &str,
+    tenant: &Tenant,
 ) -> Result<Vec<ShareAccountReply>, KVAppError> {
     let mut outbound_share_accounts: Vec<ShareAccountReply> = vec![];
 
     let tenant_share_name_key = ShareNameIdent {
-        tenant: Tenant::new_or_err(tenant, func_name!())?,
+        tenant: tenant.clone(),
         share_name: "".to_string(),
     };
     let share_name_keys = list_keys(kv_api, &tenant_share_name_key).await?;

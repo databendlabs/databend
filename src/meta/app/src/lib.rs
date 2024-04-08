@@ -31,7 +31,6 @@ pub mod share;
 pub mod storage;
 pub mod tenant;
 pub mod tenant_key;
-pub mod tenant_key_errors;
 
 pub mod id_generator;
 

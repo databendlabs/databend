@@ -150,7 +150,7 @@ impl ShareApiTestSuite {
         info!("--- show share when there are no share");
         {
             let req = ShowSharesReq {
-                tenant: tenant.name().to_string(),
+                tenant: tenant.clone(),
             };
 
             let res = mt.show_shares(req).await;
@@ -186,7 +186,7 @@ impl ShareApiTestSuite {
         info!("--- show share again");
         {
             let req = ShowSharesReq {
-                tenant: tenant.name().to_string(),
+                tenant: tenant.clone(),
             };
 
             let res = mt.show_shares(req).await;
@@ -620,7 +620,7 @@ impl ShareApiTestSuite {
         info!("--- show share check account information");
         {
             let req = ShowSharesReq {
-                tenant: tenant_name1.to_string(),
+                tenant: tenant1.clone(),
             };
 
             let res = mt.show_shares(req).await;

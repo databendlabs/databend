@@ -243,14 +243,14 @@ impl ListIndexesReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListIndexesByIdReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub table_id: MetaId,
 }
 
 impl ListIndexesByIdReq {
-    pub fn new(tenant: impl Into<String>, table_id: MetaId) -> Self {
+    pub fn new(tenant: impl ToTenant, table_id: MetaId) -> Self {
         Self {
-            tenant: tenant.into(),
+            tenant: tenant.to_tenant(),
             table_id,
         }
     }

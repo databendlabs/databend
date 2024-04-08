@@ -16,8 +16,8 @@
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key as tk;
-use databend_common_meta_app::tenant_key::TenantResource;
+use databend_common_meta_app::tenant_key::ident;
+use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
@@ -28,7 +28,7 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
-impl<R> FromToProto for tk::TIdent<R>
+impl<R> FromToProto for ident::TIdent<R>
 where R: TenantResource
 {
     type PB = pb::TIdent;

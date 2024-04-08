@@ -205,10 +205,7 @@ async fn generate_refresh_index_plan(
     let catalog = ctx.get_catalog(catalog).await?;
     let mut plans = vec![];
     let indexes = catalog
-        .list_indexes_by_table_id(ListIndexesByIdReq {
-            tenant: ctx.get_tenant().name().to_string(),
-            table_id,
-        })
+        .list_indexes_by_table_id(ListIndexesByIdReq::new(ctx.get_tenant(), table_id))
         .await?;
 
     let sync_indexes = indexes

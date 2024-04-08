@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant_key::TIdent;
+use crate::tenant_key::ident::TIdent;
 
 pub type MaskPolicyTableIdListIdent = TIdent<Resource>;
 
@@ -23,7 +23,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::data_mask::MaskpolicyTableIdList;
-    use crate::tenant_key::TenantResource;
+    use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
