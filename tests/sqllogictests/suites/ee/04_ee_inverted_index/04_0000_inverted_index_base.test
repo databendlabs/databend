@@ -288,9 +288,9 @@ SELECT id, score(), title FROM books WHERE match(title, '设计 AND 实现') ORD
 query IFT
 SELECT id, score(), title FROM books WHERE match(title, '设计 OR 实现') ORDER BY score() DESC
 ----
-9 5.063791 | Vue.js设计与实现
-10 2.0477252 | 前端架构设计
-8 1.8123543 | Rust程序设计（第2版）
+9 5.063791 Vue.js设计与实现
+10 2.0477252 前端架构设计
+8 1.8123543 Rust程序设计（第2版）
 
 query IFT
 SELECT id, score(), title FROM books WHERE match(title, '设计 OR 实现 OR 实战') ORDER BY score() DESC
