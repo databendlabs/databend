@@ -45,7 +45,6 @@ use databend_common_storages_system::EnginesTable;
 use databend_common_storages_system::FunctionsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::RolesTable;
-use databend_common_storages_system::TracingTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
