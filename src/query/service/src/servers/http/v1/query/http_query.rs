@@ -557,16 +557,7 @@ impl HttpQuery {
     #[async_backtrace::framed]
     async fn get_state(&self) -> ResponseState {
         let state = self.state.read().await;
-        let (exe_state, err) = state.state.extract();
-        ResponseState {
-            running_time_ms: state.get_query_duration_ms(),
-            progresses: state.get_progress(),
-            state: exe_state,
-            error: err,
-            warnings: state.get_warnings(),
-            affect: state.get_affect(),
-            schema: state.get_schema(),
-        }
+        state.get_response_state()
     }
 
     #[async_backtrace::framed]

@@ -41,6 +41,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
+use crate::servers::http::v1::query::http_query::ResponseState;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
@@ -162,6 +163,18 @@ impl ExecutorSessionState {
 }
 
 impl Executor {
+    pub fn get_response_state(&self) -> ResponseState {
+        let (exe_state, err) = self.state.extract();
+        ResponseState {
+            running_time_ms: self.get_query_duration_ms(),
+            progresses: self.get_progress(),
+            state: exe_state,
+            error: err,
+            warnings: self.get_warnings(),
+            affect: self.get_affect(),
+            schema: self.get_schema(),
+        }
+    }
     pub fn get_schema(&self) -> Vec<QueryResponseField> {
         match &self.state {
             Starting(_) => Default::default(),
