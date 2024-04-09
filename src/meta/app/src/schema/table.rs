@@ -586,11 +586,9 @@ pub struct UndropTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableByIdReq {
-    pub tenant: Tenant,
+    pub name_ident: TableNameIdent,
     pub db_id: MetaId,
     pub table_id: MetaId,
-    pub db_name: String,
-    pub table_name: String,
 }
 
 impl UndropTableReq {

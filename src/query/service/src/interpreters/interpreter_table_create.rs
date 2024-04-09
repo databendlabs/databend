@@ -268,11 +268,13 @@ impl CreateTableInterpreter {
                 let undrop_fut = {
                     async move {
                         let undrop_by_id = UndropTableByIdReq {
-                            tenant,
+                            name_ident: TableNameIdent {
+                                tenant,
+                                db_name,
+                                table_name,
+                            },
                             db_id,
                             table_id,
-                            db_name,
-                            table_name,
                         };
                         catalog.undrop_table_by_id(undrop_by_id).await
                     }
