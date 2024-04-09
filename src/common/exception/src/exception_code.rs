@@ -150,6 +150,7 @@ build_exceptions! {
     UnknownCatalogType(1120),
     UnmatchMaskPolicyReturnType(1121),
     Timeout(1122),
+    Outdated(1123),
 
     // Data Related Errors
 
