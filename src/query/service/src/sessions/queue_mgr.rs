@@ -33,6 +33,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_metrics::session::dec_session_running_acquired_queries;
+use databend_common_metrics::session::inc_session_running_acquired_queries;
 use databend_common_metrics::session::incr_session_queue_abort_count;
 use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
@@ -139,6 +141,7 @@ impl<Data: QueueData> QueueManager<Data> {
 
             return match future.await {
                 Ok(v) => {
+                    inc_session_running_acquired_queries();
                     record_session_queue_acquire_duration_ms(
                         start_time.elapsed().unwrap_or_default(),
                     );
@@ -198,6 +201,12 @@ impl<Data: QueueData> QueueManager<Data> {
 pub struct AcquireQueueGuard {
     #[allow(dead_code)]
     permit: Option<OwnedSemaphorePermit>,
+}
+
+impl Drop for AcquireQueueGuard {
+    fn drop(&mut self) {
+        dec_session_running_acquired_queries();
+    }
 }
 
 impl AcquireQueueGuard {
