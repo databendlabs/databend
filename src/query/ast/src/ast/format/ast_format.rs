@@ -3304,10 +3304,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::new(format_ctx);
                 self.children.push(node);
             }
-            TimeTravelPoint::Timestamp(expr) => {
-                self.visit_expr(expr);
+            TimeTravelPoint::Timestamp(ts) => {
+                self.visit_expr(ts);
                 let child = self.children.pop().unwrap();
                 let name = "Timestamp".to_string();
+                let format_ctx = AstFormatContext::with_children(name, 1);
+                let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+                self.children.push(node);
+            }
+            TimeTravelPoint::Offset(num) => {
+                self.visit_expr(num);
+                let child = self.children.pop().unwrap();
+                let name = "Offset".to_string();
                 let format_ctx = AstFormatContext::with_children(name, 1);
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);

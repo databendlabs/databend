@@ -101,6 +101,45 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+        "st_geompointfromgeohash",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<StringType, GeometryType>(|geohash, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+            if geohash.len() > 12 {
+                ctx.set_error(builder.len(), "");
+                builder.put_str("Currently the precision only implement within 12 digits!");
+                return;
+            }
+
+            let geo: geo_types::Geometry = match decode_bbox(geohash) {
+                Ok(rect) => Point::from(rect.center()).into(),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.put_str("");
+                    return;
+                }
+            };
+
+            match geo.to_json() {
+                Ok(json) => builder.put_slice(json.as_bytes()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            };
+            builder.commit_row();
+        }),
+    );
+
     registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType, _, _>(
         "st_makegeompoint",
         |_,_, _| FunctionDomain::Full,

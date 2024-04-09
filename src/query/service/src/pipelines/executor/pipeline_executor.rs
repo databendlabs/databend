@@ -15,15 +15,22 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
+use futures_util::future::select;
+use futures_util::future::Either;
 use log::info;
 use log::warn;
 use parking_lot::Condvar;
@@ -47,6 +54,7 @@ pub struct QueryWrapper {
     #[allow(unused)]
     lock_guards: Vec<LockGuard>,
     finish_condvar_wait: Arc<(Mutex<bool>, Condvar)>,
+    finished_notify: Arc<WatchNotify>,
 }
 
 pub enum PipelineExecutor {
@@ -82,6 +90,7 @@ impl PipelineExecutor {
                 on_finished_callback: Mutex::new(on_finished_callback),
                 lock_guards,
                 finish_condvar_wait: finish_condvar,
+                finished_notify: Arc::new(WatchNotify::new()),
             }))
         }
     }
@@ -144,6 +153,7 @@ impl PipelineExecutor {
                 on_finished_callback: Mutex::new(on_finished_callback),
                 lock_guards,
                 finish_condvar_wait: finish_condvar,
+                finished_notify: Arc::new(WatchNotify::new()),
             }))
         }
     }
@@ -178,12 +188,17 @@ impl PipelineExecutor {
                     &query_wrapper.settings.query_id,
                 )?;
                 GlobalQueriesExecutor::instance().send_graph(query_wrapper.graph.clone())?;
-
+                Self::start_executor_daemon(
+                    query_wrapper,
+                    query_wrapper.settings.max_execute_time_in_seconds,
+                )?;
                 let (lock, cvar) = &*query_wrapper.finish_condvar_wait;
                 let mut finished = lock.lock();
                 if !*finished {
                     cvar.wait(&mut finished);
                 }
+
+                query_wrapper.finished_notify.notify_waiters();
 
                 let may_error = query_wrapper.graph.get_error();
                 return match may_error {
@@ -207,6 +222,29 @@ impl PipelineExecutor {
                 };
             }
         }
+    }
+
+    fn start_executor_daemon(
+        query_wrapper: &QueryWrapper,
+        max_execute_time_in_seconds: Duration,
+    ) -> Result<()> {
+        if !max_execute_time_in_seconds.is_zero() {
+            let this_graph = Arc::downgrade(&query_wrapper.graph);
+            let finished_notify = query_wrapper.finished_notify.clone();
+            GlobalIORuntime::instance().spawn(GLOBAL_TASK, async move {
+                let finished_future = Box::pin(finished_notify.notified());
+                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
+                if let Either::Left(_) = select(max_execute_future, finished_future).await {
+                    if let Some(graph) = this_graph.upgrade() {
+                        graph.should_finish(Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the execution time exceeds the maximum execution time limit",
+                        ))).expect("exceed max execute time, but cannot send error message");
+                    }
+                }
+            });
+        }
+
+        Ok(())
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {

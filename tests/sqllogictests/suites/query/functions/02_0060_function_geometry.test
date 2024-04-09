@@ -108,6 +108,11 @@ SRID=4326;POINT(389866.35 5819003.03)
 statement ok
 DROP TABLE IF EXISTS t1;
 
+query T
+SELECT TO_STRING(ST_GEOMPOINTFROMGEOHASH('s02equ0'))
+----
+{"type": "Point", "coordinates": [1.0004425048828125,2.0001983642578125]}
+
 statement ok
 CREATE TABLE t1 (s varchar);
 

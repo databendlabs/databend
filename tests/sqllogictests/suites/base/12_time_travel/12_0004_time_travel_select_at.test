@@ -1,0 +1,37 @@
+statement ok
+DROP DATABASE IF EXISTS db_12_0004
+
+statement ok
+CREATE DATABASE db_12_0004
+
+statement ok
+USE db_12_0004
+
+statement ok
+CREATE TABLE t(c1 int)
+
+statement ok
+insert into t values(1)
+
+statement error 2004
+select * from t at(timestamp => '1234')
+
+statement error 2004
+select * from t at(offset => 1)
+
+statement error 2013
+select * from t at(offset => -30 * 60)
+
+statement ok
+select sleep(1)
+
+query I
+select * from t at(offset => -1)
+----
+1
+
+statement ok
+DROP TABLE t ALL
+
+statement ok
+DROP DATABASE db_12_0004

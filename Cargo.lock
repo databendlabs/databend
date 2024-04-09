@@ -4226,7 +4226,6 @@ dependencies = [
  "snailquote",
  "tikv-jemalloc-ctl",
  "typetag",
- "walkdir",
 ]
 
 [[package]]
@@ -9677,9 +9676,8 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.45.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3350be0d4ba326017ce22c98a9e94d21b069160fcd95bbe6c2555dac4e93c47a"
+version = "0.45.1"
+source = "git+https://github.com/apache/opendal?rev=53377ca#53377ca873c2928ce519ca57a939f89af1a76c47"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -9702,7 +9700,7 @@ dependencies = [
  "prometheus",
  "prometheus-client",
  "prost 0.11.9",
- "quick-xml 0.30.0",
+ "quick-xml 0.31.0",
  "reqsign",
  "reqwest",
  "serde",
@@ -11185,16 +11183,6 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
-dependencies = [
- "memchr",
- "serde",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1004a344b30a54e2ee58d66a71b32d2db2feb0a31f9a2d302bf0536f15de2a33"
@@ -11497,8 +11485,7 @@ checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 [[package]]
 name = "reqsign"
 version = "0.14.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43e319d9de9ff4d941abf4ac718897118b0fe04577ea3f8e0f5788971784eef5"
+source = "git+https://github.com/Xuanwo/reqsign?rev=122dc12#122dc12e4e4dfbcaa12e6ce2f0f314009f51f1c5"
 dependencies = [
  "anyhow",
  "async-trait",

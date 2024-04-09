@@ -326,6 +326,7 @@ pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a Tim
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
+        TimeTravelPoint::Offset(expr) => visitor.visit_expr(expr),
         TimeTravelPoint::Stream {
             catalog,
             database,
