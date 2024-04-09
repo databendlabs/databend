@@ -108,7 +108,7 @@ members = [
 
 [workspace.dependencies]
 # databend maintains
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "a7325f4" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "3fe3acd" }
 
 opendal = { version = "0.45.1", features = [
     "layers-minitrace",
