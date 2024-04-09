@@ -271,6 +271,9 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_role(&self, tenant: &Tenant, role: String, if_exists: bool) -> Result<()> {
         let client = self.role_api(tenant);
+        // If the dropped role owns objects, transfer objects owner to account_admin role.
+        client.transfer_ownership_to_admin(&role).await?;
+
         let drop_role = client.drop_role(role, MatchSeq::GE(1));
         match drop_role.await {
             Ok(res) => Ok(res),
