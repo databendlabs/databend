@@ -122,6 +122,14 @@ impl Interpreter for ExplainInterpreter {
                     }
                     _ => self.explain_plan(&self.plan)?,
                 },
+                Plan::MergeInto(plan) => {
+                    let mut res = self.explain_plan(&self.plan)?;
+                    let input = self
+                        .explain_query(&plan.input, &plan.meta_data, &plan.bind_context, &None)
+                        .await?;
+                    res.extend(input);
+                    vec![DataBlock::concat(&res)?]
+                }
                 _ => self.explain_plan(&self.plan)?,
             },
 
