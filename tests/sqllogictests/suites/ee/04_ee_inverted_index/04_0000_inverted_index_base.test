@@ -305,10 +305,10 @@ SELECT id, score(), title FROM books WHERE match(title, '设计 OR 实现 OR 实
 query IFT
 SELECT id, score(), title FROM books WHERE match(title, '(设计 AND 实现) OR 实战') ORDER BY score() DESC
 ----
-9 5.063791 | Vue.js设计与实现
-7 2.189928 | Apache Pulsar实战
-5 1.7138567 | BERT基础教程：Transformer大模型实战
-6 1.2924166 | Flask Web开发：基于Python的Web应用开发实战（第2版）
+9 5.063791 Vue.js设计与实现
+7 2.189928 Apache Pulsar实战
+5 1.7138567 BERT基础教程：Transformer大模型实战
+6 1.2924166 Flask Web开发：基于Python的Web应用开发实战（第2版）
 
 query IFT
 SELECT id, score(), title FROM books WHERE match(title, 'Rust OR database') ORDER BY score() DESC
