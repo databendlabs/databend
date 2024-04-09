@@ -44,7 +44,7 @@ END;
 $$;
 
 query I
-EXECUTE immediate $$
+EXECUTE IMMEDIATE $$
 BEGIN
     CREATE OR REPLACE TABLE t1 (a INT, b FLOAT, c STRING);
     INSERT INTO t1 VALUES (1, 2.0, '3');
@@ -60,7 +60,7 @@ $$;
 └─────────────────────────────────────────┘
 
 query I
-EXECUTE immediate $$
+EXECUTE IMMEDIATE $$
 BEGIN
     LET x := 1;
     LET y := x + 1;
@@ -77,7 +77,7 @@ $$;
 └───────┘
 
 query I
-EXECUTE immediate $$
+EXECUTE IMMEDIATE $$
 BEGIN
     LET x := 1;
     RETURN TABLE(SELECT :x + 1);
