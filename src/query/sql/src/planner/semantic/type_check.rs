@@ -2234,6 +2234,12 @@ impl<'a> TypeChecker<'a> {
                 continue;
             }
             let field_names: Vec<&str> = field_str.split(':').collect();
+            // if the field is JSON type, must specify the key path in the object
+            // for example:
+            // the field `info` has the value: `{"tags":{"id":10,"env":"prod","name":"test"}}`
+            // a query can be written like this `info.tags.env:prod`
+            let field_name = field_names[0].trim();
+            let sub_field_names: Vec<&str> = field_name.split('.').collect();
             let column_expr = Expr::ColumnRef {
                 span: query_scalar.span(),
                 column: ColumnRef {
@@ -2241,7 +2247,7 @@ impl<'a> TypeChecker<'a> {
                     table: None,
                     column: ColumnID::Name(Identifier::from_name(
                         query_scalar.span(),
-                        field_names[0].trim(),
+                        sub_field_names[0].trim(),
                     )),
                 },
             };
