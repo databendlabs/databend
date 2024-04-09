@@ -203,8 +203,8 @@ impl Catalog for ImmutableCatalog {
 
     async fn mget_table_names_by_ids(
         &self,
-        table_ids: &[MetaId],
         _tenant: &str,
+        table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
         let mut table_name = Vec::with_capacity(table_ids.len());
         for id in table_ids {
@@ -230,8 +230,8 @@ impl Catalog for ImmutableCatalog {
 
     async fn mget_database_names_by_ids(
         &self,
-        db_ids: &[MetaId],
         _tenant: &Tenant,
+        db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         let mut res = Vec::new();
         for id in db_ids {

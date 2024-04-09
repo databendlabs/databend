@@ -281,8 +281,8 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn mget_table_names_by_ids(
         &self,
-        table_ids: &[MetaId],
         tenant: &str,
+        table_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         // Fetching system database names
         let sys_dbs = self
@@ -312,13 +312,13 @@ impl Catalog for DatabaseCatalog {
         // Fetching table names for mutable table IDs
         let mut tables = self
             .immutable_catalog
-            .mget_table_names_by_ids(table_ids, tenant)
+            .mget_table_names_by_ids(tenant, table_ids)
             .await?;
 
         // Fetching table names for remaining system table IDs
         let other = self
             .mutable_catalog
-            .mget_table_names_by_ids(&mut_table_ids, tenant)
+            .mget_table_names_by_ids(tenant, &mut_table_ids)
             .await?;
 
         // Appending the results from the mutable catalog to tables
@@ -341,8 +341,8 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn mget_database_names_by_ids(
         &self,
-        db_ids: &[MetaId],
         tenant: &Tenant,
+        db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         let sys_db_ids: Vec<_> = self
             .immutable_catalog
@@ -360,12 +360,12 @@ impl Catalog for DatabaseCatalog {
 
         let mut dbs = self
             .immutable_catalog
-            .mget_database_names_by_ids(db_ids, tenant)
+            .mget_database_names_by_ids(tenant, db_ids)
             .await?;
 
         let other = self
             .mutable_catalog
-            .mget_database_names_by_ids(&mut_db_ids, tenant)
+            .mget_database_names_by_ids(tenant, &mut_db_ids)
             .await?;
 
         dbs.extend(other);

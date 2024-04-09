@@ -195,8 +195,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // List the tables name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
-        table_ids: &[MetaId],
         tenant: &str,
+        table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>>;
 
     // Mget the db name by meta id.
@@ -205,8 +205,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
         &self,
-        db_ids: &[MetaId],
         tenant: &Tenant,
+        db_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>>;
 
     // Get one table by db and table name.

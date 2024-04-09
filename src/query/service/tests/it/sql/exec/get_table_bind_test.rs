@@ -189,10 +189,10 @@ impl Catalog for FakedCatalog {
 
     async fn mget_table_names_by_ids(
         &self,
-        table_ids: &[MetaId],
         tenant: &str,
+        table_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
-        self.cat.mget_table_names_by_ids(table_ids, tenant).await
+        self.cat.mget_table_names_by_ids(tenant, table_ids).await
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
@@ -201,10 +201,10 @@ impl Catalog for FakedCatalog {
 
     async fn mget_database_names_by_ids(
         &self,
-        db_ids: &[MetaId],
         tenant: &Tenant,
+        db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
-        self.cat.mget_database_names_by_ids(db_ids, tenant).await
+        self.cat.mget_database_names_by_ids(tenant, db_ids).await
     }
 
     async fn get_table(
