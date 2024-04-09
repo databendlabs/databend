@@ -454,3 +454,10 @@ select count(*) from crt1;
 
 statement ok
 drop table if exists crt1
+
+statement error 1006
+create table t as select number/0 from numbers(1);
+
+# table t should not be created
+statement error 1105
+select * from t;
