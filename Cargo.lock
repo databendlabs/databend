@@ -4225,7 +4225,6 @@ dependencies = [
  "snailquote",
  "tikv-jemalloc-ctl",
  "typetag",
- "walkdir",
 ]
 
 [[package]]

@@ -16,18 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::SendableDataBlockStream;
-use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use poem::http::StatusCode;
 use poem::Body;
 use poem::IntoResponse;
-use tokio_stream::StreamExt;
 
-use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
-use crate::sessions::TableContext;
-use crate::stream::ReadDataBlockStream;
 
 // read log files from cfg.log.log_dir
 #[poem::handler]
