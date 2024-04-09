@@ -210,6 +210,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             create_option: CreateOption::CreateIfNotExists,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
+            as_dropped: false,
         })
         .await;
 
@@ -250,6 +251,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             create_option: CreateOption::CreateIfNotExists,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
+            as_dropped: false,
         })
         .await;
 

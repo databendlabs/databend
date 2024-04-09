@@ -152,7 +152,7 @@ impl Interpreter for DropTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = resp.spec_vec {
             save_share_spec(
-                &self.ctx.get_tenant().name().to_string(),
+                self.ctx.get_tenant().name(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),

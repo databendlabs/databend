@@ -226,9 +226,11 @@ impl CreateTableInterpreter {
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
 
+        let db_name = &self.plan.database;
+        let table_name = &self.plan.table;
         let table_info = TableInfo::new(
-            &self.plan.database,
-            &self.plan.table,
+            db_name,
+            table_name,
             TableIdent::new(table_id, reply.table_id_seq),
             table_meta,
         );
@@ -258,26 +260,30 @@ impl CreateTableInterpreter {
             .execute2()
             .await?;
 
-        let db_name = self.plan.database.clone();
-        let table_name = self.plan.table.clone();
+        let db_name = db_name.clone();
+        let table_name = table_name.clone();
         pipeline.main_pipeline.set_on_finished(move |err| {
             if err.is_ok() {
-                match GlobalIORuntime::instance().block_on(async move {
-                    let undrop_by_id = UndropTableByIdReq {
-                        tenant,
-                        db_id: reply.db_id,
-                        table_id,
-                        db_name,
-                        table_name,
-                    };
-                    catalog.undrop_table_by_id(undrop_by_id).await
-                }) {
+                let qualified_table_name = format!("{}.{}", db_name, table_name);
+                let undrop_fut = {
+                    async move {
+                        let undrop_by_id = UndropTableByIdReq {
+                            tenant,
+                            db_id,
+                            table_id,
+                            db_name,
+                            table_name,
+                        };
+                        catalog.undrop_table_by_id(undrop_by_id).await
+                    }
+                };
+
+                match GlobalIORuntime::instance().block_on(undrop_fut) {
                     Ok(_) => {
-                        // TODO more ctx info
-                        info!(" create as select done.");
+                        info!("create {} as select done.", qualified_table_name)
                     }
                     Err(e) => {
-                        info!("create as select failed. {:?}", e)
+                        info!("create {} as select failed. {:?}", qualified_table_name, e)
                     }
                 }
             }
@@ -346,7 +352,7 @@ impl CreateTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &self.ctx.get_tenant().name().to_string(),
+                self.ctx.get_tenant().name(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
