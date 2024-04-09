@@ -58,6 +58,12 @@ pub enum ExecuteStateKind {
     Succeeded,
 }
 
+impl ExecuteStateKind {
+    pub fn is_stopped(self) -> bool {
+        matches!(self, Self::Succeeded | Self::Failed)
+    }
+}
+
 impl std::fmt::Display for ExecuteStateKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self)
@@ -220,7 +226,7 @@ impl Executor {
         }
     }
     #[async_backtrace::framed]
-    pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
+    pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>) {
         {
             let guard = this.read().await;
             if let Stopped(s) = &guard.state {
@@ -249,8 +255,10 @@ impl Executor {
                     )
                     .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
-                if reason.is_err() {
-                    s.ctx.get_current_session().txn_mgr().lock().set_fail();
+                if let Err(e) = &reason {
+                    if e.code() != ErrorCode::CLOSED_QUERY {
+                        s.ctx.get_current_session().txn_mgr().lock().set_fail();
+                    }
                 }
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
@@ -263,18 +271,11 @@ impl Executor {
                 }))
             }
             Running(r) => {
-                // release session
-                if kill {
-                    if let Err(error) = &reason {
-                        r.session.force_kill_query(error.clone());
-                    } else {
-                        r.session.force_kill_query(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed",
-                        ));
+                if let Err(e) = &reason {
+                    if e.code() != ErrorCode::CLOSED_QUERY {
+                        r.session.txn_mgr().lock().set_fail();
                     }
-                }
-                if reason.is_err() {
-                    r.session.txn_mgr().lock().set_fail();
+                    r.session.force_kill_query(error.clone());
                 }
 
                 guard.state = Stopped(Box::new(ExecuteStopped {

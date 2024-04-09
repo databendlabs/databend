@@ -238,15 +238,13 @@ async fn query_final_handler(
         {
             Ok(query) => {
                 let mut response = query.get_response_state_only().await;
+                if !response.state.state.is_stopped() {
+                    query.kill(ErrorCode::ClosedQuery("closed by client")).await;
+                    response = query.get_response_state_only().await;
+                }
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
-                if response.state.state == ExecuteStateKind::Running {
-                    return Err(PoemError::from_string(
-                        format!("query {} is still running, can not final it", query_id),
-                        StatusCode::BAD_REQUEST,
-                    ));
-                }
                 Ok(QueryResponse::from_internal(query_id, response, true))
             }
             Err(reason) => Err(query_id_not_found_or_removed(
@@ -277,7 +275,9 @@ async fn query_cancel_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.try_get_query(&query_id).await {
             Ok(query) => {
-                query.kill("http query cancel by handler").await;
+                query
+                    .kill(ErrorCode::AbortedQuery("canceled by client"))
+                    .await;
                 http_query_manager
                     .remove_query(&query_id, RemoveReason::Canceled)
                     .await

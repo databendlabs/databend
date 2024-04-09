@@ -36,7 +36,15 @@ pub enum LogType {
     Start = 1,
     Finish = 2,
     Error = 3,
+
+    /// canceled by another thread:
+    /// 1. `kill <query_id>` statement
+    /// 2. client_driver/ctx.cancel() -> /kill
     Aborted = 4,
+
+    /// close early because client does not need more data:
+    /// 1. explicit or implicit result_set.close() -> /final
+    Closed = 5,
 }
 
 impl LogType {
@@ -46,6 +54,7 @@ impl LogType {
             LogType::Finish => "Finish".to_string(),
             LogType::Error => "Error".to_string(),
             LogType::Aborted => "Aborted".to_string(),
+            LogType::Closed => "Closed".to_string(),
         }
     }
 }

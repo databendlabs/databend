@@ -28,6 +28,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_txn::TxnManagerRef;
 use log::warn;
@@ -195,7 +196,7 @@ impl HttpQueryManager {
                             Ok(_) => {
                                 warn!("{msg}");
                                 if let Some(query) = http_query_weak.upgrade() {
-                                    query.kill(&msg).await;
+                                    query.kill(ErrorCode::AbortedQuery(&msg)).await;
                                 }
                             }
                             Err(_) => {
