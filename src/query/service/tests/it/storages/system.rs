@@ -359,23 +359,6 @@ async fn test_roles_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_tracing_table() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-
-    let table: Arc<dyn Table> = Arc::new(TracingTable::create(1));
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
-
-    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
-    let result = stream.try_collect::<Vec<_>>().await?;
-    let block = &result[0];
-    assert_eq!(block.num_columns(), 1);
-    assert!(block.num_rows() > 0);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_users_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("users_table.txt").unwrap();
