@@ -104,7 +104,7 @@ pub fn parse_to_subtype(buf: &[u8]) -> Result<GeometryDataType> {
                 Ok(GeometryDataType::EWKB)
             } else {
                 Err(ErrorCode::GeometryError(
-                    "Invalid geometry type format1".to_string(),
+                    "Invalid geometry type format".to_string(),
                 ))
             }
         }
@@ -113,7 +113,7 @@ pub fn parse_to_subtype(buf: &[u8]) -> Result<GeometryDataType> {
                 Ok(GeometryDataType::EWKB)
             } else {
                 Err(ErrorCode::GeometryError(
-                    "Invalid geometry type format1".to_string(),
+                    "Invalid geometry type format".to_string(),
                 ))
             }
         }

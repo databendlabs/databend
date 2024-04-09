@@ -24,8 +24,11 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::parse_to_ewkb;
+use databend_common_io::parse_to_subtype;
+use databend_common_io::GeometryDataType;
 use geo::MultiPoint;
 use geo::Point;
+use geo_types::Polygon;
 use geohash::decode_bbox;
 use geos::geo_types;
 use geos::geo_types::Coord;
@@ -34,8 +37,10 @@ use geos::Geom;
 use geos::Geometry;
 use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
+use geozero::wkt::Wkt;
 use geozero::CoordDimensions;
 use geozero::GeozeroGeometry;
+use geozero::ToGeo;
 use geozero::ToGeos;
 use geozero::ToJson;
 use geozero::ToWkb;
@@ -46,12 +51,12 @@ use geozero::ToWkt;
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
     registry.register_aliases("st_makegeompoint", &["st_geom_point"]);
+    registry.register_aliases("st_makepolygon", &["st_polygon"]);
     registry.register_aliases("st_makeline", &["st_make_line"]);
     registry.register_aliases("st_geometryfromwkb", &[
         "st_geomfromwkb",
         "st_geometryfromewkb",
         "st_geomfromewkb",
-        "to_geometry",
     ]);
     registry.register_aliases("st_geometryfromwkt", &[
         "st_geomfromwkt",
@@ -59,7 +64,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         "st_geomfromewkt",
         "st_geometryfromtext",
         "st_geomfromtext",
-        "to_geometry",
     ]);
 
     // functions
@@ -76,6 +80,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             if geohash.len() > 12 {
                 ctx.set_error(builder.len(), "");
                 builder.put_str("Currently the precision only implement within 12 digits!");
+                builder.commit_row();
                 return;
             }
 
@@ -87,6 +92,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
                     builder.put_str("");
+                    builder.commit_row();
                     return;
                 }
             };
@@ -114,6 +120,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             if geohash.len() > 12 {
                 ctx.set_error(builder.len(), "");
                 builder.put_str("Currently the precision only implement within 12 digits!");
+                builder.commit_row();
                 return;
             }
 
@@ -125,6 +132,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
                     builder.put_str("");
+                    builder.commit_row();
                     return;
                 }
             };
@@ -163,6 +171,76 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     );
 
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+        "st_makepolygon",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|binary, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            let subtype = match parse_to_subtype(binary) {
+                Ok(subtype) => subtype,
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.put_str("");
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            let geometry = match subtype {
+                GeometryDataType::EWKT => Wkt(binary).to_geo(),
+                GeometryDataType::EWKB => Ewkb(binary).to_geo(),
+                GeometryDataType::GEOJSON => GeoJson(std::str::from_utf8(binary).unwrap()).to_geo(),
+            };
+
+            let line_string = match geometry {
+                Ok(geo) => geo.try_into(),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.put_str("");
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            let wkt = line_string
+                .map_err(|e: geo_types::Error| ErrorCode::GeometryError(e.to_string()))
+                .and_then(|line_string: LineString| {
+                    let points = line_string.into_points();
+                    if points.len() < 4 {
+                        Err(ErrorCode::GeometryError(
+                            "Input lines must have at least 4 points!",
+                        ))
+                    } else if points.last() != points.first() {
+                        Err(ErrorCode::GeometryError(
+                            "The first and last elements are not equal.",
+                        ))
+                    } else {
+                        let polygon = Polygon::new(LineString::from(points), vec![]);
+                        geo_types::Geometry::from(polygon)
+                            .to_json()
+                            .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+                    }
+                });
+            match wkt {
+                Ok(data) => builder.put_slice(data.as_bytes()),
+                Err(e) => ctx.set_error(builder.len(), e.to_string()),
+            }
+            builder.commit_row();
+        }),
+    );
+
     registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, GeometryType, _, _>(
         "st_makeline",
         |_, _, _| FunctionDomain::Full,
@@ -180,21 +258,24 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match binary_to_geos(params)
                     {
                         Ok(geos) => {
-                                match get_shared_srid(&geos){
-                                    Ok(s) => {
-                                        srid = s;
-                                        geos
-                                    },
-                                    Err(e) => {
-                                        ctx.set_error(builder.len(), ErrorCode::GeometryError(e).to_string());
-                                        builder.put_str("");
-                                        return;
-                                    }
+                            match get_shared_srid(&geos){
+                                Ok(s) => {
+                                    srid = s;
+                                    geos
+                                },
+                                Err(e) => {
+                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e).to_string());
+                                    builder.put_str("");
+                                    builder.commit_row();
+                                    return;
+                                }
                             }
                         },
                         Err(e) => {
                             ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
-                            return builder.put_str("");
+                            builder.put_str("");
+                            builder.commit_row();
+                            return;
                         }
                     };
 
@@ -207,7 +288,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 Ok(point) => point,
                                 Err(e) => {
                                     ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
-                                    return builder.put_str("");
+                                    builder.put_str("");
+                                    builder.commit_row();
+                                    return;
                                 }
                             };
                             coords.push(point.into());
@@ -217,7 +300,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 Ok(line) => line,
                                 Err(e) => {
                                     ctx.set_error(builder.len(), e.to_string());
-                                    return builder.put_str("");
+                                    builder.put_str("");
+                                    builder.commit_row();
+                                    return;
                                 }
                             };
                             coords.append(&mut line.into_inner());
@@ -227,7 +312,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 Ok(multi_point) => multi_point,
                                 Err(e) => {
                                     ctx.set_error(builder.len(), e.to_string());
-                                    return builder.put_str("");
+                                    builder.put_str("");
+                                    builder.commit_row();
+                                    return;
                                 }
                             };
                             for point in multi_point.into_iter() {
@@ -239,7 +326,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 builder.len(),
                                 ErrorCode::GeometryError("Geometry expression must be a Point, MultiPoint, or LineString.").to_string(),
                             );
-                            return builder.put_str("");
+                            builder.put_str("");
+                            builder.commit_row();
+                            return;
                         }
                     }
                 }
@@ -271,7 +360,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
-                    return builder.put_str("");
+                    builder.put_str("");
+                    builder.commit_row();
+                    return;
                 }
             };
             match Ewkb(&b_ewkb).to_geos() {
@@ -437,6 +528,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         );
                         ctx.set_error(builder.len(), ErrorCode::GeometryError(error).to_string());
                         builder.put_str("");
+                        builder.commit_row();
                         return;
                     }
                 },
