@@ -95,31 +95,30 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
-    let conn_ip = get_connection_ip(&req);
+    let client_ip = get_client_ip(&req);
     if std_auth_headers.is_empty() {
         if matches!(kind, HttpHandlerKind::Clickhouse) {
-            auth_clickhouse_name_password(req, conn_ip)
+            auth_clickhouse_name_password(req, client_ip)
         } else {
             Err(ErrorCode::AuthenticateFailure(
                 "No authorization header detected",
             ))
         }
     } else {
-        auth_by_header(&std_auth_headers, conn_ip)
+        auth_by_header(&std_auth_headers, client_ip)
     }
 }
 
-/// this function tries to get the client IP address from the headers, if not found, it will
-/// return the connection's remote address. This IP address is ONLY used for logging purpose,
-/// never use this ip on authentication or network policy.
+/// this function tries to get the client IP address from the headers. if the ip in header
+/// not found, fallback to the remote address, which might be local proxy's ip address.
+/// please note that when it comes with network policy, we need make sure the incoming
+/// traffic comes from a trustworthy proxy instance.
 fn get_client_ip(req: &Request) -> Option<String> {
-    // Check for X-Real-IP first
     if let Some(x_real_ip) = req.headers().get("X-Real-IP") {
         if let Ok(ip_str) = x_real_ip.to_str() {
             return Some(ip_str.to_string());
         }
     }
-
     if let Some(x_forwarded_for) = req.headers().get("X-Forwarded-For") {
         if let Ok(ips) = x_forwarded_for.to_str() {
             // take the first one the the original client IP
@@ -129,22 +128,13 @@ fn get_client_ip(req: &Request) -> Option<String> {
             }
         }
     }
-
-    // Lastly, check for the CF-Connecting-IP (used by Cloudflare)
+    // CF-Connecting-IP is only used in Cloudflare
     if let Some(cf_connecting_ip) = req.headers().get("CF-Connecting-IP") {
         if let Ok(ip_str) = cf_connecting_ip.to_str() {
             return Some(ip_str.to_string());
         }
     }
 
-    // fallback to connection IP if no ip related header exists at all
-    get_connection_ip(req)
-}
-
-/// Get the client IP address from the connection. this IP address may used in the authentication
-/// and network policy, take care that NOT to use the client IP retrieved from the headers on these
-/// cases.
-fn get_connection_ip(req: &Request) -> Option<String> {
     // fallback to the connection's remote address, take care
     let client_ip = match req.remote_addr().0 {
         Addr::SocketAddr(addr) => Some(addr.ip().to_string()),
