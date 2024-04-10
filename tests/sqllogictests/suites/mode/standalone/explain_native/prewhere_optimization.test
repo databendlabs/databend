@@ -11,7 +11,7 @@ TableScan
 ├── table: default.default.t_where_optimizer
 ├── output columns: [a (#0)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = 1)], limit: NONE]
@@ -24,7 +24,7 @@ TableScan
 ├── table: default.default.t_where_optimizer
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = t_where_optimizer.b (#1))], limit: NONE]
@@ -37,7 +37,7 @@ TableScan
 ├── table: default.default.t_where_optimizer
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2)], limit: NONE]
@@ -50,7 +50,7 @@ TableScan
 ├── table: default.default.t_where_optimizer
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [and_filters(t_where_optimizer.a (#0) = 1, t_where_optimizer.b (#1) > 2)], limit: NONE]
@@ -63,7 +63,7 @@ TableScan
 ├── table: default.default.t_where_optimizer
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [is_true(t_where_optimizer.b (#1) = 1)], limit: NONE]
@@ -76,7 +76,7 @@ TableScan
 ├── table: default.default.t_where_optimizer
 ├── output columns: [a (#0)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [is_true(t_where_optimizer.b (#1) = 1)], limit: NONE]
@@ -95,7 +95,7 @@ TableScan
 ├── table: default.default.t_where_optimizer
 ├── output columns: [id (#0), s (#1)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [t_where_optimizer.s:a (#2) > 0], limit: NONE]

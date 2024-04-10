@@ -104,7 +104,7 @@ EvalScalar
         ├── table: default.project_set.t
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read size: < 1 KiB
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -125,7 +125,7 @@ EvalScalar
         ├── table: default.project_set.t
         ├── output columns: [b (#1)]
         ├── read rows: 0
-        ├── read size: < 1 KiB
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]

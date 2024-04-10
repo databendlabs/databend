@@ -27,7 +27,7 @@ Sort
         ├── table: default.test_explain_window.empsalary
         ├── output columns: [depname (#0), empno (#1), salary (#2)]
         ├── read rows: 0
-        ├── read size: < 1 KiB
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -111,7 +111,7 @@ Filter
         │       ├── table: default.test_explain_window.test
         │       ├── output columns: [k (#0), v (#1)]
         │       ├── read rows: 0
-        │       ├── read size: < 1 KiB
+        │       ├── read size: 0
         │       ├── partitions total: 0
         │       ├── partitions scanned: 0
         │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
@@ -124,7 +124,7 @@ Filter
                 ├── table: default.test_explain_window.test
                 ├── output columns: [k (#2), v (#3)]
                 ├── read rows: 0
-                ├── read size: < 1 KiB
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
@@ -151,7 +151,7 @@ Filter
         │   ├── table: default.test_explain_window.test
         │   ├── output columns: [k (#0), v (#1)]
         │   ├── read rows: 0
-        │   ├── read size: < 1 KiB
+        │   ├── read size: 0
         │   ├── partitions total: 0
         │   ├── partitions scanned: 0
         │   ├── push downs: [filters: [], limit: NONE]
@@ -160,7 +160,7 @@ Filter
             ├── table: default.test_explain_window.test
             ├── output columns: [k (#2), v (#3)]
             ├── read rows: 0
-            ├── read size: < 1 KiB
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -187,7 +187,7 @@ Filter
         │   ├── table: default.test_explain_window.test
         │   ├── output columns: [k (#0), v (#1)]
         │   ├── read rows: 0
-        │   ├── read size: < 1 KiB
+        │   ├── read size: 0
         │   ├── partitions total: 0
         │   ├── partitions scanned: 0
         │   ├── push downs: [filters: [], limit: NONE]
@@ -196,7 +196,7 @@ Filter
             ├── table: default.test_explain_window.test
             ├── output columns: [k (#2), v (#3)]
             ├── read rows: 0
-            ├── read size: < 1 KiB
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -225,7 +225,7 @@ Filter
         ├── table: default.test_explain_window.t
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read size: < 1 KiB
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -261,7 +261,7 @@ Window
         ├── table: default.test_explain_window.tbpush
         ├── output columns: [b (#0)]
         ├── read rows: 0
-        ├── read size: < 1 KiB
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
@@ -284,7 +284,7 @@ Filter
         ├── table: default.test_explain_window.tbpush
         ├── output columns: [b (#0)]
         ├── read rows: 0
-        ├── read size: < 1 KiB
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -307,7 +307,7 @@ Filter
         ├── table: default.test_explain_window.tbpush
         ├── output columns: [b (#0)]
         ├── read rows: 0
-        ├── read size: < 1 KiB
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -477,7 +477,7 @@ RowFetch
                     ├── table: default.test_explain_window.t
                     ├── output columns: [a (#0), b (#1), _row_id (#7)]
                     ├── read rows: 0
-                    ├── read size: < 1 KiB
+                    ├── read size: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]

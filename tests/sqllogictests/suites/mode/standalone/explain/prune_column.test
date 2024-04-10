@@ -209,7 +209,7 @@ Sort
     ├── table: default.system.functions
     ├── output columns: [name (#0), example (#4)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]

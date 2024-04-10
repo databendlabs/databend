@@ -143,7 +143,7 @@ HashJoin
 │   ├── table: default.default.column_only_optimization_target
 │   ├── output columns: [a (#2), b (#3), _row_id (#4)]
 │   ├── read rows: 0
-│   ├── read size: < 1 KiB
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -152,7 +152,7 @@ HashJoin
     ├── table: default.default.column_only_optimization_source
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
@@ -180,7 +180,7 @@ HashJoin
 │   ├── table: default.default.column_only_optimization_target
 │   ├── output columns: [a (#2), b (#3), _row_id (#4)]
 │   ├── read rows: 0
-│   ├── read size: < 1 KiB
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -189,7 +189,7 @@ HashJoin
     ├── table: default.default.column_only_optimization_source
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
@@ -220,7 +220,7 @@ HashJoin
 │   ├── table: default.default.column_only_optimization_target
 │   ├── output columns: [a (#2), b (#3), _row_id (#4)]
 │   ├── read rows: 0
-│   ├── read size: < 1 KiB
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -229,7 +229,7 @@ HashJoin
     ├── table: default.default.column_only_optimization_source
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
@@ -257,7 +257,7 @@ HashJoin
 │   ├── table: default.default.column_only_optimization_target
 │   ├── output columns: [a (#2), b (#3), _row_id (#4)]
 │   ├── read rows: 0
-│   ├── read size: < 1 KiB
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -266,7 +266,7 @@ HashJoin
     ├── table: default.default.column_only_optimization_source
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]

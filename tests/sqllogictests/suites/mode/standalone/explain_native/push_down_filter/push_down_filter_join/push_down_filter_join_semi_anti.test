@@ -32,7 +32,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2)]
 │   ├── read rows: 0
-│   ├── read size: < 1 KiB
+│   ├── read size: 0
 │   ├── partitions total: 1
 │   ├── partitions scanned: 0
 │   ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -42,7 +42,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 1
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -64,7 +64,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2)]
 │   ├── read rows: 0
-│   ├── read size: < 1 KiB
+│   ├── read size: 0
 │   ├── partitions total: 1
 │   ├── partitions scanned: 0
 │   ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -74,7 +74,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 1
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <range pruning: 1 to 0>]

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::base::convert_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
@@ -23,7 +24,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
-use databend_common_base::base::convert_byte_size;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -1027,7 +1027,9 @@ fn union_all_to_format_tree(
 }
 
 fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
-    let read_size = if info.read_bytes < 1024 {
+    let read_size = if info.read_bytes == 0 {
+        "0".to_string()
+    } else if info.read_bytes < 1024 {
         "< 1 KiB".to_string()
     } else {
         convert_byte_size(info.read_bytes as f64)

@@ -17,7 +17,7 @@ TableScan
 ├── table: default.default.t1
 ├── output columns: [a (#0)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 1
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -42,7 +42,7 @@ Filter
     │   ├── table: default.default.t1
     │   ├── output columns: [a (#0), b (#1)]
     │   ├── read rows: 0
-    │   ├── read size: < 1 KiB
+    │   ├── read size: 0
     │   ├── partitions total: 1
     │   ├── partitions scanned: 0
     │   ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -981,7 +981,7 @@ TableScan
 ├── table: default.default.t4
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
-├── read size: < 1 KiB
+├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [and_filters(t4.a (#0) = 1, TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
@@ -1004,7 +1004,7 @@ EvalScalar
     ├── table: default.default.t4
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
@@ -1021,7 +1021,7 @@ EvalScalar
     ├── table: default.default.t4
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t4.a (#0) > 100)], limit: NONE]
@@ -1063,7 +1063,7 @@ Sort
     │   ├── table: default.default.t2
     │   ├── output columns: [k (#2), l (#3)]
     │   ├── read rows: 0
-    │   ├── read size: < 1 KiB
+    │   ├── read size: 0
     │   ├── partitions total: 0
     │   ├── partitions scanned: 0
     │   ├── push downs: [filters: [false], limit: NONE]

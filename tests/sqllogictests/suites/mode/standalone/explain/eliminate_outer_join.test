@@ -663,7 +663,7 @@ HashJoin
 │       ├── table: default.eliminate_outer_join.time_table
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 0
-│       ├── read size: < 1 KiB
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(time_table.a (#1) > '2001-01-01 00:00:00.000000')], limit: NONE]
@@ -676,7 +676,7 @@ HashJoin
         ├── table: default.eliminate_outer_join.time_table
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read size: < 1 KiB
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(time_table.a (#0) > '2001-01-01 00:00:00.000000')], limit: NONE]

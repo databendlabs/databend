@@ -111,7 +111,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -128,7 +128,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -145,7 +145,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -188,7 +188,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 0
-    ├── read size: < 1 KiB
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
