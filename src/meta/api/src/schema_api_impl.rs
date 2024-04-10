@@ -1623,6 +1623,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             });
                         }
                         CreateOption::CreateOrReplace => {
+                            let is_delete = req.as_dropped;
                             construct_drop_table_txn_operations(
                                 self,
                                 req.name_ident.table_name.clone(),
@@ -1630,7 +1631,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                 *id.data,
                                 db_id.data,
                                 false,
-                                false,
+                                is_delete,
                                 &mut condition,
                                 &mut if_then,
                             )
@@ -1962,9 +1963,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 })?
             };
 
+            let table_id = req.table_id;
+
             // Return error if there is no table id history.
-            let table_id = match tb_id_list.last() {
-                Some(table_id) => *table_id,
+            // let table_id = match tb_id_list.last() {
+            match tb_id_list.last() {
+                // Some(table_id) => *table_id,
+                // TODO
+                Some(last_table_id) => assert_eq!(
+                    *last_table_id, table_id,
+                    "table_id mismatch, last of id_list{},  table id {}",
+                    *last_table_id, table_id
+                ),
                 None => {
                     return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
                         UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),

@@ -194,6 +194,7 @@ impl CreateTableInterpreter {
             .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
         let table_id = reply.table_id;
+        let table_id_seq = reply.table_id_seq;
         let db_id = reply.db_id;
 
         // grant the ownership of the table to the current role.
@@ -231,7 +232,7 @@ impl CreateTableInterpreter {
         let table_info = TableInfo::new(
             db_name,
             table_name,
-            TableIdent::new(table_id, reply.table_id_seq),
+            TableIdent::new(table_id, table_id_seq),
             table_meta,
         );
 
@@ -275,19 +276,19 @@ impl CreateTableInterpreter {
                             },
                             db_id,
                             table_id,
+                            table_id_seq,
                         };
                         catalog.undrop_table_by_id(undrop_by_id).await
                     }
                 };
 
-                match GlobalIORuntime::instance().block_on(undrop_fut) {
-                    Ok(_) => {
-                        info!("create {} as select done.", qualified_table_name)
-                    }
-                    Err(e) => {
-                        info!("create {} as select failed. {:?}", qualified_table_name, e)
-                    }
-                }
+                // GlobalIORuntime::instance().block_on(undrop_fut)?;
+                GlobalIORuntime::instance()
+                    .block_on(undrop_fut)
+                    .map_err(|e| {
+                        info!("create {} as select failed. {:?}", qualified_table_name, e);
+                        e
+                    })?;
             }
 
             Ok(())

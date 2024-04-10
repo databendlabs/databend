@@ -589,6 +589,7 @@ pub struct UndropTableByIdReq {
     pub name_ident: TableNameIdent,
     pub db_id: MetaId,
     pub table_id: MetaId,
+    pub table_id_seq: u64,
 }
 
 impl UndropTableReq {

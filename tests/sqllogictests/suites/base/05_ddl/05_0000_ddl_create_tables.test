@@ -461,3 +461,30 @@ create table t as select number/0 from numbers(1);
 # table t should not be created
 statement error 1105
 select * from t;
+
+
+statement ok
+create or replace table t as select * from numbers(1);
+
+query I
+select count(*) from t;
+----
+1
+
+statement ok
+create or replace table t as select * from numbers(2);
+
+query I
+select count(*) from t;
+----
+2
+
+statement ok
+create or replace table t as select * from numbers(3);
+
+query I
+select count(*) from t;
+----
+3
+
+
