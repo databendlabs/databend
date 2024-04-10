@@ -280,7 +280,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 20, "{:?}", result);
+    assert_eq!(result.schema.len(), 19, "{:?}", result);
 
     // get state
     let uri = make_state_uri(query_id);
