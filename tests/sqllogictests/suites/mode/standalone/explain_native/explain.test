@@ -17,7 +17,7 @@ TableScan
 ├── table: default.default.t1
 ├── output columns: [a (#0)]
 ├── read rows: 0
-├── read bytes: 0
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -42,7 +42,7 @@ Filter
     │   ├── table: default.default.t1
     │   ├── output columns: [a (#0), b (#1)]
     │   ├── read rows: 0
-    │   ├── read bytes: 0
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 0
     │   ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -52,7 +52,7 @@ Filter
         ├── table: default.default.t2
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 5
-        ├── read bytes: 68
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -73,7 +73,7 @@ HashJoin
 │   ├── table: default.default.t1
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 1
-│   ├── read bytes: 36
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -83,7 +83,7 @@ HashJoin
     ├── table: default.default.t2
     ├── output columns: [a (#2), b (#3)]
     ├── read rows: 5
-    ├── read bytes: 68
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -585,7 +585,7 @@ UnionAll
 │   ├── table: default.default.t1
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 18
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -595,7 +595,7 @@ UnionAll
     ├── table: default.default.t2
     ├── output columns: [a (#2)]
     ├── read rows: 5
-    ├── read bytes: 34
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -620,7 +620,7 @@ Filter
     │   ├── table: default.default.t1
     │   ├── output columns: [a (#0), b (#1)]
     │   ├── read rows: 1
-    │   ├── read bytes: 36
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -630,7 +630,7 @@ Filter
         ├── table: default.default.t2
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 5
-        ├── read bytes: 68
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -655,7 +655,7 @@ Filter
     │   ├── table: default.default.t1
     │   ├── output columns: [a (#0), b (#1)]
     │   ├── read rows: 1
-    │   ├── read bytes: 36
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
@@ -665,7 +665,7 @@ Filter
         ├── table: default.default.t2
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 5
-        ├── read bytes: 68
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -699,7 +699,7 @@ HashJoin
 │   │   ├── table: default.default.t1
 │   │   ├── output columns: [a (#0), b (#1)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 36
+│   │   ├── read size: < 1 KiB
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -709,7 +709,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 5
-│       ├── read bytes: 68
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -719,7 +719,7 @@ HashJoin
     ├── table: default.default.t3
     ├── output columns: [a (#4), b (#5)]
     ├── read rows: 10
-    ├── read bytes: 108
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -751,7 +751,7 @@ HashJoin
 │       │   ├── table: default.default.t1
 │       │   ├── output columns: [a (#0), b (#1)]
 │       │   ├── read rows: 1
-│       │   ├── read bytes: 36
+│       │   ├── read size: < 1 KiB
 │       │   ├── partitions total: 1
 │       │   ├── partitions scanned: 1
 │       │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -761,7 +761,7 @@ HashJoin
 │           ├── table: default.default.t2
 │           ├── output columns: [a (#2), b (#3)]
 │           ├── read rows: 5
-│           ├── read bytes: 68
+│           ├── read size: < 1 KiB
 │           ├── partitions total: 1
 │           ├── partitions scanned: 1
 │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -771,7 +771,7 @@ HashJoin
     ├── table: default.default.t3
     ├── output columns: [a (#4), b (#5)]
     ├── read rows: 10
-    ├── read bytes: 108
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -805,7 +805,7 @@ Limit
             │   ├── table: default.default.t1
             │   ├── output columns: [a (#0), b (#1)]
             │   ├── read rows: 1
-            │   ├── read bytes: 36
+            │   ├── read size: < 1 KiB
             │   ├── partitions total: 1
             │   ├── partitions scanned: 1
             │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -815,7 +815,7 @@ Limit
                 ├── table: default.default.t2
                 ├── output columns: [a (#2), b (#3)]
                 ├── read rows: 5
-                ├── read bytes: 68
+                ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -836,7 +836,7 @@ HashJoin
 │   ├── table: default.default.t1
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 1
-│   ├── read bytes: 36
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -846,7 +846,7 @@ HashJoin
     ├── table: default.default.t2
     ├── output columns: [a (#2), b (#3)]
     ├── read rows: 5
-    ├── read bytes: 68
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -878,7 +878,7 @@ AggregateFinal
                 ├── table: default.default.t1
                 ├── output columns: [a (#0)]
                 ├── read rows: 1
-                ├── read bytes: 18
+                ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -910,7 +910,7 @@ AggregateFinal
                 ├── table: default.default.t1
                 ├── output columns: [a (#0)]
                 ├── read rows: 1
-                ├── read bytes: 18
+                ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -981,7 +981,7 @@ TableScan
 ├── table: default.default.t4
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
-├── read bytes: 0
+├── read size: < 1 KiB
 ├── partitions total: 0
 ├── partitions scanned: 0
 ├── push downs: [filters: [and_filters(t4.a (#0) = 1, TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
@@ -1004,7 +1004,7 @@ EvalScalar
     ├── table: default.default.t4
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: < 1 KiB
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
@@ -1021,7 +1021,7 @@ EvalScalar
     ├── table: default.default.t4
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: < 1 KiB
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t4.a (#0) > 100)], limit: NONE]
@@ -1063,7 +1063,7 @@ Sort
     │   ├── table: default.default.t2
     │   ├── output columns: [k (#2), l (#3)]
     │   ├── read rows: 0
-    │   ├── read bytes: 0
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 0
     │   ├── partitions scanned: 0
     │   ├── push downs: [filters: [false], limit: NONE]
@@ -1072,7 +1072,7 @@ Sort
         ├── table: default.default.t1
         ├── output columns: [i (#0), j (#1)]
         ├── read rows: 3
-        ├── read bytes: 56
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]

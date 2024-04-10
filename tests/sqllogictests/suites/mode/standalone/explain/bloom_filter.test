@@ -29,7 +29,7 @@ EvalScalar
         ├── table: default.default.bloom_test_t
         ├── output columns: [c1 (#0)]
         ├── read rows: 3
-        ├── read bytes: 44
+        ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
@@ -115,7 +115,7 @@ EvalScalar
         ├── table: default.default.bloom_test_t
         ├── output columns: [c2 (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 0>]
@@ -137,7 +137,7 @@ EvalScalar
         ├── table: default.default.bloom_test_t
         ├── output columns: [c2 (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
@@ -159,7 +159,7 @@ EvalScalar
         ├── table: default.default.bloom_test_t
         ├── output columns: [c3 (#2)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
@@ -201,7 +201,7 @@ EvalScalar
         ├── table: default.default.bloom_test_alter_t1
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 88
+        ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
@@ -235,7 +235,7 @@ EvalScalar
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 88
+        ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
@@ -266,7 +266,7 @@ EvalScalar
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 88
+        ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, bloom pruning: 3 to 2>]
@@ -292,7 +292,7 @@ EvalScalar
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 9
-        ├── read bytes: 132
+        ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
@@ -326,7 +326,7 @@ EvalScalar
         ├── table: default.default.bloom_test_nullable_t
         ├── output columns: [c1 (#0), c2 (#1)]
         ├── read rows: 3
-        ├── read bytes: 88
+        ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
@@ -348,7 +348,7 @@ EvalScalar
         ├── table: default.default.bloom_test_nullable_t
         ├── output columns: [c2 (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]

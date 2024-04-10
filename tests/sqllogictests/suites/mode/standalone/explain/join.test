@@ -30,7 +30,7 @@ HashJoin
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 34
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -40,7 +40,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [number (#1)]
     ├── read rows: 10
-    ├── read bytes: 60
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -61,7 +61,7 @@ HashJoin
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 34
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -75,7 +75,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [number (#1)]
         ├── read rows: 10
-        ├── read bytes: 60
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -100,7 +100,7 @@ HashJoin
 │       ├── table: default.default.t
 │       ├── output columns: [number (#0)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
 │       ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -114,7 +114,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [number (#1)]
         ├── read rows: 10
-        ├── read bytes: 60
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -139,7 +139,7 @@ Filter
     │   ├── table: default.default.t
     │   ├── output columns: [number (#0)]
     │   ├── read rows: 1
-    │   ├── read bytes: 34
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -149,7 +149,7 @@ Filter
         ├── table: default.default.t1
         ├── output columns: [number (#1)]
         ├── read rows: 10
-        ├── read bytes: 60
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -182,7 +182,7 @@ HashJoin
 │   │       ├── table: default.default.t
 │   │       ├── output columns: [number (#0)]
 │   │       ├── read rows: 0
-│   │       ├── read bytes: 0
+│   │       ├── read size: < 1 KiB
 │   │       ├── partitions total: 1
 │   │       ├── partitions scanned: 0
 │   │       ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -192,7 +192,7 @@ HashJoin
 │       ├── table: default.default.t1
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 10
-│       ├── read bytes: 60
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -202,7 +202,7 @@ HashJoin
     ├── table: default.default.t2
     ├── output columns: [number (#2)]
     ├── read rows: 100
-    ├── read bytes: 166
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -247,7 +247,7 @@ HashJoin
 │       ├── table: default.default.onecolumn
 │       ├── output columns: [x (#0)]
 │       ├── read rows: 4
-│       ├── read bytes: 44
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -261,7 +261,7 @@ HashJoin
         ├── table: default.default.twocolumn
         ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
-        ├── read bytes: 92
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -286,7 +286,7 @@ HashJoin
 │       ├── table: default.default.onecolumn
 │       ├── output columns: [x (#0)]
 │       ├── read rows: 4
-│       ├── read bytes: 44
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -300,7 +300,7 @@ HashJoin
         ├── table: default.default.twocolumn
         ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
-        ├── read bytes: 92
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -325,7 +325,7 @@ HashJoin
 │       ├── table: default.default.onecolumn
 │       ├── output columns: [x (#0)]
 │       ├── read rows: 4
-│       ├── read bytes: 44
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -339,7 +339,7 @@ HashJoin
         ├── table: default.default.twocolumn
         ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
-        ├── read bytes: 92
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -366,7 +366,7 @@ Filter
     │   ├── table: default.default.twocolumn
     │   ├── output columns: [x (#1), y (#2)]
     │   ├── read rows: 4
-    │   ├── read bytes: 92
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -376,7 +376,7 @@ Filter
         ├── table: default.default.onecolumn
         ├── output columns: [x (#0)]
         ├── read rows: 4
-        ├── read bytes: 44
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -401,7 +401,7 @@ HashJoin
 │       ├── table: default.default.onecolumn
 │       ├── output columns: [x (#0)]
 │       ├── read rows: 4
-│       ├── read bytes: 44
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -415,7 +415,7 @@ HashJoin
         ├── table: default.default.twocolumn
         ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
-        ├── read bytes: 92
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -455,7 +455,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(t2.a (#2) > 10)], limit: NONE]
@@ -468,7 +468,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t1.a (#0) > 10)], limit: NONE]
@@ -488,7 +488,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -501,7 +501,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t1.a (#0) + t1.b (#1) > 10)], limit: NONE]
@@ -525,7 +525,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(t2.a (#2) > 10)], limit: NONE]
@@ -538,7 +538,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t1.a (#0) > 10)], limit: NONE]
@@ -562,7 +562,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(t2.a (#2) + t2.b (#3) > 10)], limit: NONE]
@@ -575,7 +575,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t1.a (#0) + t1.b (#1) > 10)], limit: NONE]
@@ -599,7 +599,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(t2.b (#3) + t2.a (#2) > 10)], limit: NONE]
@@ -612,7 +612,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: < 1 KiB
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t1.b (#1) + t1.a (#0) > 10)], limit: NONE]
@@ -633,7 +633,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -642,7 +642,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: < 1 KiB
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
@@ -750,7 +750,7 @@ HashJoin
 │       ├── table: default.default.twocolumn
 │       ├── output columns: [x (#1), y (#2)]
 │       ├── read rows: 8
-│       ├── read bytes: 184
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 2
 │       ├── partitions scanned: 2
 │       ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
@@ -760,7 +760,7 @@ HashJoin
     ├── table: default.default.onecolumn
     ├── output columns: [x (#0)]
     ├── read rows: 7
-    ├── read bytes: 84
+    ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 2
     ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
@@ -792,7 +792,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 20
-│   ├── read bytes: 160
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -801,7 +801,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 10
-    ├── read bytes: 80
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -841,7 +841,7 @@ EvalScalar
     │       ├── table: default.default.t2
     │       ├── output columns: [wms_id (#4)]
     │       ├── read rows: 0
-    │       ├── read bytes: 0
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 0
     │       ├── partitions scanned: 0
     │       ├── push downs: [filters: [is_true(substr(t2.wms_id (#4), 1) = 'R006')], limit: NONE]
@@ -854,7 +854,7 @@ EvalScalar
             ├── table: default.default.t1
             ├── output columns: [ext (#1)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: < 1 KiB
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [is_true(substr(replace(t1.ext (#1), '33', '44'), 1) = 'R006')], limit: NONE]
@@ -882,7 +882,7 @@ EvalScalar
     │       ├── table: default.default.t2
     │       ├── output columns: [wms_id (#4)]
     │       ├── read rows: 0
-    │       ├── read bytes: 0
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 0
     │       ├── partitions scanned: 0
     │       ├── push downs: [filters: [is_true(t2.wms_id (#4) = 'R006')], limit: NONE]
@@ -895,7 +895,7 @@ EvalScalar
             ├── table: default.default.t1
             ├── output columns: [ext (#1)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: < 1 KiB
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [is_true(replace(t1.ext (#1), '33', '44') = 'R006')], limit: NONE]
@@ -919,7 +919,7 @@ EvalScalar
     │   ├── table: default.default.t2
     │   ├── output columns: [wms_id (#4)]
     │   ├── read rows: 0
-    │   ├── read bytes: 0
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 0
     │   ├── partitions scanned: 0
     │   ├── push downs: [filters: [], limit: NONE]
@@ -932,7 +932,7 @@ EvalScalar
             ├── table: default.default.t1
             ├── output columns: [ext (#1)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: < 1 KiB
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [is_true(replace(substr(t1.ext (#1), 1), '33', '44') = 'R006')], limit: NONE]

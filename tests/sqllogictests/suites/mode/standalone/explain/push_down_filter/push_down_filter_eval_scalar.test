@@ -104,7 +104,7 @@ AggregateFinal
         │               │                   ├── table: default.default.t2
         │               │                   ├── output columns: [sid (#1), val (#2)]
         │               │                   ├── read rows: 0
-        │               │                   ├── read bytes: 0
+        │               │                   ├── read size: < 1 KiB
         │               │                   ├── partitions total: 0
         │               │                   ├── partitions scanned: 0
         │               │                   ├── push downs: [filters: [is_true(t2.sid (#1) = 1)], limit: NONE]
@@ -117,7 +117,7 @@ AggregateFinal
         │                       ├── table: default.default.t1
         │                       ├── output columns: [id (#0)]
         │                       ├── read rows: 0
-        │                       ├── read bytes: 0
+        │                       ├── read size: < 1 KiB
         │                       ├── partitions total: 0
         │                       ├── partitions scanned: 0
         │                       ├── push downs: [filters: [is_true(t1.id (#0) = 1)], limit: NONE]
@@ -147,7 +147,7 @@ AggregateFinal
                                 ├── table: default.default.t1
                                 ├── output columns: [id (#9)]
                                 ├── read rows: 0
-                                ├── read bytes: 0
+                                ├── read size: < 1 KiB
                                 ├── partitions total: 0
                                 ├── partitions scanned: 0
                                 ├── push downs: [filters: [is_true(t1.id (#9) = 1)], limit: NONE]

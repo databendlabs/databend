@@ -75,7 +75,7 @@ HashJoin
 │   ├── table: default.default.target_build_optimization
 │   ├── output columns: [a (#3), b (#4), c (#5), _row_id (#6)]
 │   ├── read rows: 8
-│   ├── read bytes: 512
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 0
 │   ├── partitions scanned: 4
 │   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
@@ -85,7 +85,7 @@ HashJoin
     ├── table: default.default.source_optimization
     ├── output columns: [a (#0), b (#1), c (#2)]
     ├── read rows: 12
-    ├── read bytes: 770
+    ├── read size: < 1 KiB
     ├── partitions total: 0
     ├── partitions scanned: 6
     ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
@@ -150,7 +150,7 @@ HashJoin
 │   ├── table: default.default.target_build_optimization
 │   ├── output columns: [a (#3), b (#4), c (#5), _row_id (#6)]
 │   ├── read rows: 8
-│   ├── read bytes: 512
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 0
 │   ├── partitions scanned: 4
 │   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
@@ -160,7 +160,7 @@ HashJoin
     ├── table: default.default.source_optimization
     ├── output columns: [a (#0), b (#1), c (#2)]
     ├── read rows: 10
-    ├── read bytes: 752
+    ├── read size: < 1 KiB
     ├── partitions total: 6
     ├── partitions scanned: 6
     ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
@@ -242,7 +242,7 @@ HashJoin
 │   ├── table: default.default.target_build_optimization
 │   ├── output columns: [a (#3), b (#4), c (#5), _row_id (#6)]
 │   ├── read rows: 8
-│   ├── read bytes: 512
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 4
 │   ├── partitions scanned: 4
 │   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
@@ -252,7 +252,7 @@ HashJoin
     ├── table: default.default.source_optimization
     ├── output columns: [a (#0), b (#1), c (#2)]
     ├── read rows: 10
-    ├── read bytes: 752
+    ├── read size: < 1 KiB
     ├── partitions total: 6
     ├── partitions scanned: 6
     ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
@@ -338,7 +338,7 @@ HashJoin
 │   ├── table: default.default.target_build_optimization
 │   ├── output columns: [a (#3), b (#4), c (#5), _row_id (#6)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -347,7 +347,7 @@ HashJoin
     ├── table: default.default.source_optimization
     ├── output columns: [a (#0), b (#1), c (#2)]
     ├── read rows: 10
-    ├── read bytes: 752
+    ├── read size: < 1 KiB
     ├── partitions total: 0
     ├── partitions scanned: 6
     ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
