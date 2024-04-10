@@ -132,6 +132,9 @@ statement ok
 create table t1(a int);
 
 statement ok
+drop stage if exists ss;
+
+statement ok
 create stage ss FILE_FORMAT = (TYPE = CSV);
 
 statement ok
@@ -188,38 +191,26 @@ Exchange
         └── TableScan
             ├── table: default.system.stage
             ├── output columns: [_$1 (#0)]
-            ├── read rows: 18
+            ├── read rows: 6
             ├── read size: < 1 KiB
-            ├── partitions total: 3
-            ├── partitions scanned: 3
+            ├── partitions total: 1
+            ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 0.00
 
 query TT
 merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
 ----
-18 0
+6 0
 
 query T
 select * from t1 order by a;
 ----
 1
-1
-1
-2
-2
 2
 3
-3
-3
-4
-4
 4
 5
-5
-5
-6
-6
 6
 9
 10
