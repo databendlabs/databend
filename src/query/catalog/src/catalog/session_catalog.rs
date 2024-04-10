@@ -250,9 +250,10 @@ impl Catalog for SessionCatalog {
     // Mget the dbs name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
+        tenant: &str,
         table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
-        self.inner.mget_table_names_by_ids(table_ids).await
+        self.inner.mget_table_names_by_ids(tenant, table_ids).await
     }
 
     // Mget the db name by meta id.
@@ -263,9 +264,10 @@ impl Catalog for SessionCatalog {
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
         &self,
+        tenant: &Tenant,
         db_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
-        self.inner.mget_database_names_by_ids(db_ids).await
+        self.inner.mget_database_names_by_ids(tenant, db_ids).await
     }
 
     // Get one table by db and table name.
