@@ -459,7 +459,8 @@ statement error 1006
 create table t as select number/0 from numbers(1);
 
 # table t should not be created
-statement error 1105
+# expects:  ERROR 1105 (HY000): UnknownTable. Code: 1025, Text = error: ...
+statement error 1025
 select * from t;
 
 
