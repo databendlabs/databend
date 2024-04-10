@@ -11,7 +11,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#1)]
     ├── read rows: 10
-    ├── read bytes: 80
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [numbers.number (#1) > 5], limit: NONE]

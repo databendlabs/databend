@@ -5,7 +5,7 @@ TableScan
 ├── table: default.system.numbers
 ├── output columns: [number (#0)]
 ├── read rows: 1
-├── read bytes: 8
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── push downs: [filters: [], limit: NONE]
@@ -27,7 +27,7 @@ AggregateFinal
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 1
-        ├── read bytes: 8
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -62,7 +62,7 @@ Limit
                     ├── table: default.system.numbers
                     ├── output columns: [number (#0)]
                     ├── read rows: 1
-                    ├── read bytes: 8
+                    ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── push downs: [filters: [numbers.number (#0) > 1], limit: NONE]
@@ -90,7 +90,7 @@ HashJoin
 │           ├── table: default.system.numbers
 │           ├── output columns: [number (#0)]
 │           ├── read rows: 1
-│           ├── read bytes: 8
+│           ├── read size: < 1 KiB
 │           ├── partitions total: 1
 │           ├── partitions scanned: 1
 │           ├── push downs: [filters: [numbers.number (#0) + 1 = 1], limit: NONE]
@@ -103,7 +103,7 @@ HashJoin
         ├── table: default.system.numbers
         ├── output columns: [number (#5)]
         ├── read rows: 1
-        ├── read bytes: 8
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -166,7 +166,7 @@ HashJoin
 │                           │           ├── table: default.system.numbers
 │                           │           ├── output columns: [number (#3)]
 │                           │           ├── read rows: 1
-│                           │           ├── read bytes: 8
+│                           │           ├── read size: < 1 KiB
 │                           │           ├── partitions total: 1
 │                           │           ├── partitions scanned: 1
 │                           │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
@@ -179,7 +179,7 @@ HashJoin
 │                                   ├── table: default.system.numbers
 │                                   ├── output columns: [number (#8)]
 │                                   ├── read rows: 1
-│                                   ├── read bytes: 8
+│                                   ├── read size: < 1 KiB
 │                                   ├── partitions total: 1
 │                                   ├── partitions scanned: 1
 │                                   ├── push downs: [filters: [], limit: NONE]
@@ -192,7 +192,7 @@ HashJoin
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 2
-        ├── read bytes: 16
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -209,7 +209,7 @@ Sort
     ├── table: default.system.functions
     ├── output columns: [name (#0), example (#4)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
@@ -247,7 +247,7 @@ HashJoin
 │                   ├── table: default.system.numbers
 │                   ├── output columns: []
 │                   ├── read rows: 1
-│                   ├── read bytes: 8
+│                   ├── read size: < 1 KiB
 │                   ├── partitions total: 1
 │                   ├── partitions scanned: 1
 │                   ├── push downs: [filters: [], limit: 1]
@@ -256,7 +256,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 10
-    ├── read bytes: 80
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -292,7 +292,7 @@ AggregateFinal
             ├── table: default.default.t
             ├── output columns: [b (#1)]
             ├── read rows: 2
-            ├── read bytes: 40
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]

@@ -12,7 +12,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1000
-│   ├── read bytes: 8000
+│   ├── read size: 7.81 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -21,7 +21,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 10000
-    ├── read bytes: 80000
+    ├── read size: 78.12 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -41,7 +41,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#0)]
 │   ├── read rows: 1000
-│   ├── read bytes: 8000
+│   ├── read size: 7.81 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -50,7 +50,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#1)]
     ├── read rows: 10000
-    ├── read bytes: 80000
+    ├── read size: 78.12 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]

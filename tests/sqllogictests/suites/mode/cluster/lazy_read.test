@@ -31,7 +31,7 @@ RowFetch
                     ├── table: default.default.t_lazy
                     ├── output columns: [a (#0), _row_id (#7)]
                     ├── read rows: 0
-                    ├── read bytes: 0
+                    ├── read size: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [], limit: 2]
@@ -65,7 +65,7 @@ RowFetch
                     ├── table: default.default.t_lazy
                     ├── output columns: [a (#0), _row_id (#7)]
                     ├── read rows: 0
-                    ├── read bytes: 0
+                    ├── read size: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
@@ -97,7 +97,7 @@ Limit
                 ├── table: default.default.t_lazy
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [], limit: 2]
@@ -127,7 +127,7 @@ Limit
                 ├── table: default.default.t_lazy
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
@@ -153,7 +153,7 @@ Limit
             ├── table: default.default.t_lazy
             ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: 2]

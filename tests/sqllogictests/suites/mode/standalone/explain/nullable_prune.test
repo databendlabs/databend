@@ -20,7 +20,7 @@ TableScan
 ├── table: default.default.t_nullable_prune
 ├── output columns: [a (#0)]
 ├── read rows: 6
-├── read bytes: 76
+├── read size: < 1 KiB
 ├── partitions total: 2
 ├── partitions scanned: 2
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
@@ -38,7 +38,7 @@ Filter
     ├── table: default.default.t_nullable_prune
     ├── output columns: [a (#0)]
     ├── read rows: 3
-    ├── read bytes: 44
+    ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
@@ -56,7 +56,7 @@ Filter
     ├── table: default.default.t_nullable_prune
     ├── output columns: [a (#0)]
     ├── read rows: 3
-    ├── read bytes: 32
+    ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]

@@ -37,7 +37,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 18
+│   │   ├── read size: < 1 KiB
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -47,7 +47,7 @@ HashJoin
 │       ├── table: default.join_reorder.t1
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 10
-│       ├── read bytes: 54
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -57,7 +57,7 @@ HashJoin
     ├── table: default.join_reorder.t2
     ├── output columns: [a (#2)]
     ├── read rows: 100
-    ├── read bytes: 414
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -85,7 +85,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 18
+│   │   ├── read size: < 1 KiB
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -95,7 +95,7 @@ HashJoin
 │       ├── table: default.join_reorder.t2
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 100
-│       ├── read bytes: 414
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -105,7 +105,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#2)]
     ├── read rows: 10
-    ├── read bytes: 54
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -133,7 +133,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 18
+│   │   ├── read size: < 1 KiB
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -143,7 +143,7 @@ HashJoin
 │       ├── table: default.join_reorder.t2
 │       ├── output columns: [a (#2)]
 │       ├── read rows: 100
-│       ├── read bytes: 414
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -153,7 +153,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#0)]
     ├── read rows: 10
-    ├── read bytes: 54
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -181,7 +181,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 18
+│   │   ├── read size: < 1 KiB
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -191,7 +191,7 @@ HashJoin
 │       ├── table: default.join_reorder.t2
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 100
-│       ├── read bytes: 414
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -201,7 +201,7 @@ HashJoin
     ├── table: default.join_reorder.t1
     ├── output columns: [a (#0)]
     ├── read rows: 10
-    ├── read bytes: 54
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -229,7 +229,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 18
+│   │   ├── read size: < 1 KiB
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -239,7 +239,7 @@ HashJoin
 │       ├── table: default.join_reorder.t1
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 10
-│       ├── read bytes: 54
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -249,7 +249,7 @@ HashJoin
     ├── table: default.join_reorder.t2
     ├── output columns: [a (#0)]
     ├── read rows: 100
-    ├── read bytes: 414
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -277,7 +277,7 @@ HashJoin
 │   │   ├── table: default.join_reorder.t
 │   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 18
+│   │   ├── read size: < 1 KiB
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -287,7 +287,7 @@ HashJoin
 │       ├── table: default.join_reorder.t1
 │       ├── output columns: [a (#2)]
 │       ├── read rows: 10
-│       ├── read bytes: 54
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -297,7 +297,7 @@ HashJoin
     ├── table: default.join_reorder.t2
     ├── output columns: [a (#0)]
     ├── read rows: 100
-    ├── read bytes: 414
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
