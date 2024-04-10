@@ -639,25 +639,33 @@ async fn test_http_session() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_result_timeout() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
-    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 1}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
+    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 5}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
     let mut req = TestHttpQueryRequest::new(json);
     let (status, result, _) = req.fetch_begin().await?;
 
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
-    assert!(!query_id.is_empty());
+    assert_eq!(result.data.len(), 1);
 
-    sleep(std::time::Duration::from_secs(3)).await;
-    let (status, result, body) = req.fetch_next().await?;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", result);
+    sleep(std::time::Duration::from_secs(5)).await;
+
+    // fail to get page 0 again (e.g. retry) due to timeout
+    let (status, result, body) = req
+        .do_request(Method::GET, &format!("/v1/query/{query_id}/page/0",))
+        .await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", body);
     let msg = format!("query id {} timeout", query_id);
     let msg = json!({ "error": { "code": "400", "message": msg }}).to_string();
     assert_eq!(body, msg, "{:?}", result);
+
+    // but /final return ok
+    let (status, result, _) = req.fetch_next().await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
 
     Ok(())
 }
