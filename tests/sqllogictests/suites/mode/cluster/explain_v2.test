@@ -321,8 +321,8 @@ Limit
                 ├── output columns: [number (#0)]
                 ├── read rows: 10
                 ├── read size: < 1 KiB
-                ├── partitions total: 3
-                ├── partitions scanned: 3
+                ├── partitions total: 1
+                ├── partitions scanned: 1
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 10.00
 
@@ -356,8 +356,8 @@ AggregateFinal
             │       ├── output columns: [number (#1)]
             │       ├── read rows: 5
             │       ├── read size: < 1 KiB
-            │       ├── partitions total: 3
-            │       ├── partitions scanned: 3
+            │       ├── partitions total: 1
+            │       ├── partitions scanned: 1
             │       ├── push downs: [filters: [], limit: NONE]
             │       └── estimated rows: 5.00
             └── Exchange(Probe)
@@ -368,8 +368,8 @@ AggregateFinal
                     ├── output columns: [number (#0)]
                     ├── read rows: 10
                     ├── read size: < 1 KiB
-                    ├── partitions total: 3
-                    ├── partitions scanned: 3
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 10.00
 
@@ -424,8 +424,8 @@ Exchange
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 3
         ├── read size: < 1 KiB
-        ├── partitions total: 3
-        ├── partitions scanned: 3
+        ├── partitions total: 1
+        ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3.00
