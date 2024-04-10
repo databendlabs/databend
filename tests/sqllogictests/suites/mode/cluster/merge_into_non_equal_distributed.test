@@ -77,7 +77,7 @@ HashJoin
 │       ├── table: default.default.t1
 │       ├── output columns: [a (#1), _row_id (#2)]
 │       ├── read rows: 15
-│       ├── read bytes: 156
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 3
 │       ├── partitions scanned: 3
 │       ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
@@ -90,7 +90,7 @@ HashJoin
         ├── table: default.default.t2
         ├── output columns: [a (#0)]
         ├── read rows: 1
-        ├── read bytes: 36
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -131,7 +131,7 @@ drop table if exists t2;
 statement ok
 create table t1(a int);
 
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): StageAlreadyExists\. Code: 2502, Text = Stage 'ss' already exists\.\.'
 create stage ss FILE_FORMAT = (TYPE = CSV);
 
 statement ok
@@ -176,7 +176,7 @@ Exchange
     │       ├── table: default.default.t1
     │       ├── output columns: [a (#1), _row_id (#2)]
     │       ├── read rows: 2
-    │       ├── read bytes: 40
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -188,26 +188,38 @@ Exchange
         └── TableScan
             ├── table: default.system.stage
             ├── output columns: [_$1 (#0)]
-            ├── read rows: 6
-            ├── read bytes: 12
-            ├── partitions total: 1
-            ├── partitions scanned: 1
+            ├── read rows: 18
+            ├── read size: < 1 KiB
+            ├── partitions total: 3
+            ├── partitions scanned: 3
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 0.00
 
 query TT
 merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
 ----
-6 0
+18 0
 
 query T
 select * from t1 order by a;
 ----
 1
+1
+1
+2
+2
 2
 3
+3
+3
+4
+4
 4
 5
+5
+5
+6
+6
 6
 9
 10
