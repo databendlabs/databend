@@ -117,12 +117,11 @@ fn get_client_ip(req: &Request) -> Option<String> {
     let headers = ["X-Real-IP", "X-Forwarded-For", "CF-Connecting-IP"];
     for &header in headers.iter() {
         if let Some(value) = req.headers().get(header) {
-            if let Ok(ip_str) = value.to_str() {
-                let mut ip_str = ip_str.to_string();
+            if let Ok(mut ip_str) = value.to_str() {
                 if header == "X-Forwarded-For" {
-                    ip_str = ip_str.split(',')[0];
+                    ip_str = ip_str.split(',').next().unwrap_or("");
                 }
-                return Some(ip_str);
+                return Some(ip_str.to_string());
             }
         }
     }
