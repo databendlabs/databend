@@ -359,19 +359,11 @@ pub(crate) async fn query_handler(
             Ok(query) => {
                 query.update_expire_time(true).await;
                 // tmp workaround to tolerant old clients
-                let max_wait_time = std::cmp::max(1, req.pagination.wait_time_secs);
-                let start = std::time::Instant::now();
-                let resp = loop {
-                    let resp = query
-                        .get_response_page(0)
-                        .await
-                        .map_err(|err| err.display_with_sql(&sql))
-                        .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
-                    if matches!(resp.state.state, ExecuteStateKind::Starting) && start.elapsed().as_secs() < max_wait_time as u64 {
-                        continue;
-                    }
-                    break resp
-                };
+                let resp = query
+                    .get_response_page(0)
+                    .await
+                    .map_err(|err| err.display_with_sql(&sql))
+                    .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
                 if matches!(resp.state.state, ExecuteStateKind::Failed) {
                     ctx.set_fail();
                 }
