@@ -383,16 +383,12 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
             condition_format, unmatched_format
         )));
     }
-    let s_expr = merge_into.input.as_ref();
-    let metadata = &*merge_into.meta_data.read();
-    let input_format_child = s_expr.to_format_tree(metadata, false)?;
     let all_children = [
         vec![distributed_format],
         vec![target_build_optimization_format],
         vec![can_try_update_column_only_format],
         matched_children,
         unmatched_children,
-        vec![input_format_child],
     ]
     .concat();
     let res = FormatTreeNode::with_children(target_table_format, all_children).format_pretty()?;
