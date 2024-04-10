@@ -100,6 +100,7 @@ build_exceptions! {
     TooManyUserConnections(1041),
     AbortedSession(1042),
     AbortedQuery(1043),
+    ClosedQuery(1044),
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),

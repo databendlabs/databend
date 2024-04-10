@@ -10,6 +10,9 @@ echo "drop database if exists c_r1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists c_r2;" | $BENDSQL_CLIENT_CONNECT
 
 echo "create role role3;" | $BENDSQL_CLIENT_CONNECT
+echo "grant select on system.one to role role3" | $BENDSQL_CLIENT_CONNECT
+echo "grant update on information_schema.* to role role3" | $BENDSQL_CLIENT_CONNECT
+
 echo "create database c_r1" | $BENDSQL_CLIENT_CONNECT
 echo "create table c_r1.t1(id int)" | $BENDSQL_CLIENT_CONNECT
 echo "create database c_r2" | $BENDSQL_CLIENT_CONNECT
@@ -25,6 +28,25 @@ echo "grant update, delete on c_r1.t1 to role role3;" | $BENDSQL_CLIENT_CONNECT
 echo "grant select, insert on c_r2.* to role role3;" | $BENDSQL_CLIENT_CONNECT
 echo "grant update, delete on c_r2.t2 to role role3;" | $BENDSQL_CLIENT_CONNECT
 
+echo "=== review init role3 grants ==="
+echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+
+echo "=== drop table c_r2.t2 ==="
+echo "drop table c_r2.t2;" | $BENDSQL_CLIENT_CONNECT
+echo "=== drop c_r2.t2 once ==="
+echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+
+echo "=== create same name table c_r2.t2 ==="
+echo "create table c_r2.t2(id int);" | $BENDSQL_CLIENT_CONNECT
+echo "grant select on c_r2.t2 to role role3;" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "drop table c_r2.t2;" | $BENDSQL_CLIENT_CONNECT
+echo "=== drop c_r2.t2 twice ==="
+echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "create table c_r2.t2(id int);" | $BENDSQL_CLIENT_CONNECT
+echo "grant update, delete on c_r2.t2 to role role3;" | $BENDSQL_CLIENT_CONNECT
+
+echo "=== test database drop ==="
 echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 echo "drop database c_r;" | $BENDSQL_CLIENT_CONNECT
 echo "drop database c_r2;" | $BENDSQL_CLIENT_CONNECT

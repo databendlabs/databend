@@ -191,7 +191,7 @@ impl Interpreter for ShowGrantsInterpreter {
                 .iter()
                 .map(|res| res.1.clone())
                 .collect::<Vec<String>>();
-            let dbs_name = catalog.mget_database_names_by_ids(&db_ids).await?;
+            let dbs_name = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
 
             for (i, db_name) in dbs_name.iter().enumerate() {
                 if let Some(db_name) = db_name {
@@ -214,8 +214,10 @@ impl Interpreter for ShowGrantsInterpreter {
                 .iter()
                 .map(|res| res.2.clone())
                 .collect::<Vec<String>>();
-            let dbs_name = catalog.mget_database_names_by_ids(&db_ids).await?;
-            let tables_name = catalog.mget_table_names_by_ids(&table_ids).await?;
+            let dbs_name = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
+            let tables_name = catalog
+                .mget_table_names_by_ids(tenant.name(), &table_ids)
+                .await?;
 
             for (i, table_name) in tables_name.iter().enumerate() {
                 if let Some(table_name) = table_name {

@@ -77,7 +77,7 @@ HashJoin
 │       ├── table: default.default.t1
 │       ├── output columns: [a (#1), _row_id (#2)]
 │       ├── read rows: 15
-│       ├── read bytes: 156
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 3
 │       ├── partitions scanned: 3
 │       ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
@@ -90,7 +90,7 @@ HashJoin
         ├── table: default.default.t2
         ├── output columns: [a (#0)]
         ├── read rows: 1
-        ├── read bytes: 36
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -130,6 +130,9 @@ drop table if exists t2;
 
 statement ok
 create table t1(a int);
+
+statement ok
+drop stage if exists ss;
 
 statement ok
 create stage ss FILE_FORMAT = (TYPE = CSV);
@@ -176,7 +179,7 @@ Exchange
     │       ├── table: default.default.t1
     │       ├── output columns: [a (#1), _row_id (#2)]
     │       ├── read rows: 2
-    │       ├── read bytes: 40
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -189,7 +192,7 @@ Exchange
             ├── table: default.system.stage
             ├── output columns: [_$1 (#0)]
             ├── read rows: 6
-            ├── read bytes: 12
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]

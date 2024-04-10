@@ -36,7 +36,7 @@ UnionAll
 │       ├── table: default.default.t1
 │       ├── output columns: [a (#0), b (#1)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
 │       ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -50,7 +50,7 @@ UnionAll
         ├── table: default.default.t2
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 1
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 1 to 0>]
@@ -71,7 +71,7 @@ UnionAll
 │       ├── table: default.default.t1
 │       ├── output columns: [a (#0), b (#1)]
 │       ├── read rows: 2
-│       ├── read bytes: 80
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -85,7 +85,7 @@ UnionAll
         ├── table: default.default.t2
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 2
-        ├── read bytes: 80
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -112,7 +112,7 @@ Limit
     │       ├── table: default.default.t1
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 2
-    │       ├── read bytes: 80
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -127,7 +127,7 @@ Limit
             ├── table: default.default.t2
             ├── output columns: [a (#2), b (#3)]
             ├── read rows: 2
-            ├── read bytes: 80
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -154,7 +154,7 @@ Limit
     │       ├── table: default.default.t1
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 2
-    │       ├── read bytes: 80
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -169,7 +169,7 @@ Limit
             ├── table: default.default.t2
             ├── output columns: [a (#2), b (#3)]
             ├── read rows: 2
-            ├── read bytes: 80
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -196,7 +196,7 @@ Limit
     │       ├── table: default.default.t1
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 2
-    │       ├── read bytes: 80
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -211,7 +211,7 @@ Limit
             ├── table: default.default.t2
             ├── output columns: [a (#2), b (#3)]
             ├── read rows: 2
-            ├── read bytes: 80
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]

@@ -15,7 +15,7 @@ Limit
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 8
-        ├── read bytes: 64
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: 8]
@@ -36,7 +36,7 @@ Sort
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 10
-        ├── read bytes: 80
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -67,7 +67,7 @@ Limit
                 ├── table: default.system.numbers
                 ├── output columns: [number (#0)]
                 ├── read rows: 10
-                ├── read bytes: 80
+                ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── push downs: [filters: [], limit: 8]
@@ -125,7 +125,7 @@ Limit
                     │           │   ├── table: default.system.numbers
                     │           │   ├── output columns: []
                     │           │   ├── read rows: 1
-                    │           │   ├── read bytes: 8
+                    │           │   ├── read size: < 1 KiB
                     │           │   ├── partitions total: 1
                     │           │   ├── partitions scanned: 1
                     │           │   ├── push downs: [filters: [], limit: NONE]
@@ -134,7 +134,7 @@ Limit
                     │               ├── table: default.system.numbers
                     │               ├── output columns: [number (#2)]
                     │               ├── read rows: 1
-                    │               ├── read bytes: 8
+                    │               ├── read size: < 1 KiB
                     │               ├── partitions total: 1
                     │               ├── partitions scanned: 1
                     │               ├── push downs: [filters: [], limit: NONE]
@@ -150,7 +150,7 @@ Limit
                         │   ├── table: default.system.numbers
                         │   ├── output columns: []
                         │   ├── read rows: 1
-                        │   ├── read bytes: 8
+                        │   ├── read size: < 1 KiB
                         │   ├── partitions total: 1
                         │   ├── partitions scanned: 1
                         │   ├── push downs: [filters: [], limit: NONE]
@@ -159,7 +159,7 @@ Limit
                             ├── table: default.system.numbers
                             ├── output columns: [number (#0)]
                             ├── read rows: 1
-                            ├── read bytes: 8
+                            ├── read size: < 1 KiB
                             ├── partitions total: 1
                             ├── partitions scanned: 1
                             ├── push downs: [filters: [], limit: NONE]
@@ -197,7 +197,7 @@ Limit
         │           ├── table: default.system.numbers
         │           ├── output columns: [number (#0)]
         │           ├── read rows: 1
-        │           ├── read bytes: 8
+        │           ├── read size: < 1 KiB
         │           ├── partitions total: 1
         │           ├── partitions scanned: 1
         │           ├── push downs: [filters: [], limit: NONE]
@@ -215,7 +215,7 @@ Limit
                     ├── table: default.system.numbers
                     ├── output columns: [number (#3)]
                     ├── read rows: 2
-                    ├── read bytes: 16
+                    ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── push downs: [filters: [], limit: NONE]
