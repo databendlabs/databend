@@ -7,14 +7,6 @@ use test_procedure;
 query I
 EXECUTE IMMEDIATE $$
 BEGIN
-    SELECT 0 / 0;
-END;
-$$;
-----
-
-query I
-EXECUTE IMMEDIATE $$
-BEGIN
     RETURN;
 END;
 $$;
@@ -90,6 +82,24 @@ $$;
 ├───────┤
 │     2 │
 └───────┘
+
+query error divided by zero
+EXECUTE IMMEDIATE $$
+BEGIN
+    SELECT 0 / 0;
+END;
+$$;
+----
+
+
+query error divided by zero
+EXECUTE IMMEDIATE $$
+BEGIN
+    RETURN 0 / 0;
+END;
+$$;
+----
+
 
 statement ok
 drop database test_procedure;

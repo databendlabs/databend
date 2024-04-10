@@ -29,6 +29,8 @@ use databend_common_ast::parser::script::script_stmts;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::ParseMode;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Range;
 use databend_common_exception::Result;
 use databend_common_script::compile;
 use databend_common_script::ir::ColumnAccess;
@@ -397,6 +399,42 @@ fn test_script_error() {
             END LOOP;
         "#,
     );
+    run_script(
+        file,
+        r#"
+            LET xxx := 0;
+            LET y := 1 + xxx / 0;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET xxx := 0;
+            SELECT 1 + :xxx / 0;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET xxx := 0;
+            RETURN 1 + xxx / 0;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET xxx := 0;
+            RETURN TABLE(SELECT 1 + :xxx / 0);
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            FOR x IN REVERSE 3 TO 1 DO
+                RETURN;
+            END FOR;
+        "#,
+    );
 }
 
 fn mock_client() -> MockClient {
@@ -543,11 +581,24 @@ fn mock_client() -> MockClient {
             "SELECT NOT is_true(3 < 3)",
             MockSet::unnamed(vec![vec![Literal::Boolean(true)]]),
         )
+        .throw_error_when(
+            "SELECT 1 + 0 / 0",
+            ErrorCode::BadArguments("division by zero".to_string())
+                .set_span(Some(Range { start: 13, end: 14 })),
+        )
+        .throw_error_when(
+            "SELECT * FROM generate_series(1, 3, -1)",
+            ErrorCode::BadArguments(
+                "start must be greater than or equal to end when step is negative".to_string(),
+            )
+            .set_span(Some(Range { start: 14, end: 39 })),
+        )
 }
 
 #[derive(Debug, Clone)]
 struct MockClient {
     responses: HashMap<String, MockSet>,
+    throw_errors: HashMap<String, ErrorCode>,
     query_log: Arc<Mutex<Vec<(String, MockSet)>>>,
 }
 
@@ -555,12 +606,18 @@ impl MockClient {
     pub fn new() -> Self {
         MockClient {
             responses: HashMap::new(),
+            throw_errors: HashMap::new(),
             query_log: Arc::new(Mutex::new(vec![])),
         }
     }
 
     pub fn response_when(mut self, query: &str, block: MockSet) -> Self {
         self.responses.insert(query.to_string(), block);
+        self
+    }
+
+    pub fn throw_error_when(mut self, query: &str, err: ErrorCode) -> Self {
+        self.throw_errors.insert(query.to_string(), err);
         self
     }
 }
@@ -570,16 +627,19 @@ impl Client for MockClient {
     type Set = MockSet;
 
     async fn query(&self, query: &str) -> Result<Self::Set> {
-        match self.responses.get(query) {
-            Some(block) => {
-                self.query_log
-                    .lock()
-                    .unwrap()
-                    .push((query.to_string(), block.clone()));
-                Ok(block.clone())
-            }
-            None => panic!("response to query is not defined: {query}"),
+        if let Some(block) = self.responses.get(query) {
+            self.query_log
+                .lock()
+                .unwrap()
+                .push((query.to_string(), block.clone()));
+            return Ok(block.clone());
         }
+
+        if let Some(err) = self.throw_errors.get(query) {
+            return Err(err.clone());
+        }
+
+        panic!("response to query is not defined: {query}")
     }
 
     fn var_to_ast(&self, scalar: &Self::Var) -> Result<Expr> {

@@ -160,3 +160,63 @@ END LOOP;
 Execution of script has exceeded the limit of 1000 steps, which usually means you may have an infinite loop. Otherwise, You can increase the limit with `set script_max_steps = 10000;`.
 
 
+---------- Input ----------
+LET xxx := 0;
+LET y := 1 + xxx / 0;
+---------- Output ----------
+error: 
+  --> SQL:2:10
+  |
+1 | LET xxx := 0;
+2 | LET y := 1 + xxx / 0;
+  |          ^^^^^^^^^^^ division by zero
+
+
+---------- Input ----------
+LET xxx := 0;
+SELECT 1 + :xxx / 0;
+---------- Output ----------
+error: 
+  --> SQL:2:1
+  |
+1 | LET xxx := 0;
+2 | SELECT 1 + :xxx / 0;
+  | ^^^^^^^^^^^^^^^^^^^ division by zero
+
+
+---------- Input ----------
+LET xxx := 0;
+RETURN 1 + xxx / 0;
+---------- Output ----------
+error: 
+  --> SQL:2:8
+  |
+1 | LET xxx := 0;
+2 | RETURN 1 + xxx / 0;
+  |        ^^^^^^^^^^^ division by zero
+
+
+---------- Input ----------
+LET xxx := 0;
+RETURN TABLE(SELECT 1 + :xxx / 0);
+---------- Output ----------
+error: 
+  --> SQL:2:1
+  |
+1 | LET xxx := 0;
+2 | RETURN TABLE(SELECT 1 + :xxx / 0);
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ division by zero
+
+
+---------- Input ----------
+FOR x IN REVERSE 3 TO 1 DO
+    RETURN;
+END FOR;
+---------- Output ----------
+error: 
+  --> SQL:1:5
+  |
+1 | FOR x IN REVERSE 3 TO 1 DO
+  |     ^ start must be greater than or equal to end when step is negative
+
+

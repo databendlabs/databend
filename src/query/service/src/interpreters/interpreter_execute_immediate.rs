@@ -45,7 +45,7 @@ use databend_common_script::ReturnValue;
 use databend_common_sql::plans::ExecuteImmediatePlan;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::TableContext;
-use futures_util::StreamExt;
+use futures::TryStreamExt;
 use itertools::Itertools;
 use serde_json::Value as JsonValue;
 
@@ -108,16 +108,20 @@ impl Interpreter for ExecuteImmediateInterpreter {
                         StringType::from_data(vec![scalar.to_string()]),
                     ])])?
                 }
-                Some(ReturnValue::Set(set)) => PipelineBuildResult::from_blocks(vec![
-                    DataBlock::new_from_columns(vec![StringType::from_data(vec![box_render(
+                Some(ReturnValue::Set(set)) => {
+                    let rendered_table = box_render(
                         &set.schema,
                         &[set.block.clone()],
                         usize::MAX,
                         usize::MAX,
                         usize::MAX,
                         true,
-                    )?])]),
-                ])?,
+                    )?;
+                    let lines = rendered_table.lines().map(|x| x.to_string()).collect();
+                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                        StringType::from_data(lines),
+                    ])])?
+                }
                 None => PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
                     StringType::from_data(Vec::<String>::new()),
                 ])])?,
@@ -153,11 +157,7 @@ impl Client for ScriptClient {
         let (plan, _) = planner.plan_sql(query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;
-        let blocks = stream
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
+        let blocks = stream.try_collect::<Vec<_>>().await?;
         let schema = plan.schema();
 
         let block = match blocks.len() {

@@ -288,7 +288,7 @@ impl Compiler {
             offset: None,
             ignore_result: false,
         }));
-        let stmt = StatementTemplate::new(expr.span(), select_stmt);
+        let stmt = StatementTemplate::new(expr.whole_span(), select_stmt);
         let set_ref = SetRef::new_internal(expr.span(), "expr_result", &mut self.ref_allocator);
         output.push(ScriptIR::Query {
             stmt,

@@ -124,11 +124,7 @@ impl<C: Client> Executor<C> {
                     .client
                     .query(&sql)
                     .await
-                    .map_err(|err| err.set_span(stmt.span));
-                let block = match block {
-                    Ok(block) => block,
-                    Err(err) => panic!("{}", err.to_string()),
-                };
+                    .map_err(|err| err.set_span(stmt.span))?;
                 self.sets.insert(to_set.clone(), block);
             }
             ScriptIR::Iter { set, to_iter } => {
