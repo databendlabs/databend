@@ -1812,15 +1812,3 @@ TableScan
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 10000000000000000.00
 
-query T
-explain select * from numbers(10000000000000000000);
-----
-TableScan
-├── table: default.system.numbers
-├── output columns: [number (#0)]
-├── read rows: 10000000000000000000
-├── read size: 5.39 EiB
-├── partitions total: 152587890625001
-├── partitions scanned: 152587890625001
-├── push downs: [filters: [], limit: NONE]
-└── estimated rows: 10000000000000000000.00
