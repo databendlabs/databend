@@ -30,6 +30,7 @@ fn test_geometry() {
     test_st_geompointfromgeohash(file);
     test_st_makeline(file);
     test_st_makepoint(file);
+    test_st_makepolygon(file);
     test_to_string(file);
     test_st_geometryfromwkb(file);
     test_st_geometryfromwkt(file);
@@ -50,22 +51,22 @@ fn test_st_makeline(file: &mut impl Write) {
     run_ast(
         file,
         "st_makeline(
-                            to_geometry('SRID=4326;POINT(1.0 2.0)'),
-                            to_geometry('SRID=4326;POINT(3.5 4.5)'))",
+                            st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)'),
+                            st_geometryfromwkt('SRID=4326;POINT(3.5 4.5)'))",
         &[],
     );
     run_ast(
         file,
         "st_makeline(
-                            to_geometry('SRID=3857;POINT(1.0 2.0)'),
-                            to_geometry('SRID=3857;LINESTRING(1.0 2.0, 10.1 5.5)'))",
+                            st_geometryfromwkt('SRID=3857;POINT(1.0 2.0)'),
+                            st_geometryfromwkt('SRID=3857;LINESTRING(1.0 2.0, 10.1 5.5)'))",
         &[],
     );
     run_ast(
         file,
         "st_makeline(
-                            to_geometry('LINESTRING(1.0 2.0, 10.1 5.5)'),
-                            to_geometry('MULTIPOINT(3.5 4.5, 6.1 7.9)'))",
+                            st_geometryfromwkt('LINESTRING(1.0 2.0, 10.1 5.5)'),
+                            st_geometryfromwkt('MULTIPOINT(3.5 4.5, 6.1 7.9)'))",
         &[],
     );
 }
@@ -77,6 +78,26 @@ fn test_st_makepoint(file: &mut impl Write) {
         ("a", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
         ("b", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
     ]);
+}
+
+fn test_st_makepolygon(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_makepolygon(st_geometryfromwkt('LINESTRING(0.0 0.0, 1.0 0.0, 1.0 2.0, 0.0 2.0, 0.0 0.0)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_makepolygon(st_geometryfromwkb(unhex('01020000000500000000000000000000000000000000000000000000000000f03f0000000000000000000000000000f03f00000000000000400000000000000000000000000000004000000000000000000000000000000000')))",
+        &[],
+    );
+    run_ast(file, "st_makepolygon(a)", &[(
+        "a",
+        StringType::from_data(vec![
+            "LINESTRING(0.0 0.0, 1.0 0.0, 1.0 2.0, 0.0 2.0, 0.0 0.0)",
+            "LINESTRING(10.1 5.2, 15.2 7.3, 20.2 8.3, 10.9 7.7, 10.1 5.2)",
+        ]),
+    )]);
 }
 
 fn test_to_string(file: &mut impl Write) {
