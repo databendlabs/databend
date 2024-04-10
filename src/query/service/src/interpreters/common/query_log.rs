@@ -44,6 +44,13 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
                     e.to_string(),
                     e.backtrace_str(),
                 )
+            } else if e.code() == ErrorCode::ABORTED_QUERY {
+                (
+                    LogType::Closed,
+                    e.code().into(),
+                    e.to_string(),
+                    e.backtrace_str(),
+                )
             } else {
                 (
                     LogType::Error,
