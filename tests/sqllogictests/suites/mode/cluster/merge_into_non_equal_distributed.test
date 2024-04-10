@@ -131,7 +131,7 @@ drop table if exists t2;
 statement ok
 create table t1(a int);
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): StageAlreadyExists\. Code: 2502, Text = Stage 'ss' already exists\.\.'
+statement ok
 create stage ss FILE_FORMAT = (TYPE = CSV);
 
 statement ok
