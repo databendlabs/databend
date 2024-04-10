@@ -25,9 +25,9 @@ Exchange
         ├── output columns: [a (#0)]
         ├── read rows: 100
         ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
         └── estimated rows: 100.00
 
@@ -60,9 +60,9 @@ Exchange
         │           ├── output columns: [a (#2), b (#3)]
         │           ├── read rows: 100
         │           ├── read size: < 1 KiB
-        │           ├── partitions total: 1
-        │           ├── partitions scanned: 1
-        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │           ├── partitions total: 3
+        │           ├── partitions scanned: 3
+        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         │           ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
         │           └── estimated rows: 100.00
         └── Filter(Probe)
@@ -74,9 +74,9 @@ Exchange
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 100
                 ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── partitions total: 3
+                ├── partitions scanned: 3
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                 ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
                 └── estimated rows: 100.00
 
@@ -101,9 +101,9 @@ Exchange
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
     │       ├── read size: < 1 KiB
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │       ├── partitions total: 3
+    │       ├── partitions scanned: 3
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
@@ -111,9 +111,9 @@ Exchange
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
         ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -194,9 +194,9 @@ Limit
                         ├── output columns: [a (#0)]
                         ├── read rows: 100
                         ├── read size: < 1 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                        ├── partitions total: 3
+                        ├── partitions scanned: 3
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                         ├── push downs: [filters: [], limit: NONE]
                         └── estimated rows: 100.00
 
@@ -238,9 +238,9 @@ Limit
                     │       ├── output columns: [a (#2)]
                     │       ├── read rows: 100
                     │       ├── read size: < 1 KiB
-                    │       ├── partitions total: 1
-                    │       ├── partitions scanned: 1
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    │       ├── partitions total: 3
+                    │       ├── partitions scanned: 3
+                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                     │       ├── push downs: [filters: [], limit: NONE]
                     │       └── estimated rows: 100.00
                     └── TableScan(Probe)
@@ -248,9 +248,9 @@ Limit
                         ├── output columns: [a (#0), b (#1)]
                         ├── read rows: 100
                         ├── read size: < 1 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                        ├── partitions total: 3
+                        ├── partitions scanned: 3
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                         ├── push downs: [filters: [], limit: NONE]
                         └── estimated rows: 100.00
 
@@ -278,9 +278,9 @@ Exchange
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
     │       ├── read size: < 1 KiB
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │       ├── partitions total: 3
+    │       ├── partitions scanned: 3
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
@@ -288,9 +288,9 @@ Exchange
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
         ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -321,8 +321,8 @@ Limit
                 ├── output columns: [number (#0)]
                 ├── read rows: 10
                 ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
+                ├── partitions total: 3
+                ├── partitions scanned: 3
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 10.00
 
@@ -356,8 +356,8 @@ AggregateFinal
             │       ├── output columns: [number (#1)]
             │       ├── read rows: 5
             │       ├── read size: < 1 KiB
-            │       ├── partitions total: 1
-            │       ├── partitions scanned: 1
+            │       ├── partitions total: 3
+            │       ├── partitions scanned: 3
             │       ├── push downs: [filters: [], limit: NONE]
             │       └── estimated rows: 5.00
             └── Exchange(Probe)
@@ -368,8 +368,8 @@ AggregateFinal
                     ├── output columns: [number (#0)]
                     ├── read rows: 10
                     ├── read size: < 1 KiB
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
+                    ├── partitions total: 3
+                    ├── partitions scanned: 3
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 10.00
 
@@ -424,9 +424,9 @@ Exchange
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 3
         ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3.00
 
