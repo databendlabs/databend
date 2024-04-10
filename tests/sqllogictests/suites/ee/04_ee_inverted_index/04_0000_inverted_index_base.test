@@ -48,26 +48,26 @@ t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
 
-query I?T
+query 
 SELECT id, score(), content FROM t WHERE match(content, 'test')
 ----
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 5 2.4594712 Time flies like an arrow; fruit flies like a banana
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, 'word')
 ----
 2 1.5948367 A picture is worth a thousand words
 4 1.6550698 Actions speak louder than words
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '"early bird"')
 ----
 3 4.503372 The early bird catches the worm
@@ -98,7 +98,7 @@ INSERT INTO t VALUES
 (29, '每个人的人生都是一部独特的传奇，我们需要珍惜每一个瞬间，用心去感受生活的美好。'),
 (30, '张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。')
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 21 1.1111465 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -107,23 +107,23 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '北京') ORDER BY score()
 ----
 30 1.7396812 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
 12 1.9475443 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '北京大学') ORDER BY score()
 ----
 30 5.2190437 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '文化博大精深') ORDER BY score()
 ----
 28 7.61753 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') ORDER BY score()
 ----
 21 1.1111465 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -131,17 +131,17 @@ SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') O
 15 2.063777 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 7.61753 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '化博') ORDER BY score()
 ----
 
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '。') ORDER BY score()
 ----
 
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '不存在') ORDER BY score()
 ----
 
@@ -149,7 +149,7 @@ SELECT id, score(), content FROM t WHERE match(content, '不存在') ORDER BY sc
 statement ok
 UPDATE t SET content = '科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。' WHERE id=24
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 21 1.423108 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -157,7 +157,7 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 1.5707673 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '科技') ORDER BY score()
 ----
 13 2.1947646 随着科技的发展，人们的生活变得越来越便利。
@@ -166,7 +166,7 @@ SELECT id, score(), content FROM t WHERE match(content, '科技') ORDER BY score
 statement ok
 DELETE FROM t WHERE id=21
 
-query I?T
+query T
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
@@ -194,12 +194,12 @@ INSERT INTO t_small_blocks VALUES
 (9, 'You can not judge a book by its cover'),
 (10, 'An apple a day keeps the doctor away')
 
-query I?T
+query T
 SELECT id, content FROM t WHERE match(content, '"early bird"')
 ----
 3 The early bird catches the worm
 
-query I?T
+query T
 EXPLAIN SELECT id, content FROM t WHERE match(content, '"early bird"')
 ----
 Filter
