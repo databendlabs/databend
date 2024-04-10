@@ -279,16 +279,51 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
+    async fn mget_table_names_by_ids(
+        &self,
+        tenant: &str,
+        table_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
+        // Fetching system database names
+        let sys_dbs = self
+            .immutable_catalog
+            .list_databases(&Tenant::new_literal(tenant))
+            .await?;
+
+        // Collecting system table names from all system databases
+        let mut sys_table_ids = Vec::new();
+        for sys_db in sys_dbs {
+            let sys_tables = self
+                .immutable_catalog
+                .list_tables(tenant, sys_db.name())
+                .await?;
+            for sys_table in sys_tables {
+                sys_table_ids.push(sys_table.get_id());
+            }
+        }
+
+        // Filtering table IDs that are not in the system table IDs
+        let mut_table_ids: Vec<MetaId> = table_ids
+            .iter()
+            .copied()
+            .filter(|table_id| !sys_table_ids.contains(table_id))
+            .collect();
+
+        // Fetching table names for mutable table IDs
         let mut tables = self
             .immutable_catalog
-            .mget_table_names_by_ids(table_ids)
+            .mget_table_names_by_ids(tenant, table_ids)
             .await?;
-        let mut other = self
+
+        // Fetching table names for remaining system table IDs
+        let other = self
             .mutable_catalog
-            .mget_table_names_by_ids(table_ids)
+            .mget_table_names_by_ids(tenant, &mut_table_ids)
             .await?;
-        tables.append(&mut other);
+
+        // Appending the results from the mutable catalog to tables
+        tables.extend(other);
+
         Ok(tables)
     }
 
@@ -304,16 +339,37 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
+    async fn mget_database_names_by_ids(
+        &self,
+        tenant: &Tenant,
+        db_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
+        let sys_db_ids: Vec<_> = self
+            .immutable_catalog
+            .list_databases(tenant)
+            .await?
+            .iter()
+            .map(|sys_db| sys_db.get_db_info().ident.db_id)
+            .collect();
+
+        let mut_db_ids: Vec<MetaId> = db_ids
+            .iter()
+            .filter(|db_id| !sys_db_ids.contains(db_id))
+            .copied()
+            .collect();
+
         let mut dbs = self
             .immutable_catalog
-            .mget_database_names_by_ids(db_ids)
+            .mget_database_names_by_ids(tenant, db_ids)
             .await?;
-        let mut other = self
+
+        let other = self
             .mutable_catalog
-            .mget_database_names_by_ids(db_ids)
+            .mget_database_names_by_ids(tenant, &mut_db_ids)
             .await?;
-        dbs.append(&mut other);
+
+        dbs.extend(other);
+
         Ok(dbs)
     }
 
