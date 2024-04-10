@@ -187,7 +187,9 @@ impl MutableCatalog {
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
         };
-        self.ctx.database_factory.get_database(ctx, db_info)
+        self.ctx
+            .database_factory
+            .build_database_by_engine(ctx, db_info)
     }
 }
 
