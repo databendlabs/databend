@@ -232,13 +232,10 @@ async fn query_final_handler(
             query_id, query_id
         );
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager
-            .remove_query(&query_id, RemoveReason::Finished)
-            .await
-        {
-            Ok(query) => {
+        match http_query_manager.remove_query(&query_id, RemoveReason::Finished) {
+            Some(query) => {
                 let mut response = query.get_response_state_only().await;
-                if !response.state.state.is_stopped() {
+                if query.check_removed().is_none() && !response.state.state.is_stopped() {
                     query.kill(ErrorCode::ClosedQuery("closed by client")).await;
                     response = query.get_response_state_only().await;
                 }
@@ -247,11 +244,7 @@ async fn query_final_handler(
                 response.state.affect = None;
                 Ok(QueryResponse::from_internal(query_id, response, true))
             }
-            Err(reason) => Err(query_id_not_found_or_removed(
-                &query_id,
-                &ctx.node_id,
-                reason,
-            )),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -273,22 +266,16 @@ async fn query_cancel_handler(
             query_id, query_id
         );
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.try_get_query(&query_id).await {
-            Ok(query) => {
-                query
-                    .kill(ErrorCode::AbortedQuery("canceled by client"))
-                    .await;
-                http_query_manager
-                    .remove_query(&query_id, RemoveReason::Canceled)
-                    .await
-                    .ok();
+        match http_query_manager.remove_query(&query_id, RemoveReason::Canceled) {
+            Some(query) => {
+                if query.check_removed().is_none() {
+                    query
+                        .kill(ErrorCode::AbortedQuery("canceled by client"))
+                        .await;
+                }
                 Ok(StatusCode::OK)
             }
-            Err(reason) => Err(query_id_not_found_or_removed(
-                &query_id,
-                &ctx.node_id,
-                reason,
-            )),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -304,16 +291,16 @@ async fn query_state_handler(
 
     async {
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.try_get_query(&query_id).await {
-            Ok(query) => {
-                let response = query.get_response_state_only().await;
-                Ok(QueryResponse::from_internal(query_id, response, false))
+        match http_query_manager.get_query(&query_id) {
+            Some(query) => {
+                if let Some(reason) = query.check_removed() {
+                    Err(query_id_removed(&query_id, reason))
+                } else {
+                    let response = query.get_response_state_only().await;
+                    Ok(QueryResponse::from_internal(query_id, response, false))
+                }
             }
-            Err(reason) => Err(query_id_not_found_or_removed(
-                &query_id,
-                &ctx.node_id,
-                reason,
-            )),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -330,20 +317,20 @@ async fn query_page_handler(
 
     async {
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.try_get_query(&query_id).await {
-            Ok(query) => {
-                query.update_expire_time(true).await;
-                let resp = query.get_response_page(page_no).await.map_err(|err| {
-                    poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
-                })?;
-                query.update_expire_time(false).await;
-                Ok(QueryResponse::from_internal(query_id, resp, false))
+        match http_query_manager.get_query(&query_id) {
+            Some(query) => {
+                if let Some(reason) = query.check_removed() {
+                    Err(query_id_removed(&query_id, reason))
+                } else {
+                    query.update_expire_time(true).await;
+                    let resp = query.get_response_page(page_no).await.map_err(|err| {
+                        poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                    })?;
+                    query.update_expire_time(false).await;
+                    Ok(QueryResponse::from_internal(query_id, resp, false))
+                }
             }
-            Err(reason) => Err(query_id_not_found_or_removed(
-                &query_id,
-                &ctx.node_id,
-                reason,
-            )),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -432,17 +419,15 @@ pub fn query_route() -> Route {
     route
 }
 
-fn query_id_not_found_or_removed(
-    query_id: &str,
-    node_id: &str,
-    reason: Option<RemoveReason>,
-) -> PoemError {
-    let error = match reason {
-        Some(reason) => reason.to_string(),
-        None => "not found".to_string(),
-    };
+fn query_id_removed(query_id: &str, remove_reason: RemoveReason) -> PoemError {
     PoemError::from_string(
-        format!("query id {query_id} {error} on {node_id}"),
+        format!("query id {query_id} {}", remove_reason),
+        StatusCode::BAD_REQUEST,
+    )
+}
+fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
+    PoemError::from_string(
+        format!("query id {query_id} not found on {node_id}"),
         StatusCode::NOT_FOUND,
     )
 }

@@ -288,7 +288,7 @@ impl Executor {
                     if e.code() != ErrorCode::CLOSED_QUERY {
                         r.session.txn_mgr().lock().set_fail();
                     }
-                    r.session.force_kill_query(error.clone());
+                    r.session.force_kill_query(e.clone());
                 }
 
                 guard.state = Stopped(Box::new(ExecuteStopped {
@@ -367,11 +367,11 @@ impl ExecuteState {
         );
         match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
-                Executor::stop(&executor_clone, Err(err.clone()), false).await;
+                Executor::stop(&executor_clone, Err(err.clone())).await;
                 block_sender_closer.close();
             }
             Err(e) => {
-                Executor::stop(&executor_clone, Err(e), false).await;
+                Executor::stop(&executor_clone, Err(e)).await;
                 block_sender_closer.close();
             }
             _ => {}
@@ -403,7 +403,7 @@ async fn execute(
         None => {
             let block = DataBlock::empty_with_schema(schema);
             block_sender.send(block, 0).await;
-            Executor::stop(&executor, Ok(()), false).await;
+            Executor::stop(&executor, Ok(())).await;
             block_sender.close();
         }
         Some(Err(err)) => {
@@ -413,7 +413,7 @@ async fn execute(
                 databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
             );
             block_sender.send(DataBlock::new(vec![data], 1), 1).await;
-            Executor::stop(&executor, Err(err), false).await;
+            Executor::stop(&executor, Err(err)).await;
             block_sender.close();
         }
         Some(Ok(block)) => {
@@ -438,7 +438,7 @@ async fn execute(
                     }
                 };
             }
-            Executor::stop(&executor, Ok(()), false).await;
+            Executor::stop(&executor, Ok(())).await;
             block_sender.close();
         }
     }

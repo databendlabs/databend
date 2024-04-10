@@ -270,7 +270,7 @@ async fn test_simple_sql() -> Result<()> {
     let sql = "select * from system.tables limit 10";
     let ep = create_endpoint().await?;
     let (status, result) =
-        post_sql_to_endpoint_new_session(&ep, sql, 1, HeaderMap::default()).await?;
+        post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
 
@@ -320,7 +320,7 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.next_uri.is_none(), "{:?}", result);
 
     let response = get_uri(&ep, &page_0_uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{:?}", result);
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 1).await?;
@@ -652,11 +652,11 @@ async fn test_result_timeout() -> Result<()> {
     let query_id = result.id.clone();
     assert!(!query_id.is_empty());
 
-    sleep(std::time::Duration::from_secs(2)).await;
+    sleep(std::time::Duration::from_secs(3)).await;
     let (status, result, body) = req.fetch_next().await?;
-    assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", result);
-    let msg = format!("query id {} timeout on {}", query_id, config.query.node_id);
-    let msg = json!({ "error": { "code": "404", "message": msg }}).to_string();
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", result);
+    let msg = format!("query id {} timeout", query_id);
+    let msg = json!({ "error": { "code": "400", "message": msg }}).to_string();
     assert_eq!(body, msg, "{:?}", result);
 
     Ok(())
