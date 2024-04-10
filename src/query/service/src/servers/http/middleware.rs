@@ -114,24 +114,16 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
 /// please note that when it comes with network policy, we need make sure the incoming
 /// traffic comes from a trustworthy proxy instance.
 fn get_client_ip(req: &Request) -> Option<String> {
-    if let Some(x_real_ip) = req.headers().get("X-Real-IP") {
-        if let Ok(ip_str) = x_real_ip.to_str() {
-            return Some(ip_str.to_string());
-        }
-    }
-    if let Some(x_forwarded_for) = req.headers().get("X-Forwarded-For") {
-        if let Ok(ips) = x_forwarded_for.to_str() {
-            // take the first one the the original client IP
-            let first_ip = ips.split(',').next().unwrap_or("").trim();
-            if !first_ip.is_empty() {
-                return Some(first_ip.to_string());
+    let headers = ["X-Real-IP", "X-Forwarded-For", "CF-Connecting-IP"];
+    for &header in headers.iter() {
+        if let Some(value) = req.headers().get(header) {
+            if let Ok(ip_str) = value.to_str() {
+                let mut ip_str = ip_str.to_string();
+                if header == "X-Forwarded-For" {
+                    ip_str = ip_str.split(',')[0];
+                }
+                return Some(ip_str);
             }
-        }
-    }
-    // CF-Connecting-IP is only used in Cloudflare
-    if let Some(cf_connecting_ip) = req.headers().get("CF-Connecting-IP") {
-        if let Ok(ip_str) = cf_connecting_ip.to_str() {
-            return Some(ip_str.to_string());
         }
     }
 
