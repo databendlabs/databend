@@ -113,7 +113,7 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
 /// not found, fallback to the remote address, which might be local proxy's ip address.
 /// please note that when it comes with network policy, we need make sure the incoming
 /// traffic comes from a trustworthy proxy instance.
-fn get_client_ip(req: &Request) -> Option<String> {
+pub fn get_client_ip(req: &Request) -> Option<String> {
     let headers = ["X-Real-IP", "X-Forwarded-For", "CF-Connecting-IP"];
     for &header in headers.iter() {
         if let Some(value) = req.headers().get(header) {
