@@ -147,7 +147,8 @@ enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 feature-set = { version = "0.1.1" }
 geo = { version = "0.27.0", features = ["use-serde"] }
-geozero = { version = "0.11.0", features = ["default", "with-wkb"] }
+geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
+geozero = { version = "0.11.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 itertools = "0.10.5"
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.5"
