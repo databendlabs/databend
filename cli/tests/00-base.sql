@@ -46,6 +46,8 @@ insert into test_nested values([1,2,3], null, (1, 'ab')), (null, {'k1':'v1', 'k2
 select * from test_nested;
 select a[1], b['k1'], c:x, c:y from test_nested;
 
+select {'k1':'v1','k2':'v2'}, [to_binary('ab'), to_binary('xyz')], (parse_json('[1,2]'), st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)'), to_date('2024-04-10'));
+
 select 'bye';
 drop table test;
 drop table test_decimal;

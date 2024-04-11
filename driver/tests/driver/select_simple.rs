@@ -177,16 +177,99 @@ async fn select_nullable_u64() {
     assert_eq!(val, Some(4950));
 }
 
-// TODO:(everpcoc) parse to real array
-// #[tokio::test]
-// async fn select_array() {
-//     let mut conn = prepare().await;
-//     let row = conn.query_row("select [1, 2, 3, 4, 5]").await.unwrap();
-//     assert!(row.is_some());
-//     let row = row.unwrap();
-//     let (val,): (String,) = row.try_into().unwrap();
-//     assert_eq!(val, "[1,2,3,4,5]");
-// }
+#[tokio::test]
+async fn select_array() {
+    let conn = prepare().await;
+    let row = conn
+        .query_row("select [], [1, 2, 3, 4, 5], [10::Decimal(15,2), 1.1+2.3], [to_binary('xyz')]")
+        .await
+        .unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    assert_eq!(
+        row.values().to_owned(),
+        vec![
+            Value::EmptyArray,
+            Value::Array(vec![
+                Value::Number(NumberValue::UInt8(1)),
+                Value::Number(NumberValue::UInt8(2)),
+                Value::Number(NumberValue::UInt8(3)),
+                Value::Number(NumberValue::UInt8(4)),
+                Value::Number(NumberValue::UInt8(5)),
+            ]),
+            Value::Array(vec![
+                Value::Number(NumberValue::Decimal128(
+                    1000,
+                    DecimalSize {
+                        precision: 4,
+                        scale: 2
+                    }
+                )),
+                Value::Number(NumberValue::Decimal128(
+                    340,
+                    DecimalSize {
+                        precision: 4,
+                        scale: 2
+                    }
+                ))
+            ]),
+            Value::Array(vec![Value::Binary(vec![120, 121, 122])]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn select_map() {
+    let conn = prepare().await;
+    let row = conn
+        .query_row("select {}, {'k1':'v1','k2':'v2'}, {'xx':to_date('2020-01-01')}")
+        .await
+        .unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    assert_eq!(
+        row.values().to_owned(),
+        vec![
+            Value::EmptyMap,
+            Value::Map(vec![
+                (
+                    Value::String("k1".to_string()),
+                    Value::String("v1".to_string())
+                ),
+                (
+                    Value::String("k2".to_string()),
+                    Value::String("v2".to_string())
+                ),
+            ]),
+            Value::Map(vec![(Value::String("xx".to_string()), Value::Date(18262)),]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn select_tuple() {
+    let conn = prepare().await;
+    let row = conn.query_row("select (parse_json('[1,2]'), [1,2], true), (st_geometryfromwkt('SRID=4126;POINT(3.0 5.0)'), to_timestamp('2024-10-22 10:11:12'))").await.unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    assert_eq!(
+        row.values().to_owned(),
+        vec![
+            Value::Tuple(vec![
+                Value::Variant("[1,2]".to_string()),
+                Value::Array(vec![
+                    Value::Number(NumberValue::UInt8(1)),
+                    Value::Number(NumberValue::UInt8(2)),
+                ]),
+                Value::Boolean(true),
+            ]),
+            Value::Tuple(vec![
+                Value::Geometry("SRID=4126;POINT(3 5)".to_string()),
+                Value::Timestamp(1729591872000000)
+            ]),
+        ]
+    );
+}
 
 #[tokio::test]
 async fn select_multiple_columns() {

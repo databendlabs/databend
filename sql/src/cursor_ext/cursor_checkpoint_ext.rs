@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cursor_ext;
-pub mod error;
-pub mod from_row;
-pub mod rows;
-pub mod schema;
-pub mod value;
+use std::io::Cursor;
 
-#[doc(hidden)]
-pub mod _macro_internal {
-    pub use crate::error::{Error, Result};
-    pub use crate::rows::{Row, RowIterator};
-    pub use crate::schema::Schema;
-    pub use crate::value::Value;
+pub trait ReadCheckPointExt {
+    fn checkpoint(&self) -> u64;
+    fn rollback(&mut self, checkpoint: u64);
+}
+
+impl<T> ReadCheckPointExt for Cursor<T>
+where
+    T: AsRef<[u8]>,
+{
+    fn checkpoint(&self) -> u64 {
+        self.position()
+    }
+
+    fn rollback(&mut self, checkpoint: u64) {
+        self.set_position(checkpoint)
+    }
 }

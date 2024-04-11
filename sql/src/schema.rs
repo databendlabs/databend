@@ -131,7 +131,12 @@ impl std::fmt::Display for DataType {
             DataType::Date => write!(f, "Date"),
             DataType::Nullable(inner) => write!(f, "Nullable({})", inner),
             DataType::Array(inner) => write!(f, "Array({})", inner),
-            DataType::Map(inner) => write!(f, "Map({})", inner),
+            DataType::Map(inner) => match inner.as_ref() {
+                DataType::Tuple(tys) => {
+                    write!(f, "Map({}, {})", tys[0], tys[1])
+                }
+                _ => unreachable!(),
+            },
             DataType::Tuple(inner) => {
                 let inner = inner
                     .iter()
@@ -173,7 +178,19 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
 
     fn try_from(desc: &TypeDesc) -> Result<Self> {
         let dt = match desc.name {
-            "Null" | "NULL" => DataType::Null,
+            "Null" | "NULL" => {
+                if desc.args.is_empty() {
+                    DataType::Null
+                } else {
+                    if desc.args.len() != 1 {
+                        return Err(Error::Parsing(
+                            "Nullable type must have one argument".to_string(),
+                        ));
+                    }
+                    let inner = Self::try_from(&desc.args[0])?;
+                    DataType::Nullable(Box::new(inner))
+                }
+            }
             "Boolean" => DataType::Boolean,
             "Binary" => DataType::Binary,
             "String" => DataType::String,
@@ -423,6 +440,10 @@ fn parse_type_desc(s: &str) -> Result<TypeDesc> {
             }
             ' ' => {
                 if depth == 0 {
+                    let s = &s[start..i];
+                    if !s.is_empty() {
+                        args.push(parse_type_desc(s)?);
+                    }
                     start = i + 1;
                 }
             }
@@ -564,6 +585,29 @@ mod test {
                             }],
                         },
                     ],
+                },
+            },
+            TestCase {
+                desc: "map nullable value args",
+                input: "Nullable(Map(String, String NULL))",
+                output: TypeDesc {
+                    name: "Nullable",
+                    args: vec![TypeDesc {
+                        name: "Map",
+                        args: vec![
+                            TypeDesc {
+                                name: "String",
+                                args: vec![],
+                            },
+                            TypeDesc {
+                                name: "NULL",
+                                args: vec![TypeDesc {
+                                    name: "String",
+                                    args: vec![],
+                                }],
+                            },
+                        ],
+                    }],
                 },
             },
         ];
