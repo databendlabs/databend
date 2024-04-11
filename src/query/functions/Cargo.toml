@@ -44,6 +44,7 @@ itertools = { workspace = true }
 lexical-core = "0.8.5"
 libm = "0.2.6"
 match-template = { workspace = true }
+md-5 = "0.10.5"
 memchr = { version = "2", default-features = false }
 naive-cityhash = "0.2.0"
 num-traits = "0.2.15"
@@ -76,3 +77,6 @@ goldenfile = "1.4"
 [[bench]]
 name = "bench"
 harness = false
+
+[package.metadata.cargo-machete]
+ignored = ["md-5"]
