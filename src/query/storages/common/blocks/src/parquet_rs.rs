@@ -91,9 +91,10 @@ fn choose_compression_scheme(
                 .is_some_and(|ndv| num_rows as f64 / ndv as f64 > ENABLE_DICT_THRESHOLD)
             {
                 let col_path = ColumnPath::new(vec![field.name().clone()]);
-                props = props
-                    .set_column_dictionary_enabled(col_path.clone(), true)
-                    .set_column_compression(col_path, Compression::UNCOMPRESSED);
+                props = props.set_column_dictionary_enabled(col_path.clone(), true);
+                // TODO: figure out the benefit of disable compression when encoding is effective.
+                // Currently, compression type recorded in block meta is in file level, not column level.
+                // .set_column_compression(col_path, Compression::UNCOMPRESSED);
             }
         }
     }
