@@ -76,7 +76,7 @@ macro_rules! impl_history_aware {
             #[async_backtrace::framed]
             async fn list_tables(
                 catalog: &Arc<dyn Catalog>,
-                tenant: &str,
+                tenant: &Tenant,
                 database_name: &str,
                 with_history: bool,
                 _without_view: bool,
