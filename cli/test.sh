@@ -47,10 +47,10 @@ for tf in cli/tests/*.{sql,sh}; do
 	echo "    Running test -- ${tf}"
 	if [[ $tf == *.sh ]]; then
 		suite=$(basename "${tf}" | sed -e 's#.sh##')
-		bash "${tf}" >"cli/tests/${suite}.output" 2>&1
+		bash "${tf}" >"cli/tests/${suite}.output" 2>&1 || true
 	elif [[ $tf == *.sql ]]; then
 		suite=$(basename "${tf}" | sed -e 's#.sql##')
-		"${BENDSQL}" --output tsv <"${tf}" >"cli/tests/${suite}.output" 2>&1
+		"${BENDSQL}" --output tsv <"${tf}" >"cli/tests/${suite}.output" 2>&1 || true
 	fi
 	diff "cli/tests/${suite}.output" "cli/tests/${suite}.result"
 done
@@ -61,10 +61,10 @@ for tf in cli/tests/"$TEST_HANDLER"/*.{sql,sh}; do
 	echo "    Running test -- ${tf}"
 	if [[ $tf == *.sh ]]; then
 		suite=$(basename "${tf}" | sed -e 's#.sh##')
-		bash "${tf}" >"cli/tests/${TEST_HANDLER}/${suite}.output" 2>&1
+		bash "${tf}" >"cli/tests/${TEST_HANDLER}/${suite}.output" 2>&1 || true
 	elif [[ $tf == *.sql ]]; then
 		suite=$(basename "${tf}" | sed -e 's#.sql##')
-		"${BENDSQL}" --output tsv <"${tf}" >"cli/tests/${TEST_HANDLER}/${suite}.output" 2>&1
+		"${BENDSQL}" --output tsv <"${tf}" >"cli/tests/${TEST_HANDLER}/${suite}.output" 2>&1 || true
 	fi
 	diff "cli/tests/${TEST_HANDLER}/${suite}.output" "cli/tests/${TEST_HANDLER}/${suite}.result"
 done
