@@ -101,10 +101,10 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
-use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
@@ -597,7 +597,11 @@ impl TableContext for QueryContext {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-        let format = FormatSettings { timezone };
+        let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let format = FormatSettings {
+            timezone,
+            geometry_format,
+        };
         Ok(format)
     }
 
@@ -622,7 +626,7 @@ impl TableContext for QueryContext {
         let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = self.get_settings().get_disable_variant_check()?;
-
+        let geometry_output_format = self.get_settings().get_geometry_output_format()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -639,6 +643,7 @@ impl TableContext for QueryContext {
 
             external_server_connect_timeout_secs,
             external_server_request_timeout_secs,
+            geometry_output_format,
         })
     }
 

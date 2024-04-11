@@ -204,7 +204,7 @@ build_exceptions! {
 
     // Geometry errors.
     GeometryError(1801),
-
+    InvalidGeometryFormat(1802),
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),

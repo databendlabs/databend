@@ -35,12 +35,6 @@ use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
-use crate::api::DataExchange;
-use crate::api::ExchangeInjector;
-use crate::api::ExchangeSorting;
-use crate::api::FlightScatter;
-use crate::api::MergeExchangeParams;
-use crate::api::ShuffleExchangeParams;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
@@ -58,6 +52,12 @@ use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::servers::flight::v1::exchange::DataExchange;
+use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::exchange::ExchangeSorting;
+use crate::servers::flight::v1::exchange::MergeExchangeParams;
+use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::sessions::QueryContext;
 
 struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'static> {

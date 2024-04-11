@@ -2,6 +2,14 @@ statement ok
 DROP TABLE IF EXISTS t1
 
 statement ok
+SET geometry_output_format='EWKT'
+
+query T
+SELECT to_string(st_makeline(ST_GEOMFROMWKT('POINT(33.0 44.2)', 32633), ST_GEOMFROMWKT('POINT(224.5 41.5)', 32633)));
+----
+SRID=32633;LINESTRING(33 44.2,224.5 41.5)
+
+statement ok
 CREATE TABLE t1 (lat Float64, lon Float64) ENGINE=Memory
 
 statement ok
@@ -34,8 +42,8 @@ CREATE TABLE t1 (a int, g geometry)
 statement ok
 INSERT INTO t1 VALUES(1, ST_GEOMFROMWKT('POINT(389866.35 5819003.03)', 32633)), (2, ST_GEOMFROMWKT('POINT(4.500212 52.161170)', 4326))
 
-query IT
-SELECT a, g FROM t1
+query T
+SELECT a, to_string(g) FROM t1
 ----
 1 SRID=32633;POINT(389866.35 5819003.03)
 2 SRID=4326;POINT(4.500212 52.16117)
@@ -55,6 +63,9 @@ CREATE TABLE t1 (a geometry)
 statement ok
 INSERT INTO t1 VALUES(ST_GEOMETRYFROMWKT('LINESTRING(0.0 0.0, 1.0 0.0, 1.0 2.0, 0.0 2.0, 0.0 0.0)')),(ST_GEOMETRYFROMWKT('LINESTRING(0.0 0.2, 1.4 5, 1.9 2, 0 2, 0.0 0.2)'))
 
+statement ok
+SET geometry_output_format='GeoJSON'
+
 query T
 SELECT to_string(st_makepolygon(a)) FROM t1
 ----
@@ -68,12 +79,12 @@ statement ok
 CREATE TABLE t1 (g1 geometry, g2 geometry)
 
 statement ok
-SELECT to_string(st_makeline(ST_GEOMFROMWKT('POINT(33.0 44.2)', 32633), ST_GEOMFROMWKT('POINT(224.5 41.5)', 32633))) FROM t1
-
-statement ok
 INSERT INTO t1 VALUES(ST_GEOMFROMWKT('POINT(1.0 2.0)', 32633), ST_GEOMFROMWKT('POINT(3.5 4.5)', 32633)),
 (ST_GEOMFROMWKT('POINT(1.0 2.0)', 4326), ST_GEOMFROMWKT('LINESTRING(1.0 2.0, 10.1 5.5)', 4326)),
 (ST_GEOMFROMWKT('LINESTRING(1.0 2.0, 10.1 5.5)'), ST_GEOMFROMWKT('MULTIPOINT(3.5 4.5, 6.1 7.9)'))
+
+statement ok
+SET geometry_output_format='EWKT'
 
 query T
 SELECT to_string(st_makeline(g1, g2)) FROM t1
@@ -91,6 +102,9 @@ CREATE TABLE t1 (b binary);
 statement ok
 INSERT INTO t1 VALUES(UNHEX('0101000020797f000066666666a9cb17411f85ebc19e325641'));
 
+statement ok
+SET geometry_output_format='EWKT'
+
 query T
 SELECT TO_STRING(ST_GEOMETRYFROMWKB(b)) FROM t1;
 ----
@@ -102,9 +116,9 @@ SELECT TO_STRING(ST_GEOMETRYFROMWKB(b, 4326)) FROM t1;
 SRID=4326;POINT(389866.35 5819003.03)
 
 query T
-SELECT TO_STRING(ST_ASGEOJSON(ST_GEOMETRYFROMWKB(b))) FROM t1
+SELECT ST_ASGEOJSON(ST_GEOMETRYFROMWKB(b)) FROM t1
 ----
-{"type": "Point", "coordinates": [389866.35,5819003.03]}
+{"coordinates":[389866.35,5819003.03],"type":"Point"}
 
 statement ok
 DROP TABLE IF EXISTS t1;
@@ -131,7 +145,10 @@ DROP TABLE IF EXISTS t1;
 query T
 SELECT TO_STRING(ST_ASGEOJSON(ST_GEOMETRYFROMWKT('SRID=4326;LINESTRING(389866 5819003, 390000 5830000)')))
 ----
-{"type": "LineString", "coordinates": [[389866,5819003],[390000,5830000]]}
+ {"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}
+
+statement ok
+SET geometry_output_format = 'GeoJSON'
 
 query T
 SELECT TO_STRING(ST_GEOMPOINTFROMGEOHASH('s02equ0'))

@@ -1,24 +1,12 @@
 query T
-show tables from information_schema
+show views from information_schema like 'tables'
 ----
-columns
-key_column_usage
-keywords
-schemata
-statistics
-tables
-views
+tables SELECT database AS table_catalog, database AS table_schema, name AS table_name, 'BASE TABLE' AS table_type, engine AS engine, created_on AS create_time, dropped_on AS drop_time, data_size AS data_length, index_size AS index_length, num_rows AS table_rows, NULL AS auto_increment, NULL AS table_collation, NULL AS data_free, comment AS table_comment FROM system.tables;
 
 query T
-SHOW TABLES FROM INFORMATION_SCHEMA
+show views from INFORMATION_SCHEMA like 'tables'
 ----
-columns
-key_column_usage
-keywords
-schemata
-statistics
-tables
-views
+tables SELECT database AS table_catalog, database AS table_schema, name AS table_name, 'BASE TABLE' AS table_type, engine AS engine, created_on AS create_time, dropped_on AS drop_time, data_size AS data_length, index_size AS index_length, num_rows AS table_rows, NULL AS auto_increment, NULL AS table_collation, NULL AS data_free, comment AS table_comment FROM system.tables;
 
 query TTTTT
 DESC INFORMATION_SCHEMA.KEY_COLUMN_USAGE
@@ -68,15 +56,15 @@ select count(1) > 1 from information_Schema.Columns
 1
 
 query T
-SELECT t.table_catalog FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = 'information_schema'
+SELECT t.table_catalog FROM information_schema.VIEWS t WHERE t.TABLE_SCHEMA = 'information_schema'
 ----
-information_schema
-information_schema
-information_schema
-information_schema
-information_schema
-information_schema
-information_schema
+default
+default
+default
+default
+default
+default
+default
 
 statement ok
 drop table if exists t

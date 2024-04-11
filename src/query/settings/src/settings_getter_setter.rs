@@ -15,6 +15,7 @@
 use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
 
 use crate::settings::Settings;
@@ -626,5 +627,10 @@ impl Settings {
 
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {
         self.try_get_u64("statement_queued_timeout_in_seconds")
+    }
+
+    pub fn get_geometry_output_format(&self) -> Result<GeometryDataType> {
+        let v = self.try_get_string("geometry_output_format")?;
+        v.parse()
     }
 }

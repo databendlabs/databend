@@ -32,11 +32,10 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
-use geozero::geojson::GeoJson;
-use geozero::wkb::FromWkb;
-use geozero::wkb::WkbDialect;
-use geozero::wkt::Ewkt;
-use geozero::ToJson;
+use databend_common_io::GeometryDataType;
+use geozero::wkb::Ewkb;
+use geozero::CoordDimensions;
+use geozero::ToWkb;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -63,12 +62,13 @@ impl FieldEncoderValues {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
                 binary_format: Default::default(),
+                geometry_format: Default::default(),
             },
             quote_char: b'\'',
         }
     }
 
-    pub fn create_for_http_handler(timezone: Tz) -> Self {
+    pub fn create_for_http_handler(timezone: Tz, geometry_format: GeometryDataType) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -78,6 +78,7 @@ impl FieldEncoderValues {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone,
                 binary_format: Default::default(),
+                geometry_format,
             },
             quote_char: b'\'',
         }
@@ -87,7 +88,7 @@ impl FieldEncoderValues {
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
-    pub fn create_for_mysql_handler(timezone: Tz) -> Self {
+    pub fn create_for_mysql_handler(timezone: Tz, geometry_format: GeometryDataType) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -97,6 +98,7 @@ impl FieldEncoderValues {
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
                 binary_format: Default::default(),
+                geometry_format,
             },
             quote_char: b'\'',
         }
@@ -298,14 +300,10 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let mut data_cursor = std::io::Cursor::new(v);
-        match Ewkt::from_wkb(&mut data_cursor, WkbDialect::Ewkb) {
-            Ok(ewkt) => self.write_string_inner(ewkt.0.as_bytes(), out_buf, in_nested),
-            Err(_) => {
-                let json = GeoJson(std::str::from_utf8(v).unwrap()).to_json().unwrap();
-                self.write_string_inner(json.as_bytes(), out_buf, in_nested);
-            }
-        };
+        let s = Ewkb(v.to_vec())
+            .to_ewkb(CoordDimensions::xy(), None)
+            .unwrap();
+        self.write_string_inner(&s, out_buf, in_nested);
     }
 
     fn write_array<T: ValueType>(
