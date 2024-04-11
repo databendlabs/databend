@@ -12,22 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod share;
-mod stage;
-mod stream;
-mod table;
-mod task;
-mod view;
-mod virtual_column;
+use databend_common_ast::ast::ExecuteImmediateStmt;
+use databend_common_exception::Result;
+
+use crate::plans::ExecuteImmediatePlan;
+use crate::plans::Plan;
+use crate::Binder;
+
+impl Binder {
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_execute_immediate(
+        &mut self,
+        stmt: &ExecuteImmediateStmt,
+    ) -> Result<Plan> {
+        let ExecuteImmediateStmt { script } = stmt;
+        Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
+            script: script.clone(),
+        })))
+    }
+}

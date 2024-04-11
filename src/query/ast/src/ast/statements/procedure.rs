@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod share;
-mod stage;
-mod stream;
-mod table;
-mod task;
-mod view;
-mod virtual_column;
+use std::fmt::Display;
+use std::fmt::Formatter;
+
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct ExecuteImmediateStmt {
+    #[drive(skip)]
+    pub script: String,
+}
+
+impl Display for ExecuteImmediateStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EXECUTE IMMEDIATE $$\n{}\n$$", self.script)?;
+        Ok(())
+    }
+}
