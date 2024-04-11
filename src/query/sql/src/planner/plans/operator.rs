@@ -372,9 +372,7 @@ impl TryFrom<RelOperator> for Scan {
         if let RelOperator::Scan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to LogicalGet",
-            ))
+            Err(ErrorCode::Internal("Cannot downcast RelOperator to Scan"))
         }
     }
 }
