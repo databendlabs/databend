@@ -806,22 +806,20 @@ impl TableSchema {
         // Although `inner_project` and `traverse_paths` methods will not be called for complex types like Array(Tuple),
         // when constructing column leaves (for reading parquet) for these types, we still need to dfs the inner fields.
         // See comments in `common_storage::ColumnNodes::traverse_fields_dfs` for more details.
-        if let TableDataType::Tuple {
-            fields_name,
-            fields_type,
-        } = &field.data_type.remove_nullable()
-        {
+        if let TableDataType::Tuple { fields_type, .. } = &field.data_type.remove_nullable() {
             let field_name = field.name();
             let mut next_column_id = field.column_id;
-            let fields = fields_name
+            let fields = fields_type
                 .iter()
-                .zip(fields_type)
-                .map(|(name, ty)| {
-                    let inner_name = format!("{}:{}", field_name, name.to_lowercase());
+                .enumerate()
+                .map(|(i, ty)| {
+                    // use field index as inner name.
+                    let inner_name = format!("{}:{}", field_name, i + 1);
                     let field = TableField::new(&inner_name, ty.clone());
                     field.build_column_id(&mut next_column_id)
                 })
                 .collect::<Vec<_>>();
+
             return Self::traverse_paths(&fields, &path[1..]);
         }
         let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
@@ -841,25 +839,19 @@ impl TableSchema {
         fn collect_in_field(
             field: &TableField,
             fields: &mut Vec<TableField>,
-            is_nullable: bool,
             next_column_id: &mut ColumnId,
         ) {
             let ty = field.data_type();
-            let is_nullable = ty.is_nullable() || is_nullable;
             match ty.remove_nullable() {
-                TableDataType::Tuple {
-                    fields_type,
-                    fields_name,
-                } => {
-                    for (name, ty) in fields_name.iter().zip(fields_type) {
+                TableDataType::Tuple { fields_type, .. } => {
+                    for (i, ty) in fields_type.iter().enumerate() {
                         collect_in_field(
                             &TableField::new_from_column_id(
-                                &format!("{}:{}", field.name(), name),
+                                &format!("{}:{}", field.name(), i + 1),
                                 ty.clone(),
                                 *next_column_id,
                             ),
                             fields,
-                            is_nullable,
                             next_column_id,
                         );
                     }
@@ -872,7 +864,6 @@ impl TableSchema {
                             *next_column_id,
                         ),
                         fields,
-                        is_nullable,
                         next_column_id,
                     );
                 }
@@ -884,17 +875,12 @@ impl TableSchema {
                             *next_column_id,
                         ),
                         fields,
-                        is_nullable,
                         next_column_id,
                     );
                 }
                 _ => {
                     *next_column_id += 1;
-                    let mut field = field.clone();
-                    if is_nullable {
-                        field.data_type = field.data_type.wrap_nullable();
-                    }
-                    fields.push(field)
+                    fields.push(field.clone())
                 }
             }
         }
@@ -906,7 +892,7 @@ impl TableSchema {
                 continue;
             }
             let mut next_column_id = field.column_id;
-            collect_in_field(field, &mut fields, false, &mut next_column_id);
+            collect_in_field(field, &mut fields, &mut next_column_id);
         }
         fields
     }
@@ -1465,12 +1451,12 @@ pub fn create_test_complex_schema() -> TableSchema {
     let child_field22 = TableDataType::Number(NumberDataType::UInt64);
 
     let s = TableDataType::Tuple {
-        fields_name: vec!["0".to_string(), "1".to_string()],
+        fields_name: vec!["a".to_string(), "b".to_string()],
         fields_type: vec![child_field11, child_field12],
     };
 
     let tuple = TableDataType::Tuple {
-        fields_name: vec!["0".to_string(), "1".to_string()],
+        fields_name: vec!["a".to_string(), "b".to_string()],
         fields_type: vec![s.clone(), TableDataType::Array(Box::new(child_field22))],
     };
 

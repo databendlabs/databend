@@ -550,8 +550,8 @@ impl TestFixture {
             TableField::new("t", TableDataType::Tuple {
                 fields_name: vec!["a".to_string(), "b".to_string()],
                 fields_type: vec![
-                    TableDataType::Number(NumberDataType::Int32),
-                    TableDataType::Number(NumberDataType::Int32),
+                    TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
+                    TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
                 ],
             }),
         ]);
@@ -571,15 +571,17 @@ impl TestFixture {
                         .take(rows_per_block)
                         .collect::<Vec<i32>>(),
                     );
-                    let column1 = Int32Type::from_data(
+                    let column1 = Int32Type::from_opt_data(
                         std::iter::repeat_with(|| (idx as i32 + start) * 2)
                             .take(rows_per_block)
-                            .collect::<Vec<i32>>(),
+                            .map(Some)
+                            .collect::<Vec<Option<i32>>>(),
                     );
-                    let column2 = Int32Type::from_data(
+                    let column2 = Int32Type::from_opt_data(
                         std::iter::repeat_with(|| (idx as i32 + start) * 3)
                             .take(rows_per_block)
-                            .collect::<Vec<i32>>(),
+                            .map(Some)
+                            .collect::<Vec<Option<i32>>>(),
                     );
                     let tuple_inner_columns = vec![column1, column2];
                     let tuple_column = Column::Tuple(tuple_inner_columns);

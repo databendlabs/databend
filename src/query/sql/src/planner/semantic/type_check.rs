@@ -3941,7 +3941,7 @@ impl<'a> TypeChecker<'a> {
                             ))
                             .set_span(span));
                         }
-                        let inner_name = fields_name.get(idx as usize - 1).unwrap();
+                        let inner_name = format!("{}", idx);
                         let inner_type = fields_type.get(idx as usize - 1).unwrap();
                         names.push(inner_name.clone());
                         index_with_types.push_back((idx as usize, inner_type.clone()));
@@ -3949,7 +3949,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     Literal::String(name) => match fields_name.iter().position(|k| k == &name) {
                         Some(idx) => {
-                            let inner_name = fields_name.get(idx).unwrap();
+                            let inner_name = format!("{}", idx + 1);
                             let inner_type = fields_type.get(idx).unwrap();
                             names.push(inner_name.clone());
                             index_with_types.push_back((idx + 1, inner_type.clone()));

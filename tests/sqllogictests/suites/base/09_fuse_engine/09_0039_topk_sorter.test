@@ -2,6 +2,9 @@ statement ok
 set enable_compact_after_write = 0;
 
 statement ok
+drop table if exists test;
+
+statement ok
 create table test(m int, event_time Timestamp, url string);
 
 statement ok

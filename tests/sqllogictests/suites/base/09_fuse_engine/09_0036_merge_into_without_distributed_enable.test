@@ -471,6 +471,9 @@ statement ok
 drop table if exists employees;
 
 statement ok
+drop table if exists salaries;
+
+statement ok
 CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255))  cluster by(employee_id,employee_name);
 
 statement ok
@@ -497,6 +500,12 @@ select * from salaries order by employee_id;
 
 ## null cast bug fix
 statement ok
+drop table if exists t1_target;
+
+statement ok
+drop table if exists t2_source;
+
+statement ok
 create table t1_target(a int not null) cluster by(a);
 
 statement ok
@@ -520,6 +529,12 @@ select * from t1_target order by a;
 2
 
 ## cluster table test
+statement ok
+drop table if exists cluster_target;
+
+statement ok
+drop table if exists cluster_source;
+
 statement ok
 create table cluster_target(a int,b string,c int) cluster by(a,b);
 
@@ -612,6 +627,12 @@ merge into test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5,
 
 ## test update list #13297
 statement ok
+drop table if exists t11
+
+statement ok
+drop table if exists t12
+
+statement ok
 create table t11(a int,b string, c string) cluster by(a,b);
 
 statement ok
@@ -631,6 +652,9 @@ merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched
 
 ## test issue #13287
 statement ok
+drop table if exists tt1
+
+statement ok
 create table tt1 (a int, b int) cluster by(a,b);
 
 statement error 1065
@@ -647,6 +671,9 @@ select count(*) from tt1;
 0
 
 ## test issue #13367
+statement ok
+drop table if exists tt2
+
 statement ok
 create table tt2(a bool, b variant, c map(string, string)) cluster by(a);
 

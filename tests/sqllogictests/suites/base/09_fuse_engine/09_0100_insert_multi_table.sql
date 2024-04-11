@@ -583,3 +583,4 @@ select * from t2 order by c1;
 ----
 1 2
 3 4
+

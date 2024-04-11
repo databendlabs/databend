@@ -15,12 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_array::cast::AsArray;
-use arrow_array::Array;
-use arrow_array::LargeListArray;
-use arrow_array::MapArray;
 use arrow_array::RecordBatch;
-use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
@@ -30,7 +25,6 @@ use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
 use databend_common_exception::Result;
 
 use super::EXTENSION_KEY;
-use crate::converts::arrow2::table_field_to_arrow2_field_ignore_inside_nullable;
 use crate::infer_table_schema;
 use crate::Column;
 use crate::DataBlock;
@@ -67,18 +61,11 @@ impl From<&TableSchema> for ArrowSchema {
     }
 }
 
-/// Parquet2 can't dealing with nested type like Tuple(int not null,int null) null, but for type like Tuple(int null,int null) null, it can work.
-///
-/// So when casting from TableSchema to Arrow2 schema, the inner type inherit the nullable property from outer type.
-///
-/// But when casting from TableSchema to Arrow-rs schema, there is no such problem, so the inside nullable is ignored.
-pub fn table_schema_to_arrow_schema_ignore_inside_nullable(schema: &TableSchema) -> ArrowSchema {
+pub fn table_schema_to_arrow_schema(schema: &TableSchema) -> ArrowSchema {
     let fields = schema
         .fields
         .iter()
-        .map(|f| {
-            arrow_field_from_arrow2_field(table_field_to_arrow2_field_ignore_inside_nullable(f))
-        })
+        .map(|f| arrow_field_from_arrow2_field(f.into()))
         .collect::<Vec<_>>();
     ArrowSchema {
         fields: Fields::from(fields),
@@ -106,64 +93,14 @@ impl DataBlock {
     }
 
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
-        let arrow_schema = table_schema_to_arrow_schema_ignore_inside_nullable(table_schema);
+        let arrow_schema = table_schema_to_arrow_schema(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
-        for (entry, arrow_field) in self
-            .convert_to_full()
-            .columns()
-            .iter()
-            .zip(arrow_schema.fields())
-        {
+        for entry in self.convert_to_full().columns().iter() {
             let column = entry.value.to_owned().into_column().unwrap();
             let array = column.into_arrow_rs();
-
-            // Adjust struct array names
-            arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
+            arrays.push(array);
         }
         Ok(RecordBatch::try_new(Arc::new(arrow_schema), arrays)?)
-    }
-
-    fn adjust_nested_array(array: Arc<dyn Array>, arrow_field: &ArrowField) -> Arc<dyn Array> {
-        if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
-            let array = array.as_ref().as_struct();
-            let inner_arrays = array
-                .columns()
-                .iter()
-                .zip(fs.iter())
-                .map(|(array, arrow_field)| {
-                    Self::adjust_nested_array(array.clone(), arrow_field.as_ref())
-                })
-                .collect();
-
-            let array = StructArray::new(fs.clone(), inner_arrays, array.nulls().cloned());
-            Arc::new(array) as _
-        } else if let ArrowDataType::LargeList(f) = arrow_field.data_type() {
-            let array = array.as_ref().as_list::<i64>();
-            let values = Self::adjust_nested_array(array.values().clone(), f.as_ref());
-            let array = LargeListArray::new(
-                f.clone(),
-                array.offsets().clone(),
-                values,
-                array.nulls().cloned(),
-            );
-            Arc::new(array) as _
-        } else if let ArrowDataType::Map(f, ordered) = arrow_field.data_type() {
-            let array = array.as_ref().as_map();
-
-            let entry = Arc::new(array.entries().clone()) as Arc<dyn Array>;
-            let entry = Self::adjust_nested_array(entry, f.as_ref());
-
-            let array = MapArray::new(
-                f.clone(),
-                array.offsets().clone(),
-                entry.as_struct().clone(),
-                array.nulls().cloned(),
-                *ordered,
-            );
-            Arc::new(array) as _
-        } else {
-            array
-        }
     }
 }
 
