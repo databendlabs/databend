@@ -88,7 +88,7 @@ impl RulePushDownPrewhere {
                 }
             }
             _ => {
-                // SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
+                // SubqueryExpr and AggregateFunction will not appear in Filter-Scan
                 return Err(ErrorCode::Unimplemented(format!(
                     "Prewhere don't support expr {:?}",
                     expr
