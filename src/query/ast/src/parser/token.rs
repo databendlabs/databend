@@ -1554,6 +1554,7 @@ impl TokenKind {
             | TokenKind::SOME
             | TokenKind::SEMI
             // | TokenKind::SYMMETRIC
+            | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
