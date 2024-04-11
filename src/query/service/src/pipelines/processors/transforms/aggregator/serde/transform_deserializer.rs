@@ -40,15 +40,15 @@ use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::UnknownMode;
 
-use crate::api::DataPacket;
-use crate::api::ExchangeDeserializeMeta;
-use crate::api::FragmentData;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
+use crate::servers::flight::v1::packets::DataPacket;
+use crate::servers::flight::v1::packets::FragmentData;
 
 pub struct TransformDeserializer<Method: HashMethodBounds, V: Send + Sync + 'static> {
     schema: DataSchemaRef,
