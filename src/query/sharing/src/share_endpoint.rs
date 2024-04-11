@@ -34,6 +34,7 @@ use http::header::AUTHORIZATION;
 use http::header::CONTENT_LENGTH;
 use http::Method;
 use http::Request;
+use log::debug;
 use log::error;
 use opendal::raw::AsyncBody;
 use opendal::raw::HttpClient;
@@ -69,6 +70,11 @@ impl ShareEndpointManager {
         from_tenant: &Tenant,
         to_tenant: Option<&Tenant>,
     ) -> Result<Vec<EndpointConfig>> {
+        debug!(
+            "get_share_endpoint_config from_tenant: {:?}, to_tenant: {:?}",
+            from_tenant, to_tenant
+        );
+
         if let Some(to_tenant) = to_tenant {
             if to_tenant.name() == from_tenant.name() {
                 match ShareTableConfig::share_endpoint_address() {
@@ -89,8 +95,14 @@ impl ShareEndpointManager {
             endpoint: None,
             to_tenant: to_tenant.cloned(),
         };
+
+        debug!("get_share_endpoint_config req: {:?}", req);
+
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let resp = meta_api.get_share_endpoint(req).await?;
+
+        debug!("get_share_endpoint_config resp: {:?}", resp);
+
         let mut share_endpoint_config_vec = Vec::with_capacity(resp.share_endpoint_meta_vec.len());
         for (_, endpoint_meta) in resp.share_endpoint_meta_vec.iter() {
             share_endpoint_config_vec.push(EndpointConfig {
@@ -184,9 +196,15 @@ impl ShareEndpointManager {
         to_tenant: Option<&Tenant>,
         share_name: Option<ShareNameIdent>,
     ) -> Result<Vec<(String, ShareSpec)>> {
+        debug!(
+            "get_inbound_shares from_tenant: {:?}, to_tenant: {:?}, share_name: {:?}",
+            from_tenant, to_tenant, share_name
+        );
+
         let mut endpoint_meta_config_vec = vec![];
         // If `to_tenant` is None, query from same tenant for inbound shares
         if to_tenant.is_none() {
+            debug!("get_inbound_shares to_tenant is None");
             if let Ok(config_vec) = self
                 .get_share_endpoint_config(from_tenant, Some(from_tenant))
                 .await
@@ -194,9 +212,15 @@ impl ShareEndpointManager {
                 endpoint_meta_config_vec.extend(config_vec);
             }
         }
+
         if let Ok(config_vec) = self.get_share_endpoint_config(from_tenant, to_tenant).await {
             endpoint_meta_config_vec.extend(config_vec);
         }
+
+        debug!(
+            "get_inbound_shares endpoint_meta_config_vec: {:?}",
+            endpoint_meta_config_vec
+        );
 
         let mut share_spec_vec = vec![];
         let share_names: Vec<String> = vec![];
@@ -204,8 +228,11 @@ impl ShareEndpointManager {
             let url = format!(
                 "{}tenant/{}/share_spec",
                 endpoint_config.url,
-                from_tenant.display()
+                from_tenant.name()
             );
+
+            debug!("get_inbound_shares url: {:?}", url);
+
             let bs = Bytes::from(serde_json::to_vec(&share_names)?);
             let auth = endpoint_config.token.to_header().await?;
             let requester = GlobalConfig::instance()
@@ -222,10 +249,17 @@ impl ShareEndpointManager {
                 .header(TENANT_HEADER, requester)
                 .body(AsyncBody::Bytes(bs))?;
             let resp = self.client.send(req).await;
+
             match resp {
                 Ok(resp) => {
                     let bs = resp.into_body().bytes().await?;
+
+                    debug!("get_inbound_shares OK resp bytes: {:?}", bs);
+
                     let ret: Vec<ShareSpec> = serde_json::from_slice(&bs)?;
+
+                    debug!("get_inbound_shares OK resp ret: {:?}", ret);
+
                     for share_spec in ret {
                         if let Some(ref share_name) = share_name {
                             if share_spec.name == share_name.share_name()
