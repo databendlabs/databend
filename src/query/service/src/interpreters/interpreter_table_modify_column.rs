@@ -235,6 +235,27 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
+        // if schema is same and only modify comment, don't need to modify schema
+        if schema == new_schema && modify_comment {
+            let table_id = table_info.ident.table_id;
+            let table_version = table_info.ident.seq;
+
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table_version),
+                new_table_meta: table_info.meta,
+                copied_files: None,
+                deduplicated_label: None,
+                update_stream_meta: vec![],
+            };
+
+            catalog
+                .update_table_meta(table.get_table_info(), req)
+                .await?;
+
+            return Ok(PipelineBuildResult::create());
+        }
+
         // if alter column from string to binary, we don't need to rebuild table
         let is_alter_column_string_to_binary =
             schema
@@ -295,7 +316,8 @@ impl ModifyTableColumnInterpreter {
                         && (old_data_type == new_data_type
                             || is_string_to_binary(&old_field.data_type, &new_field.data_type))
                 });
-        if modify_comment || is_alter_column_string_to_binary {
+
+        if is_alter_column_string_to_binary {
             table_info.meta.schema = new_schema.into();
 
             let table_id = table_info.ident.table_id;
