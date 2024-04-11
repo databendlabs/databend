@@ -86,6 +86,26 @@ Some(Var(UInt64(1)))
 
 
 ---------- Input ----------
+LET table := 1;
+RETURN table;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, table(0)
+QUERY SELECT :0, __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, __return_val3(3)
+RETURN __return_val3(3)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+---------- Output ---------
+Some(Var(UInt64(1)))
+
+
+---------- Input ----------
 RETURN;
 ---------- IR -------------
 RETURN

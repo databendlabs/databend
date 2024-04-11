@@ -130,6 +130,13 @@ fn test_script() {
     run_script(
         file,
         r#"
+            LET table := 1;
+            RETURN table;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
             RETURN;
         "#,
     );
