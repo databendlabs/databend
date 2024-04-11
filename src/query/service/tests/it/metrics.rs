@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::metrics::register_counter;
-use databend_query::metrics::MetricService;
+use databend_query::servers::metrics::MetricService;
 use databend_query::servers::Server;
 
 #[tokio::test(flavor = "multi_thread")]

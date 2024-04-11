@@ -52,7 +52,7 @@ use log::warn;
 use rand::thread_rng;
 use rand::Rng;
 
-use crate::api::FlightClient;
+use crate::servers::flight::FlightClient;
 
 pub struct ClusterDiscovery {
     local_id: String,
