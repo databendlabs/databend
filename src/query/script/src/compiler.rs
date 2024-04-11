@@ -158,15 +158,26 @@ impl Compiler {
                         label,
                     )?);
                 }
-                ScriptStatement::ForIn {
+                ScriptStatement::ForInSet {
                     span,
                     variable,
                     resultset,
                     body,
                     label,
                 } => {
-                    output
-                        .append(&mut self.compile_for_in(*span, variable, resultset, body, label)?);
+                    let set = self.lookup_set(resultset)?;
+                    output.append(&mut self.compile_for_in(*span, variable, set, body, label)?);
+                }
+                ScriptStatement::ForInStatement {
+                    span,
+                    variable,
+                    stmt,
+                    body,
+                    label,
+                } => {
+                    let to_set = SetRef::new_internal(*span, "for_in_set", &mut self.ref_allocator);
+                    output.append(&mut self.compile_sql_statement(*span, stmt, to_set.clone())?);
+                    output.append(&mut self.compile_for_in(*span, variable, to_set, body, label)?);
                 }
                 ScriptStatement::WhileLoop {
                     span,
@@ -438,7 +449,7 @@ impl Compiler {
         &mut self,
         span: Span,
         variable: &Identifier,
-        resultset: &Identifier,
+        set: SetRef,
         body: &[ScriptStatement],
         label: &Option<Identifier>,
     ) -> Result<Vec<ScriptIR>> {
@@ -452,7 +463,6 @@ impl Compiler {
         };
 
         // ITER resultset, iter
-        let set = self.lookup_set(resultset)?;
         let iter = IterRef::new(variable.span, &variable.name, &mut self.ref_allocator);
         self.declare_ref(variable, RefItem::Iter(iter.clone()))?;
         output.push(ScriptIR::Iter {

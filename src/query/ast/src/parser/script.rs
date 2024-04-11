@@ -171,16 +171,30 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             label,
         },
     );
-    let for_in_stmt = map(
+    let for_in_set_stmt = map(
         consumed(rule! {
             FOR ~ ^#ident ~ ^IN ~ #ident ~ ^DO
             ~ ^#semicolon_terminated_list1(script_stmt)
             ~ ^END ~ ^FOR ~ #ident?
         }),
-        |(span, (_, variable, _, resultset, _, body, _, _, label))| ScriptStatement::ForIn {
+        |(span, (_, variable, _, resultset, _, body, _, _, label))| ScriptStatement::ForInSet {
             span: transform_span(span.tokens),
             variable,
             resultset,
+            body,
+            label,
+        },
+    );
+    let for_in_stmt_stmt = map(
+        consumed(rule! {
+            FOR ~ ^#ident ~ ^IN ~ ^#statement_body ~ ^DO
+            ~ ^#semicolon_terminated_list1(script_stmt)
+            ~ ^END ~ ^FOR ~ #ident?
+        }),
+        |(span, (_, variable, _, stmt, _, body, _, _, label))| ScriptStatement::ForInStatement {
+            span: transform_span(span.tokens),
+            variable,
+            stmt,
             body,
             label,
         },
@@ -295,7 +309,8 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         | #return_stmt_stmt
         | #return_stmt
         | #for_loop_stmt
-        | #for_in_stmt
+        | #for_in_set_stmt
+        | #for_in_stmt_stmt
         | #while_loop_stmt
         | #repeat_loop_stmt
         | #loop_stmt

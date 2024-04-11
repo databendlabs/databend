@@ -228,6 +228,48 @@ Some(Var(UInt64(3)))
 
 
 ---------- Input ----------
+LET sum := 0;
+FOR row IN SELECT * FROM numbers(3) DO
+    sum := sum + row.number;
+END FOR;
+RETURN sum;
+---------- IR -------------
+QUERY SELECT 0, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, sum(0)
+QUERY SELECT * FROM numbers(3), __for_in_set3(3)
+ITER __for_in_set3(3), row(6)
+__LOOP4(4):
+JUMP_IF_ENDED row(6), __LOOP_END5(5)
+READ row(6), "number", __row.number7(7)
+QUERY SELECT :0 + :7, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, sum(0)
+NEXT row(6)
+GOTO __LOOP4(4)
+__LOOP_END5(5):
+QUERY SELECT :0, __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, __return_val10(10)
+RETURN __return_val10(10)
+---------- QUERY ---------
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT * FROM numbers(3)
+BLOCK: (number): (0), (1), (2)
+QUERY: SELECT 0 + 0
+BLOCK: ($0): (0)
+QUERY: SELECT 0 + 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 2
+BLOCK: ($0): (3)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+---------- Output ---------
+Some(Var(UInt64(3)))
+
+
+---------- Input ----------
 LET x RESULTSET := SELECT * FROM numbers(3);
 LET sum := 0;
 FOR x IN x DO

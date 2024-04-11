@@ -447,7 +447,7 @@ FOR rec IN resultset DO
     CONTINUE;
 END FOR label1
 ---------- AST ------------
-ForIn {
+ForInSet {
     span: Some(
         0..52,
     ),
@@ -479,6 +479,116 @@ ForIn {
         Identifier {
             span: Some(
                 46..52,
+            ),
+            name: "label1",
+            quote: None,
+            is_hole: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+FOR rec IN SELECT * FROM numbers(100) DO
+    CONTINUE;
+END FOR label1
+---------- Output ---------
+FOR rec IN
+    SELECT * FROM numbers(100)
+DO
+    CONTINUE;
+END FOR label1
+---------- AST ------------
+ForInStatement {
+    span: Some(
+        0..69,
+    ),
+    variable: Identifier {
+        span: Some(
+            4..7,
+        ),
+        name: "rec",
+        quote: None,
+        is_hole: false,
+    },
+    stmt: Query(
+        Query {
+            span: Some(
+                11..37,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        11..37,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        18..19,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: Some(
+                                25..37,
+                            ),
+                            lateral: false,
+                            name: Identifier {
+                                span: Some(
+                                    25..32,
+                                ),
+                                name: "numbers",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            params: [
+                                Literal {
+                                    span: Some(
+                                        33..36,
+                                    ),
+                                    value: UInt64(
+                                        100,
+                                    ),
+                                },
+                            ],
+                            named_params: [],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+    body: [
+        Continue {
+            span: Some(
+                45..53,
+            ),
+            label: None,
+        },
+    ],
+    label: Some(
+        Identifier {
+            span: Some(
+                63..69,
             ),
             name: "label1",
             quote: None,

@@ -168,6 +168,16 @@ fn test_script() {
     run_script(
         file,
         r#"
+            LET sum := 0;
+            FOR row IN SELECT * FROM numbers(3) DO
+                sum := sum + row.number;
+            END FOR;
+            RETURN sum;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
             LET x RESULTSET := SELECT * FROM numbers(3);
             LET sum := 0;
             FOR x IN x DO

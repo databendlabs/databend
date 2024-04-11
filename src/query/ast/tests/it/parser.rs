@@ -1143,6 +1143,11 @@ fn test_script() {
             END FOR label1
         "#,
         r#"
+            FOR rec IN SELECT * FROM numbers(100) DO
+                CONTINUE;
+            END FOR label1
+        "#,
+        r#"
             WHILE counter < maximum_count DO
                 CONTINUE label1;
             END WHILE label1

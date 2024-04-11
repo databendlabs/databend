@@ -26,6 +26,34 @@ $$;
 ----
 2
 
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+----
+4950
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET x RESULTSET := SELECT * FROM numbers(100);
+    LET sum := 0;
+    FOR x IN x DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+----
+4950
+
 query error start must be less than or equal to end when step is positive
 EXECUTE IMMEDIATE $$
 BEGIN

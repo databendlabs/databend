@@ -144,10 +144,17 @@ pub enum ScriptStatement {
         body: Vec<ScriptStatement>,
         label: Option<Identifier>,
     },
-    ForIn {
+    ForInSet {
         span: Span,
         variable: Identifier,
         resultset: Identifier,
+        body: Vec<ScriptStatement>,
+        label: Option<Identifier>,
+    },
+    ForInStatement {
+        span: Span,
+        variable: Identifier,
+        stmt: Statement,
         body: Vec<ScriptStatement>,
         label: Option<Identifier>,
     },
@@ -232,7 +239,7 @@ impl Display for ScriptStatement {
                 }
                 Ok(())
             }
-            ScriptStatement::ForIn {
+            ScriptStatement::ForInSet {
                 variable,
                 resultset,
                 body,
@@ -240,6 +247,33 @@ impl Display for ScriptStatement {
                 ..
             } => {
                 writeln!(f, "FOR {variable} IN {resultset} DO")?;
+                for stmt in body {
+                    writeln!(
+                        f,
+                        "{}",
+                        indent::indent_all_by(INDENT_DEPTH, format!("{stmt};"))
+                    )?;
+                }
+                write!(f, "END FOR")?;
+                if let Some(label) = label {
+                    write!(f, " {label}")?;
+                }
+                Ok(())
+            }
+            ScriptStatement::ForInStatement {
+                variable,
+                stmt,
+                body,
+                label,
+                ..
+            } => {
+                writeln!(f, "FOR {variable} IN")?;
+                writeln!(
+                    f,
+                    "{}",
+                    indent::indent_all_by(INDENT_DEPTH, format!("{stmt}"))
+                )?;
+                writeln!(f, "DO")?;
                 for stmt in body {
                     writeln!(
                         f,
