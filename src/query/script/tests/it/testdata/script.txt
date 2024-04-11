@@ -428,6 +428,56 @@ Some(Var(UInt64(3)))
 
 
 ---------- Input ----------
+LET x := 1;
+REPEAT
+    x := x + 1;
+    LET y := 3;
+UNTIL x = y
+END REPEAT;
+RETURN x;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+__LOOP3(3):
+QUERY SELECT :0 + 1, __expr_result5(5)
+ITER __expr_result5(5), __expr_result_iter6(6)
+READ __expr_result_iter6(6), $0, x(0)
+QUERY SELECT 3, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, y(7)
+QUERY SELECT is_true(:0 = :7), __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, __break_condition10(10)
+JUMP_IF_TRUE __break_condition10(10), __LOOP_END4(4)
+GOTO __LOOP3(3)
+__LOOP_END4(4):
+QUERY SELECT :0, __expr_result14(14)
+ITER __expr_result14(14), __expr_result_iter15(15)
+READ __expr_result_iter15(15), $0, __return_val13(13)
+RETURN __return_val13(13)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 1
+BLOCK: ($0): (2)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+QUERY: SELECT is_true(2 = 3)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT 2 + 1
+BLOCK: ($0): (3)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+QUERY: SELECT is_true(3 = 3)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+---------- Output ---------
+Some(Var(UInt64(3)))
+
+
+---------- Input ----------
 LOOP
     LET x := 0;
     LOOP

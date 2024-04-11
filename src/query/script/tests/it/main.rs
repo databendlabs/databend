@@ -218,6 +218,18 @@ fn test_script() {
     run_script(
         file,
         r#"
+            LET x := 1;
+            REPEAT
+                x := x + 1;
+                LET y := 3;
+            UNTIL x = y
+            END REPEAT;
+            RETURN x;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
             LOOP
                 LET x := 0;
                 LOOP
