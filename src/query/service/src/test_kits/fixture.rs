@@ -19,7 +19,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
-use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::cluster_info::Warehouse;
 use databend_common_catalog::table::AppendMode;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
@@ -70,7 +70,6 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::clusters::ClusterDiscovery;
-use crate::clusters::ClusterHelper;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -221,7 +220,7 @@ impl TestFixture {
                 .await?;
             info!(
                 "Databend query unit test setup registered:{:?} to metasrv:{:?}.",
-                config.query.cluster_id, config.meta.endpoints
+                config.query.warehouse_id, config.meta.endpoints
             );
         }
 
@@ -238,7 +237,7 @@ impl TestFixture {
     }
 
     /// returns new QueryContext of default session with cluster
-    pub async fn new_query_ctx_with_cluster(
+    pub async fn new_query_ctx_with_warehouse(
         &self,
         desc: ClusterDescriptor,
     ) -> Result<Arc<QueryContext>> {
@@ -247,7 +246,7 @@ impl TestFixture {
 
         let dummy_query_context = QueryContext::create_from_shared(QueryContextShared::try_create(
             self.default_session.clone(),
-            Cluster::create(nodes, local_id),
+            Warehouse::create(nodes, local_id),
         )?);
 
         dummy_query_context.get_settings().set_max_threads(8)?;

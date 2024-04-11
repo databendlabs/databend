@@ -63,7 +63,7 @@ impl CascadesOptimizer {
             RuleSet::create()
         };
 
-        let cluster_peers = ctx.get_cluster().nodes.len();
+        let cluster_peers = ctx.get_warehouse().nodes.len();
         let dop = ctx.get_settings().get_max_threads()? as usize;
         let cost_model = Box::new(
             DefaultCostModel::new(ctx.clone())?

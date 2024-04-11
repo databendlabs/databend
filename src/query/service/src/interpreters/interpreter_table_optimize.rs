@@ -180,7 +180,7 @@ impl OptimizeTableInterpreter {
             .await?;
 
         let catalog_info = catalog.info();
-        let compact_is_distributed = (!self.ctx.get_cluster().is_empty())
+        let compact_is_distributed = (!self.ctx.get_warehouse().is_empty())
             && self.ctx.get_settings().get_enable_distributed_compact()?;
 
         // build the compact pipeline.

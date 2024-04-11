@@ -53,7 +53,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::clusters::Cluster;
+use crate::clusters::Warehouse;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
@@ -82,7 +82,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: Arc<Cluster>,
+    pub(in crate::sessions) warehouse_cache: Arc<Warehouse>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
@@ -130,12 +130,12 @@ pub struct QueryContextShared {
 impl QueryContextShared {
     pub fn try_create(
         session: Arc<Session>,
-        cluster_cache: Arc<Cluster>,
+        cluster_cache: Arc<Warehouse>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
             catalog_manager: CatalogManager::instance(),
             session,
-            cluster_cache,
+            warehouse_cache: cluster_cache,
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             total_scan_values: Arc::new(Progress::create()),
@@ -227,8 +227,8 @@ impl QueryContextShared {
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
-    pub fn get_cluster(&self) -> Arc<Cluster> {
-        self.cluster_cache.clone()
+    pub fn get_warehouse(&self) -> Arc<Warehouse> {
+        self.warehouse_cache.clone()
     }
 
     pub fn get_current_catalog(&self) -> String {

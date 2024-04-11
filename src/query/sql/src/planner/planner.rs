@@ -169,7 +169,7 @@ impl Planner {
 
                 // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
                 let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
-                    .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
+                    .with_enable_distributed_optimization(!self.ctx.get_warehouse().is_empty())
                     .with_enable_join_reorder(unsafe {
                         !self.ctx.get_settings().get_disable_join_reorder()?
                     })

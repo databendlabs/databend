@@ -53,7 +53,7 @@ impl SyncSystemTable for ProcessesTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let processes_info = ctx.get_processes_info();
 
-        let local_node = ctx.get_cluster().local_id.clone();
+        let local_node = ctx.get_warehouse().local_id.clone();
 
         let mut nodes = Vec::with_capacity(processes_info.len());
         let mut processes_id = Vec::with_capacity(processes_info.len());

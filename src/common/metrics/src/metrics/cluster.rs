@@ -26,17 +26,17 @@ static CLUSTER_CLUSTER_ERROR_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, St
 static CLUSTER_DISCOVERED_NODE_GAUGE: LazyLock<FamilyGauge<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_gauge_family("cluster_discovered_node"));
 
-pub fn metric_incr_cluster_heartbeat_count(
+pub fn metric_incr_warehouse_heartbeat_count(
     local_id: &str,
     flight_address: &str,
-    cluster_id: &str,
+    warehouse_id: &str,
     tenant_id: &str,
     result: &str,
 ) {
     let labels = &vec![
         ("local_id", String::from(local_id)),
         ("flight_address", String::from(flight_address)),
-        ("cluster_id", cluster_id.to_string()),
+        ("cluster_id", warehouse_id.to_string()),
         ("tenant_id", tenant_id.to_string()),
         ("result", result.to_string()),
     ];

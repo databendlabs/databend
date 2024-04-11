@@ -29,7 +29,6 @@ use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
-use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -46,10 +45,10 @@ impl ExchangeSink {
 
         match params {
             ExchangeParams::MergeExchange(params) => {
-                if params.destination_id == ctx.get_cluster().local_id() {
+                if params.destination_id == ctx.get_warehouse().local_id() {
                     return Err(ErrorCode::Internal(format!(
                         "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
-                        ctx.get_cluster().local_id(),
+                        ctx.get_warehouse().local_id(),
                         params.destination_id,
                         params.fragment_id
                     )));
@@ -85,7 +84,7 @@ impl ExchangeSink {
                     params.ignore_exchange,
                     &params.destination_id,
                     params.fragment_id,
-                    &ctx.get_cluster().local_id(),
+                    &ctx.get_warehouse().local_id(),
                 )]));
                 Ok(())
             }
@@ -103,7 +102,7 @@ impl ExchangeSink {
                         false,
                         destination_id,
                         params.fragment_id,
-                        &ctx.get_cluster().local_id(),
+                        &ctx.get_warehouse().local_id(),
                     ));
                 }
 

@@ -51,13 +51,13 @@ impl PhysicalPlanBuilder {
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let input_plan = self.build(s_expr.child(0)?, required).await?;
-        if self.ctx.get_cluster().is_empty() {
+        if self.ctx.get_warehouse().is_empty() {
             return Err(ErrorCode::CannotConnectNode(
                 "there is only one node when build distributed merge into",
             ));
         }
         let mut cluster_index = BTreeMap::new();
-        for (id, node) in self.ctx.get_cluster().nodes.iter().enumerate() {
+        for (id, node) in self.ctx.get_warehouse().nodes.iter().enumerate() {
             cluster_index.insert(node.id.clone(), id);
         }
         let input_schema = input_plan.output_schema()?;

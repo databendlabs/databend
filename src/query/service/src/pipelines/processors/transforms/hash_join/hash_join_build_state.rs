@@ -151,7 +151,7 @@ impl HashJoinBuildState {
         let mut enable_inlist_runtime_filter = false;
         let mut enable_min_max_runtime_filter = false;
         if supported_join_type_for_runtime_filter(&hash_join_state.hash_join_desc.join_type) {
-            let is_cluster = !ctx.get_cluster().is_empty();
+            let is_cluster = !ctx.get_warehouse().is_empty();
             // For cluster, only support runtime filter for broadcast join.
             let is_broadcast_join = hash_join_state.hash_join_desc.broadcast;
             if !is_cluster || is_broadcast_join {

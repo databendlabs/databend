@@ -312,7 +312,7 @@ impl PlanFragment {
         };
         let partitions = &plan.segments;
         let executors = Fragmenter::get_executors(ctx.clone());
-        let local_id = ctx.get_cluster().local_id.clone();
+        let local_id = ctx.get_warehouse().local_id.clone();
         match ctx.get_settings().get_replace_into_shuffle_strategy()? {
             ReplaceIntoShuffleStrategy::SegmentLevelShuffling => {
                 let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;

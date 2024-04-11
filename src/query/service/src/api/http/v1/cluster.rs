@@ -20,7 +20,6 @@ use poem::http::StatusCode;
 use poem::web::IntoResponse;
 use poem::web::Json;
 
-use crate::clusters::ClusterHelper;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -48,5 +47,5 @@ async fn list_nodes(sessions: &Arc<SessionManager>) -> Result<Vec<Arc<NodeInfo>>
         .create_session(SessionType::HTTPAPI("WatchCluster".to_string()))
         .await?;
     let watch_cluster_context = watch_cluster_session.create_query_context().await?;
-    Ok(watch_cluster_context.get_cluster().get_nodes())
+    Ok(watch_cluster_context.get_warehouse().get_nodes())
 }

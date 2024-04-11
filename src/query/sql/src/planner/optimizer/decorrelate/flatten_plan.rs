@@ -92,7 +92,7 @@ impl SubqueryRewriter {
                 }
                 .into(),
             ));
-            if self.ctx.get_cluster().is_empty() {
+            if self.ctx.get_warehouse().is_empty() {
                 // Wrap logical get with distinct to eliminate duplicates rows.
                 let mut group_items = Vec::with_capacity(self.derived_columns.len());
                 for (index, column_index) in self.derived_columns.values().cloned().enumerate() {

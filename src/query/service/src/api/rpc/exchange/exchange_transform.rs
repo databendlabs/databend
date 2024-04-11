@@ -27,7 +27,6 @@ use crate::api::rpc::exchange::exchange_source::via_exchange_source;
 use crate::api::rpc::exchange::exchange_source_reader::create_reader_item;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
 use crate::api::ExchangeInjector;
-use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;
@@ -66,7 +65,7 @@ impl ExchangeTransform {
                             false,
                             destination_id,
                             params.fragment_id,
-                            &ctx.get_cluster().local_id(),
+                            &ctx.get_warehouse().local_id(),
                         ),
                     });
                 }

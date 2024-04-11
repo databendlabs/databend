@@ -31,7 +31,7 @@ flight_sql_handler_host = "0.0.0.0"
 flight_sql_handler_port = 8900
 
 tenant_id = "default"
-cluster_id = "default"
+warehouse_id = "default"
 
 table_engine_memory_enabled = true
 

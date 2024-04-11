@@ -46,7 +46,7 @@ impl SyncSystemTable for ClustersTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let cluster_nodes = ctx.get_cluster().nodes.clone();
+        let cluster_nodes = ctx.get_warehouse().nodes.clone();
 
         let mut names = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
         let mut clusters = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
@@ -57,12 +57,12 @@ impl SyncSystemTable for ClustersTable {
         );
         let mut versions = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
 
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let warehouse_id = GlobalConfig::instance().query.warehouse_id.clone();
         for cluster_node in &cluster_nodes {
             let (ip, port) = cluster_node.ip_port()?;
 
             names.push(Scalar::String(cluster_node.id.clone()).as_ref());
-            clusters.push(Scalar::String(cluster_id.clone()).as_ref());
+            clusters.push(Scalar::String(warehouse_id.clone()).as_ref());
             addresses.push(Scalar::String(ip).as_ref());
             addresses_port.push(Scalar::Number(NumberScalar::UInt16(port)).as_ref());
             versions.push(Scalar::String(cluster_node.binary_version.clone()).as_ref());

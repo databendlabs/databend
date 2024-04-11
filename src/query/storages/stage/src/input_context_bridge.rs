@@ -140,7 +140,7 @@ impl StageTable {
             projection,
             self.table_info.default_values.clone(),
         )?);
-        debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
+        debug!("start copy splits feeder in {}", ctx.get_warehouse().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         Ok(())
     }

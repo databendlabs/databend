@@ -68,11 +68,11 @@ impl PipelineBuilder {
         self.build_pipeline(&add_row_number.input)?;
         let node_index = add_row_number
             .cluster_index
-            .get(&self.ctx.get_cluster().local_id);
+            .get(&self.ctx.get_warehouse().local_id);
         if node_index.is_none() {
             return Err(ErrorCode::NotFoundClusterNode(format!(
                 "can't find out {} when build distributed merge into pipeline",
-                self.ctx.get_cluster().local_id
+                self.ctx.get_warehouse().local_id
             )));
         }
         let node_index = *node_index.unwrap() as u16;

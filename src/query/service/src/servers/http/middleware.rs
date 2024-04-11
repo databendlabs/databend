@@ -206,7 +206,7 @@ impl<E> HTTPSessionEndpoint<E> {
             let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
             session.set_current_tenant(tenant);
         }
-        let node_id = ctx.get_cluster().local_id.clone();
+        let node_id = ctx.get_warehouse().local_id.clone();
 
         self.auth_manager
             .auth(ctx.get_current_session(), &credential)

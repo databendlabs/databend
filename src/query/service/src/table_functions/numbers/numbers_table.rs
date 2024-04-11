@@ -161,7 +161,7 @@ impl Table for NumbersTable {
             fake_partitions as usize,
         );
 
-        let cluster = ctx.get_cluster();
+        let cluster = ctx.get_warehouse();
         let mut worker_num = ctx.get_settings().get_max_threads()?;
 
         worker_num = match worker_num > fake_partitions {

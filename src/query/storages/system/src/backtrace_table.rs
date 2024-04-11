@@ -51,7 +51,7 @@ impl SyncSystemTable for BacktraceTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let local_node = ctx.get_cluster().local_id.clone();
+        let local_node = ctx.get_warehouse().local_id.clone();
         let (tasks, polling_tasks) = get_all_tasks(false);
         let tasks_size = tasks.len() + polling_tasks.len();
 

@@ -18,7 +18,7 @@ use databend_common_meta_types::NodeInfo;
 
 #[async_trait::async_trait]
 pub trait ClusterApi: Sync + Send {
-    // Add a new node info to /tenant/cluster_id/node-name.
+    // Add a new node info to /tenant/warehouse_id/node-name.
     async fn add_node(&self, node: NodeInfo) -> Result<u64>;
 
     // Get the tenant's cluster all nodes.

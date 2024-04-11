@@ -2998,7 +2998,6 @@ dependencies = [
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "futures",
  "geo",
- "geos",
  "geozero",
  "goldenfile",
  "hex",

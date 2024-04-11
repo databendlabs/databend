@@ -35,7 +35,7 @@ echo 'Start databend-query...'
 cat <<EOF >config.toml
 [query]
 tenant_id = "benchmark"
-cluster_id = "${BENCHMARK_ID}"
+warehouse_id = "${BENCHMARK_ID}"
 [[query.users]]
 name = "root"
 auth_type = "no_password"

@@ -90,7 +90,7 @@ impl LockManager {
         lock: &T,
     ) -> Result<Option<LockGuard>> {
         let user = ctx.get_current_user()?.name;
-        let node = ctx.get_cluster().local_id.clone();
+        let node = ctx.get_warehouse().local_id.clone();
         let query_id = ctx.get_current_session_id();
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
 

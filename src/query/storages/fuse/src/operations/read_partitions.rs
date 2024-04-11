@@ -82,7 +82,7 @@ impl FuseTable {
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
 
                 let mut nodes_num = 1;
-                let cluster = ctx.get_cluster();
+                let cluster = ctx.get_warehouse();
 
                 if !cluster.is_empty() {
                     nodes_num = cluster.nodes.len();

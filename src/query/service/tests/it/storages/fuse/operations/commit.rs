@@ -22,7 +22,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::cluster_info::Warehouse;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -573,7 +573,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_cluster(&self) -> Arc<Cluster> {
+    fn get_warehouse(&self) -> Arc<Warehouse> {
         todo!()
     }
 

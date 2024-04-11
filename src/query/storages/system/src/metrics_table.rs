@@ -52,7 +52,7 @@ impl SyncSystemTable for MetricsTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let local_id = ctx.get_cluster().local_id.clone();
+        let local_id = ctx.get_warehouse().local_id.clone();
 
         let mut samples = GLOBAL_METRICS_REGISTRY.dump_sample()?;
         samples.extend(self.custom_metric_samples()?);

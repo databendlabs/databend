@@ -1379,6 +1379,9 @@ pub struct QueryConfig {
     pub cluster_id: String,
 
     #[clap(long, value_name = "VALUE", default_value_t)]
+    pub warehouse_id: String,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub num_cpus: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
@@ -1673,7 +1676,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
         Ok(InnerQueryConfig {
             tenant_id: Tenant::new_or_err(self.tenant_id, "")
                 .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
-            cluster_id: self.cluster_id,
+            warehouse_id: self.cluster_id,
             node_id: "".to_string(),
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
@@ -1753,7 +1756,8 @@ impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
         Self {
             tenant_id: inner.tenant_id.name().to_string(),
-            cluster_id: inner.cluster_id,
+            cluster_id: inner.warehouse_id.clone(),
+            warehouse_id: inner.warehouse_id,
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,

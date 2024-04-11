@@ -103,7 +103,7 @@ use xorf::BinaryFuse16;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
-use crate::clusters::Cluster;
+use crate::clusters::Warehouse;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
@@ -661,8 +661,8 @@ impl TableContext for QueryContext {
         self.shared.get_settings()
     }
 
-    fn get_cluster(&self) -> Arc<Cluster> {
-        self.shared.get_cluster()
+    fn get_warehouse(&self) -> Arc<Warehouse> {
+        self.shared.get_warehouse()
     }
 
     // Get all the processes list info.

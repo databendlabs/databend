@@ -40,7 +40,7 @@ pub fn get_background_service_user(conf: &InnerConfig) -> UserInfo {
         format!(
             "{}-{}-background-svc",
             conf.query.tenant_id.name(),
-            conf.query.cluster_id.clone()
+            conf.query.warehouse_id.clone()
         )
         .as_str(),
         "0.0.0.0",

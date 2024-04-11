@@ -182,7 +182,7 @@ impl BlockCompactMutator {
         ));
         metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time);
 
-        let cluster = self.ctx.get_cluster();
+        let cluster = self.ctx.get_warehouse();
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
             let column_ids = self

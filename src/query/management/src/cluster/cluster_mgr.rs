@@ -42,7 +42,7 @@ impl ClusterMgr {
     pub fn create(
         metastore: MetaStore,
         tenant: &str,
-        cluster_id: &str,
+        warehouse_id: &str,
         lift_time: Duration,
     ) -> Result<Self> {
         if tenant.is_empty() {
@@ -58,7 +58,7 @@ impl ClusterMgr {
                 "{}/{}/{}/databend_query",
                 CLUSTER_API_KEY_PREFIX,
                 escape_for_key(tenant)?,
-                escape_for_key(cluster_id)?
+                warehouse_id,
             ),
         })
     }

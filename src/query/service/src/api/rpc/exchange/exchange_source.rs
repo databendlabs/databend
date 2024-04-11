@@ -28,7 +28,6 @@ use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_source_reader::ExchangeSourceReader;
 use crate::api::ExchangeInjector;
-use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 
 /// Add Exchange Source to the pipeline.
@@ -45,10 +44,10 @@ pub fn via_exchange_source(
     //                             ...          --->        ...             --->        ...
     //                         ExchangeSource   --->  DeserializeTransform  --->  DownstreamTransform
 
-    if params.destination_id != ctx.get_cluster().local_id() {
+    if params.destination_id != ctx.get_warehouse().local_id() {
         return Err(ErrorCode::Internal(format!(
             "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
-            ctx.get_cluster().local_id(),
+            ctx.get_warehouse().local_id(),
             params.destination_id,
             params.fragment_id
         )));
@@ -79,7 +78,7 @@ pub fn via_exchange_source(
                 output.clone(),
                 flight_exchange,
                 &destination_id,
-                &ctx.get_cluster().local_id(),
+                &ctx.get_warehouse().local_id(),
                 params.fragment_id,
             ),
             vec![],

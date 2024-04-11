@@ -90,7 +90,7 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
     }
 
     let tenant = conf.query.tenant_id.clone();
-    let cluster_id = conf.query.cluster_id.clone();
+    let warehouse_id = conf.query.warehouse_id.clone();
     let flight_addr = conf.query.flight_api_address.clone();
 
     let mut _sentry_guard = None;
@@ -108,7 +108,7 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
             ..Default::default()
         })));
         sentry::configure_scope(|scope| scope.set_tag("tenant", tenant.name()));
-        sentry::configure_scope(|scope| scope.set_tag("cluster_id", cluster_id));
+        sentry::configure_scope(|scope| scope.set_tag("cluster_id", warehouse_id));
         sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }
 
@@ -228,7 +228,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             .await?;
         info!(
             "Databend query has been registered:{:?} to metasrv:{:?}.",
-            conf.query.cluster_id, conf.meta.endpoints
+            conf.query.warehouse_id, conf.meta.endpoints
         );
     }
 

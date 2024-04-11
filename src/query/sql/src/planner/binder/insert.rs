@@ -171,7 +171,7 @@ impl Binder {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
                 let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
-                    .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
+                    .with_enable_distributed_optimization(!self.ctx.get_warehouse().is_empty());
 
                 if let Plan::Query { s_expr, .. } = &select_plan {
                     if !self.check_sexpr_top(s_expr)? {

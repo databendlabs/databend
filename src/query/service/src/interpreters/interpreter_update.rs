@@ -264,7 +264,7 @@ impl UpdateInterpreter {
                 )
                 .await?;
 
-            let is_distributed = !self.ctx.get_cluster().is_empty();
+            let is_distributed = !self.ctx.get_warehouse().is_empty();
             let physical_plan = Self::build_physical_plan(
                 filters,
                 update_list,

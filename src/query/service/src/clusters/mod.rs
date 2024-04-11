@@ -14,6 +14,6 @@
 
 mod cluster;
 
-pub use cluster::Cluster;
+pub use cluster::Warehouse;
 pub use cluster::ClusterDiscovery;
 pub use cluster::ClusterHelper;

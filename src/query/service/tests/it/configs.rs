@@ -708,7 +708,7 @@ fn test_override_config() -> Result<()> {
 
 [query]
 tenant_id = "tenant_id_from_file"
-cluster_id = ""
+warehouse_id = ""
 num_cpus = 0
 mysql_handler_host = "127.0.0.1"
 mysql_handler_port = 3307

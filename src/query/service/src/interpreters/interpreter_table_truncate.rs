@@ -93,7 +93,7 @@ impl Interpreter for TruncateTableInterpreter {
             let settings = self.ctx.get_settings();
             let timeout = settings.get_flight_client_timeout()?;
             let conf = GlobalConfig::instance();
-            let cluster = self.ctx.get_cluster();
+            let cluster = self.ctx.get_warehouse();
             for node_info in &cluster.nodes {
                 if node_info.id != cluster.local_id {
                     let truncate_packet = TruncateTablePacket::create(

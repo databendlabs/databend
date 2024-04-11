@@ -106,7 +106,7 @@ impl PipelineBuilder {
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
 
-        let in_cluster = !self.ctx.get_cluster().is_empty();
+        let in_cluster = !self.ctx.get_warehouse().is_empty();
 
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
@@ -134,11 +134,11 @@ impl PipelineBuilder {
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config = if self.ctx.get_cluster().is_empty() {
+        let partial_agg_config = if self.ctx.get_warehouse().is_empty() {
             HashTableConfig::default().with_partial(true, max_threads as usize)
         } else {
             HashTableConfig::default()
-                .cluster_with_partial(true, self.ctx.get_cluster().nodes.len())
+                .cluster_with_partial(true, self.ctx.get_warehouse().nodes.len())
         };
 
         self.main_pipeline.add_transform(|input, output| {
@@ -169,7 +169,7 @@ impl PipelineBuilder {
         })?;
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if self.ctx.get_cluster().is_empty() {
+        if self.ctx.get_warehouse().is_empty() {
             let operator = DataOperator::instance().operator();
             let location_prefix = query_spill_prefix(self.ctx.get_tenant().name());
             self.main_pipeline.add_transform(|input, output| {
@@ -220,7 +220,7 @@ impl PipelineBuilder {
         let enable_experimental_aggregate_hashtable = self
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
-        let in_cluster = !self.ctx.get_cluster().is_empty();
+        let in_cluster = !self.ctx.get_warehouse().is_empty();
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,

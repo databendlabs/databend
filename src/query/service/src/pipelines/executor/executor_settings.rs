@@ -39,7 +39,7 @@ impl ExecutorSettings {
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
-            executor_node_id: ctx.get_cluster().local_id.clone(),
+            executor_node_id: ctx.get_warehouse().local_id.clone(),
         })
     }
 }

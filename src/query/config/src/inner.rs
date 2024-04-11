@@ -149,8 +149,8 @@ impl Debug for InnerConfig {
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     pub tenant_id: Tenant,
-    /// ID for construct the cluster.
-    pub cluster_id: String,
+    /// ID for construct the warehouse.
+    pub warehouse_id: String,
     // ID for the query node.
     // This only initialized when InnerConfig::load().
     pub node_id: String,
@@ -238,7 +238,7 @@ impl Default for QueryConfig {
     fn default() -> Self {
         Self {
             tenant_id: Tenant::new_or_err("admin", "default()").unwrap(),
-            cluster_id: "".to_string(),
+            warehouse_id: "".to_string(),
             node_id: "".to_string(),
             num_cpus: 0,
             mysql_handler_host: "127.0.0.1".to_string(),

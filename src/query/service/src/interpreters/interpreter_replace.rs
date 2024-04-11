@@ -168,7 +168,7 @@ impl ReplaceInterpreter {
             ))
         });
 
-        let is_multi_node = !self.ctx.get_cluster().is_empty();
+        let is_multi_node = !self.ctx.get_warehouse().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
         let is_distributed = is_multi_node
             && !is_value_source

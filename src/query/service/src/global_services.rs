@@ -57,8 +57,8 @@ impl GlobalServices {
 
     #[async_backtrace::framed]
     pub async fn init_with(config: &InnerConfig) -> Result<()> {
-        // app name format: node_id[0..7]@cluster_id
-        let app_name_shuffle = format!("databend-query-{}", config.query.cluster_id);
+        // app name format: node_id[0..7]@warehouse_id
+        let app_name_shuffle = format!("databend-query-{}", config.query.warehouse_id);
 
         // The order of initialization is very important
         // 1. global config init.
@@ -71,7 +71,7 @@ impl GlobalServices {
             "tenant_id".to_string(),
             config.query.tenant_id.name().to_string(),
         );
-        log_labels.insert("cluster_id".to_string(), config.query.cluster_id.clone());
+        log_labels.insert("cluster_id".to_string(), config.query.warehouse_id.clone());
         log_labels.insert("node_id".to_string(), config.query.node_id.clone());
         GlobalLogger::init(&app_name_shuffle, &config.log, log_labels);
 

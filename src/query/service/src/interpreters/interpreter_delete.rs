@@ -104,7 +104,7 @@ impl Interpreter for DeleteInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "delete_interpreter_execute");
 
-        let is_distributed = !self.ctx.get_cluster().is_empty();
+        let is_distributed = !self.ctx.get_warehouse().is_empty();
 
         let catalog_name = self.plan.catalog_name.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -260,7 +260,7 @@ impl Interpreter for DeleteInterpreter {
             }
         }
 
-        let cluster = self.ctx.get_cluster();
+        let cluster = self.ctx.get_warehouse();
         let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
         let partitions = fuse_table
             .mutation_read_partitions(

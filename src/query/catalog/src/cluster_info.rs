@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use databend_common_meta_types::NodeInfo;
 
-pub struct Cluster {
+pub struct Warehouse {
     pub local_id: String,
     pub nodes: Vec<Arc<NodeInfo>>,
 }
 
-impl Cluster {
+impl Warehouse {
     /// If this cluster is empty?
     ///
     /// # Note
@@ -39,5 +39,21 @@ impl Cluster {
     /// defined in `databend-query`.
     pub fn is_empty(&self) -> bool {
         self.nodes.len() <= 1
+    }
+
+    pub fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Warehouse> {
+        Arc::new(Warehouse { local_id, nodes })
+    }
+
+    pub fn is_local(&self, node: &NodeInfo) -> bool {
+        node.id == self.local_id
+    }
+
+    pub fn local_id(&self) -> String {
+        self.local_id.clone()
+    }
+
+    pub fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
+        self.nodes.to_vec()
     }
 }

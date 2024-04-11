@@ -64,7 +64,7 @@ fn test_simple_cluster() -> Result<()> {
                     if is_check_node {
                         // Create the ctx with cluster nodes.
                         let ctx = fixture
-                            .new_query_ctx_with_cluster(cluster_desc_clone)
+                            .new_query_ctx_with_warehouse(cluster_desc_clone)
                             .await?;
 
                         // Check the cluster table.
@@ -120,7 +120,7 @@ fn setup_node_configs(addresses: Vec<&str>) -> Vec<InnerConfig> {
         .map(|(i, address)| {
             let mut conf = ConfigBuilder::create().build();
             conf.query.flight_api_address = address.to_string();
-            conf.query.cluster_id = format!("node{}", i + 1);
+            conf.query.warehouse_id = format!("node{}", i + 1);
             conf
         })
         .collect()
@@ -131,7 +131,7 @@ fn setup_cluster(configs: &[InnerConfig]) -> ClusterDescriptor {
     let mut cluster_desc = ClusterDescriptor::new();
     for conf in configs.iter() {
         cluster_desc =
-            cluster_desc.with_node(&conf.query.cluster_id, &conf.query.flight_api_address);
+            cluster_desc.with_node(&conf.query.warehouse_id, &conf.query.flight_api_address);
     }
     cluster_desc
 }

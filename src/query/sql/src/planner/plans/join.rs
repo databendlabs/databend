@@ -543,7 +543,7 @@ impl Operator for Join {
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
             // where n is the number of servers in the cluster.
             let broadcast_join_threshold = if ctx.get_settings().get_prefer_broadcast_join()? {
-                (ctx.get_cluster().nodes.len() - 1) as f64
+                (ctx.get_warehouse().nodes.len() - 1) as f64
             } else {
                 // Use a very large value to prevent broadcast join.
                 1000.0

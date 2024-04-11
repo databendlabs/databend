@@ -49,7 +49,7 @@ impl SyncSystemTable for CachesTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let local_node = ctx.get_cluster().local_id.clone();
+        let local_node = ctx.get_warehouse().local_id.clone();
         let mut nodes = Vec::new();
         let mut names = Vec::new();
         let mut num_items = Vec::new();

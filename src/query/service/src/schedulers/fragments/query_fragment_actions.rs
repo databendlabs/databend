@@ -30,7 +30,6 @@ use crate::api::ExecutePartialQueryPacket;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
-use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlan;
@@ -117,14 +116,14 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_executors(&self) -> Vec<String> {
-        let cluster = self.ctx.get_cluster();
+        let cluster = self.ctx.get_warehouse();
         let cluster_nodes = cluster.get_nodes();
 
         cluster_nodes.iter().map(|node| &node.id).cloned().collect()
     }
 
     pub fn get_local_executor(&self) -> String {
-        self.ctx.get_cluster().local_id()
+        self.ctx.get_warehouse().local_id()
     }
 
     pub fn get_root_actions(&self) -> Result<&QueryFragmentActions> {
@@ -171,7 +170,7 @@ impl QueryFragmentsActions {
         let mut fragments_packets = self.get_executors_fragments();
         let mut query_fragments_plan_packets = Vec::with_capacity(fragments_packets.len());
 
-        let cluster = self.ctx.get_cluster();
+        let cluster = self.ctx.get_warehouse();
         let settings = self.ctx.get_settings();
         let local_query_fragments_plan_packet = QueryFragmentsPlanPacket::create(
             self.ctx.get_id(),
@@ -207,7 +206,7 @@ impl QueryFragmentsActions {
 
     pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
         let nodes_info = Self::nodes_info(&self.ctx);
-        let local_id = self.ctx.get_cluster().local_id.clone();
+        let local_id = self.ctx.get_warehouse().local_id.clone();
         let connections_info = self.fragments_connections();
         let statistics_connections = self.statistics_connections();
 
@@ -325,7 +324,7 @@ impl QueryFragmentsActions {
     }
 
     fn statistics_connections(&self) -> Vec<ConnectionInfo> {
-        let local_id = self.ctx.get_cluster().local_id.clone();
+        let local_id = self.ctx.get_warehouse().local_id.clone();
         let nodes_info = Self::nodes_info(&self.ctx);
         let mut target_source_connections = Vec::with_capacity(nodes_info.len());
 
@@ -341,7 +340,7 @@ impl QueryFragmentsActions {
     }
 
     fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {
-        let nodes = ctx.get_cluster().get_nodes();
+        let nodes = ctx.get_warehouse().get_nodes();
         let mut nodes_info = HashMap::with_capacity(nodes.len());
 
         for node in nodes {

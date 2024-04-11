@@ -36,13 +36,13 @@ impl InterpreterMetrics {
         let handler_type = ctx.get_current_session().get_type().to_string();
         let query_kind = ctx.get_query_kind().to_string();
         let tenant_id = ctx.get_tenant();
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let warehouse_id = GlobalConfig::instance().query.warehouse_id.clone();
 
         vec![
             (LABEL_HANDLER, handler_type),
             (LABEL_KIND, query_kind),
             (LABEL_TENANT, tenant_id.name().to_string()),
-            (LABEL_CLUSTER, cluster_id),
+            (LABEL_CLUSTER, warehouse_id),
         ]
     }
 

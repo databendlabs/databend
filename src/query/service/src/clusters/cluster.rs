@@ -30,7 +30,7 @@ use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
-pub use databend_common_catalog::cluster_info::Cluster;
+pub use databend_common_catalog::cluster_info::Warehouse;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
@@ -58,7 +58,7 @@ pub struct ClusterDiscovery {
     local_id: String,
     heartbeat: Mutex<ClusterHeartbeat>,
     api_provider: Arc<dyn ClusterApi>,
-    cluster_id: String,
+    warehouse_id: String,
     tenant_id: String,
     flight_address: String,
 }
@@ -66,74 +66,10 @@ pub struct ClusterDiscovery {
 // avoid leak FlightClient to common-xxx
 #[async_trait::async_trait]
 pub trait ClusterHelper {
-    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
-    fn empty() -> Arc<Cluster>;
-    fn is_empty(&self) -> bool;
+    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Warehouse>;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
-    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient>;
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
-}
-
-#[async_trait::async_trait]
-impl ClusterHelper for Cluster {
-    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
-        Arc::new(Cluster { local_id, nodes })
-    }
-
-    fn empty() -> Arc<Cluster> {
-        Arc::new(Cluster {
-            local_id: String::from(""),
-            nodes: Vec::new(),
-        })
-    }
-
-    fn is_empty(&self) -> bool {
-        self.nodes.len() <= 1
-    }
-
-    fn is_local(&self, node: &NodeInfo) -> bool {
-        node.id == self.local_id
-    }
-
-    fn local_id(&self) -> String {
-        self.local_id.clone()
-    }
-
-    #[async_backtrace::framed]
-    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient> {
-        for node in &self.nodes {
-            if node.id == name {
-                return match config.tls_query_cli_enabled() {
-                    true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            Some(config.query.to_rpc_client_tls_config()),
-                        )
-                        .await?,
-                    ))),
-                    false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            None,
-                        )
-                        .await?,
-                    ))),
-                };
-            }
-        }
-
-        Err(ErrorCode::NotFoundClusterNode(format!(
-            "The node \"{}\" not found in the cluster",
-            name
-        )))
-    }
-
-    fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
-        self.nodes.to_vec()
-    }
 }
 
 impl ClusterDiscovery {
@@ -169,10 +105,10 @@ impl ClusterDiscovery {
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
                 provider,
-                cfg.query.cluster_id.clone(),
+                cfg.query.warehouse_id.clone(),
                 cfg.query.tenant_id.name().to_string(),
             )),
-            cluster_id: cfg.query.cluster_id.clone(),
+            warehouse_id: cfg.query.warehouse_id.clone(),
             tenant_id: cfg.query.tenant_id.name().to_string(),
             flight_address: cfg.query.flight_api_address.clone(),
         }))
@@ -188,22 +124,22 @@ impl ClusterDiscovery {
     ) -> Result<(Duration, Arc<dyn ClusterApi>)> {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
-        let cluster_id = &cfg.query.cluster_id;
+        let warehouse_id = &cfg.query.warehouse_id;
         let lift_time = Duration::from_secs(60);
         let cluster_manager =
-            ClusterMgr::create(metastore, tenant_id.name(), cluster_id, lift_time)?;
+            ClusterMgr::create(metastore, tenant_id.name(), warehouse_id, lift_time)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
     #[async_backtrace::framed]
-    pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
+    pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Warehouse>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
                 metric_incr_cluster_error_count(
                     &self.local_id,
                     "discover",
-                    &self.cluster_id,
+                    &self.warehouse_id,
                     &self.tenant_id,
                     &self.flight_address,
                 );
@@ -231,12 +167,12 @@ impl ClusterDiscovery {
 
                 metrics_gauge_discovered_nodes(
                     &self.local_id,
-                    &self.cluster_id,
+                    &self.warehouse_id,
                     &self.tenant_id,
                     &self.flight_address,
                     cluster_nodes.len() as f64,
                 );
-                Ok(Cluster::create(res, self.local_id.clone()))
+                Ok(Warehouse::create(res, self.local_id.clone()))
             }
         }
     }
@@ -249,7 +185,7 @@ impl ClusterDiscovery {
                 metric_incr_cluster_error_count(
                     &self.local_id,
                     "drop_invalid_ndes.get_nodes",
-                    &self.cluster_id,
+                    &self.warehouse_id,
                     &self.tenant_id,
                     &self.flight_address,
                 );
@@ -358,15 +294,15 @@ struct ClusterHeartbeat {
     shutdown_notify: Arc<Notify>,
     cluster_api: Arc<dyn ClusterApi>,
     shutdown_handler: Option<JoinHandle<()>>,
-    cluster_id: String,
     tenant_id: String,
+    warehouse_id: String,
 }
 
 impl ClusterHeartbeat {
     pub fn create(
         timeout: Duration,
         cluster_api: Arc<dyn ClusterApi>,
-        cluster_id: String,
+        warehouse_id: String,
         tenant_id: String,
     ) -> ClusterHeartbeat {
         ClusterHeartbeat {
@@ -375,7 +311,7 @@ impl ClusterHeartbeat {
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_notify: Arc::new(Notify::new()),
             shutdown_handler: None,
-            cluster_id,
+            warehouse_id,
             tenant_id,
         }
     }
@@ -385,7 +321,7 @@ impl ClusterHeartbeat {
         let shutdown_notify = self.shutdown_notify.clone();
         let cluster_api = self.cluster_api.clone();
         let sleep_range = self.heartbeat_interval(self.timeout);
-        let cluster_id = self.cluster_id.clone();
+        let warehouse_id = self.warehouse_id.clone();
         let tenant_id = self.tenant_id.clone();
 
         async move {
@@ -407,10 +343,10 @@ impl ClusterHeartbeat {
                         shutdown_notified = new_shutdown_notified;
                         let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
                         if let Err(failure) = heartbeat.await {
-                            metric_incr_cluster_heartbeat_count(
+                            metric_incr_warehouse_heartbeat_count(
                                 &node.id,
                                 &node.flight_address,
-                                &cluster_id,
+                                &warehouse_id,
                                 &tenant_id,
                                 "failure",
                             );

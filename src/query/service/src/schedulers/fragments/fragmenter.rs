@@ -36,7 +36,6 @@ use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
 use crate::api::MergeExchange;
 use crate::api::ShuffleDataExchange;
-use crate::clusters::ClusterHelper;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::sessions::QueryContext;
@@ -84,14 +83,14 @@ impl Fragmenter {
     /// Get ids of executor nodes.
     /// This method is basically copied from `QueryFragmentActions::get_executors()`.
     pub fn get_executors(ctx: Arc<QueryContext>) -> Vec<String> {
-        let cluster = ctx.get_cluster();
+        let cluster = ctx.get_warehouse();
         let cluster_nodes = cluster.get_nodes();
 
         cluster_nodes.iter().map(|node| &node.id).cloned().collect()
     }
 
     pub fn get_local_executor(ctx: Arc<QueryContext>) -> String {
-        ctx.get_cluster().local_id()
+        ctx.get_warehouse().local_id()
     }
 
     pub fn get_exchange(

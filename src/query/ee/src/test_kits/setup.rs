@@ -44,7 +44,7 @@ impl TestFixture {
                 .await?;
             info!(
                 "Databend query has been registered:{:?} to metasrv:{:?}.",
-                config.query.cluster_id, config.meta.endpoints
+                config.query.warehouse_id, config.meta.endpoints
             );
         }
 

@@ -423,7 +423,7 @@ impl HttpQuery {
         ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
-        let node_id = ctx.get_cluster().local_id.clone();
+        let node_id = ctx.get_warehouse().local_id.clone();
         let sql = &request.sql;
         info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "create query");
 

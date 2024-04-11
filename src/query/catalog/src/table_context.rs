@@ -56,7 +56,7 @@ use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
 use crate::catalog::Catalog;
-use crate::cluster_info::Cluster;
+use crate::cluster_info::Warehouse;
 use crate::merge_into_join::MergeIntoJoin;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
@@ -189,7 +189,7 @@ pub trait TableContext: Send + Sync {
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
     fn get_shared_settings(&self) -> Arc<Settings>;
-    fn get_cluster(&self) -> Arc<Cluster>;
+    fn get_warehouse(&self) -> Arc<Warehouse>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>>;

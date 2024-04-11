@@ -53,7 +53,7 @@ impl SyncSystemTable for ProcessorProfileTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let queries_profiles = ctx.get_queries_profile();
 
-        let local_id = ctx.get_cluster().local_id.clone();
+        let local_id = ctx.get_warehouse().local_id.clone();
         let total_size = queries_profiles.values().map(Vec::len).sum();
 
         let mut node: Vec<String> = Vec::with_capacity(total_size);
