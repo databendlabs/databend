@@ -27,7 +27,7 @@ Sort
         ├── table: default.test_explain_window.empsalary
         ├── output columns: [depname (#0), empno (#1), salary (#2)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -111,7 +111,7 @@ Filter
         │       ├── table: default.test_explain_window.test
         │       ├── output columns: [k (#0), v (#1)]
         │       ├── read rows: 0
-        │       ├── read bytes: 0
+        │       ├── read size: 0
         │       ├── partitions total: 0
         │       ├── partitions scanned: 0
         │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
@@ -124,7 +124,7 @@ Filter
                 ├── table: default.test_explain_window.test
                 ├── output columns: [k (#2), v (#3)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
@@ -151,7 +151,7 @@ Filter
         │   ├── table: default.test_explain_window.test
         │   ├── output columns: [k (#0), v (#1)]
         │   ├── read rows: 0
-        │   ├── read bytes: 0
+        │   ├── read size: 0
         │   ├── partitions total: 0
         │   ├── partitions scanned: 0
         │   ├── push downs: [filters: [], limit: NONE]
@@ -160,7 +160,7 @@ Filter
             ├── table: default.test_explain_window.test
             ├── output columns: [k (#2), v (#3)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -187,7 +187,7 @@ Filter
         │   ├── table: default.test_explain_window.test
         │   ├── output columns: [k (#0), v (#1)]
         │   ├── read rows: 0
-        │   ├── read bytes: 0
+        │   ├── read size: 0
         │   ├── partitions total: 0
         │   ├── partitions scanned: 0
         │   ├── push downs: [filters: [], limit: NONE]
@@ -196,7 +196,7 @@ Filter
             ├── table: default.test_explain_window.test
             ├── output columns: [k (#2), v (#3)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -216,20 +216,20 @@ Filter
 ├── filters: [is_true(max(a) OVER ( PARTITION BY a ) (#1) > 3)]
 ├── estimated rows: 0.00
 └── Window
-  ├── output columns: [t.a (#0), max(a) OVER ( PARTITION BY a ) (#1)]
-  ├── aggregate function: [max(a)]
-  ├── partition by: [a]
-  ├── order by: []
-  ├── frame: [Range: Preceding(None) ~ Following(None)]
-  └── TableScan
-    ├── table: default.test_explain_window.t
-    ├── output columns: [a (#0)]
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 0.00
+    ├── output columns: [t.a (#0), max(a) OVER ( PARTITION BY a ) (#1)]
+    ├── aggregate function: [max(a)]
+    ├── partition by: [a]
+    ├── order by: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── TableScan
+        ├── table: default.test_explain_window.t
+        ├── output columns: [a (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
 
 ## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
 statement ok
@@ -258,14 +258,14 @@ Window
     ├── filters: [is_true(tbpush.b (#0) > 3)]
     ├── estimated rows: 0.00
     └── TableScan
-      ├── table: default.test_explain_window.tbpush
-      ├── output columns: [b (#0)]
-      ├── read rows: 0
-      ├── read bytes: 0
-      ├── partitions total: 0
-      ├── partitions scanned: 0
-      ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
-      └── estimated rows: 0.00
+        ├── table: default.test_explain_window.tbpush
+        ├── output columns: [b (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
+        └── estimated rows: 0.00
 
 query T
 explain select * from vwpush where b > 3;
@@ -284,7 +284,7 @@ Filter
         ├── table: default.test_explain_window.tbpush
         ├── output columns: [b (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -307,7 +307,7 @@ Filter
         ├── table: default.test_explain_window.tbpush
         ├── output columns: [b (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -477,7 +477,7 @@ RowFetch
                     ├── table: default.test_explain_window.t
                     ├── output columns: [a (#0), b (#1), _row_id (#7)]
                     ├── read rows: 0
-                    ├── read bytes: 0
+                    ├── read size: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]

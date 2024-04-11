@@ -24,7 +24,7 @@ Exchange
         ├── table: default.default.t1
         ├── output columns: [a (#0)]
         ├── read rows: 100
-        ├── read bytes: 251
+        ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -59,7 +59,7 @@ Exchange
         │           ├── table: default.default.t2
         │           ├── output columns: [a (#2), b (#3)]
         │           ├── read rows: 100
-        │           ├── read bytes: 504
+        │           ├── read size: < 1 KiB
         │           ├── partitions total: 3
         │           ├── partitions scanned: 3
         │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -73,7 +73,7 @@ Exchange
                 ├── table: default.default.t1
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 100
-                ├── read bytes: 504
+                ├── read size: < 1 KiB
                 ├── partitions total: 3
                 ├── partitions scanned: 3
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -100,7 +100,7 @@ Exchange
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
-    │       ├── read bytes: 504
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 3
     │       ├── partitions scanned: 3
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -110,7 +110,7 @@ Exchange
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
-        ├── read bytes: 504
+        ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -193,7 +193,7 @@ Limit
                         ├── table: default.default.t1
                         ├── output columns: [a (#0)]
                         ├── read rows: 100
-                        ├── read bytes: 251
+                        ├── read size: < 1 KiB
                         ├── partitions total: 3
                         ├── partitions scanned: 3
                         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -237,7 +237,7 @@ Limit
                     │       ├── table: default.default.t2
                     │       ├── output columns: [a (#2)]
                     │       ├── read rows: 100
-                    │       ├── read bytes: 251
+                    │       ├── read size: < 1 KiB
                     │       ├── partitions total: 3
                     │       ├── partitions scanned: 3
                     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -247,7 +247,7 @@ Limit
                         ├── table: default.default.t1
                         ├── output columns: [a (#0), b (#1)]
                         ├── read rows: 100
-                        ├── read bytes: 504
+                        ├── read size: < 1 KiB
                         ├── partitions total: 3
                         ├── partitions scanned: 3
                         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -277,7 +277,7 @@ Exchange
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
-    │       ├── read bytes: 504
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 3
     │       ├── partitions scanned: 3
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -287,7 +287,7 @@ Exchange
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
-        ├── read bytes: 504
+        ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
@@ -320,7 +320,7 @@ Limit
                 ├── table: default.system.numbers
                 ├── output columns: [number (#0)]
                 ├── read rows: 10
-                ├── read bytes: 80
+                ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── push downs: [filters: [], limit: NONE]
@@ -355,7 +355,7 @@ AggregateFinal
             │       ├── table: default.system.numbers
             │       ├── output columns: [number (#1)]
             │       ├── read rows: 5
-            │       ├── read bytes: 40
+            │       ├── read size: < 1 KiB
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
             │       ├── push downs: [filters: [], limit: NONE]
@@ -367,7 +367,7 @@ AggregateFinal
                     ├── table: default.system.numbers
                     ├── output columns: [number (#0)]
                     ├── read rows: 10
-                    ├── read bytes: 80
+                    ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── push downs: [filters: [], limit: NONE]
@@ -423,7 +423,7 @@ Exchange
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 3
-        ├── read bytes: 88
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]

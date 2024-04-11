@@ -135,7 +135,6 @@ mod tests {
     use std::convert::Infallible;
 
     use databend_common_meta_kvapi::kvapi::Key;
-    use databend_common_meta_types::NonEmptyString;
 
     use crate::tenant::Tenant;
     use crate::tenant_key::ident::TIdent;
@@ -150,7 +149,7 @@ mod tests {
             type ValueType = Infallible;
         }
 
-        let tenant = Tenant::new_nonempty(NonEmptyString::new("test").unwrap());
+        let tenant = Tenant::new_literal("test");
         let ident = TIdent::<Foo>::new(tenant, "test1");
 
         let key = ident.to_string_key();

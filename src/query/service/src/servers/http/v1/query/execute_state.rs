@@ -41,6 +41,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
+use crate::servers::http::v1::query::http_query::ResponseState;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
@@ -56,6 +57,12 @@ pub enum ExecuteStateKind {
     Running,
     Failed,
     Succeeded,
+}
+
+impl ExecuteStateKind {
+    pub fn is_stopped(self) -> bool {
+        matches!(self, Self::Succeeded | Self::Failed)
+    }
 }
 
 impl std::fmt::Display for ExecuteStateKind {
@@ -156,6 +163,18 @@ impl ExecutorSessionState {
 }
 
 impl Executor {
+    pub fn get_response_state(&self) -> ResponseState {
+        let (exe_state, err) = self.state.extract();
+        ResponseState {
+            running_time_ms: self.get_query_duration_ms(),
+            progresses: self.get_progress(),
+            state: exe_state,
+            error: err,
+            warnings: self.get_warnings(),
+            affect: self.get_affect(),
+            schema: self.get_schema(),
+        }
+    }
     pub fn get_schema(&self) -> Vec<QueryResponseField> {
         match &self.state {
             Starting(_) => Default::default(),
@@ -220,7 +239,7 @@ impl Executor {
         }
     }
     #[async_backtrace::framed]
-    pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
+    pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>) {
         {
             let guard = this.read().await;
             if let Stopped(s) = &guard.state {
@@ -249,8 +268,10 @@ impl Executor {
                     )
                     .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
-                if reason.is_err() {
-                    s.ctx.get_current_session().txn_mgr().lock().set_fail();
+                if let Err(e) = &reason {
+                    if e.code() != ErrorCode::CLOSED_QUERY {
+                        s.ctx.get_current_session().txn_mgr().lock().set_fail();
+                    }
                 }
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
@@ -263,18 +284,11 @@ impl Executor {
                 }))
             }
             Running(r) => {
-                // release session
-                if kill {
-                    if let Err(error) = &reason {
-                        r.session.force_kill_query(error.clone());
-                    } else {
-                        r.session.force_kill_query(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed",
-                        ));
+                if let Err(e) = &reason {
+                    if e.code() != ErrorCode::CLOSED_QUERY {
+                        r.session.txn_mgr().lock().set_fail();
                     }
-                }
-                if reason.is_err() {
-                    r.session.txn_mgr().lock().set_fail();
+                    r.session.force_kill_query(e.clone());
                 }
 
                 guard.state = Stopped(Box::new(ExecuteStopped {
@@ -353,11 +367,11 @@ impl ExecuteState {
         );
         match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
-                Executor::stop(&executor_clone, Err(err.clone()), false).await;
+                Executor::stop(&executor_clone, Err(err.clone())).await;
                 block_sender_closer.close();
             }
             Err(e) => {
-                Executor::stop(&executor_clone, Err(e), false).await;
+                Executor::stop(&executor_clone, Err(e)).await;
                 block_sender_closer.close();
             }
             _ => {}
@@ -389,7 +403,7 @@ async fn execute(
         None => {
             let block = DataBlock::empty_with_schema(schema);
             block_sender.send(block, 0).await;
-            Executor::stop(&executor, Ok(()), false).await;
+            Executor::stop(&executor, Ok(())).await;
             block_sender.close();
         }
         Some(Err(err)) => {
@@ -399,7 +413,7 @@ async fn execute(
                 databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
             );
             block_sender.send(DataBlock::new(vec![data], 1), 1).await;
-            Executor::stop(&executor, Err(err), false).await;
+            Executor::stop(&executor, Err(err)).await;
             block_sender.close();
         }
         Some(Ok(block)) => {
@@ -424,7 +438,7 @@ async fn execute(
                     }
                 };
             }
-            Executor::stop(&executor, Ok(()), false).await;
+            Executor::stop(&executor, Ok(())).await;
             block_sender.close();
         }
     }

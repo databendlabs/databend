@@ -41,7 +41,7 @@ EvalScalar
     ├── table: default.test_virtual_db.t1
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
-    ├── read bytes: 137
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -59,7 +59,7 @@ EvalScalar
     ├── table: default.test_virtual_db.t1
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
-    ├── read bytes: 137
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -79,7 +79,7 @@ TableScan
 ├── table: default.test_virtual_db.t1
 ├── output columns: [a (#0), v['a'][0] (#2), v['b'] (#3)]
 ├── read rows: 1
-├── read bytes: 137
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -93,7 +93,7 @@ TableScan
 ├── table: default.test_virtual_db.t1
 ├── output columns: [a (#0), v['b'] (#2)]
 ├── read rows: 1
-├── read bytes: 137
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -124,7 +124,7 @@ EvalScalar
     ├── table: default.test_virtual_db.t2
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
-    ├── read bytes: 128
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -146,7 +146,7 @@ EvalScalar
         ├── table: default.test_virtual_db.t2
         ├── output columns: [a (#0), v (#1)]
         ├── read rows: 1
-        ├── read bytes: 128
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -166,7 +166,7 @@ TableScan
 ├── table: default.test_virtual_db.t2
 ├── output columns: [a (#0), v['a'][0] (#2), v['b'] (#3)]
 ├── read rows: 1
-├── read bytes: 128
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -180,7 +180,7 @@ TableScan
 ├── table: default.test_virtual_db.t2
 ├── output columns: [a (#0), v['a'][0] (#2)]
 ├── read rows: 1
-├── read bytes: 128
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
@@ -198,7 +198,7 @@ Filter
     ├── table: default.test_virtual_db.t2
     ├── output columns: [a (#0), v['b'] (#2), v['a'][0] (#3)]
     ├── read rows: 1
-    ├── read bytes: 128
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
