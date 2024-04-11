@@ -30,5 +30,6 @@ pub(crate) mod federated_helper;
 pub mod flight;
 pub mod flight_sql;
 pub mod http;
+pub mod metrics;
 mod mysql;
 pub(crate) mod server;

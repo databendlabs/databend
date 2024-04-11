@@ -49,7 +49,6 @@ pub mod databases;
 pub mod interpreters;
 pub mod local;
 pub mod locks;
-pub mod metrics;
 pub mod pipelines;
 pub mod schedulers;
 pub mod servers;
