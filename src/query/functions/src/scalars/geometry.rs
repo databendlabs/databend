@@ -23,6 +23,7 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_io::geometry_to_json;
 use databend_common_io::parse_to_ewkb;
 use databend_common_io::parse_to_subtype;
 use databend_common_io::GeometryDataType;
@@ -67,6 +68,28 @@ pub fn register(registry: &mut FunctionRegistry) {
     ]);
 
     // functions
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+        "st_asgeojson",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            match geometry_to_json(geometry) {
+                Ok(json) => builder.put_slice(json.as_bytes()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            };
+            builder.commit_row();
+        }),
+    );
+
     registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
         "st_geomfromgeohash",
         |_, _| FunctionDomain::MayThrow,

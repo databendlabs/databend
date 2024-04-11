@@ -15,7 +15,11 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use geo::Geometry;
+use geozero::wkb::Ewkb;
+use geozero::wkt::Wkt;
 use geozero::CoordDimensions;
+use geozero::ToGeo;
+use geozero::ToJson;
 use geozero::ToWkb;
 use wkt::TryFromWkt;
 
@@ -118,4 +122,23 @@ pub fn parse_to_subtype(buf: &[u8]) -> Result<GeometryDataType> {
             }
         }
     }
+}
+
+pub fn geometry_to_json(buf: &[u8]) -> Result<String> {
+    let subtype = match parse_to_subtype(buf) {
+        Ok(subtype) => subtype,
+        Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+    };
+
+    let r = match subtype {
+        GeometryDataType::EWKT => Wkt(buf).to_geo(),
+        GeometryDataType::EWKB => Ewkb(buf).to_geo(),
+        GeometryDataType::GEOJSON => return Ok(std::str::from_utf8(buf).unwrap().to_string()),
+    };
+    r.map_err(|e| ErrorCode::GeometryError(e.to_string()))
+        .and_then(|geo| {
+            geo.to_json()
+                .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+                .map(|json: String| json)
+        })
 }

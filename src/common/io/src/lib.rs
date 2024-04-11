@@ -47,6 +47,7 @@ pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
 pub use escape::escape_string_with_quote;
+pub use geometry::geometry_to_json;
 pub use geometry::parse_to_ewkb;
 pub use geometry::parse_to_subtype;
 pub use geometry::GeometryDataType;
