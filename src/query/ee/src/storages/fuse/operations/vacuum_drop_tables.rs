@@ -32,14 +32,15 @@ pub async fn do_vacuum_drop_table(
     operator: &Operator,
     dry_run_limit: Option<usize>,
 ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
-    // storage_params is_some means it is an external table, ignore
-    if table_info.meta.storage_params.is_some() {
-        info!("ignore external table {}", table_info.name);
-        return Ok(None);
-    }
-
     let dir = format!("{}/", FuseTable::parse_storage_prefix(table_info)?);
-    info!("vacuum drop table {:?} dir {:?}", table_info.name, dir);
+
+    info!(
+        "vacuum drop table {:?} dir {:?}, is_external_table:{:?}",
+        table_info.name,
+        dir,
+        table_info.meta.storage_params.is_some()
+    );
+
     let start = Instant::now();
 
     let ret = match dry_run_limit {
