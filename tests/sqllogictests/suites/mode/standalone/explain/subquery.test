@@ -527,14 +527,14 @@ EvalScalar
 ├── expressions: [exists_scalar (#4)]
 ├── estimated rows: 4.00
 └── HashJoin
-    ├── output columns: [t.i (#0), _count_scalar_subquery (#4)]
+    ├── output columns: [t.i (#0), _exists_scalar_subquery (#4)]
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [_count_scalar_subquery (#4)]
+    │   ├── output columns: [_exists_scalar_subquery (#4)]
     │   ├── expressions: [count(*) (#3) = 1]
     │   ├── estimated rows: 1.00
     │   └── AggregateFinal
