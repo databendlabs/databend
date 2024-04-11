@@ -49,8 +49,6 @@ use log::info;
 use opendal::Operator;
 
 use super::SerializePayload;
-use crate::api::serialize_block;
-use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::agg_spilling_aggregate_payload as local_agg_spilling_aggregate_payload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -65,6 +63,8 @@ use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::servers::flight::v1::exchange::serde::serialize_block;
+use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::sessions::QueryContext;
 
 pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {

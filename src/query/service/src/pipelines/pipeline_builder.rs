@@ -28,11 +28,11 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
 use super::PipelineBuilderData;
-use crate::api::DefaultExchangeInjector;
-use crate::api::ExchangeInjector;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
+use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 
 pub struct PipelineBuilder {
