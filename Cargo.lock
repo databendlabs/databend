@@ -3048,6 +3048,7 @@ dependencies = [
  "hex",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a7325f4)",
  "lexical-core",
+ "match-template",
  "micromarshal 0.4.1",
  "num",
  "num-traits",

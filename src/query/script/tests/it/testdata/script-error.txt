@@ -161,51 +161,51 @@ Execution of script has exceeded the limit of 1000 steps, which usually means yo
 
 
 ---------- Input ----------
-LET xxx := 0;
-LET y := 1 + xxx / 0;
+LET zero := 0;
+LET y := 1 + zero / 0;
 ---------- Output ----------
 error: 
   --> SQL:2:10
   |
-1 | LET xxx := 0;
-2 | LET y := 1 + xxx / 0;
-  |          ^^^^^^^^^^^ division by zero
+1 | LET zero := 0;
+2 | LET y := 1 + zero / 0;
+  |          ^^^^^^^^^^^^ division by zero
 
 
 ---------- Input ----------
-LET xxx := 0;
-SELECT 1 + :xxx / 0;
+LET zero := 0;
+SELECT 1 + :zero / 0;
 ---------- Output ----------
 error: 
   --> SQL:2:1
   |
-1 | LET xxx := 0;
-2 | SELECT 1 + :xxx / 0;
-  | ^^^^^^^^^^^^^^^^^^^ division by zero
+1 | LET zero := 0;
+2 | SELECT 1 + :zero / 0;
+  | ^^^^^^^^^^^^^^^^^^^^ division by zero
 
 
 ---------- Input ----------
-LET xxx := 0;
-RETURN 1 + xxx / 0;
+LET zero := 0;
+RETURN 1 + zero / 0;
 ---------- Output ----------
 error: 
   --> SQL:2:8
   |
-1 | LET xxx := 0;
-2 | RETURN 1 + xxx / 0;
-  |        ^^^^^^^^^^^ division by zero
+1 | LET zero := 0;
+2 | RETURN 1 + zero / 0;
+  |        ^^^^^^^^^^^^ division by zero
 
 
 ---------- Input ----------
-LET xxx := 0;
-RETURN TABLE(SELECT 1 + :xxx / 0);
+LET zero := 0;
+RETURN TABLE(SELECT 1 + :zero / 0);
 ---------- Output ----------
 error: 
   --> SQL:2:1
   |
-1 | LET xxx := 0;
-2 | RETURN TABLE(SELECT 1 + :xxx / 0);
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ division by zero
+1 | LET zero := 0;
+2 | RETURN TABLE(SELECT 1 + :zero / 0);
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ division by zero
 
 
 ---------- Input ----------

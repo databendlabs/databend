@@ -412,29 +412,29 @@ fn test_script_error() {
     run_script(
         file,
         r#"
-            LET xxx := 0;
-            LET y := 1 + xxx / 0;
+            LET zero := 0;
+            LET y := 1 + zero / 0;
         "#,
     );
     run_script(
         file,
         r#"
-            LET xxx := 0;
-            SELECT 1 + :xxx / 0;
+            LET zero := 0;
+            SELECT 1 + :zero / 0;
         "#,
     );
     run_script(
         file,
         r#"
-            LET xxx := 0;
-            RETURN 1 + xxx / 0;
+            LET zero := 0;
+            RETURN 1 + zero / 0;
         "#,
     );
     run_script(
         file,
         r#"
-            LET xxx := 0;
-            RETURN TABLE(SELECT 1 + :xxx / 0);
+            LET zero := 0;
+            RETURN TABLE(SELECT 1 + :zero / 0);
         "#,
     );
     run_script(
