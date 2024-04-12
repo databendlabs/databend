@@ -163,6 +163,7 @@ mod test_accessor {
             self.hit_delete.load(Ordering::Acquire)
         }
     }
+
     #[async_trait::async_trait]
     impl Accessor for AccessorFaultyDeletion {
         type Reader = ();
@@ -234,10 +235,9 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     Ok(())
 }
 
+// fuse table on external storage is same as internal storage.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
-    // do_vacuum_drop_table should return Ok(None) if external storage detected
-
     let meta = TableMeta {
         storage_params: Some(StorageParams::default()),
         ..Default::default()
@@ -255,12 +255,9 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     let operator = OperatorBuilder::new(accessor.clone()).finish();
 
     let result = do_vacuum_drop_table(&table_info, &operator, None).await;
+    assert!(result.is_err());
 
-    // verify that Ok(None) is returned
-    assert!(result.is_ok());
-    assert!(result.unwrap().is_none());
-
-    // verify that accessor.delete() was NOT called
+    // verify that accessor.delete() was called
     assert!(!accessor.hit_delete_operation());
 
     Ok(())
