@@ -205,7 +205,9 @@ pub struct AcquireQueueGuard {
 
 impl Drop for AcquireQueueGuard {
     fn drop(&mut self) {
-        dec_session_running_acquired_queries();
+        if self.permit.is_some() {
+            dec_session_running_acquired_queries();
+        }
     }
 }
 
