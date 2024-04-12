@@ -69,7 +69,7 @@ impl ShareDatabase {
     #[async_backtrace::framed]
     async fn get_table_info(&self, table_name: &str) -> Result<Arc<TableInfo>> {
         let table_info_map = ShareEndpointManager::instance()
-            .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![
+            .get_table_info_map(self.ctx.tenant(), &self.db_info, vec![
                 table_name.to_string(),
             ])
             .await?;

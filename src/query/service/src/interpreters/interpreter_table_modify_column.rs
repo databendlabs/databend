@@ -557,7 +557,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .ctx
             .get_catalog(catalog_name)
             .await?
-            .get_table(self.ctx.get_tenant().name(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await
             .ok();
 

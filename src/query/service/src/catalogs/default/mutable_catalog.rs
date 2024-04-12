@@ -117,7 +117,7 @@ use crate::storages::Table;
 #[derive(Clone)]
 pub struct MutableCatalog {
     ctx: CatalogContext,
-    tenant: String,
+    tenant: Tenant,
 }
 
 impl Debug for MutableCatalog {
@@ -175,10 +175,7 @@ impl MutableCatalog {
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
         };
-        Ok(MutableCatalog {
-            ctx,
-            tenant: tenant.name().to_string(),
-        })
+        Ok(MutableCatalog { ctx, tenant })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
@@ -208,15 +205,13 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx
             .meta
-            .get_database(GetDatabaseReq::new(
-                Tenant::new_or_err(tenant, func_name!())?,
-                db_name,
-            ))
+            .get_database(GetDatabaseReq::new(tenant, db_name))
             .await?;
+
         self.build_db_instance(&db_info)
     }
 
@@ -378,7 +373,7 @@ impl Catalog for MutableCatalog {
 
     async fn mget_table_names_by_ids(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
         let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
@@ -403,7 +398,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -412,7 +407,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
         db.list_tables().await
     }
@@ -420,7 +415,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
@@ -460,7 +455,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         let db = self
-            .get_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
         db.create_table(req).await
     }
@@ -474,7 +469,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         let db = self
-            .get_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
         db.undrop_table(req).await
     }
@@ -482,7 +477,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         let db = self
-            .get_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
         db.rename_table(req).await
     }
@@ -490,7 +485,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -514,9 +509,8 @@ impl Catalog for MutableCatalog {
                 Ok(self.ctx.meta.update_table_meta(req).await?)
             }
             DatabaseType::ShareDB(share_ident) => {
-                let db = self
-                    .get_database(&share_ident.tenant, &share_ident.share_name)
-                    .await?;
+                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                let db = self.get_database(&tenant, share_ident.share_name()).await?;
                 db.update_table_meta(req).await
             }
         }
@@ -537,7 +531,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -554,9 +548,8 @@ impl Catalog for MutableCatalog {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
             DatabaseType::ShareDB(share_ident) => {
-                let db = self
-                    .get_database(&share_ident.tenant, &share_ident.share_name)
-                    .await?;
+                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                let db = self.get_database(&tenant, share_ident.share_name()).await?;
                 db.truncate_table(req).await
             }
         }

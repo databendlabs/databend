@@ -33,8 +33,8 @@ use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::share;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::storage::StorageS3Config;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;
@@ -56,10 +56,7 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
         comment: "foo bar".to_string(),
         drop_on: None,
         shared_by: BTreeSet::new(),
-        from_share: Some(share::ShareNameIdent {
-            tenant: Tenant::new_literal("tenant"),
-            share_name: "share".to_string(),
-        }),
+        from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
     }
 }
 

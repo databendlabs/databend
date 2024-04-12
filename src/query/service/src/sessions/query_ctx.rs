@@ -210,10 +210,7 @@ impl QueryContext {
         let catalog = self
             .get_catalog(self.get_current_catalog().as_str())
             .await?;
-        match catalog
-            .get_database(tenant_id.name(), &new_database_name)
-            .await
-        {
+        match catalog.get_database(&tenant_id, &new_database_name).await {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -824,7 +821,7 @@ impl TableContext for QueryContext {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table(tenant.name(), database_name, table_name)
+            .get_table(&tenant, database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
@@ -840,7 +837,7 @@ impl TableContext for QueryContext {
             let req = GetTableCopiedFileReq { table_id, files };
             let start_request = Instant::now();
             let copied_files = catalog
-                .get_table_copied_file_info(tenant.name(), database_name, req)
+                .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
 

@@ -15,20 +15,21 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type ShareEndpointIdent = TIdent<Resource>;
+pub type ShareNameIdent = TIdent<Resource>;
 
-pub type ShareEndpointIdentRaw = TIdentRaw<Resource>;
+/// Share name as value.
+pub type ShareNameIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
 
-impl ShareEndpointIdent {
-    pub fn share_endpoint_name(&self) -> &str {
+impl TIdent<Resource> {
+    pub fn share_name(&self) -> &str {
         self.name()
     }
 }
 
-impl ShareEndpointIdentRaw {
-    pub fn share_endpoint_name(&self) -> &str {
+impl TIdentRaw<Resource> {
+    pub fn share_name(&self) -> &str {
         self.name()
     }
 }
@@ -38,16 +39,18 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::share::ShareEndpointId;
+    use crate::share::ShareId;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_share_endpoint";
-        type ValueType = ShareEndpointId;
+        const PREFIX: &'static str = "__fd_share";
+        const TYPE: &'static str = "ShareNameIdent";
+        type ValueType = ShareId;
     }
 
-    impl kvapi::Value for ShareEndpointId {
+    impl kvapi::Value for ShareId {
+        /// ShareId is id of the two level `name->id,id->value` mapping
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
@@ -61,17 +64,17 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::ShareEndpointIdent;
+    use super::ShareNameIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_ident() {
         let tenant = Tenant::new_literal("test");
-        let ident = ShareEndpointIdent::new(tenant, "test1");
+        let ident = ShareNameIdent::new(tenant, "test1");
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_share_endpoint/test/test1");
+        assert_eq!(key, "__fd_share/test/test1");
 
-        assert_eq!(ident, ShareEndpointIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, ShareNameIdent::from_str_key(&key).unwrap());
     }
 }

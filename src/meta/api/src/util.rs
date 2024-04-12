@@ -49,8 +49,12 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::share::share_end_point_ident::ShareEndpointIdentRaw;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::share::*;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
@@ -524,7 +528,7 @@ pub async fn get_share_endpoint_id_to_name_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_endpoint_id: u64,
     msg: impl Display,
-) -> Result<(u64, ShareEndpointIdent), KVAppError> {
+) -> Result<(u64, ShareEndpointIdentRaw), KVAppError> {
     let id_key = ShareEndpointIdToName { share_endpoint_id };
 
     let (share_endpoint_name_seq, share_endpoint) = get_pb_value(kv_api, &id_key).await?;
@@ -599,8 +603,8 @@ fn share_has_to_exist(
 
         Err(KVAppError::AppError(AppError::UnknownShare(
             UnknownShare::new(
-                &share_name_ident.share_name,
-                format!("{}: {}", msg, share_name_ident),
+                share_name_ident.name(),
+                format!("{}: {}", msg, share_name_ident.display()),
             ),
         )))
     } else {
@@ -653,7 +657,7 @@ pub async fn get_share_id_to_name_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_id: u64,
     msg: impl Display,
-) -> Result<(u64, ShareNameIdent), KVAppError> {
+) -> Result<(u64, ShareNameIdentRaw), KVAppError> {
     let id_key = ShareIdToName { share_id };
 
     let (share_name_seq, share_name) = get_pb_value(kv_api, &id_key).await?;
@@ -681,7 +685,7 @@ pub fn get_share_database_id_and_privilege(
     }
 
     Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-        ShareHasNoGrantedDatabase::new(name_key.tenant.name(), &name_key.share_name),
+        ShareHasNoGrantedDatabase::new(name_key.tenant_name(), name_key.share_name()),
     )))
 }
 
@@ -720,7 +724,7 @@ pub async fn is_db_need_to_be_remove<F>(
     mut f: F,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> Result<(bool, Option<ShareNameIdent>), KVAppError>
+) -> Result<(bool, Option<ShareNameIdentRaw>), KVAppError>
 where
     F: FnMut(&DatabaseMeta) -> bool,
 {
@@ -891,7 +895,7 @@ pub async fn list_tables_from_share_db(
     let res = get_share_or_err(
         kv_api,
         &share,
-        format!("list_tables_from_share_db: {}", &share),
+        format!("list_tables_from_share_db: {}", share.display()),
     )
     .await;
 
@@ -1017,7 +1021,7 @@ pub async fn remove_db_from_share(
         }
         None => {
             return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(db_name.tenant.name(), &share_name.share_name),
+                ShareHasNoGrantedDatabase::new(db_name.tenant.name(), share_name.name()),
             )));
         }
     }
@@ -1028,7 +1032,7 @@ pub async fn remove_db_from_share(
     condition.push(txn_cond_seq(&id_key, Eq, share_meta_seq));
     if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?));
 
-    Ok((share_name.share_name, share_meta))
+    Ok((share_name.name().to_string(), share_meta))
 }
 
 // return (share name, new share meta, new share table info)
@@ -1072,7 +1076,7 @@ pub async fn remove_table_from_share(
             warn!(
                 "remove_table_from_share: table-id {} not found of share {} in tenant {}",
                 table_id,
-                &share_name.share_name,
+                share_name.name(),
                 tenant.name()
             );
         }
@@ -1093,7 +1097,7 @@ pub async fn remove_table_from_share(
             shared_db_id = db_id;
         } else {
             return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(tenant.name(), &share_name.share_name),
+                ShareHasNoGrantedDatabase::new(tenant.name(), share_name.name()),
             )));
         }
     }
@@ -1115,7 +1119,7 @@ pub async fn remove_table_from_share(
                     .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
                     .map(|table_info| {
                         let mut table_info = table_info.as_ref().clone();
-                        table_info.db_type = DatabaseType::ShareDB(share_name.clone().into());
+                        table_info.db_type = DatabaseType::ShareDB(share_name.clone());
                         (table_info.name.clone(), table_info)
                     })
                     .collect::<Vec<_>>(),
@@ -1129,12 +1133,12 @@ pub async fn remove_table_from_share(
         }
         None => {
             return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(tenant.name(), &share_name.share_name),
+                ShareHasNoGrantedDatabase::new(tenant.name(), share_name.name()),
             )));
         }
     };
 
-    Ok((share_name.share_name, share_meta, share_table_info))
+    Ok((share_name.name().to_string(), share_meta, share_table_info))
 }
 
 pub async fn get_share_table_info(
@@ -1179,9 +1183,9 @@ pub async fn get_share_table_info(
                     .collect::<Vec<_>>(),
             );
 
-            Ok((share_name.share_name.clone(), Some(table_infos)))
+            Ok((share_name.name().to_string(), Some(table_infos)))
         }
-        None => Ok((share_name.share_name.clone(), None)),
+        None => Ok((share_name.name().to_string(), None)),
     }
 }
 

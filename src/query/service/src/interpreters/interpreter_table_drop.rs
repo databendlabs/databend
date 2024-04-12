@@ -100,9 +100,7 @@ impl Interpreter for DropTableInterpreter {
         }
 
         let tenant = self.ctx.get_tenant();
-        let db = catalog
-            .get_database(tenant.name(), &self.plan.database)
-            .await?;
+        let db = catalog.get_database(&tenant, &self.plan.database).await?;
         // actually drop table
         let resp = catalog
             .drop_table_by_id(DropTableByIdReq {

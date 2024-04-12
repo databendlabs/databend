@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`Tenant`] is a struct that represents a tenant with runtime config in it.
+//! [`UninitTenant`] is a shadow struct without runtime config.
+
 use std::fmt::Display;
 
 use databend_common_meta_types::NonEmptyString;

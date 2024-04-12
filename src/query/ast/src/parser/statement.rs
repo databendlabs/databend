@@ -21,9 +21,9 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use minitrace::func_name;
 use nom::branch::alt;
@@ -3709,10 +3709,7 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
             Tenant::new_or_err(tenant.to_string(), func_name!())
                 .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
                 .map(|tenant| {
-                    CreateDatabaseOption::FromShare(ShareNameIdent {
-                        tenant,
-                        share_name: share_name.to_string(),
-                    })
+                    CreateDatabaseOption::FromShare(ShareNameIdent::new(tenant, share_name))
                 })
         },
     );

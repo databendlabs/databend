@@ -16,7 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
+use databend_common_meta_app::KeyWithTenant;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -97,8 +98,8 @@ impl Display for CreateDatabaseStmt {
             write!(
                 f,
                 " FROM SHARE {}.{}",
-                from_share.tenant.name(),
-                from_share.share_name
+                from_share.tenant_name(),
+                from_share.name()
             )?;
         }
 

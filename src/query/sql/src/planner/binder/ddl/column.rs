@@ -53,7 +53,7 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 catalog
-                    .get_database(self.ctx.get_tenant().name(), &database)
+                    .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 database
             }
@@ -62,7 +62,7 @@ impl Binder {
         let table = {
             let table = normalize_identifier(table, &self.name_resolution_ctx).name;
             catalog
-                .get_table(self.ctx.get_tenant().name(), database.as_str(), &table)
+                .get_table(&self.ctx.get_tenant(), database.as_str(), &table)
                 .await?;
             table
         };
