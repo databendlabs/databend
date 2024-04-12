@@ -772,7 +772,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_query_queued_duration(&self, queued_duration: Duration) {
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
         todo!()
     }
 }
