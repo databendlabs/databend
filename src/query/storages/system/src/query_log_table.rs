@@ -112,6 +112,7 @@ pub struct QueryLogElement {
     #[serde(serialize_with = "datetime_str")]
     pub query_start_time: i64,
     pub query_duration_ms: i64,
+    pub query_queued_duration_ms: i64,
 
     // Schema.
     pub current_database: String,
@@ -197,6 +198,10 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("query_start_time", TableDataType::Timestamp),
             TableField::new(
                 "query_duration_ms",
+                TableDataType::Number(NumberDataType::Int64),
+            ),
+            TableField::new(
+                "query_queued_duration_ms",
                 TableDataType::Number(NumberDataType::Int64),
             ),
             // Schema.
@@ -375,6 +380,10 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Number(NumberScalar::Int64(self.query_duration_ms)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::Int64(self.query_queued_duration_ms)).as_ref());
         // Schema.
         columns
             .next()

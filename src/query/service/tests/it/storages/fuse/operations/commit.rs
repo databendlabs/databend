@@ -15,6 +15,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dashmap::DashMap;
 use databend_common_base::base::tokio;
@@ -764,6 +765,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        todo!()
+    }
+
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
         todo!()
     }
 }
