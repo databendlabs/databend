@@ -157,38 +157,27 @@ impl Binder {
         let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
-            SelectBuilder::from("system.tables_with_history")
+            SelectBuilder::from("system.views_with_history")
         } else {
-            SelectBuilder::from("system.tables")
+            SelectBuilder::from("system.views")
         };
 
         if *full {
             select_builder
-                .with_column("name AS Tables")
-                .with_column("'BASE TABLE' AS Table_type")
+                .with_column("name AS Views")
                 .with_column("database AS Database")
                 .with_column("catalog AS Catalog")
                 .with_column("owner")
                 .with_column("engine")
-                .with_column("cluster_by AS Cluster_by")
                 .with_column("created_on AS create_time");
-            if *with_history {
-                select_builder.with_column("dropped_on AS drop_time");
-            }
-
-            select_builder
-                .with_column("num_rows")
-                .with_column("data_size")
-                .with_column("data_compressed_size")
-                .with_column("index_size");
         } else {
             select_builder.with_column(format!("name AS `Views_in_{database}`"));
-            if *with_history {
-                select_builder.with_column("dropped_on AS drop_time");
-            };
         }
 
         select_builder.with_column("view_query");
+        if *with_history {
+            select_builder.with_column("dropped_on AS drop_time");
+        }
 
         select_builder
             .with_order_by("catalog")
@@ -196,7 +185,6 @@ impl Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
-        select_builder.with_filter(" engine = 'VIEW'".to_string());
 
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),

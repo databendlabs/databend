@@ -14,9 +14,10 @@
 
 use std::collections::HashMap;
 
-use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::Span;
 
 use crate::ir::ColumnAccess;
 use crate::ir::IterRef;
@@ -26,25 +27,22 @@ use crate::ir::SetRef;
 use crate::ir::VarRef;
 
 pub trait Client {
-    type Scalar: Clone;
-    type DataBlock: Clone;
+    type Var: Clone;
+    type Set: Clone;
 
-    fn query(&self, query: &str) -> Result<Self::DataBlock>;
-    fn scalar_to_literal(&self, scalar: &Self::Scalar) -> Literal;
-    fn read_from_block(
-        &self,
-        block: &Self::DataBlock,
-        row: usize,
-        col: &ColumnAccess,
-    ) -> Self::Scalar;
-    fn block_len(&self, block: &Self::DataBlock) -> usize;
-    fn is_true(&self, scalar: &Self::Scalar) -> bool;
+    #[allow(async_fn_in_trait)]
+    async fn query(&self, query: &str) -> Result<Self::Set>;
+    fn var_to_ast(&self, scalar: &Self::Var) -> Result<Expr>;
+    fn read_from_set(&self, block: &Self::Set, row: usize, col: &ColumnAccess)
+    -> Result<Self::Var>;
+    fn set_len(&self, block: &Self::Set) -> usize;
+    fn is_true(&self, scalar: &Self::Var) -> Result<bool>;
 }
 
 #[derive(Debug, Clone)]
 pub enum ReturnValue<C: Client> {
-    Var(C::Scalar),
-    Set(C::DataBlock),
+    Var(C::Var),
+    Set(C::Set),
 }
 
 #[derive(Debug)]
@@ -56,11 +54,11 @@ struct Cursor {
 
 #[derive(Debug)]
 pub struct Executor<C: Client> {
+    span: Span,
     client: C,
     code: Vec<ScriptIR>,
-    max_steps: usize,
-    vars: HashMap<VarRef, C::Scalar>,
-    sets: HashMap<SetRef, C::DataBlock>,
+    vars: HashMap<VarRef, C::Var>,
+    sets: HashMap<SetRef, C::Set>,
     iters: HashMap<IterRef, Cursor>,
     label_to_pc: HashMap<LabelRef, usize>,
     return_value: Option<ReturnValue<C>>,
@@ -68,7 +66,7 @@ pub struct Executor<C: Client> {
 }
 
 impl<C: Client> Executor<C> {
-    pub fn load(client: C, code: Vec<ScriptIR>, max_steps: usize) -> Self {
+    pub fn load(span: Span, client: C, code: Vec<ScriptIR>) -> Self {
         assert!(!code.is_empty());
 
         let mut label_to_pc = HashMap::new();
@@ -79,9 +77,9 @@ impl<C: Client> Executor<C> {
         }
 
         Executor {
+            span,
             client,
             code,
-            max_steps,
             vars: HashMap::new(),
             sets: HashMap::new(),
             iters: HashMap::new(),
@@ -91,23 +89,25 @@ impl<C: Client> Executor<C> {
         }
     }
 
-    pub fn run(&mut self) -> Result<Option<ReturnValue<C>>> {
-        for _ in 0..self.max_steps {
+    pub async fn run(&mut self, max_steps: usize) -> Result<Option<ReturnValue<C>>> {
+        for _ in 0..max_steps {
             if self.pc >= self.code.len() {
                 return Ok(self.return_value.take());
             }
-            self.step()?;
+            self.step().await?;
         }
 
         Err(ErrorCode::ScriptExecutionError(format!(
             "Execution of script has exceeded the limit of {} steps, \
              which usually means you may have an infinite loop. Otherwise, \
-             You can increase the limit with `set script_max_steps = 10000;`.",
-            self.max_steps
-        )))
+             You can increase the limit with `set script_max_steps = {};`.",
+            max_steps,
+            max_steps * 10
+        ))
+        .set_span(self.span))
     }
 
-    fn step(&mut self) -> Result<()> {
+    async fn step(&mut self) -> Result<()> {
         let line = self
             .code
             .get(self.pc)
@@ -118,11 +118,12 @@ impl<C: Client> Executor<C> {
         match &line {
             ScriptIR::Query { stmt, to_set } => {
                 let sql = stmt
-                    .subst(|var| Ok(self.client.scalar_to_literal(self.get_var(&var)?)))?
+                    .subst(|var| self.client.var_to_ast(self.get_var(&var)?))?
                     .to_string();
                 let block = self
                     .client
                     .query(&sql)
+                    .await
                     .map_err(|err| err.set_span(stmt.span))?;
                 self.sets.insert(to_set.clone(), block);
             }
@@ -131,7 +132,7 @@ impl<C: Client> Executor<C> {
                 let cursor = Cursor {
                     set: set.clone(),
                     row: 0,
-                    len: self.client.block_len(block),
+                    len: self.client.set_len(block),
                 };
                 self.iters.insert(to_iter.clone(), cursor);
             }
@@ -142,7 +143,7 @@ impl<C: Client> Executor<C> {
             } => {
                 let cursor = self.get_iter(iter)?;
                 let block = self.get_set(&cursor.set)?;
-                let scalar = self.client.read_from_block(block, cursor.row, column);
+                let scalar = self.client.read_from_set(block, cursor.row, column)?;
                 self.vars.insert(to_var.clone(), scalar);
             }
             ScriptIR::Next { iter } => {
@@ -162,7 +163,7 @@ impl<C: Client> Executor<C> {
                 to_label,
             } => {
                 let scalar = self.get_var(condition)?;
-                if self.client.is_true(scalar) {
+                if self.client.is_true(scalar)? {
                     self.goto(to_label)?;
                 }
             }
@@ -187,13 +188,13 @@ impl<C: Client> Executor<C> {
         Ok(())
     }
 
-    fn get_var(&self, var: &VarRef) -> Result<&C::Scalar> {
+    fn get_var(&self, var: &VarRef) -> Result<&C::Var> {
         self.vars
             .get(var)
             .ok_or_else(|| ErrorCode::ScriptExecutionError(format!("unknown var: {var}")))
     }
 
-    fn get_set(&self, set: &SetRef) -> Result<&C::DataBlock> {
+    fn get_set(&self, set: &SetRef) -> Result<&C::Set> {
         self.sets
             .get(set)
             .ok_or_else(|| ErrorCode::ScriptExecutionError(format!("unknown set: {set}")))

@@ -101,10 +101,10 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
-use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
 use crate::clusters::Warehouse;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;

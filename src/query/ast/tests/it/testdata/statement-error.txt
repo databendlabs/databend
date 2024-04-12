@@ -169,7 +169,7 @@ error:
   --> SQL:1:19
   |
 1 | show tables format
-  |                   ^ unexpected end of line, expecting <Ident>, <QuotedString>, or `IDENTIFIER`
+  |                   ^ unexpected end of input, expecting <Ident>, <QuotedString>, or `IDENTIFIER`
 
 
 ---------- Input ----------
@@ -353,7 +353,7 @@ error:
   --> SQL:1:17
   |
 1 | CALL system$test
-  | ----            ^ unexpected end of line, expecting `(`
+  | ----            ^ unexpected end of input, expecting `(`
   | |               
   | while parsing `CALL <procedure_name>(<parameter>, ...)`
 
@@ -365,7 +365,7 @@ error:
   --> SQL:1:19
   |
 1 | CALL system$test(a
-  | ----              ^ unexpected end of line, expecting `)` or `,`
+  | ----              ^ unexpected end of input, expecting `)` or `,`
   | |                 
   | while parsing `CALL <procedure_name>(<parameter>, ...)`
 
@@ -752,7 +752,7 @@ error:
   --> SQL:1:40
   |
 1 | CREATE CONNECTION IF NOT EXISTS my_conn
-  | ------                                 ^ unexpected end of line, expecting `STORAGE_TYPE`
+  | ------                                 ^ unexpected end of input, expecting `STORAGE_TYPE`
   | |                                      
   | while parsing `CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`
 
@@ -845,7 +845,7 @@ error:
   --> SQL:1:65
   |
 1 | CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
-  | ------                                   --       ----          ^ unexpected end of line, expecting `)`, `OVER`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, or 32 more ...
+  | ------                                   --       ----          ^ unexpected end of input, expecting `)`, `OVER`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, or 32 more ...
   | |                                        |        |  |          
   | |                                        |        |  while parsing `(<expr> [, ...])`
   | |                                        |        while parsing expression

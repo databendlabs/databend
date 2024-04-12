@@ -214,6 +214,9 @@ impl Plan {
             Plan::DropNotification(_) => Ok("DropNotification".to_string()),
             Plan::DescNotification(_) => Ok("DescNotification".to_string()),
             Plan::AlterNotification(_) => Ok("AlterNotification".to_string()),
+
+            // Stored procedures
+            Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
         }
     }
 }

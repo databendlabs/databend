@@ -20,70 +20,107 @@ use databend_common_exception::Span;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Statement;
-use crate::ast::TypeName;
 
 const INDENT_DEPTH: usize = 4;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CreateStoredProceduer {
-    pub or_replace: bool,
-    pub name: Identifier,
-    pub returns: TypeName,
-    pub body: ScriptBody,
+pub struct ScriptBlock {
+    pub span: Span,
+    pub declares: Vec<DeclareItem>,
+    pub body: Vec<ScriptStatement>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ScriptBody {
-    declare: Vec<VariableDeclare>,
-    body: Vec<ScriptStatement>,
-    exception_body: Option<ScriptStatement>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct VariableDeclare {
-    pub name: Identifier,
-    pub data_type: Option<TypeName>,
-    pub default: Expr,
-}
-
-impl Display for VariableDeclare {
+impl Display for ScriptBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let VariableDeclare {
-            name,
-            data_type,
-            default,
-        } = self;
-        if let Some(data_type) = data_type {
-            write!(f, "{name} {data_type} := {default}")?;
-        } else {
-            write!(f, "{name} := {default}")?;
+        writeln!(f, "DECLARE")?;
+        for declare in &self.declares {
+            writeln!(
+                f,
+                "{}",
+                indent::indent_all_by(INDENT_DEPTH, format!("{};", declare))
+            )?;
         }
+        writeln!(f, "BEGIN")?;
+        for stmt in &self.body {
+            writeln!(
+                f,
+                "{}",
+                indent::indent_all_by(INDENT_DEPTH, format!("{};", stmt))
+            )?;
+        }
+        writeln!(f, "END;")?;
         Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct StatementDeclare {
+pub enum DeclareItem {
+    Var(DeclareVar),
+    Set(DeclareSet),
+}
+
+impl Display for DeclareItem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DeclareItem::Var(declare) => write!(f, "{declare}"),
+            DeclareItem::Set(declare) => write!(f, "{declare}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeclareVar {
+    pub span: Span,
+    pub name: Identifier,
+    pub default: Expr,
+}
+
+impl Display for DeclareVar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let DeclareVar { name, default, .. } = self;
+        write!(f, "{name} := {default}")?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeclareSet {
+    pub span: Span,
     pub name: Identifier,
     pub stmt: Statement,
 }
 
-impl Display for StatementDeclare {
+impl Display for DeclareSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let StatementDeclare { name, stmt } = self;
+        let DeclareSet { name, stmt, .. } = self;
         write!(f, "{name} RESULTSET := {stmt}")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReturnItem {
+    Var(Expr),
+    Set(Identifier),
+    Statement(Statement),
+}
+
+impl Display for ReturnItem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReturnItem::Var(expr) => write!(f, "{expr}"),
+            ReturnItem::Set(name) => write!(f, "TABLE({name})"),
+            ReturnItem::Statement(stmt) => write!(f, "TABLE({stmt})"),
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScriptStatement {
     LetVar {
-        span: Span,
-        declare: VariableDeclare,
+        declare: DeclareVar,
     },
     LetStatement {
-        span: Span,
-        declare: StatementDeclare,
+        declare: DeclareSet,
     },
     RunStatement {
         span: Span,
@@ -96,7 +133,7 @@ pub enum ScriptStatement {
     },
     Return {
         span: Span,
-        value: Option<Expr>,
+        value: Option<ReturnItem>,
     },
     ForLoop {
         span: Span,
@@ -107,10 +144,17 @@ pub enum ScriptStatement {
         body: Vec<ScriptStatement>,
         label: Option<Identifier>,
     },
-    ForIn {
+    ForInSet {
         span: Span,
         variable: Identifier,
         resultset: Identifier,
+        body: Vec<ScriptStatement>,
+        label: Option<Identifier>,
+    },
+    ForInStatement {
+        span: Span,
+        variable: Identifier,
+        stmt: Statement,
         body: Vec<ScriptStatement>,
         label: Option<Identifier>,
     },
@@ -195,7 +239,7 @@ impl Display for ScriptStatement {
                 }
                 Ok(())
             }
-            ScriptStatement::ForIn {
+            ScriptStatement::ForInSet {
                 variable,
                 resultset,
                 body,
@@ -203,6 +247,33 @@ impl Display for ScriptStatement {
                 ..
             } => {
                 writeln!(f, "FOR {variable} IN {resultset} DO")?;
+                for stmt in body {
+                    writeln!(
+                        f,
+                        "{}",
+                        indent::indent_all_by(INDENT_DEPTH, format!("{stmt};"))
+                    )?;
+                }
+                write!(f, "END FOR")?;
+                if let Some(label) = label {
+                    write!(f, " {label}")?;
+                }
+                Ok(())
+            }
+            ScriptStatement::ForInStatement {
+                variable,
+                stmt,
+                body,
+                label,
+                ..
+            } => {
+                writeln!(f, "FOR {variable} IN")?;
+                writeln!(
+                    f,
+                    "{}",
+                    indent::indent_all_by(INDENT_DEPTH, format!("{stmt}"))
+                )?;
+                writeln!(f, "DO")?;
                 for stmt in body {
                     writeln!(
                         f,

@@ -20,11 +20,11 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
 use databend_common_storages_fuse::FuseTable;
 
-use crate::api::Packet;
-use crate::api::TruncateTablePacket;
 use crate::interpreters::Interpreter;
 use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::flight::v1::packets::Packet;
+use crate::servers::flight::v1::packets::TruncateTablePacket;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 

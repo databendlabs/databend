@@ -53,12 +53,14 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 15] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 17] = [
     "catalogs",
     "columns",
     "databases",
     "tables",
+    "views",
     "tables_with_history",
+    "views_with_history",
     "password_policies",
     "streams",
     "virtual_columns",
@@ -1074,6 +1076,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Begin => {}
             Plan::Commit => {}
             Plan::Abort => {}
+            Plan::ExecuteImmediate(_) => {}
         }
 
         Ok(())

@@ -325,6 +325,9 @@ pub enum Statement {
     AlterNotification(AlterNotificationStmt),
     DropNotification(DropNotificationStmt),
     DescribeNotification(DescribeNotificationStmt),
+
+    // Stored procedures
+    ExecuteImmediate(ExecuteImmediateStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -716,6 +719,8 @@ impl Display for Statement {
             Statement::AlterNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DropNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeNotification(stmt) => write!(f, "{stmt}")?,
+
+            Statement::ExecuteImmediate(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }
