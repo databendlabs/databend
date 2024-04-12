@@ -1076,6 +1076,14 @@ impl TableContext for QueryContext {
     fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
         *self.block_threshold.write() = thresholds;
     }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        self.shared.query_queued_duration.read().clone()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: Duration) {
+        *self.shared.query_queued_duration.write() = queued_duration;
+    }
 }
 
 impl TrySpawn for QueryContext {

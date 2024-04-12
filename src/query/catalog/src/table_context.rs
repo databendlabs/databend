@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
@@ -278,4 +279,7 @@ pub trait TableContext: Send + Sync {
 
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
+
+    fn get_query_queued_duration(&self) -> Duration;
+    fn set_query_queued_duration(&self, queued_duration: Duration);
 }

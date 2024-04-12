@@ -344,9 +344,11 @@ impl QueryEntry {
             match plan {
                 Plan::Query { metadata, .. } => {
                     let metadata = metadata.read();
-                    if let Some(table) = metadata.tables().iter().next() {
+                    for table in metadata.tables() {
                         let db = table.database();
-                        return db == "system" || db == "information_schema";
+                        if db != "system" && db != "information_schema" {
+                            return false;
+                        }
                     }
                     true
                 }
@@ -428,6 +430,7 @@ impl QueueData for QueryEntry {
     fn exit_wait_pending(&self, wait_time: Duration) {
         self.ctx
             .set_status_info(format!("resource scheduled(elapsed: {:?})", wait_time).as_str());
+        self.ctx.set_query_queued_duration(wait_time)
     }
 }
 
