@@ -188,9 +188,6 @@ impl CreateTableInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.table)
-            .await?;
         let table_id = reply.table_id;
         let table_id_seq = reply
             .table_id_seq

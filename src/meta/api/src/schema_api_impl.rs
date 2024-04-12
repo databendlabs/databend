@@ -1946,10 +1946,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
                 return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(
-                        from_share.tenant.name(),
-                        &from_share.share_name,
-                    ),
+                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
                 )));
             }
 

@@ -469,7 +469,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
+            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?
         {
             return self.immutable_catalog.undrop_table_by_id(req).await;
