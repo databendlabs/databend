@@ -493,13 +493,16 @@ drop table t;
 
 statement ok
 create table t(c int);
+
+statement ok
 insert into table t values(-1);
 
 statement ok
 create or replace table t as select * from numbers(2);
 
+# table t should be replaced, (schema also changed)
 query I
-select 1 from t order by c;
+select * from t order by number;
 ----
 0
 1
@@ -514,12 +517,12 @@ create or replace table t as select * from numbers(1);
 
 # table t should not be replaced
 statement error 1006
-create table t as select number/0 from numbers(2);
+create or replace table t as select number/0 from numbers(2);
 
 query I
-select (*) from t order by c;
+select * from t order by number;
 ----
-1
+0
 
 
 
