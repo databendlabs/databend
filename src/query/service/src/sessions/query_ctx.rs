@@ -1078,7 +1078,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_query_queued_duration(&self) -> Duration {
-        self.shared.query_queued_duration.read().clone()
+        *self.shared.query_queued_duration.read()
     }
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
