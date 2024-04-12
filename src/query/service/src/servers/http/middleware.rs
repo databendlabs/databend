@@ -95,7 +95,7 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
-    let client_ip = get_client_ip(&req);
+    let client_ip = get_client_ip(req);
     if std_auth_headers.is_empty() {
         if matches!(kind, HttpHandlerKind::Clickhouse) {
             auth_clickhouse_name_password(req, client_ip)
