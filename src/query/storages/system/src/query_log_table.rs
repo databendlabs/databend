@@ -200,6 +200,10 @@ impl SystemLogElement for QueryLogElement {
                 "query_duration_ms",
                 TableDataType::Number(NumberDataType::Int64),
             ),
+            TableField::new(
+                "query_queued_duration_ms",
+                TableDataType::Number(NumberDataType::Int64),
+            ),
             // Schema.
             TableField::new("current_database", TableDataType::String),
             TableField::new("databases", TableDataType::String),
@@ -376,6 +380,10 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Number(NumberScalar::Int64(self.query_duration_ms)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::Int64(self.query_queued_duration_ms)).as_ref());
         // Schema.
         columns
             .next()
