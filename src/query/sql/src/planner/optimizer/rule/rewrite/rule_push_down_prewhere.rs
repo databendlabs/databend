@@ -23,7 +23,6 @@ use crate::optimizer::rule::Rule;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::Prewhere;
@@ -32,7 +31,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
-use crate::plans::WindowFunc;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
@@ -86,18 +84,6 @@ impl RulePushDownPrewhere {
                 Err(ErrorCode::Unimplemented("Column is not in the table"))
             }
 
-            fn visit_window_function(&mut self, window: &'a WindowFunc) -> Result<()> {
-                Err(ErrorCode::Unimplemented(format!(
-                    "Prewhere don't support expr {:?}",
-                    window
-                )))
-            }
-            fn visit_aggregate_function(&mut self, aggregate: &'a AggregateFunction) -> Result<()> {
-                Err(ErrorCode::Unimplemented(format!(
-                    "Prewhere don't support expr {:?}",
-                    aggregate
-                )))
-            }
             fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
                 Err(ErrorCode::Unimplemented(format!(
                     "Prewhere don't support expr {:?}",
@@ -112,6 +98,8 @@ impl RulePushDownPrewhere {
             columns: ColumnSet::new(),
         };
         // WindowFunc, SubqueryExpr and AggregateFunction will not appear in Scan
+        // WindowFunc and AggFunc already check in binder:
+        // Where clause can't contain aggregate or window functions
         column_visitor.visit(expr)?;
         Ok(column_visitor.columns)
     }
