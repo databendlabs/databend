@@ -3163,6 +3163,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             new_column,
         },
     );
+    let modify_table_comment = map(
+        rule! {
+            COMMENT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, new_comment)| AlterTableAction::ModifyTableComment { new_comment },
+    );
     let add_column = map(
         rule! {
             ADD ~ COLUMN? ~ #column_def ~ ( #add_column_option )?
@@ -3230,6 +3236,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_table_cluster_key
         | #rename_table
         | #rename_column
+        | #modify_table_comment
         | #add_column
         | #drop_column
         | #modify_column

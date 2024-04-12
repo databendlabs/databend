@@ -10025,6 +10025,40 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t COMMENT='t1-commnet';
+---------- Output ---------
+ALTER TABLE t COMMENT='t1-commnet'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                is_hole: false,
+            },
+            alias: None,
+            temporal: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyTableComment {
+            new_comment: "t1-commnet",
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t DROP CLUSTER KEY;
 ---------- Output ---------
 ALTER TABLE t DROP CLUSTER KEY

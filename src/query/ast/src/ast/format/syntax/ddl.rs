@@ -162,6 +162,10 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
         AlterTableAction::RenameTable { new_table } => RcDoc::line()
             .append(RcDoc::text("RENAME TO "))
             .append(RcDoc::text(new_table.to_string())),
+        AlterTableAction::ModifyTableComment { new_comment } => RcDoc::line()
+            .append(RcDoc::text("COMMENT='"))
+            .append(RcDoc::text(new_comment))
+            .append(RcDoc::text("'")),
         AlterTableAction::RenameColumn {
             old_column,
             new_column,
