@@ -534,7 +534,7 @@ impl Display for CreateTableReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableReply {
     pub table_id: u64,
-    pub table_id_seq: u64,
+    pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
     pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
@@ -590,6 +590,8 @@ pub struct UndropTableByIdReq {
     pub db_id: MetaId,
     pub table_id: MetaId,
     pub table_id_seq: u64,
+    // TODO doc this
+    pub force: bool,
 }
 
 impl UndropTableReq {

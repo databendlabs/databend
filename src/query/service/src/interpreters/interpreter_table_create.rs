@@ -179,12 +179,10 @@ impl CreateTableInterpreter {
 
         let mut req = self.build_request(None)?;
 
-        // mark as create dropped table
+        // create a dropped table first.
         req.as_dropped = true;
         req.table_meta.drop_on = Some(Utc::now());
-
         let table_meta = req.table_meta.clone();
-
         let reply = catalog.create_table(req).await?;
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
@@ -194,7 +192,9 @@ impl CreateTableInterpreter {
             .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
         let table_id = reply.table_id;
-        let table_id_seq = reply.table_id_seq;
+        let table_id_seq = reply
+            .table_id_seq
+            .expect("internal error: table_id_seq must have been set.");
         let db_id = reply.db_id;
 
         // grant the ownership of the table to the current role.
@@ -227,11 +227,9 @@ impl CreateTableInterpreter {
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
 
-        let db_name = &self.plan.database;
-        let table_name = &self.plan.table;
         let table_info = TableInfo::new(
-            db_name,
-            table_name,
+            &self.plan.database,
+            &self.plan.table,
             TableIdent::new(table_id, table_id_seq),
             table_meta,
         );
@@ -261,13 +259,22 @@ impl CreateTableInterpreter {
             .execute2()
             .await?;
 
-        let db_name = db_name.clone();
-        let table_name = table_name.clone();
-        pipeline.main_pipeline.set_on_finished(move |err| {
-            if err.is_ok() {
-                let qualified_table_name = format!("{}.{}", db_name, table_name);
-                let undrop_fut = {
-                    async move {
+        let db_name = self.plan.database.clone();
+        let table_name = self.plan.table.clone();
+
+        // Add a callback to restore table visibility upon successful insert pipeline completion.
+        // As there might be previous on_finish callbacks(e.g. refresh/compact/re-cluster hooks) which
+        // depend on the table being visible, this callback is added at the beginning of the on_finish
+        // callback list.
+        //
+        // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
+
+        pipeline
+            .main_pipeline
+            .push_front_on_finished_callback(move |err| {
+                if err.is_ok() {
+                    let qualified_table_name = format!("{}.{}", db_name, table_name);
+                    let undrop_fut = async move {
                         let undrop_by_id = UndropTableByIdReq {
                             name_ident: TableNameIdent {
                                 tenant,
@@ -277,22 +284,20 @@ impl CreateTableInterpreter {
                             db_id,
                             table_id,
                             table_id_seq,
+                            force: true,
                         };
                         catalog.undrop_table_by_id(undrop_by_id).await
-                    }
-                };
+                    };
+                    GlobalIORuntime::instance()
+                        .block_on(undrop_fut)
+                        .map_err(|e| {
+                            info!("create {} as select failed. {:?}", qualified_table_name, e);
+                            e
+                        })?;
+                }
 
-                // GlobalIORuntime::instance().block_on(undrop_fut)?;
-                GlobalIORuntime::instance()
-                    .block_on(undrop_fut)
-                    .map_err(|e| {
-                        info!("create {} as select failed. {:?}", qualified_table_name, e);
-                        e
-                    })?;
-            }
-
-            Ok(())
-        });
+                Ok(())
+            });
 
         Ok(pipeline)
     }

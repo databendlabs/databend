@@ -232,6 +232,7 @@ use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
+use crate::txn_op_get;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
 use crate::util::db_id_has_to_exist;
@@ -1616,26 +1617,33 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         CreateOption::CreateIfNotExists => {
                             return Ok(CreateTableReply {
                                 table_id: *id.data,
-                                table_id_seq: id.seq,
+                                table_id_seq: None,
                                 db_id: db_id.data,
                                 new_table: false,
                                 spec_vec: None,
                             });
                         }
                         CreateOption::CreateOrReplace => {
-                            let is_delete = req.as_dropped;
-                            construct_drop_table_txn_operations(
-                                self,
-                                req.name_ident.table_name.clone(),
-                                &req.name_ident.tenant,
-                                *id.data,
-                                db_id.data,
-                                false,
-                                is_delete,
-                                &mut condition,
-                                &mut if_then,
-                            )
-                            .await?
+                            if req.as_dropped {
+                                // If the table is being created as a dropped table, we do not
+                                // need to combine with drop_table_txn operations, just return
+                                // the sequence number associated with the value part of
+                                // the key-value pair (key_dbid_tbname, table_id).
+                                (None, id.seq)
+                            } else {
+                                construct_drop_table_txn_operations(
+                                    self,
+                                    req.name_ident.table_name.clone(),
+                                    &req.name_ident.tenant,
+                                    *id.data,
+                                    db_id.data,
+                                    false,
+                                    false,
+                                    &mut condition,
+                                    &mut if_then,
+                                )
+                                .await?
+                            }
                         }
                     }
                 } else {
@@ -1670,7 +1678,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             {
                 // append new table_id into list
                 tb_id_list.data.append(table_id);
-                let tb_id_seq = opt.1;
+                let dbid_tbname_seq = opt.1;
 
                 condition.extend(vec![
                     // db has not to change, i.e., no new table is created.
@@ -1679,7 +1687,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     // no other table id with the same name is append.
                     txn_cond_seq(&key_table_id_list, Eq, tb_id_list.seq),
                     // no other table with the same name is inserted.
-                    txn_cond_seq(&key_dbid_tbname, Eq, tb_id_seq),
+                    txn_cond_seq(&key_dbid_tbname, Eq, dbid_tbname_seq),
                 ]);
 
                 if_then.extend( vec![
@@ -1696,9 +1704,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         txn_op_put(&key_table_id_to_name, serialize_struct(&key_dbid_tbname)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ]);
 
-                // To create the table in a "dropped" state, we intentionally omit the tuple (key_dbid_name, table_id).
-                // This ensures the table remains invisible, and available to be vacuumed.
-                if !req.as_dropped {
+                if req.as_dropped {
+                    // To create the table in a "dropped" state,
+                    // - we intentionally omit the tuple (key_dbid_name, table_id).
+                    //   This ensures the table remains invisible, and available to be vacuumed.
+                    // - also, the `table_id_seq` of newly create table should be obtained.
+                    //   The caller need to know the `table_id_seq` to manipulate the table more efficiently
+                    //   This TxnOp::Get is(should be) the last operation in the `if_then` list.
+                    if_then.push(txn_op_get(key_table_id.as_ref().unwrap()));
+                } else {
+                    // Otherwise, make newly created table visible by putting the tuple:
                     // (tenant, db_id, tb_name) -> tb_id
                     if_then.push(txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?))
                 }
@@ -1719,12 +1734,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     "create_table"
                 );
 
+                // extract the table_id_seq (if any) from the kv txn responses
+                let table_id_seq = if req.as_dropped {
+                    responses.last().and_then(|r| match &r.response {
+                        Some(Response::Get(resp)) => resp.value.as_ref().map(|v| v.seq),
+                        _ => None,
+                    })
+                } else {
+                    None
+                };
+
                 if succ {
                     return Ok(CreateTableReply {
                         table_id,
-                        table_id_seq: tb_id_seq,
+                        table_id_seq,
                         db_id: db_id.data,
-                        new_table: tb_id_seq == 0,
+                        new_table: dbid_tbname_seq == 0,
                         spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
                             Some((spec_vec, mut_share_table_info))
                         } else {
@@ -1937,7 +1962,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // If table id already exists, return error.
             let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            if tb_id_seq > 0 || table_id > 0 {
+            if !req.force && (tb_id_seq > 0 || table_id > 0) {
                 return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
                     UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
                 )));
@@ -1963,22 +1988,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 })?
             };
 
-            let table_id = req.table_id;
-
-            // Return error if there is no table id history.
-            // let table_id = match tb_id_list.last() {
-            match tb_id_list.last() {
-                // Some(table_id) => *table_id,
-                // TODO
-                Some(last_table_id) => assert_eq!(
-                    *last_table_id, table_id,
-                    "table_id mismatch, last of id_list{},  table id {}",
-                    *last_table_id, table_id
-                ),
-                None => {
-                    return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
-                        UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                    )));
+            let table_id = {
+                if req.force {
+                    match tb_id_list.last() {
+                        Some(table_id) => *table_id,
+                        None => {
+                            // Return error if there is no table id history.
+                            return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                                UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
+                            )));
+                        }
+                    }
+                } else {
+                    req.table_id
                 }
             };
 
@@ -2018,6 +2040,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         // to block the batch-delete-tables when deleting a db.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
                         txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
+                        // txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
                         txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
                     ],
                     else_then: vec![],

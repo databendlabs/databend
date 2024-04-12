@@ -71,6 +71,7 @@ pub use util::serialize_struct;
 pub use util::serialize_u64;
 pub use util::txn_cond_seq;
 pub use util::txn_op_del;
+pub use util::txn_op_get;
 pub use util::txn_op_put;
 pub use util::txn_op_put_with_expire;
 pub use util::DEFAULT_MGET_SIZE;
