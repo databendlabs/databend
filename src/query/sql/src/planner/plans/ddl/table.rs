@@ -251,6 +251,21 @@ impl RenameTablePlan {
     }
 }
 
+/// Modify table comment.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModifyTableCommentPlan {
+    pub new_comment: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl ModifyTableCommentPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// SetOptions
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetOptionsPlan {

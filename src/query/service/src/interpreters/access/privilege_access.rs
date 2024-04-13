@@ -705,6 +705,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ModifyTableColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
             }
+            Plan::ModifyTableComment(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+            }
             Plan::DropTableColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
             }
