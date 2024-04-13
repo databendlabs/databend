@@ -127,10 +127,10 @@ impl<O: Offset> ListArray<O> {
 impl<O: Offset> ListArray<O> {
     /// Slices this [`ListArray`].
     /// # Panics
-    /// panics iff `offset + length >= self.len()`
+    /// panics iff `offset + length > self.len()`
     pub fn slice(&mut self, offset: usize, length: usize) {
         assert!(
-            offset + length < self.len(),
+            offset + length <= self.len(),
             "the offset of the new Buffer cannot exceed the existing length"
         );
         unsafe { self.slice_unchecked(offset, length) }
