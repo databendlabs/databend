@@ -67,7 +67,7 @@ impl Interpreter for CreateViewInterpreter {
                     let database_name = table.database();
                     let table_name = table.name();
                     if !catalog
-                        .exists_table(tenant.as_str(), database_name, table_name)
+                        .exists_table(&tenant, database_name, table_name)
                         .await?
                         && !table_function.contains(&table_name.to_string())
                         && !table.table().is_stage_table()

@@ -23,7 +23,7 @@ Exchange
                 ├── table: default.system.numbers_mt
                 ├── output columns: [number (#0)]
                 ├── read rows: 100000
-                ├── read bytes: 800000
+                ├── read size: 781.25 KiB
                 ├── partitions total: 2
                 ├── partitions scanned: 2
                 ├── push downs: [filters: [], limit: NONE]
@@ -45,8 +45,8 @@ Exchange
     ├── aggregate functions: []
     ├── estimated rows: 100000.00
     └── Exchange
-        ├── output columns: [#_group_by_key]
-        ├── exchange type: Hash(_group_by_key)
+        ├── output columns: [numbers_mt.number (#0)]
+        ├── exchange type: Hash(0)
         └── AggregatePartial
             ├── group by: [number]
             ├── aggregate functions: []
@@ -55,7 +55,7 @@ Exchange
                 ├── table: default.system.numbers_mt
                 ├── output columns: [number (#0)]
                 ├── read rows: 100000
-                ├── read bytes: 800000
+                ├── read size: 781.25 KiB
                 ├── partitions total: 2
                 ├── partitions scanned: 2
                 ├── push downs: [filters: [], limit: NONE]

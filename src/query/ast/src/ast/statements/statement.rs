@@ -104,6 +104,7 @@ pub enum Statement {
     },
 
     Insert(InsertStmt),
+    InsertMultiTable(InsertMultiTableStmt),
     Replace(ReplaceStmt),
     MergeInto(MergeIntoStmt),
     Delete(DeleteStmt),
@@ -324,6 +325,9 @@ pub enum Statement {
     AlterNotification(AlterNotificationStmt),
     DropNotification(DropNotificationStmt),
     DescribeNotification(DescribeNotificationStmt),
+
+    // Stored procedures
+    ExecuteImmediate(ExecuteImmediateStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -415,6 +419,7 @@ impl Display for Statement {
             }
             Statement::Query(stmt) => write!(f, "{stmt}")?,
             Statement::Insert(stmt) => write!(f, "{stmt}")?,
+            Statement::InsertMultiTable(insert_multi_table) => write!(f, "{insert_multi_table}")?,
             Statement::Replace(stmt) => write!(f, "{stmt}")?,
             Statement::MergeInto(stmt) => write!(f, "{stmt}")?,
             Statement::Delete(stmt) => write!(f, "{stmt}")?,
@@ -714,6 +719,8 @@ impl Display for Statement {
             Statement::AlterNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DropNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeNotification(stmt) => write!(f, "{stmt}")?,
+
+            Statement::ExecuteImmediate(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

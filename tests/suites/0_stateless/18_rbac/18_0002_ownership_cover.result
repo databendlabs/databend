@@ -22,15 +22,15 @@ t1
 db_a
 information_schema
 system
-GRANT OWNERSHIP ON 'default'.'db_a'.* TO ROLE `role1`
-GRANT OWNERSHIP ON 'default'.'db_a'.'t' TO ROLE `role1`
-GRANT OWNERSHIP ON 'default'.'db_a'.'t1' TO ROLE `role1`
-GRANT OWNERSHIP ON 'default'.'db_a'.* TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'db_a'.'t' TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'db_a'.'t1' TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'db_a'.* TO 'a'@'%'
-GRANT OWNERSHIP ON 'default'.'db_a'.'t' TO 'a'@'%'
-GRANT OWNERSHIP ON 'default'.'db_a'.'t1' TO 'a'@'%'
+OWNERSHIP db_a  ROLE role1 GRANT OWNERSHIP ON 'default'.'db_a'.* TO ROLE `role1`
+OWNERSHIP default.db_a.t  ROLE role1 GRANT OWNERSHIP ON 'default'.'db_a'.'t' TO ROLE `role1`
+OWNERSHIP default.db_a.t1  ROLE role1 GRANT OWNERSHIP ON 'default'.'db_a'.'t1' TO ROLE `role1`
+OWNERSHIP db_a  USER b GRANT OWNERSHIP ON 'default'.'db_a'.* TO 'b'@'%'
+OWNERSHIP default.db_a.t  USER b GRANT OWNERSHIP ON 'default'.'db_a'.'t' TO 'b'@'%'
+OWNERSHIP default.db_a.t1  USER b GRANT OWNERSHIP ON 'default'.'db_a'.'t1' TO 'b'@'%'
+OWNERSHIP db_a  USER a GRANT OWNERSHIP ON 'default'.'db_a'.* TO 'a'@'%'
+OWNERSHIP default.db_a.t  USER a GRANT OWNERSHIP ON 'default'.'db_a'.'t' TO 'a'@'%'
+OWNERSHIP default.db_a.t1  USER a GRANT OWNERSHIP ON 'default'.'db_a'.'t1' TO 'a'@'%'
 t
 t1
 t
@@ -42,10 +42,10 @@ t1
 a	drop_role
 t	drop_role
 a	account_admin
-t	drop_role
+t	account_admin
 a	drop_role1
 t	drop_role1
-GRANT OWNERSHIP ON 'default'.'a'.* TO ROLE `drop_role1`
-GRANT OWNERSHIP ON 'default'.'a'.'t' TO ROLE `drop_role1`
+OWNERSHIP a  ROLE drop_role1 GRANT OWNERSHIP ON 'default'.'a'.* TO ROLE `drop_role1`
+OWNERSHIP default.a.t  ROLE drop_role1 GRANT OWNERSHIP ON 'default'.'a'.'t' TO ROLE `drop_role1`
 == test create database privilege and drop object ===
 Error: APIError: ResponseError with 1003: Unknown database 'c'

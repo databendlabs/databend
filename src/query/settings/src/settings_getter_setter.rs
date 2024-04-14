@@ -346,6 +346,10 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_max_bytes")? as usize)
     }
 
+    pub fn get_query_result_cache_min_execute_secs(&self) -> Result<usize> {
+        Ok(self.try_get_u64("query_result_cache_min_execute_secs")? as usize)
+    }
+
     pub fn get_http_handler_result_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("http_handler_result_timeout_secs")
     }
@@ -481,22 +485,6 @@ impl Settings {
 
     pub fn set_use_parquet2(&self, val: bool) -> Result<()> {
         self.try_set_u64("use_parquet2", u64::from(val))
-    }
-
-    pub fn get_fuse_write_use_parquet2(&self) -> Result<bool> {
-        Ok(self.try_get_u64("fuse_write_use_parquet2")? == 1)
-    }
-
-    pub fn set_fuse_write_use_parquet2(&self, val: bool) -> Result<()> {
-        self.try_set_u64("fuse_write_use_parquet2", u64::from(val))
-    }
-
-    pub fn get_fuse_read_use_parquet2(&self) -> Result<bool> {
-        Ok(self.try_get_u64("fuse_read_use_parquet2")? != 0)
-    }
-
-    pub fn set_fuse_read_use_parquet2(&self, val: bool) -> Result<()> {
-        self.try_set_u64("fuse_read_use_parquet2", u64::from(val))
     }
 
     pub fn get_enable_replace_into_partitioning(&self) -> Result<bool> {

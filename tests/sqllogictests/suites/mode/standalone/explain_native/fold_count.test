@@ -41,10 +41,10 @@ AggregateFinal
         ├── table: default.default.t
         ├── output columns: []
         ├── read rows: 1000
-        ├── read bytes: 4011
+        ├── read size: 3.92 KiB
         ├── partitions total: 2
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [t.number (#0) > 10], limit: NONE]
         └── estimated rows: 990.00
 

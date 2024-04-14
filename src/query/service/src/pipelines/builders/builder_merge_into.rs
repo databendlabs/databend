@@ -557,7 +557,7 @@ impl PipelineBuilder {
             // ......                       .....                       .....
             // ----------------------------------------------------------------------
             // the complete pipeline(with matched and unmatched) below:
-            // 1. matched only or compelete pipeline are same with above
+            // 1. matched only or complete pipeline are same with above
             // 2. for unmatched only or insert only, there are no row_id ports
             if need_match {
                 let mut rules = Vec::with_capacity(self.main_pipeline.output_len());

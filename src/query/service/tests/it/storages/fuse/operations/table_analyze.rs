@@ -49,9 +49,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let statistics_sql = "analyze table default.t";
     fixture.execute_command(statistics_sql).await?;
 
-    let table = catalog
-        .get_table(ctx.get_tenant().as_str(), "default", "t")
-        .await?;
+    let table = catalog.get_table(&ctx.get_tenant(), "default", "t").await?;
 
     // check count
     ctx.evict_table_from_cache("default", "default", "t")?;

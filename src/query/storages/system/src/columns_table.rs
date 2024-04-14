@@ -223,7 +223,7 @@ pub(crate) async fn dump_tables(
     let mut final_dbs: Vec<(String, u64)> = Vec::new();
 
     if databases.is_empty() {
-        let all_databases = catalog.list_databases(tenant.as_str()).await?;
+        let all_databases = catalog.list_databases(&tenant).await?;
         for db in all_databases {
             let db_id = db.get_db_info().ident.db_id;
             let db_name = db.name();
@@ -234,7 +234,7 @@ pub(crate) async fn dump_tables(
     } else {
         for db in databases {
             let db_id = catalog
-                .get_database(tenant.as_str(), &db)
+                .get_database(&tenant, &db)
                 .await?
                 .get_db_info()
                 .ident
@@ -248,7 +248,7 @@ pub(crate) async fn dump_tables(
     let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
     for (database, db_id) in final_dbs {
         let tables = if tables.is_empty() {
-            if let Ok(table) = catalog.list_tables(tenant.as_str(), &database).await {
+            if let Ok(table) = catalog.list_tables(&tenant, &database).await {
                 table
             } else {
                 vec![]
@@ -256,7 +256,7 @@ pub(crate) async fn dump_tables(
         } else {
             let mut res = Vec::new();
             for table in &tables {
-                if let Ok(table) = catalog.get_table(tenant.as_str(), &database, table).await {
+                if let Ok(table) = catalog.get_table(&tenant, &database, table).await {
                     res.push(table);
                 }
             }

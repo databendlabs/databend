@@ -393,10 +393,10 @@ EvalScalar
             ├── table: default.test_index.t
             ├── output columns: [id (#0), user_id (#1), event_name (#2)]
             ├── read rows: 8
-            ├── read bytes: 179
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [], limit: NONE]
             ├── aggregating index: [SELECT event_name, user_id, COUNT(), COUNT(id), MAX(user_id), SUM(id) FROM test_index.t GROUP BY event_name, user_id]
             ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_4 (#4), index_col_5 (#5), index_col_3 (#3)]]
@@ -437,10 +437,10 @@ EvalScalar
                 ├── table: default.test_index.t
                 ├── output columns: [id (#0), user_id (#1), event_name (#2)]
                 ├── read rows: 8
-                ├── read bytes: 179
+                ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
                 ├── push downs: [filters: [is_true(t.user_id (#1) > 1)], limit: NONE]
                 ├── aggregating index: [SELECT event_name, user_id, COUNT(), COUNT(id), MAX(user_id), SUM(id) FROM test_index.t GROUP BY event_name, user_id]
                 ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_4 (#4), index_col_5 (#5), index_col_3 (#3)], filter: is_true(index_col_0 (#0) > CAST(1 AS Int32 NULL))]
@@ -483,10 +483,10 @@ EvalScalar
                     ├── table: default.test_index.t
                     ├── output columns: [id (#0), user_id (#1), event_name (#2)]
                     ├── read rows: 8
-                    ├── read bytes: 179
+                    ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
                     ├── push downs: [filters: [is_true(t.user_id (#1) > 1)], limit: NONE]
                     ├── aggregating index: [SELECT event_name, user_id, COUNT(), COUNT(id), MAX(user_id), SUM(id) FROM test_index.t GROUP BY event_name, user_id]
                     ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_4 (#4), index_col_5 (#5), index_col_3 (#3)], filter: is_true(index_col_0 (#0) > CAST(1 AS Int32 NULL))]

@@ -36,6 +36,8 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use log::warn;
@@ -44,52 +46,59 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
 
-pub struct TablesTable<const WITH_HISTORY: bool> {
+pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
 }
 
-pub type TablesTableWithHistory = TablesTable<true>;
-pub type TablesTableWithoutHistory = TablesTable<false>;
+pub type TablesTableWithHistory = TablesTable<true, true>;
+pub type TablesTableWithoutHistory = TablesTable<false, true>;
+pub type ViewsTableWithHistory = TablesTable<true, false>;
+pub type ViewsTableWithoutHistory = TablesTable<false, false>;
 
 #[async_trait::async_trait]
 pub trait HistoryAware {
     const TABLE_NAME: &'static str;
     async fn list_tables(
         catalog: &Arc<dyn Catalog>,
-        tenant: &str,
-        db_name: &str,
+        tenant: &Tenant,
+        database_name: &str,
+        with_history: bool,
+        without_view: bool,
     ) -> Result<Vec<Arc<dyn Table>>>;
 }
 
-#[async_trait::async_trait]
-impl HistoryAware for TablesTable<true> {
-    const TABLE_NAME: &'static str = "tables_with_history";
-    #[async_backtrace::framed]
-    async fn list_tables(
-        catalog: &Arc<dyn Catalog>,
-        tenant: &str,
-        database_name: &str,
-    ) -> Result<Vec<Arc<dyn Table>>> {
-        catalog.list_tables_history(tenant, database_name).await
-    }
+macro_rules! impl_history_aware {
+    ($with_history:expr, $without_view:expr, $table_name:expr) => {
+        #[async_trait::async_trait]
+        impl HistoryAware for TablesTable<$with_history, $without_view> {
+            const TABLE_NAME: &'static str = $table_name;
+
+            #[async_backtrace::framed]
+            async fn list_tables(
+                catalog: &Arc<dyn Catalog>,
+                tenant: &Tenant,
+                database_name: &str,
+                with_history: bool,
+                _without_view: bool,
+            ) -> Result<Vec<Arc<dyn Table>>> {
+                if with_history {
+                    catalog.list_tables_history(tenant, database_name).await
+                } else {
+                    catalog.list_tables(tenant, database_name).await
+                }
+            }
+        }
+    };
 }
 
-#[async_trait::async_trait]
-impl HistoryAware for TablesTable<false> {
-    const TABLE_NAME: &'static str = "tables";
-    #[async_backtrace::framed]
-    async fn list_tables(
-        catalog: &Arc<dyn Catalog>,
-        tenant: &str,
-        database_name: &str,
-    ) -> Result<Vec<Arc<dyn Table>>> {
-        catalog.list_tables(tenant, database_name).await
-    }
-}
+impl_history_aware!(true, true, "tables_with_history");
+impl_history_aware!(false, true, "tables");
+impl_history_aware!(true, false, "views_with_history");
+impl_history_aware!(false, false, "views");
 
 #[async_trait::async_trait]
-impl<const T: bool> AsyncSystemTable for TablesTable<T>
-where TablesTable<T>: HistoryAware
+impl<const T: bool, const U: bool> AsyncSystemTable for TablesTable<T, U>
+where TablesTable<T, U>: HistoryAware
 {
     const NAME: &'static str = Self::TABLE_NAME;
 
@@ -105,9 +114,7 @@ where TablesTable<T>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs = catalog_mgr
-            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
-            .await?;
+        let catalogs = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
         Ok(self
@@ -116,55 +123,90 @@ where TablesTable<T>: HistoryAware
     }
 }
 
-impl<const T: bool> TablesTable<T>
-where TablesTable<T>: HistoryAware
+impl<const T: bool, const U: bool> TablesTable<T, U>
+where TablesTable<T, U>: HistoryAware
 {
     pub fn schema() -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![
-            TableField::new("catalog", TableDataType::String),
-            TableField::new("database", TableDataType::String),
-            TableField::new("name", TableDataType::String),
-            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("engine", TableDataType::String),
-            TableField::new("engine_full", TableDataType::String),
-            TableField::new("cluster_by", TableDataType::String),
-            TableField::new("is_transient", TableDataType::String),
-            TableField::new("created_on", TableDataType::Timestamp),
-            TableField::new(
-                "dropped_on",
-                TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
-            ),
-            TableField::new("updated_on", TableDataType::Timestamp),
-            TableField::new(
-                "num_rows",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "data_size",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "data_compressed_size",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "index_size",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "number_of_segments",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "number_of_blocks",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "owner",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-            TableField::new("comment", TableDataType::String),
-        ])
+        if U {
+            TableSchemaRefExt::create(vec![
+                TableField::new("catalog", TableDataType::String),
+                TableField::new("database", TableDataType::String),
+                TableField::new("name", TableDataType::String),
+                TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("engine", TableDataType::String),
+                TableField::new("engine_full", TableDataType::String),
+                TableField::new("cluster_by", TableDataType::String),
+                TableField::new("is_transient", TableDataType::String),
+                TableField::new("created_on", TableDataType::Timestamp),
+                TableField::new(
+                    "dropped_on",
+                    TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+                ),
+                TableField::new("updated_on", TableDataType::Timestamp),
+                TableField::new(
+                    "num_rows",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "data_size",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "data_compressed_size",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "index_size",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "number_of_segments",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "number_of_blocks",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "owner",
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+                TableField::new("comment", TableDataType::String),
+            ])
+        } else {
+            TableSchemaRefExt::create(vec![
+                TableField::new("catalog", TableDataType::String),
+                TableField::new("database", TableDataType::String),
+                TableField::new("name", TableDataType::String),
+                TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("engine", TableDataType::String),
+                TableField::new("engine_full", TableDataType::String),
+                TableField::new("created_on", TableDataType::Timestamp),
+                TableField::new(
+                    "dropped_on",
+                    TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+                ),
+                TableField::new("updated_on", TableDataType::Timestamp),
+                TableField::new(
+                    "owner",
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+                TableField::new("comment", TableDataType::String),
+                TableField::new("view_query", TableDataType::String),
+            ])
+        }
     }
 
     /// dump all the tables from all the catalogs with pushdown, this is used for `SHOW TABLES` command.
@@ -179,6 +221,7 @@ where TablesTable<T>: HistoryAware
         visibility_checker: GrantObjectVisibilityChecker,
     ) -> DataBlock {
         let tenant = ctx.get_tenant();
+
         let ctls: Vec<(String, Arc<dyn Catalog>)> =
             catalogs.iter().map(|e| (e.name(), e.clone())).collect();
 
@@ -205,7 +248,7 @@ where TablesTable<T>: HistoryAware
                         }
                     });
                     for db in db_name {
-                        match ctl.get_database(tenant.as_str(), db.as_str()).await {
+                        match ctl.get_database(&tenant, db.as_str()).await {
                             Ok(database) => dbs.push(database),
                             Err(err) => {
                                 let msg = format!("Failed to get database: {}, {}", db, err);
@@ -218,7 +261,7 @@ where TablesTable<T>: HistoryAware
             }
 
             if dbs.is_empty() {
-                dbs = match ctl.list_databases(tenant.as_str()).await {
+                dbs = match ctl.list_databases(&tenant).await {
                     Ok(dbs) => dbs,
                     Err(err) => {
                         let msg =
@@ -248,7 +291,7 @@ where TablesTable<T>: HistoryAware
                 let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
                 let name: &str = Box::leak(name);
-                let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
+                let tables = match Self::list_tables(&ctl, &tenant, name, T, U).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
@@ -279,21 +322,40 @@ where TablesTable<T>: HistoryAware
                         table_id,
                     ) && table.engine() != "STREAM"
                     {
-                        catalogs.push(ctl_name);
-                        databases.push(name);
-                        database_tables.push(table);
-                        if ownership.is_empty() {
-                            owner.push(None);
-                        } else {
-                            owner.push(
-                                ownership
-                                    .get(&OwnershipObject::Table {
-                                        catalog_name: ctl_name.to_string(),
-                                        db_id,
-                                        table_id,
-                                    })
-                                    .map(|role| role.to_string()),
-                            );
+                        if !U && table.get_table_info().engine() == "VIEW" {
+                            catalogs.push(ctl_name);
+                            databases.push(name);
+                            database_tables.push(table);
+                            if ownership.is_empty() {
+                                owner.push(None);
+                            } else {
+                                owner.push(
+                                    ownership
+                                        .get(&OwnershipObject::Table {
+                                            catalog_name: ctl_name.to_string(),
+                                            db_id,
+                                            table_id,
+                                        })
+                                        .map(|role| role.to_string()),
+                                );
+                            }
+                        } else if U && table.get_table_info().engine() != "VIEW" {
+                            catalogs.push(ctl_name);
+                            databases.push(name);
+                            database_tables.push(table);
+                            if ownership.is_empty() {
+                                owner.push(None);
+                            } else {
+                                owner.push(
+                                    ownership
+                                        .get(&OwnershipObject::Table {
+                                            catalog_name: ctl_name.to_string(),
+                                            db_id,
+                                            table_id,
+                                        })
+                                        .map(|role| role.to_string()),
+                                );
+                            }
                         }
                     }
                 }
@@ -307,27 +369,29 @@ where TablesTable<T>: HistoryAware
         let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
-        for tbl in &database_tables {
-            let stats = match tbl.table_statistics(ctx.clone(), None).await {
-                Ok(stats) => stats,
-                Err(err) => {
-                    let msg = format!(
-                        "Unable to get table statistics on table {}: {}",
-                        tbl.name(),
-                        err
-                    );
-                    warn!("{}", msg);
-                    ctx.push_warning(msg);
+        if U {
+            for tbl in &database_tables {
+                let stats = match tbl.table_statistics(ctx.clone(), None).await {
+                    Ok(stats) => stats,
+                    Err(err) => {
+                        let msg = format!(
+                            "Unable to get table statistics on table {}: {}",
+                            tbl.name(),
+                            err
+                        );
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
 
-                    None
-                }
-            };
-            num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
-            number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
-            number_of_segments.push(stats.as_ref().and_then(|v| v.number_of_segments));
-            data_size.push(stats.as_ref().and_then(|v| v.data_size));
-            data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
-            index_size.push(stats.as_ref().and_then(|v| v.index_size));
+                        None
+                    }
+                };
+                num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
+                number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
+                number_of_segments.push(stats.as_ref().and_then(|v| v.number_of_segments));
+                data_size.push(stats.as_ref().and_then(|v| v.data_size));
+                data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
+                index_size.push(stats.as_ref().and_then(|v| v.index_size));
+            }
         }
 
         let names: Vec<String> = database_tables
@@ -386,27 +450,61 @@ where TablesTable<T>: HistoryAware
             .map(|v| v.get_table_info().meta.comment.clone())
             .collect();
 
-        DataBlock::new_from_columns(vec![
-            StringType::from_data(catalogs),
-            StringType::from_data(databases),
-            StringType::from_data(names),
-            UInt64Type::from_data(table_id),
-            StringType::from_data(engines),
-            StringType::from_data(engines_full),
-            StringType::from_data(cluster_bys),
-            StringType::from_data(is_transient),
-            TimestampType::from_data(created_on),
-            TimestampType::from_opt_data(dropped_on),
-            TimestampType::from_data(updated_on),
-            UInt64Type::from_opt_data(num_rows),
-            UInt64Type::from_opt_data(data_size),
-            UInt64Type::from_opt_data(data_compressed_size),
-            UInt64Type::from_opt_data(index_size),
-            UInt64Type::from_opt_data(number_of_segments),
-            UInt64Type::from_opt_data(number_of_blocks),
-            StringType::from_opt_data(owner),
-            StringType::from_data(comment),
-        ])
+        let view_query: Vec<String> = database_tables
+            .iter()
+            .map(|v| -> String {
+                let tbl_info = v.get_table_info();
+                match tbl_info.engine() {
+                    "VIEW" => {
+                        let query = tbl_info.options().get(QUERY);
+                        match query {
+                            Some(query) => query.clone(),
+                            None => String::from(""),
+                        }
+                    }
+                    _ => String::from(""),
+                }
+            })
+            .collect();
+
+        if U {
+            DataBlock::new_from_columns(vec![
+                StringType::from_data(catalogs),
+                StringType::from_data(databases),
+                StringType::from_data(names),
+                UInt64Type::from_data(table_id),
+                StringType::from_data(engines),
+                StringType::from_data(engines_full),
+                StringType::from_data(cluster_bys),
+                StringType::from_data(is_transient),
+                TimestampType::from_data(created_on),
+                TimestampType::from_opt_data(dropped_on),
+                TimestampType::from_data(updated_on),
+                UInt64Type::from_opt_data(num_rows),
+                UInt64Type::from_opt_data(data_size),
+                UInt64Type::from_opt_data(data_compressed_size),
+                UInt64Type::from_opt_data(index_size),
+                UInt64Type::from_opt_data(number_of_segments),
+                UInt64Type::from_opt_data(number_of_blocks),
+                StringType::from_opt_data(owner),
+                StringType::from_data(comment),
+            ])
+        } else {
+            DataBlock::new_from_columns(vec![
+                StringType::from_data(catalogs),
+                StringType::from_data(databases),
+                StringType::from_data(names),
+                UInt64Type::from_data(table_id),
+                StringType::from_data(engines),
+                StringType::from_data(engines_full),
+                TimestampType::from_data(created_on),
+                TimestampType::from_opt_data(dropped_on),
+                TimestampType::from_data(updated_on),
+                StringType::from_opt_data(owner),
+                StringType::from_data(comment),
+                StringType::from_data(view_query),
+            ])
+        }
     }
 
     pub fn create(table_id: u64) -> Arc<dyn Table> {
@@ -416,7 +514,7 @@ where TablesTable<T>: HistoryAware
             name: Self::NAME.to_owned(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
-                schema: TablesTable::<T>::schema(),
+                schema: TablesTable::<T, U>::schema(),
                 engine: "SystemTables".to_string(),
 
                 ..Default::default()
@@ -424,6 +522,6 @@ where TablesTable<T>: HistoryAware
             ..Default::default()
         };
 
-        AsyncOneBlockSystemTable::create(TablesTable::<T> { table_info })
+        AsyncOneBlockSystemTable::create(TablesTable::<T, U> { table_info })
     }
 }

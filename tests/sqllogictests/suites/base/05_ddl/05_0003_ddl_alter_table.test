@@ -88,7 +88,7 @@ CREATE TABLE `05_0003_at_t3`(a int not null, b int not null, c int not null) blo
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT NOT NULL,   `b` INT NOT NULL,   `c` INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TABLE "05_0003_at_t3" ( a INT NOT NULL, b INT NOT NULL, c INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement ok
 ALTER TABLE `05_0003_at_t3` drop column c
@@ -96,7 +96,7 @@ ALTER TABLE `05_0003_at_t3` drop column c
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT NOT NULL,   `b` INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TABLE "05_0003_at_t3" ( a INT NOT NULL, b INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement ok
 ALTER TABLE `05_0003_at_t3` rename column b to c
@@ -104,7 +104,7 @@ ALTER TABLE `05_0003_at_t3` rename column b to c
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT NOT NULL,   `c` INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TABLE "05_0003_at_t3" ( a INT NOT NULL, c INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement error 1301
 ALTER TABLE `05_0003_at_t3` MODIFY COLUMN c decimal(5,2) not null
@@ -119,7 +119,7 @@ statement ok
 set hide_options_in_show_create_table=1
 
 statement ok
-CREATE TABLE `05_0003_at_t4`(a string not null, b string null, c array(string) null, d tuple(string, string) null) ENGINE=FUSE COMPRESSION='zstd' STORAGE_FORMAT='native'
+CREATE TABLE "05_0003_at_t4" ( a string not null, b string null, c array(string) null, d tuple(string, string) null ) ENGINE=FUSE COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement ok
 INSERT INTO TABLE `05_0003_at_t4` values('a', 'b', ['c1', 'c2'], ('d1', 'd2'))
@@ -127,7 +127,7 @@ INSERT INTO TABLE `05_0003_at_t4` values('a', 'b', ['c1', 'c2'], ('d1', 'd2'))
 query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
-05_0003_at_t4 CREATE TABLE `05_0003_at_t4` (   `a` VARCHAR NOT NULL,   `b` VARCHAR NULL,   `c` ARRAY(STRING) NULL,   `d` TUPLE(1 STRING, 2 STRING) NULL ) ENGINE=FUSE
+05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a VARCHAR NOT NULL, b VARCHAR NULL, c ARRAY(STRING) NULL, d TUPLE(1 STRING, 2 STRING) NULL ) ENGINE=FUSE
 
 query TTTT
 SELECT * FROM `05_0003_at_t4`
@@ -149,7 +149,7 @@ ALTER TABLE `05_0003_at_t4` MODIFY COLUMN d tuple(binary, binary) null
 query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
-05_0003_at_t4 CREATE TABLE `05_0003_at_t4` (   `a` BINARY NOT NULL,   `b` BINARY NULL,   `c` ARRAY(BINARY) NULL,   `d` TUPLE(1 BINARY, 2 BINARY) NULL ) ENGINE=FUSE
+05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a BINARY NOT NULL, b BINARY NULL, c ARRAY(BINARY) NULL, d TUPLE(1 BINARY, 2 BINARY) NULL ) ENGINE=FUSE
 
 query 
 SELECT * FROM `05_0003_at_t4`
@@ -171,7 +171,7 @@ ALTER TABLE `05_0003_at_t4` MODIFY COLUMN d tuple(string, string) null
 query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
-05_0003_at_t4 CREATE TABLE `05_0003_at_t4` (   `a` VARCHAR NOT NULL,   `b` VARCHAR NULL,   `c` ARRAY(STRING) NULL,   `d` TUPLE(1 STRING, 2 STRING) NULL ) ENGINE=FUSE
+05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a VARCHAR NOT NULL, b VARCHAR NULL, c ARRAY(STRING) NULL, d TUPLE(1 STRING, 2 STRING) NULL ) ENGINE=FUSE
 
 query TTTT
 SELECT * FROM `05_0003_at_t4`
@@ -197,5 +197,58 @@ c1 VARCHAR YES NULL (empty)
 c2 VARCHAR YES NULL (empty)
 
 statement ok
+alter table t modify c1 varchar comment 'c1-column', c2 int comment 'test';
+
+query TTTTT
+select database,table,name,data_type,comment from system.columns where table='t' and database='default';
+----
+default t c1 VARCHAR 'c1-column'
+default t c2 INT 'test'
+
+statement ok
+alter table t comment='s1';
+
+query TT
+select name, comment from system.tables where name='t' and database='default';
+----
+t s1
+
+query TT
+show create table t;
+----
+t CREATE TABLE t ( c1 VARCHAR NULL COMMENT 'c1-column', c2 INT NULL COMMENT 'test' ) ENGINE=FUSE COMMENT = 's1'
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t1(id int) comment ='t1-comment';
+
+query TT
+show create table t1;
+----
+t1 CREATE TABLE t1 ( id INT NULL ) ENGINE=FUSE COMMENT = 't1-comment'
+
+query TT
+select name, comment from system.tables where name='t1' and database='default';
+----
+t1 t1-comment
+
+statement ok
+alter table t1 comment='t1-new-comment';
+
+query TT
+show create table t1;
+----
+t1 CREATE TABLE t1 ( id INT NULL ) ENGINE=FUSE COMMENT = 't1-new-comment'
+
+query TT
+select name, comment from system.tables where name='t1' and database='default';
+----
+t1 t1-new-comment
+
+statement ok
 DROP TABLE IF EXISTS t;
 
+statement ok
+DROP TABLE IF EXISTS t1;

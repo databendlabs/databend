@@ -21,6 +21,7 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
@@ -33,9 +34,11 @@ use maplit::hashmap;
 
 use super::CreateOption;
 use crate::schema::database::DatabaseNameIdent;
+use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
+use crate::tenant::Tenant;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
@@ -65,27 +68,27 @@ impl Display for TableIdent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableNameIdent {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub db_name: String,
     pub table_name: String,
 }
 
 impl TableNameIdent {
     pub fn new(
-        tenant: impl Into<String>,
+        tenant: Tenant,
         db_name: impl Into<String>,
         table_name: impl Into<String>,
     ) -> TableNameIdent {
         TableNameIdent {
-            tenant: tenant.into(),
+            tenant,
             db_name: db_name.into(),
             table_name: table_name.into(),
         }
     }
 
-    pub fn tenant(&self) -> &str {
+    pub fn tenant(&self) -> &Tenant {
         &self.tenant
     }
 
@@ -106,7 +109,9 @@ impl Display for TableNameIdent {
         write!(
             f,
             "'{}'.'{}'.'{}'",
-            self.tenant, self.db_name, self.table_name
+            self.tenant.name(),
+            self.db_name,
+            self.table_name
         )
     }
 }
@@ -157,25 +162,7 @@ impl Display for TableIdListKey {
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(database_type::ShareNameIdent),
-}
-
-mod database_type {
-    /// Same as  [`crate::share::ShareNameIdent`] but with serde support for being used as a value.
-    /// while [`crate::share::ShareNameIdent`] can only be used as key.
-    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-    pub struct ShareNameIdent {
-        pub tenant: String,
-        pub share_name: String,
-    }
-    impl From<crate::share::ShareNameIdent> for ShareNameIdent {
-        fn from(value: crate::share::ShareNameIdent) -> Self {
-            Self {
-                tenant: value.tenant,
-                share_name: value.share_name,
-            }
-        }
-    }
+    ShareDB(ShareNameIdentRaw),
 }
 
 impl Display for DatabaseType {
@@ -188,7 +175,8 @@ impl Display for DatabaseType {
                 write!(
                     f,
                     "share database: {}-{}",
-                    share_ident.tenant, share_ident.share_name
+                    share_ident.tenant_name(),
+                    share_ident.name()
                 )
             }
         }
@@ -274,6 +262,15 @@ pub struct TableMeta {
 pub struct TableIndex {
     pub name: String,
     pub column_ids: Vec<u32>,
+    // if true, index will create after data written to databend,
+    // no need execute refresh index manually.
+    pub sync_creation: bool,
+    // if the index columns or options change,
+    // the index data needs to be regenerated,
+    // version is used to identify each change.
+    pub version: String,
+    // index options specify the index configs, like tokenizer.
+    pub options: BTreeMap<String, String>,
 }
 
 impl TableMeta {
@@ -484,7 +481,7 @@ pub struct CreateTableReq {
 }
 
 impl CreateTableReq {
-    pub fn tenant(&self) -> &str {
+    pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant
     }
     pub fn db_name(&self) -> &str {
@@ -501,7 +498,7 @@ impl Display for CreateTableReq {
             CreateOption::Create => write!(
                 f,
                 "create_table:{}/{}-{}={}",
-                self.tenant(),
+                self.tenant().name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -509,7 +506,7 @@ impl Display for CreateTableReq {
             CreateOption::CreateIfNotExists => write!(
                 f,
                 "create_table_if_not_exists:{}/{}-{}={}",
-                self.tenant(),
+                self.tenant().name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -517,7 +514,7 @@ impl Display for CreateTableReq {
             CreateOption::CreateOrReplace => write!(
                 f,
                 "create_or_replace_table:{}/{}-{}={}",
-                self.tenant(),
+                self.tenant().name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -541,7 +538,7 @@ pub struct CreateTableReply {
 pub struct DropTableByIdReq {
     pub if_exists: bool,
 
-    pub tenant: String,
+    pub tenant: Tenant,
 
     pub tb_id: MetaId,
 
@@ -578,7 +575,7 @@ pub struct UndropTableReq {
 }
 
 impl UndropTableReq {
-    pub fn tenant(&self) -> &str {
+    pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant
     }
     pub fn db_name(&self) -> &str {
@@ -594,7 +591,7 @@ impl Display for UndropTableReq {
         write!(
             f,
             "undrop_table:{}/{}-{}",
-            self.tenant(),
+            self.tenant().name(),
             self.db_name(),
             self.table_name()
         )
@@ -613,7 +610,7 @@ pub struct RenameTableReq {
 }
 
 impl RenameTableReq {
-    pub fn tenant(&self) -> &str {
+    pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant
     }
     pub fn db_name(&self) -> &str {
@@ -629,7 +626,7 @@ impl Display for RenameTableReq {
         write!(
             f,
             "rename_table:{}/{}-{}=>{}-{}",
-            self.tenant(),
+            self.tenant().name(),
             self.db_name(),
             self.table_name(),
             self.new_db_name,
@@ -713,7 +710,7 @@ pub enum SetTableColumnMaskPolicyAction {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub table_id: u64,
     pub seq: MatchSeq,
     pub column: String,
@@ -741,24 +738,34 @@ pub struct CreateTableIndexReq {
     pub table_id: u64,
     pub name: String,
     pub column_ids: Vec<u32>,
+    pub sync_creation: bool,
+    pub options: BTreeMap<String, String>,
 }
 
 impl Display for CreateTableIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
             CreateOption::Create => {
-                write!(f, "create_table_index:{}={:?}", self.name, self.column_ids)
+                write!(
+                    f,
+                    "create_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
             }
-            CreateOption::CreateIfNotExists => write!(
-                f,
-                "create_table_index_if_not_exists:{}={:?}",
-                self.name, self.column_ids
-            ),
-            CreateOption::CreateOrReplace => write!(
-                f,
-                "create_or_replace_table_index:{}={:?}",
-                self.name, self.column_ids
-            ),
+            CreateOption::CreateIfNotExists => {
+                write!(
+                    f,
+                    "create_table_index_if_not_exists: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
+            }
+            CreateOption::CreateOrReplace => {
+                write!(
+                    f,
+                    "create_or_replace_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
+            }
         }
     }
 }
@@ -800,19 +807,21 @@ impl Deref for GetTableReq {
 }
 
 impl From<(&str, &str, &str)> for GetTableReq {
+    /// For testing only
     fn from(db_table: (&str, &str, &str)) -> Self {
-        Self::new(db_table.0, db_table.1, db_table.2)
+        let tenant = Tenant::new_or_err(db_table.0, func_name!()).unwrap();
+        Self::new(&tenant, db_table.1, db_table.2)
     }
 }
 
 impl GetTableReq {
     pub fn new(
-        tenant: impl Into<String>,
+        tenant: &Tenant,
         db_name: impl Into<String>,
         table_name: impl Into<String>,
     ) -> GetTableReq {
         GetTableReq {
-            inner: TableNameIdent::new(tenant, db_name, table_name),
+            inner: TableNameIdent::new(tenant.clone(), db_name, table_name),
         }
     }
 }
@@ -831,10 +840,10 @@ impl Deref for ListTableReq {
 }
 
 impl ListTableReq {
-    pub fn new(tenant: impl Into<String>, db_name: impl Into<String>) -> ListTableReq {
+    pub fn new(tenant: &Tenant, db_name: impl Into<String>) -> ListTableReq {
         ListTableReq {
             inner: DatabaseNameIdent {
-                tenant: tenant.into(),
+                tenant: tenant.clone(),
                 db_name: db_name.into(),
             },
         }
@@ -879,42 +888,12 @@ pub struct ListDroppedTableResp {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GcDroppedTableReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub drop_ids: Vec<DroppedId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GcDroppedTableResp {}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct CountTablesKey {
-    pub tenant: String,
-}
-
-impl Display for CountTablesKey {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'", self.tenant)
-    }
-}
-
-impl CountTablesKey {
-    pub fn new(tenant: impl ToString) -> Self {
-        Self {
-            tenant: tenant.to_string(),
-        }
-    }
-}
-
-/// count tables for a tenant
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CountTablesReq {
-    pub tenant: String,
-}
-
-#[derive(Debug)]
-pub struct CountTablesReply {
-    pub count: u64,
-}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TableIdToName {
@@ -981,7 +960,6 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::primitive::Id;
-    use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
     use crate::schema::LeastVisibleTime;
@@ -1103,29 +1081,31 @@ mod kvapi_key_impl {
         }
     }
 
+    /// Reserved removed key, never reused:
     /// "__fd_table_count/<tenant>" -> <table_count>
+    ///
+    /// It was used for count number of tables belonging to a tenant
+    #[derive(Debug)]
+    struct CountTablesKey {
+        #[allow(dead_code)]
+        tenant: Tenant,
+    }
+
     impl kvapi::Key for CountTablesKey {
         const PREFIX: &'static str = "__fd_table_count";
 
         type ValueType = Id;
 
         fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+            None
         }
 
         fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_raw(&self.tenant)
-                .done()
+            unimplemented!("removed and reserved")
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            p.done()?;
-
-            Ok(CountTablesKey { tenant })
+        fn from_str_key(_s: &str) -> Result<Self, kvapi::KeyError> {
+            unimplemented!("removed and reserved")
         }
     }
 

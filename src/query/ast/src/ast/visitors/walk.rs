@@ -256,7 +256,7 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
             database,
             table,
             alias,
-            travel_point,
+            temporal,
             ..
         } => {
             if let Some(catalog) = catalog {
@@ -273,8 +273,8 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
                 visitor.visit_identifier(&alias.name);
             }
 
-            if let Some(travel_point) = travel_point {
-                visitor.visit_time_travel_point(travel_point);
+            if let Some(temporal) = temporal {
+                visitor.visit_temporal_clause(temporal);
             }
         }
         TableReference::Subquery {
@@ -306,24 +306,41 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
     }
 }
 
+pub fn walk_temporal_clause<'a, V: Visitor<'a>>(visitor: &mut V, clause: &'a TemporalClause) {
+    match clause {
+        TemporalClause::TimeTravel(point) => visitor.visit_time_travel_point(point),
+        TemporalClause::Changes(ChangesInterval {
+            at_point,
+            end_point,
+            ..
+        }) => {
+            visitor.visit_time_travel_point(at_point);
+            if let Some(end_point) = end_point {
+                visitor.visit_time_travel_point(end_point);
+            }
+        }
+    }
+}
+
 pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a TimeTravelPoint) {
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
-    }
-}
+        TimeTravelPoint::Offset(expr) => visitor.visit_expr(expr),
+        TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        } => {
+            if let Some(catalog) = catalog {
+                visitor.visit_identifier(catalog);
+            }
 
-pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamPoint) {
-    match point {
-        StreamPoint::AtStream { database, name } => {
             if let Some(database) = database {
                 visitor.visit_identifier(database);
             }
 
             visitor.visit_identifier(name);
-        }
-        StreamPoint::AtPoint(point) => {
-            visitor.visit_time_travel_point(point);
         }
     }
 }
@@ -567,5 +584,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Begin => {}
         Statement::Commit => {}
         Statement::Abort => {}
+        Statement::InsertMultiTable(_) => {}
+        Statement::ExecuteImmediate(_) => {}
     }
 }

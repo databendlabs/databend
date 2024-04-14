@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::metrics::MetricSample;
+use databend_common_base::runtime::metrics::ScopedRegistry;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -52,16 +56,10 @@ pub struct PlanProfile {
     pub title: Arc<String>,
     pub labels: Arc<Vec<ProfileLabel>>,
 
-    /// The time spent to process in nanoseconds
-    pub cpu_time: usize,
-    /// The time spent to wait in nanoseconds, usually used to
-    /// measure the time spent on waiting for I/O
-    pub wait_time: usize,
-
-    pub exchange_rows: usize,
-    pub exchange_bytes: usize,
-
     pub statistics: [usize; std::mem::variant_count::<ProfileStatisticsName>()],
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[serde(default)]
+    pub metrics: BTreeMap<String, Vec<MetricSample>>,
 }
 
 impl PlanProfile {
@@ -72,13 +70,10 @@ impl PlanProfile {
             parent_id: profile.plan_parent_id,
             title: profile.title.clone(),
             labels: profile.labels.clone(),
-            cpu_time: profile.load_profile(ProfileStatisticsName::CpuTime),
-            wait_time: profile.load_profile(ProfileStatisticsName::WaitTime),
-            exchange_rows: profile.load_profile(ProfileStatisticsName::ExchangeRows),
-            exchange_bytes: profile.load_profile(ProfileStatisticsName::ExchangeBytes),
             statistics: std::array::from_fn(|index| {
                 profile.statistics[index].load(Ordering::SeqCst)
             }),
+            metrics: BTreeMap::new(),
         }
     }
 
@@ -86,11 +81,6 @@ impl PlanProfile {
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
             self.statistics[index] += profile.statistics[index].load(Ordering::SeqCst);
         }
-
-        self.cpu_time += profile.load_profile(ProfileStatisticsName::CpuTime);
-        self.wait_time += profile.load_profile(ProfileStatisticsName::WaitTime);
-        self.exchange_rows += profile.load_profile(ProfileStatisticsName::ExchangeRows);
-        self.exchange_bytes += profile.load_profile(ProfileStatisticsName::ExchangeBytes);
     }
 
     pub fn merge(&mut self, profile: &PlanProfile) {
@@ -102,20 +92,42 @@ impl PlanProfile {
             self.statistics[index] += profile.statistics[index];
         }
 
-        self.cpu_time += profile.cpu_time;
-        self.wait_time += profile.wait_time;
-        self.exchange_rows += profile.exchange_rows;
-        self.exchange_bytes += profile.exchange_bytes;
+        for (id, metrics) in &profile.metrics {
+            match self.metrics.entry(id.clone()) {
+                Entry::Occupied(mut v) => {
+                    v.get_mut().extend(metrics.clone());
+                }
+                Entry::Vacant(v) => {
+                    v.insert(metrics.clone());
+                }
+            }
+        }
+    }
+
+    pub fn add_metrics(&mut self, node_id: String, metrics: Vec<MetricSample>) {
+        if metrics.is_empty() {
+            return;
+        }
+
+        match self.metrics.entry(node_id) {
+            Entry::Vacant(v) => {
+                v.insert(metrics);
+            }
+            Entry::Occupied(mut v) => {
+                v.insert(metrics);
+            }
+        };
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PlanScope {
     pub id: u32,
     pub name: String,
     pub parent_id: Option<u32>,
     pub title: Arc<String>,
     pub labels: Arc<Vec<ProfileLabel>>,
+    pub metrics_registry: Arc<ScopedRegistry>,
 }
 
 impl PlanScope {
@@ -131,6 +143,7 @@ impl PlanScope {
             title,
             parent_id: None,
             name,
+            metrics_registry: ScopedRegistry::create(None),
         }
     }
 }

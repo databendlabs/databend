@@ -47,7 +47,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = CreateDatamaskPolicyPlan {
             create_option: *create_option,
-            tenant: tenant.to_string(),
+            tenant,
             name: name.to_string(),
             policy: policy.clone(),
         };
@@ -64,7 +64,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = DropDatamaskPolicyPlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant,
             name: name.to_string(),
         };
         Ok(Plan::DropDatamaskPolicy(Box::new(plan)))

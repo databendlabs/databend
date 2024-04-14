@@ -72,7 +72,7 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
@@ -82,6 +82,7 @@ use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
@@ -96,13 +97,14 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
-use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
@@ -163,7 +165,10 @@ impl QueryContext {
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
+        let catalog = self
+            .shared
+            .catalog_manager
+            .build_catalog(catalog_info, self.txn_mgr())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -205,10 +210,7 @@ impl QueryContext {
         let catalog = self
             .get_catalog(self.get_current_catalog().as_str())
             .await?;
-        match catalog
-            .get_database(tenant_id.as_str(), &new_database_name)
-            .await
-        {
+        match catalog.get_database(&tenant_id, &new_database_name).await {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -518,7 +520,7 @@ impl TableContext for QueryContext {
         self.shared
             .catalog_manager
             .get_catalog(
-                self.get_tenant().as_str(),
+                self.get_tenant().name(),
                 catalog_name.as_ref(),
                 self.txn_mgr(),
             )
@@ -596,7 +598,7 @@ impl TableContext for QueryContext {
         Ok(format)
     }
 
-    fn get_tenant(&self) -> NonEmptyString {
+    fn get_tenant(&self) -> Tenant {
         self.shared.get_tenant()
     }
 
@@ -645,7 +647,7 @@ impl TableContext for QueryContext {
         if !self.query_settings.is_changed() {
             unsafe {
                 self.query_settings
-                    .unchecked_apply_changes(&self.shared.get_settings());
+                    .unchecked_apply_changes(self.shared.get_settings().changes());
             }
         }
 
@@ -819,7 +821,7 @@ impl TableContext for QueryContext {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table(tenant.as_str(), database_name, table_name)
+            .get_table(&tenant, database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
@@ -835,7 +837,7 @@ impl TableContext for QueryContext {
             let req = GetTableCopiedFileReq { table_id, files };
             let start_request = Instant::now();
             let copied_files = catalog
-                .get_table_copied_file_info(tenant.as_str(), database_name, req)
+                .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
 
@@ -927,6 +929,24 @@ impl TableContext for QueryContext {
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
         self.shared.merge_status.clone()
+    }
+
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
+        let mut multi_table_insert_status = self.shared.multi_table_insert_status.lock();
+        match multi_table_insert_status.insert_rows.get_mut(&table_id) {
+            Some(v) => {
+                *v += num_rows;
+            }
+            None => {
+                multi_table_insert_status
+                    .insert_rows
+                    .insert(table_id, num_rows);
+            }
+        }
+    }
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
+        self.shared.multi_table_insert_status.clone()
     }
 
     fn get_license_key(&self) -> String {
@@ -1055,6 +1075,14 @@ impl TableContext for QueryContext {
 
     fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
         *self.block_threshold.write() = thresholds;
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        *self.shared.query_queued_duration.read()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: Duration) {
+        *self.shared.query_queued_duration.write() = queued_duration;
     }
 }
 

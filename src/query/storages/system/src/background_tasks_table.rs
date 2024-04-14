@@ -59,9 +59,7 @@ impl AsyncSystemTable for BackgroundTaskTable {
         let tenant = ctx.get_tenant();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tasks = meta_api
-            .list_background_tasks(ListBackgroundTasksReq {
-                tenant: tenant.to_string(),
-            })
+            .list_background_tasks(ListBackgroundTasksReq::new(&tenant))
             .await?;
         let mut names = Vec::with_capacity(tasks.len());
         let mut types = Vec::with_capacity(tasks.len());

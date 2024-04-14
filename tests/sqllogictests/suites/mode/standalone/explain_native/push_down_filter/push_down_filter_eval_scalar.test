@@ -1,0 +1,154 @@
+# push down filter EvalScalar
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+drop view if exists v1;
+
+statement ok
+drop view if exists v2;
+
+statement ok
+create table t1(id int);
+
+statement ok
+create table t2(sid int, val int);
+
+statement ok
+create view v1 as select t2.sid, t2.val from t2;
+
+statement ok
+create view v2 AS
+select
+  t.id as sc,
+  coalesce(sum(tb.de), 0) as de
+from
+  t1 as t
+  left outer join (
+    select
+      t3.sid,
+      sum(coalesce(t3.val, 0)) as de
+    from
+      v1 as t3
+    group by
+      t3.sid
+  ) as tb on(tb.sid = t.id)
+group by
+  t.id
+union
+all
+select
+  t.id as sc,
+  0 as de
+from
+  t1 as t
+group by
+  t.id
+
+query T
+explain select distinct t.sc from v2 t where t.sc = 1;
+----
+AggregateFinal
+├── output columns: [t.id (#0)]
+├── group by: [id]
+├── aggregate functions: []
+├── estimated rows: 0.00
+└── AggregatePartial
+    ├── group by: [id]
+    ├── aggregate functions: []
+    ├── estimated rows: 0.00
+    └── UnionAll
+        ├── output columns: [t.id (#0), de (#8)]
+        ├── estimated rows: 0.00
+        ├── EvalScalar
+        │   ├── output columns: [t.id (#0), de (#8)]
+        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL)]
+        │   ├── estimated rows: 0.00
+        │   └── AggregateFinal
+        │       ├── output columns: [sum(tb.de) (#7), t.id (#0)]
+        │       ├── group by: [id]
+        │       ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
+        │       ├── estimated rows: 0.00
+        │       └── AggregatePartial
+        │           ├── group by: [id]
+        │           ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
+        │           ├── estimated rows: 0.00
+        │           └── HashJoin
+        │               ├── output columns: [t.id (#0), sum(coalesce(t3.val, 0)) (#5)]
+        │               ├── join type: LEFT OUTER
+        │               ├── build keys: [tb.sid (#1)]
+        │               ├── probe keys: [t.id (#0)]
+        │               ├── filters: []
+        │               ├── estimated rows: 0.00
+        │               ├── AggregateFinal(Build)
+        │               │   ├── output columns: [sum(coalesce(t3.val, 0)) (#5), t2.sid (#1)]
+        │               │   ├── group by: [sid]
+        │               │   ├── aggregate functions: [sum(sum_arg_0)]
+        │               │   ├── estimated rows: 0.00
+        │               │   └── AggregatePartial
+        │               │       ├── group by: [sid]
+        │               │       ├── aggregate functions: [sum(sum_arg_0)]
+        │               │       ├── estimated rows: 0.00
+        │               │       └── EvalScalar
+        │               │           ├── output columns: [t2.sid (#1), sum_arg_0 (#4)]
+        │               │           ├── expressions: [if(CAST(is_not_null(t3.val (#2)) AS Boolean NULL), CAST(assume_not_null(t3.val (#2)) AS Int32 NULL), true, 0, NULL)]
+        │               │           ├── estimated rows: 0.00
+        │               │           └── TableScan
+        │               │               ├── table: default.default.t2
+        │               │               ├── output columns: [sid (#1), val (#2)]
+        │               │               ├── read rows: 0
+        │               │               ├── read size: 0
+        │               │               ├── partitions total: 0
+        │               │               ├── partitions scanned: 0
+        │               │               ├── push downs: [filters: [is_true(t2.sid (#1) = 1)], limit: NONE]
+        │               │               └── estimated rows: 0.00
+        │               └── TableScan(Probe)
+        │                   ├── table: default.default.t1
+        │                   ├── output columns: [id (#0)]
+        │                   ├── read rows: 0
+        │                   ├── read size: 0
+        │                   ├── partitions total: 0
+        │                   ├── partitions scanned: 0
+        │                   ├── push downs: [filters: [is_true(t1.id (#0) = 1)], limit: NONE]
+        │                   └── estimated rows: 0.00
+        └── EvalScalar
+            ├── output columns: [t.id (#9), de (#12)]
+            ├── expressions: [CAST(de (#11) AS Int64 NULL)]
+            ├── estimated rows: 0.00
+            └── EvalScalar
+                ├── output columns: [t.id (#9), de (#11)]
+                ├── expressions: [0]
+                ├── estimated rows: 0.00
+                └── AggregateFinal
+                    ├── output columns: [t.id (#9)]
+                    ├── group by: [id]
+                    ├── aggregate functions: []
+                    ├── estimated rows: 0.00
+                    └── AggregatePartial
+                        ├── group by: [id]
+                        ├── aggregate functions: []
+                        ├── estimated rows: 0.00
+                        └── TableScan
+                            ├── table: default.default.t1
+                            ├── output columns: [id (#9)]
+                            ├── read rows: 0
+                            ├── read size: 0
+                            ├── partitions total: 0
+                            ├── partitions scanned: 0
+                            ├── push downs: [filters: [is_true(t1.id (#9) = 1)], limit: NONE]
+                            └── estimated rows: 0.00
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+drop view if exists v1;
+
+statement ok
+drop view if exists v2;

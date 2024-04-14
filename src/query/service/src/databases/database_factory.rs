@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use dashmap::DashMap;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,57 +24,36 @@ use crate::databases::share::ShareDatabase;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
-pub trait DatabaseCreator: Send + Sync {
-    fn try_create(&self, ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>>;
-}
-
-impl<T> DatabaseCreator for T
-where
-    T: Fn(DatabaseContext, DatabaseInfo) -> Result<Box<dyn Database>>,
-    T: Send + Sync,
-{
-    fn try_create(&self, ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
-        self(ctx, db_info)
-    }
-}
-
-#[derive(Default)]
-pub struct DatabaseFactory {
-    creators: DashMap<String, Arc<dyn DatabaseCreator>>,
-}
+pub struct DatabaseFactory {}
 
 impl DatabaseFactory {
     pub fn create(_: InnerConfig) -> Self {
-        let creators: DashMap<String, Arc<dyn DatabaseCreator>> = DashMap::new();
-        creators.insert(
-            DefaultDatabase::NAME.to_string(),
-            Arc::new(DefaultDatabase::try_create),
-        );
-        creators.insert(
-            ShareDatabase::NAME.to_string(),
-            Arc::new(ShareDatabase::try_create),
-        );
-
-        DatabaseFactory { creators }
+        DatabaseFactory {}
     }
 
-    pub fn get_database(
+    pub fn build_database_by_engine(
         &self,
         ctx: DatabaseContext,
         db_info: &DatabaseInfo,
     ) -> Result<Arc<dyn Database>> {
-        let db_engine = &db_info.engine();
+        let db_engine = db_info.engine();
+
         let engine = if db_engine.is_empty() {
             "DEFAULT".to_string()
         } else {
             db_engine.to_uppercase()
         };
 
-        let factory = self.creators.get(&engine).ok_or_else(|| {
-            ErrorCode::UnknownDatabaseEngine(format!("Unknown database engine {}", engine))
-        })?;
+        let db = match engine.as_str() {
+            DefaultDatabase::NAME => DefaultDatabase::try_create(ctx, db_info.clone())?,
+            ShareDatabase::NAME => ShareDatabase::try_create(ctx, db_info.clone())?,
 
-        let db: Arc<dyn Database> = factory.try_create(ctx, db_info.clone())?.into();
-        Ok(db)
+            _ => {
+                let err =
+                    ErrorCode::UnknownDatabaseEngine(format!("Unknown database engine {}", engine));
+                return Err(err);
+            }
+        };
+        Ok(db.into())
     }
 }

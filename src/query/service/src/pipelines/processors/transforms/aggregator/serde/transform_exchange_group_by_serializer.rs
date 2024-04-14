@@ -55,9 +55,8 @@ use log::info;
 use opendal::Operator;
 
 use super::SerializePayload;
-use crate::api::serialize_block;
-use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::agg_spilling_group_by_payload as local_agg_spilling_group_by_payload;
+use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::serialize_group_by;
 use crate::pipelines::processors::transforms::aggregator::spilling_group_by_payload as local_spilling_group_by_payload;
@@ -67,6 +66,8 @@ use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::SerializeGroupByStream;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::servers::flight::v1::exchange::serde::serialize_block;
+use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::sessions::QueryContext;
 
 pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {
@@ -189,7 +190,6 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                 Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
-                Some(AggregateMeta::AggregateHashTable(_)) => unreachable!(),
                 Some(AggregateMeta::Spilling(payload)) => {
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
@@ -264,7 +264,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         continue;
                     }
 
-                    let bucket = p.bucket;
+                    let bucket = compute_block_number(p.bucket, p.max_partition_count)?;
                     let stream = SerializeGroupByStream::create(
                         &self.method,
                         SerializePayload::<Method, ()>::AggregatePayload(p),

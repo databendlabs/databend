@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
+use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
@@ -37,12 +38,11 @@ use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyStr;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
+use log::debug;
 use minitrace::func_name;
 
 use crate::role::role_api::RoleApi;
@@ -56,17 +56,17 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-    tenant: NonEmptyString,
+    tenant: Tenant,
 }
 
 impl RoleMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-        tenant: NonEmptyStr,
+        tenant: &Tenant,
     ) -> Self {
         RoleMgr {
             kv_api,
-            tenant: tenant.into(),
+            tenant: tenant.clone(),
         }
     }
 
@@ -106,7 +106,7 @@ impl RoleMgr {
 
     /// Build meta-service for a role grantee, which is a tenant's database, table, stage, udf, etc.
     fn ownership_object_key(&self, object: &OwnershipObject) -> String {
-        let grantee = TenantOwnershipObject::new(Tenant::new(self.tenant.as_str()), object.clone());
+        let grantee = TenantOwnershipObject::new(self.tenant.clone(), object.clone());
         grantee.to_string_key()
     }
 
@@ -117,20 +117,17 @@ impl RoleMgr {
         let dummy = OwnershipObject::UDF {
             name: "dummy".to_string(),
         };
-        let grantee = TenantOwnershipObject::new(Tenant::new_nonempty(self.tenant.clone()), dummy);
+        let grantee = TenantOwnershipObject::new(self.tenant.clone(), dummy);
         grantee.tenant_prefix()
     }
 
     fn role_key(&self, role: &str) -> String {
-        let r = RoleIdent::new(Tenant::new_nonempty(self.tenant.clone()), role.to_string());
+        let r = RoleIdent::new(self.tenant.clone(), role.to_string());
         r.to_string_key()
     }
 
     fn role_prefix(&self) -> String {
-        let r = RoleIdent::new(
-            Tenant::new_nonempty(self.tenant.clone()),
-            "dummy".to_string(),
-        );
+        let r = RoleIdent::new(self.tenant.clone(), "dummy".to_string());
         r.tenant_prefix()
     }
 }
@@ -250,6 +247,72 @@ impl RoleApi for RoleMgr {
             .upsert_role_info(&role_info, MatchSeq::Exact(seq))
             .await?;
         Ok(Some(seq))
+    }
+
+    /// Only drop role will call transfer.
+    ///
+    /// If a role is dropped, but the owner object is exists,
+    ///
+    /// The owner role need to update to account_admin.
+    ///
+    /// get_ownerships use prefix_list_kv that will generate once meta call
+    ///
+    /// According to Txn reduce meta call. If role own n objects, will generate once meta call.
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn transfer_ownership_to_admin(
+        &self,
+        role: &str,
+    ) -> databend_common_exception::Result<()> {
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+            let mut if_then = vec![];
+            let mut condition = vec![];
+            let seq_owns = self.get_ownerships().await.map_err(|e| {
+                e.add_message_back("(while in transfer_ownership_to_admin get ownerships).")
+            })?;
+            let mut need_transfer = false;
+            for own in seq_owns {
+                if own.data.role == *role {
+                    need_transfer = true;
+                    let object = own.data.object;
+                    let owner_key = self.ownership_object_key(&object);
+                    let owner_value = serialize_struct(
+                        &OwnershipInfo {
+                            object,
+                            role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
+                        },
+                        ErrorCode::IllegalUserInfoFormat,
+                        || "",
+                    )?;
+                    // Ensure accurate matching of a key
+                    condition.push(txn_cond_seq(&owner_key, Eq, own.seq));
+                    if_then.push(txn_op_put(&owner_key, owner_value))
+                }
+            }
+
+            if need_transfer {
+                let txn_req = TxnRequest {
+                    condition: condition.clone(),
+                    if_then: if_then.clone(),
+                    else_then: vec![],
+                };
+                let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
+                let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+                debug!(
+                    succ = succ;
+                    "transfer_ownership_to_admin"
+                );
+                if succ {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
     }
 
     #[async_backtrace::framed]

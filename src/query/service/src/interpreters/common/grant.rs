@@ -36,7 +36,7 @@ pub async fn validate_grant_object_exists(
             }
 
             if !catalog
-                .exists_table(tenant.as_str(), database_name, table_name)
+                .exists_table(&tenant, database_name, table_name)
                 .await?
             {
                 return Err(databend_common_exception::ErrorCode::UnknownTable(format!(
@@ -47,10 +47,7 @@ pub async fn validate_grant_object_exists(
         }
         GrantObject::Database(catalog_name, database_name) => {
             let catalog = ctx.get_catalog(catalog_name).await?;
-            if !catalog
-                .exists_database(tenant.as_str(), database_name)
-                .await?
-            {
+            if !catalog.exists_database(&tenant, database_name).await? {
                 return Err(databend_common_exception::ErrorCode::UnknownDatabase(
                     format!("database {} not exists", database_name,),
                 ));

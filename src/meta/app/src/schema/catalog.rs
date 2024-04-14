@@ -18,7 +18,10 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::schema::CatalogNameIdent;
 use crate::storage::StorageParams;
+use crate::tenant::Tenant;
+use crate::KeyWithTenant;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum CatalogType {
@@ -84,8 +87,8 @@ pub struct CatalogName {
 impl From<CatalogNameIdent> for CatalogName {
     fn from(ident: CatalogNameIdent) -> Self {
         CatalogName {
-            tenant: ident.tenant,
-            catalog_name: ident.catalog_name,
+            tenant: ident.tenant_name().to_string(),
+            catalog_name: ident.name().to_string(),
         }
     }
 }
@@ -160,14 +163,6 @@ pub struct CatalogMeta {
     pub created_on: DateTime<Utc>,
 }
 
-/// The name of a catalog,
-/// which is used as a key and does not support other codec method such as serde.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CatalogNameIdent {
-    pub tenant: String,
-    pub catalog_name: String,
-}
-
 // serde is required by `CatalogInfo.id`
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogId {
@@ -177,12 +172,6 @@ pub struct CatalogId {
 impl CatalogId {
     pub fn new(catalog_id: u64) -> CatalogId {
         CatalogId { catalog_id }
-    }
-}
-
-impl Display for CatalogNameIdent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant, self.catalog_name)
     }
 }
 
@@ -206,10 +195,10 @@ pub struct CreateCatalogReq {
 
 impl CreateCatalogReq {
     pub fn tenant(&self) -> &str {
-        &self.name_ident.tenant
+        self.name_ident.tenant_name()
     }
     pub fn catalog_name(&self) -> &str {
-        &self.name_ident.catalog_name
+        self.name_ident.name()
     }
 }
 
@@ -218,7 +207,10 @@ impl Display for CreateCatalogReq {
         write!(
             f,
             "create_catalog(if_not_exists={}):{}/{}={:?}",
-            self.if_not_exists, self.name_ident.tenant, self.name_ident.catalog_name, self.meta
+            self.if_not_exists,
+            self.name_ident.tenant_name(),
+            self.name_ident.name(),
+            self.meta
         )
     }
 }
@@ -239,7 +231,9 @@ impl Display for DropCatalogReq {
         write!(
             f,
             "drop_catalog(if_exists={}):{}/{}",
-            self.if_exists, self.name_ident.tenant, self.name_ident.catalog_name
+            self.if_exists,
+            self.name_ident.tenant_name(),
+            self.name_ident.name()
         )
     }
 }
@@ -261,70 +255,29 @@ impl Deref for GetCatalogReq {
 }
 
 impl GetCatalogReq {
-    pub fn new(tenant: impl Into<String>, catalog_name: impl Into<String>) -> GetCatalogReq {
-        GetCatalogReq {
-            inner: CatalogNameIdent {
-                tenant: tenant.into(),
-                catalog_name: catalog_name.into(),
-            },
-        }
+    pub fn new(ident: CatalogNameIdent) -> GetCatalogReq {
+        GetCatalogReq { inner: ident }
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListCatalogReq {
-    pub tenant: String,
+    pub tenant: Tenant,
 }
 
 impl ListCatalogReq {
-    pub fn new(tenant: impl Into<String>) -> ListCatalogReq {
-        ListCatalogReq {
-            tenant: tenant.into(),
-        }
+    pub fn new(tenant: Tenant) -> ListCatalogReq {
+        ListCatalogReq { tenant }
     }
 }
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
     use super::CatalogId;
     use super::CatalogIdToName;
-    use super::CatalogNameIdent;
     use crate::schema::CatalogMeta;
-    use crate::tenant::Tenant;
-
-    /// __fd_catalog/<tenant>/<catalog_name> -> <catalog_id>
-    impl kvapi::Key for CatalogNameIdent {
-        const PREFIX: &'static str = "__fd_catalog";
-
-        type ValueType = CatalogId;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
-                .push_str(&self.catalog_name)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            let catalog_name = p.next_str()?;
-            p.done()?;
-
-            Ok(CatalogNameIdent {
-                tenant,
-                catalog_name,
-            })
-        }
-    }
+    use crate::schema::CatalogNameIdent;
 
     /// "__fd_catalog_by_id/<catalog_id>"
     impl kvapi::Key for CatalogId {
@@ -375,12 +328,6 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(CatalogIdToName { catalog_id })
-        }
-    }
-
-    impl kvapi::Value for CatalogId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
         }
     }
 

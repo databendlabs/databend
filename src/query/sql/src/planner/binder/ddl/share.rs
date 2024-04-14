@@ -52,10 +52,7 @@ impl Binder {
 
         let plan = CreateShareEndpointPlan {
             create_option: *create_option,
-            endpoint: ShareEndpointIdent {
-                tenant: self.ctx.get_tenant().to_string(),
-                endpoint,
-            },
+            endpoint: ShareEndpointIdent::new(self.ctx.get_tenant(), endpoint),
             tenant: tenant.to_string(),
             url: format!("{}://{}{}", url.protocol, url.name, url.path),
             args: args.clone(),
@@ -70,7 +67,7 @@ impl Binder {
         _stmt: &ShowShareEndpointStmt,
     ) -> Result<Plan> {
         let plan = ShowShareEndpointPlan {
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
         };
         Ok(Plan::ShowShareEndpoint(Box::new(plan)))
     }
@@ -86,7 +83,7 @@ impl Binder {
         } = stmt;
         let plan = DropShareEndpointPlan {
             if_exists: *if_exists,
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             endpoint: endpoint.to_string(),
         };
         Ok(Plan::DropShareEndpoint(Box::new(plan)))
@@ -107,7 +104,7 @@ impl Binder {
 
         let plan = CreateSharePlan {
             if_not_exists: *if_not_exists,
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             share,
             comment: comment.as_ref().cloned(),
         };
@@ -125,7 +122,7 @@ impl Binder {
 
         let plan = DropSharePlan {
             if_exists: *if_exists,
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             share,
         };
         Ok(Plan::DropShare(Box::new(plan)))

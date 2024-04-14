@@ -320,10 +320,10 @@ pub enum SetOperator {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct OrderByExpr {
     pub expr: Expr,
-    // Optional `ASC` or `DESC`
+    /// `ASC` or `DESC`
     #[drive(skip)]
     pub asc: Option<bool>,
-    // Optional `NULLS FIRST` or `NULLS LAST`
+    /// `NULLS FIRST` or `NULLS LAST`
     #[drive(skip)]
     pub nulls_first: Option<bool>,
 }
@@ -352,16 +352,16 @@ impl Display for OrderByExpr {
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SelectTarget {
-    // Expression with alias, e.g. `SELECT t.a, b AS a, a+1 AS b FROM t`
+    /// Expression with alias, e.g. `SELECT t.a, b AS a, a+1 AS b FROM t`
     AliasedExpr {
         expr: Box<Expr>,
         alias: Option<Identifier>,
     },
 
-    // Qualified star name, e.g. `SELECT t.*  exclude a, columns(expr) FROM t`.
-    // Columns("pattern_str")
-    // Columns(lambda expression)
-    // For simplicity, star wildcard is involved.
+    /// Qualified star name, e.g. `SELECT t.*  exclude a, columns(expr) FROM t`.
+    /// Columns("pattern_str")
+    /// Columns(lambda expression)
+    /// For simplicity, star wildcard is involved.
     StarColumns {
         qualified: QualifiedName,
         column_filter: Option<ColumnFilter>,
@@ -496,6 +496,12 @@ impl Display for Indirection {
 pub enum TimeTravelPoint {
     Snapshot(#[drive(skip)] String),
     Timestamp(Box<Expr>),
+    Offset(Box<Expr>),
+    Stream {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        name: Identifier,
+    },
 }
 
 impl Display for TimeTravelPoint {
@@ -506,6 +512,21 @@ impl Display for TimeTravelPoint {
             }
             TimeTravelPoint::Timestamp(ts) => {
                 write!(f, "(TIMESTAMP => {ts})")?;
+            }
+            TimeTravelPoint::Offset(num) => {
+                write!(f, "(OFFSET => {num})")?;
+            }
+            TimeTravelPoint::Stream {
+                catalog,
+                database,
+                name,
+            } => {
+                write!(f, "(STREAM => ")?;
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(name)),
+                )?;
+                write!(f, ")")?;
             }
         }
 
@@ -549,6 +570,50 @@ impl Display for Unpivot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ChangesInterval {
+    #[drive(skip)]
+    pub append_only: bool,
+    pub at_point: TimeTravelPoint,
+    pub end_point: Option<TimeTravelPoint>,
+}
+
+impl Display for ChangesInterval {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CHANGES (INFORMATION => ")?;
+        if self.append_only {
+            write!(f, "APPEND_ONLY")?;
+        } else {
+            write!(f, "DEFAULT")?;
+        }
+        write!(f, ") AT {}", self.at_point)?;
+        if let Some(end_point) = &self.end_point {
+            write!(f, " END {}", end_point)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum TemporalClause {
+    TimeTravel(TimeTravelPoint),
+    Changes(ChangesInterval),
+}
+
+impl Display for TemporalClause {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TemporalClause::TimeTravel(point) => {
+                write!(f, "AT {}", point)?;
+            }
+            TemporalClause::Changes(changes) => {
+                write!(f, "{}", changes)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TableReference {
@@ -560,8 +625,7 @@ pub enum TableReference {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
-        travel_point: Option<TimeTravelPoint>,
-        since_point: Option<TimeTravelPoint>,
+        temporal: Option<TemporalClause>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -633,8 +697,7 @@ impl Display for TableReference {
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot,
                 unpivot,
             } => {
@@ -643,20 +706,8 @@ impl Display for TableReference {
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
 
-                if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
-                    write!(f, " AT (SNAPSHOT => '{sid}')")?;
-                }
-
-                if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
-                    write!(f, " AT (TIMESTAMP => {ts})")?;
-                }
-
-                if let Some(TimeTravelPoint::Snapshot(sid)) = since_point {
-                    write!(f, " SINCE (SNAPSHOT => '{sid}')")?;
-                }
-
-                if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {
-                    write!(f, " SINCE (TIMESTAMP => {ts})")?;
+                if let Some(temporal) = temporal {
+                    write!(f, " {temporal}")?;
                 }
 
                 if let Some(alias) = alias {

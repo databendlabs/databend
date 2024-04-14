@@ -24,7 +24,7 @@ RowFetch
             ├── table: default.default.t_lazy
             ├── output columns: [a (#0), _row_id (#7)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: 2]
@@ -50,7 +50,7 @@ RowFetch
             ├── table: default.default.t_lazy
             ├── output columns: [a (#0), _row_id (#7)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [is_true(t_lazy.a (#0) > 1)], limit: NONE]
@@ -68,7 +68,7 @@ Limit
     ├── table: default.default.t_lazy
     ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: 2]
@@ -103,7 +103,7 @@ RowFetch
                 ├── table: default.default.t_11831
                 ├── output columns: [uid (#0), time (#3), _row_id (#4)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [and_filters(and_filters(t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000), t_11831.uid (#0) = 11)], limit: NONE]
@@ -131,7 +131,7 @@ Limit
         ├── table: default.default.t_lazy
         ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: 2]
@@ -153,7 +153,7 @@ Limit
         ├── table: default.default.t_lazy
         ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t_lazy.a (#0) > 1)], limit: NONE]
@@ -171,7 +171,7 @@ Limit
     ├── table: default.default.t_lazy
     ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: 2]
@@ -203,7 +203,7 @@ Limit
             ├── table: default.default.t_lazy
             ├── output columns: [a (#0), b (#1)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -256,7 +256,7 @@ Limit
                                     ├── table: default.default.t_lazy
                                     ├── output columns: [a (#0), _row_id (#9)]
                                     ├── read rows: 0
-                                    ├── read bytes: 0
+                                    ├── read size: 0
                                     ├── partitions total: 0
                                     ├── partitions scanned: 0
                                     ├── push downs: [filters: [], limit: 3]

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::base::convert_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
@@ -141,7 +142,7 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("RangeJoin: {}", plan.join_type,),
+                    format!("RangeJoin: {}", plan.join_type),
                     children,
                 ))
             }
@@ -251,6 +252,19 @@ fn to_format_tree(
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
+        PhysicalPlan::Duplicate(_) => Ok(FormatTreeNode::new("Duplicate".to_string())),
+        PhysicalPlan::Shuffle(_) => Ok(FormatTreeNode::new("Shuffle".to_string())),
+        PhysicalPlan::ChunkFilter(_) => Ok(FormatTreeNode::new("ChunkFilter".to_string())),
+        PhysicalPlan::ChunkEvalScalar(_) => Ok(FormatTreeNode::new("ChunkEvalScalar".to_string())),
+        PhysicalPlan::ChunkCastSchema(_) => Ok(FormatTreeNode::new("ChunkCastSchema".to_string())),
+        PhysicalPlan::ChunkFillAndReorder(_) => {
+            Ok(FormatTreeNode::new("ChunkFillAndReorder".to_string()))
+        }
+        PhysicalPlan::ChunkAppendData(_) => Ok(FormatTreeNode::new("ChunkAppendData".to_string())),
+        PhysicalPlan::ChunkMerge(_) => Ok(FormatTreeNode::new("ChunkMerge".to_string())),
+        PhysicalPlan::ChunkCommitInsert(_) => {
+            Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
+        }
     }
 }
 
@@ -1013,23 +1027,81 @@ fn union_all_to_format_tree(
 }
 
 fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
+    let read_size = if info.read_bytes == 0 {
+        "0".to_string()
+    } else if info.read_bytes < 1024 {
+        "< 1 KiB".to_string()
+    } else {
+        convert_byte_size(info.read_bytes as f64)
+    };
     let mut items = vec![
         FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
-        FormatTreeNode::new(format!("read bytes: {}", info.read_bytes)),
+        FormatTreeNode::new(format!("read size: {}", read_size)),
         FormatTreeNode::new(format!("partitions total: {}", info.partitions_total)),
         FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
     ];
 
-    if info.pruning_stats.segments_range_pruning_before > 0 {
-        items.push(FormatTreeNode::new(format!(
-            "pruning stats: [segments: <range pruning: {} to {}>, blocks: <range pruning: {} to {}, bloom pruning: {} to {}>]",
-            info.pruning_stats.segments_range_pruning_before,
-            info.pruning_stats.segments_range_pruning_after,
+    // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
+    let mut blocks_pruning_description = String::new();
+
+    // range pruning status.
+    if info.pruning_stats.blocks_range_pruning_before > 0 {
+        blocks_pruning_description += &format!(
+            "range pruning: {} to {}",
             info.pruning_stats.blocks_range_pruning_before,
-            info.pruning_stats.blocks_range_pruning_after,
+            info.pruning_stats.blocks_range_pruning_after
+        );
+    }
+
+    // bloom pruning status.
+    if info.pruning_stats.blocks_bloom_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "bloom pruning: {} to {}",
             info.pruning_stats.blocks_bloom_pruning_before,
-            info.pruning_stats.blocks_bloom_pruning_after,
-        )))
+            info.pruning_stats.blocks_bloom_pruning_after
+        );
+    }
+
+    // inverted index pruning status.
+    if info.pruning_stats.blocks_inverted_index_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "inverted pruning: {} to {}",
+            info.pruning_stats.blocks_inverted_index_pruning_before,
+            info.pruning_stats.blocks_inverted_index_pruning_after
+        );
+    }
+
+    // Combine segment pruning and blocks pruning descriptions if any
+    if info.pruning_stats.segments_range_pruning_before > 0
+        || !blocks_pruning_description.is_empty()
+    {
+        let mut pruning_description = String::new();
+
+        if info.pruning_stats.segments_range_pruning_before > 0 {
+            pruning_description += &format!(
+                "segments: <range pruning: {} to {}>",
+                info.pruning_stats.segments_range_pruning_before,
+                info.pruning_stats.segments_range_pruning_after
+            );
+        }
+
+        if !blocks_pruning_description.is_empty() {
+            if !pruning_description.is_empty() {
+                pruning_description += ", ";
+            }
+            pruning_description += &format!("blocks: <{}>", blocks_pruning_description);
+        }
+
+        items.push(FormatTreeNode::new(format!(
+            "pruning stats: [{}]",
+            pruning_description
+        )));
     }
 
     items

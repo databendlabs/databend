@@ -60,7 +60,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+        .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -77,7 +77,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+        .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -129,8 +129,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
     if !pipeline.is_empty() {
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        let query_id = ctx.get_id();
-        let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         executor.execute()?;

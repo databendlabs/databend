@@ -200,7 +200,7 @@ impl SubqueryRewriter {
             from_correlated_subquery: true,
             need_hold_hash_table: false,
             is_lateral: false,
-            original_join_type: None,
+            single_to_inner: None,
         };
 
         // Rewrite plan to semi-join.
@@ -290,7 +290,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
                     is_lateral: false,
-                    original_join_type: None,
+                    single_to_inner: None,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -302,7 +302,7 @@ impl SubqueryRewriter {
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {
                     if let Some(result) = self.try_decorrelate_simple_subquery(left, subquery)? {
-                        return Ok((result, UnnestResult::SimpleJoin));
+                        return Ok((result, UnnestResult::SimpleJoin { output_index: None }));
                     }
                 }
                 let correlated_columns = subquery.outer_columns.clone();
@@ -339,7 +339,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
                     is_lateral: false,
-                    original_join_type: None,
+                    single_to_inner: None,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -403,7 +403,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
                     is_lateral: false,
-                    original_join_type: None,
+                    single_to_inner: None,
                 }
                 .into();
                 Ok((

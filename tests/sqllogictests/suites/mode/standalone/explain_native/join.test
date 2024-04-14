@@ -30,20 +30,20 @@ HashJoin
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 18
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [number (#1)]
     ├── read rows: 10
-    ├── read bytes: 54
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -61,22 +61,22 @@ HashJoin
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
 │   ├── read rows: 1
-│   ├── read bytes: 18
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [number (#1)]
     ├── read rows: 10
-    ├── read bytes: 54
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [t1.number (#1) = t1.number (#1) + 1], limit: NONE]
+    └── estimated rows: 2.00
 
 query T
 explain select t.number from t, t1 where t.number > 1 and 1 < t1.number
@@ -92,20 +92,20 @@ HashJoin
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: 0
 │   ├── partitions total: 1
 │   ├── partitions scanned: 0
-│   ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 0>]
 │   ├── push downs: [filters: [t.number (#0) > 1], limit: NONE]
 │   └── estimated rows: 0.20
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: []
     ├── read rows: 10
-    ├── read bytes: 54
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [t1.number (#1) > 1], limit: NONE]
     └── estimated rows: 8.18
 
@@ -127,20 +127,20 @@ Filter
     │   ├── table: default.default.t
     │   ├── output columns: [number (#0)]
     │   ├── read rows: 1
-    │   ├── read bytes: 18
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── output columns: [number (#1)]
         ├── read rows: 10
-        ├── read bytes: 54
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 10.00
 
@@ -166,30 +166,30 @@ HashJoin
 │   │   ├── table: default.default.t
 │   │   ├── output columns: [number (#0)]
 │   │   ├── read rows: 0
-│   │   ├── read bytes: 0
+│   │   ├── read size: 0
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 0
-│   │   ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+│   │   ├── pruning stats: [segments: <range pruning: 1 to 0>]
 │   │   ├── push downs: [filters: [t.number (#0) = 1], limit: NONE]
 │   │   └── estimated rows: 0.00
 │   └── TableScan(Probe)
 │       ├── table: default.default.t1
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 10
-│       ├── read bytes: 54
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [], limit: NONE]
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.default.t2
     ├── output columns: [number (#2)]
     ├── read rows: 100
-    ├── read bytes: 414
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 100.00
 
@@ -227,20 +227,20 @@ HashJoin
 │   ├── table: default.default.onecolumn
 │   ├── output columns: [x (#0)]
 │   ├── read rows: 4
-│   ├── read bytes: 29
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [is_true(onecolumn.x (#0) > 42)], limit: NONE]
 │   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
     ├── output columns: [x (#1), y (#2)]
     ├── read rows: 4
-    ├── read bytes: 62
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_true(twocolumn.x (#1) > 42)], limit: NONE]
     └── estimated rows: 3.20
 
@@ -258,20 +258,20 @@ HashJoin
 │   ├── table: default.default.onecolumn
 │   ├── output columns: [x (#0)]
 │   ├── read rows: 4
-│   ├── read bytes: 29
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [is_true(onecolumn.x (#0) > 44 OR onecolumn.x (#0) < 43)], limit: NONE]
 │   └── estimated rows: 1.75
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
     ├── output columns: [x (#1), y (#2)]
     ├── read rows: 4
-    ├── read bytes: 62
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_true(twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43)], limit: NONE]
     └── estimated rows: 2.08
 
@@ -289,20 +289,20 @@ HashJoin
 │   ├── table: default.default.onecolumn
 │   ├── output columns: [x (#0)]
 │   ├── read rows: 4
-│   ├── read bytes: 29
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
 │   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
     ├── output columns: [x (#1), y (#2)]
     ├── read rows: 4
-    ├── read bytes: 62
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
     └── estimated rows: 3.20
 
@@ -326,20 +326,20 @@ Filter
     │   ├── table: default.default.twocolumn
     │   ├── output columns: [x (#1), y (#2)]
     │   ├── read rows: 4
-    │   ├── read bytes: 62
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── output columns: [x (#0)]
         ├── read rows: 4
-        ├── read bytes: 29
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -347,32 +347,32 @@ query T
 explain select * from onecolumn as a right join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 HashJoin
-├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
-├── join type: RIGHT OUTER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
+├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
+├── join type: LEFT OUTER
+├── build keys: [a.x (#0)]
+├── probe keys: [b.x (#1)]
 ├── filters: []
 ├── estimated rows: 3.20
 ├── TableScan(Build)
-│   ├── table: default.default.twocolumn
-│   ├── output columns: [x (#1), y (#2)]
+│   ├── table: default.default.onecolumn
+│   ├── output columns: [x (#0)]
 │   ├── read rows: 4
-│   ├── read bytes: 62
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│   ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
-│   └── estimated rows: 3.20
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
-    ├── table: default.default.onecolumn
-    ├── output columns: [x (#0)]
+    ├── table: default.default.twocolumn
+    ├── output columns: [x (#1), y (#2)]
     ├── read rows: 4
-    ├── read bytes: 29
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 4.00
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
+    └── estimated rows: 3.20
 
 statement ok
 drop table t
@@ -403,7 +403,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [is_true(t2.a (#2) > 10)], limit: NONE]
@@ -412,7 +412,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t1.a (#0) > 10)], limit: NONE]
@@ -432,7 +432,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -441,7 +441,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t1.a (#0) + t1.b (#1) > 10)], limit: NONE]
@@ -461,7 +461,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [is_true(t2.a (#2) > 10)], limit: NONE]
@@ -470,7 +470,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t1.a (#0) > 10)], limit: NONE]
@@ -490,7 +490,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [is_true(t2.a (#2) + t2.b (#3) > 10)], limit: NONE]
@@ -499,7 +499,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t1.a (#0) + t1.b (#1) > 10)], limit: NONE]
@@ -519,7 +519,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [is_true(t2.b (#3) + t2.a (#2) > 10)], limit: NONE]
@@ -528,7 +528,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t1.b (#1) + t1.a (#0) > 10)], limit: NONE]
@@ -548,7 +548,7 @@ HashJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -557,7 +557,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]

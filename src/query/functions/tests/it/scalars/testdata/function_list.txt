@@ -35,12 +35,16 @@ rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
 st_geom_point -> st_makegeompoint
+st_geometryfromewkb -> st_geometryfromwkb
 st_geometryfromewkt -> st_geometryfromwkt
 st_geometryfromtext -> st_geometryfromwkt
+st_geomfromewkb -> st_geometryfromwkb
 st_geomfromewkt -> st_geometryfromwkt
 st_geomfromtext -> st_geometryfromwkt
+st_geomfromwkb -> st_geometryfromwkb
 st_geomfromwkt -> st_geometryfromwkt
 st_make_line -> st_makeline
+st_polygon -> st_makepolygon
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
 str_to_year -> to_year
@@ -49,7 +53,6 @@ substring -> substr
 substring_utf8 -> substr
 subtract -> minus
 to_datetime -> to_timestamp
-to_geometry -> st_geometryfromwkt
 to_text -> to_string
 to_varchar -> to_string
 try_ipv4_num_to_string -> try_inet_ntoa
@@ -1999,11 +2002,13 @@ Functions overloads:
 7 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
 8 get(Map(Nothing) NULL, T0 NULL) :: NULL
 9 get(Map(T0, NULL) NULL, T0 NULL) :: NULL
-10 get(Map(T0, T1), T0) :: T1 NULL
-11 get(Map(T0, T1) NULL, T0 NULL) :: T1 NULL
-12 get FACTORY
-13 get FACTORY
+10 get(Map(T0, T1 NULL), T0) :: T1 NULL
+11 get(Map(T0, T1 NULL) NULL, T0 NULL) :: T1 NULL
+12 get(Map(T0, T1), T0) :: T1 NULL
+13 get(Map(T0, T1) NULL, T0 NULL) :: T1 NULL
 14 get FACTORY
+15 get FACTORY
+16 get FACTORY
 0 get_by_keypath FACTORY
 0 get_by_keypath_string FACTORY
 0 get_ignore_case(Variant, String) :: Variant NULL
@@ -3495,14 +3500,28 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
+0 st_geometryfromwkb(String) :: Geometry
+1 st_geometryfromwkb(String NULL) :: Geometry NULL
+2 st_geometryfromwkb(Binary) :: Geometry
+3 st_geometryfromwkb(Binary NULL) :: Geometry NULL
+4 st_geometryfromwkb(String, Int32) :: Geometry
+5 st_geometryfromwkb(String NULL, Int32 NULL) :: Geometry NULL
+6 st_geometryfromwkb(Binary, Int32) :: Geometry
+7 st_geometryfromwkb(Binary NULL, Int32 NULL) :: Geometry NULL
 0 st_geometryfromwkt(String) :: Geometry
 1 st_geometryfromwkt(String NULL) :: Geometry NULL
 2 st_geometryfromwkt(String, Int32) :: Geometry
 3 st_geometryfromwkt(String NULL, Int32 NULL) :: Geometry NULL
+0 st_geomfromgeohash(String) :: Geometry
+1 st_geomfromgeohash(String NULL) :: Geometry NULL
+0 st_geompointfromgeohash(String) :: Geometry
+1 st_geompointfromgeohash(String NULL) :: Geometry NULL
 0 st_makegeompoint(Float64, Float64) :: Geometry
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 st_makeline(Geometry, Geometry) :: Geometry
 1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
+0 st_makepolygon(Geometry) :: Geometry
+1 st_makepolygon(Geometry NULL) :: Geometry NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64

@@ -21,7 +21,13 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
+use databend_common_io::parse_to_ewkb;
+use databend_common_io::parse_to_subtype;
+use databend_common_io::GeometryDataType;
+use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
+use geozero::GeozeroGeometry;
+use geozero::ToJson;
 use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
@@ -165,8 +171,20 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
-                write!(f, "{geom:?}")
+                let value = match parse_to_subtype(s).unwrap() {
+                    GeometryDataType::GEOJSON => {
+                        GeoJson(std::str::from_utf8(s).unwrap()).to_json().unwrap()
+                    }
+                    GeometryDataType::EWKB => {
+                        let ewkb = Ewkb(s.to_vec());
+                        ewkb.to_ewkt(ewkb.srid()).unwrap()
+                    }
+                    GeometryDataType::EWKT => {
+                        let ewkb = Ewkb(parse_to_ewkb(s, None).unwrap());
+                        ewkb.to_ewkt(ewkb.srid()).unwrap()
+                    }
+                };
+                write!(f, "'{value:?}'")
             }
         }
     }
@@ -254,8 +272,20 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
-                write!(f, "'{geom}'")
+                let value = match parse_to_subtype(s).unwrap() {
+                    GeometryDataType::GEOJSON => {
+                        GeoJson(std::str::from_utf8(s).unwrap()).to_json().unwrap()
+                    }
+                    GeometryDataType::EWKB => {
+                        let ewkb = Ewkb(s.to_vec());
+                        ewkb.to_ewkt(ewkb.srid()).unwrap()
+                    }
+                    GeometryDataType::EWKT => {
+                        let ewkb = Ewkb(parse_to_ewkb(s, None).unwrap());
+                        ewkb.to_ewkt(ewkb.srid()).unwrap()
+                    }
+                };
+                write!(f, "'{value}'")
             }
         }
     }

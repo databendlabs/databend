@@ -82,10 +82,7 @@ impl FuseTable {
 
         let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
         let table_agg_index_ids = catalog
-            .list_index_ids_by_table_id(ListIndexesByIdReq {
-                tenant: ctx.get_tenant().to_string(),
-                table_id: self.get_id(),
-            })
+            .list_index_ids_by_table_id(ListIndexesByIdReq::new(ctx.get_tenant(), self.get_id()))
             .await?;
 
         // 2. Read snapshot fields by chunk size.

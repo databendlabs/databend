@@ -42,8 +42,8 @@ use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
@@ -87,7 +87,7 @@ const CATALOG_HIVE: &str = "hive";
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
-#[clap(name = "databend-query", about, version = & * * DATABEND_COMMIT_VERSION, author)]
+#[clap(name = "databend-query", about, version = &**DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit
@@ -1399,14 +1399,14 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "256")]
     pub max_active_sessions: u64,
 
-    #[clap(long, value_name = "VALUE", default_value = "0")]
+    #[clap(long, value_name = "VALUE", default_value = "8")]
     pub max_running_queries: u64,
 
     /// The max total memory in bytes that can be used by this process.
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
 
-    #[clap(long, value_name = "VALUE", value_parser = clap::value_parser!(bool), default_value = "false")]
+    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "false")]
     pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
@@ -1490,7 +1490,7 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
 
     /// Table engine memory enabled
-    #[clap(long, value_name = "VALUE", value_parser = clap::value_parser!(bool), default_value = "true")]
+    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "5000")]
@@ -1671,7 +1671,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 
     fn try_into(self) -> Result<InnerQueryConfig> {
         Ok(InnerQueryConfig {
-            tenant_id: NonEmptyString::new(self.tenant_id)
+            tenant_id: Tenant::new_or_err(self.tenant_id, "")
                 .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
             node_id: "".to_string(),
@@ -1752,7 +1752,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
         Self {
-            tenant_id: inner.tenant_id.to_string(),
+            tenant_id: inner.tenant_id.name().to_string(),
             cluster_id: inner.cluster_id,
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,

@@ -57,7 +57,7 @@ use crate::MetadataRef;
 #[allow(clippy::enum_variant_names)]
 pub enum UnnestResult {
     // Semi/Anti Join, Cross join for EXISTS
-    SimpleJoin,
+    SimpleJoin { output_index: Option<IndexType> },
     MarkJoin { marker_index: IndexType },
     SingleJoin { output_index: Option<IndexType> },
 }
@@ -242,7 +242,11 @@ impl SubqueryRewriter {
                     from_count_func: false,
                 };
                 let (s_expr, result) = if prop.outer_columns.is_empty() {
-                    self.try_rewrite_uncorrelated_subquery(s_expr, &subquery)?
+                    self.try_rewrite_uncorrelated_subquery(
+                        s_expr,
+                        &subquery,
+                        is_conjunctive_predicate,
+                    )?
                 } else {
                     self.try_decorrelate_subquery(
                         s_expr,
@@ -254,14 +258,25 @@ impl SubqueryRewriter {
 
                 // If we unnest the subquery into a simple join, then we can replace the
                 // original predicate with a `TRUE` literal to eliminate the conjunction.
-                if matches!(result, UnnestResult::SimpleJoin) {
-                    return Ok((
+                if let UnnestResult::SimpleJoin { output_index } = result {
+                    let scalar_expr = if let Some(output_index) = output_index {
+                        ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: subquery.span,
+                            column: ColumnBindingBuilder::new(
+                                "exists_scalar".to_string(),
+                                output_index,
+                                Box::new(DataType::Boolean),
+                                Visibility::Visible,
+                            )
+                            .build(),
+                        })
+                    } else {
                         ScalarExpr::ConstantExpr(ConstantExpr {
                             span: subquery.span,
                             value: Scalar::Boolean(true),
-                        }),
-                        s_expr,
-                    ));
+                        })
+                    };
+                    return Ok((scalar_expr, s_expr));
                 }
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
                     (marker_index, marker_index.to_string())
@@ -391,6 +406,7 @@ impl SubqueryRewriter {
         &mut self,
         left: &SExpr,
         subquery: &SubqueryExpr,
+        is_conjunctive_predicate: bool,
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => self.rewrite_uncorrelated_scalar_subquery(left, subquery),
@@ -461,19 +477,35 @@ impl SubqueryRewriter {
                         .into(),
                     ],
                 };
-                let filter = Filter {
-                    predicates: vec![compare.into()],
+
+                let agg_s_expr = Arc::new(SExpr::create_unary(
+                    Arc::new(agg.into()),
+                    Arc::new(subquery_expr),
+                ));
+
+                let mut output_index = None;
+                let rewritten_subquery = if is_conjunctive_predicate {
+                    let filter = Filter {
+                        predicates: vec![compare.into()],
+                    };
+                    // Filter: COUNT(*) = 1 or COUNT(*) != 1
+                    // └── Aggregate: COUNT(*)
+                    SExpr::create_unary(Arc::new(filter.into()), agg_s_expr)
+                } else {
+                    let column_index = self.metadata.write().add_derived_column(
+                        "_exists_scalar_subquery".to_string(),
+                        DataType::Number(NumberDataType::UInt64),
+                    );
+                    output_index = Some(column_index);
+                    let eval_scalar = EvalScalar {
+                        items: vec![ScalarItem {
+                            scalar: compare.into(),
+                            index: column_index,
+                        }],
+                    };
+                    SExpr::create_unary(Arc::new(eval_scalar.into()), agg_s_expr)
                 };
 
-                // Filter: COUNT(*) = 1 or COUNT(*) != 1
-                //     Aggregate: COUNT(*)
-                let rewritten_subquery = SExpr::create_unary(
-                    Arc::new(filter.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(agg.into()),
-                        Arc::new(subquery_expr),
-                    )),
-                );
                 let cross_join = Join {
                     left_conditions: vec![],
                     right_conditions: vec![],
@@ -483,7 +515,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: false,
                     need_hold_hash_table: false,
                     is_lateral: false,
-                    original_join_type: None,
+                    single_to_inner: None,
                 }
                 .into();
                 Ok((
@@ -492,7 +524,7 @@ impl SubqueryRewriter {
                         Arc::new(left.clone()),
                         Arc::new(rewritten_subquery),
                     ),
-                    UnnestResult::SimpleJoin,
+                    UnnestResult::SimpleJoin { output_index },
                 ))
             }
             SubqueryType::Any => {
@@ -553,7 +585,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: false,
                     need_hold_hash_table: false,
                     is_lateral: false,
-                    original_join_type: None,
+                    single_to_inner: None,
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -584,7 +616,7 @@ impl SubqueryRewriter {
             from_correlated_subquery: false,
             need_hold_hash_table: false,
             is_lateral: false,
-            original_join_type: None,
+            single_to_inner: None,
         }
         .into();
 

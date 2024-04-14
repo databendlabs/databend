@@ -30,10 +30,10 @@ AggregateFinal
             ├── table: default.default.fold_count
             ├── output columns: [id (#0)]
             ├── read rows: 1
-            ├── read bytes: 43
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 1.00
 
@@ -60,7 +60,7 @@ ProjectSet
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 10
-    ├── read bytes: 80
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -77,7 +77,7 @@ ProjectSet
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 10
-    ├── read bytes: 80
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]

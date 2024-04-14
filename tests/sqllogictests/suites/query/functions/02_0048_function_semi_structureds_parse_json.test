@@ -1,0 +1,223 @@
+query T
+select to_variant(null)
+----
+NULL
+
+query T
+select to_variant(true)
+----
+true
+
+query T
+select to_variant(123)
+----
+123
+
+query T
+select to_variant(12.34)
+----
+12.34
+
+query T
+select parse_json('null')
+----
+null
+
+query T
+select parse_json('true')
+----
+true
+
+query T
+select parse_json('-17')
+----
+-17
+
+query T
+select parse_json('123.12')
+----
+123.12
+
+query T
+select parse_json('1.912e2')
+----
+191.2
+
+query T
+select parse_json('"Om ara pa ca na dhih"  ')
+----
+"Om ara pa ca na dhih"
+
+query T
+select parse_json('[-1, 12, 289, 2188, false]')
+----
+[-1,12,289,2188,false]
+
+query T
+select parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
+----
+{"x":"abc","y":false,"z":10}
+
+
+query T
+select parse_json('{ "test" : "\\"abc\\"测试⚠️✅❌မြန်မာဘာသာ" } ')
+----
+{"test":"\"abc\"测试⚠️✅❌မြန်မာဘာသာ"}
+
+statement error 1006
+select parse_json('[1,')
+
+
+statement error 1006
+select parse_json('"ab')
+
+
+statement error 1065
+select parse_json()
+
+
+statement error 1065
+select parse_json('a', 'aa')
+
+
+statement error 1065
+select get(parse_json('a', 'aa'))
+
+query T
+select '==try_parse_json=='
+----
+==try_parse_json==
+
+query T
+select try_to_variant(null)
+----
+NULL
+
+query T
+select try_to_variant(true)
+----
+true
+
+query T
+select try_to_variant(123)
+----
+123
+
+query T
+select try_to_variant(12.34)
+----
+12.34
+
+query T
+select try_parse_json('null')
+----
+null
+
+query T
+select try_parse_json('true')
+----
+true
+
+query T
+select try_parse_json('-17')
+----
+-17
+
+query T
+select try_parse_json('123.12')
+----
+123.12
+
+query T
+select try_parse_json('1.912e2')
+----
+191.2
+
+query T
+select try_parse_json('"Om ara pa ca na dhih"  ')
+----
+"Om ara pa ca na dhih"
+
+query T
+select try_parse_json('[-1, 12, 289, 2188, false]')
+----
+[-1,12,289,2188,false]
+
+query T
+select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
+----
+{"x":"abc","y":false,"z":10}
+
+query T
+select try_parse_json('[1,')
+----
+NULL
+
+query T
+select try_parse_json('"ab')
+----
+NULL
+
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Fuse
+
+statement ok
+insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}')
+
+query TT
+select parse_json(v), v from t1
+----
+NULL NULL
+null null
+true true
+123 123
+"abc" "abc"
+[1,2,3] [1,2,3]
+{"a":"b"} {"a":"b"}
+
+query TT
+select try_parse_json(v), v from t1
+----
+NULL NULL
+null null
+true true
+123 123
+"abc" "abc"
+[1,2,3] [1,2,3]
+{"a":"b"} {"a":"b"}
+
+statement ok
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse
+
+statement ok
+insert into t2 values ('abc'),('[1,')
+
+query TT
+select try_parse_json(v), v from t2
+----
+NULL abc
+NULL [1,
+
+statement ok
+CREATE TABLE IF NOT EXISTS t3(a int, b string, c tuple(id int, name string)) Engine = Fuse
+
+statement ok
+insert into t3 values (1, 'ab', (10, 'v1')),(2, 'cd', (20, 'v2'))
+
+query TTT
+select to_variant(a), to_variant(b), to_variant(c) from t3
+----
+1 "ab" {"id":10,"name":"v1"}
+2 "cd" {"id":20,"name":"v2"}
+
+statement ok
+DROP DATABASE db1

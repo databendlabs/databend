@@ -1260,7 +1260,6 @@ dependencies = [
  "databend-common-license",
  "databend-common-meta-app",
  "databend-common-meta-embedded",
- "databend-common-meta-types",
  "databend-common-users",
  "databend-query",
  "pyo3",
@@ -2970,6 +2969,7 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "fast-float",
+ "geos",
  "goldenfile",
  "indent",
  "itertools 0.10.5",
@@ -3023,6 +3023,8 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "pprof",
+ "prometheus-client",
+ "prometheus-parse",
  "rand 0.8.5",
  "regex",
  "replace_with",
@@ -3142,7 +3144,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-users",
@@ -3185,6 +3186,7 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "codespan-reporting",
  "databend-common-arrow",
+ "geos",
  "geozero",
  "http",
  "opendal",
@@ -3227,6 +3229,7 @@ dependencies = [
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "futures",
  "geo",
+ "geos",
  "geozero",
  "goldenfile",
  "hex",
@@ -3267,10 +3270,10 @@ dependencies = [
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "geos",
  "geozero",
  "hex",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a7325f4)",
@@ -3404,6 +3407,7 @@ dependencies = [
  "databend-common-exception",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "geo",
+ "geos",
  "geozero",
  "lexical-core",
  "micromarshal 0.5.0",
@@ -3464,6 +3468,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
+ "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-meta-app",
@@ -3501,7 +3506,6 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
- "derive_more",
  "enumflags2",
  "hex",
  "itertools 0.10.5",
@@ -3724,14 +3728,10 @@ name = "databend-common-metrics"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "databend-common-exception",
+ "databend-common-base",
  "metrics",
- "metrics-exporter-prometheus",
- "parking_lot 0.12.1",
  "procfs 0.15.1",
  "prometheus-client",
- "prometheus-parse",
- "serde",
  "tokio",
 ]
 
@@ -3866,6 +3866,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-script"
+version = "0.1.0"
+dependencies = [
+ "databend-common-ast",
+ "databend-common-exception",
+ "derive-visitor",
+ "goldenfile",
+ "minitrace",
+ "tokio",
+ "unindent",
+]
+
+[[package]]
 name = "databend-common-settings"
 version = "0.1.0"
 dependencies = [
@@ -3994,16 +4007,15 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-meta-app",
- "databend-common-metrics",
  "databend-enterprise-storage-encryption",
  "flagset",
  "futures",
  "log",
  "metrics",
- "once_cell",
  "opendal",
  "ordered-float 4.2.0",
  "parquet",
+ "prometheus-client",
  "regex",
  "reqwest",
  "reqwest-hickory-resolver",
@@ -4072,6 +4084,7 @@ name = "databend-common-storages-fuse"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.10",
+ "arrow 50.0.0",
  "arrow-array 50.0.0",
  "async-backtrace",
  "async-trait-fn",
@@ -4099,6 +4112,7 @@ dependencies = [
  "databend-common-sharing",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-common-storages-share",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-cache-manager",
@@ -4116,17 +4130,16 @@ dependencies = [
  "minitrace",
  "opendal",
  "parquet",
- "parquet-format-safe",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "sha2",
  "siphasher",
- "streaming-decompression",
  "sys-info",
  "tantivy",
  "tantivy-common",
  "tantivy-jieba",
+ "thrift",
  "typetag",
  "uuid",
  "xorf",
@@ -4298,6 +4311,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
+ "databend-storages-common-table-meta",
  "serde",
  "typetag",
 ]
@@ -4308,6 +4322,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bytes",
  "databend-common-arrow",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4323,9 +4338,11 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "opendal",
+ "parquet",
  "serde",
  "serde_json",
  "sha2",
+ "tokio",
  "uuid",
 ]
 
@@ -4352,6 +4369,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bstr 1.9.1",
  "csv-core",
  "dashmap",
  "databend-common-base",
@@ -4368,9 +4386,11 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "enum-as-inner 0.6.0",
  "log",
  "opendal",
  "serde",
+ "serde_json",
  "typetag",
  "uuid",
 ]
@@ -4391,7 +4411,6 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
- "log",
  "minitrace",
 ]
 
@@ -4415,7 +4434,6 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-types",
- "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
  "databend-common-sql",
@@ -4441,7 +4459,6 @@ dependencies = [
  "snailquote",
  "tikv-jemalloc-ctl",
  "typetag",
- "walkdir",
 ]
 
 [[package]]
@@ -4595,10 +4612,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-expression",
  "databend-common-meta-app",
- "databend-common-storages-fuse",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -4825,6 +4839,7 @@ dependencies = [
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
+ "databend-common-script",
  "databend-common-settings",
  "databend-common-sharing",
  "databend-common-sql",
@@ -4884,9 +4899,13 @@ dependencies = [
  "mysql_async",
  "naive-cityhash",
  "num",
+ "num_cpus",
  "once_cell",
  "opendal",
  "opensrv-mysql",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry_sdk",
  "ordered-float 4.2.0",
  "p256",
  "parking_lot 0.12.1",
@@ -5023,13 +5042,10 @@ dependencies = [
 name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
- "databend-common-arrow",
- "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
  "parquet",
- "parquet-format-safe",
 ]
 
 [[package]]
@@ -5084,6 +5100,7 @@ dependencies = [
  "log",
  "match-template",
  "minitrace",
+ "parquet",
  "rand 0.8.5",
  "serde",
  "tantivy",
@@ -6505,6 +6522,7 @@ source = "git+https://github.com/georust/geozero?rev=1d78b36#1d78b3604ea6d082980
 dependencies = [
  "geo-types",
  "geojson",
+ "geos",
  "log",
  "scroll",
  "serde_json",
@@ -7787,9 +7805,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.24"
+version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2c4422095b67ee78da96fbb51a4cc413b3b25883c7717ff7ca1ab31022c9c9"
+checksum = "81fe527a889e1532da5c525686d96d4c2e74cdd345badf8dfef9f6b39dd5f5e8"
 dependencies = [
  "bytes",
  "fnv",
@@ -9230,15 +9248,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mach"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "mach2"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9396,21 +9405,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "metrics-exporter-prometheus"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8603921e1f54ef386189335f288441af761e0fc61bcb552168d9cedfe63ebc70"
-dependencies = [
- "indexmap 1.9.3",
- "metrics",
- "metrics-util",
- "parking_lot 0.12.1",
- "portable-atomic 0.3.20",
- "quanta 0.10.1",
- "thiserror",
-]
-
-[[package]]
 name = "metrics-macros"
 version = "0.6.0"
 source = "git+https://github.com/datafuse-extras/metrics.git?rev=fc2ecd1#fc2ecd143dc0461166081f80bc76f0b38381f3a1"
@@ -9418,23 +9412,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "metrics-util"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7d24dc2dbae22bff6f1f9326ffce828c9f07ef9cc1e8002e5279f845432a30a"
-dependencies = [
- "crossbeam-epoch",
- "crossbeam-utils",
- "hashbrown 0.12.3",
- "metrics",
- "num_cpus",
- "parking_lot 0.12.1",
- "portable-atomic 0.3.20",
- "quanta 0.10.1",
- "sketches-ddsketch",
 ]
 
 [[package]]
@@ -10124,9 +10101,8 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.45.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3350be0d4ba326017ce22c98a9e94d21b069160fcd95bbe6c2555dac4e93c47a"
+version = "0.45.1"
+source = "git+https://github.com/apache/opendal?rev=53377ca#53377ca873c2928ce519ca57a939f89af1a76c47"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -10149,7 +10125,7 @@ dependencies = [
  "prometheus",
  "prometheus-client",
  "prost 0.11.9",
- "quick-xml 0.30.0",
+ "quick-xml 0.31.0",
  "reqsign",
  "reqwest",
  "serde",
@@ -10228,6 +10204,18 @@ dependencies = [
  "pin-project-lite",
  "thiserror",
  "urlencoding",
+]
+
+[[package]]
+name = "opentelemetry-http"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f51189ce8be654f9b5f7e70e49967ed894e84a06fc35c6c042e64ac1fc5399e"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "http",
+ "opentelemetry",
 ]
 
 [[package]]
@@ -11574,22 +11562,6 @@ checksum = "658fa1faf7a4cc5f057c9ee5ef560f717ad9d8dc66d975267f709624d6e1ab88"
 
 [[package]]
 name = "quanta"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7e31331286705f455e56cca62e0e717158474ff02b7936c1fa596d983f4ae27"
-dependencies = [
- "crossbeam-utils",
- "libc",
- "mach",
- "once_cell",
- "raw-cpuid 10.7.0",
- "wasi 0.10.2+wasi-snapshot-preview1",
- "web-sys",
- "winapi",
-]
-
-[[package]]
-name = "quanta"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a17e662a7a8291a865152364c20c7abc5e60486ab2001e8ec10b24862de0b9ab"
@@ -11632,16 +11604,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f50b1c63b38611e7d4d7f68b82d3ad0cc71a2ad2e7f61fc10f1328d917c93cd"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
-dependencies = [
- "memchr",
- "serde",
 ]
 
 [[package]]
@@ -11961,8 +11923,7 @@ checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 [[package]]
 name = "reqsign"
 version = "0.14.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43e319d9de9ff4d941abf4ac718897118b0fe04577ea3f8e0f5788971784eef5"
+source = "git+https://github.com/Xuanwo/reqsign?rev=122dc12#122dc12e4e4dfbcaa12e6ce2f0f314009f51f1c5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14951,12 +14912,6 @@ name = "wasi"
 version = "0.9.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
-
-[[package]]
-name = "wasi"
-version = "0.10.2+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
 
 [[package]]
 name = "wasi"

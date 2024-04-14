@@ -61,6 +61,7 @@ use futures_util::TryStreamExt;
 use log::debug;
 
 use crate::interpreters::common::create_push_down_filters;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::locks::LockManager;
@@ -112,7 +113,7 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
         let tbl = catalog
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await?;
 
         // Add table lock.
@@ -285,6 +286,21 @@ impl Interpreter for DeleteInterpreter {
 
         build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        {
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                catalog_name.to_string(),
+                db_name.to_string(),
+                tbl_name.to_string(),
+                "delete".to_string(),
+                // table lock has been added, no need to check.
+                false,
+            );
+            hook_operator
+                .execute_refresh(&mut build_res.main_pipeline)
+                .await;
+        }
+
         Ok(build_res)
     }
 }
@@ -370,7 +386,7 @@ pub async fn subquery_filter(
         .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
         .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
 
-    s_expr = optimize_query(opt_ctx, s_expr.clone())?;
+    s_expr = optimize_query(opt_ctx, s_expr.clone()).await?;
 
     // Create `input_expr` pipeline and execute it to get `_row_id` data block.
     let select_interpreter = SelectInterpreter::try_create(
@@ -393,9 +409,7 @@ pub async fn subquery_filter(
     .await?;
 
     // Execute pipeline
-    let settings = ctx.get_settings();
-    let query_id = ctx.get_id();
-    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
     let pulling_executor = PipelinePullingExecutor::from_pipelines(pipeline, settings)?;
     ctx.set_executor(pulling_executor.get_inner())?;
     let stream_blocks = PullingExecutorStream::create(pulling_executor)?

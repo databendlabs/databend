@@ -209,7 +209,7 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
             (false, true, true, false) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             _ => FunctionDomain::Full,
         },
-        |lhs, rhs, _| (lhs & !rhs) || (lhs & rhs),
+        |lhs, rhs, _| lhs | !rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lt",
@@ -228,7 +228,7 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
             (true, false, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             _ => FunctionDomain::Full,
         },
-        |lhs, rhs, _| (!lhs & rhs) || (lhs & rhs),
+        |lhs, rhs, _| !lhs | rhs,
     );
 }
 

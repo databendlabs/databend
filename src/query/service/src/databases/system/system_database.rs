@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::BackgroundJobTable;
 use databend_common_storages_system::BackgroundTaskTable;
 use databend_common_storages_system::BacktraceTable;
@@ -62,6 +63,8 @@ use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TracingTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
+use databend_common_storages_system::ViewsTableWithHistory;
+use databend_common_storages_system::ViewsTableWithoutHistory;
 use databend_common_storages_system::VirtualColumnsTable;
 
 use crate::catalogs::InMemoryMetas;
@@ -136,6 +139,8 @@ impl SystemDatabase {
             UserFunctionsTable::create(sys_db_meta.next_table_id()),
             NotificationsTable::create(sys_db_meta.next_table_id()),
             NotificationHistoryTable::create(sys_db_meta.next_table_id()),
+            ViewsTableWithHistory::create(sys_db_meta.next_table_id()),
+            ViewsTableWithoutHistory::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();
@@ -157,7 +162,7 @@ impl SystemDatabase {
                 seq: 0,
             },
             name_ident: DatabaseNameIdent {
-                tenant: "".to_string(),
+                tenant: Tenant::new_literal("dummy"),
                 db_name: "system".to_string(),
             },
             meta: DatabaseMeta {

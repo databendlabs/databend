@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::DeleteSource;
@@ -31,13 +32,13 @@ use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlanReplacer;
 
-use crate::api::BroadcastExchange;
-use crate::api::DataExchange;
-use crate::api::MergeExchange;
-use crate::api::ShuffleDataExchange;
 use crate::clusters::ClusterHelper;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
+use crate::servers::flight::v1::exchange::BroadcastExchange;
+use crate::servers::flight::v1::exchange::DataExchange;
+use crate::servers::flight::v1::exchange::MergeExchange;
+use crate::servers::flight::v1::exchange::ShuffleDataExchange;
 use crate::sessions::QueryContext;
 use crate::sql::executor::physical_plans::MergeInto;
 use crate::sql::executor::PhysicalPlan;
@@ -153,6 +154,12 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
+    fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
+        self.state = State::SelectLeaf;
+
+        Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
+    }
+
     fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         if !plan.change_join_order {
@@ -249,7 +256,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             probe_keys_rt: plan.probe_keys_rt.clone(),
             enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
-            original_join_type: plan.original_join_type.clone(),
+            single_to_inner: plan.single_to_inner.clone(),
         }))
     }
 

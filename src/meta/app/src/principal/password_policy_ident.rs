@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant_key::TIdent;
+use crate::tenant_key::ident::TIdent;
 
 /// Defines the meta-service key for password policy.
 pub type PasswordPolicyIdent = TIdent<Resource>;
@@ -25,9 +25,9 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::PasswordPolicy;
-    use crate::tenant_key::TenantResource;
-    use crate::tenant_key_errors::ExistError;
-    use crate::tenant_key_errors::UnknownError;
+    use crate::tenant_key::errors::ExistError;
+    use crate::tenant_key::errors::UnknownError;
+    use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
 

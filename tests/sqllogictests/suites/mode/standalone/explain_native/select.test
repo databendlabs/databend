@@ -5,7 +5,7 @@ TableScan
 ├── table: default.system.numbers
 ├── output columns: [number (#0)]
 ├── read rows: 1
-├── read bytes: 8
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── push downs: [filters: [], limit: NONE]
@@ -22,7 +22,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 1
-    ├── read bytes: 8
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [numbers.number (#0) = 1], limit: NONE]
@@ -43,7 +43,7 @@ EvalScalar
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 1
-        ├── read bytes: 8
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [and_filters(numbers.number (#0) = 1, numbers.number (#0) + 1 = 1)], limit: NONE]
@@ -64,7 +64,7 @@ EvalScalar
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 1
-        ├── read bytes: 8
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [numbers.number (#0) = 1], limit: NONE]
@@ -81,7 +81,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 1
-    ├── read bytes: 8
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [to_float64(numbers.number (#0)) = 1], limit: NONE]
@@ -94,7 +94,7 @@ TableScan
 ├── table: default.system.numbers
 ├── output columns: [number (#0)]
 ├── read rows: 1
-├── read bytes: 8
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── push downs: [filters: [], limit: NONE]
@@ -111,7 +111,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -128,7 +128,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -145,7 +145,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -158,7 +158,7 @@ TableScan
 ├── table: default.system.numbers
 ├── output columns: [number (#0)]
 ├── read rows: 1
-├── read bytes: 8
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── push downs: [filters: [], limit: NONE]
@@ -171,7 +171,7 @@ TableScan
 ├── table: default.system.numbers
 ├── output columns: [number (#0)]
 ├── read rows: 1
-├── read bytes: 8
+├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── push downs: [filters: [], limit: NONE]
@@ -188,7 +188,7 @@ Filter
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -214,10 +214,10 @@ EvalScalar
     ├── table: default.default.t_json
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
-    ├── read bytes: 108
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 1.00
 
@@ -232,10 +232,10 @@ EvalScalar
     ├── table: default.default.t_json
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
-    ├── read bytes: 108
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 1.00
 

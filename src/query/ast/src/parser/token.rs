@@ -414,6 +414,8 @@ pub enum TokenKind {
     CATALOGS,
     #[token("CENTURY", ignore(ascii_case))]
     CENTURY,
+    #[token("CHANGES", ignore(ascii_case))]
+    CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
     #[token("COMMENT", ignore(ascii_case))]
@@ -484,6 +486,8 @@ pub enum TokenKind {
     DECADE,
     #[token("DECIMAL", ignore(ascii_case))]
     DECIMAL,
+    #[token("DECLARE", ignore(ascii_case))]
+    DECLARE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]
@@ -648,6 +652,8 @@ pub enum TokenKind {
     IN,
     #[token("INDEX", ignore(ascii_case))]
     INDEX,
+    #[token("INFORMATION", ignore(ascii_case))]
+    INFORMATION,
     #[token("INNER", ignore(ascii_case))]
     INNER,
     #[token("INSERT", ignore(ascii_case))]
@@ -670,6 +676,8 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("IMMEDIATE", ignore(ascii_case))]
+    IMMEDIATE,
     #[token("IS", ignore(ascii_case))]
     IS,
     #[token("ISODOW", ignore(ascii_case))]
@@ -763,6 +771,8 @@ pub enum TokenKind {
     NOT,
     #[token("NOTENANTSETTING", ignore(ascii_case))]
     NOTENANTSETTING,
+    #[token("DEFAULT_ROLE", ignore(ascii_case))]
+    DEFAULT_ROLE,
     #[token("NULL", ignore(ascii_case))]
     NULL,
     #[token("NULLABLE", ignore(ascii_case))]
@@ -1506,7 +1516,7 @@ impl TokenKind {
             // | TokenKind::DEFERRABLE
             | TokenKind::DESC
             | TokenKind::DISTINCT
-            // | TokenKind::DO
+            | TokenKind::DO
             | TokenKind::ELSE
             | TokenKind::END
             | TokenKind::FALSE
@@ -1532,7 +1542,6 @@ impl TokenKind {
             | TokenKind::NULL
             // | TokenKind::ONLY
             | TokenKind::OR
-            // | TokenKind::OUTER
             // | TokenKind::PLACING
             // | TokenKind::PRIMARY
             // | TokenKind::REFERENCES
@@ -1545,7 +1554,6 @@ impl TokenKind {
             | TokenKind::SOME
             | TokenKind::SEMI
             // | TokenKind::SYMMETRIC
-            // | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
@@ -1565,7 +1573,7 @@ impl TokenKind {
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FROM
-            // | TokenKind::GRANT
+            | TokenKind::GRANT
             | TokenKind::GROUP
             | TokenKind::HAVING
             | TokenKind::INTERSECT

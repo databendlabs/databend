@@ -36,7 +36,15 @@ pub enum LogType {
     Start = 1,
     Finish = 2,
     Error = 3,
+
+    /// canceled by another thread:
+    /// 1. `kill <query_id>` statement
+    /// 2. client_driver/ctx.cancel() -> /kill
     Aborted = 4,
+
+    /// close early because client does not need more data:
+    /// 1. explicit or implicit result_set.close() -> /final
+    Closed = 5,
 }
 
 impl LogType {
@@ -46,6 +54,7 @@ impl LogType {
             LogType::Finish => "Finish".to_string(),
             LogType::Error => "Error".to_string(),
             LogType::Aborted => "Aborted".to_string(),
+            LogType::Closed => "Closed".to_string(),
         }
     }
 }
@@ -103,6 +112,7 @@ pub struct QueryLogElement {
     #[serde(serialize_with = "datetime_str")]
     pub query_start_time: i64,
     pub query_duration_ms: i64,
+    pub query_queued_duration_ms: i64,
 
     // Schema.
     pub current_database: String,
@@ -188,6 +198,10 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("query_start_time", TableDataType::Timestamp),
             TableField::new(
                 "query_duration_ms",
+                TableDataType::Number(NumberDataType::Int64),
+            ),
+            TableField::new(
+                "query_queued_duration_ms",
                 TableDataType::Number(NumberDataType::Int64),
             ),
             // Schema.
@@ -366,6 +380,10 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Number(NumberScalar::Int64(self.query_duration_ms)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::Int64(self.query_queued_duration_ms)).as_ref());
         // Schema.
         columns
             .next()

@@ -22,8 +22,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -97,9 +95,11 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use log::info;
+use minitrace::func_name;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
@@ -117,7 +117,7 @@ use crate::storages::Table;
 #[derive(Clone)]
 pub struct MutableCatalog {
     ctx: CatalogContext,
-    tenant: String,
+    tenant: Tenant,
 }
 
 impl Debug for MutableCatalog {
@@ -148,13 +148,13 @@ impl MutableCatalog {
             provider.create_meta_store().await?
         };
 
-        let tenant = conf.query.tenant_id.to_string();
+        let tenant = conf.query.tenant_id.clone();
 
         // Create default database.
         let req = CreateDatabaseReq {
             create_option: CreateOption::CreateIfNotExists,
             name_ident: DatabaseNameIdent {
-                tenant,
+                tenant: tenant.clone(),
                 db_name: "default".to_string(),
             },
             meta: DatabaseMeta {
@@ -175,10 +175,7 @@ impl MutableCatalog {
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
         };
-        Ok(MutableCatalog {
-            ctx,
-            tenant: conf.query.tenant_id.to_string(),
-        })
+        Ok(MutableCatalog { ctx, tenant })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
@@ -187,7 +184,9 @@ impl MutableCatalog {
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
         };
-        self.ctx.database_factory.get_database(ctx, db_info)
+        self.ctx
+            .database_factory
+            .build_database_by_engine(ctx, db_info)
     }
 }
 
@@ -206,22 +205,23 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx
             .meta
-            .get_database(GetDatabaseReq::new(tenant.to_string(), db_name))
+            .get_database(GetDatabaseReq::new(tenant, db_name))
             .await?;
+
         self.build_db_instance(&db_info)
     }
 
     #[async_backtrace::framed]
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self
             .ctx
             .meta
             .list_databases(ListDatabaseReq {
-                tenant: tenant.to_string(),
+                tenant: tenant.clone(),
                 filter: None,
             })
             .await?;
@@ -252,7 +252,7 @@ impl Catalog for MutableCatalog {
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
-        database.init_database(&req.name_ident.tenant).await?;
+        database.init_database(req.name_ident.tenant.name()).await?;
         Ok(CreateDatabaseReply {
             db_id: res.db_id,
             spec_vec: None,
@@ -373,6 +373,7 @@ impl Catalog for MutableCatalog {
 
     async fn mget_table_names_by_ids(
         &self,
+        _tenant: &Tenant,
         table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
         let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
@@ -385,7 +386,11 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
+    async fn mget_database_names_by_ids(
+        &self,
+        _tenant: &Tenant,
+        db_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
         let res = self.ctx.meta.mget_database_names_by_ids(db_ids).await?;
         Ok(res)
     }
@@ -393,7 +398,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -402,7 +407,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
         db.list_tables().await
     }
@@ -410,7 +415,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
@@ -480,7 +485,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -504,9 +509,8 @@ impl Catalog for MutableCatalog {
                 Ok(self.ctx.meta.update_table_meta(req).await?)
             }
             DatabaseType::ShareDB(share_ident) => {
-                let db = self
-                    .get_database(&share_ident.tenant, &share_ident.share_name)
-                    .await?;
+                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                let db = self.get_database(&tenant, share_ident.share_name()).await?;
                 db.update_table_meta(req).await
             }
         }
@@ -527,7 +531,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -544,9 +548,8 @@ impl Catalog for MutableCatalog {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
             DatabaseType::ShareDB(share_ident) => {
-                let db = self
-                    .get_database(&share_ident.tenant, &share_ident.share_name)
-                    .await?;
+                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                let db = self.get_database(&tenant, share_ident.share_name()).await?;
                 db.truncate_table(req).await
             }
         }
@@ -560,12 +563,6 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
         Ok(self.ctx.meta.drop_table_index(req).await?)
-    }
-
-    #[async_backtrace::framed]
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
-        let res = self.ctx.meta.count_tables(req).await?;
-        Ok(res)
     }
 
     #[async_backtrace::framed]

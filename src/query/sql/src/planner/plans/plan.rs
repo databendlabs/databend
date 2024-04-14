@@ -24,7 +24,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
-use super::SetSecondaryRolesPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -96,15 +95,18 @@ use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
+use crate::plans::ExecuteImmediatePlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::GrantShareObjectPlan;
 use crate::plans::Insert;
+use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
 use crate::plans::MergeInto;
 use crate::plans::ModifyTableColumnPlan;
+use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterTablePlan;
@@ -122,6 +124,7 @@ use crate::plans::RevokeRolePlan;
 use crate::plans::RevokeShareObjectPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetRolePlan;
+use crate::plans::SetSecondaryRolesPlan;
 use crate::plans::SettingPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
@@ -176,9 +179,6 @@ pub enum Plan {
         plan: Box<Plan>,
     },
 
-    CopyIntoTable(Box<CopyIntoTablePlan>),
-    CopyIntoLocation(CopyIntoLocationPlan),
-
     // Call is rewrite into Query
     // Call(Box<CallPlan>),
 
@@ -202,6 +202,7 @@ pub enum Plan {
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
+    ModifyTableComment(Box<ModifyTableCommentPlan>),
     RenameTableColumn(Box<RenameTableColumnPlan>),
     AddTableColumn(Box<AddTableColumnPlan>),
     DropTableColumn(Box<DropTableColumnPlan>),
@@ -221,10 +222,15 @@ pub enum Plan {
 
     // Insert
     Insert(Box<Insert>),
+    InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
     MergeInto(Box<MergeInto>),
+
+    CopyIntoTable(Box<CopyIntoTablePlan>),
+    CopyIntoLocation(CopyIntoLocationPlan),
+
     // Views
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),
@@ -345,6 +351,9 @@ pub enum Plan {
     AlterNotification(Box<AlterNotificationPlan>),
     DropNotification(Box<DropNotificationPlan>),
     DescNotification(Box<DescNotificationPlan>),
+
+    // Stored procedures
+    ExecuteImmediate(Box<ExecuteImmediatePlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -436,10 +445,8 @@ impl Plan {
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
-
             Plan::Insert(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
-
             Plan::Presign(plan) => plan.schema(),
             Plan::ShowShareEndpoint(plan) => plan.schema(),
             Plan::DescShare(plan) => plan.schema(),
@@ -461,6 +468,8 @@ impl Plan {
             Plan::DescNotification(plan) => plan.schema(),
             Plan::DescConnection(plan) => plan.schema(),
             Plan::ShowConnections(plan) => plan.schema(),
+            Plan::ExecuteImmediate(plan) => plan.schema(),
+            Plan::InsertMultiTable(plan) => plan.schema(),
 
             other => {
                 debug_assert!(!other.has_result_set());
@@ -503,6 +512,8 @@ impl Plan {
                 | Plan::DescConnection(_)
                 | Plan::ShowConnections(_)
                 | Plan::MergeInto(_)
+                | Plan::ExecuteImmediate(_)
+                | Plan::InsertMultiTable(_)
         )
     }
 }

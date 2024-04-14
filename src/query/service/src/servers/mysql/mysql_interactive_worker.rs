@@ -47,7 +47,6 @@ use rand::RngCore;
 use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::writers::ProgressReporter;
@@ -356,37 +355,28 @@ impl InteractiveWorkerBase {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
 
-                let entry = QueryEntry::create(&context)?;
+                // Use interpreter_plan_sql, we can write the query log if an error occurs.
+                let (plan, extras) = interpreter_plan_sql(context.clone(), query).await?;
+
+                let entry = QueryEntry::create(&context, &plan, &extras)?;
                 let _guard = QueriesQueueManager::instance().acquire(entry).await?;
 
-                // Use interpreter_plan_sql, we can write the query log if an error occurs.
-                let (plan, _) = interpreter_plan_sql(context.clone(), query).await?;
-                let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
-
+                let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
                 let has_result_set = plan.has_result_set();
 
-                match interpreter {
-                    Ok(interpreter) => {
-                        let (blocks, extra_info) =
-                            Self::exec_query(interpreter.clone(), &context).await?;
-                        let schema = plan.schema();
-                        let format = context.get_format_settings()?;
-                        Ok((
-                            QueryResult::create(
-                                blocks,
-                                extra_info,
-                                has_result_set,
-                                schema,
-                                query.to_string(),
-                            ),
-                            Some(format),
-                        ))
-                    }
-                    Err(e) => {
-                        InterpreterQueryLog::fail_to_start(context, e.clone());
-                        Err(e)
-                    }
-                }
+                let (blocks, extra_info) = Self::exec_query(interpreter.clone(), &context).await?;
+                let schema = plan.schema();
+                let format = context.get_format_settings()?;
+                Ok((
+                    QueryResult::create(
+                        blocks,
+                        extra_info,
+                        has_result_set,
+                        schema,
+                        query.to_string(),
+                    ),
+                    Some(format),
+                ))
             }
         }
     }

@@ -268,10 +268,15 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
             }
         }
 
-        if (step == 0) || ((step > 0) ^ (start < end)) {
+        if step == 0 {
+            return Err(ErrorCode::BadArguments("step must not be zero".to_string()));
+        } else if step > 0 && start > end {
             return Err(ErrorCode::BadArguments(
-                "start must be less than or equal to end when step is positive vice versa"
-                    .to_string(),
+                "start must be less than or equal to end when step is positive".to_string(),
+            ));
+        } else if step < 0 && start < end {
+            return Err(ErrorCode::BadArguments(
+                "start must be greater than or equal to end when step is negative".to_string(),
             ));
         }
 

@@ -23,6 +23,7 @@ use itertools::Itertools;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectExpr;
 use crate::filter::SelectOp;
+use crate::types::AnyType;
 use crate::types::DataType;
 use crate::EvalContext;
 use crate::EvaluateOptions;
@@ -320,190 +321,25 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        match expr {
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                ..
-            } if function.signature.name == "if" => {
-                let selection = self.selection(
-                    true_selection,
-                    false_selection.0,
-                    *mutable_true_idx + count,
-                    *mutable_false_idx + count,
-                    &select_strategy,
-                );
-                let mut eval_options = EvaluateOptions::new(selection);
-
-                let result = self
-                    .evaluator
-                    .eval_if(args, generics, None, &mut eval_options)?;
-                let data_type = self
-                    .evaluator
-                    .remove_generics_data_type(generics, &function.signature.return_type);
-                self.select_value(
-                    result,
-                    &data_type,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                )
-            }
-            Expr::FunctionCall {
-                span,
-                id,
-                function,
-                generics,
-                args,
-                return_type,
-                ..
-            } => {
-                debug_assert!(
-                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
-                );
-                let selection = self.selection(
-                    true_selection,
-                    false_selection.0,
-                    *mutable_true_idx + count,
-                    *mutable_false_idx + count,
-                    &select_strategy,
-                );
-                let mut eval_options = EvaluateOptions::new(selection)
-                    .with_suppress_error(function.signature.name == "is_not_error");
-
-                let args = args
-                    .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
-                    .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match val {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
-                let mut ctx = EvalContext {
-                    generics,
-                    num_rows: self.evaluator.data_block().num_rows(),
-                    validity: None,
-                    errors: None,
-                    func_ctx: self.evaluator.func_ctx(),
-                    suppress_error: eval_options.suppress_error,
-                };
-                let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                ctx.render_error(
-                    *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    selection,
-                )?;
-                let data_type = self
-                    .evaluator
-                    .remove_generics_data_type(generics, &function.signature.return_type);
-                self.select_value(
-                    result,
-                    &data_type,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                )
-            }
-            Expr::Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            } => {
-                let selection = self.selection(
-                    true_selection,
-                    false_selection.0,
-                    *mutable_true_idx + count,
-                    *mutable_false_idx + count,
-                    &select_strategy,
-                );
-                let mut eval_options = EvaluateOptions::new(selection);
-                let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
-                let result = if *is_try {
-                    self.evaluator
-                        .run_try_cast(*span, expr.data_type(), dest_type, value)?
-                } else {
-                    self.evaluator.run_cast(
-                        *span,
-                        expr.data_type(),
-                        dest_type,
-                        value,
-                        None,
-                        &mut eval_options,
-                    )?
-                };
-                self.select_value(
-                    result,
-                    dest_type,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                )
-            }
-            Expr::LambdaFunctionCall {
-                name,
-                args,
-                lambda_expr,
-                return_type,
-                ..
-            } => {
-                let selection = self.selection(
-                    true_selection,
-                    false_selection.0,
-                    *mutable_true_idx + count,
-                    *mutable_false_idx + count,
-                    &select_strategy,
-                );
-                let mut eval_options = EvaluateOptions::new(selection);
-
-                let args = args
-                    .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
-                    .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match val {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
-                let result = self
-                    .evaluator
-                    .run_lambda(name, args, lambda_expr, return_type)?;
-                self.select_value(
-                    result,
-                    return_type,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                )
-            }
-            _ => Err(ErrorCode::UnsupportedDataType(format!(
-                "Unsupported filter expression getting {expr}",
-            ))),
-        }
+        let (result, data_type) = self.process_expr(
+            expr,
+            true_selection,
+            &false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        )?;
+        self.select_value(
+            result,
+            &data_type,
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        )
     }
 
     // Process SelectExpr::BooleanColumn.
@@ -555,6 +391,163 @@ impl<'a> Selector<'a> {
             select_strategy,
             count,
         )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_expr(
+        &self,
+        expr: &Expr,
+        true_selection: &mut [u32],
+        false_selection: &(&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<(Value<AnyType>, DataType)> {
+        let selection = self.selection(
+            true_selection,
+            false_selection.0,
+            *mutable_true_idx + count,
+            *mutable_false_idx + count,
+            &select_strategy,
+        );
+        let (result, data_type) = match expr {
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "if" => {
+                let mut eval_options = EvaluateOptions::new(selection);
+
+                let result = self
+                    .evaluator
+                    .eval_if(args, generics, None, &mut eval_options)?;
+                let data_type = self
+                    .evaluator
+                    .remove_generics_data_type(generics, &function.signature.return_type);
+                (result, data_type)
+            }
+            Expr::FunctionCall {
+                span,
+                id,
+                function,
+                generics,
+                args,
+                return_type,
+                ..
+            } => {
+                debug_assert!(
+                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
+                );
+                let mut eval_options = EvaluateOptions::new(selection)
+                    .with_suppress_error(function.signature.name == "is_not_error");
+
+                let args = args
+                    .iter()
+                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
+                let mut ctx = EvalContext {
+                    generics,
+                    num_rows: self.evaluator.data_block().num_rows(),
+                    validity: None,
+                    errors: None,
+                    func_ctx: self.evaluator.func_ctx(),
+                    suppress_error: eval_options.suppress_error,
+                };
+                let (_, eval) = function.eval.as_scalar().unwrap();
+                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                ctx.render_error(
+                    *span,
+                    id.params(),
+                    &args,
+                    &function.signature.name,
+                    selection,
+                )?;
+                let data_type = self
+                    .evaluator
+                    .remove_generics_data_type(generics, &function.signature.return_type);
+                (result, data_type)
+            }
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => {
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
+                    &select_strategy,
+                );
+                let mut eval_options = EvaluateOptions::new(selection);
+                let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
+                let result = if *is_try {
+                    self.evaluator
+                        .run_try_cast(*span, expr.data_type(), dest_type, value)?
+                } else {
+                    self.evaluator.run_cast(
+                        *span,
+                        expr.data_type(),
+                        dest_type,
+                        value,
+                        None,
+                        &mut eval_options,
+                    )?
+                };
+                (result, dest_type.clone())
+            }
+            Expr::LambdaFunctionCall {
+                name,
+                args,
+                lambda_expr,
+                return_type,
+                ..
+            } => {
+                let selection = self.selection(
+                    true_selection,
+                    false_selection.0,
+                    *mutable_true_idx + count,
+                    *mutable_false_idx + count,
+                    &select_strategy,
+                );
+                let mut eval_options = EvaluateOptions::new(selection);
+
+                let args = args
+                    .iter()
+                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
+                    .collect::<Result<Vec<_>>>()?;
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
+                let result = self
+                    .evaluator
+                    .run_lambda(name, args, lambda_expr, return_type)?;
+                (result, return_type.clone())
+            }
+            _ => {
+                return Err(ErrorCode::UnsupportedDataType(format!(
+                    "Unsupported filter expression getting {expr}",
+                )));
+            }
+        };
+        Ok((result, data_type))
     }
 
     fn selection(

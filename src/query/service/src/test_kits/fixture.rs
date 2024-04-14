@@ -53,6 +53,7 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::EmptySink;
 use databend_common_pipeline_sources::BlocksSource;
@@ -227,7 +228,7 @@ impl TestFixture {
         }
 
         GlobalServices::init_with(config).await?;
-        OssLicenseManager::init(config.query.tenant_id.to_string())?;
+        OssLicenseManager::init(config.query.tenant_id.name().to_string())?;
 
         // Cluster register.
         {
@@ -282,8 +283,8 @@ impl TestFixture {
         }
     }
 
-    pub fn default_tenant(&self) -> String {
-        self.conf.query.tenant_id.to_string()
+    pub fn default_tenant(&self) -> Tenant {
+        self.conf.query.tenant_id.clone()
     }
 
     pub fn default_db_name(&self) -> String {
@@ -520,7 +521,7 @@ impl TestFixture {
         let db_name = gen_db_name(&self.prefix);
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
-            tenant,
+            tenant: tenant.clone(),
             create_option: CreateOption::Create,
             database: db_name,
             meta: DatabaseMeta {
@@ -802,7 +803,7 @@ impl TestFixture {
             .get_catalog(CATALOG_DEFAULT)
             .await?
             .get_table(
-                self.default_tenant().as_str(),
+                &self.default_tenant(),
                 self.default_db_name().as_str(),
                 self.default_table_name().as_str(),
             )

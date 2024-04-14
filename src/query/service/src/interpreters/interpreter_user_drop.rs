@@ -54,7 +54,7 @@ impl Interpreter for DropUserInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
-            .drop_user(tenant, plan.user, plan.if_exists)
+            .drop_user(&tenant, plan.user, plan.if_exists)
             .await?;
 
         Ok(PipelineBuildResult::create())

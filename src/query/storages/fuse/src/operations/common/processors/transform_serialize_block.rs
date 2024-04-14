@@ -69,6 +69,7 @@ pub struct TransformSerializeBlock {
 
     block_builder: BlockBuilder,
     dal: Operator,
+    table_id: Option<u64>, // Only used in mutli table insert
 }
 
 impl TransformSerializeBlock {
@@ -79,6 +80,29 @@ impl TransformSerializeBlock {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
+    ) -> Result<Self> {
+        Self::do_create(ctx, input, output, table, cluster_stats_gen, kind, false)
+    }
+
+    pub fn try_create_with_tid(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        cluster_stats_gen: ClusterStatsGenerator,
+        kind: MutationKind,
+    ) -> Result<Self> {
+        Self::do_create(ctx, input, output, table, cluster_stats_gen, kind, true)
+    }
+
+    fn do_create(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        cluster_stats_gen: ClusterStatsGenerator,
+        kind: MutationKind,
+        with_tid: bool,
     ) -> Result<Self> {
         // remove virtual computed fields.
         let mut fields = table
@@ -117,6 +141,7 @@ impl TransformSerializeBlock {
             output_data: None,
             block_builder,
             dal: table.get_operator(),
+            table_id: if with_tid { Some(table.get_id()) } else { None },
         })
     }
 
@@ -321,6 +346,12 @@ impl Processor for TransformSerializeBlock {
                         .ctx
                         .get_write_progress()
                         .incr(&progress_values);
+
+                    if let Some(tid) = self.table_id {
+                        self.block_builder
+                            .ctx
+                            .update_multi_table_insert_status(tid, serialized.block_meta.row_count);
+                    }
 
                     DataBlock::empty_with_meta(Box::new(serialized.block_meta))
                 };

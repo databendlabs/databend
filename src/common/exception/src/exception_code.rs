@@ -100,6 +100,7 @@ build_exceptions! {
     TooManyUserConnections(1041),
     AbortedSession(1042),
     AbortedQuery(1043),
+    ClosedQuery(1044),
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),
@@ -150,6 +151,7 @@ build_exceptions! {
     UnknownCatalogType(1120),
     UnmatchMaskPolicyReturnType(1121),
     Timeout(1122),
+    Outdated(1123),
 
     // Data Related Errors
 
@@ -193,6 +195,7 @@ build_exceptions! {
     // Index related errors.
     UnsupportedIndex(1601),
     RefreshIndexError(1602),
+    IndexOptionInvalid(1603),
 
     // Cloud control error codes
     CloudControlConnectError(1701),
@@ -334,6 +337,8 @@ build_exceptions! {
     UnknownIndex(2722),
     DropIndexWithDropTime(2723),
     GetIndexWithDropTime(2724),
+    DuplicatedIndexColumnId(2725),
+    IndexColumnIdNotFound(2726),
 
     // Stream error codes.
     UnknownStream(2730),
@@ -352,6 +357,9 @@ build_exceptions! {
     TenantQuotaUnknown(2902),
     TenantQuotaExceeded(2903),
 
+    // Script error codes.
+    ScriptSemanticError(3001),
+    ScriptExecutionError(3002),
 }
 
 // Storage errors [3001, 4000].

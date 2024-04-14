@@ -395,6 +395,9 @@ impl<'a> Binder {
                 }
                 self.bind_insert(bind_context, stmt).await?
             }
+            Statement::InsertMultiTable(stmt) => {
+                self.bind_insert_multi_table(bind_context, stmt).await?
+            }
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
@@ -638,6 +641,7 @@ impl<'a> Binder {
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
+            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?
         };
         Ok(plan)
     }

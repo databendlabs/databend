@@ -18,6 +18,7 @@ databend-common-expression = { path = "../../expression" }
 databend-common-meta-app = { path = "../../../meta/app" }
 databend-common-pipeline-core = { path = "../../pipeline/core" }
 databend-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }

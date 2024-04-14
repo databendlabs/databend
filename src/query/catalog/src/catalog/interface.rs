@@ -19,8 +19,6 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -86,6 +84,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use dyn_clone::DynClone;
 
@@ -117,10 +116,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Database.
 
     // Get the database by name.
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>>;
+    async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>>;
 
     // Get all the databases.
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>>;
+    async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
@@ -167,7 +166,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Vec<VirtualColumnMeta>>;
 
     #[async_backtrace::framed]
-    async fn exists_database(&self, tenant: &str, db_name: &str) -> Result<bool> {
+    async fn exists_database(&self, tenant: &Tenant, db_name: &str) -> Result<bool> {
         match self.get_database(tenant, db_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -196,6 +195,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // List the tables name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
+        tenant: &Tenant,
         table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>>;
 
@@ -205,20 +205,24 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
         &self,
+        tenant: &Tenant,
         db_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>>;
 
     // Get one table by db and table name.
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
-    async fn list_tables_history(&self, tenant: &str, db_name: &str)
-    -> Result<Vec<Arc<dyn Table>>>;
+    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+    async fn list_tables_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>>;
 
     async fn get_drop_table_infos(
         &self,
@@ -243,7 +247,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     // Check a db.table is exists or not.
     #[async_backtrace::framed]
-    async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
+    async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
         match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -258,7 +262,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn upsert_table_option(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
@@ -284,11 +288,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply>;
 
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
-
     async fn get_table_copied_file_info(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply>;

@@ -35,11 +35,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use parking_lot::RwLock;
 
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::planner::optimizer::s_expr::SExpr;
 use crate::plans::Limit;
-use crate::plans::Plan;
 use crate::BindContext;
 use crate::Binder;
 use crate::Metadata;
@@ -64,8 +61,7 @@ impl Dataframe {
             span: None,
             catalog: None,
             alias: None,
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };
@@ -88,7 +84,7 @@ impl Dataframe {
             let database = "system";
             let tenant = query_ctx.get_tenant();
             let table_meta: Arc<dyn Table> = binder
-                .resolve_data_source(tenant.as_str(), catalog, database, "one", &None, &None)
+                .resolve_data_source(tenant.name(), catalog, database, "one", None)
                 .await?;
 
             let table_index = metadata.write().add_table(
@@ -481,8 +477,7 @@ impl Dataframe {
                 span: None,
                 catalog: None,
                 alias: None,
-                travel_point: None,
-                since_point: None,
+                temporal: None,
                 pivot: None,
                 unpivot: None,
             };
@@ -547,20 +542,6 @@ impl Dataframe {
 
     pub fn get_expr(&self) -> &SExpr {
         &self.s_expr
-    }
-
-    pub fn into_plan(self, enable_distributed_optimization: bool) -> Result<Plan> {
-        let plan = Plan::Query {
-            s_expr: Box::new(self.s_expr),
-            metadata: self.binder.metadata.clone(),
-            bind_context: Box::new(self.bind_context),
-            rewrite_kind: None,
-            ignore_result: false,
-            formatted_ast: None,
-        };
-        let opt_ctx = OptimizerContext::new(self.query_ctx.clone(), self.binder.metadata.clone())
-            .with_enable_distributed_optimization(enable_distributed_optimization);
-        optimize(opt_ctx, plan)
     }
 }
 

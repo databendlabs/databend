@@ -21,7 +21,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) = 1, t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
@@ -38,7 +38,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true(t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
@@ -85,7 +85,7 @@ HashJoin
 │           ├── table: default.default.t
 │           ├── output columns: [a (#0)]
 │           ├── read rows: 0
-│           ├── read bytes: 0
+│           ├── read size: 0
 │           ├── partitions total: 0
 │           ├── partitions scanned: 0
 │           ├── push downs: [filters: [false], limit: NONE]
@@ -94,9 +94,9 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#2)]
     ├── read rows: 5
-    ├── read bytes: 52
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00

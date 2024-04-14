@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
@@ -37,7 +38,7 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
@@ -45,11 +46,13 @@ use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_txn::TxnManagerRef;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
@@ -180,7 +183,7 @@ pub trait TableContext: Send + Sync {
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
-    fn get_tenant(&self) -> NonEmptyString;
+    fn get_tenant(&self) -> Tenant;
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> QueryKind;
     fn get_function_context(&self) -> Result<FunctionContext>;
@@ -248,6 +251,10 @@ pub trait TableContext: Send + Sync {
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
 
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64);
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>>;
+
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
 
@@ -272,4 +279,7 @@ pub trait TableContext: Send + Sync {
 
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
+
+    fn get_query_queued_duration(&self) -> Duration;
+    fn set_query_queued_duration(&self, queued_duration: Duration);
 }

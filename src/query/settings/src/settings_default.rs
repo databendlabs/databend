@@ -380,6 +380,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("query_result_cache_min_execute_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "For a query to be cached, it must take at least this many seconds to fetch the first block. It helps to avoid caching queries that are too fast to execute or queries with streaming scan.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("query_result_cache_ttl_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(300), // seconds
                     desc: "Sets the time-to-live (TTL) in seconds for cached query results. \
@@ -448,8 +454,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("parquet_fast_read_bytes", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Parquet file with smaller size will be read as a whole file, instead of column by column.",
+                    value: UserSettingValue::UInt64(16 * 1024 * 1024),
+                    desc: "Parquet file with smaller size will be read as a whole file, instead of column by column. Default value: 16MB",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
@@ -540,18 +546,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("fuse_write_use_parquet2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when writing data with fuse engine.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("fuse_read_use_parquet2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when reading data with fuse engine.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_replace_into_partitioning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
@@ -637,7 +631,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental aggregate hashtable",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

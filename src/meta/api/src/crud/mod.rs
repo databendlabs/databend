@@ -20,17 +20,16 @@ use std::sync::Arc;
 
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::TIdent;
-use databend_common_meta_app::tenant_key::TenantResource;
-use databend_common_meta_app::tenant_key_errors::ExistError;
-use databend_common_meta_app::tenant_key_errors::UnknownError;
+use databend_common_meta_app::tenant_key::errors::ExistError;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
+use databend_common_meta_app::tenant_key::ident::TIdent;
+use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::ValueWithName;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::With;
@@ -58,13 +57,10 @@ pub struct CrudMgr<R> {
 
 impl<R> CrudMgr<R> {
     /// Create a new `CrudMgr` instance providing CRUD access for a key space defined by `R`: [`TenantResource`].
-    pub fn create(
-        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-        tenant: &NonEmptyString,
-    ) -> Self {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
         CrudMgr {
             kv_api,
-            tenant: Tenant::new_nonempty(tenant.clone()),
+            tenant: tenant.clone(),
             _p: Default::default(),
         }
     }

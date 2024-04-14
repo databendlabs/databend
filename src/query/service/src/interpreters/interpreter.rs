@@ -19,6 +19,7 @@ use std::time::SystemTime;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,6 +39,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::sessions::short_sql;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
@@ -101,14 +103,8 @@ pub trait Interpreter: Sync + Send {
         let query_ctx = ctx.clone();
         build_res.main_pipeline.set_on_finished(move |may_error| {
             let mut has_profiles = false;
-            if let Ok(profiles) = may_error {
-                query_ctx.add_query_profiles(
-                    &profiles
-                        .iter()
-                        .filter(|x| x.plan_id.is_some())
-                        .map(|x| PlanProfile::create(x))
-                        .collect::<Vec<_>>(),
-                );
+            if let Ok(plans_profile) = may_error {
+                query_ctx.add_query_profiles(plans_profile);
 
                 let query_profiles = query_ctx.get_query_profiles();
 
@@ -150,9 +146,8 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("executing pipeline");
 
         let settings = ctx.get_settings();
-        let query_id = ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let settings = ExecutorSettings::try_create(ctx.clone())?;
 
         if build_res.main_pipeline.is_complete_pipeline()? {
             let mut pipelines = build_res.sources_pipelines;
@@ -229,6 +224,7 @@ pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(
 
     if result.is_err() {
         // Only log if there's an error
+        ctx.attach_query_str(QueryKind::Unknown, short_sql(sql.to_string()));
         log_query_start(&ctx);
         log_query_finished(&ctx, result.as_ref().err().cloned(), false);
     }

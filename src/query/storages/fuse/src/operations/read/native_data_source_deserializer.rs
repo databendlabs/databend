@@ -34,7 +34,6 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::build_select_expr;
 use databend_common_expression::eval_function;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::types::BooleanType;
@@ -52,6 +51,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::SelectExprBuilder;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -327,7 +327,7 @@ impl NativeDeserializeDataTransform {
         let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
         let filter_executor = if let Some(expr) = prewhere_filter.as_ref() {
-            let (select_expr, has_or) = build_select_expr(expr).into();
+            let (select_expr, has_or) = SelectExprBuilder::new().build(expr).into();
             Some(FilterExecutor::new(
                 select_expr,
                 func_ctx.clone(),
@@ -1138,7 +1138,7 @@ fn new_dummy_filter_executor(func_ctx: FunctionContext) -> FilterExecutor {
         scalar: Scalar::Boolean(true),
         data_type: DataType::Boolean,
     };
-    let (select_expr, has_or) = build_select_expr(&dummy_expr).into();
+    let (select_expr, has_or) = SelectExprBuilder::new().build(&dummy_expr).into();
     // TODO: specify the capacity (max_block_size) of the selection.
     FilterExecutor::new(
         select_expr,

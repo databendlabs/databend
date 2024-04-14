@@ -14,7 +14,7 @@ AggregateFinal
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 10
-        ├── read bytes: 80
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -37,7 +37,7 @@ AggregateFinal
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 10
-        ├── read bytes: 80
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -55,7 +55,7 @@ EvalScalar
     ├── table: default.system.numbers
     ├── output columns: []
     ├── read rows: 10
-    ├── read bytes: 80
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -83,7 +83,7 @@ EvalScalar
             ├── table: default.system.numbers
             ├── output columns: [number (#0)]
             ├── read rows: 10
-            ├── read bytes: 80
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
@@ -110,7 +110,7 @@ EvalScalar
             ├── table: default.system.columns
             ├── output columns: [name (#0), type (#3)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -136,7 +136,7 @@ AggregateFinal
         ├── table: default.default.explain_agg_t1
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [false], limit: NONE]
@@ -158,7 +158,7 @@ AggregateFinal
         ├── table: default.default.explain_agg_t1
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [explain_agg_t1.a (#0) > 3], limit: NONE]
@@ -180,7 +180,7 @@ AggregateFinal
         ├── table: default.default.explain_agg_t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
@@ -210,7 +210,7 @@ EvalScalar
                 ├── table: default.default.explain_agg_t1
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
@@ -240,7 +240,7 @@ EvalScalar
                 ├── table: default.default.explain_agg_t1
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
@@ -283,20 +283,20 @@ AggregateFinal
         │   ├── table: default.default.t1
         │   ├── output columns: [a (#0)]
         │   ├── read rows: 10
-        │   ├── read bytes: 54
+        │   ├── read size: < 1 KiB
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         │   ├── push downs: [filters: [], limit: NONE]
         │   └── estimated rows: 10.00
         └── TableScan(Right)
             ├── table: default.default.t2
             ├── output columns: [a (#1)]
             ├── read rows: 100
-            ├── read bytes: 414
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 100.00
 
@@ -333,7 +333,7 @@ EvalScalar
             ├── table: default.default.t
             ├── output columns: [referer (#0), isrefresh (#1)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]

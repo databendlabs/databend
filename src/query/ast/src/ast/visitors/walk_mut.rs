@@ -280,7 +280,7 @@ pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut 
             database,
             table,
             alias,
-            travel_point,
+            temporal,
             ..
         } => {
             if let Some(catalog) = catalog {
@@ -297,8 +297,8 @@ pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut 
                 visitor.visit_identifier(&mut alias.name);
             }
 
-            if let Some(travel_point) = travel_point {
-                visitor.visit_time_travel_point(travel_point);
+            if let Some(temporal) = temporal {
+                visitor.visit_temporal_clause(temporal);
             }
         }
         TableReference::Subquery {
@@ -334,19 +334,38 @@ pub fn walk_time_travel_point_mut<V: VisitorMut>(visitor: &mut V, time: &mut Tim
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
-    }
-}
+        TimeTravelPoint::Offset(expr) => visitor.visit_expr(expr),
+        TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        } => {
+            if let Some(catalog) = catalog {
+                visitor.visit_identifier(catalog);
+            }
 
-pub fn walk_stream_point_mut<V: VisitorMut>(visitor: &mut V, stream: &mut StreamPoint) {
-    match stream {
-        StreamPoint::AtStream { database, name } => {
             if let Some(database) = database {
                 visitor.visit_identifier(database);
             }
 
             visitor.visit_identifier(name);
         }
-        StreamPoint::AtPoint(point) => visitor.visit_time_travel_point(point),
+    }
+}
+
+pub fn walk_temporal_clause_mut<V: VisitorMut>(visitor: &mut V, clause: &mut TemporalClause) {
+    match clause {
+        TemporalClause::TimeTravel(point) => visitor.visit_time_travel_point(point),
+        TemporalClause::Changes(ChangesInterval {
+            at_point,
+            end_point,
+            ..
+        }) => {
+            visitor.visit_time_travel_point(at_point);
+            if let Some(point) = end_point {
+                visitor.visit_time_travel_point(point);
+            }
+        }
     }
 }
 
@@ -563,5 +582,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::AlterNotification(stmt) => visitor.visit_alter_notification(stmt),
         Statement::DropNotification(stmt) => visitor.visit_drop_notification(stmt),
         Statement::DescribeNotification(stmt) => visitor.visit_describe_notification(stmt),
+        Statement::InsertMultiTable(_) => {}
+        Statement::ExecuteImmediate(_) => {}
     }
 }
