@@ -79,6 +79,18 @@ select {'id':number} from numbers(5)
 {'id':3}
 {'id':4}
 
+statement ok
+CREATE OR REPLACE TABLE t1(tags Map(String, String)) Engine = Fuse
+
+statement ok
+INSERT INTO t1 VALUES ({'region':'sg', 'az': '1'}),({'region':'sg', 'az': '2'}), ({'region':'hk', 'az': '1'}),({'region':'hk', 'az': '2'})
+
+query I
+SELECT to_int32(tags['az']) AS int_az FROM t1 WHERE tags['region'] = 'sg' ORDER BY int_az;
+----
+1
+2
+
 statement error 1006
 CREATE TABLE IF NOT EXISTS t3(id Int, m Map(Array(Date), String)) Engine = Fuse
 
