@@ -24,12 +24,12 @@ onlyif mysql
 statement ok
 vacuum drop table from test_ctas;
 
--- create a stage that points to the same location of table `ctas_test`
+# create a stage that points to the same location of table `ctas_test`
 onlyif mysql
 statement ok
 create stage ctas_stage url='fs:///tmp/ctas';
 
--- list the stage, an empty result-set should be return
+# list the stage, an empty result-set should be return
 onlyif mysql
 query T
 list @ctas_stage;

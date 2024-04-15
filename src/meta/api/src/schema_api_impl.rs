@@ -1518,7 +1518,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
 
-        let mut key_table_id: Option<TableId> = None;
+        let mut maybe_key_table_id: Option<TableId> = None;
 
         if !req.as_dropped && req.table_meta.drop_on.is_some() {
             return Err(KVAppError::AppError(AppError::CreateTableWithDropTime(
@@ -1660,12 +1660,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
 
             // Table id is unique and does not need to re-generate in every loop.
-            if key_table_id.is_none() {
-                let id = fetch_id(self, IdGenerator::table_id()).await?;
-                key_table_id = Some(TableId { table_id: id });
-            }
+            let key_table_id = match maybe_key_table_id {
+                None => {
+                    let id = fetch_id(self, IdGenerator::table_id()).await?;
+                    TableId { table_id: id }
+                }
+                Some(id) => id,
+            };
 
-            let table_id = key_table_id.as_ref().map(|tid| tid.table_id).unwrap();
+            let table_id = key_table_id.table_id;
 
             let key_table_id_to_name = TableIdToName { table_id };
 
@@ -1684,10 +1687,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     // db has not to change, i.e., no new table is created.
                     // Renaming db is OK and does not affect the seq of db_meta.
                     txn_cond_seq(&key_dbid, Eq, db_meta.seq),
-                    // no other table id with the same name is append.
-                    txn_cond_seq(&key_table_id_list, Eq, tb_id_list.seq),
                     // no other table with the same name is inserted.
                     txn_cond_seq(&key_dbid_tbname, Eq, dbid_tbname_seq),
+                    // no other table id with the same name is append.
+                    txn_cond_seq(&key_table_id_list, Eq, tb_id_list.seq),
                 ]);
 
                 if_then.extend( vec![
@@ -1695,7 +1698,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         // to block the batch-delete-tables when deleting a db.
                         txn_op_put(&key_dbid, serialize_struct(&db_meta.data)?), /* (db_id) -> db_meta */
                         txn_op_put(
-                            key_table_id.as_ref().unwrap(),
+                            &key_table_id,
                             serialize_struct(&req.table_meta)?,
                         ), /* (tenant, db_id, tb_id) -> tb_meta */
                         txn_op_put(&key_table_id_list, serialize_struct(&tb_id_list.data)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
@@ -1711,7 +1714,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     // - also, the `table_id_seq` of newly create table should be obtained.
                     //   The caller need to know the `table_id_seq` to manipulate the table more efficiently
                     //   This TxnOp::Get is(should be) the last operation in the `if_then` list.
-                    if_then.push(txn_op_get(key_table_id.as_ref().unwrap()));
+                    if_then.push(txn_op_get(&key_table_id));
                 } else {
                     // Otherwise, make newly created table visible by putting the tuple:
                     // (tenant, db_id, tb_name) -> tb_id
