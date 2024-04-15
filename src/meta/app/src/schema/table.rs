@@ -590,8 +590,8 @@ pub struct UndropTableByIdReq {
     pub db_id: MetaId,
     pub table_id: MetaId,
     pub table_id_seq: u64,
-    // TODO doc this
-    pub force: bool,
+    // replacing existing table of same name (if there is)
+    pub replace_mode: bool,
 }
 
 impl UndropTableReq {

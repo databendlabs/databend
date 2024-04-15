@@ -1957,12 +1957,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 table_name: req.name_ident.table_name.clone(),
             };
 
-            // If table id already exists, return error.
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            if !req.force && (tb_id_seq > 0 || table_id > 0) {
-                return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
-                    UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
-                )));
+            let (dbid_tbname_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+            if !req.replace_mode {
+                // If table id already exists, return error.
+                if dbid_tbname_seq > 0 || table_id > 0 {
+                    return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
+                        UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
+                    )));
+                }
             }
 
             // get table id list from _fd_table_id_list/db_id/table_name
@@ -1986,7 +1988,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
 
             let table_id = {
-                if req.force {
+                if !req.replace_mode {
                     match tb_id_list.last() {
                         Some(table_id) => *table_id,
                         None => {
@@ -2028,7 +2030,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         // Renaming db is OK and does not affect the seq of db_meta.
                         txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
                         // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
+                        txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
                         // table is not changed
                         txn_cond_seq(&tbid, Eq, tb_meta_seq),
                     ],
