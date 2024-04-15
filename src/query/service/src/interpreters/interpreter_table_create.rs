@@ -278,7 +278,7 @@ impl CreateTableInterpreter {
                             db_id,
                             table_id,
                             table_id_seq,
-                            replace_mode: true,
+                            force_replace: true,
                         };
                         catalog.undrop_table_by_id(undrop_by_id).await
                     };

@@ -1796,133 +1796,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[minitrace::trace]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let tenant_dbname_tbname = &req.name_ident;
-        let tenant_dbname = req.name_ident.db_name_ident();
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            // Get db by name to ensure presence
-
-            let (_, db_id, db_meta_seq, db_meta) =
-                get_db_or_err(self, &tenant_dbname, "undrop_table").await?;
-
-            // cannot operate on shared database
-            if let Some(from_share) = db_meta.from_share {
-                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
-                )));
-            }
-
-            // Get table by tenant,db_id, table_name to assert presence.
-
-            let dbid_tbname = DBIdTableName {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
-            };
-
-            // If table id already exists, return error.
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            if tb_id_seq > 0 || table_id > 0 {
-                return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
-                    UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
-                )));
-            }
-
-            // get table id list from _fd_table_id_list/db_id/table_name
-            let dbid_tbname_idlist = TableIdListKey {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
-            };
-            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
-                get_pb_value(self, &dbid_tbname_idlist).await?;
-
-            let mut tb_id_list = if tb_id_list_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
-                    UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                )));
-            } else {
-                tb_id_list_opt.ok_or_else(|| {
-                    KVAppError::AppError(AppError::UndropTableHasNoHistory(
-                        UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                    ))
-                })?
-            };
-
-            // Return error if there is no table id history.
-            let table_id = match tb_id_list.last() {
-                Some(table_id) => *table_id,
-                None => {
-                    return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
-                        UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                    )));
-                }
-            };
-
-            // get tb_meta of the last table id
-            let tbid = TableId { table_id };
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-
-            // add drop_on time on table meta
-            // (db_id, table_name) -> table_id
-
-            debug!(
-                ident :% =(&tbid),
-                name :% =(tenant_dbname_tbname);
-                "undrop table"
-            );
-
-            {
-                // reset drop on time
-                let mut tb_meta = tb_meta.unwrap();
-                // undrop a table with no drop_on time
-                if tb_meta.drop_on.is_none() {
-                    return Err(KVAppError::AppError(AppError::UndropTableWithNoDropTime(
-                        UndropTableWithNoDropTime::new(&tenant_dbname_tbname.table_name),
-                    )));
-                }
-                tb_meta.drop_on = None;
-
-                let txn_req = TxnRequest {
-                    condition: vec![
-                        // db has not to change, i.e., no new table is created.
-                        // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
-                        // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
-                        // table is not changed
-                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                    ],
-                    if_then: vec![
-                        // Changing a table in a db has to update the seq of db_meta,
-                        // to block the batch-delete-tables when deleting a db.
-                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
-                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
-                        // txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
-                        txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
-                    ],
-                    else_then: vec![],
-                };
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-
-                debug!(
-                    name :? =(tenant_dbname_tbname),
-                    id :? =(&tbid),
-                    succ = succ;
-                    "undrop_table"
-                );
-
-                if succ {
-                    return Ok(UndropTableReply {});
-                }
-            }
-        }
+        handle_undrop_table(self, req).await
     }
 
-    // TODO duplicated code
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn undrop_table_by_id(
@@ -1930,135 +1806,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         req: UndropTableByIdReq,
     ) -> Result<UndropTableReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let tenant_dbname_tbname = &req.name_ident;
-
-        let db_id = req.db_id;
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            // Get db by name to ensure presence
-
-            let (db_meta_seq, db_meta) =
-                get_db_by_id_or_err(self, req.db_id, "undrop_table").await?;
-
-            // cannot operate on shared database
-            if let Some(from_share) = db_meta.from_share {
-                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
-                )));
-            }
-
-            // Get table by tenant,db_id, table_name to assert presence.
-
-            let dbid_tbname = DBIdTableName {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
-            };
-
-            let (dbid_tbname_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            if !req.replace_mode {
-                // If table id already exists, return error.
-                if dbid_tbname_seq > 0 || table_id > 0 {
-                    return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
-                        UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
-                    )));
-                }
-            }
-
-            // get table id list from _fd_table_id_list/db_id/table_name
-            let dbid_tbname_idlist = TableIdListKey {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
-            };
-            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
-                get_pb_value(self, &dbid_tbname_idlist).await?;
-
-            let mut tb_id_list = if tb_id_list_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
-                    UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                )));
-            } else {
-                tb_id_list_opt.ok_or_else(|| {
-                    KVAppError::AppError(AppError::UndropTableHasNoHistory(
-                        UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                    ))
-                })?
-            };
-
-            let table_id = {
-                if !req.replace_mode {
-                    match tb_id_list.last() {
-                        Some(table_id) => *table_id,
-                        None => {
-                            // Return error if there is no table id history.
-                            return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
-                                UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
-                            )));
-                        }
-                    }
-                } else {
-                    req.table_id
-                }
-            };
-
-            // get tb_meta of the last table id
-            let tbid = TableId { table_id };
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                name :% =(tenant_dbname_tbname);
-                "undrop table"
-            );
-
-            {
-                // reset drop on time
-                let mut tb_meta = tb_meta.unwrap();
-                // undrop a table with no drop_on time
-                if tb_meta.drop_on.is_none() {
-                    return Err(KVAppError::AppError(AppError::UndropTableWithNoDropTime(
-                        UndropTableWithNoDropTime::new(&tenant_dbname_tbname.table_name),
-                    )));
-                }
-                tb_meta.drop_on = None;
-
-                let txn_req = TxnRequest {
-                    condition: vec![
-                        // db has not to change, i.e., no new table is created.
-                        // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
-                        // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
-                        // table is not changed
-                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                    ],
-                    if_then: vec![
-                        // Changing a table in a db has to update the seq of db_meta,
-                        // to block the batch-delete-tables when deleting a db.
-                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
-                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
-                        // txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
-                        txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
-                    ],
-                    else_then: vec![],
-                };
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-
-                debug!(
-                    name :? =(tenant_dbname_tbname),
-                    id :? =(&tbid),
-                    succ = succ;
-                    "undrop_table"
-                );
-
-                if succ {
-                    return Ok(UndropTableReply {});
-                }
-            }
-        }
+        handle_undrop_table(self, req).await
     }
 
     #[logcall::logcall("debug")]
@@ -5595,5 +5343,212 @@ fn table_lock_has_to_exist(seq: u64, table_id: u64, msg: impl Display) -> Result
         )))
     } else {
         Ok(())
+    }
+}
+
+#[tonic::async_trait]
+pub(crate) trait UndropTableStrategy {
+    fn table_name_ident(&self) -> &TableNameIdent;
+
+    // Determines whether replacing an existing table with the same name is allowed.
+    fn force_replace(&self) -> bool;
+
+    async fn refresh_target_db_meta<'a>(
+        &'a self,
+        kv_api: &'a (impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    ) -> Result<(u64, u64, DatabaseMeta), KVAppError>;
+
+    fn extract_and_validate_table_id(
+        &self,
+        tb_id_list: &mut TableIdList,
+    ) -> Result<u64, KVAppError>;
+}
+
+#[tonic::async_trait]
+impl UndropTableStrategy for UndropTableReq {
+    fn table_name_ident(&self) -> &TableNameIdent {
+        &self.name_ident
+    }
+    fn force_replace(&self) -> bool {
+        false
+    }
+    async fn refresh_target_db_meta<'a>(
+        &'a self,
+        kv_api: &'a (impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    ) -> Result<(u64, u64, DatabaseMeta), KVAppError> {
+        // for plain un-drop table (by name), database meta is refreshed by name
+        let (_, db_id, db_meta_seq, db_meta) =
+            get_db_or_err(kv_api, &self.name_ident.db_name_ident(), "undrop_table").await?;
+        Ok((db_id, db_meta_seq, db_meta))
+    }
+
+    fn extract_and_validate_table_id(
+        &self,
+        tb_id_list: &mut TableIdList,
+    ) -> Result<u64, KVAppError> {
+        // for plain un-drop table (by name), the last item of
+        // tb_id_list should be used.
+        let table_id = match tb_id_list.last() {
+            Some(table_id) => *table_id,
+            None => {
+                return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                    UndropTableHasNoHistory::new(&self.name_ident.table_name),
+                )));
+            }
+        };
+        Ok(table_id)
+    }
+}
+
+#[tonic::async_trait]
+impl UndropTableStrategy for UndropTableByIdReq {
+    fn table_name_ident(&self) -> &TableNameIdent {
+        &self.name_ident
+    }
+
+    fn force_replace(&self) -> bool {
+        self.force_replace
+    }
+    async fn refresh_target_db_meta<'a>(
+        &'a self,
+        kv_api: &'a (impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    ) -> Result<(u64, u64, DatabaseMeta), KVAppError> {
+        // for un-drop table by id, database meta is refreshed by database id
+        let (db_meta_seq, db_meta) =
+            get_db_by_id_or_err(kv_api, self.db_id, "undrop_table_by_id").await?;
+        Ok((self.db_id, db_meta_seq, db_meta))
+    }
+
+    fn extract_and_validate_table_id(
+        &self,
+        tb_id_list: &mut TableIdList,
+    ) -> Result<u64, KVAppError> {
+        // for un-drop table by id, assumes that the last item of tb_id_list should
+        // be the table id which is requested to be un-dropped.
+        let target_table_id = self.table_id;
+        match tb_id_list.last() {
+            Some(table_id) if *table_id == target_table_id => Ok(target_table_id),
+            _ => Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                UndropTableHasNoHistory::new(&self.name_ident.table_name),
+            ))),
+        }
+    }
+}
+
+async fn handle_undrop_table(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    req: impl UndropTableStrategy + std::fmt::Debug,
+) -> Result<UndropTableReply, KVAppError> {
+    let tenant_dbname_tbname = req.table_name_ident();
+
+    let mut trials = txn_backoff(None, func_name!());
+    loop {
+        trials.next().unwrap()?.await;
+
+        // Get db by name to ensure presence
+
+        let (db_id, db_meta_seq, db_meta) = req.refresh_target_db_meta(kv_api).await?;
+
+        // cannot operate on shared database
+        if let Some(from_share) = db_meta.from_share {
+            return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
+            )));
+        }
+
+        // Get table by tenant,db_id, table_name to assert presence.
+
+        let dbid_tbname = DBIdTableName {
+            db_id,
+            table_name: tenant_dbname_tbname.table_name.clone(),
+        };
+
+        let (dbid_tbname_seq, table_id) = get_u64_value(kv_api, &dbid_tbname).await?;
+        if !req.force_replace() {
+            // If table id already exists, return error.
+            if dbid_tbname_seq > 0 || table_id > 0 {
+                return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
+                    UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
+                )));
+            }
+        }
+
+        // get table id list from _fd_table_id_list/db_id/table_name
+        let dbid_tbname_idlist = TableIdListKey {
+            db_id,
+            table_name: tenant_dbname_tbname.table_name.clone(),
+        };
+        let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
+            get_pb_value(kv_api, &dbid_tbname_idlist).await?;
+
+        let mut tb_id_list = if tb_id_list_seq == 0 {
+            return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
+            )));
+        } else {
+            tb_id_list_opt.ok_or_else(|| {
+                KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                    UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
+                ))
+            })?
+        };
+
+        let table_id = req.extract_and_validate_table_id(&mut tb_id_list)?;
+
+        // get tb_meta of the last table id
+        let tbid = TableId { table_id };
+        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(kv_api, &tbid).await?;
+
+        debug!(
+            ident :% =(&tbid),
+            name :% =(tenant_dbname_tbname);
+            "undrop table"
+        );
+
+        {
+            // reset drop on time
+            let mut tb_meta = tb_meta.unwrap();
+            // undrop a table with no drop_on time
+            if tb_meta.drop_on.is_none() {
+                return Err(KVAppError::AppError(AppError::UndropTableWithNoDropTime(
+                    UndropTableWithNoDropTime::new(&tenant_dbname_tbname.table_name),
+                )));
+            }
+            tb_meta.drop_on = None;
+
+            let txn_req = TxnRequest {
+                condition: vec![
+                    // db has not to change, i.e., no new table is created.
+                    // Renaming db is OK and does not affect the seq of db_meta.
+                    txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
+                    // still this table id
+                    txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
+                    // table is not changed
+                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                ],
+                if_then: vec![
+                    // Changing a table in a db has to update the seq of db_meta,
+                    // to block the batch-delete-tables when deleting a db.
+                    txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
+                    txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
+                    // txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
+                    txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
+                ],
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(kv_api, txn_req).await?;
+
+            debug!(
+                name :? =(tenant_dbname_tbname),
+                id :? =(&tbid),
+                succ = succ;
+                "undrop_table"
+            );
+
+            if succ {
+                return Ok(UndropTableReply {});
+            }
+        }
     }
 }
