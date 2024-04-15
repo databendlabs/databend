@@ -90,6 +90,7 @@ impl Interpreter for InsertInterpreter {
             return Ok(PipelineBuildResult::create());
         }
         let table = if let Some(table_info) = &self.plan.table_info {
+            // if table_info is provided, we should instantiated table with it.
             self.ctx
                 .get_catalog(&self.plan.catalog)
                 .await?

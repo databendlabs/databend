@@ -191,15 +191,12 @@ impl CreateTableInterpreter {
         let table_id = reply.table_id;
         let table_id_seq = reply
             .table_id_seq
-            .expect("internal error: table_id_seq must have been set.");
+            .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
         let db_id = reply.db_id;
 
         // grant the ownership of the table to the current role.
         let current_role = self.ctx.get_current_role();
         if let Some(current_role) = current_role {
-            let db = catalog.get_database(&tenant, &self.plan.database).await?;
-            let db_id = db.get_db_info().ident.db_id;
-
             let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .grant_ownership(

@@ -59,6 +59,9 @@ pub struct Insert {
     pub schema: TableSchemaRef,
     pub overwrite: bool,
     pub source: InsertInputSource,
+    // if a table with fixed table id, and version should be used,
+    // it should be provided as some `table_info`.
+    // otherwise, the table being inserted will be resolved by using `catalog`.`database`.`table`
     pub table_info: Option<TableInfo>,
 }
 
