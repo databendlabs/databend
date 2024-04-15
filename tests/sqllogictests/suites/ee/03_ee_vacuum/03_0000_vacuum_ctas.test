@@ -1,0 +1,45 @@
+# test orphan data created by failed CTAS could be vacuumed
+onlyif mysql
+statement ok
+create database ctas_test;
+
+onlyif mysql
+statement ok
+use ctas_test;
+
+
+# generate orphan data files
+onlyif mysql
+statement error 1006
+create or replace table t (c int) 'fs:///tmp/ctas/' as select number / (number-3999999) from numbers(4000000);
+
+
+# verify the orphan files could be vacuumed
+
+onlyif mysql
+statement ok
+set data_retention_time_in_days = 0;
+
+onlyif mysql
+statement ok
+vacuum drop table from test_ctas;
+
+-- create a stage that points to the same location of table `ctas_test`
+onlyif mysql
+statement ok
+create stage ctas_stage url='fs:///tmp/ctas';
+
+-- list the stage, an empty result-set should be return
+onlyif mysql
+query T
+list @ctas_stage;
+
+onlyif mysql
+statement ok
+drop database ctas_test;
+
+
+
+
+
+
