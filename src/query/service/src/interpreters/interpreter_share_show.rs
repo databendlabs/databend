@@ -71,7 +71,7 @@ impl Interpreter for ShowSharesInterpreter {
             created_owns.push(share_spec.share_on.unwrap_or_default().to_string());
             database_names.push(share_spec.database.unwrap_or_default().name);
             from.push(from_tenant);
-            to.push(tenant.name().to_string());
+            to.push(tenant.tenant_name().to_string());
             comments.push(share_spec.comment.unwrap_or_default());
         }
 

@@ -68,7 +68,7 @@ impl UdfMgr {
         if let CreateOption::Create = create_option {
             if res.prev.is_some() {
                 let err = UdfError::Exists {
-                    tenant: self.tenant.name().to_string(),
+                    tenant: self.tenant.tenant_name().to_string(),
                     name: info.name.to_string(),
                     reason: "".to_string(),
                 };
@@ -99,7 +99,7 @@ impl UdfMgr {
             Ok(res.result.unwrap().seq)
         } else {
             Err(UdfError::NotFound {
-                tenant: self.tenant.name().to_string(),
+                tenant: self.tenant.tenant_name().to_string(),
                 name: info.name.to_string(),
                 context: "while update udf".to_string(),
             })
@@ -179,7 +179,7 @@ impl UdfMgr {
     fn ensure_non_builtin(&self, name: &str) -> Result<(), UdfError> {
         if is_builtin_function(name) {
             return Err(UdfError::Exists {
-                tenant: self.tenant.name().to_string(),
+                tenant: self.tenant.tenant_name().to_string(),
                 name: name.to_string(),
                 reason: " It is a builtin function".to_string(),
             });

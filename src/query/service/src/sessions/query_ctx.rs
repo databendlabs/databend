@@ -520,7 +520,7 @@ impl TableContext for QueryContext {
         self.shared
             .catalog_manager
             .get_catalog(
-                self.get_tenant().name(),
+                self.get_tenant().tenant_name(),
                 catalog_name.as_ref(),
                 self.txn_mgr(),
             )

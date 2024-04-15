@@ -117,9 +117,9 @@ pub struct CreateDatabaseWithDropTime {
 }
 
 impl CreateDatabaseWithDropTime {
-    pub fn new(db_name: impl Into<String>) -> Self {
+    pub fn new(db_name: impl ToString) -> Self {
         Self {
-            db_name: db_name.into(),
+            db_name: db_name.to_string(),
         }
     }
 }
@@ -610,9 +610,9 @@ pub struct WrongShareObject {
 }
 
 impl WrongShareObject {
-    pub fn new(obj_name: impl Into<String>) -> Self {
+    pub fn new(obj_name: impl ToString) -> Self {
         Self {
-            obj_name: obj_name.into(),
+            obj_name: obj_name.to_string(),
         }
     }
 }

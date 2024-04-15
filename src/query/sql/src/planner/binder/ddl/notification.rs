@@ -94,7 +94,7 @@ impl Binder {
                 let tenant = self.ctx.get_tenant();
                 let plan = CreateNotificationPlan {
                     if_not_exists: *if_not_exists,
-                    tenant: tenant.name().to_string(),
+                    tenant: tenant.tenant_name().to_string(),
                     name: name.to_string(),
                     notification_type: t,
                     enabled: *enabled,
@@ -130,7 +130,7 @@ impl Binder {
         }
         let plan = AlterNotificationPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant: tenant.tenant_name().to_string(),
             name: name.to_string(),
             options: options.clone(),
         };
@@ -147,7 +147,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = DropNotificationPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant: tenant.tenant_name().to_string(),
             name: name.to_string(),
         };
         Ok(Plan::DropNotification(Box::new(plan)))
@@ -162,7 +162,7 @@ impl Binder {
         let DescribeNotificationStmt { name } = stmt;
         let tenant = self.ctx.get_tenant();
         let plan = DescNotificationPlan {
-            tenant: tenant.name().to_string(),
+            tenant: tenant.tenant_name().to_string(),
             name: name.to_string(),
         };
         Ok(Plan::DescNotification(Box::new(plan)))

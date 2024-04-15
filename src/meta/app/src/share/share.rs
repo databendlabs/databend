@@ -54,7 +54,7 @@ impl ShareConsumer {
 
 impl Display for ShareConsumer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant.name(), self.share_id)
+        write!(f, "'{}'/'{}'", self.tenant.tenant_name(), self.share_id)
     }
 }
 
@@ -242,7 +242,7 @@ pub struct GetShareGrantTenantsReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetObjectGrantPrivilegesReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub object: ShareGrantObjectName,
 }
 
@@ -857,12 +857,12 @@ mod kvapi_key_impl {
         fn to_string_key(&self) -> String {
             if self.share_id != 0 {
                 kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(self.tenant.name())
+                    .push_str(self.tenant.tenant_name())
                     .push_u64(self.share_id)
                     .done()
             } else {
                 kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(self.tenant.name())
+                    .push_str(self.tenant.tenant_name())
                     .done()
             }
         }
