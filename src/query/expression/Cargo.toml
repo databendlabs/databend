@@ -30,6 +30,7 @@ base64 = "0.21.0"
 borsh = { workspace = true, features = ["derive"] }
 bumpalo = { workspace = true }
 chrono = { workspace = true }
+memchr = { version = "2", default-features = false }
 chrono-tz = { workspace = true }
 comfy-table = "6"
 dashmap = { workspace = true }
