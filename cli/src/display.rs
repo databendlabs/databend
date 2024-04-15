@@ -298,8 +298,13 @@ impl<'a> FormatDisplay<'a> {
                     stats.write_bytes,
                 ),
             };
+            let mut rows_speed_str = rows_str;
             if rows <= 1 {
                 rows_str = rows_str.trim_end_matches('s');
+            }
+            let rows_speed = total_rows as f64 / self.start.elapsed().as_secs_f64();
+            if rows_speed <= 1.0 {
+                rows_speed_str = rows_speed_str.trim_end_matches('s');
             }
             eprintln!(
                 "{} {} {} in {:.3} sec. Processed {} {}, {} ({} {}/s, {}/s)",
@@ -310,8 +315,8 @@ impl<'a> FormatDisplay<'a> {
                 humanize_count(total_rows as f64),
                 rows_str,
                 HumanBytes(total_bytes as u64),
-                humanize_count(total_rows as f64 / self.start.elapsed().as_secs_f64()),
-                rows_str,
+                humanize_count(rows_speed),
+                rows_speed_str,
                 HumanBytes((total_bytes as f64 / self.start.elapsed().as_secs_f64()) as u64),
             );
             eprintln!();
