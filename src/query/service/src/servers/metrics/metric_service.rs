@@ -14,6 +14,7 @@
 
 use std::net::SocketAddr;
 use std::time::Duration;
+use log::info;
 
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_exception::ErrorCode;
@@ -31,9 +32,12 @@ pub struct MetricService {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn metrics_handler() -> impl IntoResponse {
-    GLOBAL_METRICS_REGISTRY
+    let response = GLOBAL_METRICS_REGISTRY
         .render_metrics()
-        .unwrap_or_else(|e| e.message())
+        .unwrap_or_else(|e| e.message());
+
+    info!("metrics dump: {:?}", response);
+    response
 }
 
 impl MetricService {
