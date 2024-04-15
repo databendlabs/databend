@@ -42,98 +42,6 @@ use crate::Selector;
 use crate::Value;
 
 impl<'a> Selector<'a> {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_like(
-        &self,
-        mut column: Column,
-        data_type: &DataType,
-        like_pattern: &LikePattern,
-        like_str: &[u8],
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        // Remove `NullableColumn` and get the inner column and validity.
-        let mut validity = None;
-        if let DataType::Nullable(_) = data_type {
-            let nullable_column = column.clone().into_nullable().unwrap();
-            column = nullable_column.column;
-            validity = Some(nullable_column.validity);
-        }
-        let column = column.into_string().unwrap();
-
-        let dummy_function = |_: &[u8], _: &[u8]| -> bool { true };
-        let cmp = match like_pattern {
-            LikePattern::OrdinalStr => LikePattern::ordinal_str,
-            LikePattern::StartOfPercent => LikePattern::start_of_percent,
-            LikePattern::EndOfPercent => LikePattern::end_of_percent,
-            LikePattern::SurroundByPercent => LikePattern::surround_by_percent,
-            LikePattern::ComplexPattern => LikePattern::complex_pattern,
-            _ => dummy_function,
-        };
-
-        let has_false = false_selection.1;
-        let is_simple_pattern = matches!(like_pattern, LikePattern::SimplePattern(_));
-
-        match (has_false, is_simple_pattern) {
-            (true, true) => self.select_column_like::<_, true, true>(
-                cmp,
-                column,
-                like_str,
-                like_pattern,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            (true, false) => self.select_column_like::<_, true, false>(
-                cmp,
-                column,
-                like_str,
-                like_pattern,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            (false, true) => self.select_column_like::<_, false, true>(
-                cmp,
-                column,
-                like_str,
-                like_pattern,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            (false, false) => self.select_column_like::<_, false, false>(
-                cmp,
-                column,
-                like_str,
-                like_pattern,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-        }
-    }
-
     // Select indices by comparing two `Value`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_values(
@@ -391,5 +299,97 @@ impl<'a> Selector<'a> {
             }
         };
         Ok(count)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn select_like(
+        &self,
+        mut column: Column,
+        data_type: &DataType,
+        like_pattern: &LikePattern,
+        like_str: &[u8],
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        // Remove `NullableColumn` and get the inner column and validity.
+        let mut validity = None;
+        if let DataType::Nullable(_) = data_type {
+            let nullable_column = column.clone().into_nullable().unwrap();
+            column = nullable_column.column;
+            validity = Some(nullable_column.validity);
+        }
+        let column = column.into_string().unwrap();
+
+        let dummy_function = |_: &[u8], _: &[u8]| -> bool { true };
+        let cmp = match like_pattern {
+            LikePattern::OrdinalStr => LikePattern::ordinal_str,
+            LikePattern::StartOfPercent => LikePattern::start_of_percent,
+            LikePattern::EndOfPercent => LikePattern::end_of_percent,
+            LikePattern::SurroundByPercent => LikePattern::surround_by_percent,
+            LikePattern::ComplexPattern => LikePattern::complex_pattern,
+            _ => dummy_function,
+        };
+
+        let has_false = false_selection.1;
+        let is_simple_pattern = matches!(like_pattern, LikePattern::SimplePattern(_));
+
+        match (has_false, is_simple_pattern) {
+            (true, true) => self.select_column_like::<_, true, true>(
+                cmp,
+                column,
+                like_str,
+                like_pattern,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            (true, false) => self.select_column_like::<_, true, false>(
+                cmp,
+                column,
+                like_str,
+                like_pattern,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            (false, true) => self.select_column_like::<_, false, true>(
+                cmp,
+                column,
+                like_str,
+                like_pattern,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            (false, false) => self.select_column_like::<_, false, false>(
+                cmp,
+                column,
+                like_str,
+                like_pattern,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+        }
     }
 }
