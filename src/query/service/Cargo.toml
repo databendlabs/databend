@@ -50,6 +50,7 @@ databend-common-io = { path = "../../common/io" }
 databend-common-management = { path = "../management" }
 databend-common-meta-api = { path = "../../meta/api" }
 databend-common-meta-app = { path = "../../meta/app" }
+databend-common-script = { path = "../script" }
 
 databend-common-cloud-control = { path = "../../common/cloud_control" }
 databend-common-license = { path = "../../common/license" }

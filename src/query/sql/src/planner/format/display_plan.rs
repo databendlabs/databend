@@ -78,6 +78,7 @@ impl Plan {
             Plan::UndropTable(_) => Ok("UndropTable".to_string()),
             Plan::DescribeTable(_) => Ok("DescribeTable".to_string()),
             Plan::RenameTable(_) => Ok("RenameTable".to_string()),
+            Plan::ModifyTableComment(_) => Ok("ModifyTableComment".to_string()),
             Plan::SetOptions(_) => Ok("SetOptions".to_string()),
             Plan::RenameTableColumn(_) => Ok("RenameTableColumn".to_string()),
             Plan::AddTableColumn(_) => Ok("AddTableColumn".to_string()),
@@ -214,6 +215,9 @@ impl Plan {
             Plan::DropNotification(_) => Ok("DropNotification".to_string()),
             Plan::DescNotification(_) => Ok("DescNotification".to_string()),
             Plan::AlterNotification(_) => Ok("AlterNotification".to_string()),
+
+            // Stored procedures
+            Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
         }
     }
 }

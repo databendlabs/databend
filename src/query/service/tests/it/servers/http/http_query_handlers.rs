@@ -28,6 +28,7 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_query::auth::AuthMgr;
+use databend_query::servers::http::middleware::get_client_ip;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_final_uri;
@@ -280,7 +281,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 20, "{:?}", result);
+    assert_eq!(result.schema.len(), 19, "{:?}", result);
 
     // get state
     let uri = make_state_uri(query_id);
@@ -1717,5 +1718,15 @@ async fn test_txn_timeout() -> Result<()> {
             last_query_id
         )
     );
+    Ok(())
+}
+
+#[test]
+fn test_parse_ip() -> Result<()> {
+    let req = poem::Request::builder()
+        .header("X-Forwarded-For", "1.2.3.4")
+        .finish();
+    let ip = get_client_ip(&req);
+    assert_eq!(ip, Some("1.2.3.4".to_string()));
     Ok(())
 }

@@ -641,6 +641,7 @@ impl<'a> Binder {
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
+            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?
         };
         Ok(plan)
     }

@@ -109,6 +109,7 @@ use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
+use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
@@ -390,7 +391,7 @@ impl Binder {
                 self.ctx
                     .get_catalog(&ctl_name)
                     .await?
-                    .get_database(self.ctx.get_tenant().name(), &database)
+                    .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
             }
@@ -586,7 +587,7 @@ impl Binder {
             // safely eliminate this "FUSE" constant and the table meta option entry.
             let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
-                .get_database(self.ctx.get_tenant().name(), &database)
+                .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
@@ -830,6 +831,14 @@ impl Binder {
                     if_exists: *if_exists,
                     new_database: database.clone(),
                     new_table: normalize_identifier(new_table, &self.name_resolution_ctx).name,
+                    catalog,
+                    database,
+                    table,
+                })))
+            }
+            AlterTableAction::ModifyTableComment { new_comment } => {
+                Ok(Plan::ModifyTableComment(Box::new(ModifyTableCommentPlan {
+                    new_comment: new_comment.to_string(),
                     catalog,
                     database,
                     table,

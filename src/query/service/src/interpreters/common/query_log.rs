@@ -100,6 +100,7 @@ impl InterpreterQueryLog {
         let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
         let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
+        let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -170,6 +171,7 @@ impl InterpreterQueryLog {
             event_time,
             query_start_time,
             query_duration_ms: 0,
+            query_queued_duration_ms,
             current_database,
             databases: "".to_string(),
             tables: "".to_string(),
@@ -242,6 +244,7 @@ impl InterpreterQueryLog {
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
         let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
         let query_duration_ms = ctx.get_query_duration_ms();
+        let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
         let data_metrics = ctx.get_data_metrics();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
@@ -327,6 +330,7 @@ impl InterpreterQueryLog {
             event_time,
             query_start_time,
             query_duration_ms,
+            query_queued_duration_ms,
             databases: "".to_string(),
             tables: "".to_string(),
             columns: "".to_string(),

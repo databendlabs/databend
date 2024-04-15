@@ -19,8 +19,10 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_sql::plans::CreateDatabasePlan;
@@ -47,22 +49,19 @@ impl CreateDatabaseInterpreter {
 
     async fn check_create_database_from_share(
         &self,
-        tenant: &String,
+        tenant: &Tenant,
         share_name: &ShareNameIdent,
     ) -> Result<()> {
         let share_specs = ShareEndpointManager::instance()
-            .get_inbound_shares(
-                tenant,
-                Some(share_name.tenant.name().to_string()),
-                Some(share_name.clone()),
-            )
+            .get_inbound_shares(tenant, Some(share_name.tenant()), Some(share_name.clone()))
             .await?;
         match share_specs.first() {
             Some((_, share_spec)) => {
-                if !share_spec.tenants.contains(tenant) {
+                if !share_spec.tenants.contains(&tenant.name().to_string()) {
                     return Err(ErrorCode::UnknownShareAccounts(format!(
                         "share {} has not granted privilege to {}",
-                        share_name, tenant
+                        share_name.display(),
+                        tenant.name()
                     )));
                 }
                 match share_spec.db_privileges {
@@ -70,14 +69,16 @@ impl CreateDatabaseInterpreter {
                         if !db_privileges.contains(ShareGrantObjectPrivilege::Usage) {
                             return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
                                 "share {} has not granted privilege to {}",
-                                share_name, tenant
+                                share_name.display(),
+                                tenant.name()
                             )));
                         }
                     }
                     None => {
                         return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
                             "share {} has not granted privilege to {}",
-                            share_name, tenant
+                            share_name.display(),
+                            tenant.name()
                         )));
                     }
                 }
@@ -122,7 +123,8 @@ impl Interpreter for CreateDatabaseInterpreter {
         };
         // if create from other tenant, check from share endpoint
         if let Some(ref share_name) = self.plan.meta.from_share {
-            self.check_create_database_from_share(&tenant.name().to_string(), share_name)
+            let share_name_ident = share_name.clone().to_tident(());
+            self.check_create_database_from_share(&tenant, &share_name_ident)
                 .await?;
         }
 

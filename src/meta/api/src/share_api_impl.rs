@@ -35,8 +35,11 @@ use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::share::share_end_point_ident::ShareEndpointIdentRaw;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::*;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
@@ -112,8 +115,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 } else {
                     Err(KVAppError::AppError(AppError::ShareAlreadyExists(
                         ShareAlreadyExists::new(
-                            &name_key.share_name,
-                            format!("create share: tenant: {}", name_key.tenant.name()),
+                            name_key.name(),
+                            format!("create share: tenant: {}", name_key.tenant_name()),
                         ),
                     )))
                 };
@@ -141,7 +144,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     if_then: vec![
                         txn_op_put(name_key, serialize_u64(share_id)?), /* (tenant, share_name) -> share_id */
                         txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
-                        txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_share_id_to_name/<share_id> -> (tenant,share_name) */
+                        txn_op_put(&id_to_name_key, serialize_struct(&name_key.to_raw())?), /* __fd_share_id_to_name/<share_id> -> (tenant,share_name) */
                     ],
                     else_then: vec![],
                 };
@@ -158,7 +161,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(CreateShareReply {
                         share_id,
-                        spec_vec: Some(get_tenant_share_spec_vec(self, &name_key.tenant).await?),
+                        spec_vec: Some(get_tenant_share_spec_vec(self, name_key.tenant()).await?),
                     });
                 }
             }
@@ -183,7 +186,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let res = get_share_or_err(self, name_key, format!("drop_share: {}", &name_key)).await;
+            let res = get_share_or_err(
+                self,
+                name_key,
+                format!("drop_share: {}", name_key.display()),
+            )
+            .await;
 
             let (share_id_seq, share_id, share_meta_seq, share_meta) = match res {
                 Ok(x) => x,
@@ -201,9 +209,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             };
 
-            let res =
-                get_share_id_to_name_or_err(self, share_id, format!("drop_share: {}", &name_key))
-                    .await;
+            let res = get_share_id_to_name_or_err(
+                self,
+                share_id,
+                format!("drop_share: {}", name_key.display()),
+            )
+            .await;
             let (share_name_seq, _share_name) = match res {
                 Ok(x) => x,
                 Err(e) => {
@@ -286,7 +297,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(DropShareReply {
                         share_id: Some(share_id),
-                        spec_vec: Some(get_tenant_share_spec_vec(self, &name_key.tenant).await?),
+                        spec_vec: Some(get_tenant_share_spec_vec(self, name_key.tenant()).await?),
                     });
                 }
             }
@@ -305,8 +316,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let res =
-                get_share_or_err(self, name_key, format!("add_share_tenants: {}", &name_key)).await;
+            let res = get_share_or_err(
+                self,
+                name_key,
+                format!("add_share_tenants: {}", name_key.display()),
+            )
+            .await;
 
             let (share_id_seq, share_id, share_meta_seq, mut share_meta) = match res {
                 Ok(x) => x,
@@ -335,7 +350,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             if add_share_account_keys.is_empty() {
                 return Err(KVAppError::AppError(AppError::ShareAccountsAlreadyExists(
                     ShareAccountsAlreadyExists::new(
-                        req.share_name.share_name,
+                        req.share_name.name(),
                         &req.accounts,
                         "share accounts already exists",
                     ),
@@ -390,7 +405,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(AddShareAccountsReply {
                         share_id: Some(share_id),
-                        spec_vec: Some(get_tenant_share_spec_vec(self, &name_key.tenant).await?),
+                        spec_vec: Some(get_tenant_share_spec_vec(self, name_key.tenant()).await?),
                     });
                 }
             }
@@ -412,7 +427,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let res = get_share_or_err(
                 self,
                 name_key,
-                format!("remove_share_tenants: {}", &name_key),
+                format!("remove_share_tenants: {}", name_key.display()),
             )
             .await;
 
@@ -433,7 +448,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
             let mut remove_share_account_keys_and_seqs = vec![];
             for account in req.accounts.iter() {
-                if account == name_key.tenant.name() {
+                if account == name_key.tenant_name() {
                     continue;
                 }
                 if share_meta.has_account(account) {
@@ -506,7 +521,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(RemoveShareAccountsReply {
                         share_id: Some(share_id),
-                        spec_vec: Some(get_tenant_share_spec_vec(self, &name_key.tenant).await?),
+                        spec_vec: Some(get_tenant_share_spec_vec(self, name_key.tenant()).await?),
                     });
                 }
             }
@@ -528,7 +543,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let res = get_share_or_err(
                 self,
                 share_name_key,
-                format!("grant_share_object: {}", &share_name_key),
+                format!("grant_share_object: {}", share_name_key.display()),
             )
             .await;
 
@@ -540,7 +555,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             };
 
             let seq_and_id =
-                get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant, true)
+                get_share_object_seq_and_id(self, &req.object, share_name_key.tenant(), true)
                     .await?;
 
             check_share_object(&share_meta.database, &seq_and_id, &req.object)?;
@@ -553,7 +568,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 return Ok(GrantShareObjectReply {
                     share_id,
                     spec_vec: None,
-                    share_table_info: (share_name_key.share_name.clone(), None),
+                    share_table_info: (share_name_key.name().to_string(), None),
                 });
             }
 
@@ -591,7 +606,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 create_db_name_to_id_key_if_need(
                     self,
                     &seq_and_id,
-                    &share_name_key.tenant,
+                    share_name_key.tenant(),
                     &req.object,
                     &mut condition,
                     &mut if_then,
@@ -623,7 +638,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     return Ok(GrantShareObjectReply {
                         share_id,
                         spec_vec: Some(
-                            get_tenant_share_spec_vec(self, &share_name_key.tenant).await?,
+                            get_tenant_share_spec_vec(self, share_name_key.tenant()).await?,
                         ),
                         share_table_info: get_share_table_info(self, share_name_key, &share_meta)
                             .await?,
@@ -648,7 +663,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let res = get_share_or_err(
                 self,
                 share_name_key,
-                format!("revoke_share_object: {}", &share_name_key),
+                format!("revoke_share_object: {}", share_name_key.display()),
             )
             .await;
 
@@ -660,7 +675,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             };
 
             let seq_and_id =
-                get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant, false)
+                get_share_object_seq_and_id(self, &req.object, share_name_key.tenant(), false)
                     .await?;
 
             check_share_object(&share_meta.database, &seq_and_id, &req.object)?;
@@ -673,7 +688,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 return Ok(RevokeShareObjectReply {
                     share_id,
                     spec_vec: None,
-                    share_table_info: (share_name_key.share_name.clone(), None),
+                    share_table_info: (share_name_key.name().to_string(), None),
                 });
             }
 
@@ -759,7 +774,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     return Ok(RevokeShareObjectReply {
                         share_id,
                         spec_vec: Some(
-                            get_tenant_share_spec_vec(self, &share_name_key.tenant).await?,
+                            get_tenant_share_spec_vec(self, share_name_key.tenant()).await?,
                         ),
                         share_table_info: get_share_table_info(self, share_name_key, &share_meta)
                             .await?,
@@ -780,7 +795,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         let res = get_share_or_err(
             self,
             share_name_key,
-            format!("revoke_share_object: {}", &share_name_key),
+            format!("revoke_share_object: {}", share_name_key.display()),
         )
         .await;
 
@@ -887,7 +902,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
                     entries.push((
                         share_meta.get_grant_entry(object.clone()),
-                        share_name.share_name,
+                        share_name.share_name().to_string(),
                     ));
                 }
 
@@ -924,7 +939,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (_seq, share_ids) = get_object_shared_by_share_ids(self, &object).await?;
                 let mut entries = vec![];
                 for share_id in share_ids.share_ids.iter() {
-                    let (_seq, share_name) = get_share_id_to_name_or_err(
+                    let (_seq, share_name_ident_raw) = get_share_id_to_name_or_err(
                         self,
                         *share_id,
                         format!("get_grant_privileges_of_object: {}", &share_id),
@@ -940,7 +955,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
                     entries.push((
                         share_meta.get_grant_entry(object.clone()),
-                        share_name.share_name,
+                        share_name_ident_raw.share_name().to_string(),
                     ));
                 }
 
@@ -1034,7 +1049,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if_then.extend(vec![
                         txn_op_put(name_key, serialize_u64(share_endpoint_id)?), /* (tenant, share_endpoint_name) -> share_endpoint_id */
                         txn_op_put(&id_key, serialize_struct(&share_endpoint_meta)?), /* (share_endpoint_id) -> share_endpoint_meta */
-                        txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_share_endpoint_id_to_name/<share_endpoint_id> -> (tenant,share_endpoint_name) */
+                        txn_op_put(&id_to_name_key, serialize_struct(&ShareEndpointIdentRaw::from(name_key.clone()))?), /* __fd_share_endpoint_id_to_name/<share_endpoint_id> -> (tenant,share_endpoint_name) */
                     ]);
 
                 let txn_req = TxnRequest {
@@ -1128,7 +1143,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         share_endpoint_id: new_share_endpoint_id,
                     };
                     if_then.push(txn_op_put(name_key, serialize_u64(new_share_endpoint_id)?));
-                    if_then.push(txn_op_put(&id_to_name_key, serialize_struct(name_key)?));
+                    if_then.push(txn_op_put(
+                        &id_to_name_key,
+                        serialize_struct(&ShareEndpointIdentRaw::from(name_key.clone()))?,
+                    ));
                     if_then.push(txn_op_put(
                         &share_endpoint_id_key,
                         serialize_struct(&share_endpoint_meta)?,
@@ -1184,7 +1202,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 get_pb_value(self, &id_key).await?;
             if let Some(share_endpoint_meta) = share_endpoint_meta {
                 if let Some(to_tenant) = &req.to_tenant {
-                    if to_tenant == &share_endpoint_meta.tenant {
+                    if to_tenant.name() == share_endpoint_meta.tenant {
                         share_endpoint_meta_vec.push((share_endpoint, share_endpoint_meta));
                     }
                 } else {
@@ -1334,13 +1352,13 @@ async fn get_share_database_name(
                     get_pb_value(kv_api, &id_to_name).await?;
                 if name_ident_seq == 0 || name_ident.is_none() {
                     return Err(KVAppError::AppError(AppError::UnknownShare(
-                        UnknownShare::new(&share_name.share_name, ""),
+                        UnknownShare::new(share_name.name(), ""),
                     )));
                 }
                 Ok(Some(name_ident.unwrap().db_name))
             }
             ShareGrantObject::Table(_id) => Err(KVAppError::AppError(AppError::WrongShare(
-                WrongShare::new(&share_name.share_name),
+                WrongShare::new(share_name.name()),
             ))),
         }
     } else {
@@ -1352,7 +1370,12 @@ async fn get_outbound_share_tenants_by_name(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_name: &ShareNameIdent,
 ) -> Result<Vec<GetShareGrantTenants>, KVAppError> {
-    let res = get_share_or_err(kv_api, share_name, format!("get_share: {share_name}")).await?;
+    let res = get_share_or_err(
+        kv_api,
+        share_name,
+        format!("get_share: {}", share_name.display()),
+    )
+    .await?;
     let (_share_id_seq, share_id, _share_meta_seq, share_meta) = res;
 
     let mut accounts = vec![];
@@ -1385,7 +1408,7 @@ async fn get_outbound_share_info_by_name(
     let res = get_share_or_err(
         kv_api,
         share_name,
-        format!("get_share: {}", share_name.clone()),
+        format!("get_share: {}", share_name.display()),
     )
     .await?;
     let (_share_id_seq, _share_id, _share_meta_seq, share_meta) = res;
@@ -1412,10 +1435,7 @@ async fn get_outbound_share_infos_by_tenant(
 ) -> Result<Vec<ShareAccountReply>, KVAppError> {
     let mut outbound_share_accounts: Vec<ShareAccountReply> = vec![];
 
-    let tenant_share_name_key = ShareNameIdent {
-        tenant: tenant.clone(),
-        share_name: "".to_string(),
-    };
+    let tenant_share_name_key = ShareNameIdent::new(tenant, "");
     let share_name_keys = list_keys(kv_api, &tenant_share_name_key).await?;
 
     for share_name in share_name_keys {
@@ -1736,18 +1756,14 @@ async fn get_tenant_share_spec_vec(
     tenant: &Tenant,
 ) -> Result<Vec<ShareSpec>, KVAppError> {
     let mut share_metas = vec![];
-    let share_name_list = ShareNameIdent {
-        tenant: tenant.clone(),
-        // Using a empty share to to list all
-        share_name: "".to_string(),
-    };
+    let share_name_list = ShareNameIdent::new(tenant, "");
 
     let share_name_list_keys = list_keys(kv_api, &share_name_list).await?;
     for share_name in share_name_list_keys {
         let res = get_share_or_err(
             kv_api,
             &share_name,
-            format!("get_tenant_share_spec_vec: {}", &share_name),
+            format!("get_tenant_share_spec_vec: {}", share_name.display()),
         )
         .await;
 
@@ -1769,8 +1785,7 @@ async fn get_tenant_share_spec_vec(
         };
 
         share_metas.push(
-            convert_share_meta_to_spec(kv_api, &share_name.share_name, share_id, share_meta)
-                .await?,
+            convert_share_meta_to_spec(kv_api, share_name.name(), share_id, share_meta).await?,
         );
     }
 

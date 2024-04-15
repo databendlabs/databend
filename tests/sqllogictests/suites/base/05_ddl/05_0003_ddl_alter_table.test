@@ -197,5 +197,58 @@ c1 VARCHAR YES NULL (empty)
 c2 VARCHAR YES NULL (empty)
 
 statement ok
+alter table t modify c1 varchar comment 'c1-column', c2 int comment 'test';
+
+query TTTTT
+select database,table,name,data_type,comment from system.columns where table='t' and database='default';
+----
+default t c1 VARCHAR 'c1-column'
+default t c2 INT 'test'
+
+statement ok
+alter table t comment='s1';
+
+query TT
+select name, comment from system.tables where name='t' and database='default';
+----
+t s1
+
+query TT
+show create table t;
+----
+t CREATE TABLE t ( c1 VARCHAR NULL COMMENT 'c1-column', c2 INT NULL COMMENT 'test' ) ENGINE=FUSE COMMENT = 's1'
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t1(id int) comment ='t1-comment';
+
+query TT
+show create table t1;
+----
+t1 CREATE TABLE t1 ( id INT NULL ) ENGINE=FUSE COMMENT = 't1-comment'
+
+query TT
+select name, comment from system.tables where name='t1' and database='default';
+----
+t1 t1-comment
+
+statement ok
+alter table t1 comment='t1-new-comment';
+
+query TT
+show create table t1;
+----
+t1 CREATE TABLE t1 ( id INT NULL ) ENGINE=FUSE COMMENT = 't1-new-comment'
+
+query TT
+select name, comment from system.tables where name='t1' and database='default';
+----
+t1 t1-new-comment
+
+statement ok
 DROP TABLE IF EXISTS t;
 
+statement ok
+DROP TABLE IF EXISTS t1;

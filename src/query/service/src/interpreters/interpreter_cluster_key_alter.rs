@@ -50,7 +50,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
         let table = catalog
-            .get_table(tenant.name(), &plan.database, &plan.table)
+            .get_table(&tenant, &plan.database, &plan.table)
             .await?;
 
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));

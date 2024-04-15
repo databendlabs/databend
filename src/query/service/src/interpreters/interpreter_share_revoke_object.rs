@@ -17,8 +17,8 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::RevokeShareObjectReq;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::UserApiProvider;
 
@@ -54,10 +54,7 @@ impl Interpreter for RevokeShareObjectInterpreter {
         let tenant = self.ctx.get_tenant();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = RevokeShareObjectReq {
-            share_name: ShareNameIdent {
-                tenant,
-                share_name: self.plan.share.clone(),
-            },
+            share_name: ShareNameIdent::new(&tenant, &self.plan.share),
             object: self.plan.object.clone(),
             privilege: self.plan.privilege,
             update_on: Utc::now(),

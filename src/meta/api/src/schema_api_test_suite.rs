@@ -111,12 +111,12 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::AddShareAccountsReq;
 use databend_common_meta_app::share::CreateShareReq;
 use databend_common_meta_app::share::GrantShareObjectReq;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::tenant::Tenant;
@@ -793,14 +793,11 @@ impl SchemaApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant1 = "tenant1";
-        let tenant = Tenant::new_or_err(tenant1, func_name!())?;
+        let tenant_name1 = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name1, func_name!())?;
         let db1 = "db1";
         let share = "share";
-        let share_name = ShareNameIdent {
-            tenant: tenant.clone(),
-            share_name: share.to_string(),
-        };
+        let share_name = ShareNameIdent::new(&tenant, share);
         let db_name1 = DatabaseNameIdent {
             tenant: tenant.clone(),
             db_name: db1.to_string(),
@@ -814,7 +811,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: db_name1.clone(),
                 meta: DatabaseMeta {
-                    from_share: Some(share_name.clone()),
+                    from_share: Some(share_name.clone().into()),
                     ..Default::default()
                 },
             };
@@ -5369,10 +5366,7 @@ impl SchemaApiTestSuite {
         let share = "share";
         let tb1 = "tb1";
         let tb2 = "tb2";
-        let share_name = ShareNameIdent {
-            tenant: tenant1.clone(),
-            share_name: share.to_string(),
-        };
+        let share_name = ShareNameIdent::new(&tenant1, share);
         let db_name1 = DatabaseNameIdent {
             tenant: tenant1.clone(),
             db_name: db1.to_string(),
@@ -5479,7 +5473,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: db_name2.clone(),
                 meta: DatabaseMeta {
-                    from_share: Some(share_name.clone()),
+                    from_share: Some(share_name.clone().into()),
                     ..Default::default()
                 },
             };

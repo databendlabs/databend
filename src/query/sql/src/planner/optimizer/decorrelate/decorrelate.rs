@@ -302,7 +302,7 @@ impl SubqueryRewriter {
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {
                     if let Some(result) = self.try_decorrelate_simple_subquery(left, subquery)? {
-                        return Ok((result, UnnestResult::SimpleJoin));
+                        return Ok((result, UnnestResult::SimpleJoin { output_index: None }));
                     }
                 }
                 let correlated_columns = subquery.outer_columns.clone();

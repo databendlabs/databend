@@ -101,10 +101,10 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
-use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
@@ -210,10 +210,7 @@ impl QueryContext {
         let catalog = self
             .get_catalog(self.get_current_catalog().as_str())
             .await?;
-        match catalog
-            .get_database(tenant_id.name(), &new_database_name)
-            .await
-        {
+        match catalog.get_database(&tenant_id, &new_database_name).await {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -824,7 +821,7 @@ impl TableContext for QueryContext {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table(tenant.name(), database_name, table_name)
+            .get_table(&tenant, database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
@@ -840,7 +837,7 @@ impl TableContext for QueryContext {
             let req = GetTableCopiedFileReq { table_id, files };
             let start_request = Instant::now();
             let copied_files = catalog
-                .get_table_copied_file_info(tenant.name(), database_name, req)
+                .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
 
@@ -1078,6 +1075,14 @@ impl TableContext for QueryContext {
 
     fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
         *self.block_threshold.write() = thresholds;
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        *self.shared.query_queued_duration.read()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: Duration) {
+        *self.shared.query_queued_duration.write() = queued_duration;
     }
 }
 

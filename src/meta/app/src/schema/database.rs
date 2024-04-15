@@ -23,9 +23,10 @@ use chrono::DateTime;
 use chrono::Utc;
 
 use super::CreateOption;
-use crate::share::ShareNameIdent;
+use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareSpec;
 use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 // serde is required by
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -127,7 +128,7 @@ pub struct DatabaseMeta {
     pub drop_on: Option<DateTime<Utc>>,
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
-    pub from_share: Option<ShareNameIdent>,
+    pub from_share: Option<ShareNameIdentRaw>,
 }
 
 impl Default for DatabaseMeta {
@@ -333,10 +334,10 @@ impl Deref for GetDatabaseReq {
 }
 
 impl GetDatabaseReq {
-    pub fn new(tenant: Tenant, db_name: impl Into<String>) -> GetDatabaseReq {
+    pub fn new(tenant: impl ToTenant, db_name: impl Into<String>) -> GetDatabaseReq {
         GetDatabaseReq {
             inner: DatabaseNameIdent {
-                tenant,
+                tenant: tenant.to_tenant(),
                 db_name: db_name.into(),
             },
         }

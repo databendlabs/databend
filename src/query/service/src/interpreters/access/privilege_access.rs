@@ -53,12 +53,14 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 15] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 17] = [
     "catalogs",
     "columns",
     "databases",
     "tables",
+    "views",
     "tables_with_history",
+    "views_with_history",
     "password_policies",
     "streams",
     "virtual_columns",
@@ -94,7 +96,7 @@ impl PrivilegeAccess {
                     .ctx
                     .get_catalog(catalog_name)
                     .await?
-                    .get_database(tenant.name(), db_name)
+                    .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
                     .ident
@@ -110,14 +112,12 @@ impl PrivilegeAccess {
                 }
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
                 let db_id = catalog
-                    .get_database(tenant.name(), db_name)
+                    .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
-                let table = catalog
-                    .get_table(tenant.name(), db_name, table_name)
-                    .await?;
+                let table = catalog.get_table(&tenant, db_name, table_name).await?;
                 let table_id = table.get_id();
                 OwnershipObject::Table {
                     catalog_name: catalog_name.clone(),
@@ -166,10 +166,7 @@ impl PrivilegeAccess {
             }
             Err(_err) => {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
-                match self
-                    .convert_to_id(tenant.name(), &catalog, db_name, None)
-                    .await
-                {
+                match self.convert_to_id(&tenant, &catalog, db_name, None).await {
                     Ok(obj) => {
                         let (db_id, _) = match obj {
                             ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
@@ -260,7 +257,7 @@ impl PrivilegeAccess {
                     Ok(_) => return Ok(()),
                     Err(_err) => {
                         match self
-                            .convert_to_id(tenant.name(), &catalog, db_name, Some(table_name))
+                            .convert_to_id(&tenant, &catalog, db_name, Some(table_name))
                             .await
                         {
                             Ok(obj) => {
@@ -452,7 +449,7 @@ impl PrivilegeAccess {
 
     async fn convert_to_id(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         catalog: &Arc<dyn Catalog>,
         database_name: &str,
         table_name: Option<&str>,
@@ -511,7 +508,7 @@ impl AccessChecker for PrivilegeAccess {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(catalog).await?;
-                        let (db_id, table_id) = match self.convert_to_id(tenant.name(), &catalog, database, None).await? {
+                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -531,7 +528,7 @@ impl AccessChecker for PrivilegeAccess {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(&catalog_name).await?;
-                        let (db_id, table_id) = match self.convert_to_id(tenant.name(), &catalog, database, None).await? {
+                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -551,7 +548,7 @@ impl AccessChecker for PrivilegeAccess {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(catalog_name).await?;
-                        let (db_id, table_id) = match self.convert_to_id(tenant.name(), &catalog, database, Some(table)).await? {
+                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, Some(table)).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -636,7 +633,7 @@ impl AccessChecker for PrivilegeAccess {
                 let catalog = self.ctx.get_catalog(&catalog_name).await?;
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
-                let (db_id, _) = match self.convert_to_id(tenant.name(), &catalog, &plan.database, None).await? {
+                let (db_id, _) = match self.convert_to_id(&tenant, &catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
@@ -706,6 +703,9 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
             }
             Plan::ModifyTableColumn(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+            }
+            Plan::ModifyTableComment(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
             }
             Plan::DropTableColumn(plan) => {
@@ -1074,6 +1074,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Begin => {}
             Plan::Commit => {}
             Plan::Abort => {}
+            Plan::ExecuteImmediate(_) => {}
         }
 
         Ok(())

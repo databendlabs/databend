@@ -125,7 +125,7 @@ impl Interpreter for CreateTableInterpreter {
             // If a database has lot of tables, list_tables will be slow.
             // So We check get it when max_tables_per_database != 0
             let tables = catalog
-                .list_tables(self.plan.tenant.name(), &self.plan.database)
+                .list_tables(&self.plan.tenant, &self.plan.database)
                 .await?;
             if tables.len() >= quota.max_tables_per_database as usize {
                 return Err(ErrorCode::TenantQuotaExceeded(format!(
@@ -178,15 +178,13 @@ impl CreateTableInterpreter {
         }
 
         let table = catalog
-            .get_table(tenant.name(), &self.plan.database, &self.plan.table)
+            .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
 
         // grant the ownership of the table to the current role.
         let current_role = self.ctx.get_current_role();
         if let Some(current_role) = current_role {
-            let db = catalog
-                .get_database(tenant.name(), &self.plan.database)
-                .await?;
+            let db = catalog.get_database(&tenant, &self.plan.database).await?;
             let db_id = db.get_db_info().ident.db_id;
 
             let role_api = UserApiProvider::instance().role_api(&tenant);
@@ -276,9 +274,7 @@ impl CreateTableInterpreter {
         // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
         if let Some(current_role) = self.ctx.get_current_role() {
             let tenant = self.ctx.get_tenant();
-            let db = catalog
-                .get_database(tenant.name(), &self.plan.database)
-                .await?;
+            let db = catalog.get_database(&tenant, &self.plan.database).await?;
             let db_id = db.get_db_info().ident.db_id;
 
             let role_api = UserApiProvider::instance().role_api(&tenant);

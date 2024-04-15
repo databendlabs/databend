@@ -164,8 +164,7 @@ impl FuseTable {
                 let operator = create_share_table_operator(
                     ShareTableConfig::share_endpoint_address(),
                     ShareTableConfig::share_endpoint_token(),
-                    &share_ident.tenant,
-                    &share_ident.share_name,
+                    &share_ident,
                     &table_info.name,
                 )?;
                 (operator, FuseTableType::SharedReadOnly)
