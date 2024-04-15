@@ -1665,7 +1665,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
 
             // Table id is unique and does not need to re-generate in every loop.
-            // TODO, not correct
             let key_table_id = match &maybe_key_table_id {
                 None => {
                     let id = fetch_id(self, IdGenerator::table_id()).await?;
