@@ -3009,7 +3009,6 @@ dependencies = [
  "lexical-core",
  "log",
  "match-template",
- "memchr",
  "micromarshal 0.5.0",
  "num-traits",
  "ordered-float 4.2.0",
