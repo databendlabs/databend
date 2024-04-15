@@ -56,6 +56,12 @@ statement ok
 DROP STAGE replace_test_stage_huggingface
 
 statement ok
+CREATE OR REPLACE STAGE replace_test_stage_azblob url='azblob://testcontainer/' connection=(account_name ='myname' secret_key ='mykey' endpoint_url='https://my-username.blob.core.windows.net')
+
+statement ok
+DROP STAGE replace_test_stage_azblob
+
+statement ok
 SHOW STAGES
 
 statement ok

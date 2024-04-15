@@ -27,6 +27,7 @@ message StorageConfig {
     CosStorageConfig cos = 7;
     HdfsStorageConfig hdfs = 8;
     HuggingfaceStorageConfig huggingface = 9;
+    AzblobStorageConfig azblob = 10;
   }
 }
 
@@ -139,4 +140,15 @@ message HuggingfaceStorageConfig {
   string revision = 3;
   string root = 4;
   string token = 5;
+}
+
+message AzblobStorageConfig {
+  uint64 version = 100;
+  uint64 min_reader_ver = 101;
+
+  string endpoint_url = 1;
+  string container = 2;
+  string account_name = 3;
+  string account_key = 4;
+  string root = 5;
 }

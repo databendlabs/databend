@@ -66,6 +66,9 @@ impl FromToProto for mt::storage::StorageParams {
                     mt::storage::StorageHuggingfaceConfig::from_pb(s)?,
                 ))
             }
+            Some(pb::storage_config::Storage::Azblob(s)) => Ok(mt::storage::StorageParams::Azblob(
+                mt::storage::StorageAzblobConfig::from_pb(s)?,
+            )),
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
             }),
@@ -100,6 +103,9 @@ impl FromToProto for mt::storage::StorageParams {
             }),
             mt::storage::StorageParams::Huggingface(v) => Ok(pb::StorageConfig {
                 storage: Some(pb::storage_config::Storage::Huggingface(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Azblob(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Azblob(v.to_pb()?)),
             }),
             others => Err(Incompatible {
                 reason: format!("stage type: {} not supported", others),
@@ -396,6 +402,39 @@ impl FromToProto for mt::storage::StorageHuggingfaceConfig {
             repo_id: self.repo_id.clone(),
             revision: self.revision.clone(),
             token: self.token.clone(),
+            root: self.root.clone(),
+        })
+    }
+}
+
+impl FromToProto for mt::storage::StorageAzblobConfig {
+    type PB = pb::AzblobStorageConfig;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.version, p.min_reader_ver)?;
+
+        Ok(mt::storage::StorageAzblobConfig {
+            endpoint_url: p.endpoint_url,
+            container: p.container,
+            account_name: p.account_name,
+            account_key: p.account_key,
+            root: p.root,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::AzblobStorageConfig {
+            version: VER,
+            min_reader_ver: MIN_READER_VER,
+            endpoint_url: self.endpoint_url.clone(),
+            container: self.container.clone(),
+            account_name: self.account_name.clone(),
+            account_key: self.account_key.clone(),
             root: self.root.clone(),
         })
     }

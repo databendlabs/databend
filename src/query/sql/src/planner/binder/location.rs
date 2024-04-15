@@ -55,7 +55,7 @@ fn secure_omission(endpoint: String) -> String {
     }
 }
 
-fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+fn parse_azblob_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let endpoint = l.connection.get("endpoint_url").cloned().ok_or_else(|| {
         Error::new(
             ErrorKind::InvalidInput,
@@ -509,7 +509,7 @@ pub async fn parse_uri_location(
     }
 
     let sp = match protocol {
-        Scheme::Azblob => parse_azure_params(l, root)?,
+        Scheme::Azblob => parse_azblob_params(l, root)?,
         Scheme::Gcs => parse_gcs_params(l)?,
         #[cfg(feature = "storage-hdfs")]
         Scheme::Hdfs => parse_hdfs_params(l)?,
