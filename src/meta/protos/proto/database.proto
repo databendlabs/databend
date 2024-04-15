@@ -23,17 +23,6 @@ package databend_proto;
 import "share.proto";
 import "tenant.proto";
 
-message DatabaseNameIdent {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  // The user this db belongs to
-  string tenant = 1;
-
-  // Database name
-  string db_name = 2;
-}
-
 // DatabaseMeta is a container of all non-identity information.
 message DatabaseMeta {
   uint64 ver = 100;

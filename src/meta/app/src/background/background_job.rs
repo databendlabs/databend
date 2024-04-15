@@ -353,7 +353,7 @@ impl ListBackgroundJobsReq {
 
 impl Display for ListBackgroundJobsReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "list_background_job({})", self.tenant.name())
+        write!(f, "list_background_job({})", self.tenant.tenant_name())
     }
 }
 

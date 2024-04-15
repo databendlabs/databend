@@ -59,7 +59,7 @@ impl Tenant {
         }
     }
 
-    pub fn name(&self) -> &str {
+    pub fn tenant_name(&self) -> &str {
         &self.tenant
     }
 

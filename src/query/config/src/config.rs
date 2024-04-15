@@ -1752,7 +1752,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
         Self {
-            tenant_id: inner.tenant_id.name().to_string(),
+            tenant_id: inner.tenant_id.tenant_name().to_string(),
             cluster_id: inner.cluster_id,
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,

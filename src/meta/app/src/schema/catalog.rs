@@ -78,6 +78,7 @@ pub struct IcebergCatalogOption {
 
 /// Same as `CatalogNameIdent`, but with `serde` support,
 /// and can be used a s part of a value.
+// #[derive(Clone, Debug, PartialEq, Eq)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CatalogName {
     pub tenant: String,
