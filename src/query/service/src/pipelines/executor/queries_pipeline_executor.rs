@@ -168,7 +168,7 @@ impl QueriesPipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                let graph = context.get_graph();
+                let task_info = context.get_task_info();
                 let res = catch_unwind(|| context.execute_task(Some(self))).flatten();
                 match res {
                     Ok(Some((executed_pid, graph))) => {
@@ -185,6 +185,7 @@ impl QueriesPipelineExecutor {
                                     );
                                 }
                                 Err(error) => {
+                                    graph.record_node_error(executed_pid, Some(error.clone()));
                                     graph.should_finish(Err(error))?;
                                 }
                             }
@@ -196,7 +197,8 @@ impl QueriesPipelineExecutor {
                     Ok(None) => {}
                     Err(cause) => {
                         warn!("Execute task error: {:?}", cause);
-                        if let Some(graph) = graph {
+                        if let Some((graph, node_index)) = task_info {
+                            graph.record_node_error(node_index, Some(cause.clone()));
                             graph.should_finish(Err(cause.clone()))?;
                         }
                     }

@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ErrorInfo;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
@@ -127,6 +128,13 @@ impl Node {
             // Node tracking metrics
             tracking_payload.metrics = scope.as_ref().map(|x| x.metrics_registry.clone());
 
+            // Node tracking error
+            tracking_payload.node_error = Some(ErrorInfo::create(
+                pid,
+                unsafe { processor.name() },
+                scope.as_ref().map(|x| x.id),
+            ));
+
             tracking_payload
         };
 
@@ -138,6 +146,24 @@ impl Node {
             outputs_port: outputs_port.to_vec(),
             tracking_payload,
         })
+    }
+
+    pub fn record_error(&self, error: Option<ErrorCode>) {
+        if let Some(error) = error {
+            if self.tracking_payload.node_error.is_some() {
+                let mut guard = self
+                    .tracking_payload
+                    .node_error
+                    .as_ref()
+                    .unwrap()
+                    .error
+                    .lock();
+                // Only record the first error
+                if (*guard).is_none() {
+                    *guard = Some(error);
+                }
+            }
+        }
     }
 
     pub unsafe fn trigger(&self, queue: &mut VecDeque<DirectedEdge>) {
@@ -798,6 +824,10 @@ impl RunningGraph {
     pub fn get_error(&self) -> Option<ErrorCode> {
         let finished_error = self.0.finished_error.lock();
         finished_error.clone()
+    }
+
+    pub fn record_node_error(&self, node_index: NodeIndex, error: Option<ErrorCode>) {
+        self.0.graph[node_index].record_error(error);
     }
 
     pub fn format_graph_nodes(&self) -> String {

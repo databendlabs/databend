@@ -430,13 +430,24 @@ impl QueryPipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                if let Some((executed_pid, graph)) = context.execute_task(None)? {
-                    // Not scheduled graph if pipeline is finished.
-                    if !self.global_tasks_queue.is_finished() {
-                        // We immediately schedule the processor again.
-                        let schedule_queue = graph.schedule_queue(executed_pid)?;
-                        schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                let task_info = context.get_task_info();
+                let res: Result<(), ErrorCode> = {
+                    if let Some((executed_pid, graph)) = context.execute_task(None)? {
+                        // Not scheduled graph if pipeline is finished.
+                        if !self.global_tasks_queue.is_finished() {
+                            // We immediately schedule the processor again.
+                            let schedule_queue = graph.schedule_queue(executed_pid)?;
+                            schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                        }
                     }
+                    Ok(())
+                };
+                if let Err(cause) = res {
+                    if let Some((graph, node_index)) = task_info {
+                        graph.record_node_error(node_index, Some(cause.clone()));
+                        graph.should_finish(Err(cause.clone()))?;
+                    }
+                    return Err(cause);
                 }
             }
         }

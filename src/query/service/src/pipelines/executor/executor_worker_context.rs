@@ -97,12 +97,14 @@ impl ExecutorWorkerContext {
         std::mem::replace(&mut self.task, ExecutorTask::None)
     }
 
-    pub fn get_graph(&self) -> Option<Arc<RunningGraph>> {
-        match &self.task {
-            ExecutorTask::None => None,
-            ExecutorTask::Sync(p) => Some(p.graph.clone()),
-            ExecutorTask::Async(p) => Some(p.graph.clone()),
-            ExecutorTask::AsyncCompleted(p) => Some(p.graph.clone()),
+    pub fn get_task_info(&self) -> Option<(Arc<RunningGraph>, NodeIndex)> {
+        unsafe {
+            match &self.task {
+                ExecutorTask::None => None,
+                ExecutorTask::Sync(p) => Some((p.graph.clone(), p.processor.id())),
+                ExecutorTask::Async(p) => Some((p.graph.clone(), p.processor.id())),
+                ExecutorTask::AsyncCompleted(p) => Some((p.graph.clone(), p.id)),
+            }
         }
     }
 
