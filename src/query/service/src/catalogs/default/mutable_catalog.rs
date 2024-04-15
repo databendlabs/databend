@@ -21,6 +21,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
@@ -38,7 +39,6 @@ use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -97,6 +97,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use log::info;
@@ -154,10 +155,7 @@ impl MutableCatalog {
         // Create default database.
         let req = CreateDatabaseReq {
             create_option: CreateOption::CreateIfNotExists,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.clone(),
-                db_name: "default".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "default"),
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -240,7 +238,8 @@ impl Catalog for MutableCatalog {
         let res = self.ctx.meta.create_database(req.clone()).await?;
         info!(
             "db name: {}, engine: {}",
-            &req.name_ident.db_name, &req.meta.engine
+            req.name_ident.database_name(),
+            &req.meta.engine
         );
 
         // Initial the database after creating.
@@ -253,7 +252,7 @@ impl Catalog for MutableCatalog {
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
-        database.init_database(req.name_ident.tenant.name()).await?;
+        database.init_database(req.name_ident.tenant_name()).await?;
         Ok(CreateDatabaseReply {
             db_id: res.db_id,
             spec_vec: None,

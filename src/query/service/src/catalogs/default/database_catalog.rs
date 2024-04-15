@@ -93,6 +93,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
 use log::info;
 
@@ -191,12 +192,12 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                req.name_ident.db_name
+                req.name_ident.database_name()
             )));
         }
         // create db in BOTTOM layer only
@@ -210,7 +211,7 @@ impl Catalog for DatabaseCatalog {
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
             return self.immutable_catalog.drop_database(req).await;
@@ -224,11 +225,11 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
             || self
                 .immutable_catalog
-                .exists_database(&req.name_ident.tenant, &req.new_db_name)
+                .exists_database(req.name_ident.tenant(), &req.new_db_name)
                 .await?
         {
             return self.immutable_catalog.rename_database(req).await;

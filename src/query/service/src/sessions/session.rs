@@ -79,7 +79,7 @@ impl Session {
             ("session_database".to_string(), self.get_current_database()),
             (
                 "session_tenant".to_string(),
-                self.get_current_tenant().name().to_string(),
+                self.get_current_tenant().tenant_name().to_string(),
             ),
         ];
         if let Some(query_id) = self.get_current_query_id() {

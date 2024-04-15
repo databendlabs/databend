@@ -857,7 +857,7 @@ impl Binder {
                     .analyze_rename_column(old_column, new_column, schema)
                     .await?;
                 Ok(Plan::RenameTableColumn(Box::new(RenameTableColumnPlan {
-                    tenant: self.ctx.get_tenant().name().to_string(),
+                    tenant: self.ctx.get_tenant().tenant_name().to_string(),
                     catalog,
                     database,
                     table,
@@ -884,7 +884,7 @@ impl Binder {
                     AstAddColumnOption::End => AddColumnOption::End,
                 };
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
-                    tenant: self.ctx.get_tenant().name().to_string(),
+                    tenant: self.ctx.get_tenant().tenant_name().to_string(),
                     catalog,
                     database,
                     table,
@@ -947,7 +947,7 @@ impl Binder {
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
                     AlterTableClusterKeyPlan {
-                        tenant: tenant.name().to_string(),
+                        tenant: tenant.tenant_name().to_string(),
                         catalog,
                         database,
                         table,
@@ -957,7 +957,7 @@ impl Binder {
             }
             AlterTableAction::DropTableClusterKey => Ok(Plan::DropTableClusterKey(Box::new(
                 DropTableClusterKeyPlan {
-                    tenant: tenant.name().to_string(),
+                    tenant: tenant.tenant_name().to_string(),
                     catalog,
                     database,
                     table,
@@ -990,7 +990,7 @@ impl Binder {
                 };
 
                 Ok(Plan::ReclusterTable(Box::new(ReclusterTablePlan {
-                    tenant: tenant.name().to_string(),
+                    tenant: tenant.tenant_name().to_string(),
                     catalog,
                     database,
                     table,
@@ -1003,7 +1003,7 @@ impl Binder {
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point).await?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
-                    tenant: tenant.name().to_string(),
+                    tenant: tenant.tenant_name().to_string(),
                     catalog,
                     database,
                     table,

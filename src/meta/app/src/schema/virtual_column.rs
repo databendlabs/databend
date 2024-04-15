@@ -45,7 +45,7 @@ impl VirtualColumnNameIdent {
 
 impl Display for VirtualColumnNameIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}'/{}", self.tenant.name(), self.table_id)
+        write!(f, "'{}'/{}", self.tenant.tenant_name(), self.table_id)
     }
 }
 
@@ -148,7 +148,7 @@ mod kvapi_key_impl {
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant.name())
+                .push_str(self.tenant.tenant_name())
                 .push_u64(self.table_id)
                 .done()
         }

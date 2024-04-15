@@ -64,7 +64,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
             let resp = meta_api.add_share_tenants(req).await?;
 
             save_share_spec(
-                self.ctx.get_tenant().name(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 resp.spec_vec,
                 None,
@@ -79,7 +79,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
             let resp = meta_api.remove_share_tenants(req).await?;
 
             save_share_spec(
-                self.ctx.get_tenant().name(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 resp.spec_vec,
                 None,

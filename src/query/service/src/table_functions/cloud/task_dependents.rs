@@ -188,7 +188,7 @@ impl TaskDependentsSource {
     fn build_request(&self) -> GetTaskDependentsRequest {
         GetTaskDependentsRequest {
             task_name: self.task_name.clone(),
-            tenant_id: self.ctx.get_tenant().name().to_string(),
+            tenant_id: self.ctx.get_tenant().tenant_name().to_string(),
             recursive: self.recursive,
         }
     }
@@ -263,7 +263,7 @@ impl AsyncSource for TaskDependentsSource {
         let query_id = self.ctx.get_id();
 
         let cfg = build_client_config(
-            tenant.name().to_string(),
+            tenant.tenant_name().to_string(),
             user,
             query_id,
             cloud_api.get_timeout(),

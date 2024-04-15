@@ -59,7 +59,7 @@ impl AsyncSystemTable for QueryCacheTable {
         let meta_client = UserApiProvider::instance().get_meta_store_client();
         let result_cache_mgr = ResultCacheMetaManager::create(meta_client, 0);
         let tenant = ctx.get_tenant();
-        let prefix = gen_result_cache_prefix(tenant.name());
+        let prefix = gen_result_cache_prefix(tenant.tenant_name());
 
         let cached_values = result_cache_mgr.list(prefix.as_str()).await?;
 

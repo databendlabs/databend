@@ -61,7 +61,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
             Err(err) => {
                 warnings.push(format!(
                     "failed to list tables of database {}.{}: {}",
-                    tenant.name(),
+                    tenant.tenant_name(),
                     database.name(),
                     err
                 ));

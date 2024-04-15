@@ -17,12 +17,12 @@ use std::collections::BTreeSet;
 
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::TableId;
@@ -781,10 +781,7 @@ impl ShareApiTestSuite {
 
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.clone(),
-                    db_name: db_name.to_string(),
-                },
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
                 meta: DatabaseMeta::default(),
             };
 
@@ -809,10 +806,7 @@ impl ShareApiTestSuite {
 
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.clone(),
-                    db_name: db2_name.to_string(),
-                },
+                name_ident: DatabaseNameIdent::new(&tenant, db2_name),
                 meta: DatabaseMeta::default(),
             };
 
@@ -1207,10 +1201,7 @@ impl ShareApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.clone(),
-                    db_name: db_name.to_string(),
-                },
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
                 meta: DatabaseMeta::default(),
             };
 
@@ -1298,7 +1289,7 @@ impl ShareApiTestSuite {
         info!("--- get unknown object");
         {
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 object: ShareGrantObjectName::Database("db".to_string()),
             };
 
@@ -1308,7 +1299,7 @@ impl ShareApiTestSuite {
             assert_eq!(ErrorCode::UNKNOWN_DATABASE, ErrorCode::from(err).code());
 
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 object: ShareGrantObjectName::Table("db".to_string(), "table".to_string()),
             };
 
@@ -1348,10 +1339,7 @@ impl ShareApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.clone(),
-                    db_name: db_name.to_string(),
-                },
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
                 meta: DatabaseMeta::default(),
             };
 
@@ -1411,7 +1399,7 @@ impl ShareApiTestSuite {
         info!("--- get_grant_privileges_of_object of db and table");
         {
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 object: ShareGrantObjectName::Database(db_name.to_string()),
             };
 
@@ -1423,7 +1411,7 @@ impl ShareApiTestSuite {
             assert_eq!(res.privileges[0].grant_on, grant_on);
 
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
             };
 
@@ -1441,10 +1429,7 @@ impl ShareApiTestSuite {
             let tenant2 = Tenant::new_literal(tenant_name2);
             let db2 = "db2";
 
-            let db_name2 = DatabaseNameIdent {
-                tenant: tenant2.clone(),
-                db_name: db2.to_string(),
-            };
+            let db_name2 = DatabaseNameIdent::new(&tenant2, db2);
 
             // first grant account tenant2
             let req = AddShareAccountsReq {
@@ -1518,7 +1503,7 @@ impl ShareApiTestSuite {
 
             // get_grant_privileges_of_object of db and table again
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 object: ShareGrantObjectName::Database(db_name.to_string()),
             };
 
@@ -1528,7 +1513,7 @@ impl ShareApiTestSuite {
             assert_eq!(res.privileges.len(), 1);
 
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant_name.to_string(),
+                tenant: tenant.clone(),
                 object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
             };
 
@@ -1596,10 +1581,7 @@ impl ShareApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.clone(),
-                    db_name: db_name.to_string(),
-                },
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
                 meta: DatabaseMeta::default(),
             };
 
@@ -1751,10 +1733,7 @@ impl ShareApiTestSuite {
 
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.clone(),
-                    db_name: db_name.to_string(),
-                },
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
             })
             .await?;
 

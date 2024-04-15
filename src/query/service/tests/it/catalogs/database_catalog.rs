@@ -21,11 +21,11 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::RenameDatabaseReq;
@@ -73,10 +73,7 @@ async fn test_catalogs_database() -> Result<()> {
     {
         let req = CreateDatabaseReq {
             create_option: CreateOption::Create,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.clone(),
-                db_name: "db1".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "db1"),
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -93,10 +90,7 @@ async fn test_catalogs_database() -> Result<()> {
     {
         let req = RenameDatabaseReq {
             if_exists: false,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.clone(),
-                db_name: "db1".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "db1"),
             new_db_name: "db2".to_string(),
         };
         let res = catalog.rename_database(req.clone()).await;
@@ -110,10 +104,7 @@ async fn test_catalogs_database() -> Result<()> {
     {
         let req = DropDatabaseReq {
             if_exists: false,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.clone(),
-                db_name: "db1".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "db1"),
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_err());
@@ -123,10 +114,7 @@ async fn test_catalogs_database() -> Result<()> {
     {
         let req = DropDatabaseReq {
             if_exists: false,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.clone(),
-                db_name: "db2".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "db2"),
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_ok());
