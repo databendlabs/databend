@@ -30,7 +30,6 @@ base64 = "0.21.0"
 borsh = { workspace = true, features = ["derive"] }
 bumpalo = { workspace = true }
 chrono = { workspace = true }
-memchr = { version = "2", default-features = false }
 chrono-tz = { workspace = true }
 comfy-table = "6"
 dashmap = { workspace = true }
@@ -47,6 +46,7 @@ jsonb = { workspace = true }
 lexical-core = "0.8.5"
 log = { workspace = true }
 match-template = { workspace = true }
+memchr = { version = "2", default-features = false }
 micromarshal = "0.5.0"
 num-traits = "0.2.15"
 ordered-float = { workspace = true, features = ["serde", "rand", "borsh"] }
