@@ -325,7 +325,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjecto
         Arc::new(AggregateInjector::<Method, V> {
             ctx,
             method,
-            tenant: tenant.name().to_string(),
+            tenant: tenant.tenant_name().to_string(),
             aggregator_params: params,
             _phantom: Default::default(),
         })

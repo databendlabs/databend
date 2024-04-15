@@ -76,7 +76,8 @@ impl ShareDatabase {
         match table_info_map.get(table_name) {
             None => Err(ErrorCode::UnknownTable(format!(
                 "share table `{}`.`{}` is unknown",
-                &self.db_info.name_ident.db_name, table_name
+                self.db_info.name_ident.database_name(),
+                table_name
             ))),
             Some(table_info) => Ok(Arc::new(table_info.clone())),
         }
@@ -98,7 +99,7 @@ impl ShareDatabase {
 #[async_trait::async_trait]
 impl Database for ShareDatabase {
     fn name(&self) -> &str {
-        &self.db_info.name_ident.db_name
+        self.db_info.name_ident.database_name()
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {

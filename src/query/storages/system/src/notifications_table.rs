@@ -107,13 +107,13 @@ impl AsyncSystemTable for NotificationsTable {
         let query_id = ctx.get_id();
         let user = ctx.get_current_user()?.identity().to_string();
         let req = ListNotificationRequest {
-            tenant_id: tenant.name().to_string().clone(),
+            tenant_id: tenant.tenant_name().to_string().clone(),
         };
 
         let cloud_api = CloudControlApiProvider::instance();
         let notification_client = cloud_api.get_notification_client();
         let mut cfg = build_client_config(
-            tenant.name().to_string(),
+            tenant.tenant_name().to_string(),
             user,
             query_id,
             cloud_api.get_timeout(),

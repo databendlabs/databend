@@ -25,7 +25,7 @@ pub struct HiveDatabase {
 #[async_trait::async_trait]
 impl Database for HiveDatabase {
     fn name(&self) -> &str {
-        &self.database_info.name_ident.db_name
+        self.database_info.name_ident.database_name()
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {

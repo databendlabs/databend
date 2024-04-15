@@ -342,7 +342,11 @@ impl QueryContextShared {
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
         let catalog = self
             .catalog_manager
-            .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
+            .get_catalog(
+                tenant.tenant_name(),
+                catalog,
+                self.session.session_ctx.txn_mgr(),
+            )
             .await?;
         let cache_table = catalog.get_table(&tenant, database, table).await?;
 
@@ -372,7 +376,11 @@ impl QueryContextShared {
                 let tenant = self.get_tenant();
                 let catalog = self
                     .catalog_manager
-                    .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
+                    .get_catalog(
+                        tenant.tenant_name(),
+                        catalog,
+                        self.session.session_ctx.txn_mgr(),
+                    )
                     .await?;
                 let source_table = match catalog.get_stream_source_table(stream_desc)? {
                     Some(source_table) => source_table,

@@ -212,7 +212,7 @@ impl TestFixture {
         }
 
         GlobalServices::init_with(config).await?;
-        OssLicenseManager::init(config.query.tenant_id.name().to_string())?;
+        OssLicenseManager::init(config.query.tenant_id.tenant_name().to_string())?;
 
         // Cluster register.
         {

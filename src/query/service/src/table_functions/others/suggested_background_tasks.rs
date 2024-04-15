@@ -198,7 +198,7 @@ impl SuggestedBackgroundTasksSource {
         let ctx = ctx.clone();
         info!(
             background = true,
-            tenant = ctx.get_tenant().name().to_string();
+            tenant = ctx.get_tenant().tenant_name().to_string();
             "list all lsuggestions"
         );
         Self::get_suggested_compaction_tasks(ctx).await

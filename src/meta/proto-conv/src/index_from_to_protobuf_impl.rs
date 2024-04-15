@@ -54,7 +54,7 @@ impl FromToProto for mt::IndexNameIdent {
         let p = pb::IndexNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.name().to_string(),
+            tenant: self.tenant.tenant_name().to_string(),
             index_name: self.index_name.clone(),
         };
         Ok(p)
