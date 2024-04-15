@@ -523,13 +523,3 @@ query I
 select * from t order by number;
 ----
 0
-
-
-
-
-
-
-
-
-
-
