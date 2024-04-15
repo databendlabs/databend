@@ -27,6 +27,7 @@ use crate::binder::ScalarBinder;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
+use crate::plans::walk_expr;
 use crate::plans::DeletePlan;
 use crate::plans::Filter;
 use crate::plans::Operator;
@@ -35,7 +36,7 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator::Scan;
 use crate::plans::SubqueryDesc;
 use crate::plans::SubqueryExpr;
-use crate::plans::VisitorWithParent;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ScalarExpr;
 
@@ -125,7 +126,7 @@ impl Binder {
     #[async_backtrace::framed]
     async fn process_subquery(
         &self,
-        parent: Option<&ScalarExpr>,
+        parent: &ScalarExpr,
         subquery_expr: &SubqueryExpr,
         mut table_expr: SExpr,
     ) -> Result<SubqueryDesc> {
@@ -133,10 +134,10 @@ impl Binder {
             == DataType::Nullable(Box::new(DataType::Boolean))
         {
             subquery_expr.clone().into()
-        } else if let Some(scalar) = parent {
-            if let Ok(data_type) = scalar.data_type() {
+        } else {
+            if let Ok(data_type) = parent.data_type() {
                 if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
-                    scalar.clone()
+                    parent.clone()
                 } else {
                     return Err(ErrorCode::from_string(
                         "subquery data type in delete/update statement should be boolean"
@@ -148,10 +149,6 @@ impl Binder {
                     "subquery data type in delete/update statement should be boolean".to_string(),
                 ));
             }
-        } else {
-            return Err(ErrorCode::from_string(
-                "subquery data type in delete/update statement should be boolean".to_string(),
-            ));
         };
 
         let mut outer_columns = Default::default();
@@ -216,21 +213,16 @@ impl Binder {
         subquery_desc: &mut Vec<SubqueryDesc>,
     ) -> Result<()> {
         struct FindSubqueryVisitor<'a> {
-            subqueries: Vec<(Option<&'a ScalarExpr>, &'a SubqueryExpr)>,
+            subqueries: Vec<(&'a ScalarExpr, &'a SubqueryExpr)>,
         }
 
-        impl<'a> VisitorWithParent<'a> for FindSubqueryVisitor<'a> {
-            fn visit_subquery(
-                &mut self,
-                parent: Option<&'a ScalarExpr>,
-                current: &'a ScalarExpr,
-                subquery: &'a SubqueryExpr,
-            ) -> Result<()> {
-                self.subqueries.push((parent, subquery));
-                if let Some(child_expr) = subquery.child_expr.as_ref() {
-                    self.visit_with_parent(Some(current), child_expr)?;
+        impl<'a> Visitor<'a> for FindSubqueryVisitor<'a> {
+            fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+                if let ScalarExpr::SubqueryExpr(subquery) = expr {
+                    self.subqueries.push((expr, subquery));
                 }
-                Ok(())
+
+                walk_expr(self, expr)
             }
         }
 
