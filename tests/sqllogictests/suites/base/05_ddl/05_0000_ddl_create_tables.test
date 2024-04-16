@@ -457,7 +457,7 @@ drop table if exists crt1
 
 ### Atomic CTAS ###
 
-# no (visible)table should be created if anything fails
+# CASE: no (visible)table should be created if anything fails
 statement error 1006
 create table t as select number/0 from numbers(1);
 
@@ -467,9 +467,9 @@ statement error 1025
 select * from t;
 
 
-### create or replace should work  ###
+# CASE: create or replace
 
-## normal case
+# normal case
 statement ok
 create or replace table t as select * from numbers(1);
 
@@ -489,7 +489,8 @@ select count(*) from t;
 statement ok
 drop table t;
 
-## replace exists table which created with plain create stmt
+# replace exists table which created with plain create stmt:
+# table t should be replaced, (schema also changed)
 
 statement ok
 create table t(c int);
@@ -500,7 +501,6 @@ insert into table t values(-1);
 statement ok
 create or replace table t as select * from numbers(2);
 
-# table t should be replaced, (schema also changed)
 query I
 select * from t order by number;
 ----
@@ -510,7 +510,8 @@ select * from t order by number;
 statement ok
 drop table t;
 
-## table should not be replaced if anything fails
+# create or replace failed:
+# table should not be replaced if anything fails
 
 statement ok
 create or replace table t as select * from numbers(1);
@@ -523,3 +524,33 @@ query I
 select * from t order by number;
 ----
 0
+
+statement ok
+drop table t
+
+# CASE: create if not exist
+
+# brand new table
+
+statement ok
+create table if not exists t as select * from numbers(100);
+
+query I
+select count(*) from t;
+----
+100
+
+
+# table exists
+
+statement ok
+create table if not exists t as select * from numbers(1);
+
+# table not changed
+query I
+select count(*) from t;
+----
+100
+
+statement ok
+drop table t
