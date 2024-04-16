@@ -94,7 +94,6 @@ pub struct With {
 
 impl Display for With {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WITH ")?;
         if self.recursive {
             write!(f, "RECURSIVE ")?;
         }

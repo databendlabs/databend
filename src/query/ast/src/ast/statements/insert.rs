@@ -44,7 +44,7 @@ pub struct InsertStmt {
 impl Display for InsertStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(cte) = &self.with {
-            write!(f, "{} ", cte)?;
+            write!(f, "WITH {} ", cte)?;
         }
         write!(f, "INSERT ")?;
         if let Some(hints) = &self.hints {
