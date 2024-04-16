@@ -1110,7 +1110,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     async fn resolve_window(
         &mut self,
         span: Span,
@@ -1275,7 +1274,6 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    #[async_backtrace::framed]
     async fn resolve_range_offset(&mut self, bound: &WindowFrameBound) -> Result<Option<Scalar>> {
         match bound {
             WindowFrameBound::Following(Some(box expr))
@@ -1296,7 +1294,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     async fn resolve_window_range_frame(&mut self, frame: WindowFrame) -> Result<WindowFuncFrame> {
         let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
         let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
@@ -1323,7 +1320,6 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    #[async_backtrace::framed]
     async fn resolve_window_frame(
         &mut self,
         span: Span,
@@ -1407,7 +1403,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve general window function call.
-    #[async_backtrace::framed]
+
     async fn resolve_general_window_function(
         &mut self,
         span: Span,
@@ -1471,7 +1467,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     async fn resolve_lag_lead_window_function(
         &mut self,
         func_name: &str,
@@ -1539,7 +1534,6 @@ impl<'a> TypeChecker<'a> {
         }))
     }
 
-    #[async_backtrace::framed]
     async fn resolve_nth_value_window_function(
         &mut self,
         func_name: &str,
@@ -1612,7 +1606,6 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    #[async_backtrace::framed]
     async fn resolve_ntile_window_function(
         &mut self,
         args: &[ScalarExpr],
@@ -1647,7 +1640,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve aggregation function call.
-    #[async_backtrace::framed]
+
     async fn resolve_aggregate_function(
         &mut self,
         span: Span,
@@ -1823,7 +1816,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     async fn resolve_lambda_function(
         &mut self,
         span: Span,
@@ -1993,7 +1985,6 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((lambda_func, data_type)))
     }
 
-    #[async_backtrace::framed]
     async fn resolve_search_function(
         &mut self,
         span: Span,
@@ -2163,7 +2154,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve function call.
-    #[async_backtrace::framed]
+
     pub async fn resolve_function(
         &mut self,
         span: Span,
@@ -2310,7 +2301,6 @@ impl<'a> TypeChecker<'a> {
     /// would be transformed into `FunctionCall`, except comparison
     /// expressions, conjunction(`AND`) and disjunction(`OR`).
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_binary_op(
         &mut self,
         span: Span,
@@ -2371,7 +2361,6 @@ impl<'a> TypeChecker<'a> {
 
     /// Resolve unary expressions.
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_unary_op(
         &mut self,
         span: Span,
@@ -2392,7 +2381,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_extract_expr(
         &mut self,
         span: Span,
@@ -2438,7 +2426,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_date_add(
         &mut self,
         span: Span,
@@ -2464,7 +2451,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_date_trunc(
         &mut self,
         span: Span,
@@ -2532,7 +2518,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     pub async fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
@@ -2653,7 +2638,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,
@@ -3045,7 +3029,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_trim_function(
         &mut self,
         span: Span,
@@ -3105,7 +3088,6 @@ impl<'a> TypeChecker<'a> {
     // TODO(leiysky): use an array builder function instead, since we should allow declaring
     // an array with variable as element.
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_array(
         &mut self,
         span: Span,
@@ -3121,7 +3103,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_map(
         &mut self,
         span: Span,
@@ -3145,7 +3126,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_tuple(
         &mut self,
         span: Span,
@@ -3161,7 +3141,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_like(
         &mut self,
         op: &BinaryOperator,
@@ -3202,7 +3181,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_udf(
         &mut self,
         span: Span,
@@ -3240,7 +3218,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_udf_server(
         &mut self,
         span: Span,
@@ -3305,7 +3282,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_udf_script(
         &mut self,
         span: Span,
@@ -3348,7 +3324,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_lambda_udf(
         &mut self,
         span: Span,
@@ -3398,7 +3373,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_cast_to_variant(
         &mut self,
         span: Span,
@@ -3429,7 +3403,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn rewrite_cast_to_variant(
         &mut self,
         span: Span,
@@ -3502,7 +3475,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_map_access(
         &mut self,
         expr: &Expr,
@@ -3604,7 +3576,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_tuple_map_access_pushdown(
         &mut self,
         span: Span,
