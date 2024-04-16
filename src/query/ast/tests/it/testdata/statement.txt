@@ -9026,6 +9026,7 @@ INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 Insert(
     InsertStmt {
         hints: None,
+        with: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -9107,6 +9108,7 @@ INSERT INTO t (c1, c2) VALUES (1, 2)
 Insert(
     InsertStmt {
         hints: None,
+        with: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -9170,6 +9172,7 @@ INSERT INTO t SELECT * FROM t2
 Insert(
     InsertStmt {
         hints: None,
+        with: None,
         catalog: None,
         database: None,
         table: Identifier {
