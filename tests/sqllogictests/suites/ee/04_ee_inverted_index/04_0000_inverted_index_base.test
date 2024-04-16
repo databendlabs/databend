@@ -38,12 +38,12 @@ INSERT INTO t VALUES
 (10, 'An apple a day keeps the doctor away')
 
 statement ok
-CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content) tokenizer = 'chinese'
+CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop'
 
 query TT
 SHOW CREATE TABLE t
 ----
-t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) tokenizer = 'chinese' ) ENGINE=FUSE
+t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) filters = 'english_stop,english_stemmer,chinese_stop', tokenizer = 'chinese' ) ENGINE=FUSE
 
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
@@ -168,6 +168,26 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 2.002842 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
+# index without optional filters and index rocord is basic
+statement ok
+CREATE OR REPLACE INVERTED INDEX idx1 ON t(content) tokenizer = 'chinese' index_record='basic'
+
+statement ok
+REFRESH INVERTED INDEX idx1 ON t
+
+query T
+SELECT id, score(), content FROM t WHERE match(content, 'the')
+----
+1 0.8323383 The quick brown fox jumps over the lazy dog
+3 0.9893832 The early bird catches the worm
+6 0.8788376 Beauty is in the eye of the beholder
+10 0.8788376 An apple a day keeps the doctor away
+
+query T
+SELECT id, score(), content FROM t WHERE match(content, 'fly')
+----
+
+
 # Test pruning status
 
 statement ok
@@ -190,27 +210,27 @@ INSERT INTO t_small_blocks VALUES
 (10, 'An apple a day keeps the doctor away')
 
 query IT
-SELECT id, content FROM t WHERE query('content:"early bird"')
+SELECT id, content FROM t_small_blocks WHERE query('content:"early bird"')
 ----
 3 The early bird catches the worm
 
 query T
-EXPLAIN SELECT id, content FROM t WHERE query('content:"early bird"')
+EXPLAIN SELECT id, content FROM t_small_blocks WHERE query('content:"early bird"')
 ----
 Filter
-├── output columns: [t.id (#0), t.content (#1)]
-├── filters: [t._search_matched (#2)]
-├── estimated rows: 29.00
+├── output columns: [t_small_blocks.id (#0), t_small_blocks.content (#1)]
+├── filters: [t_small_blocks._search_matched (#2)]
+├── estimated rows: 10.00
 └── TableScan
-    ├── table: default.test_index.t
+    ├── table: default.test_index.t_small_blocks
     ├── output columns: [id (#0), content (#1), _search_matched (#2)]
-    ├── read rows: 10
+    ├── read rows: 2
     ├── read size: < 1 KiB
-    ├── partitions total: 3
+    ├── partitions total: 5
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, inverted pruning: 3 to 1>]
-    ├── push downs: [filters: [t._search_matched (#2)], limit: NONE]
-    └── estimated rows: 29.00
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, inverted pruning: 5 to 1>]
+    ├── push downs: [filters: [t_small_blocks._search_matched (#2)], limit: NONE]
+    └── estimated rows: 10.00
 
 statement ok
 CREATE TABLE books(
@@ -221,7 +241,7 @@ CREATE TABLE books(
 )
 
 statement ok
-CREATE INVERTED INDEX IF NOT EXISTS idx1 ON books(title, author, description) tokenizer = 'chinese'
+CREATE INVERTED INDEX IF NOT EXISTS idx1 ON books(title, author, description) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop'
 
 statement ok
 INSERT INTO books VALUES
@@ -368,6 +388,43 @@ SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 descri
 4 22.395063 白话深度学习的数学
 10 10.238626 前端架构设计
 8 9.061771 Rust程序设计（第2版）
+
+
+# index without optional filters and index rocord is basic
+statement ok
+CREATE OR REPLACE INVERTED INDEX idx1 ON books(title, author, description) tokenizer = 'chinese' index_record='basic'
+
+statement ok
+REFRESH INVERTED INDEX idx1 ON books
+
+query IFT
+SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'python') ORDER BY score() DESC
+----
+2 8.192706 Python深度学习（第2版）
+6 6.235875 Flask Web开发：基于Python的Web应用开发实战（第2版）
+14 5.4896193 Building Recommendation Systems in Python and JAX
+11 5.2801366 OpenAI GPT For Python Developers, 2nd Edition
+13 4.2964296 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+4 1.5421177 白话深度学习的数学
+3 1.3799851 大模型应用开发极简入门
+12 1.3110648 Developing Apps with GPT-4 and ChatGPT
+7 1.2791233 Apache Pulsar实战
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:设计 AND 实现 OR 实战') ORDER BY score() DESC
+----
+9 5.027091 Vue.js设计与实现
+7 2.2837715 Apache Pulsar实战
+5 1.7452873 BERT基础教程：Transformer大模型实战
+6 1.2672173 Flask Web开发：基于Python的Web应用开发实战（第2版）
+
+# basic index record can't search phrase terms
+statement error 1105
+SELECT id, score(), title FROM books WHERE query('title:"Rust Atomics"') ORDER BY score() DESC
+
+statement error 1105
+SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 description:(学习 +神经网络)^1.1') ORDER BY score() DESC
+
 
 statement ok
 use default
