@@ -134,21 +134,18 @@ impl Binder {
             == DataType::Nullable(Box::new(DataType::Boolean))
         {
             subquery_expr.clone().into()
-        } else {
-            if let Ok(data_type) = parent.data_type() {
-                if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
-                    parent.clone()
-                } else {
-                    return Err(ErrorCode::from_string(
-                        "subquery data type in delete/update statement should be boolean"
-                            .to_string(),
-                    ));
-                }
+        } else if let Ok(data_type) = parent.data_type() {
+            if data_type == DataType::Boolean.wrap_nullable() {
+                parent.clone()
             } else {
                 return Err(ErrorCode::from_string(
                     "subquery data type in delete/update statement should be boolean".to_string(),
                 ));
             }
+        } else {
+            return Err(ErrorCode::from_string(
+                "subquery data type in delete/update statement should be boolean".to_string(),
+            ));
         };
 
         let mut outer_columns = Default::default();
