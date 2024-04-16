@@ -203,7 +203,7 @@ pub async fn do_get_sequence_next_value(
                 OutofSequenceRange::new(
                     name_key.sequence_name.clone(),
                     format!(
-                        "{}: current: {}, count: {}",
+                        "{:?}: current: {}, count: {}",
                         name_key, sequence_meta.current, count
                     ),
                 ),

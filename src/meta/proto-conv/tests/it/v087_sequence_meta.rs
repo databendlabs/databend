@@ -36,11 +36,7 @@ fn test_decode_v87_sequence_meta() -> anyhow::Result<()> {
         current: 10,
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), table_meta_v86.as_slice(), 86, want())?;
+    common::test_load_old(func_name!(), sequence_meta_v87.as_slice(), 87, want())?;
 
     Ok(())
-}
-
-fn s(ss: impl ToString) -> String {
-    ss.to_string()
 }
