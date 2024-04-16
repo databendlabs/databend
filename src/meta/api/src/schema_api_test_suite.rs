@@ -77,6 +77,7 @@ use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexIdToName;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::IndexNameIdentRaw;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
@@ -3612,10 +3613,7 @@ impl SchemaApiTestSuite {
 
         let agg_index_create_req = CreateIndexReq {
             create_option: CreateOption::CreateIfNotExists,
-            name_ident: IndexNameIdent {
-                tenant: tenant.clone(),
-                index_name: idx1_name.to_string(),
-            },
+            name_ident: IndexNameIdent::new(&tenant, idx1_name),
             meta: IndexMeta {
                 table_id,
                 index_type: IndexType::AGGREGATING,
@@ -3722,7 +3720,7 @@ impl SchemaApiTestSuite {
 
             let agg_index_meta: Result<IndexMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
-            let agg_index_name_ident: Result<IndexNameIdent, KVAppError> =
+            let agg_index_name_ident: Result<IndexNameIdentRaw, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_to_name_key).await;
 
             assert!(agg_index_meta.is_err());
@@ -5807,15 +5805,9 @@ impl SchemaApiTestSuite {
             sync_creation: false,
         };
 
-        let name_ident_1 = IndexNameIdent {
-            tenant: tenant.clone(),
-            index_name: index_name_1.to_string(),
-        };
+        let name_ident_1 = IndexNameIdent::new(&tenant, index_name_1);
 
-        let name_ident_2 = IndexNameIdent {
-            tenant: tenant.clone(),
-            index_name: index_name_2.to_string(),
-        };
+        let name_ident_2 = IndexNameIdent::new(&tenant, index_name_2);
 
         {
             info!("--- list index with no create before");
@@ -5966,10 +5958,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create or replace index");
             let replace_index_name = "replace_idx";
-            let replace_name_ident = IndexNameIdent {
-                tenant: tenant.clone(),
-                index_name: replace_index_name.to_string(),
-            };
+            let replace_name_ident = IndexNameIdent::new(&tenant, replace_index_name);
             let req = CreateIndexReq {
                 create_option: CreateOption::Create,
                 name_ident: replace_name_ident.clone(),

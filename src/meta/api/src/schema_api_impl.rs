@@ -124,6 +124,7 @@ use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexIdToName;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::IndexNameIdentRaw;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::LeastVisibleTimeKey;
 use databend_common_meta_app::schema::ListCatalogReq;
@@ -913,7 +914,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         if req.meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::CreateIndexWithDropTime(
-                CreateIndexWithDropTime::new(&tenant_index.index_name),
+                CreateIndexWithDropTime::new(tenant_index.index_name()),
             )));
         }
 
@@ -938,11 +939,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
                             IndexAlreadyExists::new(
-                                &tenant_index.index_name,
-                                format!(
-                                    "create index with tenant: {}",
-                                    tenant_index.tenant.display()
-                                ),
+                                tenant_index.index_name(),
+                                format!("create index with tenant: {}", tenant_index.tenant_name()),
                             ),
                         )));
                     }
@@ -988,7 +986,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 if_then.extend(vec![
                     txn_op_put(tenant_index, serialize_u64(index_id)?), /* (tenant, index_name) -> index_id */
                     txn_op_put(&id_key, serialize_struct(&req.meta)?),  // (index_id) -> index_meta
-                    txn_op_put(&id_to_name_key, serialize_struct(tenant_index)?), /* __fd_index_id_to_name/<index_id> -> (tenant,index_name) */
+                    txn_op_put(&id_to_name_key, serialize_struct(&IndexNameIdentRaw::from(tenant_index))?), /* __fd_index_id_to_name/<index_id> -> (tenant,index_name) */
                 ]);
 
                 let txn_req = TxnRequest {
@@ -1075,7 +1073,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         if index_id_seq == 0 {
             return Err(KVAppError::AppError(AppError::UnknownIndex(
-                UnknownIndex::new(&tenant_index.index_name, "get_index"),
+                UnknownIndex::new(tenant_index.index_name(), "get_index"),
             )));
         }
 
@@ -1091,7 +1089,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // get an index with drop time
         if index_meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::GetIndexWithDropTime(
-                GetIndexWithDropTime::new(&tenant_index.index_name),
+                GetIndexWithDropTime::new(tenant_index.index_name()),
             )));
         }
 
@@ -1149,7 +1147,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
             })?;
             let index_id = deserialize_u64(&seq.data)?;
-            id_name_list.push((index_id.0, name_ident.index_name));
+            id_name_list.push((index_id.0, name_ident.index_name().to_string()));
         }
 
         debug!(ident = prefix_key; "list_indexes");
@@ -1194,7 +1192,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
             })?;
             let index_id = deserialize_u64(&seq.data)?;
-            id_name_list.push((index_id.0, name_ident.index_name));
+            id_name_list.push((index_id.0, name_ident.index_name().to_string()));
         }
 
         debug!(ident :% =(&prefix); "list_indexes");
@@ -1233,7 +1231,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
             })?;
             let index_id = deserialize_u64(&seq.data)?;
-            id_name_list.push((index_id.0, name_ident.index_name));
+            id_name_list.push((index_id.0, name_ident.index_name().to_string()));
         }
 
         debug!(ident :% =(&prefix); "list_indexes");
@@ -4120,7 +4118,7 @@ async fn construct_drop_index_txn_operations(
             Ok((index_id, index_id_seq))
         } else {
             return Err(KVAppError::AppError(AppError::UnknownIndex(
-                UnknownIndex::new(&tenant_index.index_name, "drop_index"),
+                UnknownIndex::new(tenant_index.index_name(), "drop_index"),
             )));
         };
     }
@@ -4134,7 +4132,7 @@ async fn construct_drop_index_txn_operations(
     // drop an index with drop time
     if index_meta.dropped_on.is_some() {
         return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
-            DropIndexWithDropTime::new(&tenant_index.index_name),
+            DropIndexWithDropTime::new(tenant_index.index_name()),
         )));
     }
     // update drop on time
@@ -5243,7 +5241,7 @@ async fn gc_dropped_table_index(
             KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
         })?;
         let index_id = deserialize_u64(&seq.data)?;
-        id_name_list.push((index_id.0, name_ident.index_name));
+        id_name_list.push((index_id.0, name_ident.index_name().to_string()));
     }
 
     if id_name_list.is_empty() {
@@ -5266,13 +5264,13 @@ async fn gc_dropped_table_index(
         .collect::<Vec<_>>();
 
     // Get (tenant, index_name) list by index ids
-    let index_name_list: Result<Vec<IndexNameIdent>, MetaNetworkError> = kv_api
+    let index_name_list: Result<Vec<IndexNameIdentRaw>, MetaNetworkError> = kv_api
         .mget_kv(&id_to_name_keys)
         .await?
         .iter()
         .filter(|seq_v| seq_v.is_some())
         .map(|seq_v| {
-            let index_name_ident: IndexNameIdent =
+            let index_name_ident: IndexNameIdentRaw =
                 deserialize_struct(&seq_v.as_ref().unwrap().data)?;
             Ok(index_name_ident)
         })
@@ -5282,7 +5280,7 @@ async fn gc_dropped_table_index(
 
     debug_assert_eq!(index_ids.len(), index_name_list.len());
 
-    for (index_id, index_name_ident) in index_ids.iter().zip(index_name_list.iter()) {
+    for (index_id, index_name_ident_raw) in index_ids.iter().zip(index_name_list.iter()) {
         let id_key = IndexId {
             index_id: *index_id,
         };
@@ -5291,7 +5289,9 @@ async fn gc_dropped_table_index(
         };
         if_then.push(txn_op_del(&id_key)); // (index_id) -> index_meta
         if_then.push(txn_op_del(&id_to_name_key)); // __fd_index_id_to_name/<index_id> -> (tenant,index_name)
-        if_then.push(txn_op_del(index_name_ident)); // (tenant, index_name) -> index_id
+
+        let index_name_ident = index_name_ident_raw.clone().to_tident(());
+        if_then.push(txn_op_del(&index_name_ident)); // (tenant, index_name) -> index_id
     }
 
     Ok(())
