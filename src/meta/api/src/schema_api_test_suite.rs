@@ -106,6 +106,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
@@ -1725,7 +1726,6 @@ impl SchemaApiTestSuite {
                 ident
             }
         };
-
         info!("--- create table again with if_not_exists = true");
         {
             req.create_option = CreateOption::CreateIfNotExists;
@@ -1941,6 +1941,159 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &key_table_id_to_name).await?;
             assert_eq!(ret_table_name_ident, key_dbid_tbname);
         }
+
+        {
+            info!("--- create table as dropped, undrop table by id, etc");
+
+            // recall that there is no table named with "tbl_dropped"
+            // - create table as dropped
+            let created_on = Utc::now();
+            let tbl_name = "tbl_dropped";
+            let tbl_meta = {
+                let mut v = table_meta(created_on);
+                v.drop_on = Some(Utc::now());
+                v
+            };
+
+            let create_table_req = CreateTableReq {
+                create_option: CreateOption::Create,
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: tbl_meta,
+                as_dropped: true,
+            };
+            let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
+            let create_table_as_dropped_resp = mt.create_table(create_table_req.clone()).await?;
+
+            // - verify that table created is invisible
+            let req = GetTableReq::new(&tenant, db_name, tbl_name);
+            let got = mt.get_table(req).await;
+            use databend_common_meta_app::app_error::AppError;
+            assert!(matches!(
+                got.unwrap_err(),
+                KVAppError::AppError(AppError::UnknownTable(_))
+            ));
+
+            // - verify other states are as expected
+            let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
+            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(create_table_as_dropped_resp.table_id >= 1, "table id >= 1");
+
+            // -- verify this table is un-droppable
+
+            {
+                let undrop_table_req = UndropTableByIdReq {
+                    name_ident: create_table_req.name_ident.clone(),
+                    db_id: create_table_as_dropped_resp.db_id,
+                    table_id: create_table_as_dropped_resp.table_id,
+                    table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
+                    force_replace: true,
+                };
+
+                mt.undrop_table_by_id(undrop_table_req).await?;
+                let req = GetTableReq::new(&tenant, db_name, tbl_name);
+                // after "un-drop", table should be visible
+                let tbl = mt.get_table(req).await?;
+                // and it should be one which is specified by table id
+                assert_eq!(tbl.ident.table_id, create_table_as_dropped_resp.table_id);
+            }
+
+            {
+                // if there is already a table with same name that is visible
+                // undrop-table-by-id with force_replace set to false should fail.
+                let undrop_table_req = UndropTableByIdReq {
+                    name_ident: create_table_req.name_ident.clone(),
+                    db_id: create_table_as_dropped_resp.db_id,
+                    table_id: create_table_as_dropped_resp.table_id,
+                    table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
+                    force_replace: false,
+                };
+
+                let res = mt.undrop_table_by_id(undrop_table_req).await;
+                assert!(matches!(
+                    res.unwrap_err(),
+                    KVAppError::AppError(AppError::UndropTableAlreadyExists(_))
+                ));
+            }
+
+            // -- create if not exist (as dropped) should work as expected
+
+            {
+                // recall that there is table of same name existing
+                // case 1: table exists
+                let create_table_if_not_exist_req = {
+                    let mut req = create_table_req.clone();
+                    req.create_option = CreateOption::CreateIfNotExists;
+                    req
+                };
+
+                let create_if_not_exist_resp =
+                    mt.create_table(create_table_if_not_exist_req).await?;
+                // no new table should be created
+                assert!(!create_if_not_exist_resp.new_table);
+                // the tabled id that returned should be the same
+                assert_eq!(
+                    create_if_not_exist_resp.table_id,
+                    create_table_as_dropped_resp.table_id
+                );
+
+                // table should still visible
+                let req = GetTableReq::new(&tenant, db_name, tbl_name);
+                let _ = mt.get_table(req).await?;
+
+                // case 2: table does not exist
+                // let's use a brand-new table name "not_exist"
+                let create_table_if_not_exist_req = {
+                    let mut req = create_table_req.clone();
+                    req.name_ident.table_name = "not_exist".to_owned();
+                    req.create_option = CreateOption::CreateIfNotExists;
+                    req
+                };
+
+                let create_if_not_exist_resp =
+                    mt.create_table(create_table_if_not_exist_req).await?;
+                // new table should be created
+                assert!(create_if_not_exist_resp.new_table);
+                // table should not be visible
+                let req = GetTableReq::new(&tenant, db_name, "not_exist");
+                let got = mt.get_table(req).await;
+                assert!(matches!(
+                    got.unwrap_err(),
+                    KVAppError::AppError(AppError::UnknownTable(_))
+                ));
+            }
+
+            // -- create or replace (as dropped) should work as expected
+
+            {
+                let create_or_replace_req = {
+                    let mut req = create_table_req.clone();
+                    req.create_option = CreateOption::CreateOrReplace;
+                    req
+                };
+
+                let create_or_replace_resp = mt.create_table(create_or_replace_req).await?;
+                // since table of same name has been created, "new_table" (in the sense of table name) should be false
+                assert!(!create_or_replace_resp.new_table);
+                // but a table of different id should be created
+                assert_ne!(
+                    create_or_replace_resp.table_id,
+                    create_table_as_dropped_resp.table_id
+                );
+
+                // the replaced table should be still visible:
+                let req = GetTableReq::new(&tenant, db_name, tbl_name);
+                let tbl = mt.get_table(req).await?;
+                // the visible one should be the one before the create-or-replace-as-dropped
+                assert_eq!(create_table_as_dropped_resp.table_id, tbl.ident.table_id);
+                // but not the newly created (as dropped) one
+                assert_ne!(create_or_replace_resp.table_id, tbl.ident.table_id);
+            }
+        }
+
         Ok(())
     }
 
