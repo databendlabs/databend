@@ -627,4 +627,8 @@ impl Settings {
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {
         self.try_get_u64("statement_queued_timeout_in_seconds")
     }
+
+    pub fn get_script_max_steps(&self) -> Result<u64> {
+        self.try_get_u64("script_max_steps")
+    }
 }
