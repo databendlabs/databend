@@ -15,6 +15,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dashmap::DashMap;
 use databend_common_base::base::tokio;
@@ -774,6 +775,14 @@ impl TableContext for CtxDelegation {
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
         todo!()
     }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        todo!()
+    }
+
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -792,7 +801,7 @@ impl Catalog for FakedCatalog {
         self.cat.info()
     }
 
-    async fn get_database(&self, _tenant: &str, _db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {
         todo!()
     }
 
@@ -829,8 +838,12 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_table_names_by_ids(&self, table_id: &[MetaId]) -> Result<Vec<Option<String>>> {
-        self.cat.mget_table_names_by_ids(table_id).await
+    async fn mget_table_names_by_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
+        self.cat.mget_table_names_by_ids(tenant, table_id).await
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
@@ -838,26 +851,30 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
-        self.cat.mget_database_names_by_ids(db_ids).await
+    async fn mget_database_names_by_ids(
+        &self,
+        tenant: &Tenant,
+        db_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
+        self.cat.mget_database_names_by_ids(tenant, db_ids).await
     }
 
     async fn get_table(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }
 
-    async fn list_tables(&self, _tenant: &str, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 
     async fn list_tables_history(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
@@ -881,7 +898,7 @@ impl Catalog for FakedCatalog {
 
     async fn upsert_table_option(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -919,7 +936,7 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_copied_file_info(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {

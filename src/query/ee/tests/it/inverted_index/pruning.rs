@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::F32;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
@@ -121,7 +122,7 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog("default").await?;
     let table = catalog
         .get_table(
-            fixture.default_tenant().name(),
+            &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
@@ -381,7 +382,7 @@ async fn test_block_pruner() -> Result<()> {
 
     let table = catalog
         .get_table(
-            fixture.default_tenant().name(),
+            &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
@@ -446,7 +447,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "test".to_string(),
         }),
         ..Default::default()
@@ -456,7 +457,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "save".to_string(),
         }),
         ..Default::default()
@@ -466,7 +467,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "one".to_string(),
         }),
         ..Default::default()
@@ -476,7 +477,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "the".to_string(),
         }),
         ..Default::default()
@@ -486,7 +487,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "光阴".to_string(),
         }),
         ..Default::default()
@@ -496,7 +497,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "人生".to_string(),
         }),
         ..Default::default()
@@ -506,7 +507,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["meaning".to_string()],
+            query_fields: vec![("meaning".to_string(), None)],
             query_text: "people".to_string(),
         }),
         ..Default::default()
@@ -516,7 +517,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["meaning".to_string()],
+            query_fields: vec![("meaning".to_string(), None)],
             query_text: "bad".to_string(),
         }),
         ..Default::default()
@@ -526,7 +527,7 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["meaning".to_string()],
+            query_fields: vec![("meaning".to_string(), None)],
             query_text: "黄金".to_string(),
         }),
         ..Default::default()
@@ -536,8 +537,34 @@ async fn test_block_pruner() -> Result<()> {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["meaning".to_string()],
+            query_fields: vec![("meaning".to_string(), None)],
             query_text: "时间".to_string(),
+        }),
+        ..Default::default()
+    };
+    let e11 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_version: index_version.clone(),
+            index_schema: index_schema.clone(),
+            query_fields: vec![
+                ("idiom".to_string(), Some(F32::from(5.0))),
+                ("meaning".to_string(), Some(F32::from(1.0))),
+            ],
+            query_text: "you".to_string(),
+        }),
+        ..Default::default()
+    };
+    let e12 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_version: index_version.clone(),
+            index_schema: index_schema.clone(),
+            query_fields: vec![
+                ("idiom".to_string(), Some(F32::from(5.0))),
+                ("meaning".to_string(), Some(F32::from(1.0))),
+            ],
+            query_text: "光阴".to_string(),
         }),
         ..Default::default()
     };
@@ -552,7 +579,10 @@ async fn test_block_pruner() -> Result<()> {
         (Some(e8), 4, 4),
         (Some(e9), 1, 2),
         (Some(e10), 2, 2),
+        (Some(e11), 9, 15),
+        (Some(e12), 2, 2),
     ];
+
     for (extra, expected_blocks, expected_rows) in extras {
         let block_metas = apply_block_pruning(
             snapshot.clone(),

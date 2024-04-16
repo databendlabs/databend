@@ -30,7 +30,7 @@ pub struct ShareSpecVec {
     share_specs: BTreeMap<String, ext::ShareSpecExt>,
 }
 
-pub fn get_share_spec_location(tenant: &String) -> String {
+pub fn get_share_spec_location(tenant: &str) -> String {
     format!("{}/{}/share_specs.json", SHARE_CONFIG_PREFIX, tenant,)
 }
 
@@ -67,7 +67,7 @@ pub async fn save_share_table_info(
 
 #[async_backtrace::framed]
 pub async fn save_share_spec(
-    tenant: &String,
+    tenant: &str,
     operator: Operator,
     spec_vec: Option<Vec<ShareSpec>>,
     share_table_info: Option<Vec<ShareTableInfoMap>>,

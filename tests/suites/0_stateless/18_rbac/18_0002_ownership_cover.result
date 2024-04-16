@@ -42,7 +42,7 @@ t1
 a	drop_role
 t	drop_role
 a	account_admin
-t	drop_role
+t	account_admin
 a	drop_role1
 t	drop_role1
 OWNERSHIP a  ROLE drop_role1 GRANT OWNERSHIP ON 'default'.'a'.* TO ROLE `drop_role1`

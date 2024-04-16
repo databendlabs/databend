@@ -22,6 +22,7 @@ mod index;
 mod network_policy;
 mod notification;
 mod password_policy;
+mod procedure;
 mod role;
 mod sequence;
 mod share;

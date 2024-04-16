@@ -21,6 +21,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::CreateShareEndpointReq;
 use databend_common_meta_app::share::CreateShareReq;
 use databend_common_meta_app::share::DropShareEndpointReq;
@@ -29,7 +30,6 @@ use databend_common_meta_app::share::GetShareEndpointReq;
 use databend_common_meta_app::share::ShareEndpointIdent;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 
 // Create Share endpoint Plan
@@ -38,7 +38,7 @@ pub struct CreateShareEndpointPlan {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
 }
@@ -116,10 +116,7 @@ impl From<CreateSharePlan> for CreateShareReq {
     fn from(p: CreateSharePlan) -> Self {
         CreateShareReq {
             if_not_exists: p.if_not_exists,
-            share_name: ShareNameIdent {
-                tenant: p.tenant,
-                share_name: p.share,
-            },
+            share_name: ShareNameIdent::new(&p.tenant, &p.share),
             comment: p.comment,
             create_on: Utc::now(),
         }
@@ -137,10 +134,7 @@ impl From<DropSharePlan> for DropShareReq {
     fn from(p: DropSharePlan) -> Self {
         DropShareReq {
             if_exists: p.if_exists,
-            share_name: ShareNameIdent {
-                tenant: p.tenant,
-                share_name: p.share,
-            },
+            share_name: ShareNameIdent::new(&p.tenant, &p.share),
         }
     }
 }

@@ -18,7 +18,7 @@ Exchange
     │       ├── table: default.system.numbers
     │       ├── output columns: [number (#0)]
     │       ├── read rows: 1
-    │       ├── read bytes: 8
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── push downs: [filters: [], limit: NONE]
@@ -27,7 +27,7 @@ Exchange
         ├── table: default.system.numbers
         ├── output columns: [number (#1)]
         ├── read rows: 2
-        ├── read bytes: 16
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -63,7 +63,7 @@ Exchange
     │       │       ├── table: default.system.numbers
     │       │       ├── output columns: [number (#0)]
     │       │       ├── read rows: 1
-    │       │       ├── read bytes: 8
+    │       │       ├── read size: < 1 KiB
     │       │       ├── partitions total: 1
     │       │       ├── partitions scanned: 1
     │       │       ├── push downs: [filters: [], limit: NONE]
@@ -72,7 +72,7 @@ Exchange
     │           ├── table: default.system.numbers
     │           ├── output columns: [number (#1)]
     │           ├── read rows: 2
-    │           ├── read bytes: 16
+    │           ├── read size: < 1 KiB
     │           ├── partitions total: 1
     │           ├── partitions scanned: 1
     │           ├── push downs: [filters: [], limit: NONE]
@@ -81,7 +81,7 @@ Exchange
         ├── table: default.system.numbers
         ├── output columns: [number (#2)]
         ├── read rows: 3
-        ├── read bytes: 24
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -121,7 +121,7 @@ Exchange
     │       │           ├── table: default.system.numbers
     │       │           ├── output columns: [number (#0)]
     │       │           ├── read rows: 1
-    │       │           ├── read bytes: 8
+    │       │           ├── read size: < 1 KiB
     │       │           ├── partitions total: 1
     │       │           ├── partitions scanned: 1
     │       │           ├── push downs: [filters: [], limit: NONE]
@@ -130,7 +130,7 @@ Exchange
     │           ├── table: default.system.numbers
     │           ├── output columns: [number (#2)]
     │           ├── read rows: 2
-    │           ├── read bytes: 16
+    │           ├── read size: < 1 KiB
     │           ├── partitions total: 1
     │           ├── partitions scanned: 1
     │           ├── push downs: [filters: [], limit: NONE]
@@ -139,7 +139,7 @@ Exchange
         ├── table: default.system.numbers
         ├── output columns: [number (#3)]
         ├── read rows: 3
-        ├── read bytes: 24
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -177,7 +177,7 @@ Exchange
     │                   ├── table: default.system.numbers
     │                   ├── output columns: [number (#0)]
     │                   ├── read rows: 1
-    │                   ├── read bytes: 8
+    │                   ├── read size: < 1 KiB
     │                   ├── partitions total: 1
     │                   ├── partitions scanned: 1
     │                   ├── push downs: [filters: [], limit: NONE]
@@ -186,7 +186,7 @@ Exchange
         ├── table: default.system.numbers
         ├── output columns: [number (#3)]
         ├── read rows: 2
-        ├── read bytes: 16
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -208,7 +208,7 @@ Fragment 0:
             ├── table: default.system.numbers
             ├── output columns: [number (#0)]
             ├── read rows: 1
-            ├── read bytes: 8
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
@@ -249,7 +249,7 @@ Fragment 2:
             ├── table: default.system.numbers
             ├── output columns: [number (#3)]
             ├── read rows: 2
-            ├── read bytes: 16
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
@@ -303,7 +303,7 @@ AggregateFinal
             │   │       ├── table: default.system.numbers
             │   │       ├── output columns: [number (#0)]
             │   │       ├── read rows: 10
-            │   │       ├── read bytes: 80
+            │   │       ├── read size: < 1 KiB
             │   │       ├── partitions total: 1
             │   │       ├── partitions scanned: 1
             │   │       ├── push downs: [filters: [], limit: NONE]
@@ -312,7 +312,7 @@ AggregateFinal
             │       ├── table: default.system.numbers
             │       ├── output columns: [number (#1)]
             │       ├── read rows: 1000
-            │       ├── read bytes: 8000
+            │       ├── read size: 7.81 KiB
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
             │       ├── push downs: [filters: [], limit: NONE]
@@ -331,7 +331,7 @@ AggregateFinal
                 │       ├── table: default.system.numbers
                 │       ├── output columns: [number (#3)]
                 │       ├── read rows: 10
-                │       ├── read bytes: 80
+                │       ├── read size: < 1 KiB
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
                 │       ├── push downs: [filters: [], limit: NONE]
@@ -340,7 +340,7 @@ AggregateFinal
                     ├── table: default.system.numbers
                     ├── output columns: [number (#2)]
                     ├── read rows: 10
-                    ├── read bytes: 80
+                    ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── push downs: [filters: [], limit: NONE]
@@ -392,7 +392,7 @@ AggregateFinal
         │           │       ├── table: default.system.numbers
         │           │       ├── output columns: [number (#0)]
         │           │       ├── read rows: 10
-        │           │       ├── read bytes: 80
+        │           │       ├── read size: < 1 KiB
         │           │       ├── partitions total: 1
         │           │       ├── partitions scanned: 1
         │           │       ├── push downs: [filters: [], limit: NONE]
@@ -401,7 +401,7 @@ AggregateFinal
         │               ├── table: default.system.numbers
         │               ├── output columns: [number (#1)]
         │               ├── read rows: 1000
-        │               ├── read bytes: 8000
+        │               ├── read size: 7.81 KiB
         │               ├── partitions total: 1
         │               ├── partitions scanned: 1
         │               ├── push downs: [filters: [], limit: NONE]
@@ -432,7 +432,7 @@ AggregateFinal
                         │       ├── table: default.system.numbers
                         │       ├── output columns: [number (#3)]
                         │       ├── read rows: 10
-                        │       ├── read bytes: 80
+                        │       ├── read size: < 1 KiB
                         │       ├── partitions total: 1
                         │       ├── partitions scanned: 1
                         │       ├── push downs: [filters: [], limit: NONE]
@@ -441,7 +441,7 @@ AggregateFinal
                             ├── table: default.system.numbers
                             ├── output columns: [number (#2)]
                             ├── read rows: 10
-                            ├── read bytes: 80
+                            ├── read size: < 1 KiB
                             ├── partitions total: 1
                             ├── partitions scanned: 1
                             ├── push downs: [filters: [], limit: NONE]
@@ -488,7 +488,7 @@ AggregateFinal
             │   │       ├── table: default.system.numbers
             │   │       ├── output columns: [number (#0)]
             │   │       ├── read rows: 10
-            │   │       ├── read bytes: 80
+            │   │       ├── read size: < 1 KiB
             │   │       ├── partitions total: 1
             │   │       ├── partitions scanned: 1
             │   │       ├── push downs: [filters: [], limit: NONE]
@@ -497,7 +497,7 @@ AggregateFinal
             │       ├── table: default.system.numbers
             │       ├── output columns: [number (#1)]
             │       ├── read rows: 1000
-            │       ├── read bytes: 8000
+            │       ├── read size: 7.81 KiB
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
             │       ├── push downs: [filters: [], limit: NONE]
@@ -506,7 +506,7 @@ AggregateFinal
                 ├── table: default.system.numbers
                 ├── output columns: [number (#2)]
                 ├── read rows: 10
-                ├── read bytes: 80
+                ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── push downs: [filters: [], limit: NONE]
@@ -537,7 +537,7 @@ Exchange
     │       ├── table: default.system.numbers
     │       ├── output columns: [number (#2)]
     │       ├── read rows: 10
-    │       ├── read bytes: 80
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── push downs: [filters: [], limit: NONE]
@@ -556,7 +556,7 @@ Exchange
         │       ├── table: default.system.numbers
         │       ├── output columns: [number (#0)]
         │       ├── read rows: 10
-        │       ├── read bytes: 80
+        │       ├── read size: < 1 KiB
         │       ├── partitions total: 1
         │       ├── partitions scanned: 1
         │       ├── push downs: [filters: [], limit: NONE]
@@ -565,7 +565,7 @@ Exchange
             ├── table: default.system.numbers
             ├── output columns: [number (#1)]
             ├── read rows: 1000
-            ├── read bytes: 8000
+            ├── read size: 7.81 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
@@ -594,7 +594,7 @@ Exchange
     │       ├── table: default.system.numbers
     │       ├── output columns: [number (#1)]
     │       ├── read rows: 20
-    │       ├── read bytes: 160
+    │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── push downs: [filters: [], limit: NONE]
@@ -606,7 +606,7 @@ Exchange
             ├── table: default.system.numbers
             ├── output columns: [number (#0)]
             ├── read rows: 10
-            ├── read bytes: 80
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]

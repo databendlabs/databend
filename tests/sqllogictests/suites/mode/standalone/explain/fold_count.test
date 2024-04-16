@@ -45,7 +45,7 @@ AggregateFinal
             ├── table: default.default.t
             ├── output columns: [number (#0)]
             ├── read rows: 1000
-            ├── read bytes: 1436
+            ├── read size: 1.40 KiB
             ├── partitions total: 2
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
@@ -68,7 +68,7 @@ AggregateFinal
         ├── table: default.default.t
         ├── output columns: [number (#0)]
         ├── read rows: 1001
-        ├── read bytes: 1470
+        ├── read size: 1.44 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]

@@ -79,6 +79,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -131,7 +132,7 @@ impl Catalog for SessionCatalog {
     /// Database.
 
     // Get the database by name.
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         self.inner.get_database(tenant, db_name).await
     }
 
@@ -258,9 +259,10 @@ impl Catalog for SessionCatalog {
     // Mget the dbs name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
+        tenant: &Tenant,
         table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
-        self.inner.mget_table_names_by_ids(table_ids).await
+        self.inner.mget_table_names_by_ids(tenant, table_ids).await
     }
 
     // Mget the db name by meta id.
@@ -271,15 +273,16 @@ impl Catalog for SessionCatalog {
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
         &self,
+        tenant: &Tenant,
         db_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
-        self.inner.mget_database_names_by_ids(db_ids).await
+        self.inner.mget_database_names_by_ids(tenant, db_ids).await
     }
 
     // Get one table by db and table name.
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -307,12 +310,12 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         self.inner.list_tables(tenant, db_name).await
     }
     async fn list_tables_history(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         self.inner.list_tables_history(tenant, db_name).await
@@ -341,13 +344,17 @@ impl Catalog for SessionCatalog {
         self.inner.undrop_table(req).await
     }
 
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        self.inner.undrop_table_by_id(req).await
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         self.inner.rename_table(req).await
     }
 
     async fn upsert_table_option(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -393,7 +400,7 @@ impl Catalog for SessionCatalog {
 
     async fn get_table_copied_file_info(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {

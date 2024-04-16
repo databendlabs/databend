@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dashmap::DashMap;
 use databend_common_base::base::tokio;
@@ -159,7 +160,7 @@ impl Catalog for FakedCatalog {
         self.cat.info()
     }
 
-    async fn get_database(&self, _tenant: &str, _db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {
         todo!()
     }
 
@@ -195,34 +196,42 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_name_by_id(table_id).await
     }
 
-    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
-        self.cat.mget_table_names_by_ids(table_ids).await
+    async fn mget_table_names_by_ids(
+        &self,
+        tenant: &Tenant,
+        table_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
+        self.cat.mget_table_names_by_ids(tenant, table_ids).await
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.cat.get_db_name_by_id(db_id).await
     }
 
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
-        self.cat.mget_database_names_by_ids(db_ids).await
+    async fn mget_database_names_by_ids(
+        &self,
+        tenant: &Tenant,
+        db_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
+        self.cat.mget_database_names_by_ids(tenant, db_ids).await
     }
 
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         self.cat.get_table(tenant, db_name, table_name).await
     }
 
-    async fn list_tables(&self, _tenant: &str, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 
     async fn list_tables_history(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
@@ -246,7 +255,7 @@ impl Catalog for FakedCatalog {
 
     async fn upsert_table_option(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -284,7 +293,7 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_copied_file_info(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -697,7 +706,7 @@ impl TableContext for CtxDelegation {
         let tenant = self.ctx.get_tenant();
         let db = database.to_string();
         let tbl = table.to_string();
-        let table_meta_key = (tenant.name().to_string(), db, tbl);
+        let table_meta_key = (tenant.tenant_name().to_string(), db, tbl);
         let already_in_cache = { self.cache.lock().contains_key(&table_meta_key) };
         if already_in_cache {
             self.table_from_cache
@@ -713,7 +722,7 @@ impl TableContext for CtxDelegation {
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let tbl = self
                 .cat
-                .get_table(self.ctx.get_tenant().name(), database, table)
+                .get_table(&self.ctx.get_tenant(), database, table)
                 .await?;
             let tbl2 = tbl.clone();
             let mut guard = self.cache.lock();
@@ -851,6 +860,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        todo!()
+    }
+
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
         todo!()
     }
 }

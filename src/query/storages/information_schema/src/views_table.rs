@@ -27,7 +27,7 @@ pub struct ViewsTable {}
 impl ViewsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let query = "SELECT
-            database AS table_catalog,
+            catalog AS table_catalog,
             database AS table_schema,
             name AS table_name,
             NULL AS view_definition,
@@ -37,8 +37,7 @@ impl ViewsTable {
             0 AS is_trigger_updatable,
             0 AS is_trigger_deletable,
             0 AS is_trigger_insertable_into
-        FROM system.tables
-        WHERE engine LIKE '%View';";
+        FROM system.views";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());

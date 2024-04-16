@@ -52,7 +52,7 @@ impl Interpreter for CreateShareInterpreter {
         let resp = meta_api.create_share(self.plan.clone().into()).await?;
 
         save_share_spec(
-            &self.ctx.get_tenant().name().to_string(),
+            self.ctx.get_tenant().tenant_name(),
             self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
             None,

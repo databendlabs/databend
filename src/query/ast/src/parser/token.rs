@@ -486,6 +486,8 @@ pub enum TokenKind {
     DECADE,
     #[token("DECIMAL", ignore(ascii_case))]
     DECIMAL,
+    #[token("DECLARE", ignore(ascii_case))]
+    DECLARE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]
@@ -674,6 +676,8 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("IMMEDIATE", ignore(ascii_case))]
+    IMMEDIATE,
     #[token("IS", ignore(ascii_case))]
     IS,
     #[token("ISODOW", ignore(ascii_case))]
@@ -1514,7 +1518,7 @@ impl TokenKind {
             // | TokenKind::DEFERRABLE
             | TokenKind::DESC
             | TokenKind::DISTINCT
-            // | TokenKind::DO
+            | TokenKind::DO
             | TokenKind::ELSE
             | TokenKind::END
             | TokenKind::FALSE
@@ -1540,7 +1544,6 @@ impl TokenKind {
             | TokenKind::NULL
             // | TokenKind::ONLY
             | TokenKind::OR
-            // | TokenKind::OUTER
             // | TokenKind::PLACING
             // | TokenKind::PRIMARY
             // | TokenKind::REFERENCES
@@ -1553,7 +1556,6 @@ impl TokenKind {
             | TokenKind::SOME
             | TokenKind::SEMI
             // | TokenKind::SYMMETRIC
-            // | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
@@ -1573,7 +1575,7 @@ impl TokenKind {
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FROM
-            // | TokenKind::GRANT
+            | TokenKind::GRANT
             | TokenKind::GROUP
             | TokenKind::HAVING
             | TokenKind::INTERSECT

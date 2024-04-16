@@ -43,7 +43,7 @@ impl From<CreateSequenceReq> for SequenceMeta {
     fn from(p: CreateSequenceReq) -> Self {
         SequenceMeta {
             comment: p.comment.clone(),
-            create_on: p.create_on.clone(),
+            create_on: p.create_on,
             update_on: p.create_on,
             start: 1,
             step: 1,
@@ -146,7 +146,7 @@ mod kvapi_key_impl {
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant.name())
+                .push_str(&self.tenant.tenant)
                 .push_str(&self.sequence_name)
                 .done()
         }

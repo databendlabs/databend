@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 
 use crate::storages::StorageFactory;
@@ -23,5 +24,11 @@ use crate::storages::StorageFactory;
 pub struct DatabaseContext {
     pub meta: MetaStore,
     pub storage_factory: Arc<StorageFactory>,
-    pub tenant: String,
+    pub tenant: Tenant,
+}
+
+impl DatabaseContext {
+    pub fn tenant(&self) -> &Tenant {
+        &self.tenant
+    }
 }

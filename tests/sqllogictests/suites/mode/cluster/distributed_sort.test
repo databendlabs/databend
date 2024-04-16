@@ -24,7 +24,7 @@ Sort
             ├── table: default.default.t_distributed_sort
             ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -58,7 +58,7 @@ Limit
                 ├── table: default.default.t_distributed_sort
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [], limit: 2]
@@ -94,7 +94,7 @@ RowFetch
                     ├── table: default.default.t_distributed_sort
                     ├── output columns: [a (#0), _row_id (#7)]
                     ├── read rows: 0
-                    ├── read bytes: 0
+                    ├── read size: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [], limit: 2]
@@ -116,7 +116,7 @@ Limit
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 1000
-        ├── read bytes: 8000
+        ├── read size: 7.81 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -142,7 +142,7 @@ Limit
             ├── table: default.system.numbers
             ├── output columns: [number (#0)]
             ├── read rows: 110
-            ├── read bytes: 880
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: 110]
@@ -168,7 +168,7 @@ Limit
             ├── table: default.system.numbers
             ├── output columns: [number (#0)]
             ├── read rows: 110
-            ├── read bytes: 880
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: 110]

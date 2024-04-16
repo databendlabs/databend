@@ -18,7 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
-use databend_common_meta_app::principal::UdfName;
+use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
@@ -61,14 +61,14 @@ impl UdfMgr {
 
         let seq = MatchSeq::from(*create_option);
 
-        let key = UdfName::new(&self.tenant, &info.name);
+        let key = UdfIdent::new(&self.tenant, &info.name);
         let req = UpsertPB::insert(key, info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if let CreateOption::Create = create_option {
             if res.prev.is_some() {
                 let err = UdfError::Exists {
-                    tenant: self.tenant.name().to_string(),
+                    tenant: self.tenant.tenant_name().to_string(),
                     name: info.name.to_string(),
                     reason: "".to_string(),
                 };
@@ -91,7 +91,7 @@ impl UdfMgr {
             return Ok(Err(e));
         }
 
-        let key = UdfName::new(&self.tenant, &info.name);
+        let key = UdfIdent::new(&self.tenant, &info.name);
         let req = UpsertPB::update(key, info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
@@ -99,7 +99,7 @@ impl UdfMgr {
             Ok(res.result.unwrap().seq)
         } else {
             Err(UdfError::NotFound {
-                tenant: self.tenant.name().to_string(),
+                tenant: self.tenant.tenant_name().to_string(),
                 name: info.name.to_string(),
                 context: "while update udf".to_string(),
             })
@@ -114,7 +114,7 @@ impl UdfMgr {
         &self,
         udf_name: &str,
     ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
-        let key = UdfName::new(&self.tenant, udf_name);
+        let key = UdfIdent::new(&self.tenant, udf_name);
         let res = self.kv_api.get_pb(&key).await?;
         Ok(res)
     }
@@ -123,7 +123,7 @@ impl UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
-        let key = DirName::new(UdfName::new(&self.tenant, ""));
+        let key = DirName::new(UdfIdent::new(&self.tenant, ""));
         let strm = self.kv_api.list_pb_values(&key).await?;
 
         match strm.try_collect().await {
@@ -135,7 +135,7 @@ impl UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn list_udf_fallback(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
-        let key = UdfName::new(&self.tenant, "");
+        let key = UdfIdent::new(&self.tenant, "");
         let values = self.kv_api.prefix_list_kv(&key.to_string_key()).await?;
 
         let mut udfs = Vec::with_capacity(values.len());
@@ -165,7 +165,7 @@ impl UdfMgr {
         udf_name: &str,
         seq: MatchSeq,
     ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
-        let key = UdfName::new(&self.tenant, udf_name);
+        let key = UdfIdent::new(&self.tenant, udf_name);
         let req = UpsertPB::delete(key).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
@@ -179,7 +179,7 @@ impl UdfMgr {
     fn ensure_non_builtin(&self, name: &str) -> Result<(), UdfError> {
         if is_builtin_function(name) {
             return Err(UdfError::Exists {
-                tenant: self.tenant.name().to_string(),
+                tenant: self.tenant.tenant_name().to_string(),
                 name: name.to_string(),
                 reason: " It is a builtin function".to_string(),
             });

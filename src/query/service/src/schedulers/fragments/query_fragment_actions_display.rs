@@ -17,9 +17,9 @@ use std::fmt::Formatter;
 
 use databend_common_sql::MetadataRef;
 
-use crate::api::DataExchange;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
+use crate::servers::flight::v1::exchange::DataExchange;
 
 impl QueryFragmentsActions {
     pub fn display_indent<'a>(&'a self, metadata: &'a MetadataRef) -> impl Display + '_ {

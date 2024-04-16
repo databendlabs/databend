@@ -204,7 +204,9 @@ impl PageManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn detach(&self) {
+    pub async fn detach(&mut self) {
         self.block_receiver.close();
+        self.last_page = None;
+        self.row_buffer.clear()
     }
 }

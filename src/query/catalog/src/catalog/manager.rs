@@ -36,7 +36,7 @@ use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_types::anyerror::func_name;
 use databend_storages_common_txn::TxnManagerRef;
 
 use super::Catalog;
@@ -176,10 +176,7 @@ impl CatalogManager {
             return Ok(ctl.clone());
         }
 
-        let non_empty = NonEmptyString::new(tenant)
-            .map_err(|_e| ErrorCode::TenantIsEmpty("tenant is empty when get_catalog"))?;
-
-        let tenant = Tenant::new_nonempty(non_empty);
+        let tenant = Tenant::new_or_err(tenant, func_name!())?;
         let ident = CatalogNameIdent::new(tenant, catalog_name);
 
         // Get catalog from metasrv.

@@ -13,10 +13,25 @@
 // limitations under the License.
 
 use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
 pub type ShareEndpointIdent = TIdent<Resource>;
 
+pub type ShareEndpointIdentRaw = TIdentRaw<Resource>;
+
 pub use kvapi_impl::Resource;
+
+impl ShareEndpointIdent {
+    pub fn share_endpoint_name(&self) -> &str {
+        self.name()
+    }
+}
+
+impl ShareEndpointIdentRaw {
+    pub fn share_endpoint_name(&self) -> &str {
+        self.name()
+    }
+}
 
 mod kvapi_impl {
 

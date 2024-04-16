@@ -277,7 +277,7 @@ impl Catalog for HiveCatalog {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db = self
             .client
             .get_database(FastStr::new(db_name))
@@ -367,7 +367,11 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
+    async fn mget_table_names_by_ids(
+        &self,
+        _tenant: &Tenant,
+        _table_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
         ))
@@ -379,7 +383,11 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
+    async fn mget_database_names_by_ids(
+        &self,
+        _tenant: &Tenant,
+        _db_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get dbs name by ids in HIVE catalog",
         ))
@@ -390,7 +398,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn get_table(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -428,7 +436,7 @@ impl Catalog for HiveCatalog {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn list_tables(&self, _tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_names = self
             .client
             .get_all_tables(FastStr::new(db_name))
@@ -448,7 +456,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
@@ -486,7 +494,7 @@ impl Catalog for HiveCatalog {
 
     // Check a db.table is exists or not.
     #[async_backtrace::framed]
-    async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
+    async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
         // TODO refine this
         match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
@@ -503,7 +511,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -536,7 +544,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {

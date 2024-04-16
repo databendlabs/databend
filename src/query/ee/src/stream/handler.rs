@@ -58,7 +58,7 @@ impl StreamHandler for RealStreamHandler {
         let catalog = ctx.get_catalog(&plan.catalog).await?;
 
         let mut table = catalog
-            .get_table(tenant.name(), &plan.table_database, &plan.table_name)
+            .get_table(&tenant, &plan.table_database, &plan.table_name)
             .await?;
         let table_info = table.get_table_info();
         if table_info.options().contains_key("TRANSIENT") {
@@ -89,7 +89,7 @@ impl StreamHandler for RealStreamHandler {
             };
 
             catalog
-                .upsert_table_option(tenant.name(), &plan.table_database, req)
+                .upsert_table_option(&tenant, &plan.table_database, req)
                 .await?;
             // refreash table.
             table = table.refresh(ctx.as_ref()).await?;
@@ -128,6 +128,7 @@ impl StreamHandler for RealStreamHandler {
                 schema,
                 ..Default::default()
             },
+            as_dropped: false,
         };
 
         catalog.create_table(req).await
@@ -145,7 +146,7 @@ impl StreamHandler for RealStreamHandler {
         let catalog = ctx.get_catalog(&plan.catalog).await?;
         let tenant = ctx.get_tenant();
         let tbl = catalog
-            .get_table(tenant.name(), &db_name, &stream_name)
+            .get_table(&tenant, &db_name, &stream_name)
             .await
             .ok();
 
@@ -162,7 +163,7 @@ impl StreamHandler for RealStreamHandler {
                 )));
             }
 
-            let db = catalog.get_database(tenant.name(), &db_name).await?;
+            let db = catalog.get_database(&tenant, &db_name).await?;
 
             catalog
                 .drop_table_by_id(DropTableByIdReq {

@@ -33,11 +33,13 @@ use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
 use super::CreateOption;
-use crate::schema::database::DatabaseNameIdent;
+use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
@@ -76,14 +78,14 @@ pub struct TableNameIdent {
 
 impl TableNameIdent {
     pub fn new(
-        tenant: Tenant,
-        db_name: impl Into<String>,
-        table_name: impl Into<String>,
+        tenant: impl ToTenant,
+        db_name: impl ToString,
+        table_name: impl ToString,
     ) -> TableNameIdent {
         TableNameIdent {
-            tenant,
-            db_name: db_name.into(),
-            table_name: table_name.into(),
+            tenant: tenant.to_tenant(),
+            db_name: db_name.to_string(),
+            table_name: table_name.to_string(),
         }
     }
 
@@ -96,10 +98,7 @@ impl TableNameIdent {
     }
 
     pub fn db_name_ident(&self) -> DatabaseNameIdent {
-        DatabaseNameIdent {
-            tenant: self.tenant.clone(),
-            db_name: self.db_name.clone(),
-        }
+        DatabaseNameIdent::new(&self.tenant, &self.db_name)
     }
 }
 
@@ -108,7 +107,7 @@ impl Display for TableNameIdent {
         write!(
             f,
             "'{}'.'{}'.'{}'",
-            self.tenant.name(),
+            self.tenant.tenant_name(),
             self.db_name,
             self.table_name
         )
@@ -161,25 +160,7 @@ impl Display for TableIdListKey {
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(database_type::ShareNameIdent),
-}
-
-mod database_type {
-    /// Same as  [`crate::share::ShareNameIdent`] but with serde support for being used as a value.
-    /// while [`crate::share::ShareNameIdent`] can only be used as key.
-    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-    pub struct ShareNameIdent {
-        pub tenant: String,
-        pub share_name: String,
-    }
-    impl From<crate::share::ShareNameIdent> for ShareNameIdent {
-        fn from(value: crate::share::ShareNameIdent) -> Self {
-            Self {
-                tenant: value.tenant.name().to_string(),
-                share_name: value.share_name,
-            }
-        }
-    }
+    ShareDB(ShareNameIdentRaw),
 }
 
 impl Display for DatabaseType {
@@ -192,7 +173,8 @@ impl Display for DatabaseType {
                 write!(
                     f,
                     "share database: {}-{}",
-                    share_ident.tenant, share_ident.share_name
+                    share_ident.tenant_name(),
+                    share_ident.name()
                 )
             }
         }
@@ -494,6 +476,14 @@ pub struct CreateTableReq {
     pub create_option: CreateOption,
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
+
+    /// Set it to true if a dropped table needs to be created,
+    ///
+    /// since [CreateOption] is used by various scenarios, we use
+    /// this dedicated flag to mark this behavior.
+    ///
+    /// currently used in atomic CTAS.
+    pub as_dropped: bool,
 }
 
 impl CreateTableReq {
@@ -514,7 +504,7 @@ impl Display for CreateTableReq {
             CreateOption::Create => write!(
                 f,
                 "create_table:{}/{}-{}={}",
-                self.tenant().name(),
+                self.tenant().tenant_name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -522,7 +512,7 @@ impl Display for CreateTableReq {
             CreateOption::CreateIfNotExists => write!(
                 f,
                 "create_table_if_not_exists:{}/{}-{}={}",
-                self.tenant().name(),
+                self.tenant().tenant_name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -530,7 +520,7 @@ impl Display for CreateTableReq {
             CreateOption::CreateOrReplace => write!(
                 f,
                 "create_or_replace_table:{}/{}-{}={}",
-                self.tenant().name(),
+                self.tenant().tenant_name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -542,6 +532,8 @@ impl Display for CreateTableReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableReply {
     pub table_id: u64,
+    pub table_id_seq: Option<u64>,
+    pub db_id: u64,
     pub new_table: bool,
     pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
 }
@@ -590,6 +582,16 @@ pub struct UndropTableReq {
     pub name_ident: TableNameIdent,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UndropTableByIdReq {
+    pub name_ident: TableNameIdent,
+    pub db_id: MetaId,
+    pub table_id: MetaId,
+    pub table_id_seq: u64,
+    // Indicates whether to forcefully replace an existing table with the same name, if it exists.
+    pub force_replace: bool,
+}
+
 impl UndropTableReq {
     pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant
@@ -607,7 +609,7 @@ impl Display for UndropTableReq {
         write!(
             f,
             "undrop_table:{}/{}-{}",
-            self.tenant().name(),
+            self.tenant().tenant_name(),
             self.db_name(),
             self.table_name()
         )
@@ -642,7 +644,7 @@ impl Display for RenameTableReq {
         write!(
             f,
             "rename_table:{}/{}-{}=>{}-{}",
-            self.tenant().name(),
+            self.tenant().tenant_name(),
             self.db_name(),
             self.table_name(),
             self.new_db_name,
@@ -831,11 +833,7 @@ impl From<(&str, &str, &str)> for GetTableReq {
 }
 
 impl GetTableReq {
-    pub fn new(
-        tenant: &Tenant,
-        db_name: impl Into<String>,
-        table_name: impl Into<String>,
-    ) -> GetTableReq {
+    pub fn new(tenant: &Tenant, db_name: impl ToString, table_name: impl ToString) -> GetTableReq {
         GetTableReq {
             inner: TableNameIdent::new(tenant.clone(), db_name, table_name),
         }
@@ -856,12 +854,9 @@ impl Deref for ListTableReq {
 }
 
 impl ListTableReq {
-    pub fn new(tenant: &Tenant, db_name: impl Into<String>) -> ListTableReq {
+    pub fn new(tenant: &Tenant, db_name: impl ToString) -> ListTableReq {
         ListTableReq {
-            inner: DatabaseNameIdent {
-                tenant: tenant.clone(),
-                db_name: db_name.into(),
-            },
+            inner: DatabaseNameIdent::new(tenant, db_name),
         }
     }
 }

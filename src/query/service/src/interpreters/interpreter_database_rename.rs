@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_sql::plans::RenameDatabasePlan;
 
@@ -53,10 +53,7 @@ impl Interpreter for RenameDatabaseInterpreter {
             catalog
                 .rename_database(RenameDatabaseReq {
                     if_exists: entity.if_exists,
-                    name_ident: DatabaseNameIdent {
-                        tenant,
-                        db_name: entity.database.clone(),
-                    },
+                    name_ident: DatabaseNameIdent::new(tenant, &entity.database),
                     new_db_name: entity.new_database.clone(),
                 })
                 .await?;

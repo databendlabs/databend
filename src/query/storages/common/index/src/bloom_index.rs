@@ -600,15 +600,22 @@ fn visit_map_column(
     return_type: &DataType,
     visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
 ) -> Result<Option<Expr<String>>> {
-    if let Expr::ColumnRef { id, data_type, .. } = &args[0] {
-        if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
-            let val_type = match inner_ty {
-                DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                _ => unreachable!(),
-            };
-            debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
-            return visitor(span, id, scalar, &val_type, return_type);
+    match &args[0] {
+        Expr::ColumnRef { id, data_type, .. }
+        | Expr::Cast {
+            expr: box Expr::ColumnRef { id, data_type, .. },
+            ..
+        } => {
+            if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
+                let val_type = match inner_ty {
+                    DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                    _ => unreachable!(),
+                };
+                debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
+                return visitor(span, id, scalar, &val_type, return_type);
+            }
         }
+        _ => {}
     }
     Ok(None)
 }

@@ -22,6 +22,7 @@ use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::With;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -647,6 +648,7 @@ impl<'a> Binder {
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
+            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?
         };
         Ok(plan)
     }
@@ -864,5 +866,32 @@ impl<'a> Binder {
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())
+    }
+
+    pub(crate) fn add_cte(&mut self, with: &With, bind_context: &mut BindContext) -> Result<()> {
+        for (idx, cte) in with.ctes.iter().enumerate() {
+            let table_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
+            if bind_context.cte_map_ref.contains_key(&table_name) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "duplicate cte {table_name}"
+                )));
+            }
+            let cte_info = CteInfo {
+                columns_alias: cte
+                    .alias
+                    .columns
+                    .iter()
+                    .map(|c| normalize_identifier(c, &self.name_resolution_ctx).name)
+                    .collect(),
+                query: *cte.query.clone(),
+                materialized: cte.materialized,
+                cte_idx: idx,
+                used_count: 0,
+                columns: vec![],
+            };
+            self.ctes_map.insert(table_name.clone(), cte_info.clone());
+            bind_context.cte_map_ref.insert(table_name, cte_info);
+        }
+        Ok(())
     }
 }

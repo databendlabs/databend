@@ -100,6 +100,7 @@ build_exceptions! {
     TooManyUserConnections(1041),
     AbortedSession(1042),
     AbortedQuery(1043),
+    ClosedQuery(1044),
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),
@@ -150,10 +151,11 @@ build_exceptions! {
     UnknownCatalogType(1120),
     UnmatchMaskPolicyReturnType(1121),
     Timeout(1122),
+    Outdated(1123),
     // sequence
-    UnknownSequence(1123),
     OutofSequenceRange(1124),
     WrongSequenceCount(1125),
+    UnknownSequence(1126),
 
     // Data Related Errors
 

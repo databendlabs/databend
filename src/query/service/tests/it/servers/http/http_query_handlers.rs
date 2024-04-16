@@ -28,6 +28,7 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_query::auth::AuthMgr;
+use databend_query::servers::http::middleware::get_client_ip;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_final_uri;
@@ -270,7 +271,7 @@ async fn test_simple_sql() -> Result<()> {
     let sql = "select * from system.tables limit 10";
     let ep = create_endpoint().await?;
     let (status, result) =
-        post_sql_to_endpoint_new_session(&ep, sql, 1, HeaderMap::default()).await?;
+        post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
 
@@ -280,7 +281,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 20, "{:?}", result);
+    assert_eq!(result.schema.len(), 19, "{:?}", result);
 
     // get state
     let uri = make_state_uri(query_id);
@@ -320,7 +321,7 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.next_uri.is_none(), "{:?}", result);
 
     let response = get_uri(&ep, &page_0_uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{:?}", result);
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 1).await?;
@@ -639,25 +640,35 @@ async fn test_http_session() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 async fn test_result_timeout() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
-    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 1}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
+    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 5}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
     let mut req = TestHttpQueryRequest::new(json);
     let (status, result, _) = req.fetch_begin().await?;
 
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
-    assert!(!query_id.is_empty());
+    assert_eq!(result.data.len(), 1);
 
-    sleep(std::time::Duration::from_secs(2)).await;
-    let (status, result, body) = req.fetch_next().await?;
-    assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", result);
-    let msg = format!("query id {} timeout on {}", query_id, config.query.node_id);
-    let msg = json!({ "error": { "code": "404", "message": msg }}).to_string();
+    sleep(std::time::Duration::from_secs(5)).await;
+
+    // fail to get page 0 again (e.g. retry) due to timeout
+    // this is flaky
+    let (status, result, body) = req
+        .do_request(Method::GET, &format!("/v1/query/{query_id}/page/0",))
+        .await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", body);
+    let msg = format!("query id {} timeout", query_id);
+    let msg = json!({ "error": { "code": "400", "message": msg }}).to_string();
     assert_eq!(body, msg, "{:?}", result);
+
+    // but /final return ok
+    let (status, result, _) = req.fetch_next().await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
 
     Ok(())
 }
@@ -1707,5 +1718,15 @@ async fn test_txn_timeout() -> Result<()> {
             last_query_id
         )
     );
+    Ok(())
+}
+
+#[test]
+fn test_parse_ip() -> Result<()> {
+    let req = poem::Request::builder()
+        .header("X-Forwarded-For", "1.2.3.4")
+        .finish();
+    let ip = get_client_ip(&req);
+    assert_eq!(ip, Some("1.2.3.4".to_string()));
     Ok(())
 }

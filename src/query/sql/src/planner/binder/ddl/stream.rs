@@ -94,11 +94,13 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
+
         let (catalog, database, stream_name) =
             self.normalize_object_identifier_triple(catalog, database, stream);
+
         let plan = DropStreamPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant,
             catalog,
             database,
             stream_name,

@@ -38,11 +38,11 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 
-use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentAction;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
+use crate::servers::flight::v1::exchange::DataExchange;
 use crate::sessions::QueryContext;
 use crate::sql::executor::physical_plans::UpdateSource;
 use crate::sql::executor::PhysicalPlan;

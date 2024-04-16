@@ -27,6 +27,14 @@ pub trait TenantResource {
     /// The key prefix to store in meta-service.
     const PREFIX: &'static str;
 
+    /// The type name of the alias struct.
+    ///
+    /// For example, for the follow type alias, `Resource::TYPE` is `Foo`:
+    /// ```rust,ignore
+    /// type Foo = TIdent<Resource>;
+    /// ```
+    const TYPE: &'static str = "";
+
     /// The type of the value for the key [`TIdent<R: TenantResource>`](TIdent).
     type ValueType: kvapi::Value;
 }

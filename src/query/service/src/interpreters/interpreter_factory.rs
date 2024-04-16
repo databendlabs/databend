@@ -204,6 +204,9 @@ impl InterpreterFactory {
                 ctx,
                 *set_options.clone(),
             )?)),
+            Plan::ModifyTableComment(new_comment) => Ok(Arc::new(
+                ModifyTableCommentInterpreter::try_create(ctx, *new_comment.clone())?,
+            )),
             Plan::RenameTableColumn(rename_table_column) => Ok(Arc::new(
                 RenameTableColumnInterpreter::try_create(ctx, *rename_table_column.clone())?,
             )),
@@ -577,6 +580,10 @@ impl InterpreterFactory {
             Plan::InsertMultiTable(p) => {
                 Ok(InsertMultiTableInterpreter::try_create(ctx, *p.clone())?)
             }
+            Plan::ExecuteImmediate(p) => Ok(Arc::new(ExecuteImmediateInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
             Plan::CreateSequence(p) => Ok(Arc::new(CreateSequenceInterpreter::try_create(
                 ctx,
                 *p.clone(),

@@ -29,7 +29,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(t2.a (#2) > 'a')], limit: NONE]
@@ -38,7 +38,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
@@ -76,7 +76,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(t2.a (#2) > '2022-01-01')], limit: NONE]
@@ -85,7 +85,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
@@ -122,7 +122,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(t2.a (#2) > 1.10)], limit: NONE]
@@ -131,7 +131,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
@@ -168,7 +168,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
@@ -177,7 +177,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]

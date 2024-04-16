@@ -33,6 +33,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_metrics::session::dec_session_running_acquired_queries;
+use databend_common_metrics::session::inc_session_running_acquired_queries;
 use databend_common_metrics::session::incr_session_queue_abort_count;
 use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
@@ -139,6 +141,7 @@ impl<Data: QueueData> QueueManager<Data> {
 
             return match future.await {
                 Ok(v) => {
+                    inc_session_running_acquired_queries();
                     record_session_queue_acquire_duration_ms(
                         start_time.elapsed().unwrap_or_default(),
                     );
@@ -198,6 +201,14 @@ impl<Data: QueueData> QueueManager<Data> {
 pub struct AcquireQueueGuard {
     #[allow(dead_code)]
     permit: Option<OwnedSemaphorePermit>,
+}
+
+impl Drop for AcquireQueueGuard {
+    fn drop(&mut self) {
+        if self.permit.is_some() {
+            dec_session_running_acquired_queries();
+        }
+    }
 }
 
 impl AcquireQueueGuard {
@@ -333,9 +344,11 @@ impl QueryEntry {
             match plan {
                 Plan::Query { metadata, .. } => {
                     let metadata = metadata.read();
-                    if let Some(table) = metadata.tables().iter().next() {
+                    for table in metadata.tables() {
                         let db = table.database();
-                        return db == "system" || db == "information_schema";
+                        if db != "system" && db != "information_schema" {
+                            return false;
+                        }
                     }
                     true
                 }
@@ -417,6 +430,7 @@ impl QueueData for QueryEntry {
     fn exit_wait_pending(&self, wait_time: Duration) {
         self.ctx
             .set_status_info(format!("resource scheduled(elapsed: {:?})", wait_time).as_str());
+        self.ctx.set_query_queued_duration(wait_time)
     }
 }
 
