@@ -341,6 +341,11 @@ pub fn txn_op_put(key: &impl kvapi::Key, value: Vec<u8>) -> TxnOp {
     TxnOp::put(key.to_string_key(), value)
 }
 
+/// Build a txn operation that gets value by key.
+pub fn txn_op_get(key: &impl kvapi::Key) -> TxnOp {
+    TxnOp::get(key.to_string_key())
+}
+
 // TODO: replace it with common_meta_types::with::With
 pub fn txn_op_put_with_expire(key: &impl kvapi::Key, value: Vec<u8>, expire_at: u64) -> TxnOp {
     TxnOp::put_with_expire(key.to_string_key(), value, Some(expire_at))

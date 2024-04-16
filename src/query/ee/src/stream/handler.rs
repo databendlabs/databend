@@ -128,6 +128,7 @@ impl StreamHandler for RealStreamHandler {
                 schema,
                 ..Default::default()
             },
+            as_dropped: false,
         };
 
         catalog.create_table(req).await

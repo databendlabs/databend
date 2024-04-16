@@ -109,6 +109,7 @@ pub use table::TableNameIdent;
 pub use table::TableStatistics;
 pub use table::TruncateTableReply;
 pub use table::TruncateTableReq;
+pub use table::UndropTableByIdReq;
 pub use table::UndropTableReply;
 pub use table::UndropTableReq;
 pub use table::UpdateMultiTableMetaReq;

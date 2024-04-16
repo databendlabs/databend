@@ -799,6 +799,7 @@ impl ShareApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -819,6 +820,7 @@ impl ShareApiTestSuite {
                     table_name: tbl2_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -835,6 +837,7 @@ impl ShareApiTestSuite {
                     table_name: tbl2_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -1215,6 +1218,7 @@ impl ShareApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -1352,6 +1356,7 @@ impl ShareApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -1594,6 +1599,7 @@ impl ShareApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;

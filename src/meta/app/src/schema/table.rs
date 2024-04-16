@@ -476,6 +476,14 @@ pub struct CreateTableReq {
     pub create_option: CreateOption,
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
+
+    /// Set it to true if a dropped table needs to be created,
+    ///
+    /// since [CreateOption] is used by various scenarios, we use
+    /// this dedicated flag to mark this behavior.
+    ///
+    /// currently used in atomic CTAS.
+    pub as_dropped: bool,
 }
 
 impl CreateTableReq {
@@ -524,6 +532,8 @@ impl Display for CreateTableReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableReply {
     pub table_id: u64,
+    pub table_id_seq: Option<u64>,
+    pub db_id: u64,
     pub new_table: bool,
     pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
 }
@@ -570,6 +580,16 @@ pub struct DropTableReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReq {
     pub name_ident: TableNameIdent,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UndropTableByIdReq {
+    pub name_ident: TableNameIdent,
+    pub db_id: MetaId,
+    pub table_id: MetaId,
+    pub table_id_seq: u64,
+    // Indicates whether to forcefully replace an existing table with the same name, if it exists.
+    pub force_replace: bool,
 }
 
 impl UndropTableReq {
