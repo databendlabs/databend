@@ -263,7 +263,7 @@ pub struct CreateShareEndpointReq {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
     pub create_on: DateTime<Utc>,
@@ -330,7 +330,7 @@ impl ShareEndpointMeta {
     pub fn new(req: &CreateShareEndpointReq) -> Self {
         Self {
             url: req.url.clone(),
-            tenant: req.tenant.clone(),
+            tenant: req.tenant.tenant_name().to_string(),
             args: req.args.clone(),
             comment: req.comment.clone(),
             create_on: req.create_on,
