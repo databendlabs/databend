@@ -40,6 +40,7 @@ SELECT * FROM left_table SEMI JOIN right_table ON left_table.a = right_table.a W
 ----
 Binder Error
 
+
 # left results are not deduplicated
 statement ok
 INSERT INTO left_table VALUES (42, 1, 5), (42, 1, 5), (42, 1, 5), (42, 1, 5);

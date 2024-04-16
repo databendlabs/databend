@@ -40,6 +40,7 @@ SELECT * FROM left_table ANTI JOIN right_table ON left_table.a = right_table.a W
 ----
 Binder Error
 
+
 statement ok
 INSERT INTO left_table VALUES (43, 1, 5), (43, 1, 5), (43, 1, 5), (43, 1, 5);
 
