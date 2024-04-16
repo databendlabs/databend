@@ -17,7 +17,6 @@ select * from @data/csv (files=>('select.csv'), file_format=>'csv')
 
 query error 1065.*select \* from file only support Parquet format
 select *, $1 from @data/csv (files=>('select.csv'), file_format=>'csv')
-----
 
 
 statement ok
