@@ -51,7 +51,6 @@ select $1 from v order by $1
 # ndjson only supports $1
 query error column position 2 doesn't exist
 select $2 from @data/ndjson/ (files=>('json_sample.ndjson'), file_format=>'ndjson')
-----
 
 statement ok
 truncate table ontime
