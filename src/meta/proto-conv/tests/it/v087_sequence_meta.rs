@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
+use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression as ce;
 use databend_common_meta_app::schema as mt;
-use maplit::btreemap;
-use maplit::btreeset;
 use minitrace::func_name;
 
 use crate::common;
