@@ -2000,7 +2000,6 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((lambda_func, data_type)))
     }
 
-    #[async_backtrace::framed]
     async fn resolve_score_search_function(
         &mut self,
         span: Span,
