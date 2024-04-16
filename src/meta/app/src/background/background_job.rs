@@ -359,6 +359,9 @@ impl Display for ListBackgroundJobsReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use crate::background::background_job::BackgroundJobId;
     use crate::background::BackgroundJobInfo;
@@ -372,18 +375,12 @@ mod kvapi_key_impl {
             None
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.id)
-                .done()
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let id = p.next_u64()?;
-            p.done()?;
-
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
+            let id = parser.next_u64()?;
             Ok(BackgroundJobId { id })
         }
     }

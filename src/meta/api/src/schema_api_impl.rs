@@ -1137,10 +1137,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // Get index id list by `prefix_list` "<prefix>/<tenant>"
-        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-            .push_str(req.tenant.tenant_name())
-            .push_str("")
-            .done();
+        let ident = IndexNameIdent::new(&req.tenant, "dummy");
+        let prefix_key = ident.tenant_prefix();
 
         let id_list = self.prefix_list_kv(&prefix_key).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
@@ -1475,9 +1473,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         // Get virtual columns list by `prefix_list` "<prefix>/<tenant>"
-        let prefix_key = kvapi::KeyBuilder::new_prefixed(VirtualColumnNameIdent::PREFIX)
-            .push_str(req.tenant.tenant_name())
-            .done();
+        let ident = VirtualColumnNameIdent::new(&req.tenant, 0u64);
+        let prefix_key = ident.tenant_prefix();
 
         let list = self.prefix_list_kv(&prefix_key).await?;
         let mut virtual_column_list = Vec::with_capacity(list.len());
@@ -1779,9 +1776,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError> {
         debug!("SchemaApi: {}", func_name!());
 
-        let reply = self
-            .prefix_list_kv(&[TableId::PREFIX, ""].join("/"))
-            .await?;
+        let prefix = TableId::root_prefix();
+        let reply = self.prefix_list_kv(&prefix).await?;
 
         let mut res = vec![];
 
@@ -5158,10 +5154,8 @@ async fn gc_dropped_table_index(
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
     // Get index id list by `prefix_list` "<prefix>/<tenant>/"
-    let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-        .push_str(tenant.tenant_name())
-        .push_raw("")
-        .done();
+    let ident = IndexNameIdent::new(tenant, "dummy");
+    let prefix_key = ident.tenant_prefix();
 
     let id_list = kv_api.prefix_list_kv(&prefix_key).await?;
     let mut id_name_list = Vec::with_capacity(id_list.len());
