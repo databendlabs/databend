@@ -3598,9 +3598,8 @@ impl<'a> TypeChecker<'a> {
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
             let column_entry = self.metadata.read().column(column.index).clone();
             if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
-                let new_scalar = self
-                    .rewrite_cast_to_variant(span, scalar, &data_type, is_try)
-                    .await;
+                let new_scalar =
+                    Self::rewrite_cast_to_variant(span, scalar, &data_type, is_try).await;
                 let return_type = if is_try || source_type.is_nullable() {
                     DataType::Nullable(Box::new(DataType::Variant))
                 } else {
@@ -3614,7 +3613,6 @@ impl<'a> TypeChecker<'a> {
 
     #[async_recursion::async_recursion]
     async fn rewrite_cast_to_variant(
-        &mut self,
         span: Span,
         scalar: &ScalarExpr,
         data_type: &TableDataType,
@@ -3645,8 +3643,7 @@ impl<'a> TypeChecker<'a> {
 
                     let value =
                         if matches!(field_type.remove_nullable(), TableDataType::Tuple { .. }) {
-                            self.rewrite_cast_to_variant(span, &value, field_type, is_try)
-                                .await
+                            Self::rewrite_cast_to_variant(span, &value, field_type, is_try).await
                         } else {
                             value
                         };
