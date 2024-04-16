@@ -2048,7 +2048,6 @@ impl<'a> TypeChecker<'a> {
     /// gives preferential weight to fields being searched in.
     /// For example: title^5, content^1.2
     /// The scond argument is the query text without query syntax.
-    #[async_backtrace::framed]
     async fn resolve_match_search_function(
         &mut self,
         span: Span,
@@ -2187,7 +2186,6 @@ impl<'a> TypeChecker<'a> {
     /// 3. must and negative operator terms, like `title:+fox -cat`
     /// 4. phrase terms, like `title:"quick brown fox"`
     /// 5. multiple field with boost terms, like `title:fox^5 content:dog^2`
-    #[async_backtrace::framed]
     async fn resolve_query_search_function(
         &mut self,
         span: Span,
@@ -2262,7 +2260,6 @@ impl<'a> TypeChecker<'a> {
             .await
     }
 
-    #[async_backtrace::framed]
     async fn resolve_search_function(
         &mut self,
         span: Span,
