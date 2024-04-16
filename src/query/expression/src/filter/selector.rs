@@ -349,6 +349,7 @@ impl<'a> Selector<'a> {
         debug_assert!(
             matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
         );
+        // It's safe to unwrap because the expr is a column ref.
         let column = value.into_column().unwrap();
         self.select_like(
             column,

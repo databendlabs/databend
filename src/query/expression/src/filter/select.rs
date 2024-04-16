@@ -322,9 +322,11 @@ impl<'a> Selector<'a> {
             column = nullable_column.column;
             validity = Some(nullable_column.validity);
         }
+        // It's safe to unwrap because the column's data type is `DataType::String`.
         let column = column.into_string().unwrap();
 
-        let dummy_function = |_: &[u8], _: &[u8]| -> bool { true };
+        // To unite the function signature, we define a dummy function for `LikePattern::SimplePattern`.
+        let dummy_function = |_: &[u8], _: &[u8]| -> bool { false };
         let cmp = match like_pattern {
             LikePattern::OrdinalStr => LikePattern::ordinal_str,
             LikePattern::StartOfPercent => LikePattern::start_of_percent,
@@ -336,7 +338,6 @@ impl<'a> Selector<'a> {
 
         let has_false = false_selection.1;
         let is_simple_pattern = matches!(like_pattern, LikePattern::SimplePattern(_));
-
         match (has_false, is_simple_pattern) {
             (true, true) => self.select_column_like::<_, true, true>(
                 cmp,
