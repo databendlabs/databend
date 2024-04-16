@@ -211,6 +211,8 @@ impl ShareApiTestSuite {
         let endpoint2 = "endpoint2";
 
         let tenant1 = Tenant::new_literal(tenant_name1);
+        let tenant2 = Tenant::new_literal(tenant_name2);
+        let tenant3 = Tenant::new_literal(tenant_name3);
 
         info!("--- create share endpoints");
         let create_on = Utc::now();
@@ -219,7 +221,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 endpoint: ShareEndpointIdent::new(&tenant1, endpoint1),
                 url: "http://127.0.0.1:22222".to_string(),
-                tenant: tenant_name2.to_string(),
+                tenant: tenant2.clone(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -233,7 +235,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 endpoint: ShareEndpointIdent::new(&tenant1, endpoint1),
                 url: "http://127.0.0.1:21111".to_string(),
-                tenant: tenant_name2.to_string(),
+                tenant: tenant2.clone(),
                 comment: None,
                 args: BTreeMap::new(),
                 create_on,
@@ -252,7 +254,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 endpoint: ShareEndpointIdent::new(&tenant1, endpoint2),
                 url: "http://127.0.0.1:21111".to_string(),
-                tenant: tenant_name3.to_string(),
+                tenant: tenant3.clone(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -383,7 +385,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 endpoint: endpoint.clone(),
                 url: url.clone(),
-                tenant: tenant_name2.to_string(),
+                tenant: tenant2.clone(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -419,7 +421,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::CreateOrReplace,
                 endpoint: endpoint.clone(),
                 url: url.clone(),
-                tenant: tenant_name2.to_string(),
+                tenant: tenant2.clone(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),

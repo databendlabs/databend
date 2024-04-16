@@ -43,7 +43,7 @@ impl DropNotificationInterpreter {
     fn build_request(&self) -> DropNotificationRequest {
         let plan = self.plan.clone();
         DropNotificationRequest {
-            tenant_id: plan.tenant,
+            tenant_id: plan.tenant.tenant_name().to_string(),
             name: plan.name,
             if_exists: plan.if_exists,
         }

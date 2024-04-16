@@ -15,21 +15,21 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type RoleIdent = TIdent<Resource>;
+pub type UdfIdent = TIdent<Resource>;
 
 /// Share name as value.
-pub type RoleIdentRaw = TIdentRaw<Resource>;
+pub type UdfIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
 
 impl TIdent<Resource> {
-    pub fn role_name(&self) -> &str {
+    pub fn udf_name(&self) -> &str {
         self.name()
     }
 }
 
 impl TIdentRaw<Resource> {
-    pub fn role_name(&self) -> &str {
+    pub fn udf_name(&self) -> &str {
         self.name()
     }
 }
@@ -38,17 +38,17 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::RoleInfo;
+    use crate::principal::UserDefinedFunction;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_roles";
-        const TYPE: &'static str = "RoleIdent";
-        type ValueType = RoleInfo;
+        const PREFIX: &'static str = "__fd_udfs";
+        const TYPE: &'static str = "UdfIdent";
+        type ValueType = UserDefinedFunction;
     }
 
-    impl kvapi::Value for RoleInfo {
+    impl kvapi::Value for UserDefinedFunction {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }
@@ -62,17 +62,17 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::RoleIdent;
+    use super::UdfIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_ident() {
         let tenant = Tenant::new_literal("test");
-        let ident = RoleIdent::new(tenant, "test1");
+        let ident = UdfIdent::new(tenant, "test1");
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_roles/test/test1");
+        assert_eq!(key, "__fd_udfs/test/test1");
 
-        assert_eq!(ident, RoleIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, UdfIdent::from_str_key(&key).unwrap());
     }
 }
