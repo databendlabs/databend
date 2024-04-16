@@ -76,7 +76,7 @@ impl InvertedIndexPruner {
         let inverted_index_reader = InvertedIndexReader::try_create(
             self.dal.clone(),
             &self.inverted_index_info.index_schema,
-            &self.inverted_index_info.query_columns,
+            &self.inverted_index_info.query_fields,
             &index_loc,
         )
         .await?;
