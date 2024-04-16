@@ -76,6 +76,7 @@ impl Binder {
         stmt: &InsertStmt,
     ) -> Result<Plan> {
         let InsertStmt {
+            with,
             catalog,
             database,
             table,
@@ -84,6 +85,9 @@ impl Binder {
             overwrite,
             ..
         } = stmt;
+        if let Some(with) = &with {
+            self.add_cte(with, bind_context)?;
+        }
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
         let table = self
