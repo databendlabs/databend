@@ -15,21 +15,22 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type RoleIdent = TIdent<Resource>;
+/// Index name as meta-service key
+pub type IndexNameIdent = TIdent<Resource>;
 
-/// Share name as value.
-pub type RoleIdentRaw = TIdentRaw<Resource>;
+/// Index name as value.
+pub type IndexNameIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
 
 impl TIdent<Resource> {
-    pub fn role_name(&self) -> &str {
+    pub fn index_name(&self) -> &str {
         self.name()
     }
 }
 
 impl TIdentRaw<Resource> {
-    pub fn role_name(&self) -> &str {
+    pub fn index_name(&self) -> &str {
         self.name()
     }
 }
@@ -37,20 +38,22 @@ impl TIdentRaw<Resource> {
 mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::principal::RoleInfo;
+    use crate::schema::IndexId;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_roles";
-        const TYPE: &'static str = "RoleIdent";
-        type ValueType = RoleInfo;
+        const PREFIX: &'static str = "__fd_index";
+        const TYPE: &'static str = "IndexNameIdent";
+        type ValueType = IndexId;
     }
 
-    impl kvapi::Value for RoleInfo {
+    impl kvapi::Value for IndexId {
+        /// IndexId is id of the two level `name->id,id->value` mapping
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
+            [self.to_string_key()]
         }
     }
 
@@ -62,17 +65,17 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::RoleIdent;
+    use super::IndexNameIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_ident() {
         let tenant = Tenant::new_literal("test");
-        let ident = RoleIdent::new(tenant, "test1");
+        let ident = IndexNameIdent::new(tenant, "test1");
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_roles/test/test1");
+        assert_eq!(key, "__fd_index/test/test1");
 
-        assert_eq!(ident, RoleIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, IndexNameIdent::from_str_key(&key).unwrap());
     }
 }
