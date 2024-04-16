@@ -135,7 +135,7 @@ impl Interpreter for AddTableColumnInterpreter {
 
             if let Some(share_table_info) = res.share_table_info {
                 save_share_table_info(
-                    self.ctx.get_tenant().name(),
+                    self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_data_operator()?.operator(),
                     share_table_info,
                 )

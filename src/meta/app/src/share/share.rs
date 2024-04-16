@@ -54,7 +54,7 @@ impl ShareConsumer {
 
 impl Display for ShareConsumer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant.name(), self.share_id)
+        write!(f, "'{}'/'{}'", self.tenant.tenant_name(), self.share_id)
     }
 }
 
@@ -242,7 +242,7 @@ pub struct GetShareGrantTenantsReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetObjectGrantPrivilegesReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub object: ShareGrantObjectName,
 }
 
@@ -263,7 +263,7 @@ pub struct CreateShareEndpointReq {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
     pub create_on: DateTime<Utc>,
@@ -330,7 +330,7 @@ impl ShareEndpointMeta {
     pub fn new(req: &CreateShareEndpointReq) -> Self {
         Self {
             url: req.url.clone(),
-            tenant: req.tenant.clone(),
+            tenant: req.tenant.tenant_name().to_string(),
             args: req.args.clone(),
             comment: req.comment.clone(),
             create_on: req.create_on,
@@ -857,12 +857,12 @@ mod kvapi_key_impl {
         fn to_string_key(&self) -> String {
             if self.share_id != 0 {
                 kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(self.tenant.name())
+                    .push_str(self.tenant.tenant_name())
                     .push_u64(self.share_id)
                     .done()
             } else {
                 kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(self.tenant.name())
+                    .push_str(self.tenant.tenant_name())
                     .done()
             }
         }

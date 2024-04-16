@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::tenant::Tenant;
@@ -35,10 +35,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             create_option: p.create_option,
-            name_ident: DatabaseNameIdent {
-                tenant: p.tenant.clone(),
-                db_name: p.database,
-            },
+            name_ident: DatabaseNameIdent::new(&p.tenant, &p.database),
             meta: p.meta,
         }
     }
@@ -48,10 +45,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: &CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             create_option: p.create_option,
-            name_ident: DatabaseNameIdent {
-                tenant: p.tenant.clone(),
-                db_name: p.database.clone(),
-            },
+            name_ident: DatabaseNameIdent::new(&p.tenant, &p.database),
             meta: p.meta.clone(),
         }
     }
@@ -70,10 +64,7 @@ impl From<DropDatabasePlan> for DropDatabaseReq {
     fn from(p: DropDatabasePlan) -> Self {
         DropDatabaseReq {
             if_exists: p.if_exists,
-            name_ident: DatabaseNameIdent {
-                tenant: p.tenant,
-                db_name: p.database,
-            },
+            name_ident: DatabaseNameIdent::new(&p.tenant, &p.database),
         }
     }
 }
@@ -82,10 +73,7 @@ impl From<&DropDatabasePlan> for DropDatabaseReq {
     fn from(p: &DropDatabasePlan) -> Self {
         DropDatabaseReq {
             if_exists: p.if_exists,
-            name_ident: DatabaseNameIdent {
-                tenant: p.tenant.clone(),
-                db_name: p.database.clone(),
-            },
+            name_ident: DatabaseNameIdent::new(&p.tenant, &p.database),
         }
     }
 }
@@ -116,10 +104,7 @@ pub struct UndropDatabasePlan {
 impl From<UndropDatabasePlan> for UndropDatabaseReq {
     fn from(p: UndropDatabasePlan) -> Self {
         UndropDatabaseReq {
-            name_ident: DatabaseNameIdent {
-                tenant: p.tenant,
-                db_name: p.database,
-            },
+            name_ident: DatabaseNameIdent::new(&p.tenant, &p.database),
         }
     }
 }

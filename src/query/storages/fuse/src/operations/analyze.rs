@@ -112,7 +112,7 @@ impl SinkAnalyzeState {
         // always use the latest table
         let tenant = self.ctx.get_tenant();
         let catalog = CatalogManager::instance()
-            .get_catalog(tenant.name(), &self.catalog, self.ctx.txn_mgr())
+            .get_catalog(tenant.tenant_name(), &self.catalog, self.ctx.txn_mgr())
             .await?;
         let table = catalog
             .get_table(&tenant, &self.database, &self.table)

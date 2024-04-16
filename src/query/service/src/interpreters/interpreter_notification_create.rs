@@ -46,7 +46,7 @@ impl CreateNotificationInterpreter {
         let tp = get_notification_type(plan.notification_type.to_string().as_str())
             .expect("invalid notification type");
         CreateNotificationRequest {
-            tenant_id: plan.tenant,
+            tenant_id: plan.tenant.tenant_name().to_string(),
             name: plan.name,
             if_not_exists: plan.if_not_exists,
             notification_type: tp as i32,

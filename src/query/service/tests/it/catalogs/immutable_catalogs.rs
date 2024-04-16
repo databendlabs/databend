@@ -14,9 +14,9 @@
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::tenant::Tenant;
@@ -48,10 +48,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     // create database should failed
     let create_db_req = CreateDatabaseReq {
         create_option: CreateOption::Create,
-        name_ident: DatabaseNameIdent {
-            tenant: tenant.clone(),
-            db_name: "system".to_string(),
-        },
+        name_ident: DatabaseNameIdent::new(&tenant, "system"),
         meta: Default::default(),
     };
     let create_db_req = catalog.create_database(create_db_req).await;
@@ -59,10 +56,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 
     let drop_db_req = DropDatabaseReq {
         if_exists: false,
-        name_ident: DatabaseNameIdent {
-            tenant: tenant.clone(),
-            db_name: "system".to_string(),
-        },
+        name_ident: DatabaseNameIdent::new(&tenant, "system"),
     };
     let drop_db_req = catalog.drop_database(drop_db_req).await;
     assert!(drop_db_req.is_err());
@@ -70,10 +64,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     // rename database should failed
     let rename_db_req = RenameDatabaseReq {
         if_exists: false,
-        name_ident: DatabaseNameIdent {
-            tenant: tenant.clone(),
-            db_name: "system".to_string(),
-        },
+        name_ident: DatabaseNameIdent::new(&tenant, "system"),
 
         new_db_name: "test".to_string(),
     };
@@ -83,10 +74,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     // rename database should failed
     let rename_db_req = RenameDatabaseReq {
         if_exists: false,
-        name_ident: DatabaseNameIdent {
-            tenant: tenant.clone(),
-            db_name: "test".to_string(),
-        },
+        name_ident: DatabaseNameIdent::new(&tenant, "test"),
 
         new_db_name: "system".to_string(),
     };
