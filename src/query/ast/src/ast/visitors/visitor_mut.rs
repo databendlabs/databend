@@ -838,4 +838,7 @@ pub trait VisitorMut: Sized {
     fn visit_drop_connection(&mut self, _stmt: &mut DropConnectionStmt) {}
     fn visit_describe_connection(&mut self, _stmt: &mut DescribeConnectionStmt) {}
     fn visit_show_connections(&mut self, _stmt: &mut ShowConnectionsStmt) {}
+
+    fn visit_create_sequence(&mut self, _stmt: &mut CreateSequenceStmt) {}
+    fn visit_drop_sequence(&mut self, _stmt: &mut DropSequenceStmt) {}
 }

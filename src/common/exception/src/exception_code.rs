@@ -150,6 +150,10 @@ build_exceptions! {
     UnknownCatalogType(1120),
     UnmatchMaskPolicyReturnType(1121),
     Timeout(1122),
+    // sequence
+    UnknownSequence(1123),
+    OutofSequenceRange(1124),
+    WrongSequenceCount(1125),
 
     // Data Related Errors
 
@@ -358,6 +362,9 @@ build_exceptions! {
     // Script error codes.
     ScriptSemanticError(3001),
     ScriptExecutionError(3002),
+
+    // sequence
+    SequenceAlreadyExists(3101),
 }
 
 // Storage errors [3001, 4000].

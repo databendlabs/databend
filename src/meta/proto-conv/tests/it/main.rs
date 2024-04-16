@@ -89,3 +89,4 @@ mod v083_ndjson_format_params;
 mod v084_background_task_creator;
 mod v085_table_index;
 mod v086_table_index;
+mod v087_sequence_meta;

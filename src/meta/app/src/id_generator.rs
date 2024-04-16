@@ -28,6 +28,7 @@ pub(crate) const ID_GEN_SHARE_ENDPOINT: &str = "share_endpoint_id";
 
 pub(crate) const ID_GEN_DATA_MASK: &str = "data_mask";
 pub(crate) const ID_GEN_BACKGROUND_JOB: &str = "background_job";
+pub(crate) const ID_GEN_SEQUENCE: &str = "sequence";
 
 /// Key for resource id generator
 ///
@@ -95,6 +96,12 @@ impl IdGenerator {
     pub fn catalog_id() -> Self {
         Self {
             resource: ID_GEN_CATALOG.to_string(),
+        }
+    }
+
+    pub fn sequence_id() -> Self {
+        Self {
+            resource: ID_GEN_SEQUENCE.to_string(),
         }
     }
 }

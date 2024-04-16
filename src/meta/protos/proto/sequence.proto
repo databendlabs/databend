@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod role;
-mod sequence;
-mod share;
-mod stage;
-mod stream;
-mod table;
-mod task;
-mod view;
-mod virtual_column;
+syntax = "proto3";
+
+package databend_proto;
+
+message SequenceMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string create_on = 1;
+  string update_on = 2;
+  optional string comment = 3;
+  uint64 start = 4;
+  int64 step = 5;
+  uint64 current = 6;
+}

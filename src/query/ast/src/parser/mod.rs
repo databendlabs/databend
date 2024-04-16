@@ -18,6 +18,7 @@ pub mod expr;
 pub mod query;
 pub mod quote;
 pub mod script;
+mod sequence;
 mod share;
 mod stage;
 pub mod statement;

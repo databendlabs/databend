@@ -24,6 +24,8 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::CreateSequencePlan;
+use super::DropSequencePlan;
 use super::SetSecondaryRolesPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
@@ -348,6 +350,10 @@ pub enum Plan {
     AlterNotification(Box<AlterNotificationPlan>),
     DropNotification(Box<DropNotificationPlan>),
     DescNotification(Box<DescNotificationPlan>),
+
+    // sequence
+    CreateSequence(Box<CreateSequencePlan>),
+    DropSequence(Box<DropSequencePlan>),
 }
 
 #[derive(Clone, Debug)]

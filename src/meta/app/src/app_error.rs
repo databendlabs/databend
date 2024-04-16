@@ -937,6 +937,66 @@ impl VirtualColumnNotFound {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("SequenceAlreadyExists: `{name}` while `{context}`")]
+pub struct SequenceAlreadyExists {
+    name: String,
+    context: String,
+}
+
+impl SequenceAlreadyExists {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownSequence: `{name}` while `{context}`")]
+pub struct UnknownSequence {
+    name: String,
+    context: String,
+}
+
+impl UnknownSequence {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("OutofSequenceRange: `{name}` while `{context}`")]
+pub struct OutofSequenceRange {
+    name: String,
+    context: String,
+}
+
+impl OutofSequenceRange {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("WrongSequenceCount: `{name}`")]
+pub struct WrongSequenceCount {
+    name: String,
+}
+
+impl WrongSequenceCount {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1110,6 +1170,17 @@ pub enum AppError {
 
     #[error(transparent)]
     MultiStatementTxnCommitFailed(#[from] MultiStmtTxnCommitFailed),
+
+    // sequence
+    #[error(transparent)]
+    SequenceAlreadyExists(#[from] SequenceAlreadyExists),
+
+    #[error(transparent)]
+    UnknownSequence(#[from] UnknownSequence),
+    #[error(transparent)]
+    OutofSequenceRange(#[from] OutofSequenceRange),
+    #[error(transparent)]
+    WrongSequenceCount(#[from] WrongSequenceCount),
 }
 
 impl AppErrorMessage for TenantIsEmpty {
@@ -1462,6 +1533,30 @@ impl AppErrorMessage for VirtualColumnAlreadyExists {
     }
 }
 
+impl AppErrorMessage for SequenceAlreadyExists {
+    fn message(&self) -> String {
+        format!("Sequence '{}' already exists", self.name)
+    }
+}
+
+impl AppErrorMessage for UnknownSequence {
+    fn message(&self) -> String {
+        format!("Sequence '{}' does not exists", self.name)
+    }
+}
+
+impl AppErrorMessage for OutofSequenceRange {
+    fn message(&self) -> String {
+        format!("Sequence '{}' out of range", self.name)
+    }
+}
+
+impl AppErrorMessage for WrongSequenceCount {
+    fn message(&self) -> String {
+        format!("Require zero Sequence count for '{}'", self.name)
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1563,6 +1658,10 @@ impl From<AppError> for ErrorCode {
             AppError::MultiStatementTxnCommitFailed(err) => {
                 ErrorCode::UnresolvableConflict(err.message())
             }
+            AppError::SequenceAlreadyExists(err) => ErrorCode::SequenceAlreadyExists(err.message()),
+            AppError::UnknownSequence(err) => ErrorCode::UnknownSequence(err.message()),
+            AppError::OutofSequenceRange(err) => ErrorCode::OutofSequenceRange(err.message()),
+            AppError::WrongSequenceCount(err) => ErrorCode::WrongSequenceCount(err.message()),
         }
     }
 }
