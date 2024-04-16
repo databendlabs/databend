@@ -21,6 +21,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ErrorInfo;
@@ -148,20 +149,19 @@ impl Node {
         })
     }
 
-    pub fn record_error(&self, error: Option<ErrorCode>) {
-        if let Some(error) = error {
-            if self.tracking_payload.node_error.is_some() {
-                let mut guard = self
-                    .tracking_payload
-                    .node_error
-                    .as_ref()
-                    .unwrap()
-                    .error
-                    .lock();
-                // Only record the first error
-                if (*guard).is_none() {
-                    *guard = Some(error);
-                }
+    pub fn record_error(&self, error: NodeErrorType) {
+        if self.tracking_payload.node_error.is_some() {
+            let mut guard = self
+                .tracking_payload
+                .node_error
+                .as_ref()
+                .unwrap()
+                .error
+                .lock();
+
+            // Only record the first error
+            if (*guard).is_none() {
+                *guard = Some(error);
             }
         }
     }
@@ -826,7 +826,7 @@ impl RunningGraph {
         finished_error.clone()
     }
 
-    pub fn record_node_error(&self, node_index: NodeIndex, error: Option<ErrorCode>) {
+    pub fn record_node_error(&self, node_index: NodeIndex, error: NodeErrorType) {
         self.0.graph[node_index].record_error(error);
     }
 

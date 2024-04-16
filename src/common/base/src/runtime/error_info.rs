@@ -17,6 +17,26 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use parking_lot::Mutex;
 
+#[derive(Clone)]
+pub enum NodeErrorType {
+    ScheduleEventError(ErrorCode),
+    SyncProcessError(ErrorCode),
+    AsyncProcessError(ErrorCode),
+    LocalError(ErrorCode),
+}
+
+impl NodeErrorType {
+    pub fn get_error_code(&self) -> ErrorCode {
+        match self {
+            NodeErrorType::ScheduleEventError(error) => error,
+            NodeErrorType::SyncProcessError(error) => error,
+            NodeErrorType::AsyncProcessError(error) => error,
+            NodeErrorType::LocalError(error) => error,
+        }
+        .clone()
+    }
+}
+
 pub struct ErrorInfo {
     // processor id
     pub pid: usize,
@@ -25,7 +45,7 @@ pub struct ErrorInfo {
     // plan id
     pub plan_id: Option<u32>,
 
-    pub error: Mutex<Option<ErrorCode>>,
+    pub error: Mutex<Option<NodeErrorType>>,
 }
 
 impl ErrorInfo {
@@ -55,5 +75,5 @@ pub struct NodeErrorReport {
     pub pid: usize,
     pub p_name: String,
     pub plan_id: Option<u32>,
-    pub node_error: Option<ErrorCode>,
+    pub node_error: Option<NodeErrorType>,
 }
