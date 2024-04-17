@@ -458,7 +458,9 @@ impl fmt::Display for UserGrantSet {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
     use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use crate::principal::user_grant::TenantOwnershipObject;
     use crate::principal::OwnershipInfo;
@@ -474,19 +476,16 @@ mod kvapi_key_impl {
             Some(self.tenant.to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            let b = kvapi::KeyBuilder::new_prefixed(Self::PREFIX).push_str(&self.tenant.tenant);
-            self.object.build_key(b).done()
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            let b = b.push_str(self.tenant_name());
+            self.object.build_key(b)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
+            let tenant = parser.next_nonempty()?;
+            let subject = OwnershipObject::parse_key(parser)?;
 
-            let tenant = p.next_nonempty()?;
-            let subject = OwnershipObject::parse_key(&mut p)?;
-            p.done()?;
-
-            Ok(TenantOwnershipObject {
+            Ok(Self {
                 tenant: Tenant::new_nonempty(tenant),
                 object: subject,
             })
