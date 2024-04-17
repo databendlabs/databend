@@ -76,7 +76,6 @@ use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -185,14 +184,6 @@ pub trait SchemaApi: Send + Sync {
     // table
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError>;
-
-    /// List all tables belonging to every db and every tenant.
-    ///
-    /// I.e.: all tables found in key-space: `__fd_table_by_id/`.
-    /// Notice that this key space includes both deleted and non-deleted table-metas. `TableMeta.drop_on.is_some()` indicates it's a deleted(but not yet garbage collected) one.
-    ///
-    /// It returns a list of (table-id, table-meta-seq, table-meta).
-    async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError>;
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply, KVAppError>;
 

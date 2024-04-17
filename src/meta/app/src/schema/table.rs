@@ -973,7 +973,6 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::KeyError;
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
-    use crate::primitive::Id;
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
     use crate::schema::LeastVisibleTime;
@@ -985,7 +984,6 @@ mod kvapi_key_impl {
     use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
-    use crate::tenant::Tenant;
 
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
@@ -1069,34 +1067,6 @@ mod kvapi_key_impl {
         }
     }
 
-    /// Reserved removed key, never reused:
-    /// "__fd_table_count/<tenant>" -> <table_count>
-    ///
-    /// It was used for count number of tables belonging to a tenant
-    #[derive(Debug)]
-    struct CountTablesKey {
-        #[allow(dead_code)]
-        tenant: Tenant,
-    }
-
-    impl kvapi::Key for CountTablesKey {
-        const PREFIX: &'static str = "__fd_table_count";
-
-        type ValueType = Id;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-
-        fn to_string_key(&self) -> String {
-            unimplemented!("removed and reserved")
-        }
-
-        fn from_str_key(_s: &str) -> Result<Self, kvapi::KeyError> {
-            unimplemented!("removed and reserved")
-        }
-    }
-
     // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
     impl kvapi::Key for TableCopiedFileNameIdent {
         const PREFIX: &'static str = "__fd_table_copied_files";
@@ -1114,13 +1084,10 @@ mod kvapi_key_impl {
             b.push_u64(self.table_id).push_raw(&self.file)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
+        fn decode_key(p: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
             let table_id = p.next_u64()?;
             let file = p.tail_raw()?.to_string();
-
-            Ok(TableCopiedFileNameIdent { table_id, file })
+            Ok(Self { table_id, file })
         }
     }
 
