@@ -79,6 +79,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -92,6 +93,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
 use log::info;
 
@@ -190,12 +192,12 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                req.name_ident.db_name
+                req.name_ident.database_name()
             )));
         }
         // create db in BOTTOM layer only
@@ -209,7 +211,7 @@ impl Catalog for DatabaseCatalog {
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
             return self.immutable_catalog.drop_database(req).await;
@@ -223,11 +225,11 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
             || self
                 .immutable_catalog
-                .exists_database(&req.name_ident.tenant, &req.new_db_name)
+                .exists_database(req.name_ident.tenant(), &req.new_db_name)
                 .await?
         {
             return self.immutable_catalog.rename_database(req).await;
@@ -460,6 +462,20 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.undrop_table(req).await;
         }
         self.mutable_catalog.undrop_table(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        info!("Undrop table by id from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?
+        {
+            return self.immutable_catalog.undrop_table_by_id(req).await;
+        }
+        self.mutable_catalog.undrop_table_by_id(req).await
     }
 
     #[async_backtrace::framed]

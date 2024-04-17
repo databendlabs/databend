@@ -45,7 +45,7 @@ impl VirtualColumnNameIdent {
 
 impl Display for VirtualColumnNameIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}'/{}", self.tenant.name(), self.table_id)
+        write!(f, "'{}'/{}", self.tenant.tenant_name(), self.table_id)
     }
 }
 
@@ -130,10 +130,13 @@ impl ListVirtualColumnsReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use crate::schema::VirtualColumnMeta;
     use crate::schema::VirtualColumnNameIdent;
     use crate::tenant::Tenant;
+    use crate::KeyWithTenant;
 
     /// <prefix>/<tenant>/<table_id>
     impl kvapi::Key for VirtualColumnNameIdent {
@@ -146,23 +149,25 @@ mod kvapi_key_impl {
             Some(self.tenant.to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant.name())
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_str(self.tenant.tenant_name())
                 .push_u64(self.table_id)
-                .done()
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
+        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
             let tenant = p.next_nonempty()?;
             let table_id = p.next_u64()?;
             p.done()?;
 
             let tenant = Tenant::new_nonempty(tenant);
 
-            Ok(VirtualColumnNameIdent { tenant, table_id })
+            Ok(Self { tenant, table_id })
+        }
+    }
+
+    impl KeyWithTenant for VirtualColumnNameIdent {
+        fn tenant(&self) -> &Tenant {
+            &self.tenant
         }
     }
 

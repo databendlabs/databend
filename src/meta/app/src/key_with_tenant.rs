@@ -25,16 +25,17 @@ pub trait KeyWithTenant: kvapi::Key {
 
     /// Return the name of the embedded tenant.
     fn tenant_name(&self) -> &str {
-        self.tenant().name()
+        self.tenant().tenant_name()
     }
 
     /// Return a encoded key prefix for listing keys of this kind that belong to the tenant.
     ///
     /// It is in form of `<__PREFIX>/<tenant>/`.
     /// The trailing `/` is important for exclude tenants with prefix same as this tenant.
+    // TODO: test tenant_prefix with tenant config
     fn tenant_prefix(&self) -> String {
         kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-            .push_str(self.tenant().name())
+            .push_str(self.tenant().tenant_name())
             // Add trailing "/"
             .push_raw("")
             .done()

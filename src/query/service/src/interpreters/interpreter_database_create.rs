@@ -57,11 +57,14 @@ impl CreateDatabaseInterpreter {
             .await?;
         match share_specs.first() {
             Some((_, share_spec)) => {
-                if !share_spec.tenants.contains(&tenant.name().to_string()) {
+                if !share_spec
+                    .tenants
+                    .contains(&tenant.tenant_name().to_string())
+                {
                     return Err(ErrorCode::UnknownShareAccounts(format!(
                         "share {} has not granted privilege to {}",
                         share_name.display(),
-                        tenant.name()
+                        tenant.tenant_name()
                     )));
                 }
                 match share_spec.db_privileges {
@@ -70,7 +73,7 @@ impl CreateDatabaseInterpreter {
                             return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
                                 "share {} has not granted privilege to {}",
                                 share_name.display(),
-                                tenant.name()
+                                tenant.tenant_name()
                             )));
                         }
                     }
@@ -78,7 +81,7 @@ impl CreateDatabaseInterpreter {
                         return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
                             "share {} has not granted privilege to {}",
                             share_name.display(),
-                            tenant.name()
+                            tenant.tenant_name()
                         )));
                     }
                 }
@@ -155,7 +158,7 @@ impl Interpreter for CreateDatabaseInterpreter {
             }
 
             save_share_spec(
-                &self.ctx.get_tenant().name().to_string(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_into),

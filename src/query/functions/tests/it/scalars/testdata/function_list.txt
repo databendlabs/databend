@@ -2002,8 +2002,8 @@ Functions overloads:
 7 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
 8 get(Map(Nothing) NULL, T0 NULL) :: NULL
 9 get(Map(T0, NULL) NULL, T0 NULL) :: NULL
-10 get(Map(T0, T1), T0) :: T1 NULL
-11 get(Map(T0, T1) NULL, T0 NULL) :: T1 NULL
+10 get(Map(T0, T1 NULL), T0) :: T1 NULL
+11 get(Map(T0, T1 NULL) NULL, T0 NULL) :: T1 NULL
 12 get FACTORY
 13 get FACTORY
 14 get FACTORY

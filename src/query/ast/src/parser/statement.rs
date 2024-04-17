@@ -2273,14 +2273,24 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
         };
         map(
             rule! {
-                INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                #with? ~ INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
                 ~ #dot_separated_idents_1_to_3
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
             },
-            |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            |(
+                with,
+                _,
+                opt_hints,
+                overwrite,
+                _,
+                (catalog, database, table),
+                opt_columns,
+                source,
+            )| {
                 Statement::Insert(InsertStmt {
                     hints: opt_hints,
+                    with,
                     catalog,
                     database,
                     table,

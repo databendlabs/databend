@@ -38,7 +38,7 @@ where R: TenantResource
         // If there is a specified type name for this alias, use it.
         // Otherwise use the default name
         let type_name = if R::TYPE.is_empty() {
-            "TIdentRaw"
+            "TIdent"
         } else {
             R::TYPE
         };
@@ -98,7 +98,7 @@ impl<R> TIdent<R> {
 
     /// Create a display-able instance.
     pub fn display(&self) -> impl fmt::Display + '_ {
-        format!("'{}'/'{}'", self.tenant.name(), self.name)
+        format!("'{}'/'{}'", self.tenant.tenant_name(), self.name)
     }
 }
 

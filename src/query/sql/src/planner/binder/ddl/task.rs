@@ -120,10 +120,12 @@ impl Binder {
         }
         verify_scheduler_option(schedule_opts)?;
         verify_task_sql(sql)?;
+
         let tenant = self.ctx.get_tenant();
+
         let plan = CreateTaskPlan {
             if_not_exists: *if_not_exists,
-            tenant: tenant.name().to_string(),
+            tenant,
             task_name: name.to_string(),
             warehouse_opts: warehouse_opts.clone(),
             schedule_opts: schedule_opts.clone(),
@@ -179,9 +181,10 @@ impl Binder {
         }
 
         let tenant = self.ctx.get_tenant();
+
         let plan = AlterTaskPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant,
             task_name: name.to_string(),
             alter_options: options.clone(),
         };
@@ -199,7 +202,7 @@ impl Binder {
 
         let plan = DropTaskPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant,
             task_name: name.to_string(),
         };
         Ok(Plan::DropTask(Box::new(plan)))
@@ -215,7 +218,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = DescribeTaskPlan {
-            tenant: tenant.name().to_string(),
+            tenant,
             task_name: name.to_string(),
         };
         Ok(Plan::DescribeTask(Box::new(plan)))
@@ -231,7 +234,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = ExecuteTaskPlan {
-            tenant: tenant.name().to_string(),
+            tenant,
             task_name: name.to_string(),
         };
         Ok(Plan::ExecuteTask(Box::new(plan)))
@@ -247,7 +250,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = ShowTasksPlan {
-            tenant: tenant.name().to_string(),
+            tenant,
             limit: limit.clone(),
         };
         Ok(Plan::ShowTasks(Box::new(plan)))

@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KeyError;
 
@@ -98,7 +99,10 @@ impl LockKey {
 
     pub fn gen_prefix(&self) -> String {
         match self {
-            LockKey::Table { table_id } => format!("{}/{}", TableLockKey::PREFIX, table_id),
+            LockKey::Table { table_id } => {
+                let ident = DirName::new(TableLockKey::new(*table_id, 0));
+                ident.dir_name_with_slash()
+            }
         }
     }
 
@@ -126,14 +130,16 @@ pub struct ListLocksReq {
 
 impl ListLocksReq {
     pub fn create() -> Self {
-        let prefixes = vec![TableLockKey::PREFIX.to_string()];
+        let prefixes = vec![TableLockKey::root_prefix()];
         Self { prefixes }
     }
 
     pub fn create_with_table_ids(table_ids: Vec<u64>) -> Self {
         let mut prefixes = Vec::new();
         for table_id in table_ids {
-            prefixes.push(format!("{}/{}", TableLockKey::PREFIX, table_id));
+            let lock = TableLockKey::new(table_id, 0);
+            let prefix = DirName::new(lock).dir_name_with_slash();
+            prefixes.push(prefix);
         }
         Self { prefixes }
     }
@@ -178,6 +184,16 @@ pub struct TableLockKey {
     pub revision: u64,
 }
 
+impl TableLockKey {
+    pub fn new(table_id: u64, revision: u64) -> Self {
+        Self { table_id, revision }
+    }
+
+    pub fn root_prefix() -> String {
+        format!("{}/", Self::PREFIX)
+    }
+}
+
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
@@ -195,21 +211,15 @@ mod kvapi_key_impl {
             Some(TableId::new(self.table_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .push_u64(self.revision)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.table_id).push_u64(self.revision)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
+        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
             let table_id = p.next_u64()?;
             let revision = p.next_u64()?;
-            p.done()?;
 
-            Ok(TableLockKey { table_id, revision })
+            Ok(Self { table_id, revision })
         }
     }
 

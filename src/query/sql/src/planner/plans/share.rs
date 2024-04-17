@@ -38,7 +38,7 @@ pub struct CreateShareEndpointPlan {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
 }
