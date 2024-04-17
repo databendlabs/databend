@@ -487,7 +487,7 @@ async fn test_wait_time_secs() -> Result<()> {
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert_eq!(result.state, ExecuteStateKind::Running, "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Starting, "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
     let next_uri = make_page_uri(query_id, 0);
@@ -508,7 +508,9 @@ async fn test_wait_time_secs() -> Result<()> {
                 assert!(
                     matches!(
                         result.state,
-                        ExecuteStateKind::Succeeded | ExecuteStateKind::Running
+                        ExecuteStateKind::Succeeded
+                            | ExecuteStateKind::Running
+                            | ExecuteStateKind::Starting
                     ),
                     "{:?}",
                     result

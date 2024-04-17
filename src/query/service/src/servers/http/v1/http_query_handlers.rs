@@ -186,14 +186,9 @@ impl QueryResponse {
         };
         let rows = data.data.len();
 
-        let state_kind = match state.state {
-            ExecuteStateKind::Starting => ExecuteStateKind::Running,
-            _ => state.state,
-        };
-
         Json(QueryResponse {
             data: data.into(),
-            state: state_kind,
+            state: state.state,
             schema: state.schema.clone(),
             session_id: Some(session_id),
             node_id: r.node_id,
