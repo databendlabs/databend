@@ -62,55 +62,46 @@ pub async fn do_create_sequence(
     let name_key = &req.name_ident;
     let meta: SequenceMeta = req.clone().into();
 
-    let mut trials = txn_backoff(None, func_name!());
-    let mut match_seq = MatchSeq::Exact(0);
-    loop {
-        trials.next().unwrap()?.await;
-        let reply = kv_api
-            .upsert_kv(UpsertKVReq::new(
-                &name_key.to_string_key(),
-                match_seq,
-                Operation::Update(serialize_struct(&meta)?),
-                None,
-            ))
-            .await?;
+    let match_seq = if let CreateOption::CreateOrReplace = &req.create_option {
+        MatchSeq::GE(0)
+    } else {
+        MatchSeq::Exact(0)
+    };
+    let reply = kv_api
+        .upsert_kv(UpsertKVReq::new(
+            &name_key.to_string_key(),
+            match_seq,
+            Operation::Update(serialize_struct(&meta)?),
+            None,
+        ))
+        .await?;
 
-        debug!(
-            name :? =(name_key),
-            prev :? = (reply.prev),
-            is_changed = reply.is_changed();
-            "create_sequence"
-        );
+    debug!(
+        name :? =(name_key),
+        prev :? = (reply.prev),
+        is_changed = reply.is_changed();
+        "create_sequence"
+    );
 
-        if !reply.is_changed() {
-            match req.create_option {
-                CreateOption::Create => {
-                    return Err(KVAppError::AppError(AppError::SequenceError(
-                        SequenceError::SequenceAlreadyExists(SequenceAlreadyExists::new(
-                            name_key.sequence_name.clone(),
-                            format!("create sequence: {:?}", name_key),
-                        )),
-                    )));
-                }
-                CreateOption::CreateIfNotExists => break,
-                CreateOption::CreateOrReplace => {
-                    if let Some(prev) = reply.prev {
-                        match_seq = MatchSeq::Exact(prev.seq);
-                    } else {
-                        return Err(KVAppError::AppError(AppError::SequenceError(
-                            SequenceError::CreateSequenceError(CreateSequenceError::new(
-                                name_key.sequence_name.clone(),
-                                format!("replace sequence: {:?} but has no prev seq", name_key),
-                            )),
-                        )));
-                    }
-                }
-            };
-        } else {
-            break;
+    if !reply.is_changed() {
+        match req.create_option {
+            CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
+                SequenceError::SequenceAlreadyExists(SequenceAlreadyExists::new(
+                    name_key.sequence_name.clone(),
+                    format!("create sequence: {:?}", name_key),
+                )),
+            ))),
+            CreateOption::CreateIfNotExists => Ok(CreateSequenceReply {}),
+            CreateOption::CreateOrReplace => Err(KVAppError::AppError(AppError::SequenceError(
+                SequenceError::CreateSequenceError(CreateSequenceError::new(
+                    name_key.sequence_name.clone(),
+                    format!("replace sequence: {:?} fail", name_key),
+                )),
+            ))),
         }
+    } else {
+        Ok(CreateSequenceReply {})
     }
-    Ok(CreateSequenceReply {})
 }
 
 pub async fn do_get_sequence(
