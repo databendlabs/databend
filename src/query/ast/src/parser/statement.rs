@@ -1724,7 +1724,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let create_network_policy = map_res(
         rule! {
             CREATE ~  ( OR ~ ^REPLACE )? ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
-             ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
+             ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0_ignore_trailing(literal_string) ~ ^")"
              ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
              ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },

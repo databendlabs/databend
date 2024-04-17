@@ -88,6 +88,13 @@ impl UserApiProvider {
                 }
             }
             let mut allow = false;
+            if network_policy.allowed_ip_list.is_empty() {
+                return Err(ErrorCode::AuthenticateFailure(format!(
+                    "user {} is not allowed to login",
+                    user_info.name
+                )));
+            }
+
             for allowed_ip in network_policy.allowed_ip_list {
                 let allowed_cidr: Ipv4Cidr = allowed_ip.parse().unwrap();
                 if allowed_cidr.contains(&ip_addr) {

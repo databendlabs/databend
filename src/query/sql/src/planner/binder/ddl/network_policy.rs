@@ -39,14 +39,17 @@ impl Binder {
             comment,
         } = stmt;
 
-        for ip in allowed_ip_list {
-            if ip.parse::<Ipv4Cidr>().is_err() {
-                return Err(ErrorCode::SemanticError(format!(
-                    "invalid ip address {}",
-                    ip
-                )));
+        if !allowed_ip_list.is_empty() {
+            for ip in allowed_ip_list {
+                if ip.parse::<Ipv4Cidr>().is_err() {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "invalid ip address {}",
+                        ip
+                    )));
+                }
             }
         }
+
         if let Some(blocked_ip_list) = blocked_ip_list {
             for ip in blocked_ip_list {
                 if ip.parse::<Ipv4Cidr>().is_err() {
@@ -84,12 +87,14 @@ impl Binder {
         } = stmt;
 
         if let Some(allowed_ip_list) = allowed_ip_list {
-            for ip in allowed_ip_list {
-                if ip.parse::<Ipv4Cidr>().is_err() {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "invalid ip address {}",
-                        ip
-                    )));
+            if !allowed_ip_list.is_empty() {
+                for ip in allowed_ip_list {
+                    if ip.parse::<Ipv4Cidr>().is_err() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "invalid ip address {}",
+                            ip
+                        )));
+                    }
                 }
             }
         }
