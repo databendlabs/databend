@@ -59,12 +59,6 @@ where Self: Sized
 
     type ValueType: kvapi::Value;
 
-    /// Return the root prefix of this key: `"<PREFIX>/"`.
-    // TODO: consider the tenant config, it should be a instance method.
-    fn root_prefix() -> String {
-        format!("{}/", Self::PREFIX)
-    }
-
     /// Return the parent key of this key.
     ///
     /// For example, a table name's parent is db-id.
