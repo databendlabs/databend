@@ -41,6 +41,7 @@ pub use shutdown_signal::SignalType;
 pub use singleton_instance::GlobalInstance;
 pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
+pub use string::format_byte_size;
 pub use string::convert_byte_size;
 pub use string::convert_number_size;
 pub use string::escape_for_key;
