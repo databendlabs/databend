@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::format_byte_size;
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::base::format_byte_size;
 use databend_common_exception::Result;
 use itertools::Itertools;
 

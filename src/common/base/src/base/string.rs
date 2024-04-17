@@ -116,12 +116,12 @@ pub fn unescape_string(escape_str: &str) -> Result<String> {
 }
 
 pub fn format_byte_size(bytes: usize) -> String {
-    let read_size = if read_bytes == 0 {
+    if bytes == 0 {
         "0".to_string()
-    } else if read_bytes < 1024 {
+    } else if bytes < 1024 {
         "< 1 KiB".to_string()
     } else {
-        convert_byte_size(info.read_bytes as f64)
+        convert_byte_size(bytes as f64)
     }
 }
 
