@@ -172,7 +172,6 @@ impl LikePattern {
         true
     }
 }
-// pub
 
 #[inline]
 pub fn is_like_pattern_escape(c: char) -> bool {
