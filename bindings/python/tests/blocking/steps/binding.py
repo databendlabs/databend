@@ -57,16 +57,16 @@ def _(context, input, output):
 
 @then("Select types should be expected native types")
 async def _(context):
-    # NumberValue::Decimal
+    # Binary
+    row = context.conn.query_row("select to_binary('xyz')")
+    assert row.values() == (b"xyz",), f"Binary: {row.values()}"
+
+    # Decimal
     row = context.conn.query_row("SELECT 15.7563::Decimal(8,4), 2.0+3.0")
     assert row.values() == (
         Decimal("15.7563"),
         Decimal("5.0"),
     ), f"Decimal: {row.values()}"
-
-    # Binary
-    row = context.conn.query_row("select to_binary('xyz')")
-    assert row.values() == (b"xyz",), f"Binary: {row.values()}"
 
     # Array
     row = context.conn.query_row("select [10::Decimal(15,2), 1.1+2.3]")

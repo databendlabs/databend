@@ -34,21 +34,35 @@ Then("Select string {string} should be equal to {string}", async function (input
 });
 
 Then("Select types should be expected native types", async function () {
-  // NumberValue::Decimal
-  const row1 = await this.conn.queryRow(`SELECT 15.7563::Decimal(8,4), 2.0+3.0`);
-  assert.deepEqual(row1.values(), ["15.7563", "5.0"]);
+  // Binary
+  {
+    const row = await this.conn.queryRow("select to_binary('xyz')");
+    assert.deepEqual(row.values(), [Buffer.from("xyz")]);
+  }
+
+  // Decimal
+  {
+    const row = await this.conn.queryRow(`SELECT 15.7563::Decimal(8,4), 2.0+3.0`);
+    assert.deepEqual(row.values(), ["15.7563", "5.0"]);
+  }
 
   // Array
-  const row2 = await this.conn.queryRow(`SELECT [10::Decimal(15,2), 1.1+2.3]`);
-  assert.deepEqual(row2.values(), [["10.00", "3.40"]]);
+  {
+    const row = await this.conn.queryRow(`SELECT [10::Decimal(15,2), 1.1+2.3]`);
+    assert.deepEqual(row.values(), [["10.00", "3.40"]]);
+  }
 
   // Map
-  const row3 = await this.conn.queryRow(`SELECT {'xx':to_date('2020-01-01')}`);
-  assert.deepEqual(row3.values(), [{ xx: new Date("2020-01-01") }]);
+  {
+    const row = await this.conn.queryRow(`SELECT {'xx':to_date('2020-01-01')}`);
+    assert.deepEqual(row.values(), [{ xx: new Date("2020-01-01") }]);
+  }
 
   // Tuple
-  const row4 = await this.conn.queryRow(`SELECT (10, '20', to_datetime('2024-04-16 12:34:56.789'))`);
-  assert.deepEqual(row4.values(), [[10, "20", new Date("2024-04-16T12:34:56.789Z")]]);
+  {
+    const row = await this.conn.queryRow(`SELECT (10, '20', to_datetime('2024-04-16 12:34:56.789'))`);
+    assert.deepEqual(row.values(), [[10, "20", new Date("2024-04-16T12:34:56.789Z")]]);
+  }
 });
 
 Then("Select numbers should iterate all rows", async function () {
