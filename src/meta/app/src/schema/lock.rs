@@ -145,9 +145,9 @@ impl ListLocksReq {
     pub fn gen_prefixes(&self) -> Vec<String> {
         let mut prefixes = Vec::new();
         if self.table_ids.is_empty() {
-            let table_lock_prefix =
-                format!("{}/{}/", TableLockKey::PREFIX, self.tenant.tenant_name());
-            prefixes.push(table_lock_prefix);
+            let lock = TableLockKey::new(self.tenant.clone(), 0, 0);
+            let prefix = DirName::new_with_level(lock, 2).dir_name_with_slash();
+            prefixes.push(prefix);
         } else {
             for table_id in &self.table_ids {
                 let lock = TableLockKey::new(self.tenant.clone(), *table_id, 0);
@@ -200,7 +200,7 @@ pub struct TableLockKey {
 }
 
 impl TableLockKey {
-    pub fn new(tenant: impl ToTenant, table_id: impl Into<u64>, revision: u64) -> Self {
+    pub fn new(tenant: impl ToTenant, table_id: u64, revision: u64) -> Self {
         Self {
             tenant: tenant.to_tenant(),
             table_id: table_id.into(),
