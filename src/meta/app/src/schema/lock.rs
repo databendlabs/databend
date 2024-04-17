@@ -130,32 +130,26 @@ pub struct LockInfo {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListLocksReq {
-    pub tenant: Tenant,
-    pub table_ids: Vec<u64>,
+    pub prefixes: Vec<String>,
 }
 
 impl ListLocksReq {
-    pub fn create(tenant: impl ToTenant, table_ids: Vec<u64>) -> Self {
+    pub fn create(tenant: &Tenant) -> Self {
+        let lock = TableLockKey::new(tenant, 0, 0);
+        let prefix = DirName::new_with_level(lock, 2).dir_name_with_slash();
         Self {
-            tenant: tenant.to_tenant(),
-            table_ids,
+            prefixes: vec![prefix],
         }
     }
 
-    pub fn gen_prefixes(&self) -> Vec<String> {
+    pub fn create_with_table_ids(tenant: &Tenant, table_ids: Vec<u64>) -> Self {
         let mut prefixes = Vec::new();
-        if self.table_ids.is_empty() {
-            let lock = TableLockKey::new(self.tenant.clone(), 0, 0);
-            let prefix = DirName::new_with_level(lock, 2).dir_name_with_slash();
+        for table_id in table_ids {
+            let lock = TableLockKey::new(tenant, table_id, 0);
+            let prefix = DirName::new(lock).dir_name_with_slash();
             prefixes.push(prefix);
-        } else {
-            for table_id in &self.table_ids {
-                let lock = TableLockKey::new(self.tenant.clone(), *table_id, 0);
-                let prefix = DirName::new(lock).dir_name_with_slash();
-                prefixes.push(prefix);
-            }
         }
-        prefixes
+        Self { prefixes }
     }
 }
 
@@ -203,7 +197,7 @@ impl TableLockKey {
     pub fn new(tenant: impl ToTenant, table_id: u64, revision: u64) -> Self {
         Self {
             tenant: tenant.to_tenant(),
-            table_id: table_id.into(),
+            table_id,
             revision,
         }
     }

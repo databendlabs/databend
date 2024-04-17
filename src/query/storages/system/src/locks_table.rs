@@ -91,7 +91,11 @@ impl AsyncSystemTable for LocksTable {
                 }
             }
 
-            let req = ListLocksReq::create(&tenant, table_ids);
+            let req = if table_ids.is_empty() {
+                ListLocksReq::create(&tenant)
+            } else {
+                ListLocksReq::create_with_table_ids(&tenant, table_ids)
+            };
             let lock_infos = ctl.list_locks(req).await?;
             for info in lock_infos {
                 lock_table_id.push(info.table_id);
