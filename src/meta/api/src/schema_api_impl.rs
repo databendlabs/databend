@@ -3638,7 +3638,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[minitrace::trace]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
         let mut reply = vec![];
-        for prefix in &req.prefixes {
+        let prefixes = req.gen_prefixes();
+        for prefix in &prefixes {
             let mut stream = self.list_kv(prefix).await?;
             while let Some(list) = stream.try_next().await? {
                 let k = list.key;
@@ -3657,7 +3658,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 })?;
 
                 reply.push(LockInfo {
-                    key,
+                    table_id: key.get_table_id(),
                     revision,
                     meta,
                 });

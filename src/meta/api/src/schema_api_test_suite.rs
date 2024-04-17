@@ -6274,7 +6274,10 @@ impl SchemaApiTestSuite {
     #[minitrace::trace]
     async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
-        let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
+        let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
 
         info!("--- prepare db and table");
@@ -6287,7 +6290,10 @@ impl SchemaApiTestSuite {
         {
             info!("--- create table lock revision 1");
             let req1 = CreateLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 2,
                 user: "root".to_string(),
                 node: "node1".to_string(),
@@ -6297,7 +6303,10 @@ impl SchemaApiTestSuite {
 
             info!("--- create table lock revision 2");
             let req2 = CreateLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 2,
                 user: "root".to_string(),
                 node: "node1".to_string(),
@@ -6308,7 +6317,10 @@ impl SchemaApiTestSuite {
 
             info!("--- list table lock revisiosn");
             let req3 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
             };
             let res3 = mt.list_lock_revisions(req3).await?;
             assert_eq!(res3.len(), 2);
@@ -6317,7 +6329,10 @@ impl SchemaApiTestSuite {
 
             info!("--- extend table lock revision 2 expire");
             let req4 = ExtendLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 4,
                 revision: res2.revision,
                 acquire_lock: true,
@@ -6327,7 +6342,10 @@ impl SchemaApiTestSuite {
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));
             let req5 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
             };
             let res5 = mt.list_lock_revisions(req5).await?;
             assert_eq!(res5.len(), 1);
@@ -6335,14 +6353,17 @@ impl SchemaApiTestSuite {
 
             info!("--- delete table lock revision 2");
             let req6 = DeleteLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 revision: res2.revision,
             };
             mt.delete_lock_revision(req6).await?;
 
             info!("--- check table locks is empty");
             let req7 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table { tenant, table_id },
             };
             let res7 = mt.list_lock_revisions(req7).await?;
             assert_eq!(res7.len(), 0);
