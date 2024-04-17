@@ -397,8 +397,13 @@ impl Session {
     ) -> Result<Option<ServerStats>> {
         let query = query.trim_end_matches(';').trim();
 
-        if is_repl && query.starts_with('!') {
-            return self.handle_commands(query).await;
+        if is_repl {
+            if query.starts_with('!') {
+                return self.handle_commands(query).await;
+            }
+            if query == "exit" || query == "quit" {
+                return Ok(None);
+            }
         }
 
         let start = Instant::now();
@@ -457,10 +462,6 @@ impl Session {
 
     #[async_recursion]
     pub async fn handle_commands(&mut self, query: &str) -> Result<Option<ServerStats>> {
-        if query == "!exit" || query == "!quit" {
-            return Ok(None);
-        }
-
         match query {
             "!exit" | "!quit" => {
                 return Ok(None);
