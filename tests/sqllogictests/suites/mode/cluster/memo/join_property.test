@@ -81,7 +81,7 @@ select * from t_1000 left join t_10 on t_1000.a = t_10.a left join t_100 on t_10
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 7.97 KiB
+├── estimated memory: 8.50 KiB
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
