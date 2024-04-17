@@ -720,6 +720,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_alter_task(&mut self, _stmt: &mut AlterTaskStmt) {}
 
+    fn visit_create_dynamic_table(&mut self, stmt: &mut CreateDynamicTableStmt) {
+        self.visit_query(&mut stmt.as_query)
+    }
+
     // notification
     fn visit_create_notification(&mut self, _stmt: &mut CreateNotificationStmt) {}
     fn visit_drop_notification(&mut self, _stmt: &mut DropNotificationStmt) {}

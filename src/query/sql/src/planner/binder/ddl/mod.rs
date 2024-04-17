@@ -18,6 +18,7 @@ mod column;
 mod connection;
 mod data_mask;
 mod database;
+mod dynamic_table;
 mod index;
 mod network_policy;
 mod notification;

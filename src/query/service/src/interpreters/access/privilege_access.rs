@@ -909,6 +909,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropStream(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?
             }
+            Plan::CreateDynamicTable(plan) => {
+                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
+            }
             Plan::CreateUser(_) => {
                 self.validate_access(
                     &GrantObject::Global,
