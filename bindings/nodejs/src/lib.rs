@@ -16,7 +16,7 @@
 extern crate napi_derive;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-use napi::bindgen_prelude::*;
+use napi::{bindgen_prelude::*, Env};
 use once_cell::sync::Lazy;
 use tokio_stream::StreamExt;
 
@@ -71,10 +71,17 @@ pub struct Value(databend_driver::Value);
 
 impl ToNapiValue for Value {
     unsafe fn to_napi_value(env: sys::napi_env, val: Self) -> Result<sys::napi_value> {
+        let ctx = Env::from(env);
         match val.0 {
             databend_driver::Value::Null => Null::to_napi_value(env, Null),
-            databend_driver::Value::EmptyArray => String::to_napi_value(env, "[]".to_string()),
-            databend_driver::Value::EmptyMap => String::to_napi_value(env, "{}".to_string()),
+            databend_driver::Value::EmptyArray => {
+                let arr = ctx.create_array(0)?;
+                Array::to_napi_value(env, arr)
+            }
+            databend_driver::Value::EmptyMap => {
+                let obj = ctx.create_object()?;
+                Object::to_napi_value(env, obj)
+            }
             databend_driver::Value::Boolean(b) => bool::to_napi_value(env, b),
             databend_driver::Value::Binary(b) => Buffer::to_napi_value(env, b.into()),
             databend_driver::Value::String(s) => String::to_napi_value(env, s),
@@ -90,9 +97,27 @@ impl ToNapiValue for Value {
                     NaiveDateTime::new(v, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
                 )
             }
-            databend_driver::Value::Array(_) => String::to_napi_value(env, format!("{}", val.0)),
-            databend_driver::Value::Map(_) => String::to_napi_value(env, format!("{}", val.0)),
-            databend_driver::Value::Tuple(_) => String::to_napi_value(env, format!("{}", val.0)),
+            databend_driver::Value::Array(inner) => {
+                let mut arr = ctx.create_array(inner.len() as u32)?;
+                for (i, v) in inner.into_iter().enumerate() {
+                    arr.set(i as u32, Value(v))?;
+                }
+                Array::to_napi_value(env, arr)
+            }
+            databend_driver::Value::Map(inner) => {
+                let mut obj = ctx.create_object()?;
+                for (k, v) in inner.into_iter() {
+                    obj.set(k.to_string(), Value(v))?;
+                }
+                Object::to_napi_value(env, obj)
+            }
+            databend_driver::Value::Tuple(inner) => {
+                let mut arr = ctx.create_array(inner.len() as u32)?;
+                for (i, v) in inner.into_iter().enumerate() {
+                    arr.set(i as u32, Value(v))?;
+                }
+                Array::to_napi_value(env, arr)
+            }
             databend_driver::Value::Bitmap(s) => String::to_napi_value(env, s),
             databend_driver::Value::Variant(s) => String::to_napi_value(env, s),
             databend_driver::Value::Geometry(s) => String::to_napi_value(env, s),
