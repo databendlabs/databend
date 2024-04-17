@@ -30,7 +30,7 @@ impl AsyncDatabendClient {
         Ok(Self(client))
     }
 
-    pub fn get_conn<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+    pub fn get_conn<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let this = self.0.clone();
         future_into_py(py, async move {
             let conn = this.get_conn().await.map_err(DriverError::new)?;
@@ -44,7 +44,7 @@ pub struct AsyncDatabendConnection(Box<dyn databend_driver::Connection>);
 
 #[pymethods]
 impl AsyncDatabendConnection {
-    pub fn info<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+    pub fn info<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let this = self.0.clone();
         future_into_py(py, async move {
             let info = this.info().await;
@@ -52,7 +52,7 @@ impl AsyncDatabendConnection {
         })
     }
 
-    pub fn version<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+    pub fn version<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let this = self.0.clone();
         future_into_py(py, async move {
             let version = this.version().await.map_err(DriverError::new)?;
@@ -60,7 +60,7 @@ impl AsyncDatabendConnection {
         })
     }
 
-    pub fn exec<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
+    pub fn exec<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<Bound<'p, PyAny>> {
         let this = self.0.clone();
         future_into_py(py, async move {
             let res = this.exec(&sql).await.map_err(DriverError::new)?;
@@ -68,7 +68,7 @@ impl AsyncDatabendConnection {
         })
     }
 
-    pub fn query_row<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
+    pub fn query_row<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<Bound<'p, PyAny>> {
         let this = self.0.clone();
         future_into_py(py, async move {
             let row = this.query_row(&sql).await.map_err(DriverError::new)?;
@@ -76,7 +76,7 @@ impl AsyncDatabendConnection {
         })
     }
 
-    pub fn query_all<'p>(&self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
+    pub fn query_all<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<Bound<'p, PyAny>> {
         let this = self.0.clone();
         future_into_py(py, async move {
             let rows: Vec<Row> = this
@@ -90,7 +90,7 @@ impl AsyncDatabendConnection {
         })
     }
 
-    pub fn query_iter<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
+    pub fn query_iter<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<Bound<'p, PyAny>> {
         let this = self.0.clone();
         future_into_py(py, async move {
             let streamer = this.query_iter(&sql).await.map_err(DriverError::new)?;
@@ -99,11 +99,11 @@ impl AsyncDatabendConnection {
     }
 
     pub fn stream_load<'p>(
-        &self,
+        &'p self,
         py: Python<'p>,
         sql: String,
         data: Vec<Vec<String>>,
-    ) -> PyResult<&'p PyAny> {
+    ) -> PyResult<Bound<'p, PyAny>> {
         let this = self.0.clone();
         future_into_py(py, async move {
             let data = data

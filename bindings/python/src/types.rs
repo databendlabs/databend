@@ -16,9 +16,10 @@ use std::sync::Arc;
 
 use once_cell::sync::Lazy;
 use pyo3::exceptions::{PyException, PyStopAsyncIteration, PyStopIteration};
+use pyo3::intern;
+use pyo3::prelude::*;
 use pyo3::sync::GILOnceCell;
 use pyo3::types::{PyDict, PyList, PyTuple, PyType};
-use pyo3::{intern, prelude::*};
 use pyo3_asyncio::tokio::future_into_py;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
@@ -32,14 +33,14 @@ pub static VERSION: Lazy<String> = Lazy::new(|| {
 
 pub static DECIMAL_CLS: GILOnceCell<Py<PyType>> = GILOnceCell::new();
 
-fn get_decimal_cls(py: Python<'_>) -> PyResult<&PyType> {
+fn get_decimal_cls(py: Python<'_>) -> PyResult<&Bound<PyType>> {
     DECIMAL_CLS
         .get_or_try_init(py, || {
-            py.import(intern!(py, "decimal"))?
+            py.import_bound(intern!(py, "decimal"))?
                 .getattr(intern!(py, "Decimal"))?
                 .extract()
         })
-        .map(|ty| ty.as_ref(py))
+        .map(|ty| ty.bind(py))
 }
 
 pub struct Value(databend_driver::Value);
@@ -49,11 +50,11 @@ impl IntoPy<PyObject> for Value {
         match self.0 {
             databend_driver::Value::Null => py.None(),
             databend_driver::Value::EmptyArray => {
-                let list = PyList::empty(py);
+                let list = PyList::empty_bound(py);
                 list.into_py(py)
             }
             databend_driver::Value::EmptyMap => {
-                let dict = PyDict::new(py);
+                let dict = PyDict::new_bound(py);
                 dict.into_py(py)
             }
             databend_driver::Value::Boolean(b) => b.into_py(py),
@@ -72,11 +73,11 @@ impl IntoPy<PyObject> for Value {
                 s.into_py(py)
             }
             databend_driver::Value::Array(inner) => {
-                let list = PyList::new(py, inner.into_iter().map(|v| Value(v).into_py(py)));
+                let list = PyList::new_bound(py, inner.into_iter().map(|v| Value(v).into_py(py)));
                 list.into_py(py)
             }
             databend_driver::Value::Map(inner) => {
-                let dict = PyDict::new(py);
+                let dict = PyDict::new_bound(py);
                 for (k, v) in inner {
                     dict.set_item(Value(k).into_py(py), Value(v).into_py(py))
                         .unwrap();
@@ -84,7 +85,7 @@ impl IntoPy<PyObject> for Value {
                 dict.into_py(py)
             }
             databend_driver::Value::Tuple(inner) => {
-                let tuple = PyTuple::new(py, inner.into_iter().map(|v| Value(v).into_py(py)));
+                let tuple = PyTuple::new_bound(py, inner.into_iter().map(|v| Value(v).into_py(py)));
                 tuple.into_py(py)
             }
             databend_driver::Value::Bitmap(s) => s.into_py(py),
@@ -138,12 +139,9 @@ impl Row {
 
 #[pymethods]
 impl Row {
-    pub fn values<'p>(&'p self, py: Python<'p>) -> PyResult<PyObject> {
-        let res = PyTuple::new(
-            py,
-            self.0.values().iter().map(|v| Value(v.clone()).into_py(py)), // FIXME: do not clone
-        );
-        Ok(res.into_py(py))
+    pub fn values<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyTuple>> {
+        let vals = self.0.values().iter().map(|v| Value(v.clone()).into_py(py));
+        Ok(PyTuple::new_bound(py, vals))
     }
 }
 
@@ -158,7 +156,7 @@ impl RowIterator {
 
 #[pymethods]
 impl RowIterator {
-    fn schema<'p>(&self, py: Python) -> PyResult<Schema> {
+    pub fn schema(&self, py: Python) -> PyResult<Schema> {
         let streamer = self.0.clone();
         let ret = wait_for_future(py, async move {
             let schema = streamer.lock().await.schema();
@@ -170,9 +168,9 @@ impl RowIterator {
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }
-    fn __next__(&self, py: Python) -> PyResult<Option<Row>> {
+    fn __next__(&self, py: Python) -> PyResult<Row> {
         let streamer = self.0.clone();
-        let ret = wait_for_future(py, async move {
+        wait_for_future(py, async move {
             match streamer.lock().await.next().await {
                 Some(val) => match val {
                     Err(e) => Err(PyException::new_err(format!("{}", e))),
@@ -180,16 +178,15 @@ impl RowIterator {
                 },
                 None => Err(PyStopIteration::new_err("The iterator is exhausted")),
             }
-        });
-        ret.map(Some)
+        })
     }
 
     fn __aiter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }
-    fn __anext__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    fn __anext__<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let streamer = self.0.clone();
-        let future = future_into_py(py, async move {
+        future_into_py(py, async move {
             match streamer.lock().await.next().await {
                 Some(val) => match val {
                     Err(e) => Err(PyException::new_err(format!("{}", e))),
@@ -197,8 +194,7 @@ impl RowIterator {
                 },
                 None => Err(PyStopAsyncIteration::new_err("The iterator is exhausted")),
             }
-        });
-        Ok(Some(future?.into()))
+        })
     }
 }
 
@@ -207,13 +203,13 @@ pub struct Schema(databend_driver::SchemaRef);
 
 #[pymethods]
 impl Schema {
-    pub fn fields<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+    pub fn fields<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyList>> {
         let fields = self
             .0
             .fields()
             .into_iter()
             .map(|f| Field(f.clone()).into_py(py));
-        Ok(PyList::new(py, fields))
+        Ok(PyList::new_bound(py, fields))
     }
 }
 

@@ -25,3 +25,6 @@ databend-client = { path = "core", version = "0.16.3" }
 databend-driver = { path = "driver", version = "0.16.3" }
 databend-driver-macros = { path = "macros", version = "0.16.3" }
 databend-sql = { path = "sql", version = "0.16.3" }
+
+[patch.crates-io]
+pyo3-asyncio = { git = "https://github.com/everpcpc/pyo3-asyncio", rev = "42af887" }
