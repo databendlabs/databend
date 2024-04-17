@@ -14,7 +14,6 @@
 
 //! Defines kvapi::KVApi key behaviors.
 
-use std::convert::Infallible;
 use std::fmt::Debug;
 use std::string::FromUtf8Error;
 
@@ -59,12 +58,6 @@ where Self: Sized
 
     type ValueType: kvapi::Value;
 
-    /// Return the root prefix of this key: `"<PREFIX>/"`.
-    // TODO: consider the tenant config, it should be a instance method.
-    fn root_prefix() -> String {
-        format!("{}/", Self::PREFIX)
-    }
-
     /// Return the parent key of this key.
     ///
     /// For example, a table name's parent is db-id.
@@ -98,25 +91,6 @@ where Self: Sized
     /// `from_str_key()` provides a default implementation that create a default parser and relies on this method.
     fn decode_key(_parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
         unimplemented!()
-    }
-}
-
-impl kvapi::Key for String {
-    const PREFIX: &'static str = "";
-
-    /// For a non structured key, the value type can never be used.
-    type ValueType = Infallible;
-
-    fn parent(&self) -> Option<String> {
-        unimplemented!("illegal to get parent of generic String key")
-    }
-
-    fn to_string_key(&self) -> String {
-        self.clone()
-    }
-
-    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-        Ok(s.to_string())
     }
 }
 
