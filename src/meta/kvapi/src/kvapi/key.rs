@@ -60,6 +60,7 @@ where Self: Sized
     type ValueType: kvapi::Value;
 
     /// Return the root prefix of this key: `"<PREFIX>/"`.
+    // TODO: consider the tenant config, it should be a instance method.
     fn root_prefix() -> String {
         format!("{}/", Self::PREFIX)
     }
@@ -150,6 +151,16 @@ impl<K> DirName<K> {
 
     pub fn into_key(self) -> K {
         self.key
+    }
+}
+
+impl<K> DirName<K>
+where K: kvapi::Key
+{
+    /// Return a string with a suffix slash "/"
+    pub fn dir_name_with_slash(&self) -> String {
+        let prefix = self.to_string_key();
+        format!("{}/", prefix)
     }
 }
 

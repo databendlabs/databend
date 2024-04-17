@@ -969,6 +969,9 @@ pub struct EmptyProto {}
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use crate::primitive::Id;
     use crate::schema::DBIdTableName;
@@ -994,21 +997,14 @@ mod kvapi_key_impl {
             Some(DatabaseId::new(self.db_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.db_id)
-                .push_str(&self.table_name)
-                .done()
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.db_id).push_str(&self.table_name)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
+        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
             let db_id = p.next_u64()?;
             let table_name = p.next_str()?;
-            p.done()?;
-
-            Ok(DBIdTableName { db_id, table_name })
+            Ok(Self { db_id, table_name })
         }
     }
 
@@ -1022,19 +1018,13 @@ mod kvapi_key_impl {
             Some(TableId::new(self.table_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .done()
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.table_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
+        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
             let table_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(TableIdToName { table_id })
+            Ok(Self { table_id })
         }
     }
 
@@ -1048,19 +1038,13 @@ mod kvapi_key_impl {
             None
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .done()
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.table_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
+        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
             let table_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(TableId { table_id })
+            Ok(Self { table_id })
         }
     }
 
@@ -1074,21 +1058,14 @@ mod kvapi_key_impl {
             Some(DatabaseId::new(self.db_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.db_id)
-                .push_str(&self.table_name)
-                .done()
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.db_id).push_str(&self.table_name)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let db_id = p.next_u64()?;
-            let table_name = p.next_str()?;
-            p.done()?;
-
-            Ok(TableIdListKey { db_id, table_name })
+        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+            let db_id = b.next_u64()?;
+            let table_name = b.next_str()?;
+            Ok(Self { db_id, table_name })
         }
     }
 
@@ -1130,14 +1107,11 @@ mod kvapi_key_impl {
             Some(TableId::new(self.table_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             // TODO: file is not escaped!!!
             //       There already are non escaped data stored on disk.
             //       We can not change it anymore.
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .push_raw(&self.file)
-                .done()
+            b.push_u64(self.table_id).push_raw(&self.file)
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -1160,19 +1134,13 @@ mod kvapi_key_impl {
             Some(TableId::new(self.table_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .done()
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.table_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let table_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(LeastVisibleTimeKey { table_id })
+        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+            let table_id = b.next_u64()?;
+            Ok(Self { table_id })
         }
     }
 
