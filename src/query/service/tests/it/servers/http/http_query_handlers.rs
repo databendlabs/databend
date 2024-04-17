@@ -1730,3 +1730,29 @@ fn test_parse_ip() -> Result<()> {
     assert_eq!(ip, Some("1.2.3.4".to_string()));
     Ok(())
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_has_result_set() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let sqls = vec![
+        ("create table tb2(id int, c1 varchar) Engine=Fuse;", false),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", false),
+        ("select * from tb2;", true),
+    ];
+
+    let wait_time_secs = 5;
+    for (sql, has_result_set) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        assert!(reply.error().is_none(), "{:?}", reply.error());
+        assert_eq!(
+            reply.state(),
+            ExecuteStateKind::Succeeded,
+            "SQL '{sql}' not finish after {wait_time_secs} secs"
+        );
+        assert_eq!(reply.last().1.has_result_set, Some(has_result_set));
+    }
+
+    Ok(())
+}
