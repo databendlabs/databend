@@ -51,7 +51,6 @@ use crate::send_txn;
 use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_seq;
-use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::SequenceApi;
 
@@ -107,19 +106,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let name_key = &req.name_ident;
 
-        let result = get_sequence_or_err(
+        let (_sequence_seq, sequence_meta) = get_sequence_or_err(
             self,
             name_key,
             format!("get_sequence_next_values: {:?}", name_key),
         )
-        .await;
-
-        let (_sequence_seq, sequence_meta) = match result {
-            Ok((sequence_seq, meta)) => (sequence_seq, meta),
-            Err(err) => {
-                return Err(err);
-            }
-        };
+        .await?;
 
         Ok(GetSequenceReply {
             meta: sequence_meta,
@@ -232,24 +224,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
                 }
             };
 
-            let condition = vec![txn_cond_seq(name_key, Eq, sequence_seq)];
-            let if_then = vec![txn_op_del(name_key)];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
+            let seq = MatchSeq::Exact(sequence_seq);
+            let key = SequenceIdent::new(&name_key.tenant, &name_key.sequence_name);
+            let req = UpsertPB::delete(key).with(seq);
+            let reply = self.upsert_pb(&req).await?;
 
             debug!(
                 name :? =(name_key),
-                succ = succ;
+                prev :? = (reply.prev),
+                is_changed = reply.is_changed();
                 "drop_sequence"
             );
 
-            if succ {
+            if reply.is_changed() {
                 break;
             }
         }
