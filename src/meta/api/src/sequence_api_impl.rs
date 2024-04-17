@@ -133,6 +133,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             )));
         }
 
+        let ident = SequenceIdent::new(&name_key.tenant, &name_key.sequence_name);
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -167,9 +168,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             sequence_meta.current += count;
             sequence_meta.update_on = Utc::now();
 
-            let condition = vec![txn_cond_seq(name_key, Eq, sequence_seq)];
+            let condition = vec![txn_cond_seq(&ident, Eq, sequence_seq)];
             let if_then = vec![
-                txn_op_put(name_key, serialize_struct(&sequence_meta)?), // name -> meta
+                txn_op_put(&ident, serialize_struct(&sequence_meta)?), // name -> meta
             ];
 
             debug!(
@@ -250,7 +251,8 @@ async fn get_sequence_or_err(
     name_key: &SequenceNameIdent,
     msg: impl Display,
 ) -> Result<(u64, SequenceMeta), KVAppError> {
-    let (sequence_seq, sequence_meta) = get_pb_value(kv_api, name_key).await?;
+    let key = SequenceIdent::new(&name_key.tenant, &name_key.sequence_name);
+    let (sequence_seq, sequence_meta) = get_pb_value(kv_api, &key).await?;
 
     if sequence_seq == 0 {
         debug!(seq = sequence_seq, name_ident :? =(name_key); "sequence does not exist");
