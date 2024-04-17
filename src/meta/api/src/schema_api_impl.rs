@@ -2656,7 +2656,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         opts.remove(k);
                     }
                     Some(v) => {
-                        opts.insert(k.to_string_key(), v.to_string_key());
+                        opts.insert(k.to_string(), v.to_string());
                     }
                 }
             }
@@ -4622,7 +4622,7 @@ async fn get_table_id_from_share_by_name(
     match table_names.binary_search(table_name) {
         Ok(i) => Ok(ids[i]),
         Err(_) => Err(KVAppError::AppError(AppError::WrongShareObject(
-            WrongShareObject::new(table_name.to_string_key()),
+            WrongShareObject::new(table_name.to_string()),
         ))),
     }
 }
@@ -4994,8 +4994,8 @@ async fn gc_dropped_db_by_id(
                 }
 
                 let id_key = iter.next().unwrap();
-                if_then.push(txn_op_del(id_key));
-                condition.push(txn_cond_seq(id_key, Eq, tb_id_list_seq));
+                if_then.push(TxnOp::delete(id_key));
+                condition.push(TxnCondition::eq_seq(id_key, tb_id_list_seq));
             }
 
             // for id_key in c {
