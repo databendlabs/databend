@@ -2004,11 +2004,9 @@ Functions overloads:
 9 get(Map(T0, NULL) NULL, T0 NULL) :: NULL
 10 get(Map(T0, T1 NULL), T0) :: T1 NULL
 11 get(Map(T0, T1 NULL) NULL, T0 NULL) :: T1 NULL
-12 get(Map(T0, T1), T0) :: T1 NULL
-13 get(Map(T0, T1) NULL, T0 NULL) :: T1 NULL
+12 get FACTORY
+13 get FACTORY
 14 get FACTORY
-15 get FACTORY
-16 get FACTORY
 0 get_by_keypath FACTORY
 0 get_by_keypath_string FACTORY
 0 get_ignore_case(Variant, String) :: Variant NULL
