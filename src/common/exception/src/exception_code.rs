@@ -366,7 +366,7 @@ build_exceptions! {
     ScriptExecutionError(3002),
 
     // sequence
-    SequenceAlreadyExists(3101),
+    SequenceError(3101),
 }
 
 // Storage errors [3001, 4000].

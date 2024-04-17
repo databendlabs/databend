@@ -18,11 +18,6 @@ use chrono::Utc;
 use super::CreateOption;
 use crate::tenant::Tenant;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SequenceId {
-    pub id: u64,
-}
-
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
 pub struct SequenceNameIdent {
     pub tenant: Tenant,
@@ -61,9 +56,7 @@ pub struct CreateSequenceReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CreateSequenceReply {
-    pub id: u64,
-}
+pub struct CreateSequenceReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceNextValueReq {
@@ -73,7 +66,6 @@ pub struct GetSequenceNextValueReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceNextValueReply {
-    pub id: u64,
     pub start: u64,
     // step has no use until now
     pub step: i64,
@@ -87,7 +79,6 @@ pub struct GetSequenceReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceReply {
-    pub id: u64,
     pub meta: SequenceMeta,
 }
 
@@ -103,42 +94,15 @@ pub struct DropSequenceReply {}
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use super::SequenceId;
     use super::SequenceMeta;
     use super::SequenceNameIdent;
     use crate::tenant::Tenant;
 
-    /// "__fd_seq_by_id/<id>"
-    impl kvapi::Key for SequenceId {
-        const PREFIX: &'static str = "__fd_sequence_by_id";
-
-        type ValueType = SequenceMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let id = p.next_u64()?;
-            p.done()?;
-
-            Ok(Self { id })
-        }
-    }
-
-    /// "__fd_sequence/<tenant>/database/<seq_name>"
+    /// "__fd_sequence/<tenant>/<seq_name>"
     impl kvapi::Key for SequenceNameIdent {
         const PREFIX: &'static str = "__fd_sequence";
 
-        type ValueType = SequenceId;
+        type ValueType = SequenceMeta;
 
         fn parent(&self) -> Option<String> {
             None
@@ -164,12 +128,6 @@ mod kvapi_key_impl {
                 tenant,
                 sequence_name,
             })
-        }
-    }
-
-    impl kvapi::Value for SequenceId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
         }
     }
 
