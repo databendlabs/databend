@@ -121,19 +121,6 @@ impl APIClient {
                         Duration::from_secs(secs)
                     };
                 }
-                "presigned_url_disabled" => {
-                    warn!("presigned_url_disabled is deprecated, please use presign=auto/detect/on/off in DSN instead");
-                    client.presign = match v.as_ref() {
-                        "true" | "1" => PresignMode::On,
-                        "false" | "0" => PresignMode::Off,
-                        _ => {
-                            return Err(Error::BadArgument(format!(
-                                "Invalid value for presigned_url_disabled: {}",
-                                v
-                            )))
-                        }
-                    }
-                }
                 "presign" => {
                     client.presign = match v.as_ref() {
                         "auto" => PresignMode::Auto,
