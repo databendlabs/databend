@@ -59,6 +59,10 @@ async def _(context):
     row = context.conn.query_row("SELECT 15.7563::Decimal(8,4), 2.0+3.0")
     assert row.values() == (Decimal("15.7563"), Decimal("5.0"))
 
+    # Binary
+    row = context.conn.query_row("select to_binary('xyz')")
+    assert row.values() == (b"xyz",)
+
     # Array
     row = context.conn.query_row("select [10::Decimal(15,2), 1.1+2.3]")
     assert row.values() == ([Decimal("10.00"), Decimal("3.40")],)

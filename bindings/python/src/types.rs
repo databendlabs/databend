@@ -19,7 +19,7 @@ use pyo3::exceptions::{PyException, PyStopAsyncIteration, PyStopIteration};
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::GILOnceCell;
-use pyo3::types::{PyDict, PyList, PyTuple, PyType};
+use pyo3::types::{PyBytes, PyDict, PyList, PyTuple, PyType};
 use pyo3_asyncio::tokio::future_into_py;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
@@ -58,7 +58,10 @@ impl IntoPy<PyObject> for Value {
                 dict.into_py(py)
             }
             databend_driver::Value::Boolean(b) => b.into_py(py),
-            databend_driver::Value::Binary(b) => b.into_py(py),
+            databend_driver::Value::Binary(b) => {
+                let buf = PyBytes::new_bound(py, &b);
+                buf.into_py(py)
+            }
             databend_driver::Value::String(s) => s.into_py(py),
             databend_driver::Value::Number(n) => {
                 let v = NumberValue(n);
