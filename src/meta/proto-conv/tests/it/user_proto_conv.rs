@@ -43,7 +43,7 @@ fn test_user_info() -> mt::principal::UserInfo {
     let option = mt::principal::UserOption::default()
         .with_set_flag(mt::principal::UserOptionFlag::TenantSetting)
         .with_default_role(Some("role1".into()))
-        .with_disabled(Some(false));
+        .with_disabled(None);
 
     mt::principal::UserInfo {
         name: "test_user".to_string(),
