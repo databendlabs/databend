@@ -26,7 +26,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
         with:
-          cache-key: bindings-python
+          cache-key: bindings-python-integration
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -69,6 +69,11 @@ jobs:
           else
             echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
           fi
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+        with:
+          cache-key: bindings-python-${{ matrix.os }}-${{ matrix.arch }}
+          target: ${{ matrix.target }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -77,9 +82,9 @@ jobs:
           sccache: 'true'
           args: ${{ steps.opts.outputs.BUILD_ARGS }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: bindings-python-${{ matrix.os }}-${{ matrix.arch }}
           path: bindings/python/dist/*.whl
 
   publish:
@@ -94,7 +99,12 @@ jobs:
       url: https://pypi.org/p/databend-driver/
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
+        with:
+          path: bindings/python/artifacts
+          pattern: bindings-python-*
+          merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+          packages-dir: bindings/python/artifacts

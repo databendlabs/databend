@@ -26,7 +26,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
         with:
-          cache-key: bindings-nodejs
+          cache-key: bindings-nodejs-integration
       - name: Setup node
         uses: actions/setup-node@v4
         with:
@@ -65,7 +65,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
         with:
-          cache-key: bindings-nodejs
+          cache-key: bindings-nodejs-${{ matrix.os }}-${{ matrix.arch }}
           target: ${{ matrix.target }}
       - name: Setup node
         uses: actions/setup-node@v4
@@ -103,9 +103,9 @@ jobs:
         working-directory: bindings/nodejs
         run: |
           strip -x *.node
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: bindings-nodejs
+          name: bindings-nodejs-${{ matrix.os }}-${{ matrix.arch }}
           path: bindings/nodejs/*.node
 
   publish:
@@ -131,9 +131,11 @@ jobs:
         working-directory: bindings/nodejs
         run: yarn install --immutable
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: bindings/nodejs/artifacts
+          pattern: bindings-nodejs-*
+          merge-multiple: true
       - name: Move artifacts
         shell: bash
         working-directory: bindings/nodejs

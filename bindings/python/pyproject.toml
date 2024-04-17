@@ -1,3 +1,7 @@
+[build-system]
+build-backend = "maturin"
+requires = ["maturin>=1.0,<2.0"]
+
 [project]
 classifiers = [
     "Programming Language :: Rust",
@@ -8,7 +12,9 @@ description = "Databend Driver Python Binding"
 license = { text = "Apache-2.0" }
 name = "databend-driver"
 readme = "README.md"
-requires-python = ">=3.7"
+# PyO3 doesn't support python 3.13 yet.
+# ref: https://github.com/apache/opendal/issues/4268
+requires-python = ">=3.7, < 3.13"
 
 [project.optional-dependencies]
 docs = ["pdoc"]
@@ -22,7 +28,3 @@ Repository = "https://github.com/datafuselabs/bendsql"
 features = ["pyo3/extension-module"]
 module-name = "databend_driver._databend_driver"
 python-source = "package"
-
-[build-system]
-build-backend = "maturin"
-requires = ["maturin>=1.0,<2.0"]

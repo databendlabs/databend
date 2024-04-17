@@ -57,8 +57,21 @@ def _(context, input, output):
 async def _(context):
     # NumberValue::Decimal
     row = context.conn.query_row("SELECT 15.7563::Decimal(8,4), 2.0+3.0")
-    expected = (Decimal("15.7563"), Decimal("5.0"))
-    assert row.values() == expected
+    assert row.values() == (Decimal("15.7563"), Decimal("5.0"))
+
+    # Array
+    row = context.conn.query_row("select [10::Decimal(15,2), 1.1+2.3]")
+    assert row.values() == ([Decimal("10.00"), Decimal("3.40")],)
+
+    # Map
+    row = context.conn.query_row("select {'xx':to_date('2020-01-01')}")
+    assert row.values() == ({"xx": "2020-01-01"},)
+
+    # Tuple
+    row = context.conn.query_row(
+        "select (10, '20', to_datetime('2024-04-16 12:34:56.789'))"
+    )
+    assert row.values() == ((10, "20", "2024-04-16 12:34:56.789"),)
 
 
 @then("Select numbers should iterate all rows")
@@ -113,5 +126,4 @@ def _(context):
         (-2, 2, 2.0, "2", "2", "2012-05-31", "2012-05-31 11:20:00"),
         (-3, 3, 3.0, "3", "2", "2016-04-04", "2016-04-04 11:30:00"),
     ]
-    print("==>", ret)
     assert ret == expected
