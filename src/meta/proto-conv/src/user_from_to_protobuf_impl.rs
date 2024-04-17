@@ -100,7 +100,8 @@ impl FromToProto for mt::principal::UserOption {
             .with_flags(flags)
             .with_default_role(p.default_role)
             .with_network_policy(p.network_policy)
-            .with_password_policy(p.password_policy))
+            .with_password_policy(p.password_policy)
+            .with_disabled(p.disabled))
     }
 
     fn to_pb(&self) -> Result<pb::UserOption, Incompatible> {
@@ -111,6 +112,7 @@ impl FromToProto for mt::principal::UserOption {
             default_role: self.default_role().cloned(),
             network_policy: self.network_policy().cloned(),
             password_policy: self.password_policy().cloned(),
+            disabled: self.disabled().cloned(),
         })
     }
 }
