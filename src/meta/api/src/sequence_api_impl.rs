@@ -17,6 +17,7 @@ use std::fmt::Display;
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CreateSequenceError;
+use databend_common_meta_app::app_error::DropSequenceError;
 use databend_common_meta_app::app_error::OutofSequenceRange;
 use databend_common_meta_app::app_error::SequenceAlreadyExists;
 use databend_common_meta_app::app_error::SequenceError;
@@ -137,19 +138,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
-            let result = get_sequence_or_err(
+            let (sequence_seq, mut sequence_meta) = get_sequence_or_err(
                 self,
                 name_key,
                 format!("get_sequence_next_values: {:?}", name_key),
             )
-            .await;
+            .await?;
 
-            let (sequence_seq, mut sequence_meta) = match result {
-                Ok((sequence_seq, meta)) => (sequence_seq, meta),
-                Err(err) => {
-                    return Err(err);
-                }
-            };
             let start = sequence_meta.current;
             let count = req.count;
             if u64::MAX - sequence_meta.current < count {
@@ -208,38 +203,37 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
         let name_key = &req.name_ident;
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let result =
+            get_sequence_or_err(self, name_key, format!("drop_sequence: {:?}", name_key)).await;
 
-            let result =
-                get_sequence_or_err(self, name_key, format!("drop_sequence: {:?}", name_key)).await;
-
-            let (sequence_seq, _sequence_meta) = match result {
-                Ok((sequence_seq, meta)) => (sequence_seq, meta),
-                Err(err) => {
-                    if req.if_exists {
-                        return Ok(DropSequenceReply {});
-                    }
-                    return Err(err);
+        let (sequence_seq, _sequence_meta) = match result {
+            Ok((sequence_seq, meta)) => (sequence_seq, meta),
+            Err(err) => {
+                if req.if_exists {
+                    return Ok(DropSequenceReply {});
                 }
-            };
-
-            let seq = MatchSeq::Exact(sequence_seq);
-            let key = SequenceIdent::new(&name_key.tenant, &name_key.sequence_name);
-            let req = UpsertPB::delete(key).with(seq);
-            let reply = self.upsert_pb(&req).await?;
-
-            debug!(
-                name :? =(name_key),
-                prev :? = (reply.prev),
-                is_changed = reply.is_changed();
-                "drop_sequence"
-            );
-
-            if reply.is_changed() {
-                break;
+                return Err(err);
             }
+        };
+
+        let seq = MatchSeq::Exact(sequence_seq);
+        let key = SequenceIdent::new(&name_key.tenant, &name_key.sequence_name);
+        let req = UpsertPB::delete(key).with(seq);
+        let reply = self.upsert_pb(&req).await?;
+
+        debug!(
+            name :? =(name_key),
+            prev :? = (reply.prev),
+            is_changed = reply.is_changed();
+            "drop_sequence"
+        );
+
+        if !reply.is_changed() {
+            return Err(KVAppError::AppError(AppError::SequenceError(
+                SequenceError::DropSequenceError(DropSequenceError::new(
+                    name_key.sequence_name.clone(),
+                )),
+            )));
         }
         Ok(DropSequenceReply {})
     }

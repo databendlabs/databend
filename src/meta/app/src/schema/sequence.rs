@@ -102,7 +102,6 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use super::SequenceMeta;
-    use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
 
@@ -118,16 +117,8 @@ mod kvapi_impl {
         }
     }
 
-    impl From<ExistError<Resource>> for ErrorCode {
-        fn from(err: ExistError<Resource>) -> Self {
-            ErrorCode::ConnectionAlreadyExists(err.to_string())
-        }
-    }
-
     impl From<UnknownError<Resource>> for ErrorCode {
         fn from(err: UnknownError<Resource>) -> Self {
-            // Special case: use customized message to keep backward compatibility.
-            // TODO: consider using the default message in the future(`err.to_string()`)
             ErrorCode::SequenceError(format!("Sequence '{}' does not exist.", err.name()))
                 .add_message_back(err.ctx())
         }
