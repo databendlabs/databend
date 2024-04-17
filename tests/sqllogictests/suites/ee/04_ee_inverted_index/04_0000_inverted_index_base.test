@@ -419,9 +419,11 @@ SELECT id, score(), title FROM books WHERE query('title:设计 AND 实现 OR 实
 6 1.2672173 Flask Web开发：基于Python的Web应用开发实战（第2版）
 
 # basic index record can't search phrase terms
+onlyif mysql
 statement error 1105
 SELECT id, score(), title FROM books WHERE query('title:"Rust Atomics"') ORDER BY score() DESC
 
+onlyif mysql
 statement error 1105
 SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 description:(学习 +神经网络)^1.1') ORDER BY score() DESC
 
