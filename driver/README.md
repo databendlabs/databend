@@ -43,3 +43,35 @@ while let Some(row) = rows.next().await {
     println!("{} {} {}", title, author, date);
 }
 ```
+
+## Type Mapping
+
+[Databend Types](https://docs.databend.com/sql/sql-reference/data-types/)
+
+### General Data Types
+
+| Databend    | Rust                    |
+| ----------- | ----------------------- |
+| `BOOLEAN`   | `bool`                  |
+| `TINYINT`   | `i8`,`u8`               |
+| `SMALLINT`  | `i16`,`u16`             |
+| `INT`       | `i32`,`u32`             |
+| `BIGINT`    | `i64`,`u64`             |
+| `FLOAT`     | `f32`                   |
+| `DOUBLE`    | `f64`                   |
+| `DECIMAL`   | `String`                |
+| `DATE`      | `chrono::NaiveDate`     |
+| `TIMESTAMP` | `chrono::NaiveDateTime` |
+| `VARCHAR`   | `String`                |
+| `BINARY`    | `Vec<u8>`               |
+
+### Semi-Structured Data Types
+
+| Databend      | Rust            |
+| ------------- | --------------- |
+| `ARRAY[T]`    | `Vec<T>`        |
+| `TUPLE[T, U]` | `(T, U)`        |
+| `MAP[K, V]`   | `HashMap<K, V>` |
+| `VARIANT`     | `String`        |
+| `BITMAP`      | `String`        |
+| `GEOMETRY`    | `String`        |

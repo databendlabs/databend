@@ -36,6 +36,38 @@ while (row) {
 }
 ```
 
+## Type Mapping
+
+[Databend Types](https://docs.databend.com/sql/sql-reference/data-types/)
+
+### General Data Types
+
+| Databend    | Node.js         |
+| ----------- | --------------- |
+| `BOOLEAN`   | `Boolean`       |
+| `TINYINT`   | `Number`        |
+| `SMALLINT`  | `Number`        |
+| `INT`       | `Number`        |
+| `BIGINT`    | `Number`        |
+| `FLOAT`     | `Number`        |
+| `DOUBLE`    | `Number`        |
+| `DECIMAL`   | `String`        |
+| `DATE`      | `Date`          |
+| `TIMESTAMP` | `Date`          |
+| `VARCHAR`   | `String`        |
+| `BINARY`    | `Array(Number)` |
+
+### Semi-Structured Data Types
+
+| Databend   | Node.js  |
+| ---------- | -------- |
+| `ARRAY`    | `Array`  |
+| `TUPLE`    | `Array`  |
+| `MAP`      | `Object` |
+| `VARIANT`  | `String` |
+| `BITMAP`   | `String` |
+| `GEOMETRY` | `String` |
+
 ## Development
 
 ```shell
