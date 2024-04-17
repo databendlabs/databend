@@ -125,6 +125,9 @@ impl<'s> KeyParser<'s> {
         let index = self.index;
         let _ = self.next_raw()?;
 
+        // Exhaust the rest of the elements
+        while self.next_raw().is_ok() {}
+
         Ok(&self.str_key[index..])
     }
 
@@ -249,17 +252,20 @@ mod tests {
         {
             let mut kp = KeyParser::new(s);
             assert_eq!(Ok(s), kp.tail_raw());
+            assert!(kp.done().is_ok());
         }
         {
             let mut kp = KeyParser::new(s);
             kp.next_raw()?;
             assert_eq!(Ok("bar%20-/123"), kp.tail_raw());
+            assert!(kp.done().is_ok());
         }
         {
             let mut kp = KeyParser::new(s);
             kp.next_raw()?;
             kp.next_raw()?;
             assert_eq!(Ok("123"), kp.tail_raw());
+            assert!(kp.done().is_ok());
         }
         {
             let mut kp = KeyParser::new(s);
@@ -267,6 +273,7 @@ mod tests {
             kp.next_raw()?;
             kp.next_raw()?;
             assert!(kp.tail_raw().is_err());
+            assert!(kp.done().is_ok());
         }
 
         Ok(())

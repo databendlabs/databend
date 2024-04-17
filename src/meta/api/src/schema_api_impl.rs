@@ -1768,33 +1768,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    /// List all tables belonging to every db and every tenant.
-    ///
-    /// It returns a list of (table-id, table-meta-seq, table-meta).
-    #[logcall::logcall("debug")]
-    #[minitrace::trace]
-    async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError> {
-        debug!("SchemaApi: {}", func_name!());
-
-        let prefix = TableId::root_prefix();
-        let reply = self.prefix_list_kv(&prefix).await?;
-
-        let mut res = vec![];
-
-        for (kk, vv) in reply.into_iter() {
-            let table_id = TableId::from_str_key(&kk).map_err(|e| {
-                let inv = InvalidReply::new("list_all_tables", &e);
-                let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                MetaError::NetworkError(meta_net_err)
-            })?;
-
-            let table_meta: TableMeta = deserialize_struct(&vv.data)?;
-
-            res.push((table_id, vv.seq, table_meta));
-        }
-        Ok(res)
-    }
-
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError> {
