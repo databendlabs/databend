@@ -149,6 +149,7 @@ use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 use crate::DatamaskApi;
 use crate::SchemaApi;
+use crate::SequenceApi;
 use crate::ShareApi;
 use crate::DEFAULT_MGET_SIZE;
 
@@ -279,7 +280,7 @@ impl SchemaApiTestSuite {
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi + DatamaskApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi + DatamaskApi + SequenceApi,
     {
         let suite = SchemaApiTestSuite {};
 
@@ -5210,7 +5211,10 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn test_sequence<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn test_sequence<MT: SchemaApi + SequenceApi + kvapi::AsKVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let sequence_name = "seq";
 

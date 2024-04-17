@@ -14,9 +14,14 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use kvapi_impl::Resource;
 
 use super::CreateOption;
 use crate::tenant::Tenant;
+use crate::tenant_key::ident::TIdent;
+
+/// Defines the meta-service key for sequence.
+pub type SequenceIdent = TIdent<Resource>;
 
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
 pub struct SequenceNameIdent {
@@ -91,6 +96,44 @@ pub struct DropSequenceReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSequenceReply {}
 
+mod kvapi_impl {
+
+    use databend_common_exception::ErrorCode;
+    use databend_common_meta_kvapi::kvapi;
+
+    use super::SequenceMeta;
+    use crate::tenant_key::errors::ExistError;
+    use crate::tenant_key::errors::UnknownError;
+    use crate::tenant_key::resource::TenantResource;
+
+    pub struct Resource;
+    impl TenantResource for Resource {
+        const PREFIX: &'static str = "__fd_sequence";
+        type ValueType = SequenceMeta;
+    }
+
+    impl kvapi::Value for SequenceMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+
+    impl From<ExistError<Resource>> for ErrorCode {
+        fn from(err: ExistError<Resource>) -> Self {
+            ErrorCode::ConnectionAlreadyExists(err.to_string())
+        }
+    }
+
+    impl From<UnknownError<Resource>> for ErrorCode {
+        fn from(err: UnknownError<Resource>) -> Self {
+            // Special case: use customized message to keep backward compatibility.
+            // TODO: consider using the default message in the future(`err.to_string()`)
+            ErrorCode::SequenceError(format!("Sequence '{}' does not exist.", err.name()))
+                .add_message_back(err.ctx())
+        }
+    }
+}
+
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
@@ -128,12 +171,6 @@ mod kvapi_key_impl {
                 tenant,
                 sequence_name,
             })
-        }
-    }
-
-    impl kvapi::Value for SequenceMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
         }
     }
 }

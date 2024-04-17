@@ -21,6 +21,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CreateDatabaseReply;
