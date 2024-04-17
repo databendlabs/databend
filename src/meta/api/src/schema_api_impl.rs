@@ -3657,7 +3657,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 })?;
 
                 reply.push(LockInfo {
-                    key,
+                    table_id: key.get_table_id(),
                     revision,
                     meta,
                 });
