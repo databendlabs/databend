@@ -13,10 +13,11 @@ name = "databend_driver"
 doc = false
 
 [dependencies]
+chrono = { version = "0.4.35", default-features = false }
 ctor = "0.2.5"
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 once_cell = "1.18"
-pyo3 = { version = "0.21", features = ["abi3-py37"] }
+pyo3 = { version = "0.21", features = ["abi3-py37", "chrono"] }
 pyo3-asyncio = { version = "0.21", features = ["tokio-runtime"] }
 tokio = "1.34"
 tokio-stream = "0.1"

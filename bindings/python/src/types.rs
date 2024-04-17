@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::{NaiveDate, NaiveDateTime};
 use once_cell::sync::Lazy;
 use pyo3::exceptions::{PyException, PyStopAsyncIteration, PyStopIteration};
 use pyo3::intern;
@@ -68,12 +69,12 @@ impl IntoPy<PyObject> for Value {
                 v.into_py(py)
             }
             databend_driver::Value::Timestamp(_) => {
-                let s = self.0.to_string();
-                s.into_py(py)
+                let t = NaiveDateTime::try_from(self.0).unwrap();
+                t.into_py(py)
             }
             databend_driver::Value::Date(_) => {
-                let s = self.0.to_string();
-                s.into_py(py)
+                let d = NaiveDate::try_from(self.0).unwrap();
+                d.into_py(py)
             }
             databend_driver::Value::Array(inner) => {
                 let list = PyList::new_bound(py, inner.into_iter().map(|v| Value(v).into_py(py)));
