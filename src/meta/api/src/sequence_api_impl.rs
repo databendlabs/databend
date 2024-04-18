@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
@@ -62,8 +63,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     ) -> Result<CreateSequenceReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant = &req.tenant;
-        let sequence_name = &req.sequence_name;
+        let tenant = req.ident.tenant();
+        let sequence_name = req.ident.name();
         let meta: SequenceMeta = req.clone().into();
 
         let seq = MatchSeq::from(req.create_option);
@@ -84,7 +85,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             match req.create_option {
                 CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
                     SequenceError::SequenceAlreadyExists(SequenceAlreadyExists::new(
-                        sequence_name.clone(),
+                        sequence_name,
                         format!("create sequence: {:?}", sequence_name),
                     )),
                 ))),
@@ -92,7 +93,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
                 CreateOption::CreateOrReplace => {
                     Err(KVAppError::AppError(AppError::SequenceError(
                         SequenceError::CreateSequenceError(CreateSequenceError::new(
-                            sequence_name.clone(),
+                            sequence_name,
                             format!("replace sequence: {:?} fail", sequence_name),
                         )),
                     )))
@@ -105,13 +106,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
     async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let tenant = &req.tenant;
-        let sequence_name = &req.sequence_name;
-
-        let ident = SequenceIdent::new(tenant, sequence_name);
+        let sequence_name = req.ident.name();
         let (_sequence_seq, sequence_meta) = get_sequence_or_err(
             self,
-            &ident,
+            &req.ident,
             format!("get_sequence_next_values: {:?}", sequence_name),
         )
         .await?;
@@ -127,15 +125,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     ) -> Result<GetSequenceNextValueReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant = &req.tenant;
-        let sequence_name = &req.sequence_name;
+        let sequence_name = req.ident.name();
         if req.count == 0 {
             return Err(KVAppError::AppError(AppError::SequenceError(
-                SequenceError::WrongSequenceCount(WrongSequenceCount::new(sequence_name.clone())),
+                SequenceError::WrongSequenceCount(WrongSequenceCount::new(sequence_name)),
             )));
         }
 
-        let ident = SequenceIdent::new(tenant, sequence_name);
+        let tenant = req.ident.tenant();
+        let ident = req.ident.clone();
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -151,7 +149,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             if u64::MAX - sequence_meta.current < count {
                 return Err(KVAppError::AppError(AppError::SequenceError(
                     SequenceError::OutofSequenceRange(OutofSequenceRange::new(
-                        sequence_name.clone(),
+                        sequence_name,
                         format!(
                             "{:?}: current: {}, count: {}",
                             sequence_name, sequence_meta.current, count
@@ -204,31 +202,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant = &req.tenant;
-        let sequence_name = &req.sequence_name;
-
-        let seq = MatchSeq::GE(0);
-        let key = SequenceIdent::new(tenant, sequence_name);
-        let reply = self.upsert_pb(&UpsertPB::delete(key).with(seq)).await?;
+        let key = req.ident.clone();
+        let reply = self.upsert_pb(&UpsertPB::delete(key)).await?;
 
         debug!(
-            tenant :?= (tenant),
-            sequence_name :? =(sequence_name),
+            tenant :?= (req.ident.tenant()),
+            sequence_name :? =(req.ident.name()),
             prev :? = (reply.prev),
             is_changed = reply.is_changed();
             "drop_sequence"
         );
 
         // return prev if drop success
-        let prev = if let Some(prev) = &reply.prev {
-            if !reply.is_changed() {
-                if req.if_exists { Some(prev.seq) } else { None }
-            } else {
-                Some(prev.seq)
-            }
-        } else {
-            None
-        };
+        let prev = reply.prev.map(|prev| prev.seq);
 
         Ok(DropSequenceReply { prev })
     }

@@ -17,13 +17,12 @@ use chrono::Utc;
 use kvapi_impl::Resource;
 
 use super::CreateOption;
-use crate::tenant::Tenant;
 use crate::tenant_key::ident::TIdent;
 
 /// Defines the meta-service key for sequence.
 pub type SequenceIdent = TIdent<Resource>;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SequenceMeta {
     pub create_on: DateTime<Utc>,
     pub update_on: DateTime<Utc>,
@@ -49,8 +48,7 @@ impl From<CreateSequenceReq> for SequenceMeta {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSequenceReq {
     pub create_option: CreateOption,
-    pub tenant: Tenant,
-    pub sequence_name: String,
+    pub ident: SequenceIdent,
     pub create_on: DateTime<Utc>,
     pub comment: Option<String>,
 }
@@ -60,8 +58,7 @@ pub struct CreateSequenceReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceNextValueReq {
-    pub tenant: Tenant,
-    pub sequence_name: String,
+    pub ident: SequenceIdent,
     pub count: u64,
 }
 
@@ -75,8 +72,7 @@ pub struct GetSequenceNextValueReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceReq {
-    pub tenant: Tenant,
-    pub sequence_name: String,
+    pub ident: SequenceIdent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,8 +83,7 @@ pub struct GetSequenceReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSequenceReq {
     pub if_exists: bool,
-    pub tenant: Tenant,
-    pub sequence_name: String,
+    pub ident: SequenceIdent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

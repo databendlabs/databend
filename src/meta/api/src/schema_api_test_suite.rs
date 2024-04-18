@@ -94,6 +94,7 @@ use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
@@ -5213,7 +5214,9 @@ impl SchemaApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant = Tenant {
+            tenant: "tenant1".to_string(),
+        };
         let sequence_name = "seq";
 
         let create_on = Utc::now();
@@ -5222,8 +5225,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                sequence_name: sequence_name.to_string(),
+                ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
                 comment: Some("seq".to_string()),
             };
@@ -5234,8 +5236,7 @@ impl SchemaApiTestSuite {
         info!("--- get sequence");
         {
             let req = GetSequenceReq {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                sequence_name: sequence_name.to_string(),
+                ident: SequenceIdent::new(&tenant, sequence_name),
             };
             let resp = mt.get_sequence(req).await?;
             assert_eq!(resp.meta.comment, Some("seq".to_string()));
@@ -5245,8 +5246,7 @@ impl SchemaApiTestSuite {
         info!("--- get sequence nextval");
         {
             let req = GetSequenceNextValueReq {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                sequence_name: sequence_name.to_string(),
+                ident: SequenceIdent::new(&tenant, sequence_name),
                 count: 10,
             };
             let resp = mt.get_sequence_next_value(req).await?;
@@ -5257,8 +5257,7 @@ impl SchemaApiTestSuite {
         info!("--- get sequence after nextval");
         {
             let req = GetSequenceReq {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                sequence_name: sequence_name.to_string(),
+                ident: SequenceIdent::new(&tenant, sequence_name),
             };
 
             let resp = mt.get_sequence(req).await?;
@@ -5270,8 +5269,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::CreateOrReplace,
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                sequence_name: sequence_name.to_string(),
+                ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
                 comment: Some("seq1".to_string()),
             };
@@ -5279,8 +5277,7 @@ impl SchemaApiTestSuite {
             let _resp = mt.create_sequence(req).await?;
 
             let req = GetSequenceReq {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                sequence_name: sequence_name.to_string(),
+                ident: SequenceIdent::new(&tenant, sequence_name),
             };
 
             let resp = mt.get_sequence(req).await?;
@@ -5290,16 +5287,14 @@ impl SchemaApiTestSuite {
 
         {
             let req = DropSequenceReq {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                sequence_name: sequence_name.to_string(),
+                ident: SequenceIdent::new(&tenant, sequence_name),
                 if_exists: true,
             };
 
             let _resp = mt.drop_sequence(req).await?;
 
             let req = GetSequenceReq {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                sequence_name: sequence_name.to_string(),
+                ident: SequenceIdent::new(&tenant, sequence_name),
             };
 
             let resp = mt.get_sequence(req).await;

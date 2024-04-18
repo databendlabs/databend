@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_sql::plans::DropSequencePlan;
 use databend_common_storages_fuse::TableContext;
 
@@ -47,8 +48,7 @@ impl Interpreter for DropSequenceInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let req = DropSequenceReq {
-            tenant: self.plan.tenant.clone(),
-            sequence_name: self.plan.sequence.to_string(),
+            ident: SequenceIdent::new(&self.plan.tenant, &self.plan.sequence),
             if_exists: self.plan.if_exists,
         };
         let catalog = self.ctx.get_default_catalog()?;
