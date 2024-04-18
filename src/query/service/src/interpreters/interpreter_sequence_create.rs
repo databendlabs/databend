@@ -17,7 +17,6 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::SequenceNameIdent;
 use databend_common_sql::plans::CreateSequencePlan;
 use databend_common_storages_fuse::TableContext;
 
@@ -50,10 +49,8 @@ impl Interpreter for CreateSequenceInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let req = CreateSequenceReq {
             create_option: self.plan.create_option,
-            name_ident: SequenceNameIdent {
-                tenant: self.plan.tenant.clone(),
-                sequence_name: self.plan.sequence.to_string(),
-            },
+            tenant: self.plan.tenant.clone(),
+            sequence_name: self.plan.sequence.to_string(),
             comment: self.plan.comment.clone(),
             create_on: Utc::now(),
         };

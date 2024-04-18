@@ -18,6 +18,8 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
@@ -38,8 +40,12 @@ impl FromToProto for mt::LockKey {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         match p.key {
-            Some(pb::lock_key::Key::Table(pb::lock_key::Table { table_id })) => {
-                Ok(mt::LockKey::Table { table_id })
+            Some(pb::lock_key::Key::Table(pb::lock_key::Table { table_id, tenant })) => {
+                let non_empty = NonEmptyString::new(tenant)
+                    .map_err(|_e| Incompatible::new("tenant is empty"))?;
+
+                let tenant = Tenant::new_nonempty(non_empty);
+                Ok(mt::LockKey::Table { tenant, table_id })
             }
             None => Err(Incompatible {
                 reason: "LockKey cannot be None".to_string(),
@@ -49,9 +55,10 @@ impl FromToProto for mt::LockKey {
 
     fn to_pb(&self) -> Result<pb::LockKey, Incompatible> {
         let key = match self {
-            mt::LockKey::Table { table_id } => {
+            mt::LockKey::Table { tenant, table_id } => {
                 Some(pb::lock_key::Key::Table(pb::lock_key::Table {
                     table_id: *table_id,
+                    tenant: tenant.tenant_name().to_string(),
                 }))
             }
         };

@@ -23,18 +23,6 @@ use crate::tenant_key::ident::TIdent;
 /// Defines the meta-service key for sequence.
 pub type SequenceIdent = TIdent<Resource>;
 
-#[derive(Hash, Clone, Debug, PartialEq, Eq)]
-pub struct SequenceNameIdent {
-    pub tenant: Tenant,
-    pub sequence_name: String,
-}
-
-impl SequenceNameIdent {
-    pub fn name(&self) -> String {
-        self.sequence_name.clone()
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SequenceMeta {
     pub create_on: DateTime<Utc>,
@@ -61,7 +49,8 @@ impl From<CreateSequenceReq> for SequenceMeta {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSequenceReq {
     pub create_option: CreateOption,
-    pub name_ident: SequenceNameIdent,
+    pub tenant: Tenant,
+    pub sequence_name: String,
     pub create_on: DateTime<Utc>,
     pub comment: Option<String>,
 }
@@ -71,7 +60,8 @@ pub struct CreateSequenceReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceNextValueReq {
-    pub name_ident: SequenceNameIdent,
+    pub tenant: Tenant,
+    pub sequence_name: String,
     pub count: u64,
 }
 
@@ -85,7 +75,8 @@ pub struct GetSequenceNextValueReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceReq {
-    pub name_ident: SequenceNameIdent,
+    pub tenant: Tenant,
+    pub sequence_name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,7 +87,8 @@ pub struct GetSequenceReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSequenceReq {
     pub if_exists: bool,
-    pub name_ident: SequenceNameIdent,
+    pub tenant: Tenant,
+    pub sequence_name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

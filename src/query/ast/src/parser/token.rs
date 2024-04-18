@@ -761,6 +761,8 @@ pub enum TokenKind {
     NATURAL,
     #[token("NETWORK", ignore(ascii_case))]
     NETWORK,
+    #[token("DISABLED", ignore(ascii_case))]
+    DISABLED,
     #[token("NDJSON", ignore(ascii_case))]
     NDJSON,
     #[token("NO_PASSWORD", ignore(ascii_case))]

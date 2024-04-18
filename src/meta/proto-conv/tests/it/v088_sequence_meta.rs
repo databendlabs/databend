@@ -20,11 +20,11 @@ use minitrace::func_name;
 use crate::common;
 
 #[test]
-fn test_decode_v87_sequence_meta() -> anyhow::Result<()> {
-    let sequence_meta_v87 = vec![
+fn test_decode_v88_sequence_meta() -> anyhow::Result<()> {
+    let sequence_meta_v88 = vec![
         10, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 50, 58, 53, 49, 58, 48, 55, 32, 85,
         84, 67, 18, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 50, 58, 53, 49, 58, 48, 55,
-        32, 85, 84, 67, 26, 3, 115, 101, 113, 32, 1, 40, 1, 48, 10, 160, 6, 87, 168, 6, 24,
+        32, 85, 84, 67, 26, 3, 115, 101, 113, 32, 1, 40, 1, 48, 10, 160, 6, 88, 168, 6, 24,
     ];
 
     let want = || mt::SequenceMeta {
@@ -36,7 +36,7 @@ fn test_decode_v87_sequence_meta() -> anyhow::Result<()> {
         current: 10,
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), sequence_meta_v87.as_slice(), 87, want())?;
+    common::test_load_old(func_name!(), sequence_meta_v88.as_slice(), 88, want())?;
 
     Ok(())
 }

@@ -1768,33 +1768,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    /// List all tables belonging to every db and every tenant.
-    ///
-    /// It returns a list of (table-id, table-meta-seq, table-meta).
-    #[logcall::logcall("debug")]
-    #[minitrace::trace]
-    async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError> {
-        debug!("SchemaApi: {}", func_name!());
-
-        let prefix = TableId::root_prefix();
-        let reply = self.prefix_list_kv(&prefix).await?;
-
-        let mut res = vec![];
-
-        for (kk, vv) in reply.into_iter() {
-            let table_id = TableId::from_str_key(&kk).map_err(|e| {
-                let inv = InvalidReply::new("list_all_tables", &e);
-                let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                MetaError::NetworkError(meta_net_err)
-            })?;
-
-            let table_meta: TableMeta = deserialize_struct(&vv.data)?;
-
-            res.push((table_id, vv.seq, table_meta));
-        }
-        Ok(res)
-    }
-
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError> {
@@ -2683,7 +2656,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         opts.remove(k);
                     }
                     Some(v) => {
-                        opts.insert(k.to_string_key(), v.to_string_key());
+                        opts.insert(k.to_string(), v.to_string());
                     }
                 }
             }
@@ -3684,7 +3657,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 })?;
 
                 reply.push(LockInfo {
-                    key,
+                    table_id: key.get_table_id(),
                     revision,
                     meta,
                 });
@@ -4649,7 +4622,7 @@ async fn get_table_id_from_share_by_name(
     match table_names.binary_search(table_name) {
         Ok(i) => Ok(ids[i]),
         Err(_) => Err(KVAppError::AppError(AppError::WrongShareObject(
-            WrongShareObject::new(table_name.to_string_key()),
+            WrongShareObject::new(table_name.to_string()),
         ))),
     }
 }
@@ -5021,8 +4994,8 @@ async fn gc_dropped_db_by_id(
                 }
 
                 let id_key = iter.next().unwrap();
-                if_then.push(txn_op_del(id_key));
-                condition.push(txn_cond_seq(id_key, Eq, tb_id_list_seq));
+                if_then.push(TxnOp::delete(id_key));
+                condition.push(TxnCondition::eq_seq(id_key, tb_id_list_seq));
             }
 
             // for id_key in c {

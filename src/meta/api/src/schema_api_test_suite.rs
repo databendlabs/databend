@@ -94,7 +94,6 @@ use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::SequenceNameIdent;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
@@ -316,7 +315,6 @@ impl SchemaApiTestSuite {
         suite.table_upsert_option(&b.build().await).await?;
         suite.table_list(&b.build().await).await?;
         suite.table_list_many(&b.build().await).await?;
-        suite.table_list_all(&b.build().await).await?;
         suite
             .table_drop_undrop_list_history(&b.build().await)
             .await?;
@@ -5224,10 +5222,8 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
-                name_ident: SequenceNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
-                    sequence_name: sequence_name.to_string(),
-                },
+                tenant: Tenant::new_or_err(tenant, func_name!())?,
+                sequence_name: sequence_name.to_string(),
                 create_on,
                 comment: Some("seq".to_string()),
             };
@@ -5238,10 +5234,8 @@ impl SchemaApiTestSuite {
         info!("--- get sequence");
         {
             let req = GetSequenceReq {
-                name_ident: SequenceNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
-                    sequence_name: sequence_name.to_string(),
-                },
+                tenant: Tenant::new_or_err(tenant, func_name!())?,
+                sequence_name: sequence_name.to_string(),
             };
             let resp = mt.get_sequence(req).await?;
             assert_eq!(resp.meta.comment, Some("seq".to_string()));
@@ -5251,10 +5245,8 @@ impl SchemaApiTestSuite {
         info!("--- get sequence nextval");
         {
             let req = GetSequenceNextValueReq {
-                name_ident: SequenceNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
-                    sequence_name: sequence_name.to_string(),
-                },
+                tenant: Tenant::new_or_err(tenant, func_name!())?,
+                sequence_name: sequence_name.to_string(),
                 count: 10,
             };
             let resp = mt.get_sequence_next_value(req).await?;
@@ -5265,10 +5257,8 @@ impl SchemaApiTestSuite {
         info!("--- get sequence after nextval");
         {
             let req = GetSequenceReq {
-                name_ident: SequenceNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
-                    sequence_name: sequence_name.to_string(),
-                },
+                tenant: Tenant::new_or_err(tenant, func_name!())?,
+                sequence_name: sequence_name.to_string(),
             };
 
             let resp = mt.get_sequence(req).await?;
@@ -5280,10 +5270,8 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::CreateOrReplace,
-                name_ident: SequenceNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
-                    sequence_name: sequence_name.to_string(),
-                },
+                tenant: Tenant::new_or_err(tenant, func_name!())?,
+                sequence_name: sequence_name.to_string(),
                 create_on,
                 comment: Some("seq1".to_string()),
             };
@@ -5291,10 +5279,8 @@ impl SchemaApiTestSuite {
             let _resp = mt.create_sequence(req).await?;
 
             let req = GetSequenceReq {
-                name_ident: SequenceNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
-                    sequence_name: sequence_name.to_string(),
-                },
+                tenant: Tenant::new_or_err(tenant, func_name!())?,
+                sequence_name: sequence_name.to_string(),
             };
 
             let resp = mt.get_sequence(req).await?;
@@ -5304,20 +5290,16 @@ impl SchemaApiTestSuite {
 
         {
             let req = DropSequenceReq {
-                name_ident: SequenceNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
-                    sequence_name: sequence_name.to_string(),
-                },
+                tenant: Tenant::new_or_err(tenant, func_name!())?,
+                sequence_name: sequence_name.to_string(),
                 if_exists: true,
             };
 
             let _resp = mt.drop_sequence(req).await?;
 
             let req = GetSequenceReq {
-                name_ident: SequenceNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
-                    sequence_name: sequence_name.to_string(),
-                },
+                tenant: Tenant::new_or_err(tenant, func_name!())?,
+                sequence_name: sequence_name.to_string(),
             };
 
             let resp = mt.get_sequence(req).await;
@@ -5787,83 +5769,6 @@ impl SchemaApiTestSuite {
                 .list_tables(ListTableReq::new(&util.tenant(), util.db_name()))
                 .await?;
             assert_eq!(n, res.len());
-        }
-
-        Ok(())
-    }
-
-    #[minitrace::trace]
-    async fn table_list_all<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant_name = "tenant1";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-        let db1_name = "db1";
-        let db2_name = "db2";
-
-        info!("--- prepare db");
-        {
-            self.create_database(mt, &tenant, db1_name, "eng1").await?;
-            self.create_database(mt, &tenant, db2_name, "eng1").await?;
-        }
-
-        info!("--- create 2 tables: tb1 tb2");
-        {
-            // Table schema with metadata(due to serde issue).
-            let schema = Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
-            )]));
-
-            let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
-
-            let mut req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db1_name.to_string(),
-                    table_name: "tb1".to_string(),
-                },
-                table_meta: TableMeta {
-                    schema: schema.clone(),
-                    engine: "JSON".to_string(),
-                    options: options.clone(),
-                    ..Default::default()
-                },
-                as_dropped: false,
-            };
-
-            let tb_ids = {
-                req.table_meta
-                    .options
-                    .insert("name".to_string(), "t1".to_string());
-                let res = mt.create_table(req.clone()).await?;
-                assert!(res.table_id >= 1, "table id >= 1");
-                let tb_id1 = res.table_id;
-
-                req.name_ident.db_name = db2_name.to_string();
-                req.name_ident.table_name = "tb2".to_string();
-                req.table_meta
-                    .options
-                    .insert("name".to_string(), "t2".to_string());
-                let res = mt.create_table(req.clone()).await?;
-                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
-                let tb_id2 = res.table_id;
-
-                vec![tb_id1, tb_id2]
-            };
-
-            info!("--- get_tables");
-            {
-                let res = mt.list_all_tables().await?;
-                assert_eq!(tb_ids.len(), res.len());
-
-                // check table-id
-                assert_eq!(tb_ids[0], res[0].0.table_id);
-                assert_eq!(tb_ids[1], res[1].0.table_id);
-
-                // check table-meta
-                assert_eq!(Some(&"t1".to_string()), res[0].2.options.get("name"));
-                assert_eq!(Some(&"t2".to_string()), res[1].2.options.get("name"));
-            }
         }
 
         Ok(())
@@ -6476,7 +6381,10 @@ impl SchemaApiTestSuite {
     #[minitrace::trace]
     async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
-        let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
+        let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
 
         info!("--- prepare db and table");
@@ -6489,7 +6397,10 @@ impl SchemaApiTestSuite {
         {
             info!("--- create table lock revision 1");
             let req1 = CreateLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 2,
                 user: "root".to_string(),
                 node: "node1".to_string(),
@@ -6499,7 +6410,10 @@ impl SchemaApiTestSuite {
 
             info!("--- create table lock revision 2");
             let req2 = CreateLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 2,
                 user: "root".to_string(),
                 node: "node1".to_string(),
@@ -6510,7 +6424,10 @@ impl SchemaApiTestSuite {
 
             info!("--- list table lock revisiosn");
             let req3 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
             };
             let res3 = mt.list_lock_revisions(req3).await?;
             assert_eq!(res3.len(), 2);
@@ -6519,7 +6436,10 @@ impl SchemaApiTestSuite {
 
             info!("--- extend table lock revision 2 expire");
             let req4 = ExtendLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 4,
                 revision: res2.revision,
                 acquire_lock: true,
@@ -6529,7 +6449,10 @@ impl SchemaApiTestSuite {
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));
             let req5 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
             };
             let res5 = mt.list_lock_revisions(req5).await?;
             assert_eq!(res5.len(), 1);
@@ -6537,14 +6460,17 @@ impl SchemaApiTestSuite {
 
             info!("--- delete table lock revision 2");
             let req6 = DeleteLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 revision: res2.revision,
             };
             mt.delete_lock_revision(req6).await?;
 
             info!("--- check table locks is empty");
             let req7 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table { tenant, table_id },
             };
             let res7 = mt.list_lock_revisions(req7).await?;
             assert_eq!(res7.len(), 0);

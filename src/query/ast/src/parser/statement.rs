@@ -3771,6 +3771,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
+    let set_disabled_option = map(
+        rule! {
+            DISABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, disabled)| UserOptionItem::Disabled(disabled),
+    );
     let set_password_policy = map(
         rule! {
             SET ~ PASSWORD ~ ^POLICY ~ ^"=" ~ ^#literal_string
@@ -3792,6 +3798,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #unset_network_policy
         | #set_password_policy
         | #unset_password_policy
+        | #set_disabled_option
     )(i)
 }
 

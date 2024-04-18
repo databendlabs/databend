@@ -550,7 +550,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("lvt:{:?}", buf);
     }
 
-    // lvt
+    // sequence
     {
         let sequence_meta = new_sequence_meta();
         let p = sequence_meta.to_pb()?;
