@@ -32,6 +32,7 @@ pub use item::Item;
 pub use item::NonEmptyItem;
 pub use key::DirName;
 pub use key::Key;
+pub use key::KeyCodec;
 pub use key::KeyError;
 pub use key_builder::KeyBuilder;
 pub use key_parser::KeyParser;

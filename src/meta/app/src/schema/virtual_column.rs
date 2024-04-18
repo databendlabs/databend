@@ -138,17 +138,7 @@ mod kvapi_key_impl {
     use crate::tenant::Tenant;
     use crate::KeyWithTenant;
 
-    /// <prefix>/<tenant>/<table_id>
-    impl kvapi::Key for VirtualColumnNameIdent {
-        const PREFIX: &'static str = "__fd_virtual_column";
-
-        type ValueType = VirtualColumnMeta;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
+    impl kvapi::KeyCodec for VirtualColumnNameIdent {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_str(self.tenant.tenant_name())
                 .push_u64(self.table_id)
@@ -162,6 +152,18 @@ mod kvapi_key_impl {
             let tenant = Tenant::new_nonempty(tenant);
 
             Ok(Self { tenant, table_id })
+        }
+    }
+
+    /// <prefix>/<tenant>/<table_id>
+    impl kvapi::Key for VirtualColumnNameIdent {
+        const PREFIX: &'static str = "__fd_virtual_column";
+
+        type ValueType = VirtualColumnMeta;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
         }
     }
 
