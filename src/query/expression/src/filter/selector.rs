@@ -123,10 +123,11 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             )?,
-            SelectExpr::Like((column_ref, like_pattern, like_str)) => self.process_like(
+            SelectExpr::Like((column_ref, like_pattern, like_str, not)) => self.process_like(
                 column_ref,
                 like_pattern,
                 like_str,
+                *not,
                 true_selection,
                 false_selection,
                 mutable_true_idx,
@@ -328,6 +329,7 @@ impl<'a> Selector<'a> {
         column_ref: &Expr,
         like_pattern: &LikePattern,
         like_str: &String,
+        not: bool,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -356,6 +358,7 @@ impl<'a> Selector<'a> {
             &data_type,
             like_pattern,
             like_str.as_bytes(),
+            not,
             true_selection,
             false_selection,
             mutable_true_idx,
