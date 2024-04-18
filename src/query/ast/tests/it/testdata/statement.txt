@@ -4512,6 +4512,29 @@ AlterUser(
 
 
 ---------- Input ----------
+ALTER USER u1 WITH disabled = false;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH DISABLED = false
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            Disabled(
+                false,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
 ALTER USER u1 WITH default_role = role1;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
@@ -4535,9 +4558,9 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;
+ALTER USER u1 WITH DEFAULT_ROLE = role1, DISABLED=true, TENANTSETTING;
 ---------- Output ---------
-ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1', TENANTSETTING
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1', DISABLED = true, TENANTSETTING
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -4551,6 +4574,9 @@ AlterUser(
         user_options: [
             DefaultRole(
                 "role1",
+            ),
+            Disabled(
+                true,
             ),
             TenantSetting(
                 true,
@@ -4655,6 +4681,33 @@ CreateUser(
         user_options: [
             SetNetworkPolicy(
                 "policy1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DISABLED = true
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        create_option: Create,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            Disabled(
+                true,
             ),
         ],
     },
