@@ -29,6 +29,12 @@ pub struct SequenceNameIdent {
     pub sequence_name: String,
 }
 
+impl SequenceNameIdent {
+    pub fn name(&self) -> String {
+        self.sequence_name.clone()
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SequenceMeta {
     pub create_on: DateTime<Utc>,
@@ -94,15 +100,16 @@ pub struct DropSequenceReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropSequenceReply {}
+pub struct DropSequenceReply {
+    // return prev seq if drop success
+    pub prev: Option<u64>,
+}
 
 mod kvapi_impl {
 
-    use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
     use super::SequenceMeta;
-    use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -114,13 +121,6 @@ mod kvapi_impl {
     impl kvapi::Value for SequenceMeta {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
-        }
-    }
-
-    impl From<UnknownError<Resource>> for ErrorCode {
-        fn from(err: UnknownError<Resource>) -> Self {
-            ErrorCode::SequenceError(format!("Sequence '{}' does not exist.", err.name()))
-                .add_message_back(err.ctx())
         }
     }
 }

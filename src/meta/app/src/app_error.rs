@@ -1002,20 +1002,6 @@ impl OutofSequenceRange {
 }
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[error("DropSequenceError: `{name}`")]
-pub struct DropSequenceError {
-    name: String,
-}
-
-impl DropSequenceError {
-    pub fn new(name: impl ToString) -> Self {
-        Self {
-            name: name.to_string(),
-        }
-    }
-}
-
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("WrongSequenceCount: `{name}`")]
 pub struct WrongSequenceCount {
     name: String,
@@ -1224,9 +1210,6 @@ pub enum SequenceError {
 
     #[error(transparent)]
     WrongSequenceCount(#[from] WrongSequenceCount),
-
-    #[error(transparent)]
-    DropSequenceError(#[from] DropSequenceError),
 }
 
 impl AppErrorMessage for TenantIsEmpty {
@@ -1609,12 +1592,6 @@ impl AppErrorMessage for WrongSequenceCount {
     }
 }
 
-impl AppErrorMessage for DropSequenceError {
-    fn message(&self) -> String {
-        format!("Drop Sequence'{}' fail", self.name)
-    }
-}
-
 impl AppErrorMessage for SequenceError {
     fn message(&self) -> String {
         match self {
@@ -1629,9 +1606,6 @@ impl AppErrorMessage for SequenceError {
                 format!("OutofSequenceRange: '{}'", e.message())
             }
             SequenceError::WrongSequenceCount(e) => {
-                format!("SequenceAlreadyExists: '{}'", e.message())
-            }
-            SequenceError::DropSequenceError(e) => {
                 format!("SequenceAlreadyExists: '{}'", e.message())
             }
         }
@@ -1752,7 +1726,6 @@ impl From<SequenceError> for ErrorCode {
             SequenceError::UnknownSequence(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::OutofSequenceRange(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::WrongSequenceCount(err) => ErrorCode::SequenceError(err.message()),
-            SequenceError::DropSequenceError(err) => ErrorCode::SequenceError(err.message()),
         }
     }
 }

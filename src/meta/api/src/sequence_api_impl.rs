@@ -17,7 +17,6 @@ use std::fmt::Display;
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CreateSequenceError;
-use databend_common_meta_app::app_error::DropSequenceError;
 use databend_common_meta_app::app_error::OutofSequenceRange;
 use databend_common_meta_app::app_error::SequenceAlreadyExists;
 use databend_common_meta_app::app_error::SequenceError;
@@ -65,6 +64,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
+        let name = name_key.name();
         let meta: SequenceMeta = req.clone().into();
 
         let seq = MatchSeq::from(req.create_option);
@@ -84,16 +84,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             match req.create_option {
                 CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
                     SequenceError::SequenceAlreadyExists(SequenceAlreadyExists::new(
-                        name_key.sequence_name.clone(),
-                        format!("create sequence: {:?}", name_key),
+                        name.clone(),
+                        format!("create sequence: {:?}", name),
                     )),
                 ))),
                 CreateOption::CreateIfNotExists => Ok(CreateSequenceReply {}),
                 CreateOption::CreateOrReplace => {
                     Err(KVAppError::AppError(AppError::SequenceError(
                         SequenceError::CreateSequenceError(CreateSequenceError::new(
-                            name_key.sequence_name.clone(),
-                            format!("replace sequence: {:?} fail", name_key),
+                            name.clone(),
+                            format!("replace sequence: {:?} fail", name),
                         )),
                     )))
                 }
@@ -106,11 +106,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let name_key = &req.name_ident;
+        let name = name_key.name();
 
         let (_sequence_seq, sequence_meta) = get_sequence_or_err(
             self,
             name_key,
-            format!("get_sequence_next_values: {:?}", name_key),
+            format!("get_sequence_next_values: {:?}", name),
         )
         .await?;
 
@@ -126,11 +127,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
+        let name = name_key.name();
         if req.count == 0 {
             return Err(KVAppError::AppError(AppError::SequenceError(
-                SequenceError::WrongSequenceCount(WrongSequenceCount::new(
-                    name_key.sequence_name.clone(),
-                )),
+                SequenceError::WrongSequenceCount(WrongSequenceCount::new(name_key.name())),
             )));
         }
 
@@ -141,7 +141,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             let (sequence_seq, mut sequence_meta) = get_sequence_or_err(
                 self,
                 name_key,
-                format!("get_sequence_next_values: {:?}", name_key),
+                format!("get_sequence_next_values: {:?}", name),
             )
             .await?;
 
@@ -150,10 +150,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             if u64::MAX - sequence_meta.current < count {
                 return Err(KVAppError::AppError(AppError::SequenceError(
                     SequenceError::OutofSequenceRange(OutofSequenceRange::new(
-                        name_key.sequence_name.clone(),
+                        name.clone(),
                         format!(
                             "{:?}: current: {}, count: {}",
-                            name_key, sequence_meta.current, count
+                            name, sequence_meta.current, count
                         ),
                     )),
                 )));
@@ -203,23 +203,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
         let name_key = &req.name_ident;
 
-        let result =
-            get_sequence_or_err(self, name_key, format!("drop_sequence: {:?}", name_key)).await;
-
-        let (sequence_seq, _sequence_meta) = match result {
-            Ok((sequence_seq, meta)) => (sequence_seq, meta),
-            Err(err) => {
-                if req.if_exists {
-                    return Ok(DropSequenceReply {});
-                }
-                return Err(err);
-            }
-        };
-
-        let seq = MatchSeq::Exact(sequence_seq);
+        let seq = MatchSeq::GE(0);
         let key = SequenceIdent::new(&name_key.tenant, &name_key.sequence_name);
-        let req = UpsertPB::delete(key).with(seq);
-        let reply = self.upsert_pb(&req).await?;
+        let reply = self.upsert_pb(&UpsertPB::delete(key).with(seq)).await?;
 
         debug!(
             name :? =(name_key),
@@ -228,14 +214,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             "drop_sequence"
         );
 
-        if !reply.is_changed() {
-            return Err(KVAppError::AppError(AppError::SequenceError(
-                SequenceError::DropSequenceError(DropSequenceError::new(
-                    name_key.sequence_name.clone(),
-                )),
-            )));
-        }
-        Ok(DropSequenceReply {})
+        // return prev if drop success
+        let prev = if let Some(prev) = &reply.prev {
+            if !reply.is_changed() {
+                if req.if_exists { Some(prev.seq) } else { None }
+            } else {
+                Some(prev.seq)
+            }
+        } else {
+            None
+        };
+
+        Ok(DropSequenceReply { prev })
     }
 }
 
@@ -254,7 +244,7 @@ async fn get_sequence_or_err(
         Err(KVAppError::AppError(AppError::SequenceError(
             SequenceError::UnknownSequence(UnknownSequence::new(
                 name_key.sequence_name.clone(),
-                format!("{}: {:?}", msg, name_key),
+                format!("{}: {:?}", msg, name_key.name()),
             )),
         )))
     } else {
