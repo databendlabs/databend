@@ -15,6 +15,7 @@
 use databend_common_ast::ast::CreateSequenceStmt;
 use databend_common_ast::ast::DropSequenceStmt;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::SequenceIdent;
 
 use crate::plans::CreateSequencePlan;
 use crate::plans::DropSequencePlan;
@@ -38,8 +39,7 @@ impl Binder {
 
         let plan = CreateSequencePlan {
             create_option: *create_option,
-            tenant,
-            sequence,
+            ident: SequenceIdent::new(tenant, sequence),
             comment: comment.clone(),
         };
         Ok(Plan::CreateSequence(plan.into()))
@@ -59,8 +59,7 @@ impl Binder {
         let sequence = self.normalize_object_identifier(sequence);
 
         let plan = DropSequencePlan {
-            tenant,
-            sequence,
+            ident: SequenceIdent::new(tenant, sequence),
             if_exists: *if_exists,
         };
         Ok(Plan::DropSequence(plan.into()))

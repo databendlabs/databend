@@ -33,7 +33,6 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
@@ -63,19 +62,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     ) -> Result<CreateSequenceReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant = req.ident.tenant();
         let sequence_name = req.ident.name();
         let meta: SequenceMeta = req.clone().into();
 
         let seq = MatchSeq::from(req.create_option);
-        let key = SequenceIdent::new(tenant, sequence_name);
+        let key = req.ident.clone();
         let reply = self
             .upsert_pb(&UpsertPB::update(key, meta).with(seq))
             .await?;
 
         debug!(
-            tenant :?= (tenant),
-            sequence_name :? =(sequence_name),
+            ident :?= (req.ident),
             prev :? = (reply.prev),
             is_changed = reply.is_changed();
             "create_sequence"
@@ -132,7 +129,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             )));
         }
 
-        let tenant = req.ident.tenant();
         let ident = req.ident.clone();
         let mut trials = txn_backoff(None, func_name!());
         loop {
@@ -167,13 +163,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
                 txn_op_put(&ident, serialize_struct(&sequence_meta)?), // name -> meta
             ];
 
-            debug!(
-                current :? =(&sequence_meta.current),
-                tenant :?= (tenant),
-                sequence_name :? =(sequence_name);
-                "get_sequence_next_values"
-            );
-
             let txn_req = TxnRequest {
                 condition,
                 if_then,
@@ -184,8 +173,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
             debug!(
                 current :? =(&sequence_meta.current),
-                tenant :?= (tenant),
-                sequence_name :? =(sequence_name),
+                ident :?= (req.ident),
                 succ = succ;
                 "get_sequence_next_values"
             );
@@ -206,8 +194,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let reply = self.upsert_pb(&UpsertPB::delete(key)).await?;
 
         debug!(
-            tenant :?= (req.ident.tenant()),
-            sequence_name :? =(req.ident.name()),
+            ident :?= (req.ident),
             prev :? = (reply.prev),
             is_changed = reply.is_changed();
             "drop_sequence"

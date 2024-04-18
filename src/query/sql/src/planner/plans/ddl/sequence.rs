@@ -13,19 +13,17 @@
 // limitations under the License.
 
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::schema::SequenceIdent;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSequencePlan {
     pub create_option: CreateOption,
-    pub tenant: Tenant,
-    pub sequence: String,
+    pub ident: SequenceIdent,
     pub comment: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSequencePlan {
-    pub tenant: Tenant,
-    pub sequence: String,
+    pub ident: SequenceIdent,
     pub if_exists: bool,
 }
