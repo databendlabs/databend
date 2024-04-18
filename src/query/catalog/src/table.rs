@@ -558,7 +558,8 @@ impl CompactionLimits {
     }
 
     pub fn limit_by_num_blocks(v: Option<usize>) -> Self {
-        // As n fragmented blocks scattered across at most n segments
+        // As n fragmented blocks scattered across at most n segments,
+        // when no segment_limit provided, we set it to the same value of block_limit
         let segment_limit = v;
         CompactionLimits {
             segment_limit,
