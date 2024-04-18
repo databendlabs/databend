@@ -915,7 +915,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.unwrap().is_empty());
 
             let tbl_ob_name =
@@ -930,7 +930,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
 
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert_eq!(res.share_table_info.1.as_ref().unwrap().len(), 1);
             assert!(
                 res.share_table_info
@@ -1034,7 +1034,7 @@ impl ShareApiTestSuite {
 
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.unwrap().is_empty());
 
             let (_share_meta_seq, share_meta) =
@@ -1113,7 +1113,7 @@ impl ShareApiTestSuite {
 
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.is_none());
 
             // assert share_meta.database is none, and share_meta.entries is empty
