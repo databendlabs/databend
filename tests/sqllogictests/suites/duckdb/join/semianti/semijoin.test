@@ -35,10 +35,9 @@ SELECT * FROM left_table SEMI JOIN (SELECT a as foo from right_table where b = 1
 42	1	1
 
 # Should throw error when filtering on column in right table
-statement error
+statement error (?s)1065.*column a doesn't exist
 SELECT * FROM left_table SEMI JOIN right_table ON left_table.a = right_table.a WHERE right_table.a < 43;
-----
-Binder Error
+
 
 # left results are not deduplicated
 statement ok
