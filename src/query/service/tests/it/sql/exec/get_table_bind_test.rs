@@ -747,11 +747,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_need_compact_after_write(&self, _enable: bool) {
+    fn set_compaction_num_block_hint(&self, _enable: u64) {
         todo!()
     }
 
-    fn get_need_compact_after_write(&self) -> bool {
+    fn get_compaction_num_block_hint(&self) -> u64 {
         todo!()
     }
 

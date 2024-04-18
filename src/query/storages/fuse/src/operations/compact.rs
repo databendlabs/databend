@@ -21,6 +21,7 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -49,6 +50,7 @@ pub struct CompactOptions {
     pub base_snapshot: Arc<TableSnapshot>,
     pub block_per_seg: usize,
     pub num_segment_limit: Option<usize>,
+    pub num_block_limit: Option<usize>,
 }
 
 impl FuseTable {
@@ -57,9 +59,12 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         lock: Arc<dyn Lock>,
-        limit: Option<usize>,
+        num_segment_limit: Option<usize>,
     ) -> Result<()> {
-        let compact_options = if let Some(v) = self.compact_options(limit).await? {
+        let compact_options = if let Some(v) = self
+            .compact_options_with_segment_limit(num_segment_limit)
+            .await?
+        {
             v
         } else {
             return Ok(());
@@ -85,9 +90,12 @@ impl FuseTable {
     pub(crate) async fn do_compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        limit: Option<usize>,
+        limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        let compact_options = if let Some(v) = self.compact_options(limit).await? {
+        let compact_options = if let Some(v) = self
+            .compact_options(limits.segment_limit, limits.block_limit)
+            .await?
+        {
             v
         } else {
             return Ok(None);
@@ -229,8 +237,19 @@ impl FuseTable {
         Ok(())
     }
 
+    async fn compact_options_with_segment_limit(
+        &self,
+        num_segment_limit: Option<usize>,
+    ) -> Result<Option<CompactOptions>> {
+        self.compact_options(num_segment_limit, None).await
+    }
+
     #[async_backtrace::framed]
-    async fn compact_options(&self, limit: Option<usize>) -> Result<Option<CompactOptions>> {
+    async fn compact_options(
+        &self,
+        num_segment_limit: Option<usize>,
+        num_block_limit: Option<usize>,
+    ) -> Result<Option<CompactOptions>> {
         let snapshot_opt = self.read_table_snapshot().await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
@@ -249,7 +268,8 @@ impl FuseTable {
         Ok(Some(CompactOptions {
             base_snapshot,
             block_per_seg,
-            num_segment_limit: limit,
+            num_segment_limit,
+            num_block_limit,
         }))
     }
 }

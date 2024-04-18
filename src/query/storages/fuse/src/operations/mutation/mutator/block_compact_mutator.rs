@@ -32,6 +32,7 @@ use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use log::info;
 use opendal::Operator;
 
 use crate::io::SegmentsIO;
@@ -82,12 +83,16 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
-        let (num_segment_limit, num_block_limit) =
-            if let Some(limit) = self.compact_params.num_segment_limit {
-                (limit, MAX_BLOCK_COUNT * 100)
-            } else {
-                (number_segments, MAX_BLOCK_COUNT)
-            };
+        let num_segment_limit = self
+            .compact_params
+            .num_segment_limit
+            .unwrap_or(number_segments);
+        let num_block_limit = self
+            .compact_params
+            .num_block_limit
+            .unwrap_or(MAX_BLOCK_COUNT);
+
+        info!("block compaction limits: seg {num_segment_limit},  block {num_block_limit}");
 
         // Status.
         self.ctx
@@ -141,8 +146,13 @@ impl BlockCompactMutator {
                     self.generate_part(segments, &mut parts, &mut checker);
                 }
 
-                if checker.compacted_segment_cnt + checker.segments.len() >= num_segment_limit
-                    || checker.compacted_block_cnt >= num_block_limit as u64
+                let residual_segment_cnt = checker.segments.len();
+                let residual_block_cnt = checker
+                    .segments
+                    .iter()
+                    .fold(0, |acc, e| acc + e.1.summary.block_count);
+                if checker.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
+                    || checker.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
                 {
                     is_end = true;
                     break;

@@ -72,7 +72,8 @@ async fn do_hook_compact(
     if ctx.get_settings().get_enable_compact_after_write()? {
         {
             pipeline.set_on_finished(move |err| {
-                if !ctx.get_need_compact_after_write() {
+                let compaction_num_block_hint = ctx.get_compaction_num_block_hint();
+                if compaction_num_block_hint == 0 {
                     return Ok(());
                 }
 
@@ -83,7 +84,7 @@ async fn do_hook_compact(
                 if err.is_ok() {
                     info!("execute {op_name} finished successfully. running table optimization job.");
                     match GlobalIORuntime::instance().block_on({
-                        compact_table(ctx, compact_target, need_lock)
+                        compact_table(ctx, compact_target, compaction_num_block_hint as usize, need_lock)
                     }) {
                         Ok(_) => {
                             info!("execute {op_name} finished successfully. table optimization job finished.");
@@ -106,6 +107,7 @@ async fn do_hook_compact(
 async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: CompactTargetTableDescription,
+    hint_fragmented_blocks: usize,
     need_lock: bool,
 ) -> Result<()> {
     // evict the table from cache
@@ -121,8 +123,8 @@ async fn compact_table(
             catalog: compact_target.catalog,
             database: compact_target.database,
             table: compact_target.table,
-            action: OptimizeTableAction::CompactBlocks,
-            limit: Some(3),
+            action: OptimizeTableAction::CompactBlocks(Some(hint_fragmented_blocks)),
+            limit: None,
             need_lock,
         })?;
 
