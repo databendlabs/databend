@@ -394,15 +394,20 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
-    let mut options = BTreeMap::new();
-    options.insert("tokenizer".to_string(), "chinese".to_string());
+    let mut index_options = BTreeMap::new();
+    index_options.insert("tokenizer".to_string(), "chinese".to_string());
+    index_options.insert(
+        "filters".to_string(),
+        "english_stop,english_stemmer,chinese_stop".to_string(),
+    );
+
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
         name: index_name.clone(),
         column_ids: vec![1, 2],
         sync_creation: true,
-        options,
+        options: index_options.clone(),
     };
 
     let res = handler.do_create_table_index(catalog.clone(), req).await;
@@ -446,6 +451,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "test".to_string(),
@@ -456,6 +462,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "save".to_string(),
@@ -466,6 +473,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "one".to_string(),
@@ -476,6 +484,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "the".to_string(),
@@ -486,6 +495,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "光阴".to_string(),
@@ -496,6 +506,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("idiom".to_string(), None)],
             query_text: "人生".to_string(),
@@ -506,6 +517,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("meaning".to_string(), None)],
             query_text: "people".to_string(),
@@ -516,6 +528,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("meaning".to_string(), None)],
             query_text: "bad".to_string(),
@@ -526,6 +539,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("meaning".to_string(), None)],
             query_text: "黄金".to_string(),
@@ -536,6 +550,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![("meaning".to_string(), None)],
             query_text: "时间".to_string(),
@@ -546,6 +561,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![
                 ("idiom".to_string(), Some(F32::from(5.0))),
@@ -559,6 +575,7 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
             query_fields: vec![
                 ("idiom".to_string(), Some(F32::from(5.0))),

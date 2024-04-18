@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::str::FromStr;
@@ -2294,6 +2295,7 @@ impl<'a> TypeChecker<'a> {
         let mut index_name = "".to_string();
         let mut index_version = "".to_string();
         let mut index_schema = None;
+        let mut index_options = BTreeMap::new();
         for table_index in table_indexes.values() {
             if column_ids
                 .iter()
@@ -2309,6 +2311,7 @@ impl<'a> TypeChecker<'a> {
                     index_fields.push(field);
                 }
                 index_schema = Some(DataSchema::new(index_fields));
+                index_options = table_index.options.clone();
                 break;
             }
         }
@@ -2335,6 +2338,7 @@ impl<'a> TypeChecker<'a> {
         let index_info = InvertedIndexInfo {
             index_name,
             index_version,
+            index_options,
             index_schema: index_schema.unwrap(),
             query_fields,
             query_text: query_text.to_string(),

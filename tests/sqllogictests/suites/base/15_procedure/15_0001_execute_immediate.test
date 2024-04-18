@@ -117,7 +117,6 @@ BEGIN
     SELECT 0 / 0;
 END;
 $$;
-----
 
 
 query error divided by zero
@@ -126,7 +125,6 @@ BEGIN
     RETURN 0 / 0;
 END;
 $$;
-----
 
 statement ok
 set script_max_steps = 100;
@@ -141,7 +139,6 @@ BEGIN
     RETURN sum;
 END;
 $$;
-----
 
 statement ok
 set script_max_steps = 1000;

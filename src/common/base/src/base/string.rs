@@ -115,6 +115,16 @@ pub fn unescape_string(escape_str: &str) -> Result<String> {
         .map_err(|e| ErrorCode::Internal(format!("unescape:{} error:{:?}", escape_str, e)))
 }
 
+pub fn format_byte_size(bytes: usize) -> String {
+    if bytes == 0 {
+        "0".to_string()
+    } else if bytes < 1024 {
+        "< 1 KiB".to_string()
+    } else {
+        convert_byte_size(bytes as f64)
+    }
+}
+
 pub fn convert_byte_size(num: f64) -> String {
     let negative = if num.is_sign_positive() { "" } else { "-" };
     let num = num.abs();

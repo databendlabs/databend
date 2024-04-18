@@ -77,6 +77,7 @@ impl InvertedIndexPruner {
             self.dal.clone(),
             &self.inverted_index_info.index_schema,
             &self.inverted_index_info.query_fields,
+            &self.inverted_index_info.index_options,
             &index_loc,
         )
         .await?;
