@@ -3009,6 +3009,7 @@ dependencies = [
  "lexical-core",
  "log",
  "match-template",
+ "memchr",
  "micromarshal 0.5.0",
  "num-traits",
  "ordered-float 4.2.0",
@@ -12777,9 +12778,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.17.2"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78ea1056caa9180e7e5727eed1a377d96c9f4615303fa82d2f4c202c64736dee"
+checksum = "004809e4710d743a13eb2975fb6a1498da76157e19ad059d595d032e6a50e30b"
 dependencies = [
  "async-trait",
  "educe",

@@ -114,7 +114,7 @@ impl FromToProto for mt::TableNameIdent {
         let p = pb::TableNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.name().to_string(),
+            tenant: self.tenant.tenant_name().to_string(),
             db_name: self.db_name.clone(),
             table_name: self.table_name.clone(),
         };

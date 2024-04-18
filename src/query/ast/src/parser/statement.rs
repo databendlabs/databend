@@ -2273,14 +2273,24 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
         };
         map(
             rule! {
-                INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                #with? ~ INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
                 ~ #dot_separated_idents_1_to_3
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
             },
-            |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            |(
+                with,
+                _,
+                opt_hints,
+                overwrite,
+                _,
+                (catalog, database, table),
+                opt_columns,
+                source,
+            )| {
                 Statement::Insert(InsertStmt {
                     hints: opt_hints,
+                    with,
                     catalog,
                     database,
                     table,
@@ -3759,6 +3769,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
+    let set_disabled_option = map(
+        rule! {
+            DISABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, disabled)| UserOptionItem::Disabled(disabled),
+    );
     let set_password_policy = map(
         rule! {
             SET ~ PASSWORD ~ ^POLICY ~ ^"=" ~ ^#literal_string
@@ -3780,6 +3796,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #unset_network_policy
         | #set_password_policy
         | #unset_password_policy
+        | #set_disabled_option
     )(i)
 }
 

@@ -80,9 +80,16 @@ impl Interpreter for ExecuteImmediateInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let res: Result<_> = try {
-            let dialect = self.ctx.get_settings().get_sql_dialect()?;
+            let settings = self.ctx.get_settings();
+            let sql_dialect = settings.get_sql_dialect()?;
             let tokens = tokenize_sql(&self.plan.script)?;
-            let mut ast = run_parser(&tokens, dialect, ParseMode::Template, false, script_block)?;
+            let mut ast = run_parser(
+                &tokens,
+                sql_dialect,
+                ParseMode::Template,
+                false,
+                script_block,
+            )?;
 
             let mut src = vec![];
             for declare in ast.declares {
@@ -100,7 +107,8 @@ impl Interpreter for ExecuteImmediateInterpreter {
                 ctx: self.ctx.clone(),
             };
             let mut executor = Executor::load(ast.span, client, compiled);
-            let result = executor.run(/* TODO(andylokandy) */ 1000).await?;
+            let script_max_steps = settings.get_script_max_steps()?;
+            let result = executor.run(script_max_steps as usize).await?;
 
             match result {
                 Some(ReturnValue::Var(scalar)) => {

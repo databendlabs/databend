@@ -234,6 +234,7 @@ pub enum SecondaryRolesOption {
 pub enum UserOptionItem {
     TenantSetting(#[drive(skip)] bool),
     DefaultRole(#[drive(skip)] String),
+    Disabled(#[drive(skip)] bool),
     SetNetworkPolicy(#[drive(skip)] String),
     UnsetNetworkPolicy,
     SetPasswordPolicy(#[drive(skip)] String),
@@ -251,6 +252,7 @@ impl UserOptionItem {
             Self::UnsetNetworkPolicy => option.set_network_policy(None),
             Self::SetPasswordPolicy(v) => option.set_password_policy(Some(v.clone())),
             Self::UnsetPasswordPolicy => option.set_password_policy(None),
+            Self::Disabled(v) => option.set_disabled(Some(*v)),
         }
     }
 }
@@ -265,6 +267,7 @@ impl Display for UserOptionItem {
             UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK POLICY"),
             UserOptionItem::SetPasswordPolicy(v) => write!(f, "SET PASSWORD POLICY = '{}'", v),
             UserOptionItem::UnsetPasswordPolicy => write!(f, "UNSET PASSWORD POLICY"),
+            UserOptionItem::Disabled(v) => write!(f, "DISABLED = {}", v),
         }
     }
 }

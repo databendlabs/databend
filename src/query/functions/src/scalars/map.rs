@@ -23,7 +23,6 @@ use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::Domain;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
@@ -97,7 +96,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| Value::Scalar(()),
     );
 
-    // NOTE: order is matter, we first catch <K, Nullable<V>> here.
     registry.register_combine_nullable_2_arg::<MapType<GenericType<0>, NullableType<GenericType<1>>>, GenericType<0>, GenericType<1>, _, _>(
         "get",
         |_, domain, _| {
@@ -114,31 +112,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             Some(v) => output.push(v),
                             None => output.push_null()
                         }
-                        return
-                    }
-                }
-                output.push_null()
-            }
-        ),
-    );
-
-    // NOTE: order is matter, we catch <K, V> here after <K, Nullable<V>>
-    registry.register_combine_nullable_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, GenericType<1>, _, _>(
-        "get",
-        |_, domain, _| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: true,
-                value: domain.as_ref().and_then(|(_, val_domain)| match val_domain {
-                    Domain::Nullable(nullable_domain) => nullable_domain.value.clone(),
-                    _ => Some(Box::new(val_domain.clone())),
-                })
-            })
-        },
-        vectorize_with_builder_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, NullableType<GenericType<1>>>(
-            |map, key, output, _| {
-                for (k, v) in map.iter() {
-                    if k == key {
-                        output.push(v);
                         return
                     }
                 }

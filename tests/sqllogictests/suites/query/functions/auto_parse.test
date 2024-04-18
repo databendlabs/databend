@@ -5,7 +5,6 @@ SELECT '1' + 1
 
 statement error 1006
 SELECT 'foo' + 1
-----
 
 query T
 SELECT parse_json('1') + 1

@@ -51,12 +51,12 @@ where R: TenantResource
         // If there is a specified type name for this alias, use it.
         // Otherwise use the default name
         let type_name = if R::TYPE.is_empty() {
-            "TIdentRaw"
+            "TIdentRaw".to_string()
         } else {
-            R::TYPE
+            format!("{}Raw", R::TYPE)
         };
 
-        f.debug_struct(type_name)
+        f.debug_struct(&type_name)
             .field("tenant", &self.tenant)
             .field("name", &self.name)
             .finish()

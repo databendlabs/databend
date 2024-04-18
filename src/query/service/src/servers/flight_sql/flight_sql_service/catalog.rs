@@ -57,7 +57,7 @@ impl CatalogInfoProvider {
             vec![(
                 catalog_name.clone(),
                 catalog_mgr
-                    .get_catalog(tenant.name(), &catalog_name, ctx.txn_mgr())
+                    .get_catalog(tenant.tenant_name(), &catalog_name, ctx.txn_mgr())
                     .await?,
             )]
         } else {

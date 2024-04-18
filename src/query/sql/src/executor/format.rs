@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_base::base::convert_byte_size;
+use databend_common_base::base::format_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
@@ -1027,13 +1027,7 @@ fn union_all_to_format_tree(
 }
 
 fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
-    let read_size = if info.read_bytes == 0 {
-        "0".to_string()
-    } else if info.read_bytes < 1024 {
-        "< 1 KiB".to_string()
-    } else {
-        convert_byte_size(info.read_bytes as f64)
-    };
+    let read_size = format_byte_size(info.read_bytes);
     let mut items = vec![
         FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
         FormatTreeNode::new(format!("read size: {}", read_size)),

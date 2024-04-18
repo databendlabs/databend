@@ -82,13 +82,14 @@ error:
 create table a (b tuple("c-1" int, "c-2" uint64));
 ---------- Output ---------
 error: 
-  --> SQL:1:48
+  --> SQL:1:19
   |
 1 | create table a (b tuple("c-1" int, "c-2" uint64));
-  | ------          - -----                        ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `NULLABLE`, `(`, `NULL`, `NOT`, or `,`
-  | |               | |                             
-  | |               | while parsing TUPLE(<type>, ...)
+  | ------          - ^^^^^
+  | |               | |
+  | |               | Invalid tuple field name, only support alphanumeric characters
   | |               | while parsing type name
+  | |               | while parsing TUPLE(<name> <type>, ...)
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 

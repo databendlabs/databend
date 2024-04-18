@@ -23,32 +23,12 @@ use chrono::DateTime;
 use chrono::Utc;
 
 use super::CreateOption;
+use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareSpec;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
-
-// serde is required by
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DatabaseNameIdent {
-    pub tenant: Tenant,
-    pub db_name: String,
-}
-
-impl Display for DatabaseNameIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant.name(), self.db_name)
-    }
-}
-
-impl DatabaseNameIdent {
-    pub fn new(tenant: Tenant, db_name: impl ToString) -> Self {
-        DatabaseNameIdent {
-            tenant,
-            db_name: db_name.to_string(),
-        }
-    }
-}
+use crate::KeyWithTenant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseInfo {
@@ -109,9 +89,22 @@ pub struct DbIdListKey {
     pub db_name: String,
 }
 
+impl DbIdListKey {
+    pub fn new(tenant: impl ToTenant, db_name: impl ToString) -> Self {
+        DbIdListKey {
+            tenant: tenant.to_tenant(),
+            db_name: db_name.to_string(),
+        }
+    }
+
+    pub fn tenant(&self) -> &Tenant {
+        &self.tenant
+    }
+}
+
 impl Display for DbIdListKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant.name(), self.db_name)
+        write!(f, "'{}'/'{}'", self.tenant.tenant_name(), self.db_name)
     }
 }
 
@@ -218,23 +211,23 @@ impl Display for CreateDatabaseReq {
             CreateOption::Create => write!(
                 f,
                 "create_db:{}/{}={:?}",
-                self.name_ident.tenant.name(),
-                self.name_ident.db_name,
+                self.name_ident.tenant_name(),
+                self.name_ident.database_name(),
                 self.meta
             ),
             CreateOption::CreateIfNotExists => write!(
                 f,
                 "create_db_if_not_exists:{}/{}={:?}",
-                self.name_ident.tenant.name(),
-                self.name_ident.db_name,
+                self.name_ident.tenant_name(),
+                self.name_ident.database_name(),
                 self.meta
             ),
 
             CreateOption::CreateOrReplace => write!(
                 f,
                 "create_or_replace_db:{}/{}={:?}",
-                self.name_ident.tenant.name(),
-                self.name_ident.db_name,
+                self.name_ident.tenant_name(),
+                self.name_ident.database_name(),
                 self.meta
             ),
         }
@@ -259,8 +252,8 @@ impl Display for RenameDatabaseReq {
         write!(
             f,
             "rename_database:{}/{}=>{}",
-            self.name_ident.tenant.name(),
-            self.name_ident.db_name,
+            self.name_ident.tenant_name(),
+            self.name_ident.database_name(),
             self.new_db_name
         )
     }
@@ -281,8 +274,8 @@ impl Display for DropDatabaseReq {
             f,
             "drop_db(if_exists={}):{}/{}",
             self.if_exists,
-            self.name_ident.tenant.name(),
-            self.name_ident.db_name
+            self.name_ident.tenant_name(),
+            self.name_ident.database_name(),
         )
     }
 }
@@ -302,18 +295,18 @@ impl Display for UndropDatabaseReq {
         write!(
             f,
             "undrop_db:{}/{}",
-            self.name_ident.tenant.name(),
-            self.name_ident.db_name
+            self.name_ident.tenant_name(),
+            self.name_ident.database_name(),
         )
     }
 }
 
 impl UndropDatabaseReq {
     pub fn tenant(&self) -> &Tenant {
-        &self.name_ident.tenant
+        self.name_ident.tenant()
     }
     pub fn db_name(&self) -> &str {
-        &self.name_ident.db_name
+        self.name_ident.database_name()
     }
 }
 
@@ -334,12 +327,9 @@ impl Deref for GetDatabaseReq {
 }
 
 impl GetDatabaseReq {
-    pub fn new(tenant: impl ToTenant, db_name: impl Into<String>) -> GetDatabaseReq {
+    pub fn new(tenant: impl ToTenant, db_name: impl ToString) -> GetDatabaseReq {
         GetDatabaseReq {
-            inner: DatabaseNameIdent {
-                tenant: tenant.to_tenant(),
-                db_name: db_name.into(),
-            },
+            inner: DatabaseNameIdent::new(tenant, db_name),
         }
     }
 }
@@ -356,47 +346,23 @@ pub struct ListDatabaseReq {
     pub filter: Option<DatabaseInfoFilter>,
 }
 
+impl ListDatabaseReq {
+    pub fn tenant(&self) -> &Tenant {
+        &self.tenant
+    }
+}
+
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
+    use crate::schema::database_name_ident::DatabaseNameIdentRaw;
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
     use crate::schema::DatabaseMeta;
-    use crate::schema::DatabaseNameIdent;
     use crate::schema::DbIdList;
     use crate::schema::DbIdListKey;
     use crate::tenant::Tenant;
-
-    /// __fd_database/<tenant>/<db_name> -> <db_id>
-    impl kvapi::Key for DatabaseNameIdent {
-        const PREFIX: &'static str = "__fd_database";
-
-        type ValueType = DatabaseId;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant.name())
-                .push_str(&self.db_name)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_nonempty()?;
-            let db_name = p.next_str()?;
-            p.done()?;
-
-            let tenant = Tenant::new_nonempty(tenant);
-
-            Ok(DatabaseNameIdent { tenant, db_name })
-        }
-    }
 
     /// "__fd_database_by_id/<db_id>"
     impl kvapi::Key for DatabaseId {
@@ -408,19 +374,13 @@ mod kvapi_key_impl {
             None
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.db_id)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.db_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let db_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(DatabaseId { db_id })
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let db_id = parser.next_u64()?;
+            Ok(Self { db_id })
         }
     }
 
@@ -428,25 +388,19 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatabaseIdToName {
         const PREFIX: &'static str = "__fd_database_id_to_name";
 
-        type ValueType = DatabaseNameIdent;
+        type ValueType = DatabaseNameIdentRaw;
 
         fn parent(&self) -> Option<String> {
             Some(DatabaseId::new(self.db_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.db_id)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.db_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let db_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(DatabaseIdToName { db_id })
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let db_id = parser.next_u64()?;
+            Ok(Self { db_id })
         }
     }
 
@@ -460,29 +414,18 @@ mod kvapi_key_impl {
             Some(self.tenant.to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant.name())
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_str(self.tenant.tenant_name())
                 .push_str(&self.db_name)
-                .done()
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_nonempty()?;
-            let db_name = p.next_str()?;
-            p.done()?;
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let tenant = parser.next_nonempty()?;
+            let db_name = parser.next_str()?;
 
             let tenant = Tenant::new_nonempty(tenant);
 
-            Ok(DbIdListKey { tenant, db_name })
-        }
-    }
-
-    impl kvapi::Value for DatabaseId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+            Ok(Self { tenant, db_name })
         }
     }
 
@@ -492,7 +435,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for DatabaseNameIdent {
+    impl kvapi::Value for DatabaseNameIdentRaw {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }

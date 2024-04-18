@@ -1621,7 +1621,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
                 .iter()
                 .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
             {
-                return Err(nom::Err::Error(ErrorKind::Other(
+                return Err(nom::Err::Failure(ErrorKind::Other(
                     "Invalid tuple field name, only support alphanumeric characters",
                 )));
             }

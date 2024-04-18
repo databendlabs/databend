@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -23,6 +25,7 @@ use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::Field;
 use tantivy::Index;
+use tantivy::Score;
 
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_filter;
 use crate::io::write::create_tokenizer_manager;
@@ -30,6 +33,8 @@ use crate::io::write::create_tokenizer_manager;
 #[derive(Clone)]
 pub struct InvertedIndexReader {
     fields: Vec<Field>,
+    field_boosts: Vec<(Field, Score)>,
+    filters: HashSet<String>,
     directory: Arc<InvertedIndexDirectory>,
 }
 
@@ -37,32 +42,50 @@ impl InvertedIndexReader {
     pub async fn try_create(
         dal: Operator,
         schema: &DataSchema,
-        query_columns: &Vec<String>,
+        query_fields: &Vec<(String, Option<F32>)>,
+        index_options: &BTreeMap<String, String>,
         index_loc: &str,
     ) -> Result<Self> {
-        let mut fields = Vec::with_capacity(query_columns.len());
-        for column_name in query_columns {
-            let i = schema.index_of(column_name)?;
+        let mut fields = Vec::with_capacity(query_fields.len());
+        let mut field_boosts = Vec::with_capacity(query_fields.len());
+        for (field_name, boost) in query_fields {
+            let i = schema.index_of(field_name)?;
             let field = Field::from_field_id(i as u32);
             fields.push(field);
+            if let Some(boost) = boost {
+                field_boosts.push((field, boost.0));
+            }
         }
-
         let directory = load_inverted_index_filter(dal.clone(), index_loc.to_string()).await?;
 
-        Ok(Self { fields, directory })
+        let filters: HashSet<String> = match index_options.get("filters") {
+            Some(filters_str) => filters_str.split(',').map(|v| v.to_string()).collect(),
+            None => HashSet::new(),
+        };
+
+        Ok(Self {
+            fields,
+            field_boosts,
+            filters,
+            directory,
+        })
     }
 
     // Filter the rows and scores in the block that can match the query text,
     // if there is no row that can match, this block can be pruned.
     pub fn do_filter(&self, query: &str, row_count: u64) -> Result<Option<Vec<(usize, F32)>>> {
-        let tokenizer_manager = create_tokenizer_manager();
+        let tokenizer_manager = create_tokenizer_manager(&self.filters);
         let directory = Arc::unwrap_or_clone(self.directory.clone());
         let mut index = Index::open(directory)?;
         index.set_tokenizers(tokenizer_manager.clone());
         let reader = index.reader()?;
         let searcher = reader.searcher();
 
-        let query_parser = QueryParser::for_index(&index, self.fields.clone());
+        let mut query_parser = QueryParser::for_index(&index, self.fields.clone());
+        // set optional boost value for the field
+        for (field, boost) in &self.field_boosts {
+            query_parser.set_field_boost(*field, *boost);
+        }
         let query = query_parser.parse_query(query)?;
 
         let collector = TopDocs::with_limit(row_count as usize);

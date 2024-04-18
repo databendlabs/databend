@@ -680,7 +680,7 @@ impl TableContext for CtxDelegation {
         let tenant = self.ctx.get_tenant();
         let db = database.to_string();
         let tbl = table.to_string();
-        let table_meta_key = (tenant.name().to_string(), db, tbl);
+        let table_meta_key = (tenant.tenant_name().to_string(), db, tbl);
         let already_in_cache = { self.cache.lock().contains_key(&table_meta_key) };
         if already_in_cache {
             self.table_from_cache
