@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::base::format_byte_size;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
@@ -23,9 +24,10 @@ use crate::plans::Exchange;
 use crate::plans::RelOperator;
 
 pub fn display_memo(memo: &Memo) -> Result<String> {
+    let mem_size = format_byte_size(memo.mem_size());
     let mut children = vec![
         FormatTreeNode::new(format!("root group: #{}", memo.root.unwrap_or(0))),
-        FormatTreeNode::new(format!("estimated memory: {} bytes", memo.mem_size())),
+        FormatTreeNode::new(format!("estimated memory: {}", mem_size)),
     ];
 
     children.extend(memo.groups.iter().map(group_to_format_tree));

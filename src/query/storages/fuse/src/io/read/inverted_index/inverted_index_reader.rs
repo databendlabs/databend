@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -32,6 +34,7 @@ use crate::io::write::create_tokenizer_manager;
 pub struct InvertedIndexReader {
     fields: Vec<Field>,
     field_boosts: Vec<(Field, Score)>,
+    filters: HashSet<String>,
     directory: Arc<InvertedIndexDirectory>,
 }
 
@@ -40,6 +43,7 @@ impl InvertedIndexReader {
         dal: Operator,
         schema: &DataSchema,
         query_fields: &Vec<(String, Option<F32>)>,
+        index_options: &BTreeMap<String, String>,
         index_loc: &str,
     ) -> Result<Self> {
         let mut fields = Vec::with_capacity(query_fields.len());
@@ -54,9 +58,15 @@ impl InvertedIndexReader {
         }
         let directory = load_inverted_index_filter(dal.clone(), index_loc.to_string()).await?;
 
+        let filters: HashSet<String> = match index_options.get("filters") {
+            Some(filters_str) => filters_str.split(',').map(|v| v.to_string()).collect(),
+            None => HashSet::new(),
+        };
+
         Ok(Self {
             fields,
             field_boosts,
+            filters,
             directory,
         })
     }
@@ -64,7 +74,7 @@ impl InvertedIndexReader {
     // Filter the rows and scores in the block that can match the query text,
     // if there is no row that can match, this block can be pruned.
     pub fn do_filter(&self, query: &str, row_count: u64) -> Result<Option<Vec<(usize, F32)>>> {
-        let tokenizer_manager = create_tokenizer_manager();
+        let tokenizer_manager = create_tokenizer_manager(&self.filters);
         let directory = Arc::unwrap_or_clone(self.directory.clone());
         let mut index = Index::open(directory)?;
         index.set_tokenizers(tokenizer_manager.clone());

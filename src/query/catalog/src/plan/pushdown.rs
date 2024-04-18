@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use databend_common_expression::types::DataType;
@@ -77,6 +78,8 @@ pub struct InvertedIndexInfo {
     pub index_name: String,
     /// The index version.
     pub index_version: String,
+    /// The index options: tokenizer, filters, etc.
+    pub index_options: BTreeMap<String, String>,
     /// The index schema.
     pub index_schema: DataSchema,
     /// The query field names and optional boost value,
