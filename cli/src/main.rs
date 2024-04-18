@@ -74,6 +74,8 @@ impl InputFormat {
             }
             InputFormat::NDJSON => {
                 options.insert("type", "NDJSON");
+                options.insert("null_field_as", "NULL");
+                options.insert("missing_field_as", "NULL");
             }
             InputFormat::Parquet => {
                 options.insert("type", "Parquet");
