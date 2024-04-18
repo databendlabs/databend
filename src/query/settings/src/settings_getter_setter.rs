@@ -588,6 +588,10 @@ impl Settings {
         )
     }
 
+    pub fn get_parse_datetime_ignore_remainder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("parse_datetime_ignore_remainder")? != 0)
+    }
+
     pub fn get_disable_variant_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_variant_check")? != 0)
     }

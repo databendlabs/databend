@@ -14,6 +14,9 @@
 
 use std::io::Write;
 
+use chrono::format::parse_and_remainder;
+use chrono::format::Parsed;
+use chrono::format::StrftimeItems;
 use chrono::prelude::*;
 use chrono::Datelike;
 use chrono::Days;
@@ -168,18 +171,62 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
             |timestamp, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
-                } else {
-                    //%Z	ACST	Local time zone name. Skips all non-whitespace characters during parsing. Identical to %:z when formatting. 6
-                    // %z	+0930	Offset from the local time to UTC (with UTC being +0000).
-                    // %:z	+09:30	Same as %z but with a colon.
-                    // %::z	+09:30:00	Offset from the local time to UTC with seconds.
-                    // %:::z	+09	Offset from the local time to UTC without minutes.
-                    // %#z	+09	Parsing only: Same as %z but allows minutes to be missing or present.
-                    let timezone_strftime = ["%Z", "%z", "%:z", "%::z", "%:::z", "%#z"];
-                    if timezone_strftime
-                        .iter()
-                        .any(|&pattern| format.contains(pattern))
+                    return;
+                }
+                // Parse with extra checks for timezone
+                // %Z	ACST	Local time zone name. Skips all non-whitespace characters during parsing. Identical to %:z when formatting. 6
+                // %z	+0930	Offset from the local time to UTC (with UTC being +0000).
+                // %:z	+09:30	Same as %z but with a colon.
+                // %::z	+09:30:00	Offset from the local time to UTC with seconds.
+                // %:::z	+09	Offset from the local time to UTC without minutes.
+                // %#z	+09	Parsing only: Same as %z but allows minutes to be missing or present.
+                let timezone_strftime = ["%Z", "%z", "%:z", "%::z", "%:::z", "%#z"];
+                let parse_tz = timezone_strftime
+                    .iter()
+                    .any(|&pattern| format.contains(pattern));
+                if ctx.func_ctx.parse_datetime_ignore_remainder {
+                    let mut parsed = Parsed::new();
+                    if parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format))
+                        .is_err()
                     {
+                        output.push_null();
+                        return;
+                    }
+                    // Additional checks and adjustments for parsed timestamp
+                    if parsed.month.is_none() {
+                        parsed.month = Some(1);
+                    }
+                    if parsed.day.is_none() {
+                        parsed.day = Some(1);
+                    }
+                    if parsed.hour_div_12.is_none() && parsed.hour_mod_12.is_none() {
+                        parsed.hour_div_12 = Some(0);
+                        parsed.hour_mod_12 = Some(0);
+                    }
+                    if parsed.minute.is_none() {
+                        parsed.minute = Some(0);
+                    }
+                    if parsed.second.is_none() {
+                        parsed.second = Some(0);
+                    }
+                    if parse_tz {
+                        if parsed.offset.is_none() {
+                            parsed.offset = Some(0);
+                        }
+                        if let Ok(res) = parsed.to_datetime() {
+                            output.push(res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros());
+                        } else {
+                            output.push_null();
+                        }
+                    } else {
+                        if let Ok(res) = parsed.to_naive_datetime_with_offset(0) {
+                            output.push(res.timestamp_micros());
+                        } else {
+                            output.push_null();
+                        }
+                    }
+                } else {
+                    if parse_tz {
                         if let Ok(res) = DateTime::parse_from_str(timestamp, format) {
                             // date need has timezone info.
                             output.push(res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros());
@@ -194,7 +241,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                             output.push_null();
                         }
                     }
-                }
+                };
             },
         ),
     );
