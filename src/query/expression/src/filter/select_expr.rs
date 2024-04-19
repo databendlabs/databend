@@ -33,8 +33,8 @@ pub enum SelectExpr {
     Or((Vec<SelectExpr>, FilterPermutation)),
     // Compare operations: ((Equal | NotEqual | Gt | Lt | Gte | Lte), args, data type of args).
     Compare((SelectOp, Vec<Expr>, Vec<DataType>)),
-    // Like operation: (column ref, like pattern, like str).
-    Like((Expr, LikePattern, String)),
+    // Like operation: (column ref, like pattern, like str, is not like).
+    Like((Expr, LikePattern, String, bool)),
     // Other operations: for example, like, is_null, is_not_null, etc.
     Others(Expr),
     // Boolean column: (column id, data type of column).
@@ -166,8 +166,8 @@ impl SelectExprBuilder {
                                     column.clone(),
                                     like_pattern,
                                     like_str.clone(),
+                                    not,
                                 )))
-                                .can_push_down_not(false)
                             } else {
                                 SelectExprBuildResult::new(SelectExpr::Others(expr.clone()))
                                     .can_push_down_not(false)
