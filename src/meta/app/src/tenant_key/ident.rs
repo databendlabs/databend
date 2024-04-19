@@ -159,40 +159,31 @@ mod kvapi_key_impl {
     use crate::tenant_key::resource::TenantResource;
     use crate::KeyWithTenant;
 
-    impl<R> kvapi::KeyCodec for TIdent<R, String>
-    where R: TenantResource
+    impl<R, N> kvapi::KeyCodec for TIdent<R, N>
+    where
+        R: TenantResource,
+        N: KeyCodec,
     {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(self.tenant_name()).push_str(&self.name)
+            let b = b.push_str(self.tenant_name());
+            self.name.encode_key(b)
         }
 
         fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
             let tenant = p.next_nonempty()?;
-            let name = p.next_str()?;
+            let name = N::decode_key(p)?;
 
-            Ok(TIdent::<R, String>::new(Tenant::new_nonempty(tenant), name))
-        }
-    }
-
-    impl<R> kvapi::KeyCodec for TIdent<R, u64>
-    where R: TenantResource
-    {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(self.tenant_name()).push_u64(self.name)
-        }
-
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
-            let tenant = p.next_nonempty()?;
-            let name = p.next_u64()?;
-
-            Ok(TIdent::<R, u64>::new(Tenant::new_nonempty(tenant), name))
+            Ok(TIdent::<R, N>::new_generic(
+                Tenant::new_nonempty(tenant),
+                name,
+            ))
         }
     }
 
     impl<R, N> kvapi::Key for TIdent<R, N>
     where
         R: TenantResource,
-        TIdent<R, N>: KeyCodec,
+        N: KeyCodec,
         N: Debug,
     {
         const PREFIX: &'static str = R::PREFIX;
