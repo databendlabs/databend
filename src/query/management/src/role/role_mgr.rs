@@ -334,56 +334,55 @@ impl RoleApi for RoleMgr {
             || "",
         )?;
 
-        let mut condition = vec![];
-        let mut if_then = vec![txn_op_put(&owner_key, owner_value.clone())];
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+            let mut condition = vec![];
+            let mut if_then = vec![txn_op_put(&owner_key, owner_value.clone())];
 
-        if let Some(old_role) = old_role {
-            // BUILTIN role or Dropped role may get err, no need to revoke
-            if let Ok(seqv) = self.get_role(&old_role.to_owned(), MatchSeq::GE(1)).await {
-                let old_key = self.role_ident(&old_role);
-                let old_seq = seqv.seq;
-                let mut old_role_info = seqv.data;
-                old_role_info.grants.revoke_privileges(
+            if let Some(ref old_role) = old_role {
+                // BUILTIN role or Dropped role may get err, no need to revoke
+                if let Ok(seqv) = self.get_role(old_role, MatchSeq::GE(1)).await {
+                    let old_key = self.role_ident(old_role);
+                    let old_seq = seqv.seq;
+                    let mut old_role_info = seqv.data;
+                    old_role_info.grants.revoke_privileges(
+                        &grant_object,
+                        make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
+                    );
+                    condition.push(txn_cond_seq(&old_key, Eq, old_seq));
+                    if_then.push(txn_op_put(
+                        &old_key,
+                        serialize_struct(&old_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
+                    ));
+                }
+            }
+
+            // account_admin has all privilege, no need to grant ownership.
+            if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN {
+                let new_key = self.role_ident(new_role);
+                let SeqV {
+                    seq: new_seq,
+                    data: mut new_role_info,
+                    ..
+                } = self.get_role(&new_role.to_owned(), MatchSeq::GE(1)).await?;
+                new_role_info.grants.grant_privileges(
                     &grant_object,
                     make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                 );
-                condition.push(txn_cond_seq(&old_key, Eq, old_seq));
+                condition.push(txn_cond_seq(&new_key, Eq, new_seq));
                 if_then.push(txn_op_put(
-                    &old_key,
-                    serialize_struct(&old_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
+                    &new_key,
+                    serialize_struct(&new_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
                 ));
             }
-        }
 
-        // account_admin has all privilege, no need to grant ownership.
-        if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN {
-            let new_key = self.role_ident(new_role);
-            let SeqV {
-                seq: new_seq,
-                data: mut new_role_info,
-                ..
-            } = self.get_role(&new_role.to_owned(), MatchSeq::GE(1)).await?;
-            new_role_info.grants.grant_privileges(
-                &grant_object,
-                make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
-            );
-            condition.push(txn_cond_seq(&new_key, Eq, new_seq));
-            if_then.push(txn_op_put(
-                &new_key,
-                serialize_struct(&new_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
-            ));
-        }
+            let txn_req = TxnRequest {
+                condition: condition.clone(),
+                if_then: if_then.clone(),
+                else_then: vec![],
+            };
 
-        let mut retry = 0;
-
-        let txn_req = TxnRequest {
-            condition: condition.clone(),
-            if_then: if_then.clone(),
-            else_then: vec![],
-        };
-
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
 

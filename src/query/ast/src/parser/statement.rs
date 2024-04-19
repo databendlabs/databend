@@ -261,16 +261,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let update = map(
         rule! {
-            UPDATE ~ #hint? ~ #table_reference_only
+            #with? ~ UPDATE ~ #hint? ~ #table_reference_only
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, hints, table, _, update_list, opt_selection)| {
+        |(with, _, hints, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
                 hints,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),
+                with,
             })
         },
     );
