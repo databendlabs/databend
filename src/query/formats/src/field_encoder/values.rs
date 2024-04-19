@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+use bstr::ByteSlice;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -32,9 +34,10 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
-use databend_common_io::GeometryDataType;
+use databend_common_io::{GeometryDataType, read_ewkb_srid};
 use geozero::wkb::Ewkb;
-use geozero::CoordDimensions;
+use geozero::{CoordDimensions, ToJson, ToWkt};
+use geozero::geojson::GeoJson;
 use geozero::ToWkb;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
@@ -292,6 +295,7 @@ impl FieldEncoderValues {
         let s = jsonb::to_string(v);
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
+
     fn write_geometry(
         &self,
         column: &BinaryColumn,
@@ -300,9 +304,26 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = Ewkb(v.to_vec())
-            .to_ewkb(CoordDimensions::xy(), None)
-            .unwrap();
+        let s = match self.common_settings().geometry_format {
+            GeometryDataType::WKB => Ewkb(v.to_vec())
+                .to_wkb(CoordDimensions::xy())
+                .unwrap()
+                .as_bytes()
+                .to_vec(),
+            GeometryDataType::WKT => Ewkb(v.to_vec()).to_wkt().unwrap().as_bytes().to_vec(),
+            GeometryDataType::EWKB => v.to_vec(),
+            GeometryDataType::EWKT => Ewkb(v.to_vec())
+                .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(&v)).unwrap())
+                .unwrap()
+                .as_bytes()
+                .to_vec(),
+            GeometryDataType::GEOJSON => GeoJson(std::str::from_utf8(v).unwrap())
+                .to_json()
+                .unwrap()
+                .as_bytes()
+                .to_vec(),
+        };
+
         self.write_string_inner(&s, out_buf, in_nested);
     }
 
