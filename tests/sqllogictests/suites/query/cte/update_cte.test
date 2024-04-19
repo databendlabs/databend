@@ -76,16 +76,9 @@ select * from t2;
 105 106 107 108 109
 110 111 112 113 114
 
-statement error
+statement error (?s)1065.*?column a doesn't exist
 with tt1 as (select * from t1) update t2 set a = tt1.a;
-----
-mysql client error: Server error: `ERROR HY000 (1105): SemanticError. Code: 1065, Text = error: 
-  --> SQL:1:54
-  |
-1 | with tt1 as (select * from t1) update t2 set a = tt1.a;
-  |                                                      ^ column a doesn't exist
 
-.'
 
 statement ok
 drop table t2;
