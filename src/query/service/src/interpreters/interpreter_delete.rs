@@ -179,10 +179,15 @@ impl Interpreter for DeleteInterpreter {
             }
 
             let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
+                // add scalar.used_columns() but ignore _row_id index
                 let mut col_indices = HashSet::new();
+                let mut used_columns = HashSet::new();
+                used_columns.extend(scalar.used_columns().iter());
                 for subquery_desc in &self.plan.subquery_desc {
                     col_indices.extend(subquery_desc.outer_columns.iter());
+                    used_columns.remove(&subquery_desc.index);
                 }
+                col_indices.extend(used_columns.iter());
                 col_indices.into_iter().collect()
             } else {
                 scalar.used_columns().into_iter().collect()
