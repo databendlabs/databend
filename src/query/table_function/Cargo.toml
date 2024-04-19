@@ -1,0 +1,30 @@
+[package]
+name = "databend-common-table-function"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+test = false
+
+[features]
+
+[dependencies] # In alphabetical order
+databend-common-base = { path = "../../common/base" }
+databend-common-catalog = { path = "../catalog" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../expression" }
+databend-common-management = { path = "../management" }
+databend-common-meta-app = { path = "../../meta/app" }
+databend-common-meta-store = { path = "../../meta/store" }
+
+# GitHub dependencies
+
+# Crates.io dependencies
+async-backtrace = { workspace = true }
+parking_lot = { workspace = true }
+
+[dev-dependencies]

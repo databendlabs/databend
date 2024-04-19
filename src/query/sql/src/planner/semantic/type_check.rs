@@ -87,6 +87,7 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_table_function::SequenceTableFunctionApi;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -126,6 +127,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::TableFunctionCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::UDFType;
@@ -741,6 +743,10 @@ impl<'a> TypeChecker<'a> {
                 {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
                         return Ok(udf);
+                    } else if let Some(table_function) =
+                        self.resolve_table_function(*span, func_name, args).await?
+                    {
+                        return Ok(table_function);
                     } else {
                         // Function not found, try to find and suggest similar function name.
                         let all_funcs = BUILTIN_FUNCTIONS
@@ -3584,6 +3590,61 @@ impl<'a> TypeChecker<'a> {
             .into(),
             scalar.1,
         )))
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn resolve_table_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        arguments: &[Expr],
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
+        // only support "nextval" table function for now
+        if func_name != "nextval" {
+            return Ok(None);
+        }
+        if arguments.len() != 1 {
+            return Err(ErrorCode::SemanticError(
+                "sequence nextval function has only one argument".to_string(),
+            )
+            .set_span(span));
+        }
+
+        let sequence_name = if let Expr::ColumnRef { column, .. } = &arguments[0] {
+            if let ColumnID::Name(name) = &column.column {
+                name.name.clone()
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    "table function can only used as column".to_string(),
+                ));
+            }
+        } else {
+            return Err(ErrorCode::SemanticError(
+                "table function can only used as column".to_string(),
+            ));
+        };
+
+        let tenant = self.ctx.get_tenant();
+        let exist = SequenceTableFunctionApi::instance()
+            .get_sequence(tenant, sequence_name.clone())
+            .await?;
+        if exist {
+            let table_func = TableFunctionCall {
+                span,
+                func_name: func_name.to_string(),
+                display_name: func_name.to_string(),
+                return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                arguments: vec![sequence_name],
+            };
+
+            Ok(Some(Box::new((
+                table_func.into(),
+                DataType::Number(NumberDataType::UInt64),
+            ))))
+        } else {
+            Ok(None)
+        }
     }
 
     #[async_recursion::async_recursion]

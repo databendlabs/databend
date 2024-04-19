@@ -43,6 +43,7 @@ databend-common-storages-result-cache = { path = "../storages/result_cache" }
 databend-common-storages-stage = { path = "../storages/stage" }
 databend-common-storages-view = { path = "../storages/view" }
 databend-common-users = { path = "../users" }
+databend-common-table-function = { path = "../table_function" }
 databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
 databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 

@@ -46,6 +46,7 @@ pub enum ScalarExpr {
     SubqueryExpr(SubqueryExpr),
     UDFCall(UDFCall),
     UDFLambdaCall(UDFLambdaCall),
+    TableFunctionCall(TableFunctionCall),
 }
 
 impl ScalarExpr {
@@ -385,6 +386,25 @@ impl TryFrom<ScalarExpr> for UDFLambdaCall {
     }
 }
 
+impl From<TableFunctionCall> for ScalarExpr {
+    fn from(v: TableFunctionCall) -> Self {
+        Self::TableFunctionCall(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for TableFunctionCall {
+    type Error = ErrorCode;
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::TableFunctionCall(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast Scalar to TableFunctionCall",
+            ))
+        }
+    }
+}
+
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct BoundColumnRef {
@@ -646,6 +666,17 @@ pub struct UDFLambdaCall {
     pub span: Span,
     pub func_name: String,
     pub scalar: Box<ScalarExpr>,
+}
+
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct TableFunctionCall {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
+    pub func_name: String,
+    pub display_name: String,
+    pub return_type: Box<DataType>,
+    pub arguments: Vec<String>,
 }
 
 pub trait Visitor<'a>: Sized {

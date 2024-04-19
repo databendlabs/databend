@@ -84,6 +84,7 @@ databend-common-storages-system = { path = "../storages/system" }
 databend-common-storages-view = { path = "../storages/view" }
 databend-common-tracing = { path = "../../common/tracing" }
 databend-common-users = { path = "../users" }
+databend-common-table-function = { path = "../table_function" }
 databend-enterprise-aggregating-index = { path = "../ee_features/aggregating_index" }
 databend-enterprise-background-service = { path = "../ee_features/background_service" }
 databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }

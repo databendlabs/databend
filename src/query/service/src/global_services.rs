@@ -117,6 +117,10 @@ impl GlobalServices {
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
 
+        SequenceTableFunctionApi::init(Arc::new(
+            MutableCatalog::try_create_with_config(config.clone()).await?,
+        ));
+
         DataOperator::init(&config.storage).await?;
         ShareTableConfig::init(
             &config.query.share_endpoint_address,
