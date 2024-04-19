@@ -29,6 +29,7 @@ pub mod reply;
 mod schema_api;
 mod schema_api_impl;
 mod schema_api_test_suite;
+mod sequence_api;
 mod share_api;
 mod share_api_impl;
 mod share_api_test_suite;
@@ -37,6 +38,7 @@ pub mod txn_backoff;
 pub(crate) mod util;
 
 pub mod crud;
+mod sequence_api_impl;
 
 pub use background_api::BackgroundApi;
 pub use background_api_test_suite::BackgroundApiTestSuite;
@@ -44,6 +46,7 @@ pub use data_mask_api::DatamaskApi;
 pub use schema_api::SchemaApi;
 pub(crate) use schema_api_impl::get_db_or_err;
 pub use schema_api_test_suite::SchemaApiTestSuite;
+pub use sequence_api::SequenceApi;
 pub use share_api::ShareApi;
 pub use share_api_test_suite::ShareApiTestSuite;
 pub use util::assert_table_exist;

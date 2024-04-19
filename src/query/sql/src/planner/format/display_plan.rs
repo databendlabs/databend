@@ -218,6 +218,10 @@ impl Plan {
 
             // Stored procedures
             Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
+
+            // sequence
+            Plan::CreateSequence(_) => Ok("CreateSequence".to_string()),
+            Plan::DropSequence(_) => Ok("DropSequence".to_string()),
         }
     }
 }

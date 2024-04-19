@@ -152,6 +152,10 @@ build_exceptions! {
     UnmatchMaskPolicyReturnType(1121),
     Timeout(1122),
     Outdated(1123),
+    // sequence
+    OutofSequenceRange(1124),
+    WrongSequenceCount(1125),
+    UnknownSequence(1126),
 
     // Data Related Errors
 
@@ -360,6 +364,9 @@ build_exceptions! {
     // Script error codes.
     ScriptSemanticError(3001),
     ScriptExecutionError(3002),
+
+    // sequence
+    SequenceError(3101),
 }
 
 // Storage errors [3001, 4000].

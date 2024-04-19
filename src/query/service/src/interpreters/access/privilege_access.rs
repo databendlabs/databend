@@ -1043,7 +1043,9 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
             | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
-            | Plan::AlterTask(_) => {
+            | Plan::AlterTask(_)
+            | Plan::CreateSequence(_)
+            | Plan::DropSequence(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
                     .await?;
             }

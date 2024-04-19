@@ -24,6 +24,7 @@ pub mod index_name_ident;
 mod least_visible_time;
 mod lock;
 mod ownership;
+mod sequence;
 mod table;
 mod virtual_column;
 
@@ -69,6 +70,7 @@ pub use lock::LockMeta;
 pub use lock::LockType;
 pub use lock::TableLockKey;
 pub use ownership::Ownership;
+pub use sequence::*;
 pub use table::CreateTableIndexReply;
 pub use table::CreateTableIndexReq;
 pub use table::CreateTableReply;

@@ -12,23 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod sequence;
-mod share;
-mod stage;
-mod stream;
-mod table;
-mod task;
-mod view;
-mod virtual_column;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::SequenceIdent;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateSequencePlan {
+    pub create_option: CreateOption,
+    pub ident: SequenceIdent,
+    pub comment: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropSequencePlan {
+    pub ident: SequenceIdent,
+    pub if_exists: bool,
+}

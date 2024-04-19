@@ -997,6 +997,8 @@ pub enum TokenKind {
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
     UPLOAD,
+    #[token("SEQUENCE", ignore(ascii_case))]
+    SEQUENCE,
     #[token("SHARE", ignore(ascii_case))]
     SHARE,
     #[token("SHARES", ignore(ascii_case))]

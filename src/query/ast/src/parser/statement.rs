@@ -32,6 +32,7 @@ use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
 
+use super::sequence::sequence;
 use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::copy::copy_into;
@@ -2111,7 +2112,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
         ),
-        // view,stream,index
+        // view,stream,index,sequence
         rule!(
             #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
@@ -2131,6 +2132,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
+            | #sequence
         ),
         rule!(
             #show_users : "`SHOW USERS`"
