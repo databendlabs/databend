@@ -108,17 +108,12 @@ impl kvapi::Key for IdGenerator {
         None
     }
 
-    fn to_string_key(&self) -> String {
-        kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-            .push_raw(&self.resource)
-            .done()
+    fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+        b.push_raw(&self.resource)
     }
 
-    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-        let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
+    fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
         let resource = p.next_raw()?;
-        p.done()?;
 
         Ok(IdGenerator {
             resource: resource.to_string(),

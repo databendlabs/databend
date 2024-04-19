@@ -19,6 +19,7 @@ use std::time::SystemTime;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,6 +39,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::sessions::short_sql;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
@@ -222,6 +224,7 @@ pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(
 
     if result.is_err() {
         // Only log if there's an error
+        ctx.attach_query_str(QueryKind::Unknown, short_sql(sql.to_string()));
         log_query_start(&ctx);
         log_query_finished(&ctx, result.as_ref().err().cloned(), false);
     }

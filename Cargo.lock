@@ -2740,6 +2740,7 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "fast-float",
+ "geos",
  "goldenfile",
  "indent",
  "itertools 0.10.5",
@@ -2956,6 +2957,7 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "codespan-reporting",
  "databend-common-arrow",
+ "geos",
  "geozero",
  "http",
  "opendal",
@@ -2998,6 +3000,7 @@ dependencies = [
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "futures",
  "geo",
+ "geos",
  "geozero",
  "goldenfile",
  "hex",
@@ -3006,6 +3009,7 @@ dependencies = [
  "lexical-core",
  "log",
  "match-template",
+ "memchr",
  "micromarshal 0.5.0",
  "num-traits",
  "ordered-float 4.2.0",
@@ -3041,6 +3045,7 @@ dependencies = [
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "geos",
  "geozero",
  "hex",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a7325f4)",
@@ -3174,6 +3179,7 @@ dependencies = [
  "databend-common-exception",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "geo",
+ "geos",
  "geozero",
  "lexical-core",
  "micromarshal 0.5.0",
@@ -3640,6 +3646,7 @@ dependencies = [
  "derive-visitor",
  "goldenfile",
  "minitrace",
+ "tokio",
  "unindent",
 ]
 
@@ -4595,6 +4602,7 @@ dependencies = [
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
+ "databend-common-script",
  "databend-common-settings",
  "databend-common-sharing",
  "databend-common-sql",
@@ -12770,9 +12778,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.17.2"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78ea1056caa9180e7e5727eed1a377d96c9f4615303fa82d2f4c202c64736dee"
+checksum = "004809e4710d743a13eb2975fb6a1498da76157e19ad059d595d032e6a50e30b"
 dependencies = [
  "async-trait",
  "educe",

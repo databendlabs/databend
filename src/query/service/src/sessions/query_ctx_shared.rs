@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
@@ -125,6 +126,8 @@ pub struct QueryContextShared {
 
     // Records query level data cache metrics
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
+
+    pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
 }
 
 impl QueryContextShared {
@@ -173,6 +176,7 @@ impl QueryContextShared {
             runtime_filters: Default::default(),
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
+            query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
         }))
     }
 
@@ -338,9 +342,13 @@ impl QueryContextShared {
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
         let catalog = self
             .catalog_manager
-            .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
+            .get_catalog(
+                tenant.tenant_name(),
+                catalog,
+                self.session.session_ctx.txn_mgr(),
+            )
             .await?;
-        let cache_table = catalog.get_table(tenant.name(), database, table).await?;
+        let cache_table = catalog.get_table(&tenant, database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
 
@@ -368,14 +376,16 @@ impl QueryContextShared {
                 let tenant = self.get_tenant();
                 let catalog = self
                     .catalog_manager
-                    .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
+                    .get_catalog(
+                        tenant.tenant_name(),
+                        catalog,
+                        self.session.session_ctx.txn_mgr(),
+                    )
                     .await?;
                 let source_table = match catalog.get_stream_source_table(stream_desc)? {
                     Some(source_table) => source_table,
                     None => {
-                        let source_table = catalog
-                            .get_table(tenant.name(), database, table_name)
-                            .await?;
+                        let source_table = catalog.get_table(&tenant, database, table_name).await?;
                         catalog.cache_stream_source_table(
                             stream.get_table_info().clone(),
                             source_table.get_table_info().clone(),

@@ -50,7 +50,7 @@ impl Interpreter for DropTableClusterKeyInterpreter {
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
         let table = catalog
-            .get_table(tenant.name(), &plan.database, &plan.table)
+            .get_table(&tenant, &plan.database, &plan.table)
             .await?;
 
         table.drop_table_cluster_keys(self.ctx.clone()).await?;

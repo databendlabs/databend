@@ -19,6 +19,9 @@ use std::hash::Hasher;
 
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
+use crate::tenant_key::raw::TIdentRaw;
+use crate::tenant_key::resource::TenantResource;
+use crate::KeyWithTenant;
 
 /// `[T]enant[Ident]` is a common meta-service key structure in form of `<PREFIX>/<TENANT>/<NAME>`.
 pub struct TIdent<R> {
@@ -28,9 +31,19 @@ pub struct TIdent<R> {
 }
 
 /// `TIdent` to be Debug does not require `R` to be Debug.
-impl<R> Debug for TIdent<R> {
+impl<R> Debug for TIdent<R>
+where R: TenantResource
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TenantResourceIdent")
+        // If there is a specified type name for this alias, use it.
+        // Otherwise use the default name
+        let type_name = if R::TYPE.is_empty() {
+            "TIdent"
+        } else {
+            R::TYPE
+        };
+
+        f.debug_struct(type_name)
             .field("tenant", &self.tenant)
             .field("name", &self.name)
             .finish()
@@ -85,7 +98,17 @@ impl<R> TIdent<R> {
 
     /// Create a display-able instance.
     pub fn display(&self) -> impl fmt::Display + '_ {
-        format!("'{}'/'{}'", self.tenant.name(), self.name)
+        format!("'{}'/'{}'", self.tenant.tenant_name(), self.name)
+    }
+}
+
+impl<R> TIdent<R>
+where R: TenantResource
+{
+    /// Convert to the corresponding Raw key that can be stored as value,
+    /// getting rid of the embedded per-tenant config.
+    pub fn to_raw(&self) -> TIdentRaw<R> {
+        TIdentRaw::new(self.tenant_name(), self.name())
     }
 }
 

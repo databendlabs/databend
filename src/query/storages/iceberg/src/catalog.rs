@@ -33,6 +33,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -44,6 +46,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -53,6 +57,10 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -91,6 +99,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::DataOperator;
 use futures::TryStreamExt;
+use minitrace::func_name;
 use opendal::Metakey;
 
 use crate::database::IcebergDatabase;
@@ -171,7 +180,8 @@ impl IcebergCatalog {
                 // but I can hardly imagine an empty named folder.
                 continue;
             }
-            let db: Arc<dyn Database> = self.get_database("", db_name).await?;
+            let dummy = Tenant::new_or_err("dummy", func_name!()).unwrap();
+            let db: Arc<dyn Database> = self.get_database(&dummy, db_name).await?;
             dbs.push(db);
         }
         Ok(dbs)
@@ -189,7 +199,7 @@ impl Catalog for IcebergCatalog {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let rel_path = format!("{db_name}/");
 
         let operator = self.operator.operator();
@@ -267,7 +277,7 @@ impl Catalog for IcebergCatalog {
 
     async fn mget_table_names_by_ids(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _table_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
@@ -296,7 +306,7 @@ impl Catalog for IcebergCatalog {
     #[async_backtrace::framed]
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -305,7 +315,7 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
         db.list_tables().await
     }
@@ -313,7 +323,7 @@ impl Catalog for IcebergCatalog {
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         unimplemented!()
@@ -340,7 +350,7 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
+    async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
         let db = self.get_database(tenant, db_name).await?;
         match db.get_table(table_name).await {
             Ok(_) => Ok(true),
@@ -354,7 +364,7 @@ impl Catalog for IcebergCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -391,7 +401,7 @@ impl Catalog for IcebergCatalog {
     #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -528,6 +538,24 @@ impl Catalog for IcebergCatalog {
 
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
+        unimplemented!()
+    }
+
+    async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        unimplemented!()
+    }
+    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+        unimplemented!()
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        _req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        unimplemented!()
+    }
+
+    async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
     }
 }

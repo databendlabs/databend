@@ -589,6 +589,10 @@ impl Settings {
         )
     }
 
+    pub fn get_parse_datetime_ignore_remainder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("parse_datetime_ignore_remainder")? != 0)
+    }
+
     pub fn get_disable_variant_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_variant_check")? != 0)
     }
@@ -632,5 +636,9 @@ impl Settings {
     pub fn get_geometry_output_format(&self) -> Result<GeometryDataType> {
         let v = self.try_get_string("geometry_output_format")?;
         v.parse()
+    }
+
+    pub fn get_script_max_steps(&self) -> Result<u64> {
+        self.try_get_u64("script_max_steps")
     }
 }

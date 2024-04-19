@@ -60,7 +60,7 @@ async fn check_segment_column_ids(
     // get the latest tbl
     let table = catalog
         .get_table(
-            fixture.default_tenant().name(),
+            &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             fixture.default_table_name().as_str(),
         )
@@ -177,7 +177,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     .with_default_expr(Some("(1,15.0)".to_string()));
 
     let add_table_column_plan = AddTableColumnPlan {
-        tenant: fixture.default_tenant().name().to_string(),
+        tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
@@ -205,7 +205,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         .get_catalog(&catalog_name)
         .await?
         .get_table(
-            fixture.default_tenant().name(),
+            &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             fixture.default_table_name().as_str(),
         )

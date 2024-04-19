@@ -1483,6 +1483,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
+            AlterTableAction::ModifyTableComment { new_comment } => {
+                let action_name = format!("Action Modify Comment To {}", new_comment);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
             AlterTableAction::AddColumn { column, option } => {
                 let action_name = match option {
                     AddColumnOption::First => format!("Action Add column {} first", column),

@@ -109,6 +109,7 @@ use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
+use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
@@ -390,7 +391,7 @@ impl Binder {
                 self.ctx
                     .get_catalog(&ctl_name)
                     .await?
-                    .get_database(self.ctx.get_tenant().name(), &database)
+                    .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
             }
@@ -586,7 +587,7 @@ impl Binder {
             // safely eliminate this "FUSE" constant and the table meta option entry.
             let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
-                .get_database(self.ctx.get_tenant().name(), &database)
+                .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
@@ -835,6 +836,14 @@ impl Binder {
                     table,
                 })))
             }
+            AlterTableAction::ModifyTableComment { new_comment } => {
+                Ok(Plan::ModifyTableComment(Box::new(ModifyTableCommentPlan {
+                    new_comment: new_comment.to_string(),
+                    catalog,
+                    database,
+                    table,
+                })))
+            }
             AlterTableAction::RenameColumn {
                 old_column,
                 new_column,
@@ -848,7 +857,7 @@ impl Binder {
                     .analyze_rename_column(old_column, new_column, schema)
                     .await?;
                 Ok(Plan::RenameTableColumn(Box::new(RenameTableColumnPlan {
-                    tenant: self.ctx.get_tenant().name().to_string(),
+                    tenant: self.ctx.get_tenant(),
                     catalog,
                     database,
                     table,
@@ -875,7 +884,7 @@ impl Binder {
                     AstAddColumnOption::End => AddColumnOption::End,
                 };
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
-                    tenant: self.ctx.get_tenant().name().to_string(),
+                    tenant: self.ctx.get_tenant(),
                     catalog,
                     database,
                     table,
@@ -938,7 +947,7 @@ impl Binder {
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
                     AlterTableClusterKeyPlan {
-                        tenant: tenant.name().to_string(),
+                        tenant,
                         catalog,
                         database,
                         table,
@@ -948,7 +957,7 @@ impl Binder {
             }
             AlterTableAction::DropTableClusterKey => Ok(Plan::DropTableClusterKey(Box::new(
                 DropTableClusterKeyPlan {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     catalog,
                     database,
                     table,
@@ -981,7 +990,7 @@ impl Binder {
                 };
 
                 Ok(Plan::ReclusterTable(Box::new(ReclusterTablePlan {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     catalog,
                     database,
                     table,
@@ -994,7 +1003,7 @@ impl Binder {
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point).await?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     catalog,
                     database,
                     table,

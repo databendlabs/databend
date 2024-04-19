@@ -33,8 +33,8 @@ use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::share;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::storage::StorageS3Config;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;
@@ -56,10 +56,7 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
         comment: "foo bar".to_string(),
         drop_on: None,
         shared_by: BTreeSet::new(),
-        from_share: Some(share::ShareNameIdent {
-            tenant: Tenant::new_literal("tenant"),
-            share_name: "share".to_string(),
-        }),
+        from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
     }
 }
 
@@ -145,6 +142,17 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
 fn new_lvt() -> mt::LeastVisibleTime {
     mt::LeastVisibleTime {
         time: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+    }
+}
+
+fn new_sequence_meta() -> mt::SequenceMeta {
+    mt::SequenceMeta {
+        create_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+        update_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+        comment: Some("seq".to_string()),
+        start: 1,
+        step: 1,
+        current: 10,
     }
 }
 
@@ -540,6 +548,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("lvt:{:?}", buf);
+    }
+
+    // sequence
+    {
+        let sequence_meta = new_sequence_meta();
+        let p = sequence_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("sequence:{:?}", buf);
     }
 
     Ok(())

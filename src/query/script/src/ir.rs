@@ -58,41 +58,6 @@ impl<const REFKIND: usize> Display for Ref<REFKIND> {
     }
 }
 
-#[derive(Default)]
-pub struct RefAllocator {
-    next_index: usize,
-}
-
-impl<const REFKIND: usize> Ref<REFKIND> {
-    pub fn new(span: Span, name: &str, allocator: &mut RefAllocator) -> Self {
-        let index = allocator.next_index;
-        allocator.next_index += 1;
-        Ref {
-            span,
-            index,
-            display_name: name.to_string(),
-        }
-    }
-
-    pub fn new_internal(span: Span, hint: &str, allocator: &mut RefAllocator) -> Self {
-        let index = allocator.next_index;
-        allocator.next_index += 1;
-        Ref {
-            span,
-            index,
-            display_name: format!("__{hint}{index}"),
-        }
-    }
-
-    pub fn placeholder(index: usize) -> Self {
-        Ref {
-            span: None,
-            index,
-            display_name: format!(":{}", index),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum ScriptIR {
     /// Executes a SQL query and stores the result in a named result set.
@@ -194,11 +159,11 @@ impl StatementTemplate {
         StatementTemplate { span, stmt }
     }
 
-    pub fn subst(&self, lookup_var: impl Fn(VarRef) -> Result<Literal>) -> Result<Statement> {
+    pub fn subst(&self, lookup_var: impl Fn(VarRef) -> Result<Expr>) -> Result<Statement> {
         #[derive(VisitorMut)]
         #[visitor(Expr(enter), Identifier(enter))]
         struct SubstVisitor<'a> {
-            lookup_var: &'a dyn Fn(VarRef) -> Result<Literal>,
+            lookup_var: &'a dyn Fn(VarRef) -> Result<Expr>,
             error: Option<ErrorCode>,
         }
 
@@ -209,7 +174,7 @@ impl StatementTemplate {
                     let value = (self.lookup_var)(VarRef::placeholder(index));
                     match value {
                         Ok(value) => {
-                            *expr = Expr::Literal { span: *span, value };
+                            *expr = value;
                         }
                         Err(e) => {
                             self.error = Some(e.set_span(*span));
@@ -223,7 +188,10 @@ impl StatementTemplate {
                     let index = ident.name.parse::<usize>().unwrap();
                     let value = (self.lookup_var)(VarRef::placeholder(index));
                     match value {
-                        Ok(Literal::String(name)) => {
+                        Ok(Expr::Literal {
+                            value: Literal::String(name),
+                            ..
+                        }) => {
                             *ident = Identifier::from_name(ident.span, name);
                         }
                         Ok(value) => {

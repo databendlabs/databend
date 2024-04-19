@@ -76,6 +76,7 @@ impl Binder {
         stmt: &InsertStmt,
     ) -> Result<Plan> {
         let InsertStmt {
+            with,
             catalog,
             database,
             table,
@@ -84,13 +85,15 @@ impl Binder {
             overwrite,
             ..
         } = stmt;
+        if let Some(with) = &with {
+            self.add_cte(with, bind_context)?;
+        }
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-        let table_id = table.get_id();
         let schema = self.schema_project(&table.schema(), columns)?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {
@@ -190,10 +193,10 @@ impl Binder {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
-            table_id,
             schema,
             overwrite: *overwrite,
             source: input_source?,
+            table_info: None,
         };
 
         Ok(Plan::Insert(Box::new(plan)))

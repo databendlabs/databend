@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
@@ -86,7 +87,7 @@ impl FuseTable {
         table: Arc<dyn Table>,
         index_name: String,
         index_version: String,
-        tokenizer_name: String,
+        index_options: &BTreeMap<String, String>,
         index_schema: TableSchemaRef,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
@@ -192,7 +193,7 @@ impl FuseTable {
                 output,
                 index_name.clone(),
                 index_version.clone(),
-                tokenizer_name.clone(),
+                index_options.clone(),
                 data_schema.clone(),
                 operator.clone(),
             )?))
@@ -278,7 +279,7 @@ impl AsyncSource for InvertedIndexSource {
 pub struct InvertedIndexTransform {
     index_name: String,
     index_version: String,
-    tokenizer_name: String,
+    index_options: BTreeMap<String, String>,
     data_schema: DataSchema,
     operator: Operator,
 }
@@ -289,14 +290,14 @@ impl InvertedIndexTransform {
         output: Arc<OutputPort>,
         index_name: String,
         index_version: String,
-        tokenizer_name: String,
+        index_options: BTreeMap<String, String>,
         data_schema: DataSchema,
         operator: Operator,
     ) -> Result<Box<dyn Processor>> {
         Ok(AsyncTransformer::create(input, output, Self {
             index_name,
             index_version,
-            tokenizer_name,
+            index_options,
             data_schema,
             operator,
         }))
@@ -315,7 +316,7 @@ impl AsyncTransform for InvertedIndexTransform {
             .unwrap();
 
         let mut index_writer =
-            InvertedIndexWriter::try_create(self.data_schema.clone(), &self.tokenizer_name)?;
+            InvertedIndexWriter::try_create(self.data_schema.clone(), &self.index_options)?;
         index_writer.add_block(&data_block)?;
 
         let index_location =
@@ -413,7 +414,7 @@ impl AsyncSink for InvertedIndexSink {
 
             if let Some(share_table_info) = res.share_table_info {
                 save_share_table_info(
-                    self.ctx.get_tenant().name(),
+                    self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_data_operator()?.operator(),
                     share_table_info,
                 )

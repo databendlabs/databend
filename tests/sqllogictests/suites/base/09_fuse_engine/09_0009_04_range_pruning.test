@@ -44,8 +44,23 @@ select max(a) from range_test_t where a >= 4000 and a <= 5000;
 ----
 5000
 
+## issue:https://github.com/datafuselabs/databend/issues/15170
+
 statement ok
-drop table range_test_t
+create or replace table test_range_array(doc varchar, embedding ARRAY(FLOAT32 not null));
+
+statement ok
+insert into test_range_array(doc)values('xx');
+
+query I
+select count() from test_range_array where embedding is not null;
+----
+0
+
+query I
+select count() from test_range_array where embedding is null;
+----
+1
 
 statement ok
 DROP DATABASE db_09_0009_04

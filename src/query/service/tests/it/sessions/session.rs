@@ -27,12 +27,12 @@ async fn test_session() -> Result<()> {
     // Tenant.
     {
         let actual = session.get_current_tenant();
-        assert_eq!(actual.name(), "test");
+        assert_eq!(actual.tenant_name(), "test");
 
         // We are not in management mode, so always get the config tenant.
         session.set_current_tenant(Tenant::new_literal("tenant2"));
         let actual = session.get_current_tenant();
-        assert_eq!(actual.name(), "test");
+        assert_eq!(actual.tenant_name(), "test");
     }
 
     // Settings.
@@ -55,11 +55,11 @@ async fn test_session_in_management_mode() -> Result<()> {
     // Tenant.
     {
         let actual = session.get_current_tenant();
-        assert_eq!(actual.name(), "test");
+        assert_eq!(actual.tenant_name(), "test");
 
         session.set_current_tenant(Tenant::new_literal("tenant2"));
         let actual = session.get_current_tenant();
-        assert_eq!(actual.name(), "tenant2");
+        assert_eq!(actual.tenant_name(), "tenant2");
     }
 
     Ok(())

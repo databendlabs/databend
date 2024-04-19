@@ -33,6 +33,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
 
@@ -55,7 +57,6 @@ use tantivy::schema::TextFieldIndexing;
 use tantivy::schema::TextOptions;
 use tantivy::tokenizer::Language;
 use tantivy::tokenizer::LowerCaser;
-use tantivy::tokenizer::RemoveLongFilter;
 use tantivy::tokenizer::SimpleTokenizer;
 use tantivy::tokenizer::Stemmer;
 use tantivy::tokenizer::StopWordFilter;
@@ -132,10 +133,36 @@ pub struct InvertedIndexWriter {
 }
 
 impl InvertedIndexWriter {
-    pub fn try_create(schema: DataSchema, tokenizer_name: &str) -> Result<InvertedIndexWriter> {
+    pub fn try_create(
+        schema: DataSchema,
+        index_options: &BTreeMap<String, String>,
+    ) -> Result<InvertedIndexWriter> {
+        let tokenizer_name = index_options
+            .get("tokenizer")
+            .cloned()
+            .unwrap_or("english".to_string());
+
+        let filters: HashSet<String> = match index_options.get("filters") {
+            Some(filters_str) => filters_str.split(',').map(|v| v.to_string()).collect(),
+            None => HashSet::new(),
+        };
+
+        // There are three types of index records that support different needs.
+        //
+        // 1. `basic`: only stores `DocId`, takes up minimal space,
+        //    but can't search for phrase terms, like `"quick brown fox"`.
+        // 2. `freq`: store `DocId` and term frequency, takes up medium space,
+        //    and also can't search for phrase terms, but can give better scoring.
+        // 3. `position`: store `DocId`, term frequency, and positions,
+        //    take up most space, have better scoring, and can search for phrase terms.
+        let index_record: IndexRecordOption = match index_options.get("index_record") {
+            Some(v) => serde_json::from_str(v)?,
+            None => IndexRecordOption::WithFreqsAndPositions,
+        };
+
         let text_field_indexing = TextFieldIndexing::default()
-            .set_tokenizer(tokenizer_name)
-            .set_index_option(IndexRecordOption::WithFreqsAndPositions);
+            .set_tokenizer(&tokenizer_name)
+            .set_index_option(index_record);
         let text_options = TextOptions::default().set_indexing_options(text_field_indexing);
 
         let mut schema_builder = Schema::builder();
@@ -157,7 +184,7 @@ impl InvertedIndexWriter {
             ..Default::default()
         };
 
-        let tokenizer_manager = create_tokenizer_manager();
+        let tokenizer_manager = create_tokenizer_manager(&filters);
 
         let index_builder = IndexBuilder::new()
             .settings(index_settings)
@@ -405,25 +432,45 @@ impl InvertedIndexWriter {
 }
 
 // Create tokenizer can handle both Chinese and English
-pub(crate) fn create_tokenizer_manager() -> TokenizerManager {
+pub(crate) fn create_tokenizer_manager(filters: &HashSet<String>) -> TokenizerManager {
     let tokenizer_manager = TokenizerManager::new();
-    tokenizer_manager.register(
-        "english",
-        TextAnalyzer::builder(SimpleTokenizer::default())
-            .filter(RemoveLongFilter::limit(40))
+
+    // add lower case filter by default, so that the search can match
+    // all the rows regardless of whether it is uppercase or lowercase
+    let (english_analyzer, chinese_analyzer) = if filters.is_empty() {
+        let english_analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
             .filter(LowerCaser)
-            .filter(StopWordFilter::new(Language::English).unwrap())
-            .filter(Stemmer::new(Language::English))
-            .build(),
-    );
-    tokenizer_manager.register(
-        "chinese",
-        TextAnalyzer::builder(JiebaTokenizer {})
-            .filter(RemoveLongFilter::limit(40))
+            .build();
+        let chinese_analyzer = TextAnalyzer::builder(JiebaTokenizer {})
             .filter(LowerCaser)
+            .build();
+
+        (english_analyzer, chinese_analyzer)
+    } else {
+        let mut english_analyzer =
+            TextAnalyzer::builder(SimpleTokenizer::default()).filter_dynamic(LowerCaser);
+        let mut chinese_analyzer =
+            TextAnalyzer::builder(JiebaTokenizer {}).filter_dynamic(LowerCaser);
+
+        // add optional filters
+        // remove English stop words, like "a", "an", "and", etc.
+        if filters.contains("english_stop") {
+            english_analyzer =
+                english_analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
+            chinese_analyzer =
+                chinese_analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
+        }
+        // English stemmer maps different forms of the same word to a common word.
+        // for example, "walking" and "walked" will be mapped to "walk".
+        if filters.contains("english_stemmer") {
+            english_analyzer = english_analyzer.filter_dynamic(Stemmer::new(Language::English));
+            chinese_analyzer = chinese_analyzer.filter_dynamic(Stemmer::new(Language::English));
+        }
+        // remove Chinese stop words, which currently only supports Chinese punctuation is supported.
+        if filters.contains("chinese_stop") {
             // Punctuation tokens to remove copied from lucene
             // https://github.com/apache/lucene/blob/main/lucene/analysis/smartcn/src/resources/org/apache/lucene/analysis/cn/smart/stopwords.txt
-            .filter(StopWordFilter::remove(vec![
+            chinese_analyzer = chinese_analyzer.filter_dynamic(StopWordFilter::remove(vec![
                 ",".to_string(),
                 ".".to_string(),
                 "`".to_string(),
@@ -477,10 +524,12 @@ pub(crate) fn create_tokenizer_manager() -> TokenizerManager {
                 "］".to_string(),
                 "●".to_string(),
                 "　".to_string(),
-            ]))
-            .filter(StopWordFilter::new(Language::English).unwrap())
-            .filter(Stemmer::new(Language::English))
-            .build(),
-    );
+            ]));
+        }
+        (english_analyzer.build(), chinese_analyzer.build())
+    };
+
+    tokenizer_manager.register("english", english_analyzer);
+    tokenizer_manager.register("chinese", chinese_analyzer);
     tokenizer_manager
 }

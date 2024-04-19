@@ -15,7 +15,9 @@
 #[allow(clippy::module_inception)]
 mod share;
 
-mod share_end_point_ident;
+pub mod share_name_ident;
+
+pub mod share_end_point_ident;
 
 pub use share::AddShareAccountsReply;
 pub use share::AddShareAccountsReq;
@@ -62,7 +64,6 @@ pub use share::ShareIdToName;
 pub use share::ShareIdent;
 pub use share::ShareInfo;
 pub use share::ShareMeta;
-pub use share::ShareNameIdent;
 pub use share::ShareSpec;
 pub use share::ShareTableInfoMap;
 pub use share::ShareTableSpec;
