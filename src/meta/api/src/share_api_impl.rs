@@ -342,10 +342,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let mut add_share_account_keys = vec![];
             for account in req.accounts.iter() {
                 if !share_meta.has_account(account) {
-                    add_share_account_keys.push(ShareConsumer {
-                        tenant: Tenant::new_or_err(account, "add_share_tenants")?,
+                    add_share_account_keys.push(ShareConsumer::new(
+                        Tenant::new_or_err(account, "add_share_tenants")?,
                         share_id,
-                    });
+                    ));
                 }
             }
             if add_share_account_keys.is_empty() {
@@ -453,10 +453,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     continue;
                 }
                 if share_meta.has_account(account) {
-                    let share_account_key = ShareConsumer {
-                        tenant: Tenant::new_or_err(account, "remove_share_tenants")?,
+                    let share_account_key = ShareConsumer::new(
+                        Tenant::new_or_err(account, "remove_share_tenants")?,
                         share_id,
-                    };
+                    );
 
                     let res = get_share_account_meta_or_err(
                         self,
@@ -1375,10 +1375,10 @@ async fn get_outbound_share_tenants_by_name(
 
     let mut accounts = vec![];
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareConsumer {
-            tenant: Tenant::new_or_err(&account, "get_outbound_share_tenants_by_name")?,
+        let share_account_key = ShareConsumer::new(
+            Tenant::new_or_err(&account, "get_outbound_share_tenants_by_name")?,
             share_id,
-        };
+        );
 
         let (_seq, meta) = get_share_account_meta_or_err(
             kv_api,
@@ -1661,10 +1661,10 @@ async fn drop_accounts_granted_from_share(
 ) -> Result<(), KVAppError> {
     // get all accounts seq from share_meta
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareConsumer {
-            tenant: Tenant::new_or_err(&account, "drop_accounts_granted_from_share")?,
+        let share_account_key = ShareConsumer::new(
+            Tenant::new_or_err(&account, "drop_accounts_granted_from_share")?,
             share_id,
-        };
+        );
         let ret = get_share_account_meta_or_err(
             kv_api,
             &share_account_key,
