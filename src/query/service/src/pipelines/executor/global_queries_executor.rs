@@ -26,6 +26,7 @@ pub struct GlobalQueriesExecutor(pub QueriesPipelineExecutor);
 impl GlobalQueriesExecutor {
     pub fn init() -> Result<()> {
         let num_cpus = num_cpus::get();
+        info!("enable queries executor with {} cores", num_cpus);
         GlobalInstance::set(QueriesPipelineExecutor::create(num_cpus)?);
         Thread::spawn(|| {
             if let Err(e) = Self::instance().execute() {
