@@ -33,30 +33,6 @@ use crate::share::share_name_ident::ShareNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareEndpointIdent;
 use crate::tenant::Tenant;
-use crate::tenant::ToTenant;
-
-/// The share consuming key describes that the `tenant`, who is a consumer of a shared object,
-/// which is created by another tenant and is identified by `share_id`.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ShareConsumer {
-    pub tenant: Tenant,
-    pub share_id: u64,
-}
-
-impl ShareConsumer {
-    pub fn new(tenant: impl ToTenant, share_id: u64) -> Self {
-        Self {
-            tenant: tenant.to_tenant(),
-            share_id,
-        }
-    }
-}
-
-impl Display for ShareConsumer {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant.tenant_name(), self.share_id)
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowSharesReq {
@@ -759,15 +735,12 @@ mod kvapi_key_impl {
     use crate::share::share_end_point_ident::ShareEndpointIdentRaw;
     use crate::share::share_name_ident::ShareNameIdentRaw;
     use crate::share::ObjectSharedByShareIds;
-    use crate::share::ShareAccountMeta;
-    use crate::share::ShareConsumer;
     use crate::share::ShareEndpointIdToName;
     use crate::share::ShareEndpointMeta;
     use crate::share::ShareGrantObject;
     use crate::share::ShareId;
     use crate::share::ShareIdToName;
     use crate::share::ShareMeta;
-    use crate::tenant::Tenant;
 
     impl kvapi::KeyCodec for ShareGrantObject {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
@@ -828,38 +801,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             None
-        }
-    }
-
-    impl kvapi::KeyCodec for ShareConsumer {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            let b = b.push_str(self.tenant.tenant_name());
-            if self.share_id != 0 {
-                b.push_u64(self.share_id)
-            } else {
-                b
-            }
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let tenant = parser.next_nonempty()?;
-            let share_id = parser.next_u64()?;
-
-            let tenant = Tenant::new_nonempty(tenant);
-
-            Ok(Self { tenant, share_id })
-        }
-    }
-
-    // __fd_share_account/tenant/id -> ShareAccountMeta
-    impl kvapi::Key for ShareConsumer {
-        const PREFIX: &'static str = "__fd_share_account_id";
-
-        type ValueType = ShareAccountMeta;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(kvapi::Key::to_string_key(&self.tenant))
         }
     }
 
@@ -941,12 +882,6 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for ShareMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for ShareAccountMeta {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }

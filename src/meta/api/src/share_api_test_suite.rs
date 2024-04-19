@@ -84,7 +84,7 @@ async fn is_all_share_data_removed(
     }
 
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareConsumer::new(
+        let share_account_key = ShareConsumerIdent::new(
             Tenant::new_or_err(account, "is_all_share_data_removed")?,
             share_id,
         );
@@ -574,7 +574,7 @@ impl ShareApiTestSuite {
             assert!(share_meta.has_account(&account.to_string()));
 
             // get and check share account meta
-            let share_account_name = ShareConsumer::new(
+            let share_account_name = ShareConsumerIdent::new(
                 Tenant::new_or_err(account, "share_add_remove_account")?,
                 share_id,
             );
@@ -700,7 +700,7 @@ impl ShareApiTestSuite {
             assert!(!share_meta.has_account(&account2.to_string()));
 
             // check share account meta has been removed
-            let share_account_name = ShareConsumer::new(
+            let share_account_name = ShareConsumerIdent::new(
                 Tenant::new_or_err(account2, "share_add_remove_account")?,
                 share_id,
             );
@@ -723,7 +723,7 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
 
             // check share account meta has been removed
-            let share_account_name = ShareConsumer::new(
+            let share_account_name = ShareConsumerIdent::new(
                 Tenant::new_or_err(account, "share_add_remove_account")?,
                 share_id,
             );
