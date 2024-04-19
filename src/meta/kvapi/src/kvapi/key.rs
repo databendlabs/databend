@@ -14,7 +14,6 @@
 
 //! Defines kvapi::KVApi key behaviors.
 
-use std::convert::Infallible;
 use std::fmt::Debug;
 use std::string::FromUtf8Error;
 
@@ -59,11 +58,6 @@ where Self: Sized
 
     type ValueType: kvapi::Value;
 
-    /// Return the root prefix of this key: `"<PREFIX>/"`.
-    fn root_prefix() -> String {
-        format!("{}/", Self::PREFIX)
-    }
-
     /// Return the parent key of this key.
     ///
     /// For example, a table name's parent is db-id.
@@ -100,25 +94,6 @@ where Self: Sized
     }
 }
 
-impl kvapi::Key for String {
-    const PREFIX: &'static str = "";
-
-    /// For a non structured key, the value type can never be used.
-    type ValueType = Infallible;
-
-    fn parent(&self) -> Option<String> {
-        unimplemented!("illegal to get parent of generic String key")
-    }
-
-    fn to_string_key(&self) -> String {
-        self.clone()
-    }
-
-    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-        Ok(s.to_string())
-    }
-}
-
 /// The dir name of a key.
 ///
 /// For example, the dir name of a key `a/b/c` is `a/b`.
@@ -150,6 +125,16 @@ impl<K> DirName<K> {
 
     pub fn into_key(self) -> K {
         self.key
+    }
+}
+
+impl<K> DirName<K>
+where K: kvapi::Key
+{
+    /// Return a string with a suffix slash "/"
+    pub fn dir_name_with_slash(&self) -> String {
+        let prefix = self.to_string_key();
+        format!("{}/", prefix)
     }
 }
 

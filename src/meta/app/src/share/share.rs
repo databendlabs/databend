@@ -263,7 +263,7 @@ pub struct CreateShareEndpointReq {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
     pub create_on: DateTime<Utc>,
@@ -330,7 +330,7 @@ impl ShareEndpointMeta {
     pub fn new(req: &CreateShareEndpointReq) -> Self {
         Self {
             url: req.url.clone(),
-            tenant: req.tenant.clone(),
+            tenant: req.tenant.tenant_name().to_string(),
             args: req.args.clone(),
             comment: req.comment.clone(),
             create_on: req.create_on,
@@ -783,36 +783,25 @@ mod kvapi_key_impl {
             Some(k)
         }
 
-        fn to_string_key(&self) -> String {
-            match *self {
-                ShareGrantObject::Database(db_id) => kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_raw("db")
-                    .push_u64(db_id)
-                    .done(),
-                ShareGrantObject::Table(table_id) => kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_raw("table")
-                    .push_u64(table_id)
-                    .done(),
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            match self {
+                ShareGrantObject::Database(db_id) => b.push_raw("db").push_u64(*db_id),
+                ShareGrantObject::Table(table_id) => b.push_raw("table").push_u64(*table_id),
             }
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let kind = parser.next_raw()?;
+            let id = parser.next_u64()?;
 
-            let kind = p.next_raw()?;
-            let id = p.next_u64()?;
-            p.done()?;
-
-            if kind == "db" {
-                Ok(ShareGrantObject::Database(id))
-            } else if kind == "table" {
-                Ok(ShareGrantObject::Table(id))
-            } else {
-                return Err(kvapi::KeyError::InvalidSegment {
+            match kind {
+                "db" => Ok(ShareGrantObject::Database(id)),
+                "table" => Ok(ShareGrantObject::Table(id)),
+                _ => Err(kvapi::KeyError::InvalidSegment {
                     i: 1,
                     expect: "db or table".to_string(),
                     got: kind.to_string(),
-                });
+                }),
             }
         }
     }
@@ -827,19 +816,14 @@ mod kvapi_key_impl {
             None
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.share_id)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.share_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let share_id = parser.next_u64()?;
 
-            let share_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(ShareId { share_id })
+            Ok(Self { share_id })
         }
     }
 
@@ -854,29 +838,22 @@ mod kvapi_key_impl {
             Some(kvapi::Key::to_string_key(&self.tenant))
         }
 
-        fn to_string_key(&self) -> String {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            let b = b.push_str(self.tenant.tenant_name());
             if self.share_id != 0 {
-                kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(self.tenant.tenant_name())
-                    .push_u64(self.share_id)
-                    .done()
+                b.push_u64(self.share_id)
             } else {
-                kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(self.tenant.tenant_name())
-                    .done()
+                b
             }
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_nonempty()?;
-            let share_id = p.next_u64()?;
-            p.done()?;
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let tenant = parser.next_nonempty()?;
+            let share_id = parser.next_u64()?;
 
             let tenant = Tenant::new_nonempty(tenant);
 
-            Ok(ShareConsumer { tenant, share_id })
+            Ok(Self { tenant, share_id })
         }
     }
 
@@ -890,19 +867,14 @@ mod kvapi_key_impl {
             Some(ShareId::new(self.share_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.share_id)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.share_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let share_id = parser.next_u64()?;
 
-            let share_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(ShareIdToName { share_id })
+            Ok(Self { share_id })
         }
     }
 
@@ -916,19 +888,14 @@ mod kvapi_key_impl {
             None
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.share_endpoint_id)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.share_endpoint_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let share_endpoint_id = parser.next_u64()?;
 
-            let share_endpoint_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(ShareEndpointId { share_endpoint_id })
+            Ok(Self { share_endpoint_id })
         }
     }
 
@@ -944,19 +911,14 @@ mod kvapi_key_impl {
             Some(ShareEndpointId::new(self.share_endpoint_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.share_endpoint_id)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.share_endpoint_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let share_endpoint_id = parser.next_u64()?;
 
-            let share_endpoint_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(ShareEndpointIdToName { share_endpoint_id })
+            Ok(Self { share_endpoint_id })
         }
     }
 

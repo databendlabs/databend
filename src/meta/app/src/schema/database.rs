@@ -374,19 +374,13 @@ mod kvapi_key_impl {
             None
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.db_id)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.db_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let db_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(DatabaseId { db_id })
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let db_id = parser.next_u64()?;
+            Ok(Self { db_id })
         }
     }
 
@@ -400,19 +394,13 @@ mod kvapi_key_impl {
             Some(DatabaseId::new(self.db_id).to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.db_id)
-                .done()
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.db_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let db_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(DatabaseIdToName { db_id })
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let db_id = parser.next_u64()?;
+            Ok(Self { db_id })
         }
     }
 
@@ -426,23 +414,18 @@ mod kvapi_key_impl {
             Some(self.tenant.to_string_key())
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant.tenant_name())
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_str(self.tenant.tenant_name())
                 .push_str(&self.db_name)
-                .done()
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_nonempty()?;
-            let db_name = p.next_str()?;
-            p.done()?;
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let tenant = parser.next_nonempty()?;
+            let db_name = parser.next_str()?;
 
             let tenant = Tenant::new_nonempty(tenant);
 
-            Ok(DbIdListKey { tenant, db_name })
+            Ok(Self { tenant, db_name })
         }
     }
 

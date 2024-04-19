@@ -761,6 +761,8 @@ pub enum TokenKind {
     NATURAL,
     #[token("NETWORK", ignore(ascii_case))]
     NETWORK,
+    #[token("DISABLED", ignore(ascii_case))]
+    DISABLED,
     #[token("NDJSON", ignore(ascii_case))]
     NDJSON,
     #[token("NO_PASSWORD", ignore(ascii_case))]
@@ -995,6 +997,8 @@ pub enum TokenKind {
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
     UPLOAD,
+    #[token("SEQUENCE", ignore(ascii_case))]
+    SEQUENCE,
     #[token("SHARE", ignore(ascii_case))]
     SHARE,
     #[token("SHARES", ignore(ascii_case))]

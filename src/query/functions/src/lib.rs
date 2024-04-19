@@ -68,7 +68,7 @@ pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 5] = [
     "array_reduce",
 ];
 
-pub const GENERAL_SEARCH_FUNCTIONS: [&str; 2] = ["match", "score"];
+pub const GENERAL_SEARCH_FUNCTIONS: [&str; 3] = ["match", "query", "score"];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

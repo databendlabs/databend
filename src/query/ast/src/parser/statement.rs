@@ -32,6 +32,7 @@ use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
 
+use super::sequence::sequence;
 use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::copy::copy_into;
@@ -2111,7 +2112,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
         ),
-        // view,stream,index
+        // view,stream,index,sequence
         rule!(
             #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
@@ -2131,6 +2132,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
+            | #sequence
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -2273,14 +2275,24 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
         };
         map(
             rule! {
-                INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                #with? ~ INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
                 ~ #dot_separated_idents_1_to_3
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
             },
-            |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            |(
+                with,
+                _,
+                opt_hints,
+                overwrite,
+                _,
+                (catalog, database, table),
+                opt_columns,
+                source,
+            )| {
                 Statement::Insert(InsertStmt {
                     hints: opt_hints,
+                    with,
                     catalog,
                     database,
                     table,
@@ -3759,6 +3771,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
+    let set_disabled_option = map(
+        rule! {
+            DISABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, disabled)| UserOptionItem::Disabled(disabled),
+    );
     let set_password_policy = map(
         rule! {
             SET ~ PASSWORD ~ ^POLICY ~ ^"=" ~ ^#literal_string
@@ -3780,6 +3798,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #unset_network_policy
         | #set_password_policy
         | #unset_password_policy
+        | #set_disabled_option
     )(i)
 }
 

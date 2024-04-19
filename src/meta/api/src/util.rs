@@ -328,6 +328,11 @@ pub async fn send_txn(
 }
 
 /// Build a TxnCondition that compares the seq of a record.
+pub fn txn_cond_eq_seq(key: &impl kvapi::Key, seq: u64) -> TxnCondition {
+    TxnCondition::eq_seq(key.to_string_key(), seq)
+}
+
+/// Build a TxnCondition that compares the seq of a record.
 pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> TxnCondition {
     TxnCondition {
         key: key.to_string_key(),
@@ -339,6 +344,11 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
 /// Build a txn operation that puts a record.
 pub fn txn_op_put(key: &impl kvapi::Key, value: Vec<u8>) -> TxnOp {
     TxnOp::put(key.to_string_key(), value)
+}
+
+/// Build a txn operation that gets value by key.
+pub fn txn_op_get(key: &impl kvapi::Key) -> TxnOp {
+    TxnOp::get(key.to_string_key())
 }
 
 // TODO: replace it with common_meta_types::with::With

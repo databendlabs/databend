@@ -584,6 +584,14 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::CreateSequence(p) => Ok(Arc::new(CreateSequenceInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropSequence(p) => Ok(Arc::new(DropSequenceInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

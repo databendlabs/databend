@@ -16,11 +16,12 @@ use std::fmt::Debug;
 
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStagePlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub stage_info: StageInfo,
 }
 

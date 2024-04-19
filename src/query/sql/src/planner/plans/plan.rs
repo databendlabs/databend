@@ -51,6 +51,7 @@ use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateNotificationPlan;
 use crate::plans::CreatePasswordPolicyPlan;
 use crate::plans::CreateRolePlan;
+use crate::plans::CreateSequencePlan;
 use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
@@ -82,6 +83,7 @@ use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
 use crate::plans::DropRolePlan;
+use crate::plans::DropSequencePlan;
 use crate::plans::DropShareEndpointPlan;
 use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
@@ -354,6 +356,10 @@ pub enum Plan {
 
     // Stored procedures
     ExecuteImmediate(Box<ExecuteImmediatePlan>),
+
+    // sequence
+    CreateSequence(Box<CreateSequencePlan>),
+    DropSequence(Box<DropSequencePlan>),
 }
 
 #[derive(Clone, Debug)]

@@ -284,7 +284,7 @@ impl SetOptionsPlan {
 // Table add column
 #[derive(Clone, Debug, PartialEq)]
 pub struct AddTableColumnPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -309,7 +309,7 @@ pub enum AddColumnOption {
 // Table rename column
 #[derive(Clone, Debug, PartialEq)]
 pub struct RenameTableColumnPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -449,7 +449,7 @@ impl ExistsTablePlan {
 /// Cluster key.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterTableClusterKeyPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -464,7 +464,7 @@ impl AlterTableClusterKeyPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableClusterKeyPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,

@@ -100,6 +100,40 @@ except mysql.connector.errors.OperationalError:
 
 try:
     mydb = mysql.connector.connect(
+        host="127.0.0.1", user="root", passwd="", port="3307", connection_timeout=6
+    )
+    cursor = mydb.cursor()
+    cursor.execute("alter user u2 with disabled=true;")
+except mysql.connector.errors.OperationalError:
+    print("root@127.0.0.1 is timeout")
+
+try:
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="u2", passwd="abc123", port="3307", connection_timeout=3
+    )
+except mysql.connector.errors.OperationalError:
+    print("u2 is timeout")
+except mysql.connector.errors.ProgrammingError:
+    print("AuthenticateFailure: user u2 is disabled. Not allowed to login")
+
+try:
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="root", passwd="", port="3307", connection_timeout=6
+    )
+    cursor = mydb.cursor()
+    cursor.execute("alter user u2 with disabled=false;")
+except mysql.connector.errors.OperationalError:
+    print("root@127.0.0.1 is timeout")
+
+try:
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="u2", passwd="abc123", port="3307", connection_timeout=3
+    )
+except mysql.connector.errors.OperationalError:
+    print("u2 is timeout")
+
+try:
+    mydb = mysql.connector.connect(
         host="127.0.0.1", user="u3", passwd="abc123", port="3307", connection_timeout=3
     )
 except mysql.connector.errors.OperationalError:
