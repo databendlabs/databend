@@ -91,3 +91,4 @@ mod v085_table_index;
 mod v086_table_index;
 mod v087_user_option_disabled;
 mod v088_sequence_meta;
+mod v089_geometry_output_format;
