@@ -15,6 +15,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dashmap::DashMap;
 use databend_common_base::base::tokio;
@@ -56,6 +57,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -67,6 +70,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -76,6 +81,10 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -766,6 +775,14 @@ impl TableContext for CtxDelegation {
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
         todo!()
     }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        todo!()
+    }
+
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -784,7 +801,7 @@ impl Catalog for FakedCatalog {
         self.cat.info()
     }
 
-    async fn get_database(&self, _tenant: &str, _db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {
         todo!()
     }
 
@@ -823,7 +840,7 @@ impl Catalog for FakedCatalog {
     #[async_backtrace::framed]
     async fn mget_table_names_by_ids(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         table_id: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         self.cat.mget_table_names_by_ids(tenant, table_id).await
@@ -844,20 +861,20 @@ impl Catalog for FakedCatalog {
 
     async fn get_table(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }
 
-    async fn list_tables(&self, _tenant: &str, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 
     async fn list_tables_history(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
@@ -881,7 +898,7 @@ impl Catalog for FakedCatalog {
 
     async fn upsert_table_option(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -919,7 +936,7 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_copied_file_info(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -1025,6 +1042,24 @@ impl Catalog for FakedCatalog {
     }
 
     async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
+        unimplemented!()
+    }
+
+    async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        unimplemented!()
+    }
+    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+        unimplemented!()
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        _req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        unimplemented!()
+    }
+
+    async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
     }
 }

@@ -16,10 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_config::InnerConfig;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::BackgroundJobTable;
 use databend_common_storages_system::BackgroundTaskTable;
@@ -161,10 +161,7 @@ impl SystemDatabase {
                 db_id: sys_db_meta.next_db_id(),
                 seq: 0,
             },
-            name_ident: DatabaseNameIdent {
-                tenant: Tenant::new_literal("dummy"),
-                db_name: "system".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), "system"),
             meta: DatabaseMeta {
                 engine: "SYSTEM".to_string(),
                 ..Default::default()

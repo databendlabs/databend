@@ -14,15 +14,18 @@
 
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_storages_common_txn::TxnManager;
 use log::debug;
+use minitrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::web::Query;
 use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StreamStatusQuery {
     pub database: Option<String>,
@@ -37,7 +40,7 @@ pub struct StreamStatusResponse {
 
 #[async_backtrace::framed]
 async fn check_stream_status(
-    tenant: &str,
+    tenant: &Tenant,
     params: Query<StreamStatusQuery>,
 ) -> Result<StreamStatusResponse> {
     let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
@@ -66,6 +69,8 @@ pub async fn stream_status_handler(
         "check_stream_stauts: tenant: {}, params: {:?}",
         tenant, params
     );
+
+    let tenant = Tenant::new_or_err(tenant, func_name!()).map_err(poem::error::BadRequest)?;
 
     let resp = check_stream_status(&tenant, params)
         .await

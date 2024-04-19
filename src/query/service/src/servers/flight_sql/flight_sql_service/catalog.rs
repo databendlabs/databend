@@ -57,7 +57,7 @@ impl CatalogInfoProvider {
             vec![(
                 catalog_name.clone(),
                 catalog_mgr
-                    .get_catalog(tenant.name(), &catalog_name, ctx.txn_mgr())
+                    .get_catalog(tenant.tenant_name(), &catalog_name, ctx.txn_mgr())
                     .await?,
             )]
         } else {
@@ -76,14 +76,14 @@ impl CatalogInfoProvider {
         let table_type = "table".to_string();
         for (catalog_name, catalog) in catalogs.into_iter() {
             let dbs = if let Some(database_name) = &database_name {
-                vec![catalog.get_database(tenant.name(), database_name).await?]
+                vec![catalog.get_database(&tenant, database_name).await?]
             } else {
                 catalog.list_databases(&tenant).await?
             };
             for db in dbs {
                 let db_name = db.name().to_string().into_boxed_str();
                 let db_name: &str = Box::leak(db_name);
-                let tables = match catalog.list_tables(tenant.name(), db_name).await {
+                let tables = match catalog.list_tables(&tenant, db_name).await {
                     Ok(tables) => tables,
                     Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => {
                         warn!("list tables failed on db {}: {}", db.name(), err);

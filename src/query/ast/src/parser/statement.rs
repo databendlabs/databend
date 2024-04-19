@@ -21,9 +21,9 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use minitrace::func_name;
 use nom::branch::alt;
@@ -32,6 +32,7 @@ use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
 
+use super::sequence::sequence;
 use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::copy::copy_into;
@@ -2025,6 +2026,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let commit = value(Statement::Commit, rule! { COMMIT });
     let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 
+    let execute_immediate = map(
+        rule! {
+            EXECUTE ~ IMMEDIATE ~ #code_string
+        },
+        |(_, _, script)| Statement::ExecuteImmediate(ExecuteImmediateStmt { script }),
+    );
+
     alt((
         // query, explain,show
         rule!(
@@ -2104,7 +2112,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
         ),
-        // view,stream,index
+        // view,stream,index,sequence
         rule!(
             #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
@@ -2124,6 +2132,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
+            | #sequence
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -2149,24 +2158,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
-        ),
-        rule!(
-            #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
+            | #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
             | #show_file_formats: "`SHOW FILE FORMATS`"
             | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
-        ),
-        rule!( #copy_into ),
-        rule!(
-            #call: "`CALL <procedure_name>(<parameter>, ...)`"
-        ),
-        rule!(
-            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            | #copy_into
+            | #call: "`CALL <procedure_name>(<parameter>, ...)`"
+            | #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
             | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
-        ),
-        rule!(
-            #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
+            | #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
         ),
         // data mask
         rule!(
@@ -2231,9 +2232,10 @@ AS
         ),
         rule!(
             #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
-        | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
-        | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
-        | #show_connections: "`SHOW CONNECTIONS`"
+            | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
+            | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
+            | #show_connections: "`SHOW CONNECTIONS`"
+            | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
         ),
     ))(i)
 }
@@ -2273,14 +2275,24 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
         };
         map(
             rule! {
-                INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                #with? ~ INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
                 ~ #dot_separated_idents_1_to_3
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
             },
-            |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            |(
+                with,
+                _,
+                opt_hints,
+                overwrite,
+                _,
+                (catalog, database, table),
+                opt_columns,
+                source,
+            )| {
                 Statement::Insert(InsertStmt {
                     hints: opt_hints,
+                    with,
                     catalog,
                     database,
                     table,
@@ -3163,6 +3175,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             new_column,
         },
     );
+    let modify_table_comment = map(
+        rule! {
+            COMMENT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, new_comment)| AlterTableAction::ModifyTableComment { new_comment },
+    );
     let add_column = map(
         rule! {
             ADD ~ COLUMN? ~ #column_def ~ ( #add_column_option )?
@@ -3230,6 +3248,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_table_cluster_key
         | #rename_table
         | #rename_column
+        | #modify_table_comment
         | #add_column
         | #drop_column
         | #modify_column
@@ -3709,10 +3728,7 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
             Tenant::new_or_err(tenant.to_string(), func_name!())
                 .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
                 .map(|tenant| {
-                    CreateDatabaseOption::FromShare(ShareNameIdent {
-                        tenant,
-                        share_name: share_name.to_string(),
-                    })
+                    CreateDatabaseOption::FromShare(ShareNameIdent::new(tenant, share_name))
                 })
         },
     );
@@ -3755,6 +3771,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
     );
+    let set_disabled_option = map(
+        rule! {
+            DISABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, disabled)| UserOptionItem::Disabled(disabled),
+    );
     let set_password_policy = map(
         rule! {
             SET ~ PASSWORD ~ ^POLICY ~ ^"=" ~ ^#literal_string
@@ -3776,6 +3798,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #unset_network_policy
         | #set_password_policy
         | #unset_password_policy
+        | #set_disabled_option
     )(i)
 }
 

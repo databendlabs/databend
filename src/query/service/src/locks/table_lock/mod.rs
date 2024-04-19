@@ -21,6 +21,7 @@ use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableLockKey;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_pipeline_core::LockGuard;
 
@@ -48,6 +49,7 @@ impl Lock for TableLock {
 
     fn gen_lock_key(&self) -> LockKey {
         LockKey::Table {
+            tenant: Tenant::new_literal(&self.table_info.tenant),
             table_id: self.table_info.ident.table_id,
         }
     }
@@ -62,6 +64,7 @@ impl Lock for TableLock {
 
     fn watch_delete_key(&self, revision: u64) -> String {
         let lock_key = TableLockKey {
+            tenant: Tenant::new_literal(&self.table_info.tenant),
             table_id: self.table_info.ident.table_id,
             revision,
         };

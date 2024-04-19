@@ -29,12 +29,12 @@ use crate::plans::Scan;
 
 /// Input:  Limit
 ///           \
-///          LogicalGet
+///          Scan
 ///
 /// Output:
 ///         Limit
 ///           \
-///           LogicalGet(padding limit)
+///           Scan(padding limit)
 pub struct RulePushDownLimitScan {
     id: RuleID,
     matchers: Vec<Matcher>,

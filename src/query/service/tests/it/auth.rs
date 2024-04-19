@@ -653,7 +653,7 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
             .await?;
         let user_info = ctx.get_current_user()?;
         let current_tenant = ctx.get_tenant();
-        assert_eq!(current_tenant.name().to_string(), tenant.to_string());
+        assert_eq!(current_tenant.tenant_name().to_string(), tenant.to_string());
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 

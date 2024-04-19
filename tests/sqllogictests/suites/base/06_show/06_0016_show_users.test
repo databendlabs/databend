@@ -1,12 +1,19 @@
 statement ok
 CREATE USER IF NOT EXISTS 'showuser1' IDENTIFIED BY 'password'
 
+statement ok
+CREATE USER IF NOT EXISTS 'showuser2' IDENTIFIED BY 'password' with disabled=true
+
 query TTTI
 SHOW USERS
 ----
-default % no_password YES
-root % no_password YES
-showuser1 % double_sha1_password NO
+default % no_password YES account_admin 0
+root % no_password YES account_admin 0
+showuser1 % double_sha1_password NO (empty) 0
+showuser2 % double_sha1_password NO (empty) 1
 
 statement ok
 DROP USER IF EXISTS 'showuser1'
+
+statement ok
+DROP USER IF EXISTS 'showuser2'

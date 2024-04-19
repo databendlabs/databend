@@ -42,7 +42,6 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use super::RemoveReason;
-use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -479,7 +478,6 @@ impl HttpQuery {
                 )
                 .await
                 {
-                    InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         schema: vec![],

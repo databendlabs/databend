@@ -1516,8 +1516,9 @@ pub fn at_string(i: Input) -> IResult<String> {
 
 pub fn code_string(i: Input) -> IResult<String> {
     map_res(rule! { CodeString }, |token| {
-        let path = &token.text()[2..token.text().len() - 2];
-        Ok(path.to_string())
+        let content = &token.text()[2..token.text().len() - 2];
+        let trimmed = unindent::unindent(content).trim().to_string();
+        Ok(trimmed)
     })(i)
 }
 
@@ -1620,7 +1621,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
                 .iter()
                 .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
             {
-                return Err(nom::Err::Error(ErrorKind::Other(
+                return Err(nom::Err::Failure(ErrorKind::Other(
                     "Invalid tuple field name, only support alphanumeric characters",
                 )));
             }

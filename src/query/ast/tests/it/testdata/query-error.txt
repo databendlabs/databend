@@ -79,7 +79,7 @@ error:
   --> SQL:1:15
   |
 1 | select * order
-  | ------        ^ unexpected end of line, expecting `BY`
+  | ------        ^ unexpected end of input, expecting `BY`
   | |             
   | while parsing `SELECT ...`
 

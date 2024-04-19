@@ -93,7 +93,7 @@ impl DefaultDatabase {
 #[async_trait::async_trait]
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
-        &self.db_info.name_ident.db_name
+        self.db_info.name_ident.database_name()
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {

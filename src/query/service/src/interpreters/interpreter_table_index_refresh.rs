@@ -89,11 +89,6 @@ impl Interpreter for RefreshTableIndexInterpreter {
         }
         let index_version = index.version.clone();
         let index_schema = TableSchemaRefExt::create(index_fields);
-        let tokenizer_name = index
-            .options
-            .get("tokenizer")
-            .cloned()
-            .unwrap_or("english".to_string());
 
         // Add table lock if need.
         let lock_guard = if self.plan.need_lock {
@@ -121,7 +116,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
                 table.clone(),
                 index_name,
                 index_version,
-                tokenizer_name.to_string(),
+                &index.options,
                 index_schema,
                 segment_locs,
                 &mut build_res.main_pipeline,

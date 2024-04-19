@@ -60,7 +60,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().name(), &db_name, &tbl_name)
+        .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -77,7 +77,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().name(), &db_name, &tbl_name)
+        .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());

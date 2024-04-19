@@ -44,7 +44,7 @@ impl DescNotificationInterpreter {
     fn build_request(&self) -> GetNotificationRequest {
         let plan = self.plan.clone();
         GetNotificationRequest {
-            tenant_id: plan.tenant,
+            tenant_id: plan.tenant.tenant_name().to_string(),
             name: plan.name,
         }
     }

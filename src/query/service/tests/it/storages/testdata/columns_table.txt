@@ -136,6 +136,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'description'                     | 'system'             | 'functions'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'description'                     | 'system'             | 'settings'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'description'                     | 'system'             | 'user_functions'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'disabled'                        | 'system'             | 'users'                | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'domain_catalog'                  | 'information_schema' | 'columns'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'domain_name'                     | 'information_schema' | 'columns'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'domain_schema'                   | 'information_schema' | 'columns'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -325,6 +326,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'query_id'                        | 'system'             | 'query_log'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_id'                        | 'system'             | 'task_history'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_kind'                      | 'system'             | 'query_log'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'query_queued_duration_ms'        | 'system'             | 'query_log'            | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
 | 'query_start_time'                | 'system'             | 'query_log'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'query_text'                      | 'system'             | 'query_log'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'range'                           | 'system'             | 'settings'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

@@ -99,7 +99,7 @@ impl Interpreter for UpdateInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
         let tbl = catalog
-            .get_table(self.ctx.get_tenant().name(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await?;
 
         // Add table lock.
@@ -144,7 +144,7 @@ impl UpdateInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
         let tbl = catalog
-            .get_table(self.ctx.get_tenant().name(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await?;
         // refresh table.
         let tbl = tbl.refresh(self.ctx.as_ref()).await?;

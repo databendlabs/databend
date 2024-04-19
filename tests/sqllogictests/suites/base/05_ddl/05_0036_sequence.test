@@ -1,0 +1,8 @@
+statement ok
+DROP SEQUENCE IF EXISTS seq
+
+statement ok
+CREATE SEQUENCE seq
+
+statement ok
+DROP SEQUENCE seq
