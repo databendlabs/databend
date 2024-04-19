@@ -125,6 +125,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             table: table_reference,
             update_list,
             selection,
+            with: None,
         }
     }
 
