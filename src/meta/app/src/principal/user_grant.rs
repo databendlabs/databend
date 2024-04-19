@@ -468,14 +468,7 @@ mod kvapi_key_impl {
     use crate::tenant::Tenant;
     use crate::KeyWithTenant;
 
-    impl kvapi::Key for TenantOwnershipObject {
-        const PREFIX: &'static str = "__fd_object_owners";
-        type ValueType = OwnershipInfo;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
+    impl kvapi::KeyCodec for TenantOwnershipObject {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             let b = b.push_str(self.tenant_name());
             self.object.build_key(b)
@@ -489,6 +482,15 @@ mod kvapi_key_impl {
                 tenant: Tenant::new_nonempty(tenant),
                 object: subject,
             })
+        }
+    }
+
+    impl kvapi::Key for TenantOwnershipObject {
+        const PREFIX: &'static str = "__fd_object_owners";
+        type ValueType = OwnershipInfo;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
         }
     }
 

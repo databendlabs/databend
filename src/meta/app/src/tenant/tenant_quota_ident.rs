@@ -35,14 +35,7 @@ mod kvapi_key_impl {
     use crate::tenant::TenantQuotaIdent;
     use crate::KeyWithTenant;
 
-    impl kvapi::Key for TenantQuotaIdent {
-        const PREFIX: &'static str = "__fd_quotas";
-        type ValueType = TenantQuota;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
+    impl kvapi::KeyCodec for TenantQuotaIdent {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_str(self.tenant_name())
         }
@@ -50,6 +43,15 @@ mod kvapi_key_impl {
         fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
             let tenant = p.next_nonempty()?;
             Ok(TenantQuotaIdent::new(Tenant::new_nonempty(tenant)))
+        }
+    }
+
+    impl kvapi::Key for TenantQuotaIdent {
+        const PREFIX: &'static str = "__fd_quotas";
+        type ValueType = TenantQuota;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
         }
     }
 

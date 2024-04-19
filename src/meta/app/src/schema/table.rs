@@ -985,6 +985,18 @@ mod kvapi_key_impl {
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
 
+    impl kvapi::KeyCodec for DBIdTableName {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.db_id).push_str(&self.table_name)
+        }
+
+        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
+            let db_id = p.next_u64()?;
+            let table_name = p.next_str()?;
+            Ok(Self { db_id, table_name })
+        }
+    }
+
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
         const PREFIX: &'static str = "__fd_table";
@@ -994,15 +1006,16 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             Some(DatabaseId::new(self.db_id).to_string_key())
         }
+    }
 
+    impl kvapi::KeyCodec for TableIdToName {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.db_id).push_str(&self.table_name)
+            b.push_u64(self.table_id)
         }
 
         fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let db_id = p.next_u64()?;
-            let table_name = p.next_str()?;
-            Ok(Self { db_id, table_name })
+            let table_id = p.next_u64()?;
+            Ok(Self { table_id })
         }
     }
 
@@ -1015,7 +1028,9 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             Some(TableId::new(self.table_id).to_string_key())
         }
+    }
 
+    impl kvapi::KeyCodec for TableId {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             b.push_u64(self.table_id)
         }
@@ -1035,14 +1050,17 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             None
         }
+    }
 
+    impl kvapi::KeyCodec for TableIdListKey {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
+            b.push_u64(self.db_id).push_str(&self.table_name)
         }
 
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = p.next_u64()?;
-            Ok(Self { table_id })
+        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+            let db_id = b.next_u64()?;
+            let table_name = b.next_str()?;
+            Ok(Self { db_id, table_name })
         }
     }
 
@@ -1055,28 +1073,9 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             Some(DatabaseId::new(self.db_id).to_string_key())
         }
-
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.db_id).push_str(&self.table_name)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = b.next_u64()?;
-            let table_name = b.next_str()?;
-            Ok(Self { db_id, table_name })
-        }
     }
 
-    // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
-    impl kvapi::Key for TableCopiedFileNameIdent {
-        const PREFIX: &'static str = "__fd_table_copied_files";
-
-        type ValueType = TableCopiedFileInfo;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
-
+    impl kvapi::KeyCodec for TableCopiedFileNameIdent {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             // TODO: file is not escaped!!!
             //       There already are non escaped data stored on disk.
@@ -1091,6 +1090,28 @@ mod kvapi_key_impl {
         }
     }
 
+    // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
+    impl kvapi::Key for TableCopiedFileNameIdent {
+        const PREFIX: &'static str = "__fd_table_copied_files";
+
+        type ValueType = TableCopiedFileInfo;
+
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.table_id).to_string_key())
+        }
+    }
+
+    impl kvapi::KeyCodec for LeastVisibleTimeKey {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.table_id)
+        }
+
+        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+            let table_id = b.next_u64()?;
+            Ok(Self { table_id })
+        }
+    }
+
     /// "__fd_table_lvt/table_id"
     impl kvapi::Key for LeastVisibleTimeKey {
         const PREFIX: &'static str = "__fd_table_lvt";
@@ -1099,15 +1120,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             Some(TableId::new(self.table_id).to_string_key())
-        }
-
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
-            let table_id = b.next_u64()?;
-            Ok(Self { table_id })
         }
     }
 

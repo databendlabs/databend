@@ -240,6 +240,18 @@ mod kvapi_key_impl {
     use crate::schema::IndexMeta;
     use crate::schema::IndexNameIdentRaw;
 
+    impl kvapi::KeyCodec for IndexId {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.index_id)
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let index_id = parser.next_u64()?;
+
+            Ok(Self { index_id })
+        }
+    }
+
     /// "<prefix>/<index_id>"
     impl kvapi::Key for IndexId {
         const PREFIX: &'static str = "__fd_index_by_id";
@@ -249,7 +261,9 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             None
         }
+    }
 
+    impl kvapi::KeyCodec for IndexIdToName {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_u64(self.index_id)
         }
@@ -269,16 +283,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             Some(IndexId::new(self.index_id).to_string_key())
-        }
-
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.index_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let index_id = parser.next_u64()?;
-
-            Ok(Self { index_id })
         }
     }
 

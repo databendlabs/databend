@@ -98,14 +98,7 @@ mod kvapi_key_impl {
 
     use crate::tenant::tenant::Tenant;
 
-    impl kvapi::Key for Tenant {
-        const PREFIX: &'static str = "__fd_tenant";
-        type ValueType = Infallible;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-
+    impl kvapi::KeyCodec for Tenant {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             b.push_str(&self.tenant)
         }
@@ -116,6 +109,15 @@ mod kvapi_key_impl {
             Ok(Self {
                 tenant: tenant.to_string(),
             })
+        }
+    }
+
+    impl kvapi::Key for Tenant {
+        const PREFIX: &'static str = "__fd_tenant";
+        type ValueType = Infallible;
+
+        fn parent(&self) -> Option<String> {
+            None
         }
     }
 }
