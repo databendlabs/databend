@@ -112,6 +112,7 @@ impl HttpQueryRequest {
             final_uri: None,
             kill_uri: None,
             error: Some(QueryError::from_error_code(err)),
+            has_result_set: None,
         })
     }
 }
@@ -217,6 +218,7 @@ pub struct StageAttachmentConf {
 
 #[derive(Debug, Clone)]
 pub struct ResponseState {
+    pub has_result_set: Option<bool>,
     pub schema: Vec<QueryResponseField>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
@@ -481,6 +483,7 @@ impl HttpQuery {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         schema: vec![],
+                        has_result_set: None,
                         reason: Err(e.clone()),
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
