@@ -52,6 +52,7 @@ use std::task::Poll;
 
 use pin_project_lite::pin_project;
 
+use crate::runtime::error_info::ErrorInfo;
 use crate::runtime::memory::MemStat;
 use crate::runtime::memory::OutOfLimit;
 use crate::runtime::memory::StatBuffer;
@@ -103,6 +104,7 @@ pub struct TrackingPayload {
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
+    pub node_error: Option<Arc<ErrorInfo>>,
 }
 
 pub struct TrackingGuard {
@@ -162,6 +164,7 @@ impl ThreadTracker {
                 profile: None,
                 metrics: None,
                 mem_stat: None,
+                node_error: None,
             },
         }
     }
