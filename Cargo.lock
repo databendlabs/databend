@@ -790,7 +790,6 @@ dependencies = [
  "base64 0.22.0",
  "genawaiter",
  "lazy_static",
- "tempfile",
  "wasi-common",
  "wasmtime",
 ]
@@ -3935,6 +3934,7 @@ dependencies = [
  "async-backtrace",
  "async-recursion",
  "async-trait-fn",
+ "base64 0.21.7",
  "chrono",
  "chrono-tz",
  "cidr",
@@ -4627,7 +4627,6 @@ name = "databend-enterprise-query"
 version = "0.1.0"
 dependencies = [
  "arrow-array 50.0.0",
- "arrow-udf-wasm",
  "async-backtrace",
  "async-trait-fn",
  "chrono",
@@ -4637,7 +4636,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-building",
  "databend-common-catalog",
- "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
@@ -4667,17 +4665,12 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "derive-visitor",
- "env_logger",
  "futures",
  "futures-util",
- "infer 0.15.0",
  "jwt-simple",
  "log",
- "once_cell",
  "opendal",
- "parking_lot 0.12.1",
  "tempfile",
- "uuid",
 ]
 
 [[package]]
@@ -4874,7 +4867,6 @@ dependencies = [
  "databend-storages-common-table-meta",
  "databend-storages-common-txn",
  "derive-visitor",
- "env_logger",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "futures",
  "futures-util",
