@@ -149,7 +149,6 @@ impl<'a> RecursiveOptimizer<'a> {
 }
 
 #[minitrace::trace]
-#[async_backtrace::framed]
 pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
@@ -227,7 +226,6 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     }
 }
 
-#[async_backtrace::framed]
 pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
@@ -316,7 +314,6 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
-#[async_backtrace::framed]
 async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
@@ -359,7 +356,6 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     Ok(cascades.memo)
 }
 
-#[async_backtrace::framed]
 async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
     // optimize source :fix issue #13733
     // reason: if there is subquery,windowfunc exprs etc. see
