@@ -126,28 +126,9 @@ impl Binder {
     #[async_backtrace::framed]
     async fn process_subquery(
         &self,
-        parent: &ScalarExpr,
         subquery_expr: &SubqueryExpr,
         mut table_expr: SExpr,
     ) -> Result<SubqueryDesc> {
-        let predicate = if subquery_expr.data_type()
-            == DataType::Nullable(Box::new(DataType::Boolean))
-        {
-            subquery_expr.clone().into()
-        } else if let Ok(data_type) = parent.data_type() {
-            if data_type == DataType::Boolean.wrap_nullable() {
-                parent.clone()
-            } else {
-                return Err(ErrorCode::from_string(
-                    "subquery data type in delete/update statement should be boolean".to_string(),
-                ));
-            }
-        } else {
-            return Err(ErrorCode::from_string(
-                "subquery data type in delete/update statement should be boolean".to_string(),
-            ));
-        };
-
         let mut outer_columns = Default::default();
         if let Some(child_expr) = &subquery_expr.child_expr {
             outer_columns = child_expr.used_columns();
@@ -155,7 +136,7 @@ impl Binder {
         outer_columns.extend(subquery_expr.outer_columns.iter());
 
         let filter = Filter {
-            predicates: vec![predicate],
+            predicates: vec![subquery_expr.clone().into()],
         };
         debug_assert_eq!(table_expr.plan.rel_op(), RelOp::Scan);
         let mut scan = match &*table_expr.plan {
@@ -210,16 +191,18 @@ impl Binder {
         subquery_desc: &mut Vec<SubqueryDesc>,
     ) -> Result<()> {
         struct FindSubqueryVisitor<'a> {
-            subqueries: Vec<(&'a ScalarExpr, &'a SubqueryExpr)>,
+            subqueries: Vec<&'a SubqueryExpr>,
         }
 
         impl<'a> Visitor<'a> for FindSubqueryVisitor<'a> {
-            fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
-                if let ScalarExpr::SubqueryExpr(subquery) = expr {
-                    self.subqueries.push((expr, subquery));
+            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+                self.subqueries.push(subquery);
+
+                if let Some(child_expr) = subquery.child_expr.as_ref() {
+                    self.visit(child_expr)?;
                 }
 
-                walk_expr(self, expr)
+                Ok(())
             }
         }
 
@@ -227,9 +210,7 @@ impl Binder {
         find_subquery.visit(scalar)?;
 
         for subquery in find_subquery.subqueries {
-            let desc = self
-                .process_subquery(subquery.0, subquery.1, table_expr.clone())
-                .await?;
+            let desc = self.process_subquery(subquery, table_expr.clone()).await?;
             subquery_desc.push(desc);
         }
 
