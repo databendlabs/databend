@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
@@ -430,14 +431,43 @@ impl QueryPipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                if let Some((executed_pid, graph)) = context.execute_task(None)? {
-                    // Not scheduled graph if pipeline is finished.
-                    if !self.global_tasks_queue.is_finished() {
-                        // We immediately schedule the processor again.
-                        let schedule_queue = graph.schedule_queue(executed_pid)?;
-                        schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                let task_info = context.get_task_info();
+                let execute_res = context.execute_task(None);
+                match execute_res {
+                    Ok(Some((executed_pid, graph))) => {
+                        // Not scheduled graph if pipeline is finished.
+                        if !self.global_tasks_queue.is_finished() {
+                            // We immediately schedule the processor again.
+                            let schedule_queue_res = graph.clone().schedule_queue(executed_pid);
+                            match schedule_queue_res {
+                                Ok(schedule_queue) => {
+                                    schedule_queue.schedule(
+                                        &self.global_tasks_queue,
+                                        &mut context,
+                                        self,
+                                    );
+                                }
+                                Err(cause) => {
+                                    graph.record_node_error(
+                                        executed_pid,
+                                        NodeErrorType::ScheduleEventError(cause.clone()),
+                                    );
+                                    graph.should_finish(Err(cause.clone()))?;
+                                    return Err(cause);
+                                }
+                            }
+                        }
                     }
-                }
+                    Err(error_type) => {
+                        let cause = error_type.get_error_code();
+                        if let Some((graph, node_index)) = task_info {
+                            graph.record_node_error(node_index, *error_type);
+                            graph.should_finish(Err(cause.clone()))?;
+                        }
+                        return Err(cause);
+                    }
+                    _ => {}
+                };
             }
         }
 

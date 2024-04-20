@@ -76,13 +76,13 @@ impl ShareEndpointManager {
         );
 
         if let Some(to_tenant) = to_tenant {
-            if to_tenant.name() == from_tenant.name() {
+            if to_tenant.tenant_name() == from_tenant.tenant_name() {
                 match ShareTableConfig::share_endpoint_address() {
                     Some(url) => {
                         return Ok(vec![EndpointConfig {
                             url: format!("http://{}/", url),
                             token: ShareTableConfig::share_endpoint_token(),
-                            tenant: from_tenant.name().to_string(),
+                            tenant: from_tenant.tenant_name().to_string(),
                         }]);
                     }
                     None => return Ok(vec![]),
@@ -107,7 +107,7 @@ impl ShareEndpointManager {
         for (_, endpoint_meta) in resp.share_endpoint_meta_vec.iter() {
             share_endpoint_config_vec.push(EndpointConfig {
                 url: endpoint_meta.url.clone(),
-                token: RefreshableToken::Direct(from_tenant.name().to_string()),
+                token: RefreshableToken::Direct(from_tenant.tenant_name().to_string()),
                 tenant: endpoint_meta.tenant.clone(),
             });
         }
@@ -136,8 +136,8 @@ impl ShareEndpointManager {
             None => {
                 return Err(ErrorCode::UnknownShareEndpoint(format!(
                     "Unknown share endpoint on accessing shared database from tenant '{}' to target tenant '{}'",
-                    from_tenant.name(),
-                    to_tenant.name()
+                    from_tenant.tenant_name(),
+                    to_tenant.tenant_name()
                 )));
             }
         };
@@ -145,7 +145,7 @@ impl ShareEndpointManager {
         let url = format!(
             "{}tenant/{}/{}/meta",
             endpoint_config.url,
-            to_tenant.name(),
+            to_tenant.tenant_name(),
             share_name
         );
         let bs = Bytes::from(serde_json::to_vec(&tables)?);
@@ -154,7 +154,7 @@ impl ShareEndpointManager {
             .as_ref()
             .query
             .tenant_id
-            .name()
+            .tenant_name()
             .to_string();
         let req = Request::builder()
             .method(Method::POST)
@@ -228,7 +228,7 @@ impl ShareEndpointManager {
             let url = format!(
                 "{}tenant/{}/share_spec",
                 endpoint_config.url,
-                from_tenant.name()
+                from_tenant.tenant_name()
             );
 
             debug!("get_inbound_shares url: {:?}", url);
@@ -239,7 +239,7 @@ impl ShareEndpointManager {
                 .as_ref()
                 .query
                 .tenant_id
-                .name()
+                .tenant_name()
                 .to_string();
             let req = Request::builder()
                 .method(Method::POST)

@@ -33,7 +33,7 @@ pub struct CreateStreamPlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropStreamPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub stream_name: String,

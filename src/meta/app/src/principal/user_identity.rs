@@ -86,7 +86,9 @@ impl TenantUserIdent {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
     use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use crate::principal::user_identity::TenantUserIdent;
     use crate::principal::UserIdentity;
@@ -94,32 +96,31 @@ mod kvapi_key_impl {
     use crate::tenant::Tenant;
     use crate::KeyWithTenant;
 
+    impl kvapi::KeyCodec for TenantUserIdent {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_str(self.tenant_name())
+                .push_str(&self.user.to_string())
+        }
+
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
+            let tenant = parser.next_nonempty()?;
+            let user_str = parser.next_str()?;
+
+            let user = UserIdentity::parse(&user_str)?;
+
+            Ok(Self {
+                tenant: Tenant::new_nonempty(tenant),
+                user,
+            })
+        }
+    }
+
     impl kvapi::Key for TenantUserIdent {
         const PREFIX: &'static str = "__fd_users";
         type ValueType = UserInfo;
 
         fn parent(&self) -> Option<String> {
             Some(self.tenant.to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant_name())
-                .push_str(&self.user.to_string())
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-            let tenant = p.next_nonempty()?;
-            let user_str = p.next_str()?;
-            p.done()?;
-
-            let user = UserIdentity::parse(&user_str)?;
-            Ok(TenantUserIdent {
-                tenant: Tenant::new_nonempty(tenant),
-                user,
-            })
         }
     }
 

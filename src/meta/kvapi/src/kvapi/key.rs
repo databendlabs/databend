@@ -14,11 +14,11 @@
 
 //! Defines kvapi::KVApi key behaviors.
 
-use std::convert::Infallible;
 use std::fmt::Debug;
 use std::string::FromUtf8Error;
 
 use crate::kvapi;
+use crate::kvapi::key_codec::KeyCodec;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KeyError {
@@ -52,17 +52,12 @@ pub enum KeyError {
 }
 
 /// Convert structured key to a string key used by kvapi::KVApi and backwards
-pub trait Key: Debug
+pub trait Key: KeyCodec + Debug
 where Self: Sized
 {
     const PREFIX: &'static str;
 
     type ValueType: kvapi::Value;
-
-    /// Return the root prefix of this key: `"<PREFIX>/"`.
-    fn root_prefix() -> String {
-        format!("{}/", Self::PREFIX)
-    }
 
     /// Return the parent key of this key.
     ///
@@ -75,47 +70,12 @@ where Self: Sized
         self.encode_key(b).done()
     }
 
-    /// Encode structured key into a key builder.
-    ///
-    /// Implement either this method or `to_string_key()`.
-    /// `to_string_key()` provides a default implementation that create a default builder and relies on this method.
-    fn encode_key(&self, mut _b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-        unimplemented!()
-    }
-
     /// Decode str into a structured key.
     fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
         let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
         let k = Self::decode_key(&mut p)?;
         p.done()?;
         Ok(k)
-    }
-
-    /// Parse a structured key from a key parser.
-    ///
-    /// Implement either this method or `from_str_key()`.
-    /// `from_str_key()` provides a default implementation that create a default parser and relies on this method.
-    fn decode_key(_parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-        unimplemented!()
-    }
-}
-
-impl kvapi::Key for String {
-    const PREFIX: &'static str = "";
-
-    /// For a non structured key, the value type can never be used.
-    type ValueType = Infallible;
-
-    fn parent(&self) -> Option<String> {
-        unimplemented!("illegal to get parent of generic String key")
-    }
-
-    fn to_string_key(&self) -> String {
-        self.clone()
-    }
-
-    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-        Ok(s.to_string())
     }
 }
 
@@ -153,6 +113,28 @@ impl<K> DirName<K> {
     }
 }
 
+impl<K> DirName<K>
+where K: kvapi::Key
+{
+    /// Return a string with a suffix slash "/"
+    pub fn dir_name_with_slash(&self) -> String {
+        let prefix = self.to_string_key();
+        format!("{}/", prefix)
+    }
+}
+
+impl<K: Key> KeyCodec for DirName<K> {
+    /// DirName can not be encoded as a key directly
+    fn encode_key(&self, _b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+        unimplemented!()
+    }
+
+    /// DirName can not be encoded as a key directly
+    fn decode_key(_p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
+        unimplemented!()
+    }
+}
+
 impl<K: Key> Key for DirName<K> {
     const PREFIX: &'static str = K::PREFIX;
     type ValueType = K::ValueType;
@@ -177,14 +159,31 @@ mod tests {
     use std::convert::Infallible;
 
     use super::DirName;
+    use crate::kvapi;
     use crate::kvapi::Key;
+    use crate::kvapi::KeyCodec;
     use crate::kvapi::KeyError;
+    use crate::kvapi::KeyParser;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct FooKey {
         a: u64,
         b: String,
         c: u64,
+    }
+
+    impl KeyCodec for FooKey {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.a).push_str(&self.b).push_u64(self.c)
+        }
+
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
+        where Self: Sized {
+            let a = parser.next_u64()?;
+            let b = parser.next_str()?;
+            let c = parser.next_u64()?;
+            Ok(FooKey { a, b, c })
+        }
     }
 
     impl Key for FooKey {
@@ -198,21 +197,11 @@ mod tests {
         fn to_string_key(&self) -> String {
             format!("{}/{}/{}/{}", Self::PREFIX, self.a, self.b, self.c)
         }
-
-        fn from_str_key(_s: &str) -> Result<Self, KeyError> {
-            // dummy impl
-            let k = FooKey {
-                a: 9,
-                b: "x".to_string(),
-                c: 8,
-            };
-            Ok(k)
-        }
     }
 
     #[test]
     fn test_dir_name_from_key() {
-        let d = DirName::<FooKey>::from_str_key("").unwrap();
+        let d = DirName::<FooKey>::from_str_key("pref/9/x/8").unwrap();
         assert_eq!(
             FooKey {
                 a: 9,

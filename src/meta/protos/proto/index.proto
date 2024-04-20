@@ -20,17 +20,6 @@ syntax = "proto3";
 
 package databend_proto;
 
-message IndexNameIdent {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  // The user this index belongs to
-  string tenant = 1;
-
-  // Index name
-  string index_name = 2;
-}
-
 // IndexMeta is a container of all non-identity information.
 message IndexMeta {
   enum IndexType {

@@ -97,7 +97,7 @@ impl UserApiProvider {
                 Ok(())
             } else {
                 Err(UdfError::NotFound {
-                    tenant: tenant.name().to_string(),
+                    tenant: tenant.tenant_name().to_string(),
                     name: udf_name.to_string(),
                     context: "while drop_udf".to_string(),
                 })

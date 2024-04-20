@@ -78,6 +78,7 @@ pub struct IcebergCatalogOption {
 
 /// Same as `CatalogNameIdent`, but with `serde` support,
 /// and can be used a s part of a value.
+// #[derive(Clone, Debug, PartialEq, Eq)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CatalogName {
     pub tenant: String,
@@ -273,11 +274,26 @@ impl ListCatalogReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use super::CatalogId;
     use super::CatalogIdToName;
     use crate::schema::CatalogMeta;
     use crate::schema::CatalogNameIdent;
+
+    impl kvapi::KeyCodec for CatalogId {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.catalog_id)
+        }
+
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
+            let catalog_id = parser.next_u64()?;
+
+            Ok(Self { catalog_id })
+        }
+    }
 
     /// "__fd_catalog_by_id/<catalog_id>"
     impl kvapi::Key for CatalogId {
@@ -288,20 +304,17 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             None
         }
+    }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.catalog_id)
-                .done()
+    impl kvapi::KeyCodec for CatalogIdToName {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.catalog_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
+            let catalog_id = parser.next_u64()?;
 
-            let catalog_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(CatalogId { catalog_id })
+            Ok(Self { catalog_id })
         }
     }
 
@@ -313,21 +326,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             Some(CatalogId::new(self.catalog_id).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.catalog_id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let catalog_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(CatalogIdToName { catalog_id })
         }
     }
 

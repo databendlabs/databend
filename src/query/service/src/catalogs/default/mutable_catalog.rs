@@ -21,6 +21,8 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_api::SequenceApi;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
@@ -29,6 +31,8 @@ use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -38,13 +42,14 @@ use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -58,6 +63,10 @@ use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -83,6 +92,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -96,6 +106,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use log::info;
@@ -153,10 +164,7 @@ impl MutableCatalog {
         // Create default database.
         let req = CreateDatabaseReq {
             create_option: CreateOption::CreateIfNotExists,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.clone(),
-                db_name: "default".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "default"),
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -239,7 +247,8 @@ impl Catalog for MutableCatalog {
         let res = self.ctx.meta.create_database(req.clone()).await?;
         info!(
             "db name: {}, engine: {}",
-            &req.name_ident.db_name, &req.meta.engine
+            req.name_ident.database_name(),
+            &req.meta.engine
         );
 
         // Initial the database after creating.
@@ -252,7 +261,7 @@ impl Catalog for MutableCatalog {
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
-        database.init_database(req.name_ident.tenant.name()).await?;
+        database.init_database(req.name_ident.tenant_name()).await?;
         Ok(CreateDatabaseReply {
             db_id: res.db_id,
             spec_vec: None,
@@ -474,6 +483,11 @@ impl Catalog for MutableCatalog {
         db.undrop_table(req).await
     }
 
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        let res = self.ctx.meta.undrop_table_by_id(req).await?;
+        Ok(res)
+    }
+
     #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         let db = self
@@ -592,5 +606,24 @@ impl Catalog for MutableCatalog {
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         self.ctx.storage_factory.get_storage_descriptors()
+    }
+
+    async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        Ok(self.ctx.meta.create_sequence(req).await?)
+    }
+
+    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
+        Ok(self.ctx.meta.get_sequence(req).await?)
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        Ok(self.ctx.meta.get_sequence_next_value(req).await?)
+    }
+
+    async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
+        Ok(self.ctx.meta.drop_sequence(req).await?)
     }
 }

@@ -281,6 +281,9 @@ impl InterpreterFactory {
                 *drop_stream.clone(),
             )?)),
 
+            // dynamic tables
+            Plan::CreateDynamicTable(_) => Err(ErrorCode::Unimplemented("todo")),
+
             // Indexes
             Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
                 ctx,
@@ -581,6 +584,14 @@ impl InterpreterFactory {
                 Ok(InsertMultiTableInterpreter::try_create(ctx, *p.clone())?)
             }
             Plan::ExecuteImmediate(p) => Ok(Arc::new(ExecuteImmediateInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::CreateSequence(p) => Ok(Arc::new(CreateSequenceInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropSequence(p) => Ok(Arc::new(DropSequenceInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

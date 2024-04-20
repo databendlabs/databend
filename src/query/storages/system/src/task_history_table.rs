@@ -176,7 +176,7 @@ impl AsyncSystemTable for TaskHistoryTable {
             }
         }
         let req = ShowTaskRunsRequest {
-            tenant_id: tenant.name().to_string(),
+            tenant_id: tenant.tenant_name().to_string(),
             scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
             scheduled_time_end: scheduled_time_end.unwrap_or("".to_string()),
             task_name: task_name.unwrap_or("".to_string()),
@@ -195,7 +195,7 @@ impl AsyncSystemTable for TaskHistoryTable {
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let config = build_client_config(
-            tenant.name().to_string(),
+            tenant.tenant_name().to_string(),
             user,
             query_id,
             cloud_api.get_timeout(),

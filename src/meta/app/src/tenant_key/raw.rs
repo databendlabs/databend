@@ -33,30 +33,32 @@ use crate::KeyWithTenant;
 /// And this struct does not guarantee the tenant to be valid,
 /// i.e., tenant-name may be empty.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct TIdentRaw<R> {
+pub struct TIdentRaw<R, N = String> {
     /// Tenant name.
     tenant: String,
 
     /// Name of the resource belonging to the tenant.
-    name: String,
+    name: N,
 
     _p: std::marker::PhantomData<R>,
 }
 
 /// `TIdentRaw` to be Debug does not require `R` to be Debug.
-impl<R> Debug for TIdentRaw<R>
-where R: TenantResource
+impl<R, N> Debug for TIdentRaw<R, N>
+where
+    R: TenantResource,
+    N: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         // If there is a specified type name for this alias, use it.
         // Otherwise use the default name
         let type_name = if R::TYPE.is_empty() {
-            "TIdentRaw"
+            "TIdentRaw".to_string()
         } else {
-            R::TYPE
+            format!("{}Raw", R::TYPE)
         };
 
-        f.debug_struct(type_name)
+        f.debug_struct(&type_name)
             .field("tenant", &self.tenant)
             .field("name", &self.name)
             .finish()
@@ -64,7 +66,9 @@ where R: TenantResource
 }
 
 /// `TIdentRaw` to be Clone does not require `R` to be Clone.
-impl<R> Clone for TIdentRaw<R> {
+impl<R, N> Clone for TIdentRaw<R, N>
+where N: Clone
+{
     fn clone(&self) -> Self {
         Self {
             tenant: self.tenant.clone(),
@@ -75,15 +79,19 @@ impl<R> Clone for TIdentRaw<R> {
 }
 
 /// `TIdentRaw` to be PartialEq does not require `R` to be PartialEq.
-impl<R> PartialEq for TIdentRaw<R> {
+impl<R, N> PartialEq for TIdentRaw<R, N>
+where N: PartialEq
+{
     fn eq(&self, other: &Self) -> bool {
         self.tenant == other.tenant && self.name == other.name
     }
 }
 
-impl<R> Eq for TIdentRaw<R> {}
+impl<R, N> Eq for TIdentRaw<R, N> where N: PartialEq {}
 
-impl<R> Hash for TIdentRaw<R> {
+impl<R, N> Hash for TIdentRaw<R, N>
+where N: Hash
+{
     fn hash<H: Hasher>(&self, state: &mut H) {
         Hash::hash(&self.tenant, state);
         Hash::hash(&self.name, state);
@@ -91,11 +99,31 @@ impl<R> Hash for TIdentRaw<R> {
     }
 }
 
-impl<R> TIdentRaw<R> {
+impl<R> TIdentRaw<R, String> {
     pub fn new(tenant: impl ToString, name: impl ToString) -> Self {
         Self {
             tenant: tenant.to_string(),
             name: name.to_string(),
+            _p: Default::default(),
+        }
+    }
+}
+
+impl<R> TIdentRaw<R, u64> {
+    pub fn new(tenant: impl ToString, name: u64) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+            name,
+            _p: Default::default(),
+        }
+    }
+}
+
+impl<R, N> TIdentRaw<R, N> {
+    pub fn new_generic(tenant: impl ToString, name: N) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+            name,
             _p: Default::default(),
         }
     }
@@ -106,42 +134,46 @@ impl<R> TIdentRaw<R> {
     }
 
     /// Get the name of the resource.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &N {
         &self.name
     }
 
     /// Convert Self to [`TIdent`] which can be used a meta-service key.
     // TODO: load per-tenant config to determine the path in meta-service.
-    pub fn to_tident(self, _config: ()) -> TIdent<R> {
+    pub fn to_tident(self, _config: ()) -> TIdent<R, N> {
         let tenant = Tenant::new_or_err(self.tenant, "to_tident").unwrap();
-        TIdent::new(tenant, self.name)
+        TIdent::new_generic(tenant, self.name)
     }
 
     /// Create a display-able instance.
-    pub fn display(&self) -> impl fmt::Display + '_ {
+    pub fn display(&self) -> impl fmt::Display + '_
+    where N: fmt::Display {
         format!("'{}'/'{}'", self.tenant, self.name)
     }
 }
 
-impl<R> From<TIdent<R>> for TIdentRaw<R>
+impl<R, N> From<TIdent<R, N>> for TIdentRaw<R, N>
 where R: TenantResource
 {
-    fn from(ident: TIdent<R>) -> Self {
+    fn from(ident: TIdent<R, N>) -> Self {
+        let (tenant, name) = ident.unpack();
         Self {
-            tenant: ident.tenant_name().to_string(),
-            name: ident.name().to_string(),
+            tenant: tenant.tenant_name().to_string(),
+            name,
             _p: Default::default(),
         }
     }
 }
 
-impl<R> From<&TIdent<R>> for TIdentRaw<R>
-where R: TenantResource
+impl<R, N> From<&TIdent<R, N>> for TIdentRaw<R, N>
+where
+    R: TenantResource,
+    N: Clone,
 {
-    fn from(ident: &TIdent<R>) -> Self {
+    fn from(ident: &TIdent<R, N>) -> Self {
         Self {
             tenant: ident.tenant_name().to_string(),
-            name: ident.name().to_string(),
+            name: ident.name().clone(),
             _p: Default::default(),
         }
     }

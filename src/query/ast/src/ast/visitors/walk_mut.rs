@@ -566,6 +566,8 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowTasks(stmt) => visitor.visit_show_tasks(stmt),
         Statement::DescribeTask(stmt) => visitor.visit_describe_task(stmt),
 
+        Statement::CreateDynamicTable(stmt) => visitor.visit_create_dynamic_table(stmt),
+
         Statement::CreateConnection(stmt) => visitor.visit_create_connection(stmt),
         Statement::DropConnection(stmt) => visitor.visit_drop_connection(stmt),
         Statement::DescribeConnection(stmt) => visitor.visit_describe_connection(stmt),
@@ -584,5 +586,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::DescribeNotification(stmt) => visitor.visit_describe_notification(stmt),
         Statement::InsertMultiTable(_) => {}
         Statement::ExecuteImmediate(_) => {}
+        Statement::CreateSequence(stmt) => visitor.visit_create_sequence(stmt),
+        Statement::DropSequence(stmt) => visitor.visit_drop_sequence(stmt),
     }
 }

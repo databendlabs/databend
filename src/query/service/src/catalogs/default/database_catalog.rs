@@ -32,6 +32,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -43,6 +45,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -55,6 +59,10 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -79,6 +87,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -92,6 +101,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
 use log::info;
 
@@ -190,12 +200,12 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                req.name_ident.db_name
+                req.name_ident.database_name()
             )));
         }
         // create db in BOTTOM layer only
@@ -209,7 +219,7 @@ impl Catalog for DatabaseCatalog {
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
             return self.immutable_catalog.drop_database(req).await;
@@ -223,11 +233,11 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
             || self
                 .immutable_catalog
-                .exists_database(&req.name_ident.tenant, &req.new_db_name)
+                .exists_database(req.name_ident.tenant(), &req.new_db_name)
                 .await?
         {
             return self.immutable_catalog.rename_database(req).await;
@@ -463,6 +473,20 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        info!("Undrop table by id from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?
+        {
+            return self.immutable_catalog.undrop_table_by_id(req).await;
+        }
+        self.mutable_catalog.undrop_table_by_id(req).await
+    }
+
+    #[async_backtrace::framed]
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         info!("Undrop database from req:{:?}", req);
 
@@ -693,5 +717,23 @@ impl Catalog for DatabaseCatalog {
 
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
         self.mutable_catalog.gc_drop_tables(req).await
+    }
+
+    async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        self.mutable_catalog.create_sequence(req).await
+    }
+    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
+        self.mutable_catalog.get_sequence(req).await
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        self.mutable_catalog.get_sequence_next_value(req).await
+    }
+
+    async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
+        self.mutable_catalog.drop_sequence(req).await
     }
 }

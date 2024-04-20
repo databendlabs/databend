@@ -471,6 +471,24 @@ impl Pipeline {
         self.on_finished = Some(Box::new(f));
     }
 
+    pub fn push_front_on_finished_callback<
+        F: FnOnce(&Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> + Send + Sync + 'static,
+    >(
+        &mut self,
+        f: F,
+    ) {
+        if let Some(on_finished) = self.on_finished.take() {
+            self.on_finished = Some(Box::new(move |may_error| {
+                f(may_error)?;
+                on_finished(may_error)
+            }));
+
+            return;
+        }
+
+        self.on_finished = Some(Box::new(f));
+    }
+
     pub fn take_on_init(&mut self) -> InitCallback {
         match self.on_init.take() {
             None => Box::new(|| Ok(())),

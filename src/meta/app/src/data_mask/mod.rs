@@ -103,9 +103,24 @@ pub struct MaskpolicyTableIdList {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use super::DatamaskId;
     use crate::data_mask::DatamaskMeta;
+
+    impl kvapi::KeyCodec for DatamaskId {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.id)
+        }
+
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
+        where Self: Sized {
+            let id = parser.next_u64()?;
+            Ok(Self { id })
+        }
+    }
 
     /// "__fd_datamask_by_id/<id>"
     impl kvapi::Key for DatamaskId {
@@ -115,21 +130,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             None
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let id = p.next_u64()?;
-            p.done()?;
-
-            Ok(DatamaskId { id })
         }
     }
 

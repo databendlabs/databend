@@ -60,6 +60,11 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let index_name = "idx1".to_string();
     let mut options = BTreeMap::new();
     options.insert("tokenizer".to_string(), "english".to_string());
+    options.insert(
+        "filters".to_string(),
+        "english_stop,english_stemmer,chinese_stop".to_string(),
+    );
+
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
@@ -126,7 +131,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
 
     let dal = new_fuse_table.get_operator_ref();
     let schema = DataSchema::from(table_schema);
-    let query_columns = vec!["title".to_string(), "content".to_string()];
+    let query_fields = vec![("title".to_string(), None), ("content".to_string(), None)];
 
     let index_loc = TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
         &block_meta.location.0,
@@ -134,8 +139,15 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         &index_version,
     );
 
-    let index_reader =
-        InvertedIndexReader::try_create(dal.clone(), &schema, &query_columns, &index_loc).await?;
+    let index_options = BTreeMap::new();
+    let index_reader = InvertedIndexReader::try_create(
+        dal.clone(),
+        &schema,
+        &query_fields,
+        &index_options,
+        &index_loc,
+    )
+    .await?;
 
     let query = "rust";
     let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;

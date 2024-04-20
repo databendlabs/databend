@@ -52,7 +52,7 @@ impl ResultCacheReader {
         tolerate_inconsistent: bool,
     ) -> Self {
         let tenant = ctx.get_tenant();
-        let meta_key = gen_result_cache_meta_key(tenant.name(), key);
+        let meta_key = gen_result_cache_meta_key(tenant.tenant_name(), key);
         let partitions_shas = ctx.get_partitions_shas();
 
         Self {

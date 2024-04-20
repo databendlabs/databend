@@ -79,6 +79,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         InsertStmt {
             // TODO
             hints: None,
+            with: None,
             catalog: None,
             database: None,
             table: table_name,
@@ -124,6 +125,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             table: table_reference,
             update_list,
             selection,
+            with: None,
         }
     }
 
@@ -479,6 +481,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             Some(InsertStmt {
                 // TODO
                 hints: None,
+                with: None,
                 catalog: None,
                 database: None,
                 table: table_name,
