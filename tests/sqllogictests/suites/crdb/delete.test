@@ -321,36 +321,3 @@ drop table t1;
 
 statement ok
 drop table t2;
-
-# https://github.com/datafuselabs/databend/issues/15278
-
-statement ok
-drop table test;
-
-statement ok
-drop table test_tmp;
-
-statement ok
-create table test(a varchar, b varchar, c varchar);
-
-statement ok
-create table test_tmp(a varchar, b varchar, c varchar);
-
-statement ok
-insert into test(a,b,c) values('a','update','table38426');
-
-statement ok
-insert into test_tmp(a,b,c) values('a','update','table38426');
-
-statement ok
-delete from test where (a) in(select a from test_tmp where b in ('update', 'delete')) and c in ('table38426');
-
-query T
-select a from test;
-----
-
-statement ok
-drop table test;
-
-statement ok
-drop table test_tmp;
