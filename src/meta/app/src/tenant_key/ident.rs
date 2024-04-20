@@ -122,16 +122,9 @@ mod kvapi_key_impl {
     use crate::tenant_key::resource::TenantResource;
     use crate::KeyWithTenant;
 
-    impl<R> kvapi::Key for TIdent<R>
+    impl<R> kvapi::KeyCodec for TIdent<R>
     where R: TenantResource
     {
-        const PREFIX: &'static str = R::PREFIX;
-        type ValueType = R::ValueType;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_str(self.tenant_name()).push_str(&self.name)
         }
@@ -141,6 +134,17 @@ mod kvapi_key_impl {
             let name = p.next_str()?;
 
             Ok(TIdent::new(Tenant::new_nonempty(tenant), name))
+        }
+    }
+
+    impl<R> kvapi::Key for TIdent<R>
+    where R: TenantResource
+    {
+        const PREFIX: &'static str = R::PREFIX;
+        type ValueType = R::ValueType;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
         }
     }
 
