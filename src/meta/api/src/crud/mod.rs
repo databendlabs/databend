@@ -49,10 +49,10 @@ use crate::kv_pb_api::UpsertPB;
 /// One `CrudMgr` instance can only access keys of exactly one [`Tenant`].
 ///
 /// [`TIdent<R>`]: TIdent
-pub struct CrudMgr<R> {
+pub struct CrudMgr<R, N = String> {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
-    _p: PhantomData<R>,
+    _p: PhantomData<(R, N)>,
 }
 
 impl<R> CrudMgr<R> {
@@ -67,7 +67,7 @@ impl<R> CrudMgr<R> {
 
     /// Create a structured key for the given name.
     fn ident(&self, name: &str) -> TIdent<R> {
-        TIdent::new(self.tenant.clone(), name)
+        TIdent::<R, String>::new(self.tenant.clone(), name)
     }
 }
 

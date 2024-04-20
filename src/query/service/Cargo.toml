@@ -159,7 +159,7 @@ prost = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
-rustls = "0.21.6"
+rustls = "0.21.11"
 rustls-pemfile = "1.0.2"
 rustyline = "11.0.0"
 serde = { workspace = true }
