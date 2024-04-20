@@ -131,6 +131,21 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
                 .append(RcDoc::text(rest_str)),
         ),
         InsertSource::Select { query } => pretty_query(*query),
+        InsertSource::FunctionCall {
+            func_name,
+            arguments,
+        } => RcDoc::text("FUNCTIONCALL").append(
+            RcDoc::line()
+                .nest(NEST_FACTOR)
+                .append(RcDoc::text(func_name.name))
+                .append(RcDoc::text(
+                    arguments
+                        .iter()
+                        .map(|arg| arg.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                )),
+        ),
     })
 }
 

@@ -36,6 +36,7 @@ use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::processors::transforms::SequenceNextvalSource;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -280,6 +281,26 @@ impl Interpreter for InsertInterpreter {
                 }
 
                 return Ok(build_res);
+            }
+            InsertInputSource::FunctionCall(function_call) => {
+                if function_call.func_name != "nextval" {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Upsupport function call {}",
+                        function_call.func_name
+                    )));
+                }
+                build_res.main_pipeline.add_source(
+                    |output| {
+                        let inner = SequenceNextvalSource::create(
+                            1,
+                            function_call.clone(),
+                            self.ctx.clone(),
+                            output.clone(),
+                        );
+                        AsyncSourcer::create(self.ctx.clone(), output, inner)
+                    },
+                    1,
+                )?;
             }
         };
 

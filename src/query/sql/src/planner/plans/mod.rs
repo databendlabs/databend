@@ -66,6 +66,7 @@ pub use dummy_table_scan::DummyTableScan;
 pub use eval_scalar::*;
 pub use exchange::*;
 pub use filter::*;
+pub use insert::FunctionCallSource;
 pub use insert::Insert;
 pub use insert::InsertInputSource;
 pub use insert_multi_table::*;

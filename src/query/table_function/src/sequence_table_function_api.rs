@@ -12,36 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_exception::Span;
 use databend_common_management::table_function::SequenceTableFunctionApiError;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
-use parking_lot::RwLock;
 
-pub struct SequenceTableFunctionApi {
-    catalog: Arc<dyn Catalog>,
-}
+pub struct SequenceTableFunctionApi {}
 
 impl SequenceTableFunctionApi {
     #[async_backtrace::framed]
-    pub fn init(catalog: Arc<dyn Catalog>) {
-        let table_function_api = SequenceTableFunctionApi { catalog };
-        GlobalInstance::set(Arc::new(table_function_api));
-    }
-
-    pub fn instance() -> Arc<SequenceTableFunctionApi> {
-        GlobalInstance::get()
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_sequence(
-        &self,
+    pub async fn exist_sequence(
+        catalog: Arc<dyn Catalog>,
         tenant: Tenant,
         sequence_name: String,
     ) -> Result<bool, SequenceTableFunctionApiError> {
@@ -49,7 +33,7 @@ impl SequenceTableFunctionApi {
             ident: SequenceIdent::new(tenant, sequence_name),
         };
 
-        if let Ok(_reply) = self.catalog.get_sequence(req).await {
+        if let Ok(_reply) = catalog.get_sequence(req).await {
             Ok(true)
         } else {
             Ok(false)

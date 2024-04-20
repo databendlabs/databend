@@ -155,6 +155,10 @@ impl DatabaseCatalog {
         );
         Ok(res)
     }
+
+    pub fn get_mutable_catalog(&self) -> Arc<dyn Catalog> {
+        self.mutable_catalog.clone()
+    }
 }
 
 #[async_trait::async_trait]

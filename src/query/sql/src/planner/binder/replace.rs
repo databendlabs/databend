@@ -169,6 +169,21 @@ impl Binder {
                 let optimized_plan = optimize(opt_ctx, select_plan).await?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }
+            InsertSource::FunctionCall {
+                func_name,
+                arguments,
+            } => {
+                // todo: return error if there is no function
+                let function_call = FunctionCallSource {
+                    func_name: func_name.name,
+                    arguments: arguments
+                        .iter()
+                        .map(|arg| arg.name.clone())
+                        .collect::<Vec<_>>(),
+                };
+
+                Ok(InsertInputSource::FunctionCall(function_call))
+            }
         };
 
         let plan = Replace {

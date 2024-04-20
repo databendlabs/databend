@@ -100,6 +100,10 @@ pub enum InsertSource {
     Select {
         query: Box<Query>,
     },
+    FunctionCall {
+        func_name: Identifier,
+        arguments: Vec<Identifier>,
+    },
 }
 
 impl Display for InsertSource {
@@ -136,6 +140,22 @@ impl Display for InsertSource {
             }
             InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
+            InsertSource::FunctionCall {
+                func_name,
+                arguments,
+            } => write!(
+                f,
+                "{}",
+                format!(
+                    "{}({})",
+                    func_name.name,
+                    arguments
+                        .iter()
+                        .map(|arg| arg.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            ),
         }
     }
 }

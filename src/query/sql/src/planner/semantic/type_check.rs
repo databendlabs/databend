@@ -3626,9 +3626,10 @@ impl<'a> TypeChecker<'a> {
         };
 
         let tenant = self.ctx.get_tenant();
-        let exist = SequenceTableFunctionApi::instance()
-            .get_sequence(tenant, sequence_name.clone())
-            .await?;
+        let catalog = self.ctx.get_default_catalog()?;
+        let exist =
+            SequenceTableFunctionApi::exist_sequence(catalog, tenant, sequence_name.clone())
+                .await?;
         if exist {
             let table_func = TableFunctionCall {
                 span,

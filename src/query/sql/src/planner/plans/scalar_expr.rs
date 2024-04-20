@@ -907,6 +907,7 @@ pub fn walk_expr_with_parent<'a, V: VisitorWithParent<'a>>(
         ScalarExpr::SubqueryExpr(subquery) => visitor.visit_subquery(parent, current, subquery),
         ScalarExpr::UDFCall(udf) => visitor.visit_udf_call(parent, current, udf),
         ScalarExpr::UDFLambdaCall(udf) => visitor.visit_udf_lambda_call(parent, current, udf),
+        ScalarExpr::TableFunctionCall(_) => Ok(()),
     }
 }
 
@@ -922,6 +923,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
+        ScalarExpr::TableFunctionCall(_) => Ok(()),
     }
 }
 
@@ -1019,6 +1021,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
+        ScalarExpr::TableFunctionCall(_) => Ok(()),
     }
 }
 
