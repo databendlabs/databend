@@ -1,8 +1,8 @@
 statement ok
-drop table test;
+drop table if exists test;
 
 statement ok
-drop table test_tmp;
+drop table if exists test_tmp;
 
 statement ok
 create table test(a varchar, b varchar, c varchar);
@@ -24,7 +24,7 @@ select a from test;
 ----
 
 statement ok
-drop table test;
+drop table if exists test;
 
 statement ok
-drop table test_tmp;
+drop table if exists test_tmp;
