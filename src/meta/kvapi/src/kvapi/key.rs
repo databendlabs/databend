@@ -18,6 +18,7 @@ use std::fmt::Debug;
 use std::string::FromUtf8Error;
 
 use crate::kvapi;
+use crate::kvapi::key_codec::KeyCodec;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KeyError {
@@ -48,15 +49,6 @@ pub enum KeyError {
 
     #[error("Unknown kvapi::Key prefix: '{prefix}'")]
     UnknownPrefix { prefix: String },
-}
-
-pub trait KeyCodec {
-    /// Encode fields of the structured key into a key builder.
-    fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder;
-
-    /// Decode fields of the structured key from a key parser.
-    fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, KeyError>
-    where Self: Sized;
 }
 
 /// Convert structured key to a string key used by kvapi::KVApi and backwards
