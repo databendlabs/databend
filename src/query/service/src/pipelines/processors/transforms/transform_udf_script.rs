@@ -68,19 +68,6 @@ impl ScriptRuntime {
         let decoded_code_blob = code_blob
             .ok_or_else(|| ErrorCode::UDFDataError("WASM module not provided".to_string()))?;
 
-        // let decoded_code_blob = general_purpose::STANDARD.decode(code_blob).map_err(|err| {
-        //     ErrorCode::UDFDataError(format!("Failed to decode WASM module from base64: {}", err))
-        // })?;
-
-        let detected_mime_type = infer::get(&decoded_code_blob).ok_or_else(|| {
-            ErrorCode::UDFDataError("Failed to infer MIME type for WASM module".to_string())
-        })?;
-
-        log::info!(
-            "Detected MIME type for WASM module: {:#?}",
-            detected_mime_type
-        );
-
         let runtime = arrow_udf_wasm::Runtime::new(&decoded_code_blob).map_err(|err| {
             ErrorCode::UDFDataError(format!("Failed to create WASM runtime for module: {}", err))
         })?;

@@ -1845,17 +1845,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cfb"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d38f2da7a0a2c4ccf0065be06397cc26a81f4e528be095826eee9d4adbb8c60f"
-dependencies = [
- "byteorder",
- "fnv",
- "uuid",
-]
-
-[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4878,7 +4867,6 @@ dependencies = [
  "http",
  "humantime",
  "indicatif",
- "infer 0.15.0",
  "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a7325f4)",
  "jwt-simple",
@@ -8167,7 +8155,7 @@ dependencies = [
  "base64 0.13.1",
  "futures-lite 1.13.0",
  "http",
- "infer 0.2.3",
+ "infer",
  "pin-project-lite",
  "rand 0.7.3",
  "serde",
@@ -8434,15 +8422,6 @@ name = "infer"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64e9829a50b42bb782c1df523f78d332fe371b10c661e78b7a3c34b0198e9fac"
-
-[[package]]
-name = "infer"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb33622da908807a06f9513c19b3c1ad50fab3e4137d82a78107d502075aa199"
-dependencies = [
- "cfb",
-]
 
 [[package]]
 name = "inferno"
