@@ -678,6 +678,7 @@ fi
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	install_mysql_client "$PACKAGE_MANAGER"
 	install_pkg git "$PACKAGE_MANAGER"
+	install_pkg wget "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
 	if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
 		# for killall & timeout
