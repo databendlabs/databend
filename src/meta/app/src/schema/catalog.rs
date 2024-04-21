@@ -283,6 +283,18 @@ mod kvapi_key_impl {
     use crate::schema::CatalogMeta;
     use crate::schema::CatalogNameIdent;
 
+    impl kvapi::KeyCodec for CatalogId {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.catalog_id)
+        }
+
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
+            let catalog_id = parser.next_u64()?;
+
+            Ok(Self { catalog_id })
+        }
+    }
+
     /// "__fd_catalog_by_id/<catalog_id>"
     impl kvapi::Key for CatalogId {
         const PREFIX: &'static str = "__fd_catalog_by_id";
@@ -292,7 +304,9 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             None
         }
+    }
 
+    impl kvapi::KeyCodec for CatalogIdToName {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             b.push_u64(self.catalog_id)
         }
@@ -312,16 +326,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             Some(CatalogId::new(self.catalog_id).to_string_key())
-        }
-
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.catalog_id)
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
-            let catalog_id = parser.next_u64()?;
-
-            Ok(Self { catalog_id })
         }
     }
 

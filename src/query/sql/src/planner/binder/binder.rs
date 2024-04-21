@@ -615,6 +615,9 @@ impl<'a> Binder {
             Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
             Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
 
+            // Dynamic Table
+            Statement::CreateDynamicTable(stmt) => self.bind_create_dynamic_table(stmt).await?,
+
             Statement::CreatePipe(_) => {
                 todo!()
             }

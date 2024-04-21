@@ -366,15 +366,7 @@ mod kvapi_key_impl {
     use crate::background::background_job::BackgroundJobId;
     use crate::background::BackgroundJobInfo;
 
-    impl kvapi::Key for BackgroundJobId {
-        const PREFIX: &'static str = "__fd_background_job_by_id";
-
-        type ValueType = BackgroundJobInfo;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-
+    impl kvapi::KeyCodec for BackgroundJobId {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             b.push_u64(self.id)
         }
@@ -382,6 +374,16 @@ mod kvapi_key_impl {
         fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
             let id = parser.next_u64()?;
             Ok(BackgroundJobId { id })
+        }
+    }
+
+    impl kvapi::Key for BackgroundJobId {
+        const PREFIX: &'static str = "__fd_background_job_by_id";
+
+        type ValueType = BackgroundJobInfo;
+
+        fn parent(&self) -> Option<String> {
+            None
         }
     }
 

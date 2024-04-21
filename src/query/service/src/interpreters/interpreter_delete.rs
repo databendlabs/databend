@@ -178,14 +178,18 @@ impl Interpreter for DeleteInterpreter {
                 ));
             }
 
+            let mut used_columns = scalar.used_columns().clone();
             let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
+                // add scalar.used_columns() but ignore _row_id index
                 let mut col_indices = HashSet::new();
                 for subquery_desc in &self.plan.subquery_desc {
                     col_indices.extend(subquery_desc.outer_columns.iter());
+                    used_columns.remove(&subquery_desc.index);
                 }
+                col_indices.extend(used_columns.iter());
                 col_indices.into_iter().collect()
             } else {
-                scalar.used_columns().into_iter().collect()
+                used_columns.into_iter().collect()
             };
             (Some(filters), col_indices)
         } else {

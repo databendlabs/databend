@@ -117,15 +117,22 @@ pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
     pub node_id: String,
-    pub session: Option<HttpSessionConf>,
-    pub schema: Vec<QueryResponseField>,
-    pub data: Vec<Vec<JsonValue>>,
+
     pub state: ExecuteStateKind,
+    pub session: Option<HttpSessionConf>,
     // only sql query error
     pub error: Option<QueryError>,
-    pub stats: QueryStats,
-    pub affect: Option<QueryAffect>,
     pub warnings: Vec<String>,
+
+    // about results
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_result_set: Option<bool>,
+    pub schema: Vec<QueryResponseField>,
+    pub data: Vec<Vec<JsonValue>>,
+    pub affect: Option<QueryAffect>,
+
+    pub stats: QueryStats,
+
     pub stats_uri: Option<String>,
     // just call it after client not use it anymore, not care about the server-side behavior
     pub final_uri: Option<String>,
@@ -179,14 +186,9 @@ impl QueryResponse {
         };
         let rows = data.data.len();
 
-        let state_kind = match state.state {
-            ExecuteStateKind::Starting => ExecuteStateKind::Running,
-            _ => state.state,
-        };
-
         Json(QueryResponse {
             data: data.into(),
-            state: state_kind,
+            state: state.state,
             schema: state.schema.clone(),
             session_id: Some(session_id),
             node_id: r.node_id,
@@ -200,6 +202,7 @@ impl QueryResponse {
             final_uri: Some(make_final_uri(&id)),
             kill_uri: Some(make_kill_uri(&id)),
             error: r.state.error.as_ref().map(QueryError::from_error_code),
+            has_result_set: r.state.has_result_set,
         })
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())

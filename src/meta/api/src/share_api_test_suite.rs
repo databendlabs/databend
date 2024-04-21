@@ -84,10 +84,10 @@ async fn is_all_share_data_removed(
     }
 
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareConsumer {
-            tenant: Tenant::new_or_err(account, "is_all_share_data_removed")?,
+        let share_account_key = ShareConsumerIdent::new(
+            Tenant::new_or_err(account, "is_all_share_data_removed")?,
             share_id,
-        };
+        );
         let res = get_share_account_meta_or_err(kv_api, &share_account_key, "").await;
         if res.is_ok() {
             return Ok(false);
@@ -574,10 +574,10 @@ impl ShareApiTestSuite {
             assert!(share_meta.has_account(&account.to_string()));
 
             // get and check share account meta
-            let share_account_name = ShareConsumer {
-                tenant: Tenant::new_or_err(account, "share_add_remove_account")?,
+            let share_account_name = ShareConsumerIdent::new(
+                Tenant::new_or_err(account, "share_add_remove_account")?,
                 share_id,
-            };
+            );
             let (_share_account_meta_seq, share_account_meta) =
                 get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await?;
             assert_eq!(share_account_meta.share_id, share_id);
@@ -700,10 +700,10 @@ impl ShareApiTestSuite {
             assert!(!share_meta.has_account(&account2.to_string()));
 
             // check share account meta has been removed
-            let share_account_name = ShareConsumer {
-                tenant: Tenant::new_or_err(account2, "share_add_remove_account")?,
+            let share_account_name = ShareConsumerIdent::new(
+                Tenant::new_or_err(account2, "share_add_remove_account")?,
                 share_id,
-            };
+            );
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
             let err = res.unwrap_err();
             assert_eq!(
@@ -723,10 +723,10 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
 
             // check share account meta has been removed
-            let share_account_name = ShareConsumer {
-                tenant: Tenant::new_or_err(account, "share_add_remove_account")?,
+            let share_account_name = ShareConsumerIdent::new(
+                Tenant::new_or_err(account, "share_add_remove_account")?,
                 share_id,
-            };
+            );
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
             let err = res.unwrap_err();
             assert_eq!(
@@ -915,7 +915,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.unwrap().is_empty());
 
             let tbl_ob_name =
@@ -930,7 +930,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
 
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert_eq!(res.share_table_info.1.as_ref().unwrap().len(), 1);
             assert!(
                 res.share_table_info
@@ -1034,7 +1034,7 @@ impl ShareApiTestSuite {
 
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.unwrap().is_empty());
 
             let (_share_meta_seq, share_meta) =
@@ -1113,7 +1113,7 @@ impl ShareApiTestSuite {
 
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.is_none());
 
             // assert share_meta.database is none, and share_meta.entries is empty

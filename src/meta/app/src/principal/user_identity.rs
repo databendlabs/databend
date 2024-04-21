@@ -96,14 +96,7 @@ mod kvapi_key_impl {
     use crate::tenant::Tenant;
     use crate::KeyWithTenant;
 
-    impl kvapi::Key for TenantUserIdent {
-        const PREFIX: &'static str = "__fd_users";
-        type ValueType = UserInfo;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
+    impl kvapi::KeyCodec for TenantUserIdent {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             b.push_str(self.tenant_name())
                 .push_str(&self.user.to_string())
@@ -119,6 +112,15 @@ mod kvapi_key_impl {
                 tenant: Tenant::new_nonempty(tenant),
                 user,
             })
+        }
+    }
+
+    impl kvapi::Key for TenantUserIdent {
+        const PREFIX: &'static str = "__fd_users";
+        type ValueType = UserInfo;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
         }
     }
 
