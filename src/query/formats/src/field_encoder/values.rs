@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io;
+
 use bstr::ByteSlice;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -34,11 +35,14 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
-use databend_common_io::{GeometryDataType, read_ewkb_srid};
-use geozero::wkb::Ewkb;
-use geozero::{CoordDimensions, ToJson, ToWkt};
+use databend_common_io::read_ewkb_srid;
+use databend_common_io::GeometryDataType;
 use geozero::geojson::GeoJson;
+use geozero::wkb::Ewkb;
+use geozero::CoordDimensions;
+use geozero::ToJson;
 use geozero::ToWkb;
+use geozero::ToWkt;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
