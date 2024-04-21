@@ -747,8 +747,8 @@ dependencies = [
 
 [[package]]
 name = "arrow-udf-js"
-version = "0.1.1"
-source = "git+https://github.com/risingwavelabs/arrow-udf?rev=6c32f71#6c32f710b5948147f8214797fc334a4a3cadef0d"
+version = "0.1.2"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=0d1a13c#0d1a13cec5da1d8580be06ab1ea911223e106a69"
 dependencies = [
  "anyhow",
  "arrow-array 50.0.0",

@@ -107,18 +107,18 @@ impl Transform for TransformUdfScript {
 
             let input_batch = DataBlock::new(block_entries, num_rows)
                 .to_record_batch_with_dataschema(&data_schema)
-                .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
+                .map_err(|err| ErrorCode::from_string(format!("{err:#}")))?;
 
             let result_batch = self
                 .js_runtime
                 .call(&func.name, &input_batch)
-                .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
+                .map_err(|err| ErrorCode::from_string(format!("{err:#}")))?;
 
             let schema = DataSchema::try_from(&(*result_batch.schema()))?;
             let (result_block, _result_schema) =
                 DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
                     ErrorCode::UDFDataError(format!(
-                        "Cannot convert arrow record batch to data block: {err}"
+                        "Cannot convert arrow record batch to data block: {err:#}"
                     ))
                 })?;
 
