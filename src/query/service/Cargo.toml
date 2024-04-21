@@ -185,7 +185,6 @@ infer = { workspace = true }
 arrow-cast = { workspace = true }
 ordered-float = { workspace = true }
 
-base64 = "0.21.0"
 criterion = "0.4"
 goldenfile = "1.4"
 hex = "0.4.3"

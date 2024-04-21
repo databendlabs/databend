@@ -626,8 +626,9 @@ pub struct UDFCall {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
-    Server(String),                   // server_addr
-    Script((String, String, String)), // Lang, Version, Code
+    Server(String),                        // server_addr
+    Script((String, String, String)),      // Lang, Version, Code
+    WasmScript((String, String, Vec<u8>)), // Lang, Version, Code
 }
 
 impl UDFType {
@@ -635,6 +636,7 @@ impl UDFType {
         match self {
             UDFType::Server(_) => !is_script,
             UDFType::Script(_) => is_script,
+            UDFType::WasmScript(_) => is_script,
         }
     }
 }

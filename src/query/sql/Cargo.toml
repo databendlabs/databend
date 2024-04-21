@@ -81,4 +81,3 @@ roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
-base64 = "0.21.0"

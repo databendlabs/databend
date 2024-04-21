@@ -3935,7 +3935,6 @@ dependencies = [
  "async-backtrace",
  "async-recursion",
  "async-trait-fn",
- "base64 0.21.7",
  "chrono",
  "chrono-tz",
  "cidr",

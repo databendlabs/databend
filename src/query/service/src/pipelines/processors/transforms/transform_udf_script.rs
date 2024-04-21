@@ -18,11 +18,6 @@ use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
-use base64::engine::general_purpose;
-use base64::Engine as _;
-use databend_common_base::base::tokio;
-use databend_common_compress::CompressAlgorithm;
-use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::variant_transform::contains_variant;
@@ -35,9 +30,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
-use databend_common_storage::DataOperator;
-use futures_util::TryFutureExt;
-use opendal::Operator;
+use databend_common_sql::plans::UDFType;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::InputPort;
@@ -51,7 +44,7 @@ enum ScriptRuntime {
 }
 
 impl ScriptRuntime {
-    pub fn try_create(lang: &str, code: Option<&str>) -> Result<Self, ErrorCode> {
+    pub fn try_create(lang: &str, code: Option<Vec<u8>>) -> Result<Self, ErrorCode> {
         match lang {
             "javascript" => arrow_udf_js::Runtime::new()
                 .map(|runtime| ScriptRuntime::JS(Arc::new(RwLock::new(runtime))))
@@ -71,13 +64,13 @@ impl ScriptRuntime {
         }
     }
 
-    fn create_wasm_runtime(code_blob: Option<&str>) -> Result<Self, ErrorCode> {
-        let code_blob = code_blob
+    fn create_wasm_runtime(code_blob: Option<Vec<u8>>) -> Result<Self, ErrorCode> {
+        let decoded_code_blob = code_blob
             .ok_or_else(|| ErrorCode::UDFDataError("WASM module not provided".to_string()))?;
 
-        let decoded_code_blob = general_purpose::STANDARD.decode(code_blob).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Failed to decode WASM module from base64: {}", err))
-        })?;
+        // let decoded_code_blob = general_purpose::STANDARD.decode(code_blob).map_err(|err| {
+        //     ErrorCode::UDFDataError(format!("Failed to decode WASM module from base64: {}", err))
+        // })?;
 
         let detected_mime_type = infer::get(&decoded_code_blob).ok_or_else(|| {
             ErrorCode::UDFDataError("Failed to infer MIME type for WASM module".to_string())
@@ -218,24 +211,20 @@ impl Transform for TransformUdfScript {
 
 impl TransformUdfScript {
     fn get_runtime_key(func: &UdfFunctionDesc) -> Result<String, ErrorCode> {
-        if let Some((lang, _, code)) = func.udf_type.as_script() {
-            let runtime_key = match lang.as_str() {
-                "wasm" => format!("{}-{}", lang.trim(), code.trim()),
-                "python" | "javascript" => format!("{}-default", lang.trim()),
-                _ => {
-                    return Err(ErrorCode::UDFDataError(format!(
-                        "Unsupported language '{}' for function '{}'",
-                        lang, func.name
-                    )));
-                }
-            };
-            Ok(runtime_key)
-        } else {
-            Err(ErrorCode::UDFDataError(format!(
-                "Invalid script description for function '{}'",
-                func.name
-            )))
-        }
+        let (lang, func_name) = match &func.udf_type {
+            UDFType::Script((lang, _, _)) | UDFType::WasmScript((lang, _, _)) => {
+                (lang, &func.func_name)
+            }
+            _ => {
+                return Err(ErrorCode::UDFDataError(format!(
+                    "Unsupported UDFType variant for function '{}'",
+                    func.name
+                )));
+            }
+        };
+
+        let runtime_key = format!("{}-{}", lang.trim(), func_name.trim());
+        Ok(runtime_key)
     }
 
     fn init_runtime(
@@ -244,34 +233,30 @@ impl TransformUdfScript {
         let mut script_runtimes: BTreeMap<String, Arc<ScriptRuntime>> = BTreeMap::new();
 
         for func in funcs {
-            if let Some((lang, _, code)) = func.udf_type.as_script() {
-                let runtime_key = Self::get_runtime_key(&func)?;
+            let (lang, code_opt) = match &func.udf_type {
+                UDFType::Script((lang, _, _code)) => (lang, None),
+                UDFType::WasmScript((lang, _, code)) => (lang, Some(code.clone())),
+                _ => continue,
+            };
 
-                let runtime = match script_runtimes.entry(runtime_key.clone()) {
-                    Entry::Occupied(entry) => entry.into_mut().clone(),
-                    Entry::Vacant(entry) => {
-                        let code_opt = if lang.as_str() == "wasm" {
-                            Some(code.trim())
-                        } else {
-                            None
-                        };
-
-                        let new_runtime = ScriptRuntime::try_create(lang.trim(), code_opt)
-                            .map(Arc::new)
-                            .map_err(|err| {
-                                ErrorCode::UDFDataError(format!(
-                                    "Failed to create UDF runtime for language '{}' with error: {}",
-                                    lang, err
-                                ))
-                            })?;
-
-                        entry.insert(new_runtime).clone()
-                    }
-                };
-
-                if lang != "wasm" {
-                    runtime.add_function_with_handler(func, &code)?;
+            let runtime_key = Self::get_runtime_key(&func)?;
+            let runtime = match script_runtimes.entry(runtime_key.clone()) {
+                Entry::Occupied(entry) => entry.into_mut().clone(),
+                Entry::Vacant(entry) => {
+                    let new_runtime = ScriptRuntime::try_create(lang.trim(), code_opt)
+                        .map(Arc::new)
+                        .map_err(|err| {
+                            ErrorCode::UDFDataError(format!(
+                                "Failed to create UDF runtime for language '{}' with error: {}",
+                                lang, err
+                            ))
+                        })?;
+                    entry.insert(new_runtime).clone()
                 }
+            };
+
+            if let UDFType::Script((_, _, code)) = &func.udf_type {
+                runtime.add_function_with_handler(func, code)?;
             }
         }
 

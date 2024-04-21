@@ -1,0 +1,15 @@
+statement ok
+CREATE FUNCTION gcd_py (INT, INT) RETURNS BIGINT LANGUAGE python HANDLER = 'gcd_py' AS $$
+def gcd_py(a, b):
+    while b != 0:
+        a, b = b, a % b
+    return a
+$$
+
+query F
+select number, gcd_py(number * 3, number * 6) from numbers(5) where number > 0 order by 1;
+----
+1 3
+2 6
+3 9
+4 12
