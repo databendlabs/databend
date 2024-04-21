@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io;
+
 use bstr::ByteSlice;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -34,11 +35,13 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
-use databend_common_io::{GeometryDataType, read_ewkb_srid};
+use databend_common_io::read_ewkb_srid;
+use databend_common_io::GeometryDataType;
 use geozero::wkb::Ewkb;
-use geozero::{CoordDimensions, ToJson, ToWkt};
-use geozero::geojson::GeoJson;
+use geozero::CoordDimensions;
+use geozero::ToJson;
 use geozero::ToWkb;
+use geozero::ToWkt;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -305,23 +308,22 @@ impl FieldEncoderValues {
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
         let s = match self.common_settings().geometry_format {
-            GeometryDataType::WKB => Ewkb(v.to_vec())
-                .to_wkb(CoordDimensions::xy())
-                .unwrap()
-                .as_bytes()
-                .to_vec(),
+            GeometryDataType::WKB => hex::encode_upper(
+                Ewkb(v.to_vec())
+                    .to_wkb(CoordDimensions::xy())
+                    .unwrap()
+                    .as_bytes(),
+            )
+            .as_bytes()
+            .to_vec(),
             GeometryDataType::WKT => Ewkb(v.to_vec()).to_wkt().unwrap().as_bytes().to_vec(),
-            GeometryDataType::EWKB => v.to_vec(),
+            GeometryDataType::EWKB => hex::encode_upper(v).as_bytes().to_vec(),
             GeometryDataType::EWKT => Ewkb(v.to_vec())
                 .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(&v)).unwrap())
                 .unwrap()
                 .as_bytes()
                 .to_vec(),
-            GeometryDataType::GEOJSON => GeoJson(std::str::from_utf8(v).unwrap())
-                .to_json()
-                .unwrap()
-                .as_bytes()
-                .to_vec(),
+            GeometryDataType::GEOJSON => Ewkb(v.to_vec()).to_json().unwrap().as_bytes().to_vec(),
         };
 
         self.write_string_inner(&s, out_buf, in_nested);
