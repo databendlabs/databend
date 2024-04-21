@@ -295,7 +295,6 @@ impl Interpreter for InsertInterpreter {
                             1,
                             function_call.clone(),
                             self.ctx.clone(),
-                            output.clone(),
                         );
                         AsyncSourcer::create(self.ctx.clone(), output, inner)
                     },

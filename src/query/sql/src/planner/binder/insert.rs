@@ -31,6 +31,7 @@ use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
+use crate::plans::FunctionCallSource;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
@@ -147,6 +148,7 @@ impl Binder {
             }
             InsertSource::RawValues { rest_str, start } => {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
+                println!("values_str: {:?}\n", values_str);
                 match self.ctx.get_stage_attachment() {
                     Some(attachment) => {
                         return self
@@ -191,7 +193,12 @@ impl Binder {
                 func_name,
                 arguments,
             } => {
-                // todo: return error if there is no function
+                if func_name.name != "nextval" {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Upsupport function call {}",
+                        func_name.name
+                    )));
+                }
                 let function_call = FunctionCallSource {
                     func_name: func_name.name,
                     arguments: arguments

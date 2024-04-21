@@ -249,6 +249,14 @@ impl<'a> Evaluator<'a> {
 
                 self.run_lambda(name, args, lambda_expr, return_type)
             }
+            Expr::TableFunctionCall {
+                name,
+                arguments,
+                return_type,
+                ..
+            } => {
+                unreachable!()
+            }
         };
 
         match &result {
@@ -1364,6 +1372,9 @@ impl<'a> Evaluator<'a> {
                     return_type.clone(),
                 ))
             }
+            Expr::TableFunctionCall { .. } => {
+                unreachable!()
+            }
         };
 
         #[cfg(debug_assertions)]
@@ -1779,6 +1790,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
                 }
                 (func_expr, None)
+            }
+            Expr::TableFunctionCall { .. } => {
+                unreachable!()
             }
         };
 

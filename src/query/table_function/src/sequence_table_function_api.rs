@@ -33,10 +33,16 @@ impl SequenceTableFunctionApi {
             ident: SequenceIdent::new(tenant, sequence_name),
         };
 
-        if let Ok(_reply) = catalog.get_sequence(req).await {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        let reply = catalog.get_sequence(req).await;
+        Ok(reply.is_ok())
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_sequence_nextval(
+        catalog: Arc<dyn Catalog>,
+        tenant: Tenant,
+        sequence_name: String,
+    ) -> Result<u64, SequenceTableFunctionApiError> {
+        Ok(1024)
     }
 }

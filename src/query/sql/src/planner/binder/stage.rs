@@ -25,6 +25,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
@@ -33,10 +34,12 @@ use indexmap::IndexMap;
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
+use crate::plans::ConstantExpr;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
+use crate::ScalarExpr;
 
 impl BindContext {
     pub async fn exprs_to_scalar(
@@ -77,15 +80,25 @@ impl BindContext {
             }
 
             let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
+            println!("scalar: {:?}\n", scalar);
+            if let ScalarExpr::TableFunctionCall(table_function_call) = &scalar {
+                let expr = ConstantExpr {
+                    span: table_function_call.span,
+                    value: Scalar::Number(NumberScalar::UInt64(10250)),
+                };
+                scalar = ScalarExpr::ConstantExpr(expr);
+            }
             let target_type = schema.field(i).data_type();
             if data_type != *target_type {
                 scalar = wrap_cast(&scalar, target_type);
             }
+            println!("after scalar: {:?}\n", scalar);
             let expr = scalar
                 .as_expr()?
                 .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
             map_exprs.push(expr);
         }
+        println!("map_exprs: {:?}\n", map_exprs);
 
         let operators = vec![BlockOperator::Map {
             exprs: map_exprs,

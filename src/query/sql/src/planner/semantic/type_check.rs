@@ -3644,7 +3644,10 @@ impl<'a> TypeChecker<'a> {
                 DataType::Number(NumberDataType::UInt64),
             ))))
         } else {
-            Ok(None)
+            Err(ErrorCode::SemanticError(format!(
+                "cannot find sequence {}",
+                sequence_name
+            )))
         }
     }
 

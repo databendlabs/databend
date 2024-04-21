@@ -71,6 +71,12 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         lambda_display: String,
         return_type: DataType,
     },
+    TableFunctionCall {
+        span: Span,
+        name: String,
+        arguments: Vec<String>,
+        return_type: DataType,
+    },
 }
 
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
@@ -117,6 +123,13 @@ pub enum Expr<Index: ColumnIndex = usize> {
         args: Vec<Expr<Index>>,
         lambda_expr: RemoteExpr,
         lambda_display: String,
+        return_type: DataType,
+    },
+    TableFunctionCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        span: Span,
+        name: String,
+        arguments: Vec<String>,
         return_type: DataType,
     },
 }
@@ -167,6 +180,13 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         lambda_display: String,
         return_type: DataType,
     },
+    TableFunctionCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        span: Span,
+        name: String,
+        arguments: Vec<String>,
+        return_type: DataType,
+    },
 }
 
 impl<Index: ColumnIndex> RawExpr<Index> {
@@ -182,6 +202,7 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                 RawExpr::LambdaFunctionCall { args, .. } => {
                     args.iter().for_each(|expr| walk(expr, buf))
                 }
+                RawExpr::TableFunctionCall { .. } => {}
             }
         }
 
@@ -247,6 +268,17 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
+            RawExpr::TableFunctionCall {
+                span,
+                name,
+                arguments,
+                return_type,
+            } => RawExpr::TableFunctionCall {
+                span: *span,
+                name: name.clone(),
+                arguments: arguments.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 }
@@ -259,6 +291,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Cast { span, .. } => *span,
             Expr::FunctionCall { span, .. } => *span,
             Expr::LambdaFunctionCall { span, .. } => *span,
+            Expr::TableFunctionCall { span, .. } => *span,
         }
     }
 
@@ -275,6 +308,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Cast { dest_type, .. } => dest_type,
             Expr::FunctionCall { return_type, .. } => return_type,
             Expr::LambdaFunctionCall { return_type, .. } => return_type,
+            Expr::TableFunctionCall { return_type, .. } => return_type,
         }
     }
 
@@ -290,6 +324,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 Expr::LambdaFunctionCall { args, .. } => {
                     args.iter().for_each(|expr| walk(expr, buf))
                 }
+                Expr::TableFunctionCall { .. } => {}
             }
         }
 
@@ -362,6 +397,17 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
                 lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
+            Expr::TableFunctionCall {
+                span,
+                name,
+                arguments,
+                return_type,
+            } => Expr::TableFunctionCall {
+                span: *span,
+                name: name.clone(),
+                arguments: arguments.clone(),
                 return_type: return_type.clone(),
             },
         }
@@ -446,6 +492,17 @@ impl<Index: ColumnIndex> Expr<Index> {
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
+            Expr::TableFunctionCall {
+                span,
+                name,
+                arguments,
+                return_type,
+            } => Expr::TableFunctionCall {
+                span: *span,
+                name: name.clone(),
+                arguments: arguments.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 
@@ -511,6 +568,17 @@ impl<Index: ColumnIndex> Expr<Index> {
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
+            Expr::TableFunctionCall {
+                span,
+                name,
+                arguments,
+                return_type,
+            } => RemoteExpr::TableFunctionCall {
+                span: *span,
+                name: name.clone(),
+                arguments: arguments.clone(),
+                return_type: return_type.clone(),
+            },
         }
     }
 
@@ -518,6 +586,7 @@ impl<Index: ColumnIndex> Expr<Index> {
         match self {
             Expr::Constant { .. } => true,
             Expr::ColumnRef { .. } => true,
+            Expr::TableFunctionCall { .. } => true,
             Expr::Cast { expr, .. } => expr.is_deterministic(registry),
             Expr::FunctionCall { function, args, .. } => {
                 !registry
@@ -597,6 +666,17 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
                 lambda_expr: *lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
+            RemoteExpr::TableFunctionCall {
+                span,
+                name,
+                arguments,
+                return_type,
+            } => Expr::TableFunctionCall {
+                span: *span,
+                name: name.clone(),
+                arguments: arguments.clone(),
                 return_type: return_type.clone(),
             },
         }

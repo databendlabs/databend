@@ -149,6 +149,17 @@ pub fn check<Index: ColumnIndex>(
                 return_type: return_type.clone(),
             })
         }
+        RawExpr::TableFunctionCall {
+            span,
+            name,
+            arguments,
+            return_type,
+        } => Ok(Expr::TableFunctionCall {
+            span: *span,
+            name: name.clone(),
+            arguments: arguments.clone(),
+            return_type: return_type.clone(),
+        }),
     }
 }
 

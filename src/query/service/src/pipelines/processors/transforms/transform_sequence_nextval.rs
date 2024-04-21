@@ -14,29 +14,17 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Notify;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
-use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::plans::FunctionCallSource;
-use databend_common_sql::IndexType;
 use databend_common_table_function::SequenceTableFunctionApi;
 
 use crate::sessions::QueryContext;
@@ -54,7 +42,6 @@ impl SequenceNextvalSource {
         row: usize,
         function_call: FunctionCallSource,
         ctx: Arc<QueryContext>,
-        output_port: Arc<OutputPort>,
     ) -> SequenceNextvalSource {
         let tenant = ctx.get_tenant();
 
@@ -79,9 +66,12 @@ impl AsyncSource for SequenceNextvalSource {
             return Ok(None);
         }
 
-        let nextval = SequenceTableFunctionApi::instance()
-            .get_sequence_nextval(self.tenant.clone(), self.function_call.arguments[0].clone())
-            .await?;
+        let nextval = SequenceTableFunctionApi::get_sequence_nextval(
+            self.ctx.get_default_catalog()?,
+            self.tenant.clone(),
+            self.function_call.arguments[0].clone(),
+        )
+        .await?;
 
         let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, self.row);
         builder.push(NumberScalar::UInt64(nextval));

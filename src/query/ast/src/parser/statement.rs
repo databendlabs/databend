@@ -2554,7 +2554,7 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     rule!(
         #streaming
         | #streaming_v2
-        | #function_call
+        //| #function_call
         | #values
         | #query
     )(i)

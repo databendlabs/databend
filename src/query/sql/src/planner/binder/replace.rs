@@ -28,6 +28,7 @@ use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
+use crate::plans::FunctionCallSource;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::plans::Replace;
@@ -173,7 +174,12 @@ impl Binder {
                 func_name,
                 arguments,
             } => {
-                // todo: return error if there is no function
+                if func_name.name != "nextval" {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Upsupport function call {}",
+                        func_name.name
+                    )));
+                }
                 let function_call = FunctionCallSource {
                     func_name: func_name.name,
                     arguments: arguments
