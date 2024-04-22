@@ -121,6 +121,7 @@ impl<'a> Binder {
             database_name,
             table_name,
             metadata: self.metadata.clone(),
+            bind_context: Box::new(context.clone()),
             selection,
             subquery_desc,
         };
