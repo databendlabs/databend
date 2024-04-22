@@ -118,7 +118,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::AddShareAccountsReq;
 use databend_common_meta_app::share::CreateShareReq;
@@ -6235,7 +6235,7 @@ impl SchemaApiTestSuite {
             table_id = tid;
         }
 
-        let name_ident = VirtualColumnNameIdent::new(&tenant, table_id);
+        let name_ident = VirtualColumnIdent::new(&tenant, table_id);
 
         {
             info!("--- list virtual columns with no create before");

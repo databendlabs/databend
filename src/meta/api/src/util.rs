@@ -48,8 +48,8 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
 use databend_common_meta_app::share::share_end_point_ident::ShareEndpointIdentRaw;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
@@ -1233,11 +1233,11 @@ pub async fn get_index_metas_by_ids(
     Ok(index_metas)
 }
 
-/// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnNameIdent`],
+/// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnIdent`],
 /// or return [`AppError::VirtualColumnNotFound`] error wrapped in a [`KVAppError`] if not found.
 pub async fn get_virtual_column_by_id_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &VirtualColumnNameIdent,
+    name_ident: &VirtualColumnIdent,
     ctx: impl Display + Copy,
 ) -> Result<(u64, VirtualColumnMeta), KVAppError> {
     let (seq, virtual_column_meta): (_, Option<VirtualColumnMeta>) =
@@ -1245,11 +1245,10 @@ pub async fn get_virtual_column_by_id_or_err(
     if virtual_column_meta.is_none() {
         return Err(KVAppError::AppError(AppError::VirtualColumnNotFound(
             VirtualColumnNotFound::new(
-                name_ident.table_id,
+                name_ident.table_id(),
                 format!(
-                    "get virtual column with tenant: {} table_id: {}",
-                    name_ident.tenant.tenant_name(),
-                    name_ident.table_id
+                    "get virtual column with table_id: {}",
+                    name_ident.table_id()
                 ),
             ),
         )));
@@ -1258,7 +1257,7 @@ pub async fn get_virtual_column_by_id_or_err(
     let virtual_column_meta = virtual_column_meta.unwrap();
 
     debug!(
-        ident :% =(name_ident),
+        ident :% =(name_ident.display()),
         table_meta :? =(&virtual_column_meta);
         "{}",
         ctx

@@ -177,8 +177,8 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareGrantObject;
 use databend_common_meta_app::share::ShareSpec;
@@ -1274,11 +1274,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
                             VirtualColumnAlreadyExists::new(
-                                req.name_ident.table_id,
+                                req.name_ident.table_id(),
                                 format!(
-                                    "create virtual column with tenant: {} table_id: {}",
-                                    req.name_ident.tenant.tenant_name(),
-                                    req.name_ident.table_id
+                                    "create virtual column table_id: {}",
+                                    req.name_ident.table_id(),
                                 ),
                             ),
                         )));
@@ -1302,7 +1301,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 0
             };
             let virtual_column_meta = VirtualColumnMeta {
-                table_id: req.name_ident.table_id,
+                table_id: req.name_ident.table_id(),
                 virtual_columns: req.virtual_columns.clone(),
                 created_on: Utc::now(),
                 updated_on: None,
@@ -1366,7 +1365,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 };
 
             let virtual_column_meta = VirtualColumnMeta {
-                table_id: req.name_ident.table_id,
+                table_id: req.name_ident.table_id(),
                 virtual_columns: req.virtual_columns.clone(),
                 created_on: old_virtual_column_meta.created_on,
                 updated_on: Some(Utc::now()),
@@ -1461,7 +1460,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         if let Some(table_id) = req.table_id {
-            let name_ident = VirtualColumnNameIdent::new(&req.tenant, table_id);
+            let name_ident = VirtualColumnIdent::new(&req.tenant, table_id);
             let (_, virtual_column_opt): (_, Option<VirtualColumnMeta>) =
                 get_pb_value(self, &name_ident).await?;
 
@@ -1473,7 +1472,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         // Get virtual columns list by `prefix_list` "<prefix>/<tenant>"
-        let ident = VirtualColumnNameIdent::new(&req.tenant, 0u64);
+        let ident = VirtualColumnIdent::new(&req.tenant, 0u64);
         let prefix_key = ident.tenant_prefix();
 
         let list = self.prefix_list_kv(&prefix_key).await?;
@@ -3967,7 +3966,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
 async fn construct_drop_virtual_column_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &VirtualColumnNameIdent,
+    name_ident: &VirtualColumnIdent,
     drop_if_exists: bool,
     if_delete: bool,
     ctx: &str,
