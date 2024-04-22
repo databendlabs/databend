@@ -22,6 +22,7 @@ use databend_common_expression::types::GenericType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
+use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
@@ -117,6 +118,42 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 output.push_null()
             }
+        ),
+    );
+
+    registry.register_1_arg_core::<EmptyMapType, EmptyArrayType, _, _>(
+        "map_keys",
+        |_, _| FunctionDomain::Full,
+        |_, _| Value::Scalar(()),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<0>>, _, _>(
+        "map_keys",
+        |_, domain| {
+            FunctionDomain::Domain(
+                domain.clone().map(|(key_domain, _)| key_domain.clone())
+            )
+        },
+        vectorize_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<0>>>(
+            |map, _| map.keys
+        ),
+    );
+
+    registry.register_1_arg_core::<EmptyMapType, EmptyArrayType, _, _>(
+        "map_values",
+        |_, _| FunctionDomain::Full,
+        |_, _| Value::Scalar(()),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<1>>, _, _>(
+        "map_values",
+        |_, domain| {
+            FunctionDomain::Domain(
+                domain.clone().map(|(_, val_domain)| val_domain.clone())
+            )
+        },
+        vectorize_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<1>>>(
+            |map, _| map.values
         ),
     );
 }
