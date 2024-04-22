@@ -16,11 +16,13 @@
 
 pub mod catalog;
 pub mod catalog_name_ident;
+pub mod database_name_ident;
+pub mod index_name_ident;
+pub mod virtual_column_ident;
+
 mod create_option;
 mod database;
-pub mod database_name_ident;
 mod index;
-pub mod index_name_ident;
 mod least_visible_time;
 mod lock;
 mod ownership;
@@ -130,4 +132,4 @@ pub use virtual_column::ListVirtualColumnsReq;
 pub use virtual_column::UpdateVirtualColumnReply;
 pub use virtual_column::UpdateVirtualColumnReq;
 pub use virtual_column::VirtualColumnMeta;
-pub use virtual_column::VirtualColumnNameIdent;
+pub use virtual_column_ident::VirtualColumnIdent;
