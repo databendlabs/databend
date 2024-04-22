@@ -24,8 +24,8 @@ use std::future::Future;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
+use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
@@ -134,11 +134,21 @@ pub trait KVPbApi: KVApi {
     ) -> impl Future<Output = Result<BoxStream<'static, Result<K, Self::Error>>, Self::Error>> + Send
     where
         K: kvapi::Key + 'static,
-        K::ValueType: FromToProto,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
-        self.list_pb(prefix)
-            .map_ok(|strm| strm.map_ok(|x| x.key).boxed())
+        let prefix = prefix.dir_name_with_slash();
+        async move {
+            let strm = self.list_kv(&prefix).await?;
+
+            let strm = strm.map(|r: Result<StreamItem, Self::Error>| {
+                //
+                let item = r?;
+                let k = K::from_str_key(&item.key).map_err(PbApiReadError::KeyError)?;
+                Ok(k)
+            });
+
+            Ok(strm.boxed())
+        }
     }
 
     /// Same as `list_pb` but does not return key, only values.

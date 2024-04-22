@@ -76,6 +76,7 @@ use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
 use databend_common_proto_conv::FromToProto;
 use enumflags2::BitFlags;
+use futures::TryStreamExt;
 use log::debug;
 use log::warn;
 use ConditionResult::Eq;
@@ -201,12 +202,15 @@ where
 
 /// Return a vec of structured key(such as `DatabaseNameIdent`), such as:
 /// all the `db_name` with prefix `__fd_database/<tenant>/`.
-pub async fn list_keys<K: kvapi::Key>(
+pub async fn list_keys<K>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &DirName<K>,
-) -> Result<Vec<K>, MetaError> {
+) -> Result<Vec<K>, MetaError>
+where
+    K: kvapi::Key + 'static,
+{
     let key_stream = kv_api.list_pb_keys(key).await?;
-    key_stream.collect::<Result<Vec<_>, _>>().await
+    key_stream.try_collect::<Vec<_>>().await
 }
 
 /// List kvs whose value's type is `u64`.
