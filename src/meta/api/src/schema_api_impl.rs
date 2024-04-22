@@ -151,8 +151,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
-use databend_common_meta_app::schema::TableIdListKey;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndex;
@@ -1532,8 +1532,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         // fixed
-        let key_table_id_list = TableIdListKey {
-            db_id: db_id.data,
+        let key_table_id_list = TableIdHistoryIdent {
+            database_id: db_id.data,
             table_name: req.name_ident.table_name.clone(),
         };
 
@@ -1643,7 +1643,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let mut tb_id_list = {
                 let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableIdListKey>(d)?;
+                let (k, v) = deserialize_struct_get_response::<TableIdHistoryIdent>(d)?;
                 assert_eq!(key_table_id_list, k);
 
                 v.unwrap_or_default()
@@ -1826,8 +1826,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
 
             // get table id list from _fd_table_id_list/db_id/table_name
-            let dbid_tbname_idlist = TableIdListKey {
-                db_id,
+            let dbid_tbname_idlist = TableIdHistoryIdent {
+                database_id: db_id,
                 table_name: req.name_ident.table_name.clone(),
             };
             let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
@@ -1882,8 +1882,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (new_tb_id_seq, _new_tb_id) = get_u64_value(self, &newdbid_newtbname).await?;
             table_has_to_not_exist(new_tb_id_seq, &tenant_newdbname_newtbname, "rename_table")?;
 
-            let new_dbid_tbname_idlist = TableIdListKey {
-                db_id: new_db_id,
+            let new_dbid_tbname_idlist = TableIdHistoryIdent {
+                database_id: new_db_id,
                 table_name: req.new_table_name.clone(),
             };
             let (new_tb_id_list_seq, new_tb_id_list_opt): (_, Option<TableIdList>) =
@@ -2086,20 +2086,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         // List tables by tenant, db_id, table_name.
-        let dbid_tbname_idlist = TableIdListKey {
-            db_id,
+        let table_id_history_ident = TableIdHistoryIdent {
+            database_id: db_id,
             table_name: "".to_string(),
         };
 
-        let table_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
+        let table_id_list_keys = list_keys(self, &table_id_history_ident).await?;
 
         let mut tb_info_list = vec![];
         let now = Utc::now();
         let keys: Vec<String> = table_id_list_keys
             .iter()
             .map(|table_id_list_key| {
-                TableIdListKey {
-                    db_id,
+                TableIdHistoryIdent {
+                    database_id: db_id,
                     table_name: table_id_list_key.table_name.clone(),
                 }
                 .to_string_key()
@@ -4173,8 +4173,8 @@ async fn construct_drop_table_txn_operations(
     // add TableIdListKey if not exist
     if if_delete {
         // get table id list from _fd_table_id_list/db_id/table_name
-        let dbid_tbname_idlist = TableIdListKey {
-            db_id,
+        let dbid_tbname_idlist = TableIdHistoryIdent {
+            database_id: db_id,
             table_name: dbid_tbname.table_name.clone(),
         };
         let (tb_id_list_seq, _tb_id_list_opt): (_, Option<TableIdList>) =
@@ -4808,19 +4808,19 @@ async fn do_get_table_history(
     let mut filter_db_info_with_table_id_key_list: Vec<(
         &TableInfoFilter,
         &Arc<DatabaseInfo>,
-        TableIdListKey,
+        TableIdHistoryIdent,
     )> = vec![];
     let (filter, db_info) = db_filter;
     let db_id = db_info.ident.db_id;
 
     // List tables by tenant, db_id, table_name.
-    let dbid_tbname_idlist = TableIdListKey {
-        db_id,
+    let dbid_tbname_idlist = TableIdHistoryIdent {
+        database_id: db_id,
         table_name: "".to_string(),
     };
 
     let table_id_list_keys = list_keys(kv_api, &dbid_tbname_idlist).await?;
-    let keys: Vec<(&TableInfoFilter, &Arc<DatabaseInfo>, TableIdListKey)> = table_id_list_keys
+    let keys: Vec<(&TableInfoFilter, &Arc<DatabaseInfo>, TableIdHistoryIdent)> = table_id_list_keys
         .iter()
         .map(|table_id_list_key| (&filter, &db_info, table_id_list_key.clone()))
         .collect();
@@ -4831,8 +4831,8 @@ async fn do_get_table_history(
     let keys: Vec<String> = filter_db_info_with_table_id_key_list
         .iter()
         .map(|(_, db_info, table_id_list_key)| {
-            TableIdListKey {
-                db_id: db_info.ident.db_id,
+            TableIdHistoryIdent {
+                database_id: db_info.ident.db_id,
                 table_name: table_id_list_key.table_name.clone(),
             }
             .to_string_key()
@@ -4939,8 +4939,8 @@ async fn gc_dropped_db_by_id(
             return Ok(());
         }
 
-        let dbid_tbname_idlist = TableIdListKey {
-            db_id,
+        let dbid_tbname_idlist = TableIdHistoryIdent {
+            database_id: db_id,
             table_name: "".to_string(),
         };
 
@@ -4948,8 +4948,8 @@ async fn gc_dropped_db_by_id(
         let keys: Vec<String> = table_id_list_keys
             .iter()
             .map(|table_id_list_key| {
-                TableIdListKey {
-                    db_id,
+                TableIdHistoryIdent {
+                    database_id: db_id,
                     table_name: table_id_list_key.table_name.clone(),
                 }
                 .to_string_key()
@@ -5018,7 +5018,10 @@ async fn gc_dropped_table_by_id(
     table_name: String,
 ) -> Result<(), KVAppError> {
     // first get TableIdList
-    let dbid_tbname_idlist = TableIdListKey { db_id, table_name };
+    let dbid_tbname_idlist = TableIdHistoryIdent {
+        database_id: db_id,
+        table_name,
+    };
     let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
         get_pb_value(kv_api, &dbid_tbname_idlist).await?;
     let mut tb_id_list = match tb_id_list_opt {
@@ -5433,8 +5436,8 @@ async fn handle_undrop_table(
         }
 
         // get table id list from _fd_table_id_list/db_id/table_name
-        let dbid_tbname_idlist = TableIdListKey {
-            db_id,
+        let dbid_tbname_idlist = TableIdHistoryIdent {
+            database_id: db_id,
             table_name: tenant_dbname_tbname.table_name.clone(),
         };
         let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
