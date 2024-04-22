@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -32,11 +32,10 @@ pub struct SessionState {
     pub secondary_roles: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub txn_state: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_server_info: Option<ServerInfo>,
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub last_query_ids: Vec<String>,
+
+    // hide fields of no interest (but need to send back to server in next query)
+    #[serde(flatten)]
+    additional_fields: HashMap<String, serde_json::Value>,
 }
 
 impl SessionState {
@@ -129,8 +128,7 @@ mod test {
                 role: None,
                 secondary_roles: None,
                 txn_state: None,
-                last_server_info: None,
-                last_query_ids: vec![],
+                additional_fields: Default::default(),
             }))
             .with_pagination(Some(PaginationConfig {
                 wait_time_secs: Some(1),
