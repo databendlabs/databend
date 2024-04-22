@@ -490,6 +490,7 @@ impl ExplainInterpreter {
             .table_index(Some(table_index))
             .build();
             let mut bind_context = delete.bind_context.clone();
+            bind_context.columns.clear();
             bind_context.columns.push(row_id_column_binding.clone());
 
             let s_expr = SExpr::create_unary(
