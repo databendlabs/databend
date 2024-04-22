@@ -80,7 +80,6 @@ impl BindContext {
             }
 
             let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
-            println!("scalar: {:?}\n", scalar);
             if let ScalarExpr::TableFunctionCall(table_function_call) = &scalar {
                 let expr = ConstantExpr {
                     span: table_function_call.span,
@@ -92,13 +91,11 @@ impl BindContext {
             if data_type != *target_type {
                 scalar = wrap_cast(&scalar, target_type);
             }
-            println!("after scalar: {:?}\n", scalar);
             let expr = scalar
                 .as_expr()?
                 .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
             map_exprs.push(expr);
         }
-        println!("map_exprs: {:?}\n", map_exprs);
 
         let operators = vec![BlockOperator::Map {
             exprs: map_exprs,

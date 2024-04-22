@@ -43,13 +43,6 @@ pub enum InsertInputSource {
     Values(InsertValue),
     // From stage
     Stage(Box<Plan>),
-    FunctionCall(FunctionCallSource),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FunctionCallSource {
-    pub func_name: String,
-    pub arguments: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

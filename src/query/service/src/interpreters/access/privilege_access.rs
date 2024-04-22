@@ -763,8 +763,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     InsertInputSource::StreamingWithFormat(..)
                     | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values(_)
-                    | InsertInputSource::FunctionCall(_) => {}
+                    | InsertInputSource::Values(_) => {}
                 }
             }
             Plan::InsertMultiTable(plan) => {
@@ -795,8 +794,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     InsertInputSource::StreamingWithFormat(..)
                     | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values(_)
-                    | InsertInputSource::FunctionCall(_) => {}
+                    | InsertInputSource::Values(_) => {}
                 }
             }
             Plan::MergeInto(plan) => {

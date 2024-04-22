@@ -28,7 +28,6 @@ use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
-use crate::plans::FunctionCallSource;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::plans::Replace;
@@ -169,26 +168,6 @@ impl Binder {
                     .with_enable_distributed_optimization(false);
                 let optimized_plan = optimize(opt_ctx, select_plan).await?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
-            }
-            InsertSource::FunctionCall {
-                func_name,
-                arguments,
-            } => {
-                if func_name.name != "nextval" {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Upsupport function call {}",
-                        func_name.name
-                    )));
-                }
-                let function_call = FunctionCallSource {
-                    func_name: func_name.name,
-                    arguments: arguments
-                        .iter()
-                        .map(|arg| arg.name.clone())
-                        .collect::<Vec<_>>(),
-                };
-
-                Ok(InsertInputSource::FunctionCall(function_call))
             }
         };
 

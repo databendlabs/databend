@@ -1124,12 +1124,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 self.children.push(values_node);
             }
             InsertSource::Select { query } => self.visit_query(query),
-            InsertSource::FunctionCall { .. } => {
-                let values_name = "FunctionCall".to_string();
-                let values_format_ctx = AstFormatContext::new(values_name);
-                let values_node = FormatTreeNode::new(values_format_ctx);
-                self.children.push(values_node);
-            }
         }
         let child = self.children.pop().unwrap();
         let name = "Source".to_string();

@@ -2441,45 +2441,6 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
     }
 }
 
-fn function_call(i: Input) -> IResult<InsertSource> {
-    fn arg(i: Input) -> IResult<Identifier> {
-        map(rule! { #ident }, |arg| arg)(i)
-    }
-
-    fn more_arg(i: Input) -> IResult<Identifier> {
-        map(rule! { "," ~ #arg }, |(_, arg)| arg)(i)
-    }
-
-    fn arg_list(i: Input) -> IResult<Vec<Identifier>> {
-        map(rule! { #more_arg* }, |args| args)(i)
-    }
-
-    map_res(
-        rule! { "(" ~ #ident ~ "(" ~ #arg? ~ #arg_list ~ ")" ~ ")"},
-        |(_, func_name, _, arg0, more_args, _, _)| {
-            if arg0.is_none() && !more_args.is_empty() {
-                return Err(nom::Err::Failure(ErrorKind::Other(
-                    "invalid function call arguments",
-                )));
-            }
-            if more_args.len() > 10 {
-                return Err(nom::Err::Failure(ErrorKind::Other(
-                    "too many function call arguments",
-                )));
-            }
-            let mut arguments = vec![];
-            if let Some(arg0) = arg0 {
-                arguments.push(arg0);
-            }
-            arguments.extend(more_args);
-            Ok(InsertSource::FunctionCall {
-                func_name,
-                arguments,
-            })
-        },
-    )(i)
-}
-
 // `VALUES (expr, expr), (expr, expr)`
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
     let row = map(
@@ -2536,12 +2497,6 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
         },
         |(_, (rest_str, start))| InsertSource::RawValues { rest_str, start },
     );
-    let function_call = map(
-        rule! {
-            VALUES ~ #function_call
-        },
-        |(_, source)| source,
-    );
     let query = map(
         rule! {
             #query ~ ";"? ~ &EOI
@@ -2554,7 +2509,6 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     rule!(
         #streaming
         | #streaming_v2
-        //| #function_call
         | #values
         | #query
     )(i)
