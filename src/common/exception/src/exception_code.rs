@@ -351,6 +351,9 @@ build_exceptions! {
     IllegalStream(2733),
     StreamVersionMismatched(2734),
 
+    // dynamic error codes.
+    IllegalDynamicTable(2740),
+
     // Variable error codes.
     UnknownVariable(2801),
     OnlySupportAsciiChars(2802),

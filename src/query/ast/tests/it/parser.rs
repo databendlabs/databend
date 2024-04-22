@@ -608,6 +608,44 @@ fn test_statement() {
         r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
+        // dynamic tables
+        r#"
+            CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
+                TARGET_LAG = 10 SECOND
+                WAREHOUSE = 'MyWarehouse'
+                REFRESH_MODE = FULL
+                INITIALIZE = ON_CREATE
+                COMMENT = 'This is test dynamic table'
+            AS
+                SELECT * FROM t
+        "#,
+        r#"
+            CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a int, b string)
+                TARGET_LAG = 10 MINUTE
+                WAREHOUSE = 'MyWarehouse'
+                REFRESH_MODE = INCREMENTAL
+                INITIALIZE = ON_SCHEDULE
+                COMMENT = 'This is test dynamic table'
+            AS
+                SELECT * FROM t
+        "#,
+        r#"
+            CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
+                CLUSTER BY (a)
+                TARGET_LAG = 10 HOUR
+                REFRESH_MODE = AUTO
+                COMMENT = 'This is test dynamic table'
+                STORAGE_FORMAT = 'native'
+            AS
+                SELECT c, d FROM t
+        "#,
+        r#"
+            CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
+                CLUSTER BY (a)
+                TARGET_LAG = 10 DAY
+            AS
+                SELECT avg(a), d FROM t GROUP BY d
+        "#,
         // tasks
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,

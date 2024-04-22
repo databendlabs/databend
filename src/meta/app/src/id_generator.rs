@@ -99,15 +99,7 @@ impl IdGenerator {
     }
 }
 
-impl kvapi::Key for IdGenerator {
-    const PREFIX: &'static str = "__fd_id_gen";
-
-    type ValueType = Infallible;
-
-    fn parent(&self) -> Option<String> {
-        None
-    }
-
+impl kvapi::KeyCodec for IdGenerator {
     fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
         b.push_raw(&self.resource)
     }
@@ -118,6 +110,16 @@ impl kvapi::Key for IdGenerator {
         Ok(IdGenerator {
             resource: resource.to_string(),
         })
+    }
+}
+
+impl kvapi::Key for IdGenerator {
+    const PREFIX: &'static str = "__fd_id_gen";
+
+    type ValueType = Infallible;
+
+    fn parent(&self) -> Option<String> {
+        None
     }
 }
 

@@ -12,38 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod connection;
-mod database;
-mod dynamic_table;
-mod file_format;
-mod index;
-mod notification;
-mod procedure;
-mod sequence;
-mod stage;
-mod stream;
-mod table;
-mod task;
-mod udf;
-mod view;
-mod virtual_column;
-
-pub use account::*;
-pub use catalog::*;
-pub use connection::*;
-pub use database::*;
-pub use dynamic_table::*;
-pub use file_format::*;
-pub use index::*;
-pub use notification::*;
-pub use procedure::*;
-pub use sequence::*;
-pub use stage::*;
-pub use stream::*;
-pub use table::*;
-pub use task::*;
-pub use udf::*;
-pub use view::*;
-pub use virtual_column::*;
+pub const OPT_KEY_AS_QUERY: &str = "as_query";
+pub const OPT_KEY_TARGET_LAG: &str = "target_lag";
+pub const OPT_KEY_REFRESH_MODE: &str = "refresh_mode";
+pub const OPT_KEY_INITIALIZE: &str = "initialize";
+pub const OPT_KEY_WAREHOUSE: &str = "warehouse";
+pub const OPT_KEY_LIFECYCLE: &str = "lifecycle";

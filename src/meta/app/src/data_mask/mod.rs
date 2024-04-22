@@ -110,6 +110,18 @@ mod kvapi_key_impl {
     use super::DatamaskId;
     use crate::data_mask::DatamaskMeta;
 
+    impl kvapi::KeyCodec for DatamaskId {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.id)
+        }
+
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
+        where Self: Sized {
+            let id = parser.next_u64()?;
+            Ok(Self { id })
+        }
+    }
+
     /// "__fd_datamask_by_id/<id>"
     impl kvapi::Key for DatamaskId {
         const PREFIX: &'static str = "__fd_datamask_by_id";
@@ -118,15 +130,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             None
-        }
-
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.id)
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
-            let id = parser.next_u64()?;
-            Ok(Self { id })
         }
     }
 

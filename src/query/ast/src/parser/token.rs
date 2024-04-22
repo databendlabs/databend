@@ -522,10 +522,14 @@ pub enum TokenKind {
     DOY,
     #[token("DOWNLOAD", ignore(ascii_case))]
     DOWNLOAD,
+    #[token("DOWNSTREAM", ignore(ascii_case))]
+    DOWNSTREAM,
     #[token("DROP", ignore(ascii_case))]
     DROP,
     #[token("DRY", ignore(ascii_case))]
     DRY,
+    #[token("DYNAMIC", ignore(ascii_case))]
+    DYNAMIC,
     #[token("EXCEPT", ignore(ascii_case))]
     EXCEPT,
     #[token("EXCLUDE", ignore(ascii_case))]
@@ -650,10 +654,14 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INCREMENTAL", ignore(ascii_case))]
+    INCREMENTAL,
     #[token("INDEX", ignore(ascii_case))]
     INDEX,
     #[token("INFORMATION", ignore(ascii_case))]
     INFORMATION,
+    #[token("INITIALIZE", ignore(ascii_case))]
+    INITIALIZE,
     #[token("INNER", ignore(ascii_case))]
     INNER,
     #[token("INSERT", ignore(ascii_case))]
@@ -787,6 +795,10 @@ pub enum TokenKind {
     OFFSET,
     #[token("ON", ignore(ascii_case))]
     ON,
+    #[token("ON_CREATE", ignore(ascii_case))]
+    ON_CREATE,
+    #[token("ON_SCHEDULE", ignore(ascii_case))]
+    ON_SCHEDULE,
     #[token("OPTIMIZE", ignore(ascii_case))]
     OPTIMIZE,
     #[token("OPTIONS", ignore(ascii_case))]
@@ -929,6 +941,8 @@ pub enum TokenKind {
     RUN,
     #[token("GRANTS", ignore(ascii_case))]
     GRANTS,
+    #[token("REFRESH_MODE", ignore(ascii_case))]
+    REFRESH_MODE,
     #[token("RIGHT", ignore(ascii_case))]
     RIGHT,
     #[token("RLIKE", ignore(ascii_case))]
@@ -1031,6 +1045,8 @@ pub enum TokenKind {
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
     TABLES,
+    #[token("TARGET_LAG", ignore(ascii_case))]
+    TARGET_LAG,
     #[token("TEXT", ignore(ascii_case))]
     TEXT,
     #[token("LONGTEXT", ignore(ascii_case))]
