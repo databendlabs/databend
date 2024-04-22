@@ -75,3 +75,19 @@ while let Some(row) = rows.next().await {
 | `VARIANT`     | `String`        |
 | `BITMAP`      | `String`        |
 | `GEOMETRY`    | `String`        |
+
+Note: `VARIANT` is a json encoded string. Example:
+
+```sql
+CREATE TABLE example (
+    data VARIANT
+);
+INSERT INTO example VALUES ('{"a": 1, "b": "hello"}');
+```
+
+```rust
+let row = conn.query_row("SELECT * FROM example limit 1;").await.unwrap();
+let (data,): (String,) = row.unwrap().try_into().unwrap();
+let value: serde_json::Value = serde_json::from_str(&data).unwrap();
+println!("{:?}", value);
+```

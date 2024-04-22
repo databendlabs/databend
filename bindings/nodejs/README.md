@@ -68,6 +68,22 @@ while (row) {
 | `BITMAP`   | `String` |
 | `GEOMETRY` | `String` |
 
+Note: `VARIANT` is a json encoded string. Example:
+
+```sql
+CREATE TABLE example (
+    data VARIANT
+);
+INSERT INTO example VALUES ('{"a": 1, "b": "hello"}');
+```
+
+```javascript
+const row = await conn.queryRow("SELECT * FROM example limit 1;");
+const data = row.values()[0];
+const value = JSON.parse(data);
+console.log(value);
+```
+
 ## Development
 
 ```shell

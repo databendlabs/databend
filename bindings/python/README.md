@@ -95,6 +95,22 @@ asyncio.run(main())
 | `BITMAP`   | `str`   |
 | `GEOMETRY` | `str`   |
 
+Note: `VARIANT` is a json encoded string. Example:
+
+```sql
+CREATE TABLE example (
+    data VARIANT
+);
+INSERT INTO example VALUES ('{"a": 1, "b": "hello"}');
+```
+
+```python
+row = await conn.query_row("SELECT * FROM example limit 1;")
+data = row.values()[0]
+value = json.loads(data)
+print(value)
+```
+
 ## APIs
 
 ### AsyncDatabendClient
