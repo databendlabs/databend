@@ -147,7 +147,6 @@ impl Binder {
             }
             InsertSource::RawValues { rest_str, start } => {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
-                println!("values_str: {:?}\n", values_str);
                 match self.ctx.get_stage_attachment() {
                     Some(attachment) => {
                         return self

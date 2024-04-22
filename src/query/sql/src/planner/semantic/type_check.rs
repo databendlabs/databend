@@ -87,7 +87,6 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
-use databend_common_table_function::SequenceTableFunctionApi;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -99,6 +98,7 @@ use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
+use crate::async_function::AsyncFunctionManager;
 use crate::binder::bind_values;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
@@ -3604,51 +3604,46 @@ impl<'a> TypeChecker<'a> {
         if func_name != "nextval" {
             return Ok(None);
         }
-        if arguments.len() != 1 {
-            return Err(ErrorCode::SemanticError(
-                "sequence nextval function has only one argument".to_string(),
-            )
-            .set_span(span));
-        }
-
-        let sequence_name = if let Expr::ColumnRef { column, .. } = &arguments[0] {
-            if let ColumnID::Name(name) = &column.column {
-                name.name.clone()
-            } else {
-                return Err(ErrorCode::SemanticError(
-                    "table function can only used as column".to_string(),
-                ));
+        let arguments = {
+            let mut str_arguments: Vec<String> = vec![];
+            for arg in arguments {
+                if let Expr::ColumnRef { column, .. } = arg {
+                    if let ColumnID::Name(_name) = &column.column {
+                        if let ColumnID::Name(name) = &column.column {
+                            str_arguments.push(name.name.clone());
+                        } else {
+                            return Err(ErrorCode::SemanticError(
+                                "async function can only used as column".to_string(),
+                            ));
+                        }
+                    } else {
+                        return Err(ErrorCode::SemanticError(
+                            "async function can only used as column".to_string(),
+                        ));
+                    }
+                } else {
+                    return Err(ErrorCode::SemanticError(
+                        "async function can only used as column".to_string(),
+                    ));
+                }
             }
-        } else {
-            return Err(ErrorCode::SemanticError(
-                "table function can only used as column".to_string(),
-            ));
+            str_arguments
         };
 
-        let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_default_catalog()?;
-        let exist =
-            SequenceTableFunctionApi::exist_sequence(catalog, tenant, sequence_name.clone())
-                .await?;
-        if exist {
-            let table_func = AsyncFunctionCall {
-                span,
-                func_name: func_name.to_string(),
-                display_name: func_name.to_string(),
-                return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                arguments: vec![sequence_name],
-            };
+        let tenant = self.ctx.get_tenant();
+        let return_type = AsyncFunctionManager::instance()
+            .resolve(tenant, catalog, func_name, &arguments)
+            .await?;
+        let table_func = AsyncFunctionCall {
+            span,
+            func_name: func_name.to_string(),
+            display_name: func_name.to_string(),
+            return_type: Box::new(return_type.clone()),
+            arguments,
+        };
 
-            Ok(Some(Box::new((
-                table_func.into(),
-                DataType::Number(NumberDataType::UInt64),
-            ))))
-        } else {
-            Err(ErrorCode::SemanticError(format!(
-                "cannot find sequence {}",
-                sequence_name
-            )))
-        }
+        Ok(Some(Box::new((table_func.into(), return_type))))
     }
 
     #[async_recursion::async_recursion]

@@ -14,28 +14,29 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_meta_app::tenant::Tenant;
 
-pub struct AsyncFunctionManager {
-    // async_functions: HashMap<String>,
-}
+use crate::plans::AsyncFunctionCall;
+use crate::ScalarExpr;
 
-impl AsyncFunctionManager {
-    pub fn init() -> Result<()> {
-        GlobalInstance::set(Self::create());
-        Ok(())
-    }
+#[async_trait::async_trait]
+pub trait AsyncFunction: Sync + Send {
+    fn function_name(&self) -> &str;
 
-    pub fn instance() -> Arc<Self> {
-        GlobalInstance::get::<Arc<Self>>()
-    }
+    async fn generate(
+        &self,
+        tenant: Tenant,
+        catalog: Arc<dyn Catalog>,
+        async_func: &AsyncFunctionCall,
+    ) -> Result<ScalarExpr>;
 
-    pub fn create() -> Arc<AsyncFunctionManager> {
-        Arc::new(AsyncFunctionManager {})
-    }
-
-    pub fn exists(&self, func_name: &str) -> bool {
-        true
-    }
+    async fn resolve(
+        &self,
+        tenant: Tenant,
+        catalog: Arc<dyn Catalog>,
+        arguments: &[String],
+    ) -> Result<DataType>;
 }

@@ -26,6 +26,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_sharing::ShareEndpointManager;
+use databend_common_sql::AsyncFunctionManager;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
@@ -116,6 +117,7 @@ impl GlobalServices {
         .await?;
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
+        AsyncFunctionManager::init()?;
 
         DataOperator::init(&config.storage).await?;
         ShareTableConfig::init(

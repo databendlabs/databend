@@ -78,7 +78,6 @@ members = [
     "src/query/ee_features/data_mask",
     "src/query/ee_features/storage_encryption",
     "src/query/ee_features/stream_handler",
-    "src/query/table_function",
     # databend-query
     "src/query/service",
     # enterprise

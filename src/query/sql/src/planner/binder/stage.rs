@@ -25,7 +25,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
@@ -34,7 +33,7 @@ use indexmap::IndexMap;
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
-use crate::plans::ConstantExpr;
+use crate::AsyncFunctionManager;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -69,6 +68,8 @@ impl BindContext {
         );
 
         let mut map_exprs = Vec::with_capacity(exprs.len());
+        let catalog = ctx.get_default_catalog()?;
+        let tenant = ctx.get_tenant();
         for (i, expr) in exprs.iter().enumerate() {
             // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
             if let AExpr::ColumnRef { column, .. } = expr {
@@ -80,12 +81,10 @@ impl BindContext {
             }
 
             let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
-            if let ScalarExpr::AsyncFunctionCall(table_function_call) = &scalar {
-                let expr = ConstantExpr {
-                    span: table_function_call.span,
-                    value: Scalar::Number(NumberScalar::UInt64(10250)),
-                };
-                scalar = ScalarExpr::ConstantExpr(expr);
+            if let ScalarExpr::AsyncFunctionCall(async_function_call) = &scalar {
+                scalar = AsyncFunctionManager::instance()
+                    .generate(tenant.clone(), catalog.clone(), async_function_call)
+                    .await?;
             }
             let target_type = schema.field(i).data_type();
             if data_type != *target_type {

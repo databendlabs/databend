@@ -42,7 +42,6 @@
 
 extern crate core;
 
-pub mod async_functions;
 pub mod auth;
 pub mod catalogs;
 pub mod clusters;

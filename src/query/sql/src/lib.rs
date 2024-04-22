@@ -22,8 +22,10 @@
 #![feature(if_let_guard)]
 #![feature(iter_next_chunk)]
 
+pub mod async_function;
 pub mod evaluator;
 pub mod executor;
 pub mod planner;
 
+pub use async_function::*;
 pub use planner::*;
