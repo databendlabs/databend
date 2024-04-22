@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
@@ -50,6 +51,8 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -3517,8 +3520,7 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        let const_udf_type = if ["wasm"].contains(&udf_definition.language.to_lowercase().as_str())
-        {
+        let const_udf_type = if udf_definition.language.to_lowercase().as_str() == "wasm" {
             let file_location = match udf_definition.code.strip_prefix('@') {
                 Some(location) => FileLocation::Stage(location.to_string()),
                 None => {
@@ -3552,6 +3554,51 @@ impl<'a> TypeChecker<'a> {
                     err
                 ))
             })?;
+
+            let compress_algo = CompressAlgorithm::from_path(&wasm_module_path);
+            log::trace!(
+                "Detecting compression algorithm for WASM module: {}",
+                &wasm_module_path
+            );
+            log::info!("Detected compression algorithm: {:#?}", &compress_algo);
+
+            let code_blob = match compress_algo {
+                Some(algo) => {
+                    log::trace!("Decompressing WASM module using {:?} algorithm", algo);
+                    let mut decoder = DecompressDecoder::new(algo);
+                    let decompressed_blob = decoder.decompress_all(&code_blob).map_err(|err| {
+                        let error_msg = format!(
+                            "Failed to decompress WASM module {}: {}",
+                            wasm_module_path, err
+                        );
+                        log::error!("{}", error_msg);
+                        ErrorCode::SemanticError(error_msg)
+                    })?;
+                    decompressed_blob
+                }
+                None => {
+                    let ext = match PathBuf::from(&wasm_module_path).extension() {
+                        Some(ext) => ext.to_string_lossy().to_string(),
+                        None => {
+                            let error_msg = format!(
+                                "WASM module path {} has no file extension",
+                                wasm_module_path
+                            );
+                            log::error!("{}", error_msg);
+                            return Err(ErrorCode::SemanticError(error_msg));
+                        }
+                    };
+
+                    if ext == "wasm" {
+                        log::trace!("WASM module is already uncompressed");
+                        code_blob
+                    } else {
+                        let error_msg = format!("Invalid WASM module: {}", wasm_module_path);
+                        log::error!("{}", error_msg);
+                        return Err(ErrorCode::SemanticError(error_msg));
+                    }
+                }
+            };
 
             UDFType::WasmScript((
                 udf_definition.language,
