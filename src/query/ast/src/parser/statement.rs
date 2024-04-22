@@ -248,14 +248,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let delete = map(
         rule! {
-            DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias
-            ~ ( WHERE ~ ^#expr )?
+            #with? ~ DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias ~ ( WHERE ~ ^#expr )?
         },
-        |(_, hints, _, table, opt_selection)| {
+        |(with, _, hints, _, table, opt_selection)| {
             Statement::Delete(DeleteStmt {
                 hints,
                 table,
                 selection: opt_selection.map(|(_, selection)| selection),
+                with,
             })
         },
     );
