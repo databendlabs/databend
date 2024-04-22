@@ -100,6 +100,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             hints,
             table: table_reference,
             selection,
+            with: None,
         }
     }
 
