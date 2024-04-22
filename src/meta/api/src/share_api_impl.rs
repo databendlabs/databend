@@ -1187,17 +1187,24 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     ) -> Result<GetShareEndpointReply, KVAppError> {
         let mut share_endpoint_meta_vec = vec![];
 
-        let tenant_share_endpoint_name_key =
-            ShareEndpointIdent::new(&req.tenant, req.endpoint.clone().unwrap_or("".to_string()));
+        let idents = {
+            if let Some(endpoint) = &req.endpoint {
+                vec![ShareEndpointIdent::new(&req.tenant, endpoint.clone())]
+            } else {
+                let ident = ShareEndpointIdent::new(&req.tenant, "dummy");
 
-        let dir_name = DirName::new(tenant_share_endpoint_name_key);
+                let dir_name = DirName::new(ident);
 
-        let share_endpoints = list_keys(self, &dir_name).await?;
-        for share_endpoint in share_endpoints {
+                list_keys(self, &dir_name).await?
+            }
+        };
+
+        for share_endpoint in idents {
             let (_seq, share_endpoint_id) = get_u64_value(self, &share_endpoint).await?;
             let id_key = ShareEndpointId { share_endpoint_id };
             let (_seq, share_endpoint_meta): (u64, Option<ShareEndpointMeta>) =
                 get_pb_value(self, &id_key).await?;
+
             if let Some(share_endpoint_meta) = share_endpoint_meta {
                 if let Some(to_tenant) = &req.to_tenant {
                     if to_tenant.tenant_name() == share_endpoint_meta.tenant {
