@@ -127,6 +127,20 @@ pub trait KVPbApi: KVApi {
         }
     }
 
+    /// Same as `list_pb` but does not return values, only keys.
+    fn list_pb_keys<K>(
+        &self,
+        prefix: &DirName<K>,
+    ) -> impl Future<Output = Result<BoxStream<'static, Result<K, Self::Error>>, Self::Error>> + Send
+    where
+        K: kvapi::Key + 'static,
+        K::ValueType: FromToProto,
+        Self::Error: From<PbApiReadError<Self::Error>>,
+    {
+        self.list_pb(prefix)
+            .map_ok(|strm| strm.map_ok(|x| x.key).boxed())
+    }
+
     /// Same as `list_pb` but does not return key, only values.
     fn list_pb_values<K>(
         &self,
@@ -179,8 +193,7 @@ pub trait KVPbApi: KVApi {
         K: kvapi::Key + 'static,
         K::ValueType: FromToProto,
     {
-        let prefix = prefix.to_string_key();
-        let prefix = format!("{prefix}/");
+        let prefix = prefix.dir_name_with_slash();
         async move {
             let strm = self
                 .list_kv(&prefix)

@@ -57,6 +57,7 @@ use databend_common_meta_app::share::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::txn_condition::Target;
@@ -80,6 +81,7 @@ use log::warn;
 use ConditionResult::Eq;
 
 use crate::kv_app_error::KVAppError;
+use crate::kv_pb_api::KVPbApi;
 use crate::reply::txn_reply_to_api_result;
 
 pub const DEFAULT_MGET_SIZE: usize = 256;
@@ -201,21 +203,10 @@ where
 /// all the `db_name` with prefix `__fd_database/<tenant>/`.
 pub async fn list_keys<K: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &K,
+    key: &DirName<K>,
 ) -> Result<Vec<K>, MetaError> {
-    let res = kv_api.prefix_list_kv(&key.to_string_key()).await?;
-
-    let mut structured_keys = Vec::with_capacity(res.len());
-
-    for (str_key, _seq_id) in res.iter() {
-        let struct_key = K::from_str_key(str_key).map_err(|e| {
-            let inv = InvalidReply::new("fail to list_keys", &e);
-            MetaNetworkError::InvalidReply(inv)
-        })?;
-        structured_keys.push(struct_key);
-    }
-
-    Ok(structured_keys)
+    let key_stream = kv_api.list_pb_keys(key).await?;
+    key_stream.collect::<Result<Vec<_>, _>>().await
 }
 
 /// List kvs whose value's type is `u64`.
