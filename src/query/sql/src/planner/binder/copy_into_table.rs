@@ -468,7 +468,6 @@ impl<'a> Binder {
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
         let expr_or_placeholders = parse_values_with_placeholder(&tokens, sql_dialect)?;
-        println!("expr_or_placeholders: {:?}\n", expr_or_placeholders);
 
         if source_schema.num_fields() != expr_or_placeholders.len() {
             return Err(ErrorCode::SemanticError(format!(

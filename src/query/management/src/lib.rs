@@ -24,7 +24,6 @@ mod role;
 mod serde;
 mod setting;
 mod stage;
-pub mod table_function;
 pub mod udf;
 mod user;
 

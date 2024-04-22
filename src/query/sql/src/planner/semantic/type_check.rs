@@ -3600,10 +3600,6 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         arguments: &[Expr],
     ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
-        // only support "nextval" table function for now
-        if func_name != "nextval" {
-            return Ok(None);
-        }
         let arguments = {
             let mut str_arguments: Vec<String> = vec![];
             for arg in arguments {
