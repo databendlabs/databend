@@ -45,6 +45,7 @@ mod kvapi_impl {
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_share_account_id";
+        const TYPE: &'static str = "ShareConsumerIdent";
         type ValueType = ShareAccountMeta;
     }
 
@@ -54,6 +55,7 @@ mod kvapi_impl {
         }
     }
 
+    // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
 }

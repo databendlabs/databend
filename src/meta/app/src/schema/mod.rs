@@ -16,6 +16,7 @@
 
 pub mod catalog;
 pub mod catalog_name_ident;
+pub mod database_id_history_ident;
 pub mod database_name_ident;
 pub mod index_name_ident;
 pub mod virtual_column_ident;
@@ -42,7 +43,6 @@ pub use database::DatabaseInfo;
 pub use database::DatabaseInfoFilter;
 pub use database::DatabaseMeta;
 pub use database::DbIdList;
-pub use database::DbIdListKey;
 pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
@@ -51,6 +51,7 @@ pub use database::RenameDatabaseReply;
 pub use database::RenameDatabaseReq;
 pub use database::UndropDatabaseReply;
 pub use database::UndropDatabaseReq;
+pub use database_id_history_ident::DatabaseIdHistoryIdent;
 pub use index::*;
 pub use index_name_ident::IndexNameIdent;
 pub use index_name_ident::IndexNameIdentRaw;

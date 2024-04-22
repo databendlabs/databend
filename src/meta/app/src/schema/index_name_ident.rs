@@ -57,6 +57,7 @@ mod kvapi_impl {
         }
     }
 
+    // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
 }

@@ -30,6 +30,7 @@ mod kvapi_impl {
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_background_job";
+        const TYPE: &'static str = "BackgroundJobIdent";
         type ValueType = BackgroundJobId;
     }
 
@@ -39,6 +40,7 @@ mod kvapi_impl {
         }
     }
 
+    // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     //     fn from(err: ExistError<Resource>) -> Self {
     //         ErrorCode::ConnectionAlreadyExists(err.to_string())
