@@ -208,7 +208,7 @@ build_exceptions! {
 
     // Geometry errors.
     GeometryError(1801),
-
+    InvalidGeometryFormat(1802),
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
@@ -350,6 +350,9 @@ build_exceptions! {
     StreamAlreadyExists(2732),
     IllegalStream(2733),
     StreamVersionMismatched(2734),
+
+    // dynamic error codes.
+    IllegalDynamicTable(2740),
 
     // Variable error codes.
     UnknownVariable(2801),

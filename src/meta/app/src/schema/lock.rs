@@ -211,20 +211,10 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::LockMeta;
-    use crate::schema::TableId;
     use crate::schema::TableLockKey;
     use crate::tenant::Tenant;
 
-    /// __fd_table_lock/<tenant>/table_id/revision -> LockMeta
-    impl kvapi::Key for TableLockKey {
-        const PREFIX: &'static str = "__fd_table_lock";
-
-        type ValueType = LockMeta;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
-
+    impl kvapi::KeyCodec for TableLockKey {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_str(self.tenant.tenant_name())
                 .push_u64(self.table_id)
@@ -242,6 +232,17 @@ mod kvapi_key_impl {
                 table_id,
                 revision,
             })
+        }
+    }
+
+    /// __fd_table_lock/<tenant>/table_id/revision -> LockMeta
+    impl kvapi::Key for TableLockKey {
+        const PREFIX: &'static str = "__fd_table_lock";
+
+        type ValueType = LockMeta;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
         }
     }
 

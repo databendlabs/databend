@@ -100,6 +100,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             hints,
             table: table_reference,
             selection,
+            with: None,
         }
     }
 
@@ -125,6 +126,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             table: table_reference,
             update_list,
             selection,
+            with: None,
         }
     }
 
@@ -527,6 +529,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                         timezone: Tz::UTC,
                         binary_format: Default::default(),
+                        geometry_format: Default::default(),
                     },
                     quote_char: b'\'',
                 };

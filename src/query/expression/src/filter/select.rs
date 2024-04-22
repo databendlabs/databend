@@ -308,6 +308,7 @@ impl<'a> Selector<'a> {
         data_type: &DataType,
         like_pattern: &LikePattern,
         like_str: &[u8],
+        not: bool,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -336,61 +337,19 @@ impl<'a> Selector<'a> {
             _ => dummy_function,
         };
 
-        let has_false = false_selection.1;
-        let is_simple_pattern = matches!(like_pattern, LikePattern::SimplePattern(_));
-        match (has_false, is_simple_pattern) {
-            (true, true) => self.select_column_like::<_, true, true>(
-                cmp,
-                column,
-                like_str,
-                like_pattern,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            (true, false) => self.select_column_like::<_, true, false>(
-                cmp,
-                column,
-                like_str,
-                like_pattern,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            (false, true) => self.select_column_like::<_, false, true>(
-                cmp,
-                column,
-                like_str,
-                like_pattern,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            (false, false) => self.select_column_like::<_, false, false>(
-                cmp,
-                column,
-                like_str,
-                like_pattern,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-        }
+        self.select_like_adapt::<_>(
+            cmp,
+            column,
+            like_pattern,
+            like_str,
+            not,
+            validity,
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        )
     }
 }

@@ -38,6 +38,7 @@ use crate::parser::common::*;
 use crate::parser::copy::copy_into;
 use crate::parser::copy::copy_into_table;
 use crate::parser::data_mask::data_mask_policy;
+use crate::parser::dynamic_table::dynamic_table;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
@@ -112,7 +113,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #task_warehouse_option
+            ~ #warehouse_option
             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
             ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
             ~ ( WHEN ~ #expr )?
@@ -247,30 +248,31 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let delete = map(
         rule! {
-            DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias
-            ~ ( WHERE ~ ^#expr )?
+            #with? ~ DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias ~ ( WHERE ~ ^#expr )?
         },
-        |(_, hints, _, table, opt_selection)| {
+        |(with, _, hints, _, table, opt_selection)| {
             Statement::Delete(DeleteStmt {
                 hints,
                 table,
                 selection: opt_selection.map(|(_, selection)| selection),
+                with,
             })
         },
     );
 
     let update = map(
         rule! {
-            UPDATE ~ #hint? ~ #table_reference_only
+            #with? ~ UPDATE ~ #hint? ~ #table_reference_only
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, hints, table, _, update_list, opt_selection)| {
+        |(with, _, hints, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
                 hints,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),
+                with,
             })
         },
     );
@@ -2112,13 +2114,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
         ),
-        // view,stream,index,sequence
+        // view,index
         rule!(
             #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
-            | #stream_table
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
@@ -2197,7 +2198,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ),
         rule!(
             #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
-  [ { WAREHOUSE = <string> }
+  [ { WAREHOUSE = <string> } ]
   [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
   [ AFTER <string>, <string>...]
   [ WHEN boolean_expr ]
@@ -2211,6 +2212,11 @@ AS
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
+        ),
+        // stream, dynamic tables.
+        rule!(
+            #stream_table
+            | #dynamic_table
         ),
         rule!(
             #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
@@ -3565,7 +3571,7 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
     )(i)
 }
 
-pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
+pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
             (WAREHOUSE  ~ "=" ~ #literal_string)?

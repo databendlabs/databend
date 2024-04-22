@@ -86,6 +86,7 @@ use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
@@ -93,7 +94,6 @@ use databend_common_meta_app::schema::DatabaseInfoFilter;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
-use databend_common_meta_app::schema::DbIdListKey;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropCatalogReply;
 use databend_common_meta_app::schema::DropCatalogReq;
@@ -177,8 +177,8 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareGrantObject;
 use databend_common_meta_app::share::ShareSpec;
@@ -318,10 +318,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
 
             // get db id list from _fd_db_id_list/db_id
-            let dbid_idlist = DbIdListKey {
-                tenant: name_key.tenant().clone(),
-                db_name: name_key.database_name().to_string(),
-            };
+            let dbid_idlist =
+                DatabaseIdHistoryIdent::new(name_key.tenant(), name_key.database_name());
             let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
                 get_pb_value(self, &dbid_idlist).await?;
 
@@ -461,7 +459,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
 
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
-            let dbid_idlist = DbIdListKey::new(name_key.tenant(), name_key.database_name());
+            let dbid_idlist =
+                DatabaseIdHistoryIdent::new(name_key.tenant(), name_key.database_name());
             let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
                 get_pb_value(self, &dbid_idlist).await?;
 
@@ -571,10 +570,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 get_pb_value(self, &db_id_key).await?;
 
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
-            let dbid_idlist = DbIdListKey {
-                tenant: tenant_dbname.tenant().clone(),
-                db_name: tenant_dbname.database_name().to_string(),
-            };
+            let dbid_idlist =
+                DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), tenant_dbname.database_name());
             let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
                 get_pb_value(self, &dbid_idlist).await?;
             let mut db_id_list: DbIdList;
@@ -617,7 +614,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 )));
             }
 
-            let new_dbid_idlist = DbIdListKey::new(tenant_dbname.tenant(), &req.new_db_name);
+            let new_dbid_idlist =
+                DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), &req.new_db_name);
             let (new_db_id_list_seq, new_db_id_list_opt): (_, Option<DbIdList>) =
                 get_pb_value(self, &new_dbid_idlist).await?;
             let mut new_db_id_list: DbIdList;
@@ -704,11 +702,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // List tables by tenant, db_id, table_name.
-        let dbid_tbname_idlist = DbIdListKey {
-            tenant: req.tenant.clone(),
-            // Using a empty db to to list all
-            db_name: "".to_string(),
-        };
+        let dbid_tbname_idlist = DatabaseIdHistoryIdent::new(&req.tenant, "");
         let db_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut db_info_list = vec![];
@@ -765,10 +759,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                 db_id,
                                 seq: db_meta_seq,
                             },
-                            name_ident: DatabaseNameIdent::new(
-                                db_id_list_key.tenant(),
-                                &db_id_list_key.db_name,
-                            ),
+                            name_ident: DatabaseNameIdent::new_from(db_id_list_key.clone()),
                             meta: db_meta,
                         };
 
@@ -1274,11 +1265,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
                             VirtualColumnAlreadyExists::new(
-                                req.name_ident.table_id,
+                                req.name_ident.table_id(),
                                 format!(
-                                    "create virtual column with tenant: {} table_id: {}",
-                                    req.name_ident.tenant.tenant_name(),
-                                    req.name_ident.table_id
+                                    "create virtual column table_id: {}",
+                                    req.name_ident.table_id(),
                                 ),
                             ),
                         )));
@@ -1302,7 +1292,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 0
             };
             let virtual_column_meta = VirtualColumnMeta {
-                table_id: req.name_ident.table_id,
+                table_id: req.name_ident.table_id(),
                 virtual_columns: req.virtual_columns.clone(),
                 created_on: Utc::now(),
                 updated_on: None,
@@ -1366,7 +1356,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 };
 
             let virtual_column_meta = VirtualColumnMeta {
-                table_id: req.name_ident.table_id,
+                table_id: req.name_ident.table_id(),
                 virtual_columns: req.virtual_columns.clone(),
                 created_on: old_virtual_column_meta.created_on,
                 updated_on: Some(Utc::now()),
@@ -1461,7 +1451,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         if let Some(table_id) = req.table_id {
-            let name_ident = VirtualColumnNameIdent::new(&req.tenant, table_id);
+            let name_ident = VirtualColumnIdent::new(&req.tenant, table_id);
             let (_, virtual_column_opt): (_, Option<VirtualColumnMeta>) =
                 get_pb_value(self, &name_ident).await?;
 
@@ -1473,7 +1463,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         // Get virtual columns list by `prefix_list` "<prefix>/<tenant>"
-        let ident = VirtualColumnNameIdent::new(&req.tenant, 0u64);
+        let ident = VirtualColumnIdent::new(&req.tenant, 0u64);
         let prefix_key = ident.tenant_prefix();
 
         let list = self.prefix_list_kv(&prefix_key).await?;
@@ -3419,11 +3409,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         for drop_id in req.drop_ids {
             match drop_id {
                 DroppedId::Db(db_id, db_name) => {
-                    gc_dropped_db_by_id(self, db_id, req.tenant.clone(), db_name).await?
+                    gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?
                 }
                 DroppedId::Table(db_id, table_id, table_name) => {
-                    gc_dropped_table_by_id(self, req.tenant.clone(), db_id, table_id, table_name)
-                        .await?
+                    gc_dropped_table_by_id(self, &req.tenant, db_id, table_id, table_name).await?
                 }
             }
         }
@@ -3967,7 +3956,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
 async fn construct_drop_virtual_column_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &VirtualColumnNameIdent,
+    name_ident: &VirtualColumnIdent,
     drop_if_exists: bool,
     if_delete: bool,
     ctx: &str,
@@ -4295,10 +4284,8 @@ async fn drop_database_meta(
         );
 
         // if remove db, MUST also removed db id from db id list
-        let dbid_idlist = DbIdListKey {
-            tenant: tenant_dbname.tenant().clone(),
-            db_name: tenant_dbname.database_name().to_string(),
-        };
+        let dbid_idlist =
+            DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), tenant_dbname.database_name());
         let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
             get_pb_value(kv_api, &dbid_idlist).await?;
 
@@ -4343,10 +4330,8 @@ async fn drop_database_meta(
         }
 
         // add DbIdListKey if not exists
-        let dbid_idlist = DbIdListKey {
-            tenant: tenant_dbname.tenant().clone(),
-            db_name: tenant_dbname.database_name().to_string(),
-        };
+        let dbid_idlist =
+            DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), tenant_dbname.database_name());
         let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
             get_pb_value(kv_api, &dbid_idlist).await?;
 
@@ -4925,14 +4910,11 @@ pub(crate) async fn get_index_or_err(
 async fn gc_dropped_db_by_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
-    tenant: Tenant,
+    tenant: &Tenant,
     db_name: String,
 ) -> Result<(), KVAppError> {
     // List tables by tenant, db_id, table_name.
-    let dbid_idlist = DbIdListKey {
-        tenant: tenant.clone(),
-        db_name,
-    };
+    let dbid_idlist = DatabaseIdHistoryIdent::new(tenant, db_name);
     let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
         get_pb_value(kv_api, &dbid_idlist).await?;
 
@@ -4990,7 +4972,7 @@ async fn gc_dropped_db_by_id(
 
                 for tb_id in tb_id_list.id_list {
                     gc_dropped_table_data(kv_api, tb_id, &mut condition, &mut if_then).await?;
-                    gc_dropped_table_index(kv_api, &tenant, tb_id, &mut if_then).await?;
+                    gc_dropped_table_index(kv_api, tenant, tb_id, &mut if_then).await?;
                 }
 
                 let id_key = iter.next().unwrap();
@@ -5030,7 +5012,7 @@ async fn gc_dropped_db_by_id(
 
 async fn gc_dropped_table_by_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: Tenant,
+    tenant: &Tenant,
     db_id: u64,
     table_id: u64,
     table_name: String,
@@ -5066,7 +5048,7 @@ async fn gc_dropped_table_by_id(
             ));
         }
         gc_dropped_table_data(kv_api, table_id, &mut condition, &mut if_then).await?;
-        gc_dropped_table_index(kv_api, &tenant, table_id, &mut if_then).await?;
+        gc_dropped_table_index(kv_api, tenant, table_id, &mut if_then).await?;
 
         let txn_req = TxnRequest {
             condition,

@@ -281,6 +281,9 @@ impl InterpreterFactory {
                 *drop_stream.clone(),
             )?)),
 
+            // dynamic tables
+            Plan::CreateDynamicTable(_) => Err(ErrorCode::Unimplemented("todo")),
+
             // Indexes
             Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
                 ctx,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
+use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::BinaryFormat;
 
 #[derive(Clone)]
@@ -37,4 +38,5 @@ pub struct OutputCommonSettings {
     pub inf_bytes: Vec<u8>,
     pub timezone: Tz,
     pub binary_format: BinaryFormat,
+    pub geometry_format: GeometryDataType,
 }

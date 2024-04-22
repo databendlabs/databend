@@ -26,6 +26,7 @@ use crate::scalars::run_ast;
 fn test_geometry() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geometry.txt").unwrap();
+    test_st_asgeojson(file);
     test_st_geomfromgeohash(file);
     test_st_geompointfromgeohash(file);
     test_st_makeline(file);
@@ -36,6 +37,20 @@ fn test_geometry() {
     test_st_geometryfromwkt(file);
     // test_st_transform(file);
 }
+
+fn test_st_asgeojson(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_asgeojson(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_asgeojson(st_geometryfromwkt('SRID=4326;LINESTRING(389866 5819003, 390000 5830000)'))",
+        &[],
+    );
+}
+
 fn test_st_geomfromgeohash(file: &mut impl Write) {
     run_ast(file, "st_geomfromgeohash('9q60y60rhs')", &[]);
     run_ast(file, "st_geomfromgeohash(a)", &[(
@@ -91,7 +106,7 @@ fn test_st_makepolygon(file: &mut impl Write) {
         "st_makepolygon(st_geometryfromwkb(unhex('01020000000500000000000000000000000000000000000000000000000000f03f0000000000000000000000000000f03f00000000000000400000000000000000000000000000004000000000000000000000000000000000')))",
         &[],
     );
-    run_ast(file, "st_makepolygon(a)", &[(
+    run_ast(file, "st_makepolygon(st_geometryfromwkt(a))", &[(
         "a",
         StringType::from_data(vec![
             "LINESTRING(0.0 0.0, 1.0 0.0, 1.0 2.0, 0.0 2.0, 0.0 0.0)",

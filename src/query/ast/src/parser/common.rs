@@ -546,7 +546,7 @@ macro_rules! declare_experimental_feature {
                             ErrorKind::Other(
                                 concat!(
                                     $feature_name,
-                                    " only works in experimental dialect, try `set sql_dialect = experimental`"
+                                    " only works in experimental dialect, try `set sql_dialect = 'experimental'`"
                                 )
                             ),
                         );
