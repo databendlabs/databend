@@ -3933,6 +3933,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-compress",
  "databend-common-config",
  "databend-common-constraint",
  "databend-common-exception",
