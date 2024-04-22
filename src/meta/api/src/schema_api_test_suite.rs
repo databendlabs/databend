@@ -51,12 +51,12 @@ use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
-use databend_common_meta_app::schema::DbIdListKey;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReq;
@@ -2134,16 +2134,15 @@ impl SchemaApiTestSuite {
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         // test drop a db without db_id_list
         {
-            let tenant = "tenant1";
+            let tenant_name = "tenant1";
+            let tenant = Tenant::new_literal(tenant_name);
+
             let db = "db1";
-            let mut util = Util::new(mt, tenant, db, "tb2", "JSON");
+            let mut util = Util::new(mt, tenant_name, db, "tb2", "JSON");
             util.create_db().await?;
 
             // remove db id list
-            let dbid_idlist = DbIdListKey {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                db_name: db.to_string(),
-            };
+            let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant, db);
             util.mt
                 .as_kv_api()
                 .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
@@ -2166,16 +2165,16 @@ impl SchemaApiTestSuite {
         }
         // test get_database_history can return db without db_id_list
         {
-            let tenant = "tenant2";
+            let tenant2_name = "tenant2";
+            let tenant2 = Tenant::new_literal(tenant2_name);
+
             let db = "db2";
-            let mut util = Util::new(mt, tenant, db, "tb2", "JSON");
+            let mut util = Util::new(mt, tenant2_name, db, "tb2", "JSON");
             util.create_db().await?;
 
             // remove db id list
-            let dbid_idlist = DbIdListKey {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                db_name: db.to_string(),
-            };
+            let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant2, db);
+
             util.mt
                 .as_kv_api()
                 .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
@@ -2183,7 +2182,7 @@ impl SchemaApiTestSuite {
 
             let res = mt
                 .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant2_name, func_name!())?,
                     filter: None,
                 })
                 .await?;
@@ -3406,18 +3405,12 @@ impl SchemaApiTestSuite {
         let db_name = "db1_database_gc_out_of_retention_time";
         let db_name_ident1 = DatabaseNameIdent::new(&tenant, db_name);
 
-        let dbid_idlist1 = DbIdListKey {
-            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-            db_name: db_name.to_string(),
-        };
+        let dbid_idlist1 = DatabaseIdHistoryIdent::new(&tenant, db_name);
 
         let db_name2 = "db2_database_gc_out_of_retention_time";
         let db_name_ident2 = DatabaseNameIdent::new(&tenant, db_name2);
 
-        let dbid_idlist2 = DbIdListKey {
-            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-            db_name: db_name2.to_string(),
-        };
+        let dbid_idlist2 = DatabaseIdHistoryIdent::new(&tenant, db_name2);
 
         let drop_on = Some(Utc::now() - Duration::days(1));
 
@@ -3814,10 +3807,7 @@ impl SchemaApiTestSuite {
         let data = serialize_struct(&drop_data)?;
         upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
-        let dbid_idlist1 = DbIdListKey {
-            tenant: tenant.clone(),
-            db_name: db1_name.to_string(),
-        };
+        let dbid_idlist1 = DatabaseIdHistoryIdent::new(&tenant, db1_name);
         let old_id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
         assert_eq!(old_id_list.len(), 1);
 

@@ -29,6 +29,7 @@ mod kvapi_impl {
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_background_task_by_name";
+        const TYPE: &'static str = "BackgroundTaskIdent";
         type ValueType = BackgroundTaskInfo;
     }
 
@@ -38,6 +39,7 @@ mod kvapi_impl {
         }
     }
 
+    // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
 }
