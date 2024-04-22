@@ -199,6 +199,23 @@ async fn select_numbers() {
 }
 
 #[tokio::test]
+async fn select_multi_page() {
+    let (conn, _) = prepare("select_multi_page").await;
+    // default page size is 10000
+    let n = 46000;
+    let sql = format!("select * from NUMBERS({n}) order by number");
+    let rows = conn.query_iter(&sql).await.unwrap();
+    let ret: Vec<u64> = rows
+        .map(|r| r.unwrap().try_into().unwrap())
+        .collect::<Vec<(u64,)>>()
+        .await
+        .into_iter()
+        .map(|r| r.0)
+        .collect();
+    assert_eq!(ret, (0..n).collect::<Vec<u64>>());
+}
+
+#[tokio::test]
 async fn select_sleep() {
     let (conn, _) = prepare("select_sleep").await;
     let mut rows = conn.query_iter("select SLEEP(2);").await.unwrap();
