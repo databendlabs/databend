@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_sql::plans::DropSequencePlan;
@@ -51,7 +52,13 @@ impl Interpreter for DropSequenceInterpreter {
             if_exists: self.plan.if_exists,
         };
         let catalog = self.ctx.get_default_catalog()?;
-        let _reply = catalog.drop_sequence(req).await?;
+        let reply = catalog.drop_sequence(req).await?;
+        if reply.prev.is_none() && !self.plan.if_exists {
+            return Err(ErrorCode::UnknownSequence(format!(
+                "unknown sequence {:?}",
+                self.plan.ident.name()
+            )));
+        }
 
         Ok(PipelineBuildResult::create())
     }

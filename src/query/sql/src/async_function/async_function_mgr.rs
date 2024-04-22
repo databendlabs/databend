@@ -24,8 +24,26 @@ use databend_common_meta_app::tenant::Tenant;
 
 use super::sequence_async_function::SequenceAsyncFunction;
 use crate::plans::AsyncFunctionCall;
-use crate::AsyncFunction;
 use crate::ScalarExpr;
+
+#[async_trait::async_trait]
+pub trait AsyncFunction: Sync + Send {
+    fn function_name(&self) -> &str;
+
+    async fn generate(
+        &self,
+        tenant: Tenant,
+        catalog: Arc<dyn Catalog>,
+        async_func: &AsyncFunctionCall,
+    ) -> Result<ScalarExpr>;
+
+    async fn resolve(
+        &self,
+        tenant: Tenant,
+        catalog: Arc<dyn Catalog>,
+        arguments: &[String],
+    ) -> Result<DataType>;
+}
 
 pub struct AsyncFunctionManager {
     functions: HashMap<String, Arc<dyn AsyncFunction>>,
