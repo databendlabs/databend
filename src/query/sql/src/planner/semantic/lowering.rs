@@ -99,7 +99,6 @@ fn update_column_type<ColumnID: ColumnIndex, TP: TypeProvider<ColumnID>>(
             })
         }
         RawExpr::Constant { .. } => Ok(raw_expr.clone()),
-        RawExpr::TableFunctionCall { .. } => Ok(raw_expr.clone()),
         RawExpr::Cast {
             span,
             is_try,
@@ -263,12 +262,9 @@ impl ScalarExpr {
                 scalar.as_raw_expr()
             }
 
-            ScalarExpr::TableFunctionCall(table_func) => RawExpr::TableFunctionCall {
-                span: table_func.span,
-                name: table_func.func_name.clone(),
-                arguments: table_func.arguments.clone(),
-                return_type: table_func.return_type.as_ref().clone(),
-            },
+            ScalarExpr::AsyncFunctionCall(_table_func) => {
+                unreachable!()
+            }
         }
     }
 

@@ -80,7 +80,7 @@ impl BindContext {
             }
 
             let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
-            if let ScalarExpr::TableFunctionCall(table_function_call) = &scalar {
+            if let ScalarExpr::AsyncFunctionCall(table_function_call) = &scalar {
                 let expr = ConstantExpr {
                     span: table_function_call.span,
                     value: Scalar::Number(NumberScalar::UInt64(10250)),

@@ -114,6 +114,7 @@ use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
+use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
@@ -127,7 +128,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
-use crate::plans::TableFunctionCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::UDFType;
@@ -743,10 +743,10 @@ impl<'a> TypeChecker<'a> {
                 {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
                         return Ok(udf);
-                    } else if let Some(table_function) =
-                        self.resolve_table_function(*span, func_name, args).await?
+                    } else if let Some(async_function) =
+                        self.resolve_async_function(*span, func_name, args).await?
                     {
-                        return Ok(table_function);
+                        return Ok(async_function);
                     } else {
                         // Function not found, try to find and suggest similar function name.
                         let all_funcs = BUILTIN_FUNCTIONS
@@ -3594,7 +3594,7 @@ impl<'a> TypeChecker<'a> {
 
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
-    async fn resolve_table_function(
+    async fn resolve_async_function(
         &mut self,
         span: Span,
         func_name: &str,
@@ -3631,7 +3631,7 @@ impl<'a> TypeChecker<'a> {
             SequenceTableFunctionApi::exist_sequence(catalog, tenant, sequence_name.clone())
                 .await?;
         if exist {
-            let table_func = TableFunctionCall {
+            let table_func = AsyncFunctionCall {
                 span,
                 func_name: func_name.to_string(),
                 display_name: func_name.to_string(),

@@ -502,7 +502,7 @@ impl<'a> InferFilterOptimizer<'a> {
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::UDFCall(_)
                     | ScalarExpr::UDFLambdaCall(_)
-                    | ScalarExpr::TableFunctionCall(_) => {
+                    | ScalarExpr::AsyncFunctionCall(_) => {
                         // Can not replace `BoundColumnRef` or can not replace unsupported ScalarExpr.
                         self.can_replace = false;
                         Ok(())

@@ -363,16 +363,5 @@ pub fn as_expr(
                 return_type: return_type.clone(),
             }
         }
-        RemoteExpr::TableFunctionCall {
-            span,
-            name,
-            arguments,
-            return_type,
-        } => Expr::TableFunctionCall {
-            span: *span,
-            name: name.clone(),
-            arguments: arguments.clone(),
-            return_type: return_type.clone(),
-        },
     }
 }

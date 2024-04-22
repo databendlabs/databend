@@ -46,7 +46,7 @@ pub enum ScalarExpr {
     SubqueryExpr(SubqueryExpr),
     UDFCall(UDFCall),
     UDFLambdaCall(UDFLambdaCall),
-    TableFunctionCall(TableFunctionCall),
+    AsyncFunctionCall(AsyncFunctionCall),
 }
 
 impl ScalarExpr {
@@ -386,20 +386,20 @@ impl TryFrom<ScalarExpr> for UDFLambdaCall {
     }
 }
 
-impl From<TableFunctionCall> for ScalarExpr {
-    fn from(v: TableFunctionCall) -> Self {
-        Self::TableFunctionCall(v)
+impl From<AsyncFunctionCall> for ScalarExpr {
+    fn from(v: AsyncFunctionCall) -> Self {
+        Self::AsyncFunctionCall(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for TableFunctionCall {
+impl TryFrom<ScalarExpr> for AsyncFunctionCall {
     type Error = ErrorCode;
     fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::TableFunctionCall(value) = value {
+        if let ScalarExpr::AsyncFunctionCall(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
-                "Cannot downcast Scalar to TableFunctionCall",
+                "Cannot downcast Scalar to AsyncFunctionCall",
             ))
         }
     }
@@ -670,7 +670,7 @@ pub struct UDFLambdaCall {
 
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
-pub struct TableFunctionCall {
+pub struct AsyncFunctionCall {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub span: Span,
     pub func_name: String,
@@ -907,7 +907,7 @@ pub fn walk_expr_with_parent<'a, V: VisitorWithParent<'a>>(
         ScalarExpr::SubqueryExpr(subquery) => visitor.visit_subquery(parent, current, subquery),
         ScalarExpr::UDFCall(udf) => visitor.visit_udf_call(parent, current, udf),
         ScalarExpr::UDFLambdaCall(udf) => visitor.visit_udf_lambda_call(parent, current, udf),
-        ScalarExpr::TableFunctionCall(_) => Ok(()),
+        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
     }
 }
 
@@ -923,7 +923,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
-        ScalarExpr::TableFunctionCall(_) => Ok(()),
+        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
     }
 }
 
@@ -1021,7 +1021,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
-        ScalarExpr::TableFunctionCall(_) => Ok(()),
+        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
     }
 }
 
