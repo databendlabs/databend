@@ -477,6 +477,7 @@ impl ExplainInterpreter {
             .unwrap();
 
         let mut result = vec![];
+        // Explain subquery.
         if !delete.subquery_desc.is_empty() {
             let row_id_column_binding = ColumnBindingBuilder::new(
                 ROW_ID_COL_NAME.to_string(),
@@ -512,6 +513,7 @@ impl ExplainInterpreter {
             result.extend(input);
         }
 
+        // Explain selection.
         if let Some(selection) = &delete.selection
             && !matches!(selection, ScalarExpr::SubqueryExpr(_))
         {
