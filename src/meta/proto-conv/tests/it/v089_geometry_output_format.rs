@@ -21,22 +21,12 @@ use minitrace::func_name;
 
 use crate::common;
 
-// These bytes are built when a new version in introduced,
-
-// and are kept for backward compatibility test.
-//
-// *************************************************************
-// * These messages should never be updated,                   *
-// * only be added when a new version is added,                *
-// * or be removed when an old version is no longer supported. *
-// *************************************************************
-//
 #[test]
-fn test_decode_v75_csv_file_format_params() -> anyhow::Result<()> {
-    let csv_file_format_params_v75 = vec![
+fn test_decode_v89_geometry_output_format() -> anyhow::Result<()> {
+    let csv_file_format_params_v89 = vec![
         8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 6, 109, 121, 95, 110, 97, 110, 50, 1,
-        124, 58, 1, 39, 66, 4, 78, 117, 108, 108, 72, 1, 82, 6, 115, 116, 114, 105, 110, 103, 90,
-        6, 98, 97, 115, 101, 54, 52, 96, 1, 160, 6, 75, 168, 6, 24,
+        124, 58, 1, 39, 66, 4, 78, 117, 108, 108, 72, 1, 82, 6, 83, 84, 82, 73, 78, 71, 90, 6, 98,
+        97, 115, 101, 54, 52, 96, 1, 106, 4, 69, 87, 75, 84, 160, 6, 89, 168, 6, 24,
     ];
     let want = || CsvFileFormatParams {
         compression: StageFileCompression::Gzip,
@@ -53,12 +43,13 @@ fn test_decode_v75_csv_file_format_params() -> anyhow::Result<()> {
         binary_format: BinaryFormat::Base64,
         geometry_format: GeometryDataType::EWKT,
     };
+    common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(
         func_name!(),
-        csv_file_format_params_v75.as_slice(),
-        75,
+        csv_file_format_params_v89.as_slice(),
+        89,
         want(),
     )?;
-    common::test_pb_from_to(func_name!(), want())?;
+
     Ok(())
 }

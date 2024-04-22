@@ -14,9 +14,12 @@
 
 use chrono_tz::Tz;
 
+use crate::GeometryDataType;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatSettings {
     pub timezone: Tz,
+    pub geometry_format: GeometryDataType,
 }
 
 // only used for tests
@@ -24,6 +27,7 @@ impl Default for FormatSettings {
     fn default() -> Self {
         Self {
             timezone: "UTC".parse::<Tz>().unwrap(),
+            geometry_format: GeometryDataType::default(),
         }
     }
 }
