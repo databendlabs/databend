@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -109,7 +110,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
-    pub(in crate::sessions) auto_compact_after_write: Arc<AtomicBool>,
+    pub(in crate::sessions) num_fragmented_block_hint: Arc<AtomicU64>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
 
@@ -164,7 +165,7 @@ impl QueryContextShared {
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
-            auto_compact_after_write: Arc::new(AtomicBool::new(true)),
+            num_fragmented_block_hint: Arc::new(AtomicU64::new(0)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),

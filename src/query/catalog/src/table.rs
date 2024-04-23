@@ -256,11 +256,17 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
-        limit: Option<usize>,
+        num_snapshot_limit: Option<usize>,
         keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _, _) = (ctx, instant, limit, keep_last_snapshot, dry_run);
+        let (_, _, _, _, _) = (
+            ctx,
+            instant,
+            num_snapshot_limit,
+            keep_last_snapshot,
+            dry_run,
+        );
 
         Ok(None)
     }
@@ -340,9 +346,9 @@ pub trait Table: Sync + Send {
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        limit: Option<usize>,
+        limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        let (_, _) = (ctx, limit);
+        let (_, _) = (ctx, limits);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'compact_blocks' operation is not supported for the table '{}'. Table engine: '{}'.",
@@ -468,7 +474,9 @@ pub struct ColumnStatistics {
 }
 
 pub enum CompactTarget {
-    Blocks,
+    // compact blocks, with optional limit on the number of blocks to be compacted
+    Blocks(Option<usize>),
+    // compact segments
     Segments,
 }
 
@@ -532,5 +540,37 @@ impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
 
     fn num_rows(&self) -> Option<u64> {
         Some(self.num_rows)
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CompactionLimits {
+    pub segment_limit: Option<usize>,
+    pub block_limit: Option<usize>,
+}
+
+impl CompactionLimits {
+    pub fn limits(segment_limit: Option<usize>, block_limit: Option<usize>) -> Self {
+        // As n fragmented blocks scattered across at most n segments,
+        // when no segment_limit provided, we set it to the same value of block_limit
+        let adjusted_segment_limit = segment_limit.or(block_limit);
+        CompactionLimits {
+            segment_limit: adjusted_segment_limit,
+            block_limit,
+        }
+    }
+    pub fn limit_by_num_segments(v: Option<usize>) -> Self {
+        CompactionLimits {
+            segment_limit: v,
+            block_limit: None,
+        }
+    }
+
+    pub fn limit_by_num_blocks(v: Option<usize>) -> Self {
+        let segment_limit = v;
+        CompactionLimits {
+            segment_limit,
+            block_limit: v,
+        }
     }
 }

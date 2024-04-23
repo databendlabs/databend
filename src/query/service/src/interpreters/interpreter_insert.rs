@@ -23,6 +23,7 @@ use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::insert::InsertValue;
@@ -273,7 +274,7 @@ impl Interpreter for InsertInterpreter {
                         self.plan.catalog.clone(),
                         self.plan.database.clone(),
                         self.plan.table.clone(),
-                        "insert_into_table".to_owned(),
+                        MutationKind::Insert,
                         true,
                     );
                     hook_operator.execute(&mut build_res.main_pipeline).await;
@@ -308,7 +309,7 @@ impl Interpreter for InsertInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
-                "insert_into_table".to_owned(),
+                MutationKind::Insert,
                 true,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;

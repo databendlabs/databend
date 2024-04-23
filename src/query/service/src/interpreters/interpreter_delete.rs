@@ -296,7 +296,7 @@ impl Interpreter for DeleteInterpreter {
                 catalog_name.to_string(),
                 db_name.to_string(),
                 tbl_name.to_string(),
-                "delete".to_string(),
+                MutationKind::Delete,
                 // table lock has been added, no need to check.
                 false,
             );

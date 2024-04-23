@@ -491,15 +491,18 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
-    // Need compact after write, over the threshold.
-    fn get_need_compact_after_write(&self) -> bool {
-        self.shared.auto_compact_after_write.load(Ordering::Acquire)
+    // get a hint at the number of blocks that need to be compacted.
+    fn get_compaction_num_block_hint(&self) -> u64 {
+        self.shared
+            .num_fragmented_block_hint
+            .load(Ordering::Acquire)
     }
 
-    fn set_need_compact_after_write(&self, enable: bool) {
+    // set a hint at the number of blocks that need to be compacted.
+    fn set_compaction_num_block_hint(&self, hint: u64) {
         self.shared
-            .auto_compact_after_write
-            .store(enable, Ordering::Release);
+            .num_fragmented_block_hint
+            .store(hint, Ordering::Release);
     }
 
     fn attach_query_str(&self, kind: QueryKind, query: String) {

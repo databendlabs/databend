@@ -259,6 +259,7 @@ async fn build_mutator(
         base_snapshot,
         block_per_seg,
         num_segment_limit: limit,
+        num_block_limit: None,
     };
 
     let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
