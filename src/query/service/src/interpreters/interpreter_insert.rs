@@ -267,7 +267,6 @@ impl Interpreter for InsertInterpreter {
                         self.plan.catalog.clone(),
                         self.plan.database.clone(),
                         self.plan.table.clone(),
-                        "insert_into_table".to_owned(),
                         MutationKind::Insert,
                         true,
                     );
@@ -303,7 +302,6 @@ impl Interpreter for InsertInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
-                "insert_into_table".to_owned(),
                 MutationKind::Insert,
                 true,
             );

@@ -110,7 +110,6 @@ impl Interpreter for MergeIntoInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
-                "merge_into".to_owned(),
                 MutationKind::MergeInto,
                 true,
             );

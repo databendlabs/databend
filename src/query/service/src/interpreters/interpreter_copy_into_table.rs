@@ -387,7 +387,6 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.catalog_info.catalog_name().to_string(),
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
-                "copy_into_table".to_string(),
                 MutationKind::Insert,
                 true,
             );

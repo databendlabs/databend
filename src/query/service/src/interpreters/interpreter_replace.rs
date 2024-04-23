@@ -111,7 +111,6 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
-                "replace_into".to_owned(),
                 MutationKind::Replace,
                 true,
             );

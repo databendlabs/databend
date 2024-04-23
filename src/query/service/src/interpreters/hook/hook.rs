@@ -34,7 +34,6 @@ pub struct HookOperator {
     catalog: String,
     database: String,
     table: String,
-    operation_name: String,
     mutation_kind: MutationKind,
     need_lock: bool,
 }
@@ -45,7 +44,6 @@ impl HookOperator {
         catalog: String,
         database: String,
         table: String,
-        operation_name: String,
         mutation_kind: MutationKind,
         need_lock: bool,
     ) -> Self {
@@ -54,7 +52,6 @@ impl HookOperator {
             catalog,
             database,
             table,
-            operation_name,
             mutation_kind,
             need_lock,
         }
@@ -100,7 +97,7 @@ impl HookOperator {
 
         let trace_ctx = CompactHookTraceCtx {
             start: Instant::now(),
-            operation_name: self.operation_name.to_owned(),
+            operation_name: self.mutation_kind.to_string(),
         };
 
         hook_compact(
