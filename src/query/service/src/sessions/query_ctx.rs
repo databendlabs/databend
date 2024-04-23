@@ -597,7 +597,11 @@ impl TableContext for QueryContext {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-        let format = FormatSettings { timezone };
+        let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let format = FormatSettings {
+            timezone,
+            geometry_format,
+        };
         Ok(format)
     }
 
@@ -610,19 +614,19 @@ impl TableContext for QueryContext {
     }
 
     fn get_function_context(&self) -> Result<FunctionContext> {
-        let external_server_connect_timeout_secs = self
-            .get_settings()
-            .get_external_server_connect_timeout_secs()?;
-        let external_server_request_timeout_secs = self
-            .get_settings()
-            .get_external_server_request_timeout_secs()?;
+        let settings = self.get_settings();
+        let external_server_connect_timeout_secs =
+            settings.get_external_server_connect_timeout_secs()?;
+        let external_server_request_timeout_secs =
+            settings.get_external_server_request_timeout_secs()?;
 
-        let tz = self.get_settings().get_timezone()?;
+        let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
-        let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
+        let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
-        let disable_variant_check = self.get_settings().get_disable_variant_check()?;
-
+        let disable_variant_check = settings.get_disable_variant_check()?;
+        let geometry_output_format = settings.get_geometry_output_format()?;
+        let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -639,6 +643,8 @@ impl TableContext for QueryContext {
 
             external_server_connect_timeout_secs,
             external_server_request_timeout_secs,
+            geometry_output_format,
+            parse_datetime_ignore_remainder,
         })
     }
 

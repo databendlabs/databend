@@ -232,7 +232,10 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     };
 
                     let num_rows = block.num_rows();
-                    let encoder = FieldEncoderValues::create_for_mysql_handler(format.timezone);
+                    let encoder = FieldEncoderValues::create_for_mysql_handler(
+                        format.timezone,
+                        format.geometry_format,
+                    );
                     let mut buf = Vec::<u8>::new();
 
                     let columns = block

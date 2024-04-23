@@ -12,51 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
+use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
-/// QuotaIdent is a unique identifier for a quota.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TenantQuotaIdent {
-    pub tenant: Tenant,
-}
+pub type TenantQuotaIdent = TIdent<Resource, ()>;
+pub type TenantQuotaIdentRaw = TIdentRaw<Resource, ()>;
+
+pub use kvapi_impl::Resource;
 
 impl TenantQuotaIdent {
-    pub fn new(tenant: Tenant) -> Self {
-        Self { tenant }
+    pub fn new(tenant: impl ToTenant) -> Self {
+        Self::new_generic(tenant, ())
     }
 }
 
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyError;
-
-    use crate::tenant::Tenant;
-    use crate::tenant::TenantQuota;
-    use crate::tenant::TenantQuotaIdent;
-    use crate::KeyWithTenant;
-
-    impl kvapi::Key for TenantQuotaIdent {
-        const PREFIX: &'static str = "__fd_quotas";
-        type ValueType = TenantQuota;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(self.tenant_name())
-        }
-
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
-            let tenant = p.next_nonempty()?;
-            Ok(TenantQuotaIdent::new(Tenant::new_nonempty(tenant)))
-        }
+impl TenantQuotaIdentRaw {
+    pub fn new(tenant: impl ToString) -> Self {
+        Self::new_generic(tenant, ())
     }
+}
 
-    impl KeyWithTenant for TenantQuotaIdent {
-        fn tenant(&self) -> &Tenant {
-            &self.tenant
-        }
+mod kvapi_impl {
+
+    use databend_common_meta_kvapi::kvapi;
+
+    use crate::tenant::TenantQuota;
+    use crate::tenant_key::resource::TenantResource;
+
+    pub struct Resource;
+    impl TenantResource for Resource {
+        const PREFIX: &'static str = "__fd_quotas";
+        const TYPE: &'static str = "TenantQuotaIdent";
+        type ValueType = TenantQuota;
     }
 
     impl kvapi::Value for TenantQuota {
@@ -64,18 +52,23 @@ mod kvapi_key_impl {
             []
         }
     }
+
+    // // Use these error types to replace usage of ErrorCode if possible.
+    // impl From<ExistError<Resource>> for ErrorCode {
+    // impl From<UnknownError<Resource>> for ErrorCode {
 }
 
 #[cfg(test)]
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::*;
+    use super::TenantQuotaIdent;
+    use crate::tenant::Tenant;
 
     #[test]
-    fn test_quota_ident() {
+    fn test_tenant_quota_ident() {
         let tenant = Tenant::new_literal("test");
-        let ident = TenantQuotaIdent::new(tenant.clone());
+        let ident = TenantQuotaIdent::new(tenant);
 
         let key = ident.to_string_key();
         assert_eq!(key, "__fd_quotas/test");

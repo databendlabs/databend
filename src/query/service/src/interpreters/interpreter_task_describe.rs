@@ -45,7 +45,7 @@ impl DescribeTaskInterpreter {
         let plan = self.plan.clone();
         DescribeTaskRequest {
             task_name: plan.task_name,
-            tenant_id: plan.tenant,
+            tenant_id: plan.tenant.tenant_name().to_string(),
             if_exist: false,
         }
     }

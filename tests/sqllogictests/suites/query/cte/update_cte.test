@@ -1,0 +1,84 @@
+control sortmode rowsort
+
+statement ok
+use default;
+
+statement ok
+drop table if exists t1 all;
+
+statement ok
+create table t1(a integer, b integer, c integer, d integer, e integer);
+
+statement ok
+insert into t1(e,c,b,d,a) values(103,102,100,101,104);
+
+statement ok
+insert into t1(a,c,d,e,b) values(107,106,108,109,105);
+
+statement ok
+insert into t1(e,d,b,a,c) values(110,114,112,111,113);
+
+statement ok
+insert into t1(d,c,e,a,b) values(116,119,117,115,118);
+
+statement ok
+drop table if exists t2 all;
+
+statement ok
+create table t2(a integer, b integer, c integer, d integer, e integer);
+
+statement ok
+insert into t2(a, b, c, d, e) values(100, 101, 102, 103, 104), (105, 106, 107, 108, 109), (110, 111, 112, 113, 114), (115, 116, 117, 118, 119);
+
+statement ok
+with cte_t as (select * from t1) update t2 set a = 1 where a in (select a from cte_t);
+
+query IIIII
+select * from t2;
+----
+1 116 117 118 119
+100 101 102 103 104
+105 106 107 108 109
+110 111 112 113 114
+
+statement ok
+delete from t2;
+
+statement ok
+insert into t2(a, b, c, d, e) values(100, 101, 102, 103, 104), (105, 106, 107, 108, 109), (110, 111, 112, 113, 114), (115, 116, 117, 118, 119);
+
+
+statement ok
+with tt1 as (select * from t1), tt2 as (select * from tt1) update t2 set a = 1 where a in (select a from tt2);
+
+query IIIII
+select * from t2;
+----
+1 116 117 118 119
+100 101 102 103 104
+105 106 107 108 109
+110 111 112 113 114
+
+statement ok
+delete from t2;
+
+statement ok
+insert into t2(a, b, c, d, e) values(100, 101, 102, 103, 104), (105, 106, 107, 108, 109), (110, 111, 112, 113, 114), (115, 116, 117, 118, 119);
+
+statement ok
+with tt1 as (select * from t1), tt2 as (select * from tt1 where a > 110), tt3 as (select * from tt2 where d > 110) update t2 set a = 1 where a in (select a from tt3);
+
+query IIIII
+select * from t2;
+----
+1 116 117 118 119
+100 101 102 103 104
+105 106 107 108 109
+110 111 112 113 114
+
+statement error (?s)1065.*?column a doesn't exist
+with tt1 as (select * from t1) update t2 set a = tt1.a;
+
+
+statement ok
+drop table t2;

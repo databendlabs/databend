@@ -48,8 +48,8 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
 use databend_common_meta_app::share::share_end_point_ident::ShareEndpointIdentRaw;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
@@ -57,6 +57,7 @@ use databend_common_meta_app::share::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::txn_condition::Target;
@@ -75,11 +76,13 @@ use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
 use databend_common_proto_conv::FromToProto;
 use enumflags2::BitFlags;
+use futures::TryStreamExt;
 use log::debug;
 use log::warn;
 use ConditionResult::Eq;
 
 use crate::kv_app_error::KVAppError;
+use crate::kv_pb_api::KVPbApi;
 use crate::reply::txn_reply_to_api_result;
 
 pub const DEFAULT_MGET_SIZE: usize = 256;
@@ -199,23 +202,15 @@ where
 
 /// Return a vec of structured key(such as `DatabaseNameIdent`), such as:
 /// all the `db_name` with prefix `__fd_database/<tenant>/`.
-pub async fn list_keys<K: kvapi::Key>(
+pub async fn list_keys<K>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &K,
-) -> Result<Vec<K>, MetaError> {
-    let res = kv_api.prefix_list_kv(&key.to_string_key()).await?;
-
-    let mut structured_keys = Vec::with_capacity(res.len());
-
-    for (str_key, _seq_id) in res.iter() {
-        let struct_key = K::from_str_key(str_key).map_err(|e| {
-            let inv = InvalidReply::new("fail to list_keys", &e);
-            MetaNetworkError::InvalidReply(inv)
-        })?;
-        structured_keys.push(struct_key);
-    }
-
-    Ok(structured_keys)
+    key: &DirName<K>,
+) -> Result<Vec<K>, MetaError>
+where
+    K: kvapi::Key + 'static,
+{
+    let key_stream = kv_api.list_pb_keys(key).await?;
+    key_stream.try_collect::<Vec<_>>().await
 }
 
 /// List kvs whose value's type is `u64`.
@@ -328,6 +323,11 @@ pub async fn send_txn(
 }
 
 /// Build a TxnCondition that compares the seq of a record.
+pub fn txn_cond_eq_seq(key: &impl kvapi::Key, seq: u64) -> TxnCondition {
+    TxnCondition::eq_seq(key.to_string_key(), seq)
+}
+
+/// Build a TxnCondition that compares the seq of a record.
 pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> TxnCondition {
     TxnCondition {
         key: key.to_string_key(),
@@ -339,6 +339,11 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
 /// Build a txn operation that puts a record.
 pub fn txn_op_put(key: &impl kvapi::Key, value: Vec<u8>) -> TxnOp {
     TxnOp::put(key.to_string_key(), value)
+}
+
+/// Build a txn operation that gets value by key.
+pub fn txn_op_get(key: &impl kvapi::Key) -> TxnOp {
+    TxnOp::get(key.to_string_key())
 }
 
 // TODO: replace it with common_meta_types::with::With
@@ -616,7 +621,7 @@ fn share_has_to_exist(
 /// Returns (share_account_meta_seq, share_account_meta)
 pub async fn get_share_account_meta_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &ShareConsumer,
+    name_key: &ShareConsumerIdent,
     msg: impl Display,
 ) -> Result<(u64, ShareAccountMeta), KVAppError> {
     let (share_account_meta_seq, share_account_meta): (u64, Option<ShareAccountMeta>) =
@@ -635,7 +640,7 @@ pub async fn get_share_account_meta_or_err(
 /// Otherwise returns UnknownShareAccounts error
 fn share_account_meta_has_to_exist(
     seq: u64,
-    name_key: &ShareConsumer,
+    name_key: &ShareConsumerIdent,
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
@@ -643,9 +648,9 @@ fn share_account_meta_has_to_exist(
 
         Err(KVAppError::AppError(AppError::UnknownShareAccounts(
             UnknownShareAccounts::new(
-                &[name_key.tenant.tenant_name().to_string()],
-                name_key.share_id,
-                format!("{}: {}", msg, name_key),
+                &[name_key.tenant_name().to_string()],
+                name_key.share_id(),
+                format!("{}: {}", msg, name_key.display()),
             ),
         )))
     } else {
@@ -1223,11 +1228,11 @@ pub async fn get_index_metas_by_ids(
     Ok(index_metas)
 }
 
-/// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnNameIdent`],
+/// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnIdent`],
 /// or return [`AppError::VirtualColumnNotFound`] error wrapped in a [`KVAppError`] if not found.
 pub async fn get_virtual_column_by_id_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &VirtualColumnNameIdent,
+    name_ident: &VirtualColumnIdent,
     ctx: impl Display + Copy,
 ) -> Result<(u64, VirtualColumnMeta), KVAppError> {
     let (seq, virtual_column_meta): (_, Option<VirtualColumnMeta>) =
@@ -1235,11 +1240,10 @@ pub async fn get_virtual_column_by_id_or_err(
     if virtual_column_meta.is_none() {
         return Err(KVAppError::AppError(AppError::VirtualColumnNotFound(
             VirtualColumnNotFound::new(
-                name_ident.table_id,
+                name_ident.table_id(),
                 format!(
-                    "get virtual column with tenant: {} table_id: {}",
-                    name_ident.tenant.tenant_name(),
-                    name_ident.table_id
+                    "get virtual column with table_id: {}",
+                    name_ident.table_id()
                 ),
             ),
         )));
@@ -1248,7 +1252,7 @@ pub async fn get_virtual_column_by_id_or_err(
     let virtual_column_meta = virtual_column_meta.unwrap();
 
     debug!(
-        ident :% =(name_ident),
+        ident :% =(name_ident.display()),
         table_meta :? =(&virtual_column_meta);
         "{}",
         ctx

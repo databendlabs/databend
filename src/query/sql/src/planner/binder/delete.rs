@@ -64,8 +64,15 @@ impl<'a> Binder {
         stamt: &DeleteStmt,
     ) -> Result<Plan> {
         let DeleteStmt {
-            table, selection, ..
+            table,
+            selection,
+            with,
+            ..
         } = stamt;
+
+        if let Some(with) = &with {
+            self.add_cte(with, bind_context)?;
+        }
 
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,
@@ -114,6 +121,7 @@ impl<'a> Binder {
             database_name,
             table_name,
             metadata: self.metadata.clone(),
+            bind_context: Box::new(context.clone()),
             selection,
             subquery_desc,
         };

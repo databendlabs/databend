@@ -117,7 +117,6 @@ BEGIN
     SELECT 0 / 0;
 END;
 $$;
-----
 
 
 query error divided by zero
@@ -126,7 +125,36 @@ BEGIN
     RETURN 0 / 0;
 END;
 $$;
+
+statement ok
+set script_max_steps = 100;
+
+query error exceeded the limit
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET sum := 0;
+    WHILE sum < 100 DO
+        sum := sum +1;
+    END WHILE;
+    RETURN sum;
+END;
+$$;
+
+statement ok
+set script_max_steps = 1000;
+
+query
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET sum := 0;
+    WHILE sum < 100 DO
+        sum := sum +1;
+    END WHILE;
+    RETURN sum;
+END;
+$$;
 ----
+100
 
 
 statement ok

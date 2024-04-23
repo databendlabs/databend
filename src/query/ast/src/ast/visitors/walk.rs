@@ -586,5 +586,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Abort => {}
         Statement::InsertMultiTable(_) => {}
         Statement::ExecuteImmediate(_) => {}
+        Statement::CreateSequence(stmt) => visitor.visit_create_sequence(stmt),
+        Statement::DropSequence(stmt) => visitor.visit_drop_sequence(stmt),
+        Statement::CreateDynamicTable(stmt) => visitor.visit_create_dynamic_table(stmt),
     }
 }

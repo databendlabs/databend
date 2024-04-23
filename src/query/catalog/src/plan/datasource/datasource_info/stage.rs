@@ -70,7 +70,7 @@ pub async fn list_stage_files(
 ) -> Result<Vec<StageFileInfo>> {
     let op = init_stage_operator(stage_info)?;
     let infos = files_info
-        .list(&op, thread_num, false, max_files)
+        .list(&op, thread_num, max_files)
         .await?
         .into_iter()
         .collect::<Vec<_>>();

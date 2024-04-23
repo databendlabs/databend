@@ -182,12 +182,14 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int default 1);"#,
         r#"create table abc as (select * from xyz limit 10)"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
+        r#"ALTER USER u1 WITH disabled = false;"#,
         r#"ALTER USER u1 WITH default_role = role1;"#,
-        r#"ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;"#,
+        r#"ALTER USER u1 WITH DEFAULT_ROLE = role1, DISABLED=true, TENANTSETTING;"#,
         r#"ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';"#,
         r#"ALTER USER u1 WITH UNSET NETWORK POLICY;"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'"#,
+        r#"CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true"#,
         r#"DROP database if exists db1;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
         r#"select * from t4;"#,
@@ -606,6 +608,52 @@ fn test_statement() {
         r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
+        // dynamic tables
+        r#"
+            CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
+                TARGET_LAG = 10 SECOND
+                WAREHOUSE = 'MyWarehouse'
+                REFRESH_MODE = FULL
+                INITIALIZE = ON_CREATE
+                COMMENT = 'This is test dynamic table'
+            AS
+                SELECT * FROM t
+        "#,
+        r#"
+            CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a int, b string)
+                TARGET_LAG = 10 MINUTE
+                WAREHOUSE = 'MyWarehouse'
+                REFRESH_MODE = INCREMENTAL
+                INITIALIZE = ON_SCHEDULE
+                COMMENT = 'This is test dynamic table'
+            AS
+                SELECT * FROM t
+        "#,
+        r#"
+            CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
+                CLUSTER BY (a)
+                TARGET_LAG = 10 HOUR
+                REFRESH_MODE = AUTO
+                COMMENT = 'This is test dynamic table'
+                STORAGE_FORMAT = 'native'
+            AS
+                SELECT c, d FROM t
+        "#,
+        r#"
+            CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
+                CLUSTER BY (a)
+                TARGET_LAG = 10 DAY
+            AS
+                SELECT avg(a), d FROM t GROUP BY d
+        "#,
+        r#"
+            CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
+                CLUSTER BY (a)
+                REFRESH_MODE = INCREMENTAL
+                TARGET_LAG = DOWNSTREAM
+            AS
+                SELECT avg(a), d FROM db.t GROUP BY d
+        "#,
         // tasks
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,

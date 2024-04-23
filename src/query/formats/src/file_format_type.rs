@@ -16,6 +16,7 @@ use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_settings::Settings;
@@ -47,6 +48,7 @@ pub struct FileFormatOptionsExt {
     pub is_select: bool,
     pub is_clickhouse: bool,
     pub is_rounding_mode: bool,
+    pub geometry_format: GeometryDataType,
 }
 
 impl FileFormatOptionsExt {
@@ -55,6 +57,7 @@ impl FileFormatOptionsExt {
         is_select: bool,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
+        let geometry_format = settings.get_geometry_output_format()?;
         let numeric_cast_option = settings
             .get_numeric_cast_option()
             .unwrap_or("rounding".to_string());
@@ -70,6 +73,7 @@ impl FileFormatOptionsExt {
             is_select,
             is_clickhouse: false,
             is_rounding_mode,
+            geometry_format,
         };
         Ok(options)
     }
@@ -79,6 +83,7 @@ impl FileFormatOptionsExt {
         settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
+        let geometry_format = settings.get_geometry_output_format()?;
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
@@ -89,6 +94,7 @@ impl FileFormatOptionsExt {
             is_select: false,
             is_clickhouse: true,
             is_rounding_mode: true,
+            geometry_format,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

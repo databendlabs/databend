@@ -1,7 +1,10 @@
 [package]
 name = "databend-common-settings"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -12,6 +15,7 @@ test = false
 databend-common-ast = { path = "../ast" }
 databend-common-config = { path = "../config" }
 databend-common-exception = { path = "../../common/exception" }
+databend-common-io = { path = "../../common/io" }
 databend-common-meta-app = { path = "../../meta/app" }
 databend-common-meta-types = { path = "../../meta/types" }
 databend-common-users = { path = "../users" }

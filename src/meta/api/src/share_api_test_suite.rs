@@ -84,10 +84,10 @@ async fn is_all_share_data_removed(
     }
 
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareConsumer {
-            tenant: Tenant::new_or_err(account, "is_all_share_data_removed")?,
+        let share_account_key = ShareConsumerIdent::new(
+            Tenant::new_or_err(account, "is_all_share_data_removed")?,
             share_id,
-        };
+        );
         let res = get_share_account_meta_or_err(kv_api, &share_account_key, "").await;
         if res.is_ok() {
             return Ok(false);
@@ -211,6 +211,8 @@ impl ShareApiTestSuite {
         let endpoint2 = "endpoint2";
 
         let tenant1 = Tenant::new_literal(tenant_name1);
+        let tenant2 = Tenant::new_literal(tenant_name2);
+        let tenant3 = Tenant::new_literal(tenant_name3);
 
         info!("--- create share endpoints");
         let create_on = Utc::now();
@@ -219,7 +221,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 endpoint: ShareEndpointIdent::new(&tenant1, endpoint1),
                 url: "http://127.0.0.1:22222".to_string(),
-                tenant: tenant_name2.to_string(),
+                tenant: tenant2.clone(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -233,7 +235,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 endpoint: ShareEndpointIdent::new(&tenant1, endpoint1),
                 url: "http://127.0.0.1:21111".to_string(),
-                tenant: tenant_name2.to_string(),
+                tenant: tenant2.clone(),
                 comment: None,
                 args: BTreeMap::new(),
                 create_on,
@@ -252,7 +254,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 endpoint: ShareEndpointIdent::new(&tenant1, endpoint2),
                 url: "http://127.0.0.1:21111".to_string(),
-                tenant: tenant_name3.to_string(),
+                tenant: tenant3.clone(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -383,7 +385,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::Create,
                 endpoint: endpoint.clone(),
                 url: url.clone(),
-                tenant: tenant_name2.to_string(),
+                tenant: tenant2.clone(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -419,7 +421,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::CreateOrReplace,
                 endpoint: endpoint.clone(),
                 url: url.clone(),
-                tenant: tenant_name2.to_string(),
+                tenant: tenant2.clone(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -572,10 +574,10 @@ impl ShareApiTestSuite {
             assert!(share_meta.has_account(&account.to_string()));
 
             // get and check share account meta
-            let share_account_name = ShareConsumer {
-                tenant: Tenant::new_or_err(account, "share_add_remove_account")?,
+            let share_account_name = ShareConsumerIdent::new(
+                Tenant::new_or_err(account, "share_add_remove_account")?,
                 share_id,
-            };
+            );
             let (_share_account_meta_seq, share_account_meta) =
                 get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await?;
             assert_eq!(share_account_meta.share_id, share_id);
@@ -698,10 +700,10 @@ impl ShareApiTestSuite {
             assert!(!share_meta.has_account(&account2.to_string()));
 
             // check share account meta has been removed
-            let share_account_name = ShareConsumer {
-                tenant: Tenant::new_or_err(account2, "share_add_remove_account")?,
+            let share_account_name = ShareConsumerIdent::new(
+                Tenant::new_or_err(account2, "share_add_remove_account")?,
                 share_id,
-            };
+            );
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
             let err = res.unwrap_err();
             assert_eq!(
@@ -721,10 +723,10 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
 
             // check share account meta has been removed
-            let share_account_name = ShareConsumer {
-                tenant: Tenant::new_or_err(account, "share_add_remove_account")?,
+            let share_account_name = ShareConsumerIdent::new(
+                Tenant::new_or_err(account, "share_add_remove_account")?,
                 share_id,
-            };
+            );
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
             let err = res.unwrap_err();
             assert_eq!(
@@ -797,6 +799,7 @@ impl ShareApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -817,6 +820,7 @@ impl ShareApiTestSuite {
                     table_name: tbl2_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -833,6 +837,7 @@ impl ShareApiTestSuite {
                     table_name: tbl2_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -910,7 +915,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.unwrap().is_empty());
 
             let tbl_ob_name =
@@ -925,7 +930,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
 
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert_eq!(res.share_table_info.1.as_ref().unwrap().len(), 1);
             assert!(
                 res.share_table_info
@@ -1029,7 +1034,7 @@ impl ShareApiTestSuite {
 
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.unwrap().is_empty());
 
             let (_share_meta_seq, share_meta) =
@@ -1108,7 +1113,7 @@ impl ShareApiTestSuite {
 
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
-            assert_eq!(res.share_table_info.0, share_name.name());
+            assert_eq!(res.share_table_info.0, *share_name.name());
             assert!(res.share_table_info.1.is_none());
 
             // assert share_meta.database is none, and share_meta.entries is empty
@@ -1213,6 +1218,7 @@ impl ShareApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -1350,6 +1356,7 @@ impl ShareApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -1592,6 +1599,7 @@ impl ShareApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: TableMeta::default(),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;

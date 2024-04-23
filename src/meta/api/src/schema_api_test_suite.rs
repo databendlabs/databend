@@ -45,21 +45,23 @@ use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
-use databend_common_meta_app::schema::DbIdListKey;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
@@ -70,6 +72,8 @@ use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IcebergCatalogOption;
@@ -77,6 +81,7 @@ use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexIdToName;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::IndexNameIdentRaw;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
@@ -89,14 +94,15 @@ use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
-use databend_common_meta_app::schema::TableIdListKey;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -106,12 +112,13 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::AddShareAccountsReq;
 use databend_common_meta_app::share::CreateShareReq;
@@ -142,6 +149,7 @@ use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 use crate::DatamaskApi;
 use crate::SchemaApi;
+use crate::SequenceApi;
 use crate::ShareApi;
 use crate::DEFAULT_MGET_SIZE;
 
@@ -272,7 +280,7 @@ impl SchemaApiTestSuite {
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi + DatamaskApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi + DatamaskApi + SequenceApi,
     {
         let suite = SchemaApiTestSuite {};
 
@@ -308,7 +316,6 @@ impl SchemaApiTestSuite {
         suite.table_upsert_option(&b.build().await).await?;
         suite.table_list(&b.build().await).await?;
         suite.table_list_many(&b.build().await).await?;
-        suite.table_list_all(&b.build().await).await?;
         suite
             .table_drop_undrop_list_history(&b.build().await)
             .await?;
@@ -349,6 +356,7 @@ impl SchemaApiTestSuite {
 
         suite.get_table_name_by_id(&b.build().await).await?;
         suite.get_db_name_by_id(&b.build().await).await?;
+        suite.test_sequence(&b.build().await).await?;
 
         Ok(())
     }
@@ -462,6 +470,7 @@ impl SchemaApiTestSuite {
             create_option: CreateOption::Create,
             name_ident: db_table_name_ident.clone(),
             table_meta: table_meta(created_on),
+            as_dropped: false,
         };
 
         {
@@ -1473,6 +1482,7 @@ impl SchemaApiTestSuite {
             },
 
             table_meta: table_meta(created_on),
+            as_dropped: false,
         };
         let resp = mt.create_table(req.clone()).await?;
         let table_id = resp.table_id;
@@ -1543,6 +1553,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
             let res = mt.create_table(req.clone()).await?;
             table_id = res.table_id;
@@ -1636,6 +1647,7 @@ impl SchemaApiTestSuite {
                 },
 
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
             // test create table
             {
@@ -1691,6 +1703,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: table_meta(created_on),
+            as_dropped: false,
         };
         let tb_ident_2 = {
             {
@@ -1720,7 +1733,6 @@ impl SchemaApiTestSuite {
                 ident
             }
         };
-
         info!("--- create table again with if_not_exists = true");
         {
             req.create_option = CreateOption::CreateIfNotExists;
@@ -1788,6 +1800,7 @@ impl SchemaApiTestSuite {
                     table_name: "tb3".to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
 
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -1886,6 +1899,7 @@ impl SchemaApiTestSuite {
                     table_name: table.to_string(),
                 },
                 table_meta: table_meta(old_created_on),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -1914,6 +1928,7 @@ impl SchemaApiTestSuite {
                     table_name: table.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
 
             let res = mt.create_table(req.clone()).await?;
@@ -1933,6 +1948,159 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &key_table_id_to_name).await?;
             assert_eq!(ret_table_name_ident, key_dbid_tbname);
         }
+
+        {
+            info!("--- create table as dropped, undrop table by id, etc");
+
+            // recall that there is no table named with "tbl_dropped"
+            // - create table as dropped
+            let created_on = Utc::now();
+            let tbl_name = "tbl_dropped";
+            let tbl_meta = {
+                let mut v = table_meta(created_on);
+                v.drop_on = Some(Utc::now());
+                v
+            };
+
+            let create_table_req = CreateTableReq {
+                create_option: CreateOption::Create,
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: tbl_meta,
+                as_dropped: true,
+            };
+            let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
+            let create_table_as_dropped_resp = mt.create_table(create_table_req.clone()).await?;
+
+            // - verify that table created is invisible
+            let req = GetTableReq::new(&tenant, db_name, tbl_name);
+            let got = mt.get_table(req).await;
+            use databend_common_meta_app::app_error::AppError;
+            assert!(matches!(
+                got.unwrap_err(),
+                KVAppError::AppError(AppError::UnknownTable(_))
+            ));
+
+            // - verify other states are as expected
+            let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
+            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(create_table_as_dropped_resp.table_id >= 1, "table id >= 1");
+
+            // -- verify this table is un-droppable
+
+            {
+                let undrop_table_req = UndropTableByIdReq {
+                    name_ident: create_table_req.name_ident.clone(),
+                    db_id: create_table_as_dropped_resp.db_id,
+                    table_id: create_table_as_dropped_resp.table_id,
+                    table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
+                    force_replace: true,
+                };
+
+                mt.undrop_table_by_id(undrop_table_req).await?;
+                let req = GetTableReq::new(&tenant, db_name, tbl_name);
+                // after "un-drop", table should be visible
+                let tbl = mt.get_table(req).await?;
+                // and it should be one which is specified by table id
+                assert_eq!(tbl.ident.table_id, create_table_as_dropped_resp.table_id);
+            }
+
+            {
+                // if there is already a table with same name that is visible
+                // undrop-table-by-id with force_replace set to false should fail.
+                let undrop_table_req = UndropTableByIdReq {
+                    name_ident: create_table_req.name_ident.clone(),
+                    db_id: create_table_as_dropped_resp.db_id,
+                    table_id: create_table_as_dropped_resp.table_id,
+                    table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
+                    force_replace: false,
+                };
+
+                let res = mt.undrop_table_by_id(undrop_table_req).await;
+                assert!(matches!(
+                    res.unwrap_err(),
+                    KVAppError::AppError(AppError::UndropTableAlreadyExists(_))
+                ));
+            }
+
+            // -- create if not exist (as dropped) should work as expected
+
+            {
+                // recall that there is table of same name existing
+                // case 1: table exists
+                let create_table_if_not_exist_req = {
+                    let mut req = create_table_req.clone();
+                    req.create_option = CreateOption::CreateIfNotExists;
+                    req
+                };
+
+                let create_if_not_exist_resp =
+                    mt.create_table(create_table_if_not_exist_req).await?;
+                // no new table should be created
+                assert!(!create_if_not_exist_resp.new_table);
+                // the tabled id that returned should be the same
+                assert_eq!(
+                    create_if_not_exist_resp.table_id,
+                    create_table_as_dropped_resp.table_id
+                );
+
+                // table should still visible
+                let req = GetTableReq::new(&tenant, db_name, tbl_name);
+                let _ = mt.get_table(req).await?;
+
+                // case 2: table does not exist
+                // let's use a brand-new table name "not_exist"
+                let create_table_if_not_exist_req = {
+                    let mut req = create_table_req.clone();
+                    req.name_ident.table_name = "not_exist".to_owned();
+                    req.create_option = CreateOption::CreateIfNotExists;
+                    req
+                };
+
+                let create_if_not_exist_resp =
+                    mt.create_table(create_table_if_not_exist_req).await?;
+                // new table should be created
+                assert!(create_if_not_exist_resp.new_table);
+                // table should not be visible
+                let req = GetTableReq::new(&tenant, db_name, "not_exist");
+                let got = mt.get_table(req).await;
+                assert!(matches!(
+                    got.unwrap_err(),
+                    KVAppError::AppError(AppError::UnknownTable(_))
+                ));
+            }
+
+            // -- create or replace (as dropped) should work as expected
+
+            {
+                let create_or_replace_req = {
+                    let mut req = create_table_req.clone();
+                    req.create_option = CreateOption::CreateOrReplace;
+                    req
+                };
+
+                let create_or_replace_resp = mt.create_table(create_or_replace_req).await?;
+                // since table of same name has been created, "new_table" (in the sense of table name) should be false
+                assert!(!create_or_replace_resp.new_table);
+                // but a table of different id should be created
+                assert_ne!(
+                    create_or_replace_resp.table_id,
+                    create_table_as_dropped_resp.table_id
+                );
+
+                // the replaced table should be still visible:
+                let req = GetTableReq::new(&tenant, db_name, tbl_name);
+                let tbl = mt.get_table(req).await?;
+                // the visible one should be the one before the create-or-replace-as-dropped
+                assert_eq!(create_table_as_dropped_resp.table_id, tbl.ident.table_id);
+                // but not the newly created (as dropped) one
+                assert_ne!(create_or_replace_resp.table_id, tbl.ident.table_id);
+            }
+        }
+
         Ok(())
     }
 
@@ -1966,16 +2134,15 @@ impl SchemaApiTestSuite {
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         // test drop a db without db_id_list
         {
-            let tenant = "tenant1";
+            let tenant_name = "tenant1";
+            let tenant = Tenant::new_literal(tenant_name);
+
             let db = "db1";
-            let mut util = Util::new(mt, tenant, db, "tb2", "JSON");
+            let mut util = Util::new(mt, tenant_name, db, "tb2", "JSON");
             util.create_db().await?;
 
             // remove db id list
-            let dbid_idlist = DbIdListKey {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                db_name: db.to_string(),
-            };
+            let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant, db);
             util.mt
                 .as_kv_api()
                 .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
@@ -1998,16 +2165,16 @@ impl SchemaApiTestSuite {
         }
         // test get_database_history can return db without db_id_list
         {
-            let tenant = "tenant2";
+            let tenant2_name = "tenant2";
+            let tenant2 = Tenant::new_literal(tenant2_name);
+
             let db = "db2";
-            let mut util = Util::new(mt, tenant, db, "tb2", "JSON");
+            let mut util = Util::new(mt, tenant2_name, db, "tb2", "JSON");
             util.create_db().await?;
 
             // remove db id list
-            let dbid_idlist = DbIdListKey {
-                tenant: Tenant::new_or_err(tenant, func_name!())?,
-                db_name: db.to_string(),
-            };
+            let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant2, db);
+
             util.mt
                 .as_kv_api()
                 .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
@@ -2015,7 +2182,7 @@ impl SchemaApiTestSuite {
 
             let res = mt
                 .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant2_name, func_name!())?,
                     filter: None,
                 })
                 .await?;
@@ -2046,8 +2213,8 @@ impl SchemaApiTestSuite {
         let (tid, _table_meta) = util.create_table().await?;
 
         // remove db id list
-        let table_id_idlist = TableIdListKey {
-            db_id: util.db_id,
+        let table_id_idlist = TableIdHistoryIdent {
+            database_id: util.db_id,
             table_name: table.to_string(),
         };
         util.mt
@@ -2147,6 +2314,7 @@ impl SchemaApiTestSuite {
                 table_name: tb2_name.to_string(),
             },
             table_meta: table_meta(created_on),
+            as_dropped: false,
         };
 
         info!("--- create table for rename");
@@ -2375,6 +2543,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
 
             let _tb_ident_2 = {
@@ -2666,6 +2835,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name_1.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
             let _res = mt.create_table(req.clone()).await?;
 
@@ -2677,6 +2847,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name_2.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
             let _res = mt.create_table(req.clone()).await?;
         }
@@ -3002,6 +3173,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
 
             let _tb_ident_2 = {
@@ -3233,18 +3405,12 @@ impl SchemaApiTestSuite {
         let db_name = "db1_database_gc_out_of_retention_time";
         let db_name_ident1 = DatabaseNameIdent::new(&tenant, db_name);
 
-        let dbid_idlist1 = DbIdListKey {
-            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-            db_name: db_name.to_string(),
-        };
+        let dbid_idlist1 = DatabaseIdHistoryIdent::new(&tenant, db_name);
 
         let db_name2 = "db2_database_gc_out_of_retention_time";
         let db_name_ident2 = DatabaseNameIdent::new(&tenant, db_name2);
 
-        let dbid_idlist2 = DbIdListKey {
-            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-            db_name: db_name2.to_string(),
-        };
+        let dbid_idlist2 = DatabaseIdHistoryIdent::new(&tenant, db_name2);
 
         let drop_on = Some(Utc::now() - Duration::days(1));
 
@@ -3342,6 +3508,7 @@ impl SchemaApiTestSuite {
             create_option: CreateOption::Create,
             name_ident,
             table_meta: create_table_meta.clone(),
+            as_dropped: false,
         };
 
         let res = mt.create_table(req).await?;
@@ -3458,8 +3625,8 @@ impl SchemaApiTestSuite {
             assert_eq!(stage_file, stage_info);
         }
 
-        let table_id_idlist = TableIdListKey {
-            db_id: res.db_id,
+        let table_id_idlist = TableIdHistoryIdent {
+            database_id: res.db_id,
             table_name: tb1_name.to_string(),
         };
 
@@ -3570,6 +3737,7 @@ impl SchemaApiTestSuite {
             create_option: CreateOption::Create,
             name_ident: tbl_name_ident,
             table_meta: create_table_meta.clone(),
+            as_dropped: false,
         };
 
         let res = mt.create_table(req).await?;
@@ -3612,10 +3780,7 @@ impl SchemaApiTestSuite {
 
         let agg_index_create_req = CreateIndexReq {
             create_option: CreateOption::CreateIfNotExists,
-            name_ident: IndexNameIdent {
-                tenant: tenant.clone(),
-                index_name: idx1_name.to_string(),
-            },
+            name_ident: IndexNameIdent::new(&tenant, idx1_name),
             meta: IndexMeta {
                 table_id,
                 index_type: IndexType::AGGREGATING,
@@ -3642,15 +3807,12 @@ impl SchemaApiTestSuite {
         let data = serialize_struct(&drop_data)?;
         upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
-        let dbid_idlist1 = DbIdListKey {
-            tenant: tenant.clone(),
-            db_name: db1_name.to_string(),
-        };
+        let dbid_idlist1 = DatabaseIdHistoryIdent::new(&tenant, db1_name);
         let old_id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
         assert_eq!(old_id_list.len(), 1);
 
-        let table_id_idlist = TableIdListKey {
-            db_id,
+        let table_id_idlist = TableIdHistoryIdent {
+            database_id: db_id,
             table_name: tb1_name.to_string(),
         };
 
@@ -3722,7 +3884,7 @@ impl SchemaApiTestSuite {
 
             let agg_index_meta: Result<IndexMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
-            let agg_index_name_ident: Result<IndexNameIdent, KVAppError> =
+            let agg_index_name_ident: Result<IndexNameIdentRaw, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_to_name_key).await;
 
             assert!(agg_index_meta.is_err());
@@ -3800,6 +3962,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
+                as_dropped: false,
             };
 
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -3896,6 +4059,7 @@ impl SchemaApiTestSuite {
                 },
 
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
             let _resp = mt.create_table(req.clone()).await?;
 
@@ -3933,6 +4097,7 @@ impl SchemaApiTestSuite {
                     create_option: CreateOption::Create,
                     name_ident: table_name.clone(),
                     table_meta: table_meta(created_on),
+                    as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
                 drop_ids_1.push(DroppedId::Table(
@@ -3963,6 +4128,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta.clone(),
+                    as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
                 mt.drop_table_by_id(DropTableByIdReq {
@@ -3991,6 +4157,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta(created_on),
+                    as_dropped: false,
                 };
                 let _resp = mt.create_table(req.clone()).await?;
             }
@@ -4033,6 +4200,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta(created_on),
+                    as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
                 drop_ids_1.push(DroppedId::Table(db_id, resp.table_id, "tb1".to_string()));
@@ -4059,6 +4227,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta.clone(),
+                    as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb2".to_string()));
@@ -4088,6 +4257,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta(created_on),
+                    as_dropped: false,
                 };
                 let _resp = mt.create_table(req.clone()).await?;
             }
@@ -4229,6 +4399,7 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta(created_on),
+                    as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
 
@@ -4442,6 +4613,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
+                as_dropped: false,
             };
 
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4555,6 +4727,7 @@ impl SchemaApiTestSuite {
                     create_option: CreateOption::Create,
                     name_ident: tbl_name_ident.clone(),
                     table_meta: create_table_meta.clone(),
+                    as_dropped: false,
                 })
                 .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4644,6 +4817,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: new_tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
+                as_dropped: false,
             };
 
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4811,6 +4985,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
 
             let _tb_ident_2 = {
@@ -4923,6 +5098,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
 
             {
@@ -5024,6 +5200,101 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
+    async fn test_sequence<MT: SchemaApi + SequenceApi + kvapi::AsKVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = Tenant {
+            tenant: "tenant1".to_string(),
+        };
+        let sequence_name = "seq";
+
+        let create_on = Utc::now();
+
+        info!("--- create sequence");
+        {
+            let req = CreateSequenceReq {
+                create_option: CreateOption::Create,
+                ident: SequenceIdent::new(&tenant, sequence_name),
+                create_on,
+                comment: Some("seq".to_string()),
+            };
+
+            let _resp = mt.create_sequence(req).await?;
+        }
+
+        info!("--- get sequence");
+        {
+            let req = GetSequenceReq {
+                ident: SequenceIdent::new(&tenant, sequence_name),
+            };
+            let resp = mt.get_sequence(req).await?;
+            assert_eq!(resp.meta.comment, Some("seq".to_string()));
+            assert_eq!(resp.meta.current, 1);
+        }
+
+        info!("--- get sequence nextval");
+        {
+            let req = GetSequenceNextValueReq {
+                ident: SequenceIdent::new(&tenant, sequence_name),
+                count: 10,
+            };
+            let resp = mt.get_sequence_next_value(req).await?;
+            assert_eq!(resp.start, 1);
+            assert_eq!(resp.end, 10);
+        }
+
+        info!("--- get sequence after nextval");
+        {
+            let req = GetSequenceReq {
+                ident: SequenceIdent::new(&tenant, sequence_name),
+            };
+
+            let resp = mt.get_sequence(req).await?;
+            assert_eq!(resp.meta.comment, Some("seq".to_string()));
+            assert_eq!(resp.meta.current, 11);
+        }
+
+        info!("--- replace sequence");
+        {
+            let req = CreateSequenceReq {
+                create_option: CreateOption::CreateOrReplace,
+                ident: SequenceIdent::new(&tenant, sequence_name),
+                create_on,
+                comment: Some("seq1".to_string()),
+            };
+
+            let _resp = mt.create_sequence(req).await?;
+
+            let req = GetSequenceReq {
+                ident: SequenceIdent::new(&tenant, sequence_name),
+            };
+
+            let resp = mt.get_sequence(req).await?;
+            assert_eq!(resp.meta.comment, Some("seq1".to_string()));
+            assert_eq!(resp.meta.current, 1);
+        }
+
+        {
+            let req = DropSequenceReq {
+                ident: SequenceIdent::new(&tenant, sequence_name),
+                if_exists: true,
+            };
+
+            let _resp = mt.drop_sequence(req).await?;
+
+            let req = GetSequenceReq {
+                ident: SequenceIdent::new(&tenant, sequence_name),
+            };
+
+            let resp = mt.get_sequence(req).await;
+            assert!(resp.is_err());
+        }
+
+        Ok(())
+    }
+
+    #[minitrace::trace]
     async fn get_table_copied_file<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -5071,6 +5342,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
             let resp = mt.create_table(req.clone()).await?;
             table_id = resp.table_id;
@@ -5275,6 +5547,7 @@ impl SchemaApiTestSuite {
                     create_option: CreateOption::Create,
                     name_ident: tb_name.clone(),
                     table_meta: table_meta(create_on),
+                    as_dropped: false,
                 };
                 let res = mt.create_table(req).await?;
                 if tb_name == &tb_name1 {
@@ -5402,6 +5675,7 @@ impl SchemaApiTestSuite {
                     options: options.clone(),
                     ..Default::default()
                 },
+                as_dropped: false,
             };
 
             let tb_ids = {
@@ -5464,6 +5738,7 @@ impl SchemaApiTestSuite {
                         table_name,
                     },
                     table_meta: table_meta.clone(),
+                    as_dropped: false,
                 };
                 let resp = util.mt.create_table(req).await?;
 
@@ -5479,82 +5754,6 @@ impl SchemaApiTestSuite {
                 .list_tables(ListTableReq::new(&util.tenant(), util.db_name()))
                 .await?;
             assert_eq!(n, res.len());
-        }
-
-        Ok(())
-    }
-
-    #[minitrace::trace]
-    async fn table_list_all<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant_name = "tenant1";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-        let db1_name = "db1";
-        let db2_name = "db2";
-
-        info!("--- prepare db");
-        {
-            self.create_database(mt, &tenant, db1_name, "eng1").await?;
-            self.create_database(mt, &tenant, db2_name, "eng1").await?;
-        }
-
-        info!("--- create 2 tables: tb1 tb2");
-        {
-            // Table schema with metadata(due to serde issue).
-            let schema = Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
-            )]));
-
-            let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
-
-            let mut req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db1_name.to_string(),
-                    table_name: "tb1".to_string(),
-                },
-                table_meta: TableMeta {
-                    schema: schema.clone(),
-                    engine: "JSON".to_string(),
-                    options: options.clone(),
-                    ..Default::default()
-                },
-            };
-
-            let tb_ids = {
-                req.table_meta
-                    .options
-                    .insert("name".to_string(), "t1".to_string());
-                let res = mt.create_table(req.clone()).await?;
-                assert!(res.table_id >= 1, "table id >= 1");
-                let tb_id1 = res.table_id;
-
-                req.name_ident.db_name = db2_name.to_string();
-                req.name_ident.table_name = "tb2".to_string();
-                req.table_meta
-                    .options
-                    .insert("name".to_string(), "t2".to_string());
-                let res = mt.create_table(req.clone()).await?;
-                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
-                let tb_id2 = res.table_id;
-
-                vec![tb_id1, tb_id2]
-            };
-
-            info!("--- get_tables");
-            {
-                let res = mt.list_all_tables().await?;
-                assert_eq!(tb_ids.len(), res.len());
-
-                // check table-id
-                assert_eq!(tb_ids[0], res[0].0.table_id);
-                assert_eq!(tb_ids[1], res[1].0.table_id);
-
-                // check table-meta
-                assert_eq!(Some(&"t1".to_string()), res[0].2.options.get("name"));
-                assert_eq!(Some(&"t2".to_string()), res[1].2.options.get("name"));
-            }
         }
 
         Ok(())
@@ -5606,6 +5805,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
             let resp = mt.create_table(req.clone()).await?;
             table_id = resp.table_id;
@@ -5807,15 +6007,9 @@ impl SchemaApiTestSuite {
             sync_creation: false,
         };
 
-        let name_ident_1 = IndexNameIdent {
-            tenant: tenant.clone(),
-            index_name: index_name_1.to_string(),
-        };
+        let name_ident_1 = IndexNameIdent::new(&tenant, index_name_1);
 
-        let name_ident_2 = IndexNameIdent {
-            tenant: tenant.clone(),
-            index_name: index_name_2.to_string(),
-        };
+        let name_ident_2 = IndexNameIdent::new(&tenant, index_name_2);
 
         {
             info!("--- list index with no create before");
@@ -5966,10 +6160,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create or replace index");
             let replace_index_name = "replace_idx";
-            let replace_name_ident = IndexNameIdent {
-                tenant: tenant.clone(),
-                index_name: replace_index_name.to_string(),
-            };
+            let replace_name_ident = IndexNameIdent::new(&tenant, replace_index_name);
             let req = CreateIndexReq {
                 create_option: CreateOption::Create,
                 name_ident: replace_name_ident.clone(),
@@ -6034,7 +6225,7 @@ impl SchemaApiTestSuite {
             table_id = tid;
         }
 
-        let name_ident = VirtualColumnNameIdent::new(&tenant, table_id);
+        let name_ident = VirtualColumnIdent::new(&tenant, table_id);
 
         {
             info!("--- list virtual columns with no create before");
@@ -6175,7 +6366,10 @@ impl SchemaApiTestSuite {
     #[minitrace::trace]
     async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
-        let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
+        let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
 
         info!("--- prepare db and table");
@@ -6188,7 +6382,10 @@ impl SchemaApiTestSuite {
         {
             info!("--- create table lock revision 1");
             let req1 = CreateLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 2,
                 user: "root".to_string(),
                 node: "node1".to_string(),
@@ -6198,7 +6395,10 @@ impl SchemaApiTestSuite {
 
             info!("--- create table lock revision 2");
             let req2 = CreateLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 2,
                 user: "root".to_string(),
                 node: "node1".to_string(),
@@ -6209,7 +6409,10 @@ impl SchemaApiTestSuite {
 
             info!("--- list table lock revisiosn");
             let req3 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
             };
             let res3 = mt.list_lock_revisions(req3).await?;
             assert_eq!(res3.len(), 2);
@@ -6218,7 +6421,10 @@ impl SchemaApiTestSuite {
 
             info!("--- extend table lock revision 2 expire");
             let req4 = ExtendLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 expire_secs: 4,
                 revision: res2.revision,
                 acquire_lock: true,
@@ -6228,7 +6434,10 @@ impl SchemaApiTestSuite {
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));
             let req5 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
             };
             let res5 = mt.list_lock_revisions(req5).await?;
             assert_eq!(res5.len(), 1);
@@ -6236,14 +6445,17 @@ impl SchemaApiTestSuite {
 
             info!("--- delete table lock revision 2");
             let req6 = DeleteLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table {
+                    tenant: tenant.clone(),
+                    table_id,
+                },
                 revision: res2.revision,
             };
             mt.delete_lock_revision(req6).await?;
 
             info!("--- check table locks is empty");
             let req7 = ListLockRevReq {
-                lock_key: LockKey::Table { table_id },
+                lock_key: LockKey::Table { tenant, table_id },
             };
             let res7 = mt.list_lock_revisions(req7).await?;
             assert_eq!(res7.len(), 0);
@@ -6574,6 +6786,7 @@ impl SchemaApiTestSuite {
                         options: options.clone(),
                         ..Default::default()
                     },
+                    as_dropped: false,
                 };
                 let old_db = node_a
                     .get_database(Self::req_get_db(&tenant, db_name))
@@ -6648,6 +6861,7 @@ impl SchemaApiTestSuite {
                     options: options.clone(),
                     ..Default::default()
                 },
+                as_dropped: false,
             };
 
             let old_db = node_a
@@ -6734,6 +6948,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                as_dropped: false,
             };
             let resp = mt.create_table(req.clone()).await?;
             table_id = resp.table_id;
@@ -6982,6 +7197,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
                 table_name: self.tbl_name(),
             },
             table_meta: table_meta.clone(),
+            as_dropped: false,
         };
         let resp = self.mt.create_table(req.clone()).await?;
         let table_id = resp.table_id;

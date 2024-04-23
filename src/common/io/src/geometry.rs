@@ -12,17 +12,66 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::io;
+use std::io::Read;
+use std::str::FromStr;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use geo::Geometry;
+use geozero::wkb::Ewkb;
 use geozero::CoordDimensions;
+use geozero::GeozeroGeometry;
+use geozero::ToJson;
 use geozero::ToWkb;
+use geozero::ToWkt;
+use scroll::Endian;
+use scroll::IOread;
+use serde::Deserialize;
+use serde::Serialize;
 use wkt::TryFromWkt;
 
+const GEO_TYPE_ID_MASK: u32 = 0x2000_0000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum GeometryDataType {
+    WKB,
+    WKT,
     EWKB,
+    #[default]
     EWKT,
     GEOJSON,
+}
+
+impl FromStr for GeometryDataType {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "WKB" => Ok(GeometryDataType::WKB),
+            "WKT" => Ok(GeometryDataType::WKT),
+            "EWKB" => Ok(GeometryDataType::EWKB),
+            "EWKT" => Ok(GeometryDataType::EWKT),
+            "GEOJSON" => Ok(GeometryDataType::GEOJSON),
+            _ => Err(ErrorCode::GeometryError(
+                "Invalid geometry type format".to_string(),
+            )),
+        }
+    }
+}
+
+impl Display for GeometryDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            GeometryDataType::WKB => "WKB".to_string(),
+            GeometryDataType::WKT => "WKT".to_string(),
+            GeometryDataType::EWKB => "EWKB".to_string(),
+            GeometryDataType::EWKT => "EWKT".to_string(),
+            GeometryDataType::GEOJSON => "GEOJSON".to_string(),
+        };
+        write!(f, "{}", str)
+    }
 }
 
 pub fn parse_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
@@ -118,4 +167,61 @@ pub fn parse_to_subtype(buf: &[u8]) -> Result<GeometryDataType> {
             }
         }
     }
+}
+
+pub fn read_ewkb_srid<R: Read>(raw: &mut R) -> std::result::Result<Option<i32>, io::Error> {
+    let byte_order = raw.ioread::<u8>()?;
+    let is_little_endian = byte_order != 0;
+    let endian = Endian::from(is_little_endian);
+    let type_id = raw.ioread_with::<u32>(endian)?;
+    let srid = if type_id & GEO_TYPE_ID_MASK == GEO_TYPE_ID_MASK {
+        Some(raw.ioread_with::<i32>(endian)?)
+    } else {
+        None
+    };
+
+    Ok(srid)
+}
+
+pub trait GeometryFormatOutput {
+    fn format(self, data_type: GeometryDataType) -> Result<String>;
+}
+impl<B: AsRef<[u8]>> GeometryFormatOutput for Ewkb<B> {
+    fn format(self, format_type: GeometryDataType) -> Result<String> {
+        match format_type {
+            GeometryDataType::WKB => self
+                .to_wkb(CoordDimensions::xy())
+                .map(|bytes| {
+                    bytes
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join("")
+                })
+                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
+            GeometryDataType::EWKB => Ok(self
+                .0
+                .as_ref()
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect::<Vec<_>>()
+                .join("")),
+            GeometryDataType::WKT => self
+                .to_wkt()
+                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
+            GeometryDataType::EWKT => self
+                .to_ewkt(self.srid())
+                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
+            GeometryDataType::GEOJSON => self
+                .to_json()
+                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
+        }
+    }
+}
+
+pub fn geometry_format<T: GeometryFormatOutput>(
+    geometry: T,
+    format_type: GeometryDataType,
+) -> Result<String> {
+    geometry.format(format_type)
 }

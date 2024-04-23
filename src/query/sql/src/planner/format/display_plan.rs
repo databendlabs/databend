@@ -105,6 +105,9 @@ impl Plan {
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),
             Plan::DropStream(_) => Ok("DropStream".to_string()),
 
+            // Dynamic Tables
+            Plan::CreateDynamicTable(_) => Ok("CreateDynamicTable".to_string()),
+
             // Indexes
             Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
             Plan::DropIndex(_) => Ok("DropIndex".to_string()),
@@ -218,6 +221,10 @@ impl Plan {
 
             // Stored procedures
             Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
+
+            // sequence
+            Plan::CreateSequence(_) => Ok("CreateSequence".to_string()),
+            Plan::DropSequence(_) => Ok("DropSequence".to_string()),
         }
     }
 }

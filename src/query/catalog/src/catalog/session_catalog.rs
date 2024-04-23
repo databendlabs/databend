@@ -24,6 +24,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -35,6 +37,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -47,6 +51,10 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -71,6 +79,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -335,6 +344,10 @@ impl Catalog for SessionCatalog {
         self.inner.undrop_table(req).await
     }
 
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        self.inner.undrop_table_by_id(req).await
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         self.inner.rename_table(req).await
     }
@@ -479,5 +492,23 @@ impl Catalog for SessionCatalog {
         if is_active {
             self.txn_mgr.lock().upsert_stream_table(stream, source);
         }
+    }
+
+    async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        self.inner.create_sequence(req).await
+    }
+    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
+        self.inner.get_sequence(req).await
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        self.inner.get_sequence_next_value(req).await
+    }
+
+    async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
+        self.inner.drop_sequence(req).await
     }
 }

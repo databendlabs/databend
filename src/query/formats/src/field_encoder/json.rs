@@ -45,6 +45,7 @@ impl FieldEncoderJSON {
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options.timezone,
                     binary_format: Default::default(),
+                    geometry_format: Default::default(),
                 },
                 quote_char: 0,
             },

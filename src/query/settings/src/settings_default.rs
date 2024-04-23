@@ -672,6 +672,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("parse_datetime_ignore_remainder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Ignore trailing chars when parse string to datetime(disable by default)",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("disable_variant_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable variant check to allow insert invalid JSON values",
@@ -718,6 +724,18 @@ impl DefaultSettings {
                 ("statement_queued_timeout_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The maximum waiting seconds in the queue. The default value is 0(no limit).",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("geometry_output_format", DefaultSettingValue {
+                    value: UserSettingValue::String("GeoJSON".to_owned()),
+                    desc: "Display format for GEOMETRY values.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::String(vec!["WKT".into(), "WKB".into(), "EWKT".into(), "EWKB".into(), "GeoJSON".into()]))
+                }),
+                ("script_max_steps", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "The maximum steps allowed in a single execution of script.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 })

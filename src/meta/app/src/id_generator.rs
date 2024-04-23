@@ -99,6 +99,20 @@ impl IdGenerator {
     }
 }
 
+impl kvapi::KeyCodec for IdGenerator {
+    fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+        b.push_raw(&self.resource)
+    }
+
+    fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+        let resource = p.next_raw()?;
+
+        Ok(IdGenerator {
+            resource: resource.to_string(),
+        })
+    }
+}
+
 impl kvapi::Key for IdGenerator {
     const PREFIX: &'static str = "__fd_id_gen";
 
@@ -106,23 +120,6 @@ impl kvapi::Key for IdGenerator {
 
     fn parent(&self) -> Option<String> {
         None
-    }
-
-    fn to_string_key(&self) -> String {
-        kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-            .push_raw(&self.resource)
-            .done()
-    }
-
-    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-        let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-        let resource = p.next_raw()?;
-        p.done()?;
-
-        Ok(IdGenerator {
-            resource: resource.to_string(),
-        })
     }
 }
 

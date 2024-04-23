@@ -145,6 +145,17 @@ fn new_lvt() -> mt::LeastVisibleTime {
     }
 }
 
+fn new_sequence_meta() -> mt::SequenceMeta {
+    mt::SequenceMeta {
+        create_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+        update_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
+        comment: Some("seq".to_string()),
+        start: 1,
+        step: 1,
+        current: 10,
+    }
+}
+
 fn new_table_meta() -> mt::TableMeta {
     mt::TableMeta {
         schema: Arc::new(ce::TableSchema::new_from(
@@ -537,6 +548,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("lvt:{:?}", buf);
+    }
+
+    // sequence
+    {
+        let sequence_meta = new_sequence_meta();
+        let p = sequence_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("sequence:{:?}", buf);
     }
 
     Ok(())

@@ -19,8 +19,12 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KeyError;
+
+use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LockMeta {
@@ -56,6 +60,7 @@ impl LockType {
             LockType::TABLE => {
                 let key = TableLockKey::from_str_key(s)?;
                 Ok(LockKey::Table {
+                    tenant: key.tenant,
                     table_id: key.table_id,
                 })
             }
@@ -71,16 +76,16 @@ impl Display for LockType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LockKey {
     /// table-level lock.
-    Table { table_id: u64 },
+    Table { tenant: Tenant, table_id: u64 },
 }
 
 impl LockKey {
     pub fn get_table_id(&self) -> u64 {
         match self {
-            LockKey::Table { table_id } => *table_id,
+            LockKey::Table { table_id, .. } => *table_id,
         }
     }
 
@@ -98,13 +103,17 @@ impl LockKey {
 
     pub fn gen_prefix(&self) -> String {
         match self {
-            LockKey::Table { table_id } => format!("{}/{}", TableLockKey::PREFIX, table_id),
+            LockKey::Table { tenant, table_id } => {
+                let ident = DirName::new(TableLockKey::new(tenant.clone(), *table_id, 0));
+                ident.dir_name_with_slash()
+            }
         }
     }
 
     pub fn gen_key(&self, revision: u64) -> TableLockKey {
         match self {
-            LockKey::Table { table_id } => TableLockKey {
+            LockKey::Table { tenant, table_id } => TableLockKey {
+                tenant: tenant.clone(),
                 table_id: *table_id,
                 revision,
             },
@@ -114,37 +123,42 @@ impl LockKey {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct LockInfo {
-    pub key: LockKey,
+    pub table_id: u64,
     pub revision: u64,
     pub meta: LockMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListLocksReq {
     pub prefixes: Vec<String>,
 }
 
 impl ListLocksReq {
-    pub fn create() -> Self {
-        let prefixes = vec![TableLockKey::PREFIX.to_string()];
-        Self { prefixes }
+    pub fn create(tenant: &Tenant) -> Self {
+        let lock = TableLockKey::new(tenant, 0, 0);
+        let prefix = DirName::new_with_level(lock, 2).dir_name_with_slash();
+        Self {
+            prefixes: vec![prefix],
+        }
     }
 
-    pub fn create_with_table_ids(table_ids: Vec<u64>) -> Self {
+    pub fn create_with_table_ids(tenant: &Tenant, table_ids: Vec<u64>) -> Self {
         let mut prefixes = Vec::new();
         for table_id in table_ids {
-            prefixes.push(format!("{}/{}", TableLockKey::PREFIX, table_id));
+            let lock = TableLockKey::new(tenant, table_id, 0);
+            let prefix = DirName::new(lock).dir_name_with_slash();
+            prefixes.push(prefix);
         }
         Self { prefixes }
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListLockRevReq {
     pub lock_key: LockKey,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateLockRevReq {
     pub lock_key: LockKey,
     pub expire_secs: u64,
@@ -158,7 +172,7 @@ pub struct CreateLockRevReply {
     pub revision: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtendLockRevReq {
     pub lock_key: LockKey,
     pub expire_secs: u64,
@@ -166,7 +180,7 @@ pub struct ExtendLockRevReq {
     pub acquire_lock: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeleteLockRevReq {
     pub lock_key: LockKey,
     pub revision: u64,
@@ -174,42 +188,61 @@ pub struct DeleteLockRevReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableLockKey {
+    pub tenant: Tenant,
     pub table_id: u64,
     pub revision: u64,
+}
+
+impl TableLockKey {
+    pub fn new(tenant: impl ToTenant, table_id: u64, revision: u64) -> Self {
+        Self {
+            tenant: tenant.to_tenant(),
+            table_id,
+            revision,
+        }
+    }
+
+    pub fn tenant(&self) -> &Tenant {
+        &self.tenant
+    }
 }
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::LockMeta;
-    use crate::schema::TableId;
     use crate::schema::TableLockKey;
+    use crate::tenant::Tenant;
 
-    /// __fd_table_lock/table_id/revision -> LockMeta
+    impl kvapi::KeyCodec for TableLockKey {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_str(self.tenant.tenant_name())
+                .push_u64(self.table_id)
+                .push_u64(self.revision)
+        }
+
+        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let tenant = p.next_nonempty()?;
+            let table_id = p.next_u64()?;
+            let revision = p.next_u64()?;
+
+            let tenant = Tenant::new_nonempty(tenant);
+            Ok(Self {
+                tenant,
+                table_id,
+                revision,
+            })
+        }
+    }
+
+    /// __fd_table_lock/<tenant>/table_id/revision -> LockMeta
     impl kvapi::Key for TableLockKey {
         const PREFIX: &'static str = "__fd_table_lock";
 
         type ValueType = LockMeta;
 
         fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .push_u64(self.revision)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let table_id = p.next_u64()?;
-            let revision = p.next_u64()?;
-            p.done()?;
-
-            Ok(TableLockKey { table_id, revision })
+            Some(self.tenant.to_string_key())
         }
     }
 

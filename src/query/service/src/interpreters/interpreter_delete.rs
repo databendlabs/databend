@@ -178,16 +178,19 @@ impl Interpreter for DeleteInterpreter {
                 ));
             }
 
-            use std::hash::RandomState;
-
-            use databend_common_sql::IndexType;
-            let mut col_indices =
-                HashSet::<IndexType, RandomState>::from_iter(scalar.used_columns());
-            for subquery_desc in &self.plan.subquery_desc {
-                col_indices.remove(&subquery_desc.index);
-                col_indices.extend(subquery_desc.outer_columns.iter());
-            }
-            let col_indices = col_indices.into_iter().collect();
+            let mut used_columns = scalar.used_columns().clone();
+            let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
+                // add scalar.used_columns() but ignore _row_id index
+                let mut col_indices = HashSet::new();
+                for subquery_desc in &self.plan.subquery_desc {
+                    col_indices.extend(subquery_desc.outer_columns.iter());
+                    used_columns.remove(&subquery_desc.index);
+                }
+                col_indices.extend(used_columns.iter());
+                col_indices.into_iter().collect()
+            } else {
+                used_columns.into_iter().collect()
+            };
             (Some(filters), col_indices)
         } else {
             (None, vec![])

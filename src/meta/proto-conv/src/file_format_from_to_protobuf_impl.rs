@@ -17,6 +17,7 @@
 
 use std::str::FromStr;
 
+use databend_common_io::GeometryDataType;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::EmptyFieldAs;
@@ -446,6 +447,14 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
                 reason: format!("{:?}", e),
             })?
             .unwrap_or_default();
+        let geometry_format = p
+            .geometry_format
+            .map(|s| GeometryDataType::from_str(&s))
+            .transpose()
+            .map_err(|e| Incompatible {
+                reason: format!("{:?}", e),
+            })?
+            .unwrap_or_default();
 
         Ok(Self {
             compression,
@@ -460,6 +469,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             empty_field_as,
             binary_format,
             output_header: p.output_header,
+            geometry_format,
         })
     }
 
@@ -481,6 +491,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             empty_field_as: Some(self.empty_field_as.to_string()),
             binary_format: Some(self.binary_format.to_string()),
             output_header: self.output_header,
+            geometry_format: Some(self.geometry_format.to_string()),
         })
     }
 }
