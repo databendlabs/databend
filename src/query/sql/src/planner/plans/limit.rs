@@ -55,7 +55,7 @@ impl Operator for Limit {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        required.distribution = Distribution::Serial;
+        required.distribution = Distribution::Any;
         Ok(required)
     }
 
@@ -66,7 +66,7 @@ impl Operator for Limit {
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         Ok(vec![vec![RequiredProperty {
-            distribution: Distribution::Serial,
+            distribution: Distribution::Any,
         }]])
     }
 
