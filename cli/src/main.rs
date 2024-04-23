@@ -136,17 +136,26 @@ struct Args {
         short = 'p',
         long,
         env = "BENDSQL_PASSWORD",
+        hide_env_values = true,
         help = "Password, overrides password in DSN"
     )]
     password: Option<SensitiveString>,
 
+    #[clap(short = 'r', long, help = "Downgrade role name, overrides role in DSN")]
+    role: Option<String>,
+
     #[clap(short = 'D', long, help = "Database name, overrides database in DSN")]
     database: Option<String>,
 
-    #[clap(long, value_parser = parse_key_val::<String, String>, help = "Settings, ignored when --dsn is set")]
+    #[clap(long, value_parser = parse_key_val::<String, String>, help = "Settings, overrides settings in DSN")]
     set: Vec<(String, String)>,
 
-    #[clap(long, env = "BENDSQL_DSN", help = "Data source name")]
+    #[clap(
+        long,
+        env = "BENDSQL_DSN",
+        hide_env_values = true,
+        help = "Data source name"
+    )]
     dsn: Option<SensitiveString>,
 
     #[clap(short = 'n', long, help = "Force non-interactive mode")]
@@ -195,9 +204,6 @@ struct Args {
 
     #[clap(short = 'l', default_value = "info", long)]
     log_level: String,
-
-    #[clap(short = 'r', long, help = "Downgrade role name")]
-    role: Option<String>,
 }
 
 /// Parse a single key-value pair
@@ -253,9 +259,6 @@ pub async fn main() -> Result<()> {
             if let Some(port) = args.port {
                 config.connection.port = Some(port);
             }
-            for (k, v) in args.set {
-                config.connection.args.insert(k, v);
-            }
             if !args.tls {
                 config
                     .connection
@@ -288,6 +291,10 @@ pub async fn main() -> Result<()> {
     // override role if specified in command line
     if let Some(role) = args.role {
         config.connection.args.insert("role".to_string(), role);
+    }
+    // override args if specified in command line
+    for (k, v) in args.set {
+        config.connection.args.insert(k, v);
     }
     let dsn = conn_args.get_dsn()?;
 

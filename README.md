@@ -68,26 +68,30 @@ Databend Native Command Line Tool
 Usage: bendsql [OPTIONS]
 
 Options:
-      --help                     Print help information
-      --flight                   Using flight sql protocol
-      --tls                      Enable TLS
-  -h, --host <HOST>              Databend Server host, Default: 127.0.0.1
-  -P, --port <PORT>              Databend Server port, Default: 8000
-  -u, --user <USER>              Default: root
-  -p, --password <PASSWORD>      [env: BENDSQL_PASSWORD=]
-  -D, --database <DATABASE>      Database name
-      --set <SET>                Settings
-      --dsn <DSN>                Data source name [env: BENDSQL_DSN=]
-  -n, --non-interactive          Force non-interactive mode
-      --query=<QUERY>            Query to execute
-  -d, --data <DATA>              Data to load, @file or @- for stdin
-  -f, --format <FORMAT>          Data format to load [default: csv] [possible values: csv, tsv, ndjson, parquet, xml]
-      --format-opt <FORMAT_OPT>  Data format options
-  -o, --output <OUTPUT>          Output format [possible values: table, csv, tsv, null]
-      --progress                 Show progress for query execution in stderr, only works with output format `table` and `null`.
-      --stats                    Show stats after query execution in stderr, only works with non-interactive mode.
-      --time[=<TIME>]            Only show execution time without results, will implicitly set output format to `null`. [possible values: local, server]
-  -V, --version                  Print version
+      --help                       Print help information
+      --flight                     Using flight sql protocol, ignored when --dsn is set
+      --tls                        Enable TLS, ignored when --dsn is set
+  -h, --host <HOST>                Databend Server host, Default: 127.0.0.1, ignored when --dsn is set
+  -P, --port <PORT>                Databend Server port, Default: 8000, ignored when --dsn is set
+  -u, --user <USER>                Default: root, overrides username in DSN
+  -p, --password <PASSWORD>        Password, overrides password in DSN [env: BENDSQL_PASSWORD]
+  -r, --role <ROLE>                Downgrade role name, overrides role in DSN
+  -D, --database <DATABASE>        Database name, overrides database in DSN
+      --set <SET>                  Settings, overrides settings in DSN
+      --dsn <DSN>                  Data source name [env: BENDSQL_DSN]
+  -n, --non-interactive            Force non-interactive mode
+      --check                      Check for server status and exit
+      --query=<QUERY>              Query to execute
+  -d, --data <DATA>                Data to load, @file or @- for stdin
+  -f, --format <FORMAT>            Data format to load [default: csv] [possible values: csv, tsv, ndjson, parquet, xml]
+      --format-opt <FORMAT_OPT>    Data format options
+  -o, --output <OUTPUT>            Output format [possible values: table, csv, tsv, null]
+  -s, --quote-style <QUOTE_STYLE>  Output quote style [possible values: always, necessary, non-numeric, never]
+      --progress                   Show progress for query execution in stderr, only works with output format `table` and `null`.
+      --stats                      Show stats after query execution in stderr, only works with non-interactive mode.
+      --time[=<TIME>]              Only show execution time without results, will implicitly set output format to `null`. [possible values: local, server]
+  -l, --log-level <LOG_LEVEL>      [default: info]
+  -V, --version                    Print version
 ```
 
 ## Custom configuration
