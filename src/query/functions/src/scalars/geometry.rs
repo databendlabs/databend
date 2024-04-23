@@ -703,9 +703,55 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_1_arg_core::<StringType, NullableType<GeometryType>, _, _>(
+    registry.register_combine_nullable_1_arg::<VariantType, GeometryType, _, _>(
         "try_to_geometry",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<GeometryType>>(
+            |json, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match json_to_geometry_impl(json, None) {
+                    Ok(data) => {
+                        output.validity.push(true);
+                        output.builder.put_slice(data.as_slice());
+                        output.builder.commit_row();
+                    }
+                    Err(_) => output.push_null(),
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_2_arg::<VariantType, Int32Type, GeometryType, _, _>(
+        "try_to_geometry",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, Int32Type, NullableType<GeometryType>>(
+            |json, srid, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match json_to_geometry_impl(json, Some(srid)) {
+                    Ok(data) => {
+                        output.validity.push(true);
+                        output.builder.put_slice(data.as_slice());
+                        output.builder.commit_row();
+                    }
+                    Err(_) => output.push_null(),
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<StringType, GeometryType, _, _>(
+        "try_to_geometry",
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, NullableType<GeometryType>>(
             |str, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -726,9 +772,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<StringType, Int32Type, NullableType<GeometryType>, _, _>(
+    registry.register_combine_nullable_2_arg::<StringType, Int32Type, GeometryType, _, _>(
         "try_to_geometry",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<StringType, Int32Type, NullableType<GeometryType>>(
             |str, srid, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -749,9 +795,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_1_arg_core::<BinaryType, NullableType<GeometryType>, _, _>(
+    registry.register_combine_nullable_1_arg::<BinaryType, GeometryType, _, _>(
         "try_to_geometry",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<BinaryType, NullableType<GeometryType>>(
             |binary, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -780,9 +826,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<BinaryType, Int32Type, NullableType<GeometryType>, _, _>(
+    registry.register_combine_nullable_2_arg::<BinaryType, Int32Type, GeometryType, _, _>(
         "try_to_geometry",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BinaryType, Int32Type, NullableType<GeometryType>>(
             |binary, srid, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -793,52 +839,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 match binary_to_geometry_impl(binary, Some(srid)) {
-                    Ok(data) => {
-                        output.validity.push(true);
-                        output.builder.put_slice(data.as_slice());
-                        output.builder.commit_row();
-                    }
-                    Err(_) => output.push_null(),
-                }
-            },
-        ),
-    );
-
-    registry.register_1_arg_core::<VariantType, NullableType<GeometryType>, _, _>(
-        "try_to_geometry",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<GeometryType>>(
-            |json, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match json_to_geometry_impl(json, None) {
-                    Ok(data) => {
-                        output.validity.push(true);
-                        output.builder.put_slice(data.as_slice());
-                        output.builder.commit_row();
-                    }
-                    Err(_) => output.push_null(),
-                }
-            },
-        ),
-    );
-
-    registry.register_2_arg_core::<VariantType, Int32Type, NullableType<GeometryType>, _, _>(
-        "try_to_geometry",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, Int32Type, NullableType<GeometryType>>(
-            |json, srid, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match json_to_geometry_impl(json, Some(srid)) {
                     Ok(data) => {
                         output.validity.push(true);
                         output.builder.put_slice(data.as_slice());
