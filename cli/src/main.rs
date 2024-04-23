@@ -179,7 +179,10 @@ struct Args {
     #[clap(short = 'o', long, help = "Output format")]
     output: Option<OutputFormat>,
 
-    #[clap(short = 's', long, help = "Output quote style")]
+    #[clap(
+        long,
+        help = "Output quote style, applies to `csv` and `tsv` output formats"
+    )]
     quote_style: Option<OutputQuoteStyle>,
 
     #[clap(

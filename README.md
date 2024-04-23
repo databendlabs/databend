@@ -86,7 +86,7 @@ Options:
   -f, --format <FORMAT>            Data format to load [default: csv] [possible values: csv, tsv, ndjson, parquet, xml]
       --format-opt <FORMAT_OPT>    Data format options
   -o, --output <OUTPUT>            Output format [possible values: table, csv, tsv, null]
-  -s, --quote-style <QUOTE_STYLE>  Output quote style [possible values: always, necessary, non-numeric, never]
+      --quote-style <QUOTE_STYLE>  Output quote style, applies to `csv` and `tsv` output formats [possible values: always, necessary, non-numeric, never]
       --progress                   Show progress for query execution in stderr, only works with output format `table` and `null`.
       --stats                      Show stats after query execution in stderr, only works with non-interactive mode.
       --time[=<TIME>]              Only show execution time without results, will implicitly set output format to `null`. [possible values: local, server]
