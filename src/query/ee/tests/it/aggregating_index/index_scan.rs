@@ -63,6 +63,7 @@ async fn test_index_scan_agg_args_are_expression() -> Result<()> {
     test_index_scan_agg_args_are_expression_impl("native").await
 }
 
+#[test]
 fn test_fuzz() -> Result<()> {
     let runtime = Runtime::with_worker_threads(2, None)?;
     runtime.block_on(async {
@@ -72,6 +73,7 @@ fn test_fuzz() -> Result<()> {
     Ok(())
 }
 
+#[test]
 fn test_fuzz_with_spill() -> Result<()> {
     let runtime = Runtime::with_worker_threads(2, None)?;
     runtime.block_on(async {
