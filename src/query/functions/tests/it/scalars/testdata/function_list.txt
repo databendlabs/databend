@@ -3678,6 +3678,18 @@ Functions overloads:
 23 to_float64(Float32 NULL) :: Float64 NULL
 24 to_float64(Boolean) :: Float64
 25 to_float64(Boolean NULL) :: Float64 NULL
+0 to_geometry(String) :: Geometry
+1 to_geometry(String NULL) :: Geometry NULL
+2 to_geometry(String, Int32) :: Geometry
+3 to_geometry(String NULL, Int32 NULL) :: Geometry NULL
+4 to_geometry(Binary) :: Geometry
+5 to_geometry(Binary NULL) :: Geometry NULL
+6 to_geometry(Binary, Int32) :: Geometry
+7 to_geometry(Binary NULL, Int32 NULL) :: Geometry NULL
+8 to_geometry(Variant) :: Geometry
+9 to_geometry(Variant NULL) :: Geometry NULL
+10 to_geometry(Variant, Int32) :: Geometry
+11 to_geometry(Variant NULL, Int32 NULL) :: Geometry NULL
 0 to_hex(String) :: String
 1 to_hex(String NULL) :: String NULL
 2 to_hex(Int64) :: String
@@ -4185,6 +4197,18 @@ Functions overloads:
 23 try_to_float64(Float32 NULL) :: Float64 NULL
 24 try_to_float64(Boolean) :: Float64 NULL
 25 try_to_float64(Boolean NULL) :: Float64 NULL
+0 try_to_geometry(Variant) :: Geometry NULL
+1 try_to_geometry(Variant NULL) :: Geometry NULL
+2 try_to_geometry(Variant, Int32) :: Geometry NULL
+3 try_to_geometry(Variant NULL, Int32 NULL) :: Geometry NULL
+4 try_to_geometry(String) :: Geometry NULL
+5 try_to_geometry(String NULL) :: Geometry NULL
+6 try_to_geometry(String, Int32) :: Geometry NULL
+7 try_to_geometry(String NULL, Int32 NULL) :: Geometry NULL
+8 try_to_geometry(Binary) :: Geometry NULL
+9 try_to_geometry(Binary NULL) :: Geometry NULL
+10 try_to_geometry(Binary, Int32) :: Geometry NULL
+11 try_to_geometry(Binary NULL, Int32 NULL) :: Geometry NULL
 0 try_to_int16(Variant) :: Int16 NULL
 1 try_to_int16(Variant NULL) :: Int16 NULL
 2 try_to_int16(String) :: Int16 NULL

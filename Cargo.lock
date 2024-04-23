@@ -11947,9 +11947,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.22.4"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf4ef73721ac7bcd79b2b315da7779d8fc09718c6b3d2d1b2d94850eb8c18432"
+checksum = "e87c9956bd9807afa1f77e0f7594af32566e830e088a5576d27c5b6f30f49d41"
 dependencies = [
  "log",
  "ring",
@@ -14184,7 +14184,7 @@ dependencies = [
  "flate2",
  "log",
  "once_cell",
- "rustls 0.22.4",
+ "rustls 0.22.2",
  "rustls-pki-types",
  "rustls-webpki 0.102.2",
  "serde",
