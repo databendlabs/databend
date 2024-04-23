@@ -54,4 +54,15 @@ mod impls {
             Ok(s)
         }
     }
+
+    impl KeyCodec for () {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b
+        }
+
+        fn decode_key(_p: &mut KeyParser) -> Result<Self, KeyError>
+        where Self: Sized {
+            Ok(())
+        }
+    }
 }
