@@ -37,5 +37,7 @@ impl kvapi::ApiBuilder<MetaEmbedded> for MetaEmbeddedBuilder {
 async fn test_meta_embedded() -> anyhow::Result<()> {
     SchemaApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
     ShareApiTestSuite::test_single_node_share(MetaEmbeddedBuilder {}).await?;
-    BackgroundApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await
+    BackgroundApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
+
+    Ok(())
 }

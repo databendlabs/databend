@@ -101,8 +101,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
-use databend_common_meta_app::schema::TableIdListKey;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -2213,8 +2213,8 @@ impl SchemaApiTestSuite {
         let (tid, _table_meta) = util.create_table().await?;
 
         // remove db id list
-        let table_id_idlist = TableIdListKey {
-            db_id: util.db_id,
+        let table_id_idlist = TableIdHistoryIdent {
+            database_id: util.db_id,
             table_name: table.to_string(),
         };
         util.mt
@@ -3625,8 +3625,8 @@ impl SchemaApiTestSuite {
             assert_eq!(stage_file, stage_info);
         }
 
-        let table_id_idlist = TableIdListKey {
-            db_id: res.db_id,
+        let table_id_idlist = TableIdHistoryIdent {
+            database_id: res.db_id,
             table_name: tb1_name.to_string(),
         };
 
@@ -3811,8 +3811,8 @@ impl SchemaApiTestSuite {
         let old_id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
         assert_eq!(old_id_list.len(), 1);
 
-        let table_id_idlist = TableIdListKey {
-            db_id,
+        let table_id_idlist = TableIdHistoryIdent {
+            database_id: db_id,
             table_name: tb1_name.to_string(),
         };
 

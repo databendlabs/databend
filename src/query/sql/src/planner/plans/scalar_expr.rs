@@ -607,7 +607,7 @@ fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
     columns.iter().for_each(|c| c.hash(state));
 }
 
-/// UDFCall includes server & lambda call
+/// UDFCall includes script & lambda call
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDFCall {

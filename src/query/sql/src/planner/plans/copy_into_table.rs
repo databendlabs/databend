@@ -127,21 +127,19 @@ impl CopyIntoTablePlan {
             if self.force {
                 stage_table_info
                     .files_info
-                    .blocking_list(&operator, false, max_files)
+                    .blocking_list(&operator, max_files)
             } else {
-                stage_table_info
-                    .files_info
-                    .blocking_list(&operator, false, None)
+                stage_table_info.files_info.blocking_list(&operator, None)
             }
         } else if self.force {
             stage_table_info
                 .files_info
-                .list(&operator, thread_num, false, max_files)
+                .list(&operator, thread_num, max_files)
                 .await
         } else {
             stage_table_info
                 .files_info
-                .list(&operator, thread_num, false, None)
+                .list(&operator, thread_num, None)
                 .await
         }?;
 
