@@ -551,14 +551,9 @@ pub struct CompactionLimits {
 
 impl CompactionLimits {
     pub fn limits(segment_limit: Option<usize>, block_limit: Option<usize>) -> Self {
-        let adjusted_segment_limit = match (block_limit, segment_limit) {
-            (Some(block_limit), None) => {
-                // As n fragmented blocks scattered across at most n segments,
-                // when no segment_limit provided, we set it to the same value of block_limit
-                Some(block_limit)
-            }
-            _ => segment_limit,
-        };
+        // As n fragmented blocks scattered across at most n segments,
+        // when no segment_limit provided, we set it to the same value of block_limit
+        let adjusted_segment_limit = segment_limit.or(block_limit);
         CompactionLimits {
             segment_limit: adjusted_segment_limit,
             block_limit,
