@@ -764,21 +764,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrow-udf-python"
-version = "0.1.0"
-source = "git+https://github.com/risingwavelabs/arrow-udf?branch=main#c8c4b773e3c4eb5c18ecb8afdd0715d73a362bae"
-dependencies = [
- "anyhow",
- "arrow-array 50.0.0",
- "arrow-buffer 50.0.0",
- "arrow-ipc 50.0.0",
- "arrow-schema 50.0.0",
- "lazy_static",
- "pyo3",
- "pyo3-build-config 0.20.3",
-]
-
-[[package]]
 name = "arrow-udf-wasm"
 version = "0.2.0"
 source = "git+https://github.com/risingwavelabs/arrow-udf?branch=main#c8c4b773e3c4eb5c18ecb8afdd0715d73a362bae"
@@ -4774,7 +4759,6 @@ dependencies = [
  "arrow-ipc 50.0.0",
  "arrow-schema 50.0.0",
  "arrow-udf-js",
- "arrow-udf-python",
  "arrow-udf-wasm",
  "async-backtrace",
  "async-channel 1.9.0",

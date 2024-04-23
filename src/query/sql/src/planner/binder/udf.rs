@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::collections::HashSet;
 
 use chrono::Utc;
 use databend_common_ast::ast::AlterUDFStmt;
@@ -36,6 +37,11 @@ use crate::plans::Plan;
 use crate::Binder;
 
 impl Binder {
+    fn is_allowed_language(language: &str) -> bool {
+        let allowed_languages: HashSet<&str> = ["javascript", "wasm"].iter().cloned().collect();
+        allowed_languages.contains(&language.to_lowercase().as_str())
+    }
+
     pub(in crate::planner::binder) async fn bind_udf_definition(
         &mut self,
         udf_name: &Identifier,
@@ -133,9 +139,9 @@ impl Binder {
                 }
                 let return_type = DataType::from(&resolve_type_name(return_type, true)?);
 
-                if !["python", "javascript", "wasm"].contains(&language.to_lowercase().as_str()) {
+                if !Self::is_allowed_language(language) {
                     return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}', must be python or javascript"
+                        "Unallowed UDF language '{language}', must be javascript or wasm"
                     )));
                 }
 

@@ -133,59 +133,30 @@ function install_ziglang {
 function install_python3 {
 	PACKAGE_MANAGER=$1
 
-	echo "==> installing python3.12..."
+	echo "==> installing python3..."
 
 	case "$PACKAGE_MANAGER" in
 	apt-get)
-		# Add the deadsnakes PPA for Ubuntu
-		sudo add-apt-repository ppa:deadsnakes/ppa -y
-		sudo apt-get update
-
-		install_pkg python3.12-dev "$PACKAGE_MANAGER"
-		install_pkg python3.12-distutils "$PACKAGE_MANAGER"
+		install_pkg python3-all-dev "$PACKAGE_MANAGER"
+		install_pkg python3-setuptools "$PACKAGE_MANAGER"
 		install_pkg python3-pip "$PACKAGE_MANAGER"
 		install_pkg libcairo2-dev "$PACKAGE_MANAGER"
-
-		# Update the default python3 and pip3 to point to python3.12
-		sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
-		sudo update-alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.12 1
 		;;
 	apk)
-		# Install Python 3.12 from source on Alpine Linux
-		apk add --no-cache build-base libffi-dev openssl-dev bzip2-dev zlib-dev readline-dev sqlite-dev
-		wget https://www.python.org/ftp/python/3.12.0/Python-3.12.0.tgz
-		tar xzf Python-3.12.0.tgz
-		cd Python-3.12.0
-		./configure --prefix=/usr/local
-		make -j$(nproc)
-		make altinstall
-		cd ..
-		rm -rf Python-3.12.0 Python-3.12.0.tgz
+		install_pkg python3-dev "$PACKAGE_MANAGER"
+		install_pkg py3-pip "$PACKAGE_MANAGER"
+		install_pkg libffi-dev "$PACKAGE_MANAGER"
 		;;
 	brew | pacman)
-		install_pkg python3.12 "$PACKAGE_MANAGER"
+		install_pkg python3 "$PACKAGE_MANAGER"
 		install_pkg cairo "$PACKAGE_MANAGER"
 		;;
 	yum | dnf)
-		# Install Python 3.12 from source on CentOS/RHEL/Fedora
-		install_pkg gcc "$PACKAGE_MANAGER"
-		install_pkg zlib-devel "$PACKAGE_MANAGER"
-		install_pkg bzip2-devel "$PACKAGE_MANAGER"
-		install_pkg openssl-devel "$PACKAGE_MANAGER"
-		install_pkg libffi-devel "$PACKAGE_MANAGER"
+		install_pkg python3-devel "$PACKAGE_MANAGER"
 		install_pkg cairo-devel "$PACKAGE_MANAGER"
-
-		wget https://www.python.org/ftp/python/3.12.0/Python-3.12.0.tgz
-		tar xzf Python-3.12.0.tgz
-		cd Python-3.12.0
-		./configure --prefix=/usr/local
-		make -j $(nproc)
-		make altinstall
-		cd ..
-		rm -rf Python-3.12.0 Python-3.12.0.tgz
 		;;
 	*)
-		echo "Unable to install python3.12 with package manager: $PACKAGE_MANAGER"
+		echo "Unable to install python3 with package manager: $PACKAGE_MANAGER"
 		exit 1
 		;;
 	esac
@@ -678,7 +649,6 @@ fi
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	install_mysql_client "$PACKAGE_MANAGER"
 	install_pkg git "$PACKAGE_MANAGER"
-	install_pkg wget "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
 	if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
 		# for killall & timeout

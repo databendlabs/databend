@@ -2,7 +2,6 @@ query
 select name, size, creator from list_stage(location => '@data/udf/wasm/test10-udf-wasm-gcd/') order by name
 ----
 udf/wasm/test10-udf-wasm-gcd/test10-udf-wasm-gcd.tar.gz 8932 NULL
-udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm 2937940 NULL
 udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst 666082 NULL
 
 statement ok
