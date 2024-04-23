@@ -32,6 +32,7 @@ fn test_geometry() {
     test_st_makeline(file);
     test_st_makepoint(file);
     test_st_makepolygon(file);
+    test_to_geometry(file);
     test_to_string(file);
     test_st_geometryfromwkb(file);
     test_st_geometryfromwkt(file);
@@ -113,6 +114,44 @@ fn test_st_makepolygon(file: &mut impl Write) {
             "LINESTRING(10.1 5.2, 15.2 7.3, 20.2 8.3, 10.9 7.7, 10.1 5.2)",
         ]),
     )]);
+}
+
+fn test_to_geometry(file: &mut impl Write) {
+    run_ast(file, "to_geometry('POINT(1820.12 890.56)')", &[]);
+    run_ast(file, "to_geometry('SRID=4326;POINT(1820.12 890.56)')", &[]);
+    run_ast(file, "to_geometry('POINT(1820.12 890.56)', 4326)", &[]);
+    run_ast(
+        file,
+        "to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)",
+        &[],
+    );
+    run_ast(
+        file,
+        r#"to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}', 4326)"#,
+        &[],
+    );
+    // Z coordinates will be supported in the future.
+    // run_ast(file, "to_geometry('SRID=32633;POINTZ(389866.35 5819003.03 30)')", &[]);
 }
 
 fn test_to_string(file: &mut impl Write) {
