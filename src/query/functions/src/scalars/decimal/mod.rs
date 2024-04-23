@@ -18,6 +18,8 @@ mod comparison;
 mod math;
 
 pub(crate) use arithmetic::register_decimal_arithmetic;
+pub(crate) use cast::convert_to_decimal;
+pub(crate) use cast::convert_to_decimal_domain;
 pub(crate) use cast::register_decimal_to_float;
 pub(crate) use cast::register_decimal_to_int;
 pub(crate) use cast::register_decimal_to_string;
