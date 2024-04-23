@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod tenant_quota_ident;
+
 mod quota;
 #[allow(clippy::module_inception)]
 mod tenant;
-mod tenant_quota_ident;
 mod uninit_tenant;
 
 pub use quota::TenantQuota;
