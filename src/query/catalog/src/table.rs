@@ -550,6 +550,20 @@ pub struct CompactionLimits {
 }
 
 impl CompactionLimits {
+    pub fn limits(segment_limit: Option<usize>, block_limit: Option<usize>) -> Self {
+        let adjusted_segment_limit = match (block_limit, segment_limit) {
+            (Some(block_limit), None) => {
+                // As n fragmented blocks scattered across at most n segments,
+                // when no segment_limit provided, we set it to the same value of block_limit
+                Some(block_limit)
+            }
+            _ => segment_limit,
+        };
+        CompactionLimits {
+            segment_limit: adjusted_segment_limit,
+            block_limit,
+        }
+    }
     pub fn limit_by_num_segments(v: Option<usize>) -> Self {
         CompactionLimits {
             segment_limit: v,
@@ -558,8 +572,6 @@ impl CompactionLimits {
     }
 
     pub fn limit_by_num_blocks(v: Option<usize>) -> Self {
-        // As n fragmented blocks scattered across at most n segments,
-        // when no segment_limit provided, we set it to the same value of block_limit
         let segment_limit = v;
         CompactionLimits {
             segment_limit,

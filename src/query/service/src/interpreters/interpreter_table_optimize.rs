@@ -177,13 +177,8 @@ impl OptimizeTableInterpreter {
                 return Ok(PipelineBuildResult::create());
             }
             CompactTarget::Blocks(num_block_limit) => {
-                if num_block_limit.is_some() {
-                    // limit on the number of blocks has higher priority
-                    // currently this limit will only be set by the auto compaction
-                    CompactionLimits::limit_by_num_blocks(num_block_limit)
-                } else {
-                    CompactionLimits::limit_by_num_segments(self.plan.limit)
-                }
+                let segment_limit = self.plan.limit;
+                CompactionLimits::limits(segment_limit, num_block_limit)
             }
         };
 
