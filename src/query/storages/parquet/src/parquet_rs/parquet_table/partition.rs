@@ -60,7 +60,7 @@ impl ParquetRSTable {
                     .collect::<Vec<_>>(),
                 None => self
                     .files_info
-                    .list(&self.operator, thread_num, false, None)
+                    .list(&self.operator, thread_num, None)
                     .await?
                     .into_iter()
                     .map(|f| (f.path, f.size))
