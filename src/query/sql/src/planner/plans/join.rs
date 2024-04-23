@@ -619,6 +619,18 @@ impl Operator for Join {
             ]);
         }
 
+        if children_required.is_empty() {
+            // (Serial, Serial)
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+            ]);
+        }
+
         Ok(children_required)
     }
 }
