@@ -186,6 +186,13 @@ pub fn can_filter_null(
                     Ok(())
                 }
                 ScalarExpr::FunctionCall(func) => {
+                    // If the function is `assume_not_null`, we can not replace
+                    // the column bindings with `Scalar::Null`.
+                    if func.func_name == "assume_not_null" {
+                        self.can_replace = false;
+                        return Ok(());
+                    }
+
                     if func.func_name != "or" {
                         for expr in &mut func.arguments {
                             self.replace(expr, column_set)?;
