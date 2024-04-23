@@ -15,10 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Expr;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::Span;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::tenant::Tenant;
 
@@ -28,7 +30,7 @@ use crate::ScalarExpr;
 
 #[async_trait::async_trait]
 pub trait AsyncFunction: Sync + Send {
-    fn function_name(&self) -> &str;
+    fn func_name(&self) -> String;
 
     async fn generate(
         &self,
@@ -39,10 +41,11 @@ pub trait AsyncFunction: Sync + Send {
 
     async fn resolve(
         &self,
+        span: Span,
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
-        arguments: &[String],
-    ) -> Result<DataType>;
+        arguments: &[Expr],
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>>;
 }
 
 pub struct AsyncFunctionManager {
@@ -61,7 +64,9 @@ impl AsyncFunctionManager {
 
     pub fn create() -> Arc<AsyncFunctionManager> {
         let mut functions = HashMap::new();
-        functions.insert("nextval".to_string(), SequenceAsyncFunction::create());
+
+        let sequence_func = SequenceAsyncFunction::create();
+        functions.insert(sequence_func.func_name(), sequence_func);
 
         Arc::new(AsyncFunctionManager { functions })
     }
@@ -84,18 +89,16 @@ impl AsyncFunctionManager {
 
     pub async fn resolve(
         &self,
+        span: Span,
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
         func_name: &str,
-        arguments: &[String],
-    ) -> Result<DataType> {
+        arguments: &[Expr],
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         if let Some(func) = self.functions.get(func_name) {
-            func.resolve(tenant, catalog, arguments).await
+            func.resolve(span, tenant, catalog, arguments).await
         } else {
-            Err(ErrorCode::SemanticError(format!(
-                "cannot find function {}",
-                func_name
-            )))
+            Ok(None)
         }
     }
 }

@@ -114,7 +114,6 @@ use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
-use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
@@ -3600,46 +3599,11 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         arguments: &[Expr],
     ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
-        let arguments = {
-            let mut str_arguments: Vec<String> = vec![];
-            for arg in arguments {
-                if let Expr::ColumnRef { column, .. } = arg {
-                    if let ColumnID::Name(_name) = &column.column {
-                        if let ColumnID::Name(name) = &column.column {
-                            str_arguments.push(name.name.clone());
-                        } else {
-                            return Err(ErrorCode::SemanticError(
-                                "async function can only used as column".to_string(),
-                            ));
-                        }
-                    } else {
-                        return Err(ErrorCode::SemanticError(
-                            "async function can only used as column".to_string(),
-                        ));
-                    }
-                } else {
-                    return Err(ErrorCode::SemanticError(
-                        "async function can only used as column".to_string(),
-                    ));
-                }
-            }
-            str_arguments
-        };
-
         let catalog = self.ctx.get_default_catalog()?;
         let tenant = self.ctx.get_tenant();
-        let return_type = AsyncFunctionManager::instance()
-            .resolve(tenant, catalog, func_name, &arguments)
-            .await?;
-        let table_func = AsyncFunctionCall {
-            span,
-            func_name: func_name.to_string(),
-            display_name: func_name.to_string(),
-            return_type: Box::new(return_type.clone()),
-            arguments,
-        };
-
-        Ok(Some(Box::new((table_func.into(), return_type))))
+        AsyncFunctionManager::instance()
+            .resolve(span, tenant, catalog, func_name, arguments)
+            .await
     }
 
     #[async_recursion::async_recursion]
