@@ -965,7 +965,7 @@ mod tests {
         //
         // - expected : overlap == true
         //
-        //   range index of column 'xx_time' does not exist
+        //   range index of column 'xx_id' does not exist (explicitly removed)
         //   the result should be overlapped
 
         let input_column_min_max = [
@@ -988,7 +988,7 @@ mod tests {
 
         let column_range_indexes = {
             let mut cloned = column_range_indexes;
-            cloned.remove(&0); // remove col xx_id
+            cloned.remove(&0); // remove range index of col xx_id
             cloned
         };
 
