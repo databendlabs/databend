@@ -386,7 +386,7 @@ pub async fn subquery_filter(
     bind_context.add_column_binding(row_id_column_binding.clone());
 
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
-        .with_enable_distributed_optimization(false)
+        .with_enable_distributed_optimization(!ctx.get_cluster().is_empty())
         .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
         .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
 
