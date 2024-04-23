@@ -35,6 +35,14 @@ impl DeletionAccumulator {
         source_on_conflict_key_set: &HashSet<UniqueKeyDigest>,
         source_bloom_hashes: &[Vec<u64>],
     ) {
+        eprintln!(
+            "add block deletion, source_on_conflict_key_set {:#?}",
+            source_on_conflict_key_set
+        );
+        eprintln!(
+            "add block deletion, source_bloom_hashes {:#?}",
+            source_bloom_hashes
+        );
         match self.deletions.entry(segment_index) {
             Entry::Occupied(ref mut v) => {
                 let block_deletions = v.get_mut();
