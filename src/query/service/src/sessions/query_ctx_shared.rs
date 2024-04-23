@@ -385,7 +385,18 @@ impl QueryContextShared {
                 let source_table = match catalog.get_stream_source_table(stream_desc)? {
                     Some(source_table) => source_table,
                     None => {
-                        let source_table = catalog.get_table(&tenant, database, table_name).await?;
+                        let source_table = catalog
+                            .get_table(&tenant, database, table_name)
+                            .await
+                            .map_err(|err| {
+                            ErrorCode::IllegalStream(format!(
+                                "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                                database,
+                                table_name,
+                                stream_desc,
+                                err.message()
+                            ))
+                        })?;
                         catalog.cache_stream_source_table(
                             stream.get_table_info().clone(),
                             source_table.get_table_info().clone(),
