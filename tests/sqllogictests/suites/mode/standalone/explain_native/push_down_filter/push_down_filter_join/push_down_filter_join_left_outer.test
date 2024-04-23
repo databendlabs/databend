@@ -195,7 +195,7 @@ create table m1(id varchar, "context" varchar);
 statement ok
 create table j1(id varchar);
 
-# In can_filter_null, if the function is `assume_not_null`, we can not replace the column bindings with `Scalar::Null`.
+# In `can_filter_null`, if the function is `assume_not_null` or `remove_nullable`, we cannot replace the column bindings with `Scalar::Null`.
 query T
 explain WITH base AS (SELECT id, context FROM m1), src1 AS (SELECT base.id FROM base WHERE IFNULL(base.context, '') = ''), join1 AS (SELECT id FROM j1) SELECT src1.id FROM src1 LEFT OUTER JOIN join1 ON TRUE;
 ----

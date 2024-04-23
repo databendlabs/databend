@@ -186,9 +186,9 @@ pub fn can_filter_null(
                     Ok(())
                 }
                 ScalarExpr::FunctionCall(func) => {
-                    // If the function is `assume_not_null`, we can not replace
+                    // If the function is `assume_not_null` or `remove_nullable`, we cannot replace
                     // the column bindings with `Scalar::Null`.
-                    if func.func_name == "assume_not_null" {
+                    if matches!(&func.func_name, "assume_not_null" | "remove_nullable") {
                         self.can_replace = false;
                         return Ok(());
                     }
