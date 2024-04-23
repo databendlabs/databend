@@ -226,19 +226,3 @@ async fn select_sleep() {
     }
     assert_eq!(result, vec![0]);
 }
-
-// #[tokio::test]
-// async fn select_bitmap_string() {
-//     let (conn, _) = prepare("select_bitmap_string").await;
-//     let mut rows = conn
-//         .query_iter("select build_bitmap([1,2,3,4,5,6]), 11::String")
-//         .await
-//         .unwrap();
-//     let mut result = vec![];
-//     while let Some(row) = rows.next().await {
-//         let row: (String, String) = row.unwrap().try_into().unwrap();
-//         assert!(row.0.contains('\0'));
-//         result.push(row.1);
-//     }
-//     assert_eq!(result, vec!["11".to_string()]);
-// }

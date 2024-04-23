@@ -27,13 +27,16 @@ use std::{
     io::{stdin, IsTerminal},
 };
 
-use crate::args::ConnectionArgs;
-use crate::config::OutputQuoteStyle;
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
-use config::{Config, OutputFormat, Settings, TimeOption};
+use databend_client::auth::SensitiveString;
 use log::info;
 use once_cell::sync::Lazy;
+
+use crate::{
+    args::ConnectionArgs,
+    config::{Config, OutputFormat, OutputQuoteStyle, Settings, TimeOption},
+};
 
 static VERSION: Lazy<String> = Lazy::new(|| {
     let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
@@ -106,32 +109,45 @@ struct Args {
     #[clap(long, help = "Print help information")]
     help: bool,
 
-    #[clap(long, help = "Using flight sql protocol")]
+    #[clap(long, help = "Using flight sql protocol, ignored when --dsn is set")]
     flight: bool,
 
-    #[clap(long, help = "Enable TLS")]
+    #[clap(long, help = "Enable TLS, ignored when --dsn is set")]
     tls: bool,
 
-    #[clap(short = 'h', long, help = "Databend Server host, Default: 127.0.0.1")]
+    #[clap(
+        short = 'h',
+        long,
+        help = "Databend Server host, Default: 127.0.0.1, ignored when --dsn is set"
+    )]
     host: Option<String>,
 
-    #[clap(short = 'P', long, help = "Databend Server port, Default: 8000")]
+    #[clap(
+        short = 'P',
+        long,
+        help = "Databend Server port, Default: 8000, ignored when --dsn is set"
+    )]
     port: Option<u16>,
 
-    #[clap(short = 'u', long, help = "Default: root")]
+    #[clap(short = 'u', long, help = "Default: root, overrides username in DSN")]
     user: Option<String>,
 
-    #[clap(short = 'p', long, env = "BENDSQL_PASSWORD")]
-    password: Option<String>,
+    #[clap(
+        short = 'p',
+        long,
+        env = "BENDSQL_PASSWORD",
+        help = "Password, overrides password in DSN"
+    )]
+    password: Option<SensitiveString>,
 
-    #[clap(short = 'D', long, help = "Database name")]
+    #[clap(short = 'D', long, help = "Database name, overrides database in DSN")]
     database: Option<String>,
 
-    #[clap(long, value_parser = parse_key_val::<String, String>, help = "Settings")]
+    #[clap(long, value_parser = parse_key_val::<String, String>, help = "Settings, ignored when --dsn is set")]
     set: Vec<(String, String)>,
 
     #[clap(long, env = "BENDSQL_DSN", help = "Data source name")]
-    dsn: Option<String>,
+    dsn: Option<SensitiveString>,
 
     #[clap(short = 'n', long, help = "Force non-interactive mode")]
     non_interactive: bool,
@@ -219,15 +235,6 @@ pub async fn main() -> Result<()> {
             if args.port.is_some() {
                 eprintln!("warning: --port is ignored when --dsn is set");
             }
-            if args.user.is_some() {
-                eprintln!("warning: --user is ignored when --dsn is set");
-            }
-            if args.password.is_some() {
-                eprintln!("warning: --password is ignored when --dsn is set");
-            }
-            if args.role.is_some() {
-                eprintln!("warning: --role is ignored when --dsn is set");
-            }
             if !args.set.is_empty() {
                 eprintln!("warning: --set is ignored when --dsn is set");
             }
@@ -237,7 +244,7 @@ pub async fn main() -> Result<()> {
             if args.flight {
                 eprintln!("warning: --flight is ignored when --dsn is set");
             }
-            ConnectionArgs::from_dsn(&dsn)?
+            ConnectionArgs::from_dsn(dsn.inner())?
         }
         None => {
             if let Some(host) = args.host {
@@ -245,9 +252,6 @@ pub async fn main() -> Result<()> {
             }
             if let Some(port) = args.port {
                 config.connection.port = Some(port);
-            }
-            if let Some(user) = args.user {
-                config.connection.user = user;
             }
             for (k, v) in args.set {
                 config.connection.args.insert(k, v);
@@ -258,14 +262,11 @@ pub async fn main() -> Result<()> {
                     .args
                     .insert("sslmode".to_string(), "disable".to_string());
             }
-            if let Some(role) = args.role {
-                config.connection.args.insert("role".to_string(), role);
-            }
             ConnectionArgs {
                 host: config.connection.host.clone(),
                 port: config.connection.port,
                 user: config.connection.user.clone(),
-                password: args.password,
+                password: SensitiveString::from(""),
                 database: config.connection.database.clone(),
                 flight: args.flight,
                 args: config.connection.args.clone(),
@@ -275,6 +276,18 @@ pub async fn main() -> Result<()> {
     // override database if specified in command line
     if args.database.is_some() {
         conn_args.database = args.database;
+    }
+    // override user if specified in command line
+    if let Some(user) = args.user {
+        config.connection.user = user;
+    }
+    // override password if specified in command line
+    if let Some(password) = args.password {
+        conn_args.password = password;
+    }
+    // override role if specified in command line
+    if let Some(role) = args.role {
+        config.connection.args.insert("role".to_string(), role);
     }
     let dsn = conn_args.get_dsn()?;
 

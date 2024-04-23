@@ -90,11 +90,9 @@ impl APIClient {
         }
 
         if u.username() != "" {
-            client.auth = Arc::new(BasicAuth::new(
-                u.username().to_string(),
-                u.password()
-                    .map(|s| percent_decode_str(s).decode_utf8_lossy().to_string()),
-            ));
+            let password = u.password().unwrap_or_default();
+            let password = percent_decode_str(password).decode_utf8()?;
+            client.auth = Arc::new(BasicAuth::new(u.username(), password));
         }
         let database = match u.path().trim_start_matches('/') {
             "" => None,
@@ -156,10 +154,10 @@ impl APIClient {
                     client.tls_ca_file = Some(v.to_string());
                 }
                 "access_token" => {
-                    client.auth = Arc::new(AccessTokenAuth::new(v.to_string()));
+                    client.auth = Arc::new(AccessTokenAuth::new(v));
                 }
                 "access_token_file" => {
-                    client.auth = Arc::new(AccessTokenFileAuth::new(v.to_string()));
+                    client.auth = Arc::new(AccessTokenFileAuth::new(v));
                 }
                 _ => {
                     session_settings.insert(k.to_string(), v.to_string());
@@ -581,7 +579,7 @@ impl Default for APIClient {
             port: 8000,
             tenant: None,
             warehouse: Arc::new(Mutex::new(None)),
-            auth: Arc::new(BasicAuth::new("root".to_string(), None)) as Arc<dyn Auth>,
+            auth: Arc::new(BasicAuth::new("root", "")) as Arc<dyn Auth>,
             session_state: Arc::new(Mutex::new(SessionState::default())),
             wait_time_secs: None,
             max_rows_in_buffer: None,

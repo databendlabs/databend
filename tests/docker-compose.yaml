@@ -7,7 +7,7 @@ services:
     volumes:
       - ./data:/data
   databend:
-    image: docker.io/datafuselabs/databend:nightly
+    image: docker.io/datafuselabs/databend
     environment:
       - QUERY_STORAGE_TYPE=s3
       - AWS_S3_ENDPOINT=http://localhost:9000

@@ -83,3 +83,9 @@ impl From<std::io::Error> for Error {
         Error::IO(e.to_string())
     }
 }
+
+impl From<std::str::Utf8Error> for Error {
+    fn from(e: std::str::Utf8Error) -> Self {
+        Error::Parsing(e.to_string())
+    }
+}

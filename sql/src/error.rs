@@ -159,6 +159,12 @@ impl From<arrow_schema::ArrowError> for Error {
     }
 }
 
+impl From<std::str::Utf8Error> for Error {
+    fn from(e: std::str::Utf8Error) -> Self {
+        Error::Parsing(e.to_string())
+    }
+}
+
 impl From<std::string::FromUtf8Error> for Error {
     fn from(e: std::string::FromUtf8Error) -> Self {
         Error::Parsing(e.to_string())

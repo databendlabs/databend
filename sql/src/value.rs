@@ -948,8 +948,8 @@ pub fn parse_decimal(text: &str, size: DecimalSize) -> Result<NumberValue> {
 
 pub fn parse_geometry(raw_data: &[u8]) -> Result<String> {
     let mut data = std::io::Cursor::new(raw_data);
-    let wkt = Ewkt::from_wkb(&mut data, WkbDialect::Ewkb);
-    wkt.map(|g| g.0).map_err(|e| e.into())
+    let wkt = Ewkt::from_wkb(&mut data, WkbDialect::Ewkb)?;
+    Ok(wkt.0)
 }
 
 struct ValueDecoder {}

@@ -31,6 +31,7 @@ use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::Streaming;
 use url::Url;
 
+use databend_client::auth::SensitiveString;
 use databend_client::presign::{presign_upload_to_stage, PresignedResponse};
 use databend_sql::error::{Error, Result};
 use databend_sql::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, Rows, ServerStats};
@@ -166,7 +167,7 @@ impl FlightSQLConnection {
         }
         let mut client = self.client.lock().await;
         let _token = client
-            .handshake(&self.args.user, &self.args.password)
+            .handshake(&self.args.user, self.args.password.inner())
             .await?;
         *handshaked = true;
         Ok(())
@@ -206,7 +207,7 @@ struct Args {
     host: String,
     port: u16,
     user: String,
-    password: String,
+    password: SensitiveString,
     database: Option<String>,
     tenant: Option<String>,
     warehouse: Option<String>,
@@ -234,7 +235,7 @@ impl Default for Args {
             tls: true,
             tls_ca_file: None,
             user: "root".to_string(),
-            password: "".to_string(),
+            password: SensitiveString::from(""),
             connect_timeout: Duration::from_secs(20),
             query_timeout: Duration::from_secs(60),
             tcp_nodelay: true,
@@ -308,9 +309,9 @@ impl Args {
             None => format!("{}://{}:{}", scheme, host, port),
         };
         args.user = u.username().to_string();
-        args.password = percent_decode_str(u.password().unwrap_or_default())
-            .decode_utf8_lossy()
-            .to_string();
+        let password = u.password().unwrap_or_default();
+        let password = percent_decode_str(password).decode_utf8()?;
+        args.password = SensitiveString::from(password.to_string());
         Ok(args)
     }
 }

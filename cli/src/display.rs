@@ -14,23 +14,20 @@
 
 use std::collections::HashSet;
 use std::fmt::Write;
-use unicode_segmentation::UnicodeSegmentation;
 
 use anyhow::{anyhow, Result};
 use comfy_table::{Cell, CellAlignment, Table};
-use terminal_size::{terminal_size, Width};
-
 use databend_driver::{Row, RowStatsIterator, RowWithStats, SchemaRef, ServerStats};
+use indicatif::{HumanBytes, ProgressBar, ProgressState, ProgressStyle};
 use rustyline::highlight::Highlighter;
+use terminal_size::{terminal_size, Width};
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
+use unicode_segmentation::UnicodeSegmentation;
 
-use indicatif::{HumanBytes, ProgressBar, ProgressState, ProgressStyle};
-
-use crate::config::OutputQuoteStyle;
 use crate::{
     ast::format_query,
-    config::{ExpandMode, OutputFormat, Settings},
+    config::{ExpandMode, OutputFormat, OutputQuoteStyle, Settings},
     helper::CliHelper,
     session::QueryKind,
 };

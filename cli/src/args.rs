@@ -15,13 +15,14 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
+use databend_client::auth::SensitiveString;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConnectionArgs {
     pub host: String,
     pub port: Option<u16>,
     pub user: String,
-    pub password: Option<String>,
+    pub password: SensitiveString,
     pub database: Option<String>,
     pub flight: bool,
     pub args: BTreeMap<String, String>,
@@ -33,9 +34,7 @@ impl ConnectionArgs {
         dsn.set_host(Some(&self.host))?;
         _ = dsn.set_port(self.port);
         _ = dsn.set_username(&self.user);
-        if let Some(password) = self.password {
-            _ = dsn.set_password(Some(&password))
-        };
+        _ = dsn.set_password(Some(self.password.inner()));
         if let Some(database) = self.database {
             dsn.set_path(&database);
         }
@@ -64,7 +63,7 @@ impl ConnectionArgs {
         let host = u.host_str().ok_or(anyhow!("missing host"))?.to_string();
         let port = u.port();
         let user = u.username().to_string();
-        let password = u.password().map(|s| s.to_string());
+        let password = SensitiveString::from(u.password().unwrap_or_default());
         let database = u.path().strip_prefix('/').map(|s| s.to_string());
         Ok(Self {
             host,
@@ -90,7 +89,7 @@ mod test {
             host: "app.databend.com".to_string(),
             port: None,
             user: "username".to_string(),
-            password: Some("3a@SC(nYE1k={{R".to_string()),
+            password: SensitiveString::from("3a@SC(nYE1k={{R"),
             database: Some("test".to_string()),
             flight: false,
             args: {
@@ -113,7 +112,7 @@ mod test {
             host: "app.databend.com".to_string(),
             port: Some(443),
             user: "username".to_string(),
-            password: Some("3a@SC(nYE1k={{R".to_string()),
+            password: SensitiveString::from("3a@SC(nYE1k={{R"),
             database: Some("test".to_string()),
             flight: false,
             args: {

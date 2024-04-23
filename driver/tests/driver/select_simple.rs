@@ -278,20 +278,48 @@ async fn select_tuple() {
     assert_eq!(val1, ("[1,2]".to_string(), vec![1, 2], true,));
 
     let row2 = conn
-        .query_row("select (st_geometryfromwkt('SRID=4126;POINT(3.0 5.0)'), to_timestamp('2024-10-22 10:11:12'))")
+        .query_row("select (to_binary('xyz'), to_timestamp('2024-10-22 10:11:12'))")
         .await
         .unwrap()
         .unwrap();
-    let (val2,): ((String, NaiveDateTime),) = row2.try_into().unwrap();
+    let (val2,): ((Vec<u8>, NaiveDateTime),) = row2.try_into().unwrap();
     assert_eq!(
         val2,
         (
-            "SRID=4126;POINT(3 5)".to_string(),
+            vec![120, 121, 122],
             DateTime::parse_from_rfc3339("2024-10-22T10:11:12Z")
                 .unwrap()
                 .naive_utc()
         )
     );
+}
+
+#[tokio::test]
+async fn select_variant() {
+    // TODO:
+}
+
+#[tokio::test]
+async fn select_bitmap() {
+    // TODO:
+    // let (conn, _) = prepare("select_bitmap_string").await;
+    // let mut rows = conn
+    //     .query_iter("select build_bitmap([1,2,3,4,5,6]), 11::String")
+    //     .await
+    //     .unwrap();
+    // let mut result = vec![];
+    // while let Some(row) = rows.next().await {
+    //     let row: (String, String) = row.unwrap().try_into().unwrap();
+    //     assert!(row.0.contains('\0'));
+    //     result.push(row.1);
+    // }
+    // assert_eq!(result, vec!["11".to_string()]);
+}
+
+#[tokio::test]
+async fn select_geometry() {
+    // TODO: response type changed to json after
+    // https://github.com/datafuselabs/databend/pull/15214
 }
 
 #[tokio::test]
