@@ -112,6 +112,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 "replace_into".to_owned(),
+                MutationKind::Replace,
                 true,
             );
             hook_operator.execute(&mut pipeline.main_pipeline).await;

@@ -3201,7 +3201,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_recursion::async_recursion]
+    //    #[async_recursion::async_recursion]
     #[async_backtrace::framed]
     async fn resolve_udf(
         &mut self,
@@ -3239,7 +3239,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_recursion::async_recursion]
     #[async_backtrace::framed]
     async fn resolve_udf_server(
         &mut self,

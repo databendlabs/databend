@@ -111,6 +111,7 @@ impl Interpreter for MergeIntoInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 "merge_into".to_owned(),
+                MutationKind::MergeInto,
                 true,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;

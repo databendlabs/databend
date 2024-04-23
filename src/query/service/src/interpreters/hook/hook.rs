@@ -15,7 +15,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use log::info;
+use log::warn;
 
 use crate::interpreters::hook::compact_hook::hook_compact;
 use crate::interpreters::hook::compact_hook::CompactHookTraceCtx;
@@ -31,6 +35,7 @@ pub struct HookOperator {
     database: String,
     table: String,
     operation_name: String,
+    mutation_kind: MutationKind,
     need_lock: bool,
 }
 
@@ -41,6 +46,7 @@ impl HookOperator {
         database: String,
         table: String,
         operation_name: String,
+        mutation_kind: MutationKind,
         need_lock: bool,
     ) -> Self {
         Self {
@@ -49,6 +55,7 @@ impl HookOperator {
             database,
             table,
             operation_name,
+            mutation_kind,
             need_lock,
         }
     }
@@ -69,10 +76,26 @@ impl HookOperator {
     #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn execute_compact(&self, pipeline: &mut Pipeline) {
+        match self.ctx.get_settings().get_enable_compact_after_write() {
+            Ok(false) => {
+                info!("auto compaction disabled");
+                return;
+            }
+            Err(e) => {
+                // swallow the exception, compaction hook should not prevent the main operation.
+                warn!("failed to get compaction settings, ignored. {}", e);
+                return;
+            }
+            Ok(true) => {
+                // auto compaction is enabled, proceed with the compaction process.
+            }
+        }
+
         let compact_target = CompactTargetTableDescription {
             catalog: self.catalog.to_owned(),
             database: self.database.to_owned(),
             table: self.table.to_owned(),
+            mutation_kind: self.mutation_kind,
         };
 
         let trace_ctx = CompactHookTraceCtx {

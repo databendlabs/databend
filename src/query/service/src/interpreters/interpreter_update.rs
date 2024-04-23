@@ -121,6 +121,7 @@ impl Interpreter for UpdateInterpreter {
                     db_name.to_string(),
                     tbl_name.to_string(),
                     "update".to_string(),
+                    MutationKind::Update,
                     // table lock has been added, no need to check.
                     false,
                 );
