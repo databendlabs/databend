@@ -42,6 +42,7 @@ use databend_common_meta_app::share::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnCondition;
@@ -1186,15 +1187,24 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     ) -> Result<GetShareEndpointReply, KVAppError> {
         let mut share_endpoint_meta_vec = vec![];
 
-        let tenant_share_endpoint_name_key =
-            ShareEndpointIdent::new(&req.tenant, req.endpoint.clone().unwrap_or("".to_string()));
+        let idents = {
+            if let Some(endpoint) = &req.endpoint {
+                vec![ShareEndpointIdent::new(&req.tenant, endpoint.clone())]
+            } else {
+                let ident = ShareEndpointIdent::new(&req.tenant, "dummy");
 
-        let share_endpoints = list_keys(self, &tenant_share_endpoint_name_key).await?;
-        for share_endpoint in share_endpoints {
+                let dir_name = DirName::new(ident);
+
+                list_keys(self, &dir_name).await?
+            }
+        };
+
+        for share_endpoint in idents {
             let (_seq, share_endpoint_id) = get_u64_value(self, &share_endpoint).await?;
             let id_key = ShareEndpointId { share_endpoint_id };
             let (_seq, share_endpoint_meta): (u64, Option<ShareEndpointMeta>) =
                 get_pb_value(self, &id_key).await?;
+
             if let Some(share_endpoint_meta) = share_endpoint_meta {
                 if let Some(to_tenant) = &req.to_tenant {
                     if to_tenant.tenant_name() == share_endpoint_meta.tenant {
@@ -1430,8 +1440,11 @@ async fn get_outbound_share_infos_by_tenant(
 ) -> Result<Vec<ShareAccountReply>, KVAppError> {
     let mut outbound_share_accounts: Vec<ShareAccountReply> = vec![];
 
-    let tenant_share_name_key = ShareNameIdent::new(tenant, "");
-    let share_name_keys = list_keys(kv_api, &tenant_share_name_key).await?;
+    let tenant_share_name_key = ShareNameIdent::new(tenant, "dummy");
+
+    let dir_name = DirName::new(tenant_share_name_key);
+
+    let share_name_keys = list_keys(kv_api, &dir_name).await?;
 
     for share_name in share_name_keys {
         let reply = get_outbound_share_info_by_name(kv_api, &share_name).await;
@@ -1746,9 +1759,11 @@ async fn get_tenant_share_spec_vec(
     tenant: &Tenant,
 ) -> Result<Vec<ShareSpec>, KVAppError> {
     let mut share_metas = vec![];
-    let share_name_list = ShareNameIdent::new(tenant, "");
+    let share_name_list = ShareNameIdent::new(tenant, "dummy");
 
-    let share_name_list_keys = list_keys(kv_api, &share_name_list).await?;
+    let dir_name = DirName::new(share_name_list);
+
+    let share_name_list_keys = list_keys(kv_api, &dir_name).await?;
     for share_name in share_name_list_keys {
         let res = get_share_or_err(
             kv_api,

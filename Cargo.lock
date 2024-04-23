@@ -3389,6 +3389,7 @@ dependencies = [
  "rand 0.8.5",
  "rmp-serde",
  "roaring",
+ "scroll 0.12.0",
  "serde",
  "wkt",
 ]
@@ -3813,6 +3814,7 @@ dependencies = [
  "chrono-tz",
  "convert_case 0.6.0",
  "databend-common-expression",
+ "databend-common-io",
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-protos",
@@ -3863,6 +3865,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
+ "databend-common-io",
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-users",
@@ -6489,7 +6492,7 @@ dependencies = [
  "geojson",
  "geos",
  "log",
- "scroll",
+ "scroll 0.11.0",
  "serde_json",
  "thiserror",
  "wkt",
@@ -8970,7 +8973,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2caa5afb8bf9f3a2652760ce7d4f62d21c4d5a423e68466fca30df82f2330164"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
@@ -12489,6 +12492,12 @@ name = "scroll"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
+
+[[package]]
+name = "scroll"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6"
 
 [[package]]
 name = "scrypt"

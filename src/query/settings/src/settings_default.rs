@@ -727,6 +727,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("geometry_output_format", DefaultSettingValue {
+                    value: UserSettingValue::String("GeoJSON".to_owned()),
+                    desc: "Display format for GEOMETRY values.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::String(vec!["WKT".into(), "WKB".into(), "EWKT".into(), "EWKB".into(), "GeoJSON".into()]))
+                }),
                 ("script_max_steps", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10000),
                     desc: "The maximum steps allowed in a single execution of script.",

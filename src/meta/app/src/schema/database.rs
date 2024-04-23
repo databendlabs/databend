@@ -84,31 +84,6 @@ impl DatabaseIdToName {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DbIdListKey {
-    pub tenant: Tenant,
-    pub db_name: String,
-}
-
-impl DbIdListKey {
-    pub fn new(tenant: impl ToTenant, db_name: impl ToString) -> Self {
-        DbIdListKey {
-            tenant: tenant.to_tenant(),
-            db_name: db_name.to_string(),
-        }
-    }
-
-    pub fn tenant(&self) -> &Tenant {
-        &self.tenant
-    }
-}
-
-impl Display for DbIdListKey {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant.tenant_name(), self.db_name)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
@@ -354,15 +329,11 @@ impl ListDatabaseReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::database_name_ident::DatabaseNameIdentRaw;
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
     use crate::schema::DatabaseMeta;
-    use crate::schema::DbIdList;
-    use crate::schema::DbIdListKey;
-    use crate::tenant::Tenant;
 
     impl kvapi::KeyCodec for DatabaseId {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
@@ -408,33 +379,6 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for DbIdListKey {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(self.tenant.tenant_name())
-                .push_str(&self.db_name)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let tenant = parser.next_nonempty()?;
-            let db_name = parser.next_str()?;
-
-            let tenant = Tenant::new_nonempty(tenant);
-
-            Ok(Self { tenant, db_name })
-        }
-    }
-
-    /// "_fd_db_id_list/<tenant>/<db_name> -> db_id_list"
-    impl kvapi::Key for DbIdListKey {
-        const PREFIX: &'static str = "__fd_db_id_list";
-
-        type ValueType = DbIdList;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-    }
-
     impl kvapi::Value for DatabaseMeta {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
@@ -444,14 +388,6 @@ mod kvapi_key_impl {
     impl kvapi::Value for DatabaseNameIdentRaw {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
-        }
-    }
-
-    impl kvapi::Value for DbIdList {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            self.id_list
-                .iter()
-                .map(|id| DatabaseId::new(*id).to_string_key())
         }
     }
 }

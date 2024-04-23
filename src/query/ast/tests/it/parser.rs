@@ -646,6 +646,14 @@ fn test_statement() {
             AS
                 SELECT avg(a), d FROM t GROUP BY d
         "#,
+        r#"
+            CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
+                CLUSTER BY (a)
+                REFRESH_MODE = INCREMENTAL
+                TARGET_LAG = DOWNSTREAM
+            AS
+                SELECT avg(a), d FROM db.t GROUP BY d
+        "#,
         // tasks
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,

@@ -143,15 +143,16 @@ impl Display for TableId {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct TableIdListKey {
-    pub db_id: u64,
+/// The meta-service key for storing table id history ever used by a table name
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct TableIdHistoryIdent {
+    pub database_id: u64,
     pub table_name: String,
 }
 
-impl Display for TableIdListKey {
+impl Display for TableIdHistoryIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.'{}'", self.db_id, self.table_name)
+        write!(f, "{}.'{}'", self.database_id, self.table_name)
     }
 }
 
@@ -980,8 +981,8 @@ mod kvapi_key_impl {
     use crate::schema::TableCopiedFileInfo;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
+    use crate::schema::TableIdHistoryIdent;
     use crate::schema::TableIdList;
-    use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
 
@@ -1052,26 +1053,29 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for TableIdListKey {
+    impl kvapi::KeyCodec for TableIdHistoryIdent {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.db_id).push_str(&self.table_name)
+            b.push_u64(self.database_id).push_str(&self.table_name)
         }
 
         fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
             let db_id = b.next_u64()?;
             let table_name = b.next_str()?;
-            Ok(Self { db_id, table_name })
+            Ok(Self {
+                database_id: db_id,
+                table_name,
+            })
         }
     }
 
     /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
-    impl kvapi::Key for TableIdListKey {
+    impl kvapi::Key for TableIdHistoryIdent {
         const PREFIX: &'static str = "__fd_table_id_list";
 
         type ValueType = TableIdList;
 
         fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
+            Some(DatabaseId::new(self.database_id).to_string_key())
         }
     }
 
