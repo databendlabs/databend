@@ -210,7 +210,7 @@ impl AsyncSource for ListStagesSource {
             pattern: self.args_parsed.files_info.pattern.clone(),
         };
 
-        let files = files_info.list(&op, thread_num, false, None).await?;
+        let files = files_info.list(&op, thread_num, None).await?;
 
         let names: Vec<String> = files.iter().map(|file| file.path.to_string()).collect();
 

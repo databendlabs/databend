@@ -91,8 +91,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
-                    builder.commit_row();
-                    return;
                 }
             };
             builder.commit_row();
@@ -151,8 +149,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             if geohash.len() > 12 {
-                ctx.set_error(builder.len(), "");
-                builder.put_str("Currently the precision only implement within 12 digits!");
+                ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(
+                        "Currently the precision only implement within 12 digits!".to_string(),
+                    )
+                    .to_string(),
+                );
                 builder.commit_row();
                 return;
             }
@@ -311,7 +314,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             let line: LineString = match g.try_into() {
                                 Ok(line) => line,
                                 Err(e) => {
-                                    ctx.set_error(builder.len(), e.to_string());
+                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
                                     builder.commit_row();
                                     return;
                                 }
@@ -322,7 +325,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             let multi_point: MultiPoint = match g.try_into() {
                                 Ok(multi_point) => multi_point,
                                 Err(e) => {
-                                    ctx.set_error(builder.len(), e.to_string());
+                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
                                     builder.commit_row();
                                     return;
                                 }

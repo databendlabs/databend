@@ -28,10 +28,12 @@ use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 
+use crate::normalize_identifier;
 use crate::planner::resolve_type_name;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
+use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
 use crate::Binder;
 
@@ -42,13 +44,14 @@ impl Binder {
         udf_description: &Option<String>,
         udf_definition: &UDFDefinition,
     ) -> Result<UserDefinedFunction> {
+        let name = normalize_identifier(udf_name, &self.name_resolution_ctx).to_string();
         match udf_definition {
             UDFDefinition::LambdaUDF {
                 parameters,
                 definition,
             } => {
                 let mut validator = UDFValidator {
-                    name: udf_name.to_string(),
+                    name,
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
                     ..Default::default()
                 };
@@ -107,7 +110,7 @@ impl Binder {
                     .await?;
 
                 Ok(UserDefinedFunction {
-                    name: udf_name.to_string(),
+                    name,
                     description: udf_description.clone().unwrap_or_default(),
                     definition: PlanUDFDefinition::UDFServer(UDFServer {
                         address: address.clone(),
@@ -152,7 +155,7 @@ impl Binder {
                 }
 
                 Ok(UserDefinedFunction {
-                    name: udf_name.to_string(),
+                    name,
                     description: udf_description.clone().unwrap_or_default(),
                     definition: PlanUDFDefinition::UDFScript(UDFScript {
                         code: code.clone(),
@@ -189,5 +192,17 @@ impl Binder {
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
         Ok(Plan::AlterUDF(Box::new(AlterUDFPlan { udf })))
+    }
+
+    pub(in crate::planner::binder) async fn bind_drop_udf(
+        &mut self,
+        if_exists: bool,
+        udf_name: &Identifier,
+    ) -> Result<Plan> {
+        let name = normalize_identifier(udf_name, &self.name_resolution_ctx).to_string();
+        Ok(Plan::DropUDF(Box::new(DropUDFPlan {
+            if_exists,
+            udf: name,
+        })))
     }
 }
