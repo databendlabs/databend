@@ -164,7 +164,9 @@ fn test_to_string(file: &mut impl Write) {
 }
 
 fn test_try_to_geometry(file: &mut impl Write) {
-    run_ast(file, "try_to_geometry('POINT(1820.12 890.56)')", &[]);
+    run_ast(file, "try_to_geometry(NULL)", &[]);
+    run_ast(file, "try_to_geometry('nuLL')", &[]);
+    run_ast(file, "try_to_geometry('null')", &[]);
     run_ast(
         file,
         "try_to_geometry('SRID=4326;POINT(1820.12 890.56)')",

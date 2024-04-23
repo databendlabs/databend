@@ -314,7 +314,20 @@ SELECT TO_STRING(TRY_TO_GEOMETRY(PARSE_JSON('{"coordinates":[],"type":"aaa"}'), 
 ----
 NULL
 
+query T
+SELECT TO_STRING(TRY_TO_GEOMETRY(NULL))
+----
+NULL
 
+query T
+SELECT TO_STRING(TRY_TO_GEOMETRY('nuLL'))
+----
+NULL
+
+query T
+SELECT TO_STRING(TRY_TO_GEOMETRY('null'))
+----
+NULL
 
 
 statement ok
