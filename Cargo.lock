@@ -754,7 +754,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-js"
 version = "0.1.2"
-source = "git+https://github.com/risingwavelabs/arrow-udf?branch=main#c8c4b773e3c4eb5c18ecb8afdd0715d73a362bae"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=0d1a13c#0d1a13cec5da1d8580be06ab1ea911223e106a69"
 dependencies = [
  "anyhow",
  "arrow-array 50.0.0",
@@ -765,13 +765,14 @@ dependencies = [
 
 [[package]]
 name = "arrow-udf-wasm"
-version = "0.2.0"
-source = "git+https://github.com/risingwavelabs/arrow-udf?branch=main#c8c4b773e3c4eb5c18ecb8afdd0715d73a362bae"
+version = "0.2.1"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=0d1a13c#0d1a13cec5da1d8580be06ab1ea911223e106a69"
 dependencies = [
  "anyhow",
  "arrow-array 50.0.0",
  "arrow-ipc 50.0.0",
  "arrow-schema 50.0.0",
+ "async-trait",
  "base64 0.22.0",
  "genawaiter",
  "lazy_static",
