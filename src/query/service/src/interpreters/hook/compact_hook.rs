@@ -72,49 +72,50 @@ async fn do_hook_compact(
         return Ok(());
     }
 
-    let compaction_limits = match compact_target.mutation_kind {
-        MutationKind::Insert => {
-            let compaction_num_block_hint = ctx.get_compaction_num_block_hint();
-            if compaction_num_block_hint == 0 {
-                return Ok(());
-            }
-            CompactionLimits {
-                segment_limit: None,
-                block_limit: Some(compaction_num_block_hint as usize),
-            }
-        }
-        _ =>
-        // for mutations other than Insertions, we use an empirical value of 3 segments as the
-        // limit for compaction. to be refined later.
-        {
-            CompactionLimits {
-                segment_limit: Some(3),
-                block_limit: None,
-            }
-        }
-    };
-
     pipeline.set_on_finished(move |err| {
-
-                let op_name = &trace_ctx.operation_name;
-                metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
-
-                let compact_start_at = Instant::now();
-                if err.is_ok() {
-                    info!("execute {op_name} finished successfully. running table optimization job.");
-                    match GlobalIORuntime::instance().block_on({
-                        compact_table(ctx, compact_target, compaction_limits, need_lock)
-                    }) {
-                        Ok(_) => {
-                            info!("execute {op_name} finished successfully. table optimization job finished.");
-                        }
-                        Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e) }
+        let compaction_limits = match compact_target.mutation_kind {
+            MutationKind::Insert => {
+                let compaction_num_block_hint = ctx.get_compaction_num_block_hint();
+                info!("hint number of blocks need to be compacted {}", compaction_num_block_hint);
+                if compaction_num_block_hint == 0 {
+                    return Ok(());
+                }
+                CompactionLimits {
+                    segment_limit: None,
+                    block_limit: Some(compaction_num_block_hint as usize),
+                }
+            }
+            _ =>
+            // for mutations other than Insertions, we use an empirical value of 3 segments as the
+            // limit for compaction. to be refined later.
+                {
+                    CompactionLimits {
+                        segment_limit: Some(3),
+                        block_limit: None,
                     }
                 }
-                metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
+        };
 
-                Ok(())
-            });
+        let op_name = &trace_ctx.operation_name;
+        metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
+
+        let compact_start_at = Instant::now();
+        if err.is_ok() {
+            info!("execute {op_name} finished successfully. running table optimization job.");
+            match GlobalIORuntime::instance().block_on({
+                compact_table(ctx, compact_target, compaction_limits, need_lock)
+            }) {
+                Ok(_) => {
+                    info!("execute {op_name} finished successfully. table optimization job finished.");
+                }
+                Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e) }
+            }
+        }
+        metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
+
+        Ok(())
+    });
+
     Ok(())
 }
 
