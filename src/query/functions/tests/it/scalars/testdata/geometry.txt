@@ -281,13 +281,31 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------+
 
 
-ast            : try_to_geometry('POINT(1820.12 890.56)')
-raw expr       : try_to_geometry('POINT(1820.12 890.56)')
-checked expr   : try_to_geometry<String>("POINT(1820.12 890.56)")
-optimized expr : "POINT(1820.12 890.56)"
+ast            : try_to_geometry(NULL)
+raw expr       : try_to_geometry(NULL)
+checked expr   : try_to_geometry<Variant NULL>(CAST(NULL AS Variant NULL))
+optimized expr : NULL
 output type    : Geometry NULL
-output domain  : Undefined
-output         : 'POINT(1820.12 890.56)'
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geometry('nuLL')
+raw expr       : try_to_geometry('nuLL')
+checked expr   : try_to_geometry<String>("nuLL")
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geometry('null')
+raw expr       : try_to_geometry('null')
+checked expr   : try_to_geometry<String>("null")
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
