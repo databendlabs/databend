@@ -17615,6 +17615,239 @@ CreateDynamicTable(
 
 
 ---------- Input ----------
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
+    CLUSTER BY (a)
+    REFRESH_MODE = INCREMENTAL
+    TARGET_LAG = DOWNSTREAM
+AS
+    SELECT avg(a), d FROM db.t GROUP BY d
+---------- Output ---------
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: CreateIfNotExists,
+        transient: true,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                45..54,
+            ),
+            name: "MyDynamic",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                56..57,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                63..64,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        cluster_by: [
+            ColumnRef {
+                span: Some(
+                    89..90,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                89..90,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ],
+        target_lag: Downstream,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        refresh_mode: Incremental,
+        initialize: OnCreate,
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                158..195,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        158..195,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: FunctionCall {
+                                span: Some(
+                                    165..171,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            165..168,
+                                        ),
+                                        name: "avg",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                169..170,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            169..170,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                            alias: None,
+                        },
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    173..174,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                173..174,
+                                            ),
+                                            name: "d",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                180..184,
+                            ),
+                            catalog: None,
+                            database: Some(
+                                Identifier {
+                                    span: Some(
+                                        180..182,
+                                    ),
+                                    name: "db",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ),
+                            table: Identifier {
+                                span: Some(
+                                    183..184,
+                                ),
+                                name: "t",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            alias: None,
+                            temporal: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: Some(
+                        Normal(
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        194..195,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    194..195,
+                                                ),
+                                                name: "d",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
+                                        ),
+                                    },
+                                },
+                            ],
+                        ),
+                    ),
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENTS = 'This is test task 1' database = 'target', timezone = 'America/Los Angeles' AS SELECT * FROM MyTable1
