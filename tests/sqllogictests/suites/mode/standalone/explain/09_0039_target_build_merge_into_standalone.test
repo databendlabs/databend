@@ -80,7 +80,7 @@ HashJoin
 │   ├── partitions scanned: 4
 │   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
 │   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 0.00
+│   └── estimated rows: 8.00
 └── TableScan(Probe)
     ├── table: default.default.source_optimization
     ├── output columns: [a (#0), b (#1), c (#2)]
@@ -155,7 +155,7 @@ HashJoin
 │   ├── partitions scanned: 4
 │   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
 │   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 0.00
+│   └── estimated rows: 8.00
 └── TableScan(Probe)
     ├── table: default.default.source_optimization
     ├── output columns: [a (#0), b (#1), c (#2)]
@@ -247,7 +247,7 @@ HashJoin
 │   ├── partitions scanned: 4
 │   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
 │   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 0.00
+│   └── estimated rows: 8.00
 └── TableScan(Probe)
     ├── table: default.default.source_optimization
     ├── output columns: [a (#0), b (#1), c (#2)]

@@ -21,6 +21,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use cron::Schedule;
 
+use crate::background::BackgroundJobIdIdent;
 use crate::background::BackgroundJobIdent;
 use crate::background::BackgroundTaskType;
 use crate::principal::UserIdentity;
@@ -214,11 +215,6 @@ impl BackgroundJobInfo {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct BackgroundJobId {
-    pub id: u64,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateBackgroundJobReq {
     pub if_not_exists: bool,
@@ -259,8 +255,14 @@ impl Display for GetBackgroundJobReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundJobReply {
-    pub id: u64,
+    pub id_ident: BackgroundJobIdIdent,
     pub info: BackgroundJobInfo,
+}
+
+impl GetBackgroundJobReply {
+    pub fn new(id_ident: BackgroundJobIdIdent, info: BackgroundJobInfo) -> Self {
+        Self { id_ident, info }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -321,7 +323,13 @@ impl Display for UpdateBackgroundJobReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundJobReply {
-    pub id: u64,
+    pub id_ident: BackgroundJobIdIdent,
+}
+
+impl UpdateBackgroundJobReply {
+    pub fn new(id_ident: BackgroundJobIdIdent) -> Self {
+        Self { id_ident }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -354,42 +362,5 @@ impl ListBackgroundJobsReq {
 impl Display for ListBackgroundJobsReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "list_background_job({})", self.tenant.tenant_name())
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
-    use databend_common_meta_kvapi::kvapi::KeyParser;
-
-    use crate::background::background_job::BackgroundJobId;
-    use crate::background::BackgroundJobInfo;
-
-    impl kvapi::KeyCodec for BackgroundJobId {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.id)
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
-            let id = parser.next_u64()?;
-            Ok(BackgroundJobId { id })
-        }
-    }
-
-    impl kvapi::Key for BackgroundJobId {
-        const PREFIX: &'static str = "__fd_background_job_by_id";
-
-        type ValueType = BackgroundJobInfo;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-    }
-
-    impl kvapi::Value for BackgroundJobInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }

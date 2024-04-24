@@ -51,7 +51,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 0.00
+│   └── estimated rows: 4.00
 └── TableScan(Probe)
     ├── table: default.default.employees2
     ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
@@ -78,32 +78,78 @@ target_table: default.default.salaries2
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 └── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
 HashJoin
-├── output columns: [employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2), salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5)]
-├── join type: LEFT OUTER
-├── build keys: [salaries2.employee_id (#3)]
-├── probe keys: [employees2.employee_id (#0)]
+├── output columns: [salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5), employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
+├── join type: RIGHT OUTER
+├── build keys: [employees2.employee_id (#0)]
+├── probe keys: [salaries2.employee_id (#3)]
 ├── filters: []
 ├── estimated rows: 4.00
 ├── TableScan(Build)
-│   ├── table: default.default.salaries2
-│   ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
-│   ├── read rows: 6
+│   ├── table: default.default.employees2
+│   ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
+│   ├── read rows: 4
 │   ├── read size: < 1 KiB
-│   ├── partitions total: 2
-│   ├── partitions scanned: 2
-│   ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 0.00
+│   └── estimated rows: 4.00
 └── TableScan(Probe)
-    ├── table: default.default.employees2
-    ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
-    ├── read rows: 4
+    ├── table: default.default.salaries2
+    ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
+    ├── read rows: 6
     ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 4.00
+    └── estimated rows: 6.00
+
+## test disable_merge_into_join_reorder settings
+statement ok
+set disable_merge_into_join_reorder = 1;
+
+query T
+explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON salaries2.employee_id = employees2.employee_id WHEN MATCHED AND employees2.department = 'HR' THEN UPDATE SET salaries2.salary = salaries2.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries2.salary = salaries2.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees2.employee_id, 55000.00);
+----
+MergeInto:
+target_table: default.default.salaries2
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
+├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
+└── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
+HashJoin
+├── output columns: [salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5), employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
+├── join type: RIGHT OUTER
+├── build keys: [employees2.employee_id (#0)]
+├── probe keys: [salaries2.employee_id (#3)]
+├── filters: []
+├── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.employees2
+│   ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
+│   ├── read rows: 4
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 4.00
+└── TableScan(Probe)
+    ├── table: default.default.salaries2
+    ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 6.00
+
+statement ok
+set disable_merge_into_join_reorder = 0;
 
 ## test update column only optimization
 statement ok

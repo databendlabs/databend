@@ -101,21 +101,19 @@ where N: Hash
 
 impl<R> TIdentRaw<R, String> {
     pub fn new(tenant: impl ToString, name: impl ToString) -> Self {
-        Self {
-            tenant: tenant.to_string(),
-            name: name.to_string(),
-            _p: Default::default(),
-        }
+        Self::new_generic(tenant, name.to_string())
     }
 }
 
 impl<R> TIdentRaw<R, u64> {
     pub fn new(tenant: impl ToString, name: u64) -> Self {
-        Self {
-            tenant: tenant.to_string(),
-            name,
-            _p: Default::default(),
-        }
+        Self::new_generic(tenant, name)
+    }
+}
+
+impl<R> TIdentRaw<R, ()> {
+    pub fn new(tenant: impl ToString) -> Self {
+        Self::new_generic(tenant, ())
     }
 }
 
