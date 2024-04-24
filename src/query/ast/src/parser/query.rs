@@ -30,6 +30,7 @@ use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::statement::hint;
+use crate::parser::statement::top_n;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
 use crate::rule;
@@ -53,6 +54,7 @@ pub enum SetOperationElement {
     SelectStmt {
         hints: Option<Hint>,
         distinct: bool,
+        top_n: Option<u64>,
         select_list: Vec<SelectTarget>,
         from: Vec<TableReference>,
         selection: Option<Expr>,
@@ -101,7 +103,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     let select_stmt = map_res(
         rule! {
             ( FROM ~ ^#comma_separated_list1(table_reference) )?
-            ~ SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+            ~ SELECT ~ #hint? ~ DISTINCT? ~ #top_n? ~ ^#comma_separated_list1(select_target)
             ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
             ~ ( WHERE ~ ^#expr )?
             ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
@@ -114,6 +116,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             _select,
             opt_hints,
             opt_distinct,
+            opt_top_n,
             select_list,
             opt_from_block_second,
             opt_where_block,
@@ -131,6 +134,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             Ok(SetOperationElement::SelectStmt {
                 hints: opt_hints,
                 distinct: opt_distinct.is_some(),
+                top_n: opt_top_n,
                 select_list,
                 from: opt_from_block_first
                     .or(opt_from_block_second)
@@ -229,6 +233,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
             SetOperationElement::SelectStmt {
                 hints,
                 distinct,
+                top_n,
                 select_list,
                 from,
                 selection,
@@ -239,6 +244,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
             } => SetExpr::Select(Box::new(SelectStmt {
                 span: transform_span(input.span.tokens),
                 hints,
+                top_n,
                 distinct,
                 select_list,
                 from,

@@ -157,6 +157,9 @@ pub enum TokenKind {
     #[regex(r#"@([^\s`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]
     AtString,
 
+    #[token("TOP", ignore(ascii_case))]
+    TOP,
+
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
     PGLiteralHex,
     #[regex(r"0[xX][a-fA-F0-9]+")]

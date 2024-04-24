@@ -283,6 +283,7 @@ impl Compiler {
                 span: expr.span(),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: vec![SelectTarget::AliasedExpr {
                     expr: Box::new(expr.clone()),
                     alias: None,
@@ -360,6 +361,7 @@ impl Compiler {
                 span: variable.span,
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: vec![SelectTarget::StarColumns {
                     qualified: vec![Indirection::Star(None)],
                     column_filter: None,

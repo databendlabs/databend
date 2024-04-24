@@ -115,6 +115,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             span: None,
             hints: None,
             distinct: false,
+            top_n: None,
             select_list,
             from,
             selection: None,
@@ -307,6 +308,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             // TODO
             hints: None,
             distinct: self.rng.gen_bool(0.7),
+            top_n: None,
             select_list,
             from,
             selection,
