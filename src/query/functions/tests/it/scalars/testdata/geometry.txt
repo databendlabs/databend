@@ -1,3 +1,84 @@
+ast            : st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
+raw expr       : st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
+checked expr   : st_asewkb<Geometry>(to_geometry<String>("SRID=4326;POINT(-122.35 37.55)"))
+optimized expr : 0101000020E61000006666666666965EC06666666666C64240
+output type    : Binary
+output domain  : Undefined
+output         : 0101000020E61000006666666666965EC06666666666C64240
+
+
+ast            : st_asewkb(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))
+raw expr       : st_asewkb(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))
+checked expr   : st_asewkb<Geometry>(to_geometry<String>("SRID=0;LINESTRING(0.75 0.75, -10 20)"))
+optimized expr : 01020000200000000002000000000000000000E83F000000000000E83F00000000000024C00000000000003440
+output type    : Binary
+output domain  : Undefined
+output         : 01020000200000000002000000000000000000E83F000000000000E83F00000000000024C00000000000003440
+
+
+ast            : st_aswkb(to_geometry('POINT(-122.35 37.55)'))
+raw expr       : st_aswkb(to_geometry('POINT(-122.35 37.55)'))
+checked expr   : st_aswkb<Geometry>(to_geometry<String>("POINT(-122.35 37.55)"))
+optimized expr : 01010000006666666666965EC06666666666C64240
+output type    : Binary
+output domain  : Undefined
+output         : 01010000006666666666965EC06666666666C64240
+
+
+ast            : st_aswkb(to_geometry('LINESTRING(0.75 0.75, -10 20)'))
+raw expr       : st_aswkb(to_geometry('LINESTRING(0.75 0.75, -10 20)'))
+checked expr   : st_aswkb<Geometry>(to_geometry<String>("LINESTRING(0.75 0.75, -10 20)"))
+optimized expr : 010200000002000000000000000000E83F000000000000E83F00000000000024C00000000000003440
+output type    : Binary
+output domain  : Undefined
+output         : 010200000002000000000000000000E83F000000000000E83F00000000000024C00000000000003440
+
+
+ast            : st_asewkt(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
+raw expr       : st_asewkt(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
+checked expr   : st_asewkt<Geometry>(to_geometry<String>("SRID=4326;POINT(-122.35 37.55)"))
+optimized expr : "SRID=4326;POINT(-122.35 37.55)"
+output type    : String
+output domain  : {"SRID=4326;POINT(-122.35 37.55)"..="SRID=4326;POINT(-122.35 37.55)"}
+output         : 'SRID=4326;POINT(-122.35 37.55)'
+
+
+ast            : st_asewkt(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))
+raw expr       : st_asewkt(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))
+checked expr   : st_asewkt<Geometry>(to_geometry<String>("SRID=0;LINESTRING(0.75 0.75, -10 20)"))
+optimized expr : "LINESTRING(0.75 0.75,-10 20)"
+output type    : String
+output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)"}
+output         : 'LINESTRING(0.75 0.75,-10 20)'
+
+
+ast            : st_asewkt(to_geometry('POINT(-122.35 37.55)'))
+raw expr       : st_asewkt(to_geometry('POINT(-122.35 37.55)'))
+checked expr   : st_asewkt<Geometry>(to_geometry<String>("POINT(-122.35 37.55)"))
+optimized expr : "POINT(-122.35 37.55)"
+output type    : String
+output domain  : {"POINT(-122.35 37.55)"..="POINT(-122.35 37.55)"}
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_asewkt(to_geometry('LINESTRING(0.75 0.75, -10 20)'))
+raw expr       : st_asewkt(to_geometry('LINESTRING(0.75 0.75, -10 20)'))
+checked expr   : st_asewkt<Geometry>(to_geometry<String>("LINESTRING(0.75 0.75, -10 20)"))
+optimized expr : "LINESTRING(0.75 0.75,-10 20)"
+output type    : String
+output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)"}
+output         : 'LINESTRING(0.75 0.75,-10 20)'
+
+
+ast            : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
+raw expr       : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
+checked expr   : st_geohash<Geometry>(to_geometry<String, Int32>("POINT(-122.306100 37.554162)", to_int32<UInt16>(4326_u16)))
+optimized expr : "9q9j8ue2v71y"
+output type    : String
+output domain  : {"9q9j8ue2v71y"..="9q9j8ue2v71y"}
+output         : '9q9j8ue2v71y'
+
+
 ast            : st_asgeojson(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))
 raw expr       : st_asgeojson(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))
 checked expr   : st_asgeojson<Geometry>(st_geometryfromwkb<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")))
