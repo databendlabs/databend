@@ -849,6 +849,7 @@ fn test_statement_error() {
         r#"SELECT c a as FROM t"#,
         r#"SELECT c a as b FROM t"#,
         r#"SELECT top -1 c a as b FROM t"#,
+        r#"SELECT top c a as b FROM t"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS a, b"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ()"#,
         r#"select * from aa.bb limit 10 order by bb;"#,

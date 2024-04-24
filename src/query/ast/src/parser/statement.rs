@@ -2603,11 +2603,20 @@ pub fn hint(i: Input) -> IResult<Hint> {
 }
 
 pub fn top_n(i: Input) -> IResult<u64> {
-    map(
+    map_res(
         rule! {
-            TOP ~ ^#literal_u64
+            TOP ~ #literal_u64? : "TOP <limit>"
         },
-        |(_, n)| n,
+        |(_, opt_n)| {
+            if let Some(n) = opt_n {
+                Ok(n)
+            } else {
+                Err(nom::Err::Failure(ErrorKind::Other(
+                    "expecting a literal number after keyword `TOP`, if you were refering a column with name `top`, \
+	                    please quote it like `\"top\"`",
+                )))
+            }
+        },
     )(i)
 }
 

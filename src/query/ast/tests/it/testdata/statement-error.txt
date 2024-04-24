@@ -417,11 +417,23 @@ error:
 SELECT top -1 c a as b FROM t
 ---------- Output ---------
 error: 
-  --> SQL:1:12
+  --> SQL:1:8
   |
 1 | SELECT top -1 c a as b FROM t
-  | ------     ^ unexpected `-`, expecting <LiteralInteger>, <MySQLLiteralHex>, or <PGLiteralHex>
-  | |           
+  | ------ ^^^ expecting a literal number after keyword `TOP`, if you were refering a column with name `top`, please quote it like `"top"`
+  | |       
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+SELECT top c a as b FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:8
+  |
+1 | SELECT top c a as b FROM t
+  | ------ ^^^ expecting a literal number after keyword `TOP`, if you were refering a column with name `top`, please quote it like `"top"`
+  | |       
   | while parsing `SELECT ...`
 
 
