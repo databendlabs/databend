@@ -70,6 +70,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_table_lock";
         const TYPE: &'static str = "TableLockIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = LockMeta;
     }
 
