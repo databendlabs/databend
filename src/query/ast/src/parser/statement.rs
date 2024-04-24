@@ -29,6 +29,7 @@ use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
+use nom::combinator::not;
 use nom::combinator::value;
 use nom::Slice;
 
@@ -2603,20 +2604,18 @@ pub fn hint(i: Input) -> IResult<Hint> {
 }
 
 pub fn top_n(i: Input) -> IResult<u64> {
-    map_res(
+    map(
         rule! {
-            TOP ~ #literal_u64? : "TOP <limit>"
+            TOP
+            ~ ^#error_hint(
+                not(literal_u64),
+                "expecting a literal number after keyword `TOP`, if you were refering a column with name `top`, \
+                        please quote it like `\"top\"`"
+            )
+            ~ #literal_u64
+            : "TOP <limit>"
         },
-        |(_, opt_n)| {
-            if let Some(n) = opt_n {
-                Ok(n)
-            } else {
-                Err(nom::Err::Failure(ErrorKind::Other(
-                    "expecting a literal number after keyword `TOP`, if you were refering a column with name `top`, \
-	                    please quote it like `\"top\"`",
-                )))
-            }
-        },
+        |(_, _, n)| n,
     )(i)
 }
 
