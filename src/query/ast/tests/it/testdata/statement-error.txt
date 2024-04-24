@@ -414,6 +414,18 @@ error:
 
 
 ---------- Input ----------
+SELECT top -1 c a as b FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | SELECT top -1 c a as b FROM t
+  | ------     ^ unexpected `-`, expecting <LiteralInteger>, <MySQLLiteralHex>, or <PGLiteralHex>
+  | |           
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
 SELECT * FROM t GROUP BY GROUPING SETS a, b
 ---------- Output ---------
 error: 

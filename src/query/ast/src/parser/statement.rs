@@ -2602,6 +2602,15 @@ pub fn hint(i: Input) -> IResult<Hint> {
     rule!(#hint|#invalid_hint)(i)
 }
 
+pub fn top_n(i: Input) -> IResult<u64> {
+    map(
+        rule! {
+            TOP ~ ^#literal_u64
+        },
+        |(_, n)| n,
+    )(i)
+}
+
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     // It's safe to unwrap because input must contain EOI.
     let first_token = i.tokens.first().unwrap();
