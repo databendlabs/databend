@@ -17,8 +17,11 @@ use crate::tenant_key::ident::TIdent;
 /// The identifier of a catalog,
 /// which is used as a key and does not support other codec method such as serde.
 pub type CatalogNameIdent = TIdent<Resource>;
+pub type CatalogNameIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
+
+use crate::tenant_key::raw::TIdentRaw;
 
 mod kvapi_impl {
 

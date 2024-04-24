@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockType;
 use databend_common_pipeline_core::LockGuard;
 
@@ -25,13 +24,11 @@ use crate::table_context::TableContext;
 pub trait Lock: Sync + Send {
     fn lock_type(&self) -> LockType;
 
-    fn gen_lock_key(&self) -> LockKey;
-
     fn get_catalog(&self) -> &str;
 
     fn get_table_id(&self) -> u64;
 
-    fn watch_delete_key(&self, revision: u64) -> String;
+    fn tenant_name(&self) -> &str;
 
     async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>>;
 }

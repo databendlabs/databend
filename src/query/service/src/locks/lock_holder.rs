@@ -29,13 +29,15 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::operations::set_backoff;
 use futures::future::select;
 use futures::future::Either;
+use minitrace::func_name;
 use rand::thread_rng;
 use rand::Rng;
 
-use crate::locks::LockExt;
 use crate::sessions::SessionManager;
 
 #[derive(Default)]
@@ -55,8 +57,18 @@ impl LockHolder {
         expire_secs: u64,
     ) -> Result<()> {
         let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
-        let delete_table_lock_req = lock.gen_delete_lock_req(revision);
-        let extend_table_lock_req = lock.gen_extend_lock_req(revision, expire_secs, false);
+
+        let tenant_name = lock.tenant_name();
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+        let lock_key = LockKey::Table {
+            tenant: tenant.clone(),
+            table_id: lock.get_table_id(),
+        };
+
+        let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
+        let extend_table_lock_req =
+            ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, false);
+
         self.try_extend_lock(
             catalog.clone(),
             extend_table_lock_req.clone(),

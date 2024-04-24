@@ -386,10 +386,9 @@ async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) ->
     }
     // replace right source
     let mut join_sexpr = plan.input.clone();
-    join_sexpr = Box::new(join_sexpr.replace_children(vec![
-        Arc::new(join_sexpr.child(0)?.clone()),
-        Arc::new(right_source),
-    ]));
+    let left_target = optimize_query(opt_ctx.clone(), join_sexpr.child(0)?.clone()).await?;
+    join_sexpr =
+        Box::new(join_sexpr.replace_children(vec![Arc::new(left_target), Arc::new(right_source)]));
 
     let join_op = Join::try_from(join_sexpr.plan().clone())?;
     let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
