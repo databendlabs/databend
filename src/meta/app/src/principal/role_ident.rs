@@ -22,13 +22,13 @@ pub type RoleIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
 
-impl TIdent<Resource> {
+impl RoleIdent {
     pub fn role_name(&self) -> &str {
         self.name()
     }
 }
 
-impl TIdentRaw<Resource> {
+impl RoleIdentRaw {
     pub fn role_name(&self) -> &str {
         self.name()
     }
@@ -45,6 +45,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_roles";
         const TYPE: &'static str = "RoleIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = RoleInfo;
     }
 

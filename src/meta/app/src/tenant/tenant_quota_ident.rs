@@ -44,6 +44,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_quotas";
         const TYPE: &'static str = "TenantQuotaIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = TenantQuota;
     }
 

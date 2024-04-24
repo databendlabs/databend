@@ -219,6 +219,7 @@ mod tests {
 
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
+            const HAS_TENANT: bool = true;
             type ValueType = Infallible;
         }
 
@@ -237,6 +238,7 @@ mod tests {
 
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
+            const HAS_TENANT: bool = true;
             type ValueType = Infallible;
         }
 

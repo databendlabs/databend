@@ -46,6 +46,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_share";
         const TYPE: &'static str = "ShareNameIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = ShareId;
     }
 

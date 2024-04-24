@@ -29,6 +29,8 @@ mod kvapi_impl {
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_datamask";
+        const TYPE: &'static str = "DataMaskNameIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = DatamaskId;
     }
 
