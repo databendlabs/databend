@@ -70,7 +70,7 @@ mod tests {
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_ident() {
+    fn test_share_name_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = ShareNameIdent::new(tenant, "test1");
 
