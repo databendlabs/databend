@@ -58,7 +58,7 @@ explain merge into t1 using t2 on t1.a < t2.a when matched then update * when no
 ----
 MergeInto:
 target_table: default.default.t1
-├── distributed: true
+├── distributed: false
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
@@ -157,7 +157,7 @@ explain merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when 
 ----
 MergeInto:
 target_table: default.default.t1
-├── distributed: true
+├── distributed: false
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
