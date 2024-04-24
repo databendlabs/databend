@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 // Calculate the memory usage in heap
@@ -22,9 +23,10 @@ pub trait OwnedMemoryUsageSize {
 impl<T: OwnedMemoryUsageSize> OwnedMemoryUsageSize for Arc<T> {
     fn owned_memory_usage(&mut self) -> usize {
         // ArcInner { strong:8 bytes, weak:8 bytes, T }
+        let ref_size = std::mem::size_of::<AtomicUsize>() * 2;
         match Arc::get_mut(self) {
-            None => 16,
-            Some(v) => 16 + v.owned_memory_usage(),
+            None => ref_size,
+            Some(v) => ref_size + v.owned_memory_usage(),
         }
     }
 }
@@ -39,9 +41,9 @@ impl<T: OwnedMemoryUsageSize> OwnedMemoryUsageSize for Vec<T> {
     fn owned_memory_usage(&mut self) -> usize {
         std::mem::size_of::<T>() * self.capacity()
             + (self
-            .iter_mut()
-            .map(|x| x.owned_memory_usage())
-            .sum::<usize>())
+                .iter_mut()
+                .map(|x| x.owned_memory_usage())
+                .sum::<usize>())
     }
 }
 

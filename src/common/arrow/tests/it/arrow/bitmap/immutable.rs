@@ -15,6 +15,7 @@
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use databend_common_base::runtime::ThreadTracker;
 
 #[test]

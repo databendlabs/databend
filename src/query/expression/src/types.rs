@@ -37,10 +37,10 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
-use databend_common_base::runtime::OwnedMemoryUsageSize;
 
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
@@ -309,20 +309,20 @@ impl DataType {
 impl OwnedMemoryUsageSize for DataType {
     fn owned_memory_usage(&mut self) -> usize {
         match self {
-            DataType::Null |
-            DataType::EmptyArray |
-            DataType::EmptyMap |
-            DataType::Boolean |
-            DataType::Binary |
-            DataType::String |
-            DataType::Number(_) |
-            DataType::Decimal(_) |
-            DataType::Timestamp |
-            DataType::Bitmap |
-            DataType::Variant |
-            DataType::Geometry |
-            DataType::Generic(_) |
-            DataType::Date => 0,
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Boolean
+            | DataType::Binary
+            | DataType::String
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Bitmap
+            | DataType::Variant
+            | DataType::Geometry
+            | DataType::Generic(_)
+            | DataType::Date => 0,
             DataType::Nullable(v) => v.owned_memory_usage(),
             DataType::Array(v) => v.owned_memory_usage(),
             DataType::Map(v) => v.owned_memory_usage(),
@@ -336,7 +336,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type ScalarRef<'a>: Debug + Clone + PartialEq;
     type Column: Debug + Clone + PartialEq;
     type Domain: Debug + Clone + PartialEq;
-    type ColumnIterator<'a>: Iterator<Item=Self::ScalarRef<'a>> + TrustedLen;
+    type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
     type ColumnBuilder: Debug + Clone;
 
     /// Upcast GAT type's lifetime.
@@ -459,7 +459,7 @@ pub trait ArgType: ValueType {
     }
 
     fn column_from_iter(
-        iter: impl Iterator<Item=Self::Scalar>,
+        iter: impl Iterator<Item = Self::Scalar>,
         generics: &GenericMap,
     ) -> Self::Column {
         let mut col = Self::create_builder(iter.size_hint().0, generics);
@@ -470,7 +470,7 @@ pub trait ArgType: ValueType {
     }
 
     fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item=Self::ScalarRef<'a>>,
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
         generics: &GenericMap,
     ) -> Self::Column {
         let mut col = Self::create_builder(iter.size_hint().0, generics);

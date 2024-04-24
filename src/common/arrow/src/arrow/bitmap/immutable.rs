@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::OwnedMemoryUsageSize;
 use either::Either;
-use zstd::zstd_safe::WriteBuf;
 
 use super::chunk_iter_to_vec;
 use super::utils::count_zeros;

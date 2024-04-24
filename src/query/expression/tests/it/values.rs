@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ethnum::I256;
-use ordered_float::OrderedFloat;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::runtime::MemStat;
@@ -21,15 +19,20 @@ use databend_common_base::runtime::OwnedMemoryUsageSize;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumn;
-use databend_common_expression::types::decimal::{DecimalColumn, DecimalScalar};
+use databend_common_expression::types::decimal::DecimalColumn;
+use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::{DateType, NumberScalar};
+use databend_common_expression::types::DateType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
-use databend_common_expression::{Column, Scalar};
+use databend_common_expression::Column;
+use databend_common_expression::Scalar;
+use ethnum::I256;
+use ordered_float::OrderedFloat;
 
 #[test]
 fn test_null_column_owned_memory_usage() {
@@ -429,7 +432,10 @@ fn test_scalar_owned_memory_usage() {
         let mut scalar = f();
 
         drop(_guard);
-        assert_eq!(mem_stat.get_memory_usage(), scalar.owned_memory_usage() as i64);
+        assert_eq!(
+            mem_stat.get_memory_usage(),
+            scalar.owned_memory_usage() as i64
+        );
     }
 
     test_scalar(|| Scalar::Null);
@@ -445,25 +451,48 @@ fn test_scalar_owned_memory_usage() {
     test_scalar(|| Scalar::Number(NumberScalar::UInt64(0)));
     test_scalar(|| Scalar::Number(NumberScalar::Float32(OrderedFloat(0_f32))));
     test_scalar(|| Scalar::Number(NumberScalar::Float64(OrderedFloat(0_f64))));
-    test_scalar(|| Scalar::Decimal(DecimalScalar::Decimal128(0, DecimalSize { precision: 0, scale: 0 })));
-    test_scalar(|| Scalar::Decimal(DecimalScalar::Decimal256(I256::new(0), DecimalSize { precision: 0, scale: 0 })));
+    test_scalar(|| {
+        Scalar::Decimal(DecimalScalar::Decimal128(0, DecimalSize {
+            precision: 0,
+            scale: 0,
+        }))
+    });
+    test_scalar(|| {
+        Scalar::Decimal(DecimalScalar::Decimal256(I256::new(0), DecimalSize {
+            precision: 0,
+            scale: 0,
+        }))
+    });
     test_scalar(|| Scalar::Timestamp(0));
     test_scalar(|| Scalar::Date(0));
     test_scalar(|| Scalar::Boolean(true));
     test_scalar(|| Scalar::Binary(Vec::with_capacity(1000)));
     test_scalar(|| Scalar::String(String::with_capacity(1000)));
-    test_scalar(|| Scalar::Array(Column::Number(NumberColumn::Int8(Buffer::from(vec![0_i8; 1000])))));
-    test_scalar(|| Scalar::Map(Column::Number(NumberColumn::Int8(Buffer::from(vec![0_i8; 1000])))));
+    test_scalar(|| {
+        Scalar::Array(Column::Number(NumberColumn::Int8(Buffer::from(vec![
+            0_i8;
+            1000
+        ]))))
+    });
+    test_scalar(|| {
+        Scalar::Map(Column::Number(NumberColumn::Int8(Buffer::from(vec![
+            0_i8;
+            1000
+        ]))))
+    });
     test_scalar(|| Scalar::Bitmap(Vec::with_capacity(1000)));
-    test_scalar(|| Scalar::Tuple({
-        let mut scalars = Vec::with_capacity(1000);
-        scalars.push(Scalar::Null);
-        scalars.push(Scalar::Number(NumberScalar::Int8(0)));
-        scalars.push(Scalar::String(String::with_capacity(1000)));
-        scalars.push(Scalar::Array(Column::Number(NumberColumn::Int8(Buffer::from(vec![0_i8; 1000])))));
-        scalars
-    }));
+    test_scalar(|| {
+        Scalar::Tuple({
+            let mut scalars = Vec::with_capacity(1000);
+            scalars.push(Scalar::Null);
+            scalars.push(Scalar::Number(NumberScalar::Int8(0)));
+            scalars.push(Scalar::String(String::with_capacity(1000)));
+            scalars.push(Scalar::Array(Column::Number(NumberColumn::Int8(
+                Buffer::from(vec![0_i8; 1000]),
+            ))));
+            scalars
+        })
+    });
     test_scalar(|| Scalar::Variant(Vec::with_capacity(1000)));
     test_scalar(|| Scalar::Geometry(Vec::with_capacity(1000)));
 }
-

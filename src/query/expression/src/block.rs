@@ -36,7 +36,7 @@ use crate::TableSchemaRef;
 use crate::Value;
 
 pub type SendableDataBlockStream =
-std::pin::Pin<Box<dyn futures::stream::Stream<Item=Result<DataBlock>> + Send>>;
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
 pub type BlockMetaInfoPtr = Box<dyn BlockMetaInfo>;
 
 /// DataBlock is a lightweight container for a group of columns.

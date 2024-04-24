@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
+use arrow_format::flight::data::FlightData;
 use backtrace::Backtrace;
-use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_exception::exception::ErrorCodeBacktrace;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

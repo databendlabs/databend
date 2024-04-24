@@ -18,8 +18,8 @@ test = false
 codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
 
 anyhow = { workspace = true }
-arrow-schema = { workspace = true }
 arrow-format = { workspace = true }
+arrow-schema = { workspace = true }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6bac65c38375f1216a565a6cc7deb89a2d" }
 #backtrace = "0.3.69"
 bincode = { workspace = true }
@@ -28,6 +28,7 @@ geozero = { workspace = true }
 http = "0.2"
 opendal = { workspace = true }
 parquet = { workspace = true }
+parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async"] }
 paste = "1.0.9"
 prost = { workspace = true }
 serde = { workspace = true }
@@ -35,7 +36,6 @@ serde_json = { workspace = true }
 tantivy = "0.21.1"
 thiserror = { workspace = true }
 tonic = { workspace = true }
-parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async"] }
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]
