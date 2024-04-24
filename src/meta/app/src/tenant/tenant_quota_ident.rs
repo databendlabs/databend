@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant::ToTenant;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
@@ -20,18 +19,6 @@ pub type TenantQuotaIdent = TIdent<Resource, ()>;
 pub type TenantQuotaIdentRaw = TIdentRaw<Resource, ()>;
 
 pub use kvapi_impl::Resource;
-
-impl TenantQuotaIdent {
-    pub fn new(tenant: impl ToTenant) -> Self {
-        Self::new_generic(tenant, ())
-    }
-}
-
-impl TenantQuotaIdentRaw {
-    pub fn new(tenant: impl ToString) -> Self {
-        Self::new_generic(tenant, ())
-    }
-}
 
 mod kvapi_impl {
 
