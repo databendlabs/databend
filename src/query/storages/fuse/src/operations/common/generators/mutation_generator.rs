@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::*;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
@@ -33,13 +34,15 @@ use crate::statistics::reducers::deduct_statistics_mut;
 pub struct MutationGenerator {
     base_snapshot: Arc<TableSnapshot>,
     conflict_resolve_ctx: ConflictResolveContext,
+    mutation_kind: MutationKind,
 }
 
 impl MutationGenerator {
-    pub fn new(base_snapshot: Arc<TableSnapshot>) -> Self {
+    pub fn new(base_snapshot: Arc<TableSnapshot>, mutation_kind: MutationKind) -> Self {
         MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
+            mutation_kind,
         }
     }
 }
@@ -104,6 +107,16 @@ impl SnapshotGenerator for MutationGenerator {
                         previous.table_statistics_location.clone(),
                         previous.inverted_indexes.clone(),
                     );
+
+                    if matches!(self.mutation_kind, MutationKind::Compact) {
+                        // for compaction, a basic but very important verification:
+                        // the number of rows should not be changed
+                        assert_eq!(
+                            new_snapshot.summary.row_count,
+                            self.base_snapshot.summary.row_count
+                        );
+                    }
+
                     Ok(new_snapshot)
                 } else {
                     metrics_inc_commit_mutation_unresolvable_conflict();
