@@ -146,7 +146,7 @@ HashJoin
     ├── partitions scanned: 2
     ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 0.00
+    └── estimated rows: 6.00
 
 statement ok
 set disable_merge_into_join_reorder = 0;
