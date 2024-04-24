@@ -63,6 +63,7 @@ pub struct OptimizerContext {
     enable_distributed_optimization: bool,
     enable_join_reorder: bool,
     enable_dphyp: bool,
+    enable_merge_into_join_reorder: bool,
 }
 
 impl OptimizerContext {
@@ -74,6 +75,7 @@ impl OptimizerContext {
             enable_distributed_optimization: false,
             enable_join_reorder: true,
             enable_dphyp: true,
+            enable_merge_into_join_reorder: true,
         }
     }
 
@@ -89,6 +91,11 @@ impl OptimizerContext {
 
     pub fn with_enable_dphyp(mut self, enable: bool) -> Self {
         self.enable_dphyp = enable;
+        self
+    }
+
+    pub fn with_enable_merge_into_join_reorder(mut self, enable: bool) -> Self {
+        self.enable_merge_into_join_reorder = enable;
         self
     }
 }
@@ -392,15 +399,19 @@ async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) ->
     // 3. for full merge into, we use right outer join
     // for now, let's import the statistic info to determine left join or right join
     // we just do optimization for the top join (target and source),won't do recursive optimization.
-    let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
-    let mut state = TransformResult::new();
-    // we will reorder the join order according to the cardinality of target and source.
-    rule.apply(&join_sexpr, &mut state)?;
-    assert!(state.results().len() <= 1);
-    // we need to check whether we do swap left and right.
-    let change_join_order = if state.results().len() == 1 {
-        join_sexpr = Box::new(state.results()[0].clone());
-        true
+    let change_join_order = if opt_ctx.enable_merge_into_join_reorder {
+        let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
+        let mut state = TransformResult::new();
+        // we will reorder the join order according to the cardinality of target and source.
+        rule.apply(&join_sexpr, &mut state)?;
+        assert!(state.results().len() <= 1);
+        // we need to check whether we do swap left and right.
+        if state.results().len() == 1 {
+            join_sexpr = Box::new(state.results()[0].clone());
+            true
+        } else {
+            false
+        }
     } else {
         false
     };
