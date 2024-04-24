@@ -17,12 +17,8 @@ use std::sync::Arc;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableLockKey;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_pipeline_core::LockGuard;
 
 use crate::locks::LockManager;
@@ -47,13 +43,6 @@ impl Lock for TableLock {
         LockType::TABLE
     }
 
-    fn gen_lock_key(&self) -> LockKey {
-        LockKey::Table {
-            tenant: Tenant::new_literal(&self.table_info.tenant),
-            table_id: self.table_info.ident.table_id,
-        }
-    }
-
     fn get_catalog(&self) -> &str {
         self.table_info.catalog()
     }
@@ -62,13 +51,8 @@ impl Lock for TableLock {
         self.table_info.ident.table_id
     }
 
-    fn watch_delete_key(&self, revision: u64) -> String {
-        let lock_key = TableLockKey {
-            tenant: Tenant::new_literal(&self.table_info.tenant),
-            table_id: self.table_info.ident.table_id,
-            revision,
-        };
-        lock_key.to_string_key()
+    fn tenant_name(&self) -> &str {
+        &self.table_info.tenant
     }
 
     async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>> {

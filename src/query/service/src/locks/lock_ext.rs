@@ -19,19 +19,25 @@ use backoff::backoff::Backoff;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::lock::Lock;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::DeleteLockRevReq;
-use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::operations::set_backoff;
+use minitrace::func_name;
 
 #[async_trait::async_trait]
 pub trait LockExt: Lock {
     /// Return true if the lock is expired.
     async fn wait_lock_expired(&self, catalog: Arc<dyn Catalog>) -> Result<bool> {
-        let req = ListLockRevReq {
-            lock_key: self.gen_lock_key(),
+        let tenant_name = self.tenant_name();
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        let lock_key = LockKey::Table {
+            tenant: tenant.clone(),
+            table_id: self.get_table_id(),
         };
+
+        let req = ListLockRevReq::new(lock_key);
 
         let max_retry_delay = Some(Duration::from_millis(500));
         let max_retry_elapsed = Some(Duration::from_secs(3));
@@ -55,49 +61,6 @@ pub trait LockExt: Lock {
                     return Ok(false);
                 }
             }
-        }
-    }
-
-    fn gen_create_lock_req(
-        &self,
-        user: String,
-        node: String,
-        query_id: String,
-        expire_secs: u64,
-    ) -> CreateLockRevReq {
-        CreateLockRevReq {
-            lock_key: self.gen_lock_key(),
-            user,
-            node,
-            query_id,
-            expire_secs,
-        }
-    }
-
-    fn gen_list_lock_req(&self) -> ListLockRevReq {
-        ListLockRevReq {
-            lock_key: self.gen_lock_key(),
-        }
-    }
-
-    fn gen_delete_lock_req(&self, revision: u64) -> DeleteLockRevReq {
-        DeleteLockRevReq {
-            lock_key: self.gen_lock_key(),
-            revision,
-        }
-    }
-
-    fn gen_extend_lock_req(
-        &self,
-        revision: u64,
-        expire_secs: u64,
-        acquire_lock: bool,
-    ) -> ExtendLockRevReq {
-        ExtendLockRevReq {
-            lock_key: self.gen_lock_key(),
-            revision,
-            acquire_lock,
-            expire_secs,
         }
     }
 }
