@@ -17,6 +17,7 @@ use std::ops::Range;
 
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use serde::Deserialize;
@@ -267,6 +268,12 @@ impl BinaryColumn {
             }
         }
         Ok(())
+    }
+}
+
+impl OwnedMemoryUsageSize for BinaryColumn {
+    fn owned_memory_usage(&mut self) -> usize {
+        self.data.owned_memory_usage() + self.offsets.owned_memory_usage()
     }
 }
 

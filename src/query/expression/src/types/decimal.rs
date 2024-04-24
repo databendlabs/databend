@@ -19,6 +19,7 @@ use std::ops::Range;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::display_decimal_128;
@@ -1000,6 +1001,15 @@ impl DecimalColumn {
                 )
             }
         })
+    }
+}
+
+impl OwnedMemoryUsageSize for DecimalColumn {
+    fn owned_memory_usage(&mut self) -> usize {
+        match self {
+            DecimalColumn::Decimal128(v, _) => v.owned_memory_usage(),
+            DecimalColumn::Decimal256(v, _) => v.owned_memory_usage(),
+        }
     }
 }
 

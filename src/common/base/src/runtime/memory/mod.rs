@@ -14,10 +14,12 @@
 
 mod alloc_error_hook;
 mod mem_stat;
+mod owned_memory_size;
 mod stat_buffer;
 
 pub use alloc_error_hook::set_alloc_error_hook;
 pub use mem_stat::MemStat;
 pub use mem_stat::OutOfLimit;
 pub use mem_stat::GLOBAL_MEM_STAT;
+pub use owned_memory_size::OwnedMemoryUsageSize;
 pub use stat_buffer::StatBuffer;

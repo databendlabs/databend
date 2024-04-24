@@ -20,6 +20,8 @@ mod iterator;
 
 use std::ops::Deref;
 
+use databend_common_base::runtime::OwnedMemoryUsageSize;
+
 use crate::arrow::ffi::InternalArrowArray;
 
 #[allow(dead_code)]
@@ -54,6 +56,15 @@ impl<T> Bytes<T> {
     #[inline]
     pub(crate) fn get_vec(&mut self) -> Option<&mut Vec<T>> {
         self.0.get_vec()
+    }
+}
+
+impl<T> OwnedMemoryUsageSize for Bytes<T> {
+    fn owned_memory_usage(&mut self) -> usize {
+        match self.get_vec() {
+            None => 0,
+            Some(vec) => vec.capacity() * std::mem::size_of::<T>(),
+        }
     }
 }
 

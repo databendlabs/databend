@@ -20,6 +20,7 @@ use std::ops::Range;
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use databend_common_arrow::ArrayRef;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -35,7 +36,7 @@ use crate::TableSchemaRef;
 use crate::Value;
 
 pub type SendableDataBlockStream =
-    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
+std::pin::Pin<Box<dyn futures::stream::Stream<Item=Result<DataBlock>> + Send>>;
 pub type BlockMetaInfoPtr = Box<dyn BlockMetaInfo>;
 
 /// DataBlock is a lightweight container for a group of columns.
@@ -72,6 +73,12 @@ impl BlockEntry {
             }
             _ => self,
         }
+    }
+}
+
+impl OwnedMemoryUsageSize for BlockEntry {
+    fn owned_memory_usage(&mut self) -> usize {
+        self.data_type.owned_memory_usage() + self.value.owned_memory_usage()
     }
 }
 
@@ -558,6 +565,12 @@ impl DataBlock {
         debug_assert!(!self.columns.is_empty());
         debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
         self.columns.last().unwrap().value.as_column().unwrap()
+    }
+}
+
+impl OwnedMemoryUsageSize for DataBlock {
+    fn owned_memory_usage(&mut self) -> usize {
+        self.columns.owned_memory_usage()
     }
 }
 

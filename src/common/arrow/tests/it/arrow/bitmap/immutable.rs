@@ -14,6 +14,8 @@
 // limitations under the License.
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 
 #[test]
 fn as_slice() {
@@ -99,4 +101,24 @@ fn from_arrow() {
     assert_eq!(nulls.len(), bitmap.len());
     let back = NullBuffer::from(bitmap);
     assert_eq!(nulls, back);
+}
+
+#[test]
+fn test_bitmap_owned_memory_usage() {
+    for len in 0..100 {
+        let mem_stat = MemStat::create("TEST".to_string());
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.mem_stat = Some(mem_stat.clone());
+
+        let _guard = ThreadTracker::tracking(payload);
+
+        let mut bitmap = Bitmap::from(vec![true; len]);
+
+        drop(_guard);
+        assert_ne!(mem_stat.get_memory_usage(), 0);
+        assert_eq!(
+            mem_stat.get_memory_usage(),
+            bitmap.owned_memory_usage() as i64
+        );
+    }
 }

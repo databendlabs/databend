@@ -14,6 +14,8 @@
 // limitations under the License.
 
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 
 #[test]
 fn new() {
@@ -131,4 +133,32 @@ fn from_arrow_sliced() {
     let sliced = b.sliced(1, 2);
     let back = arrow_buffer::Buffer::from(sliced);
     assert_eq!(back.typed_data::<i32>(), &[2, 3]);
+}
+
+#[test]
+fn test_buffer_owned_memory_usage() {
+    fn test_primitive_type<T: Copy>(index: T) {
+        let mem_stat = MemStat::create("TEST".to_string());
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.mem_stat = Some(mem_stat.clone());
+
+        let _guard = ThreadTracker::tracking(payload);
+        let mut buffer = Buffer::<T>::from(vec![index; 1000]);
+
+        drop(_guard);
+        assert_ne!(mem_stat.get_memory_usage(), 0);
+        assert_eq!(
+            mem_stat.get_memory_usage(),
+            buffer.owned_memory_usage() as i64
+        );
+    }
+
+    test_primitive_type(0_i8);
+    test_primitive_type(0_i16);
+    test_primitive_type(0_i32);
+    test_primitive_type(0_i64);
+    test_primitive_type(0_u8);
+    test_primitive_type(0_u16);
+    test_primitive_type(0_u32);
+    test_primitive_type(0_u64);
 }

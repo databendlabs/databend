@@ -18,6 +18,7 @@ use std::ops::Range;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 
 use super::AnyType;
 use super::DecimalSize;
@@ -302,6 +303,12 @@ impl NullableColumn<AnyType> {
             column: T::try_downcast_column(&self.column)?,
             validity: self.validity.clone(),
         })
+    }
+}
+
+impl OwnedMemoryUsageSize for NullableColumn<AnyType> {
+    fn owned_memory_usage(&mut self) -> usize {
+        self.validity.owned_memory_usage() + self.column.owned_memory_usage()
     }
 }
 

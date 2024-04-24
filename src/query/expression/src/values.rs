@@ -26,6 +26,7 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;
@@ -325,6 +326,15 @@ impl Value<AnyType> {
         match self {
             Value::Column(c) => Value::Column(c.wrap_nullable(validity)),
             scalar => scalar,
+        }
+    }
+}
+
+impl OwnedMemoryUsageSize for Value<AnyType> {
+    fn owned_memory_usage(&mut self) -> usize {
+        match self {
+            Value::Scalar(v) => v.owned_memory_usage(),
+            Value::Column(v) => v.owned_memory_usage(),
         }
     }
 }
@@ -748,6 +758,29 @@ impl Ord for Scalar {
 impl PartialEq for Scalar {
     fn eq(&self, other: &Self) -> bool {
         self.partial_cmp(other) == Some(Ordering::Equal)
+    }
+}
+
+impl OwnedMemoryUsageSize for Scalar {
+    fn owned_memory_usage(&mut self) -> usize {
+        match self {
+            Scalar::Null => 0,
+            Scalar::EmptyArray => 0,
+            Scalar::EmptyMap => 0,
+            Scalar::Number(_v) => 0,
+            Scalar::Decimal(_v) => 0,
+            Scalar::Timestamp(_v) => 0,
+            Scalar::Date(_v) => 0,
+            Scalar::Boolean(_v) => 0,
+            Scalar::Binary(v) => v.capacity(),
+            Scalar::String(v) => v.capacity(),
+            Scalar::Array(v) => v.owned_memory_usage(),
+            Scalar::Map(v) => v.owned_memory_usage(),
+            Scalar::Bitmap(v) => v.capacity(),
+            Scalar::Tuple(v) => v.owned_memory_usage(),
+            Scalar::Variant(v) => v.capacity(),
+            Scalar::Geometry(v) => v.capacity(),
+        }
     }
 }
 
@@ -1413,6 +1446,30 @@ impl Column {
                 }
             }
             _ => (false, None),
+        }
+    }
+}
+
+impl OwnedMemoryUsageSize for Column {
+    fn owned_memory_usage(&mut self) -> usize {
+        match self {
+            Column::Null { .. } => 0,
+            Column::EmptyArray { .. } => 0,
+            Column::EmptyMap { .. } => 0,
+            Column::Number(v) => v.owned_memory_usage(),
+            Column::Decimal(v) => v.owned_memory_usage(),
+            Column::Boolean(v) => v.owned_memory_usage(),
+            Column::Binary(v) => v.owned_memory_usage(),
+            Column::String(v) => v.owned_memory_usage(),
+            Column::Timestamp(v) => v.owned_memory_usage(),
+            Column::Date(v) => v.owned_memory_usage(),
+            Column::Array(v) => v.owned_memory_usage(),
+            Column::Map(v) => v.owned_memory_usage(),
+            Column::Bitmap(v) => v.owned_memory_usage(),
+            Column::Nullable(v) => v.owned_memory_usage(),
+            Column::Tuple(v) => v.owned_memory_usage(),
+            Column::Variant(v) => v.owned_memory_usage(),
+            Column::Geometry(v) => v.owned_memory_usage(),
         }
     }
 }

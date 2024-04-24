@@ -1,5 +1,4 @@
-// Copyright 2020-2022 Jorge C. Leitão
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,5 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bytes;
-mod immutable;
+mod binary;
+mod decimal;
+mod number;
+mod string;

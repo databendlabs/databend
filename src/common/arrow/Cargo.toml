@@ -85,6 +85,8 @@ parquet-default = [
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+databend-common-base = { path = "../base" }
+databend-common-exception = { path = "../exception" }
 
 arrow-format = { workspace = true }
 bitpacking = "0.8.0"
@@ -152,6 +154,9 @@ arrow-data = { workspace = true, optional = true }
 arrow-schema = { workspace = true, optional = true }
 
 [dev-dependencies]
+# Workspace dependencies
+databend-common-base = { path = "../base" }
+
 # used to test async readers
 tokio = { version = "1", features = ["macros", "rt", "fs", "io-util"] }
 tokio-util = { version = "0.7", features = ["compat"] }

@@ -20,6 +20,8 @@ use std::fmt::Display;
 /// Defines [`Error`], representing all errors returned by this crate.
 use std::fmt::Formatter;
 
+use databend_common_exception::ErrorCode;
+
 /// Enum with all errors in this crate.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -117,3 +119,12 @@ impl std::error::Error for Error {}
 
 /// Typedef for a [`std::result::Result`] of an [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<Error> for ErrorCode {
+    fn from(error: Error) -> Self {
+        match error {
+            Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
+            v => ErrorCode::from_std_error(v),
+        }
+    }
+}

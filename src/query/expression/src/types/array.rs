@@ -18,6 +18,7 @@ use std::ops::Range;
 
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -290,6 +291,12 @@ impl ArrayColumn<AnyType> {
             values: T::try_downcast_column(&self.values)?,
             offsets: self.offsets.clone(),
         })
+    }
+}
+
+impl OwnedMemoryUsageSize for ArrayColumn<AnyType> {
+    fn owned_memory_usage(&mut self) -> usize {
+        self.values.owned_memory_usage() + self.offsets.owned_memory_usage()
     }
 }
 

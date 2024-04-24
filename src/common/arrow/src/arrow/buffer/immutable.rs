@@ -18,6 +18,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::usize;
 
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use either::Either;
 use num_traits::Zero;
 
@@ -287,6 +288,12 @@ impl<T> Buffer<T> {
             offset,
             length,
         }
+    }
+}
+
+impl<T> OwnedMemoryUsageSize for Buffer<T> {
+    fn owned_memory_usage(&mut self) -> usize {
+        self.data.owned_memory_usage() + std::mem::size_of::<Bytes<T>>()
     }
 }
 

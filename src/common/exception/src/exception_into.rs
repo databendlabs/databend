@@ -107,18 +107,18 @@ impl From<std::num::TryFromIntError> for ErrorCode {
     }
 }
 
-impl From<databend_common_arrow::arrow::error::Error> for ErrorCode {
-    fn from(error: databend_common_arrow::arrow::error::Error) -> Self {
-        use databend_common_arrow::arrow::error::Error;
-        match error {
-            Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
-            v => ErrorCode::from_std_error(v),
-        }
-    }
-}
+// impl From<databend_common_arrow::arrow::error::Error> for ErrorCode {
+//     fn from(error: databend_common_arrow::arrow::error::Error) -> Self {
+//         use databend_common_arrow::arrow::error::Error;
+//         match error {
+//             Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
+//             v => ErrorCode::from_std_error(v),
+//         }
+//     }
+// }
 
-impl From<databend_common_arrow::parquet::error::Error> for ErrorCode {
-    fn from(error: databend_common_arrow::parquet::error::Error) -> Self {
+impl From<parquet2::error::Error> for ErrorCode {
+    fn from(error: parquet2::error::Error) -> Self {
         ErrorCode::from_std_error(error)
     }
 }

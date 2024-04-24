@@ -1,9 +1,11 @@
+use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::runtime::{MemStat, OwnedMemoryUsageSize, ThreadTracker};
 use databend_common_expression::block_debug::box_render;
-use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::string::{StringColumn, StringColumnBuilder};
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::Column;
+use databend_common_expression::{BlockEntry, Column, Scalar, Value};
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
@@ -55,4 +57,27 @@ fn test_box_render_block() {
 │ (5 shown) │        │
 └────────────────────┘"#;
     assert_eq!(d, expected);
+}
+
+#[test]
+fn test_block_entry_owned_memory_usage() {
+    fn test_block_entry<F: Fn() -> BlockEntry>(f: F) {
+        let mem_stat = MemStat::create("TEST".to_string());
+        let mut payload = ThreadTracker::new_tracking_payload();
+
+        payload.mem_stat = Some(mem_stat.clone());
+
+        let _guard = ThreadTracker::tracking(payload);
+
+        let mut block_entry = f();
+
+        drop(_guard);
+        assert_eq!(mem_stat.get_memory_usage(), block_entry.owned_memory_usage() as i64);
+    }
+
+    test_block_entry(|| BlockEntry::new(DataType::Null, Value::Scalar(Scalar::Null)));
+    test_block_entry(|| BlockEntry::new(DataType::String, Value::Column(Column::String(StringColumn::new(
+        Buffer::from(vec![0; 100 * 3]),
+        Buffer::from(vec![0; 100]),
+    )))));
 }

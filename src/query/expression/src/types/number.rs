@@ -19,6 +19,7 @@ use std::ops::Range;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
@@ -617,6 +618,14 @@ impl NumberColumn {
                     max: *max,
                 })
             }
+        })
+    }
+}
+
+impl OwnedMemoryUsageSize for NumberColumn {
+    fn owned_memory_usage(&mut self) -> usize {
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumn::NUM_TYPE(col) => col.owned_memory_usage(),
         })
     }
 }

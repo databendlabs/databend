@@ -17,7 +17,9 @@ use std::iter::FromIterator;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_base::runtime::OwnedMemoryUsageSize;
 use either::Either;
+use zstd::zstd_safe::WriteBuf;
 
 use super::chunk_iter_to_vec;
 use super::utils::count_zeros;
@@ -421,6 +423,12 @@ impl Bitmap {
             length,
             unset_bits,
         }
+    }
+}
+
+impl OwnedMemoryUsageSize for Bitmap {
+    fn owned_memory_usage(&mut self) -> usize {
+        self.bytes.owned_memory_usage() + std::mem::size_of::<Bytes<u8>>()
     }
 }
 

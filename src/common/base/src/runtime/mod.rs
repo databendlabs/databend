@@ -35,6 +35,7 @@ pub use global_runtime::GlobalIORuntime;
 pub use global_runtime::GlobalQueryRuntime;
 pub use memory::set_alloc_error_hook;
 pub use memory::MemStat;
+pub use memory::OwnedMemoryUsageSize;
 pub use memory::GLOBAL_MEM_STAT;
 pub use runtime::block_on;
 pub use runtime::execute_futures_in_parallel;
