@@ -253,7 +253,7 @@ impl StageFilesInfo {
             return Ok(vec![meta.map(|m| (full_path, m)).map_err(Into::into)]);
         }
 
-        // This clone is required to make sure we are not referring `file: &String` in the closure
+        // This clone is required to make sure we are not referring to `file: &String` in the closure
         let tasks = files.iter().take(max_files).cloned().map(|file| {
             let full_path = Path::new(&self.path)
                 .join(file)

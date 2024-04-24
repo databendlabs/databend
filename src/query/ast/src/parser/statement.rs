@@ -2609,7 +2609,7 @@ pub fn top_n(i: Input) -> IResult<u64> {
             TOP
             ~ ^#error_hint(
                 not(literal_u64),
-                "expecting a literal number after keyword `TOP`, if you were refering a column with name `top`, \
+                "expecting a literal number after keyword `TOP`, if you were referring to a column with name `top`, \
                         please quote it like `\"top\"`"
             )
             ~ ^#literal_u64
