@@ -29,6 +29,7 @@ use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
+use nom::combinator::not;
 use nom::combinator::value;
 use nom::Slice;
 
@@ -2600,6 +2601,22 @@ pub fn hint(i: Input) -> IResult<Hint> {
         |_| Hint { hints_list: vec![] },
     );
     rule!(#hint|#invalid_hint)(i)
+}
+
+pub fn top_n(i: Input) -> IResult<u64> {
+    map(
+        rule! {
+            TOP
+            ~ ^#error_hint(
+                not(literal_u64),
+                "expecting a literal number after keyword `TOP`, if you were refering a column with name `top`, \
+                        please quote it like `\"top\"`"
+            )
+            ~ ^#literal_u64
+            : "TOP <limit>"
+        },
+        |(_, _, n)| n,
+    )(i)
 }
 
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {
