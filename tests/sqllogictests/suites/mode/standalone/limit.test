@@ -20,7 +20,7 @@ statement ok
 drop table if exists t;
 
 statement ok
-create table t(id int, id2 int);
+create table t(id int, top int);
 
 statement ok
 insert into t values(1,10),(2,20),(3,30);
@@ -41,10 +41,15 @@ select distinct top 2 id from t order by id;
 2
 
 query T
-select top 2 id2 from t order by id2 desc;
+select top 2 "top" from t order by top desc;
 ----
 30
 20
+
+query T
+select "top" from t order by top limit 1;
+----
+10
 
 query TT
 select top 2 * from (select * from t limit 3) as t1 order by id;
