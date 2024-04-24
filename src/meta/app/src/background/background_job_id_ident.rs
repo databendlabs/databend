@@ -15,22 +15,20 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type RoleIdent = TIdent<Resource>;
-
-/// Share name as value.
-pub type RoleIdentRaw = TIdentRaw<Resource>;
+pub type BackgroundJobIdIdent = TIdent<Resource, u64>;
+pub type BackgroundJobIdIdentRaw = TIdentRaw<Resource, u64>;
 
 pub use kvapi_impl::Resource;
 
-impl RoleIdent {
-    pub fn role_name(&self) -> &str {
-        self.name()
+impl BackgroundJobIdIdent {
+    pub fn job_id(&self) -> u64 {
+        *self.name()
     }
 }
 
-impl RoleIdentRaw {
-    pub fn role_name(&self) -> &str {
-        self.name()
+impl BackgroundJobIdIdentRaw {
+    pub fn job_id(&self) -> u64 {
+        *self.name()
     }
 }
 
@@ -38,18 +36,18 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::RoleInfo;
+    use crate::background::BackgroundJobInfo;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_roles";
-        const TYPE: &'static str = "RoleIdent";
-        const HAS_TENANT: bool = true;
-        type ValueType = RoleInfo;
+        const PREFIX: &'static str = "__fd_background_job_by_id";
+        const TYPE: &'static str = "BackgroundJobIdIdent";
+        const HAS_TENANT: bool = false;
+        type ValueType = BackgroundJobInfo;
     }
 
-    impl kvapi::Value for RoleInfo {
+    impl kvapi::Value for BackgroundJobInfo {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }
@@ -64,17 +62,29 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::RoleIdent;
+    use super::BackgroundJobIdIdent;
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_ident() {
-        let tenant = Tenant::new_literal("test");
-        let ident = RoleIdent::new(tenant, "test1");
+    fn test_background_job_id_ident() {
+        let tenant = Tenant::new_literal("dummy");
+        let ident = BackgroundJobIdIdent::new(tenant, 3);
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_roles/test/test1");
+        assert_eq!(key, "__fd_background_job_by_id/3");
 
-        assert_eq!(ident, RoleIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, BackgroundJobIdIdent::from_str_key(&key).unwrap());
+    }
+
+    #[test]
+    fn test_background_job_id_ident_with_key_space() {
+        // TODO(xp): implement this test
+        // let tenant = Tenant::new_literal("test");
+        // let ident = BackgroundJobIdIdent::new(tenant, 3);
+        //
+        // let key = ident.to_string_key();
+        // assert_eq!(key, "__fd_background_job_by_id/3");
+        //
+        // assert_eq!(ident, BackgroundJobIdIdent::from_str_key(&key).unwrap());
     }
 }

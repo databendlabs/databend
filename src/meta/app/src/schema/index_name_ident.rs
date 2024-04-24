@@ -47,6 +47,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_index";
         const TYPE: &'static str = "IndexNameIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = IndexId;
     }
 

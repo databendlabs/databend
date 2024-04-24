@@ -231,7 +231,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
 
             if geohash.len() > 12 {
-                ctx.set_error(builder.len(), "Currently the precision only implement within 12 digits!");
+                ctx.set_error(
+                    builder.len(),
+                    "Currently the precision only implement within 12 digits!",
+                );
                 builder.commit_row();
                 return;
             }
@@ -513,7 +516,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 if precision > 12 {
-                    ctx.set_error(builder.len(), "Currently the precision only implement within 12 digits!");
+                    ctx.set_error(
+                        builder.len(),
+                        "Currently the precision only implement within 12 digits!",
+                    );
                     builder.commit_row();
                     return;
                 }

@@ -26,7 +26,15 @@ use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableLockIdent;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_metrics::lock::metrics_inc_shutdown_lock_holder_nums;
@@ -37,11 +45,11 @@ use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::UnlockApi;
 use databend_common_users::UserApiProvider;
 use futures_util::StreamExt;
+use minitrace::func_name;
 use parking_lot::RwLock;
 
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;
-use crate::locks::LockExt;
 
 pub struct LockManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,
@@ -96,10 +104,18 @@ impl LockManager {
 
         let catalog = ctx.get_catalog(lock.get_catalog()).await?;
 
+        let tenant_name = lock.tenant_name();
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        let lock_key = LockKey::Table {
+            tenant: tenant.clone(),
+            table_id: lock.get_table_id(),
+        };
+
+        let req = CreateLockRevReq::new(lock_key.clone(), user, node, query_id, expire_secs);
+
         // get a new table lock revision.
-        let res = catalog
-            .create_lock_revision(lock.gen_create_lock_req(user, node, query_id, expire_secs))
-            .await?;
+        let res = catalog.create_lock_revision(req).await?;
         let revision = res.revision;
         // metrics.
         record_created_lock_nums(lock.lock_type().to_string(), lock.get_table_id(), 1);
@@ -115,8 +131,11 @@ impl LockManager {
         let acquire_lock_timeout = ctx.get_settings().get_acquire_lock_timeout()?;
         let duration = Duration::from_secs(acquire_lock_timeout);
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let list_table_lock_req = lock.gen_list_lock_req();
-        let delete_table_lock_req = lock.gen_delete_lock_req(revision);
+
+        let list_table_lock_req = ListLockRevReq::new(lock_key.clone());
+
+        let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
+
         loop {
             // List all revisions and check if the current is the minimum.
             let reply = catalog
@@ -129,16 +148,22 @@ impl LockManager {
 
             if position == 0 {
                 // The lock is acquired by current session.
-                let extend_table_lock_req = lock.gen_extend_lock_req(revision, expire_secs, true);
+
+                let extend_table_lock_req =
+                    ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, true);
+
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
                 record_acquired_lock_nums(lock.lock_type().to_string(), lock.get_table_id(), 1);
                 break;
             }
 
+            let watch_delete_ident =
+                TableLockIdent::new(&tenant, lock.get_table_id(), reply[position - 1].0);
+
             // Get the previous revision, watch the delete event.
             let req = WatchRequest {
-                key: lock.watch_delete_key(reply[position - 1].0),
+                key: watch_delete_ident.to_string_key(),
                 key_end: None,
                 filter_type: FilterType::Delete.into(),
             };

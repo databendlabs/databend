@@ -35,6 +35,16 @@ pub trait TenantResource {
     /// ```
     const TYPE: &'static str = "";
 
+    /// Whether to encode tenant into the key, when encoding a key without key-space.
+    ///
+    /// There are two kinds of key before introducing key space:
+    /// 1. The key with tenant, such as `CatalogNameIdent(tenant, name)`.
+    /// 2. The key without tenant, such as `TableId(table_id:u64)`.
+    ///
+    /// Meta-service keys are implemented with [`TIdent`].
+    /// [`TenantResource`] should be able to distinguish the two kinds of keys.
+    const HAS_TENANT: bool;
+
     /// The type of the value for the key [`TIdent<R: TenantResource>`](TIdent).
     type ValueType: kvapi::Value;
 }
