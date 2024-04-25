@@ -181,14 +181,15 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
             "Null" | "NULL" => {
                 if desc.args.is_empty() {
                     DataType::Null
-                } else {
-                    if desc.args.len() != 1 {
-                        return Err(Error::Parsing(
-                            "Nullable type must have one argument".to_string(),
-                        ));
-                    }
+                } else if desc.args.len() == 1 {
                     let inner = Self::try_from(&desc.args[0])?;
                     DataType::Nullable(Box::new(inner))
+                } else {
+                    let mut inner = vec![];
+                    for arg in &desc.args {
+                        inner.push(Self::try_from(arg)?);
+                    }
+                    DataType::Nullable(Box::new(DataType::Tuple(inner)))
                 }
             }
             "Boolean" => DataType::Boolean,
@@ -223,13 +224,21 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
             "Timestamp" => DataType::Timestamp,
             "Date" => DataType::Date,
             "Nullable" => {
-                if desc.args.len() != 1 {
+                if desc.args.is_empty() {
                     return Err(Error::Parsing(
                         "Nullable type must have one argument".to_string(),
                     ));
                 }
-                let inner = Self::try_from(&desc.args[0])?;
-                DataType::Nullable(Box::new(inner))
+                if desc.args.len() == 1 {
+                    let inner = Self::try_from(&desc.args[0])?;
+                    DataType::Nullable(Box::new(inner))
+                } else {
+                    let mut inner = vec![];
+                    for arg in &desc.args {
+                        inner.push(Self::try_from(arg)?);
+                    }
+                    DataType::Nullable(Box::new(DataType::Tuple(inner)))
+                }
             }
             "Array" => {
                 if desc.args.len() != 1 {

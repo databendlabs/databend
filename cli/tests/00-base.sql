@@ -19,6 +19,13 @@ select /* ignore this block */ 'with comment';
 select 1; select 2; select '
 a'; select 3;
 
+-- issue 409
+drop table if exists t;
+create table t(id tuple(STRING, array(tuple(array(int), array(STRING NOT NULL)))));
+insert into t values(null);
+select * from t;
+drop table t;
+
 -- enable it after we support code string in databend
 -- select $$aa$$;
 -- select $$
