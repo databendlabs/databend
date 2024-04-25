@@ -359,12 +359,19 @@ impl ExecuteState {
         );
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let has_result_set = plan.has_result_set();
+        let schema = if has_result_set {
+            // check has_result_set first for safety
+            QueryResponseField::from_schema(plan.schema())
+        } else {
+            vec![]
+        };
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
             queue_guard,
-            schema: QueryResponseField::from_schema(plan.schema()),
-            has_result_set: plan.has_result_set(),
+            schema,
+            has_result_set,
         };
         info!("{}: http query change state to Running", &ctx.get_id());
         Executor::start_to_running(&executor, Running(running_state)).await;
