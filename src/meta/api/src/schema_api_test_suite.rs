@@ -28,8 +28,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DataMaskIdIdent;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
-use databend_common_meta_app::data_mask::DatamaskId;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
@@ -3090,7 +3090,9 @@ impl SchemaApiTestSuite {
             };
             mt.create_data_mask(req).await?;
             let old_id: u64 = get_kv_u64_data(mt.as_kv_api(), &name).await?;
-            let id_key = DatamaskId { id: old_id };
+
+            let id_key = DataMaskIdIdent::new(&tenant, old_id);
+
             let meta: DatamaskMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
             assert_eq!(meta.comment, Some("before".to_string()));
 
@@ -3111,7 +3113,9 @@ impl SchemaApiTestSuite {
 
             let id: u64 = get_kv_u64_data(mt.as_kv_api(), &name).await?;
             assert_ne!(old_id, id);
-            let id_key = DatamaskId { id };
+
+            let id_key = DataMaskIdIdent::new(&tenant, id);
+
             let meta: DatamaskMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
             assert_eq!(meta.comment, Some("after".to_string()));
         }
