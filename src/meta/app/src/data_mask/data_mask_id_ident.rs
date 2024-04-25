@@ -15,45 +15,41 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type ShareNameIdent = TIdent<Resource>;
-
-/// Share name as value.
-pub type ShareNameIdentRaw = TIdentRaw<Resource>;
+pub type DataMaskIdIdent = TIdent<Resource, u64>;
+pub type DataMaskIdIdentRaw = TIdentRaw<Resource, u64>;
 
 pub use kvapi_impl::Resource;
 
-impl TIdent<Resource> {
-    pub fn share_name(&self) -> &str {
-        self.name()
+impl DataMaskIdIdent {
+    pub fn data_mask_id(&self) -> u64 {
+        *self.name()
     }
 }
 
-impl TIdentRaw<Resource> {
-    pub fn share_name(&self) -> &str {
-        self.name()
+impl DataMaskIdIdentRaw {
+    pub fn data_mask_id(&self) -> u64 {
+        *self.name()
     }
 }
 
 mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::share::ShareId;
+    use crate::data_mask::DatamaskMeta;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_share";
-        const TYPE: &'static str = "ShareNameIdent";
-        const HAS_TENANT: bool = true;
-        type ValueType = ShareId;
+        const PREFIX: &'static str = "__fd_datamask_by_id";
+        const TYPE: &'static str = "DataMaskIdIdent";
+        const HAS_TENANT: bool = false;
+        type ValueType = DatamaskMeta;
     }
 
-    impl kvapi::Value for ShareId {
-        /// ShareId is id of the two level `name->id,id->value` mapping
+    impl kvapi::Value for DatamaskMeta {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+            []
         }
     }
 
@@ -66,17 +62,29 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::ShareNameIdent;
+    use super::DataMaskIdIdent;
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_share_name_ident() {
-        let tenant = Tenant::new_literal("test");
-        let ident = ShareNameIdent::new(tenant, "test1");
+    fn test_data_mask_id_ident() {
+        let tenant = Tenant::new_literal("dummy");
+        let ident = DataMaskIdIdent::new(tenant, 3);
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_share/test/test1");
+        assert_eq!(key, "__fd_datamask_by_id/3");
 
-        assert_eq!(ident, ShareNameIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, DataMaskIdIdent::from_str_key(&key).unwrap());
+    }
+
+    #[test]
+    fn test_data_mask_id_ident_with_key_space() {
+        // TODO(xp): implement this test
+        // let tenant = Tenant::new_literal("test");
+        // let ident = DataMaskIdIdent::new(tenant, 3);
+        //
+        // let key = ident.to_string_key();
+        // assert_eq!(key, "__fd_background_job_by_id/3");
+        //
+        // assert_eq!(ident, DataMaskIdIdent::from_str_key(&key).unwrap());
     }
 }

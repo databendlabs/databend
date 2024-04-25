@@ -13,17 +13,31 @@
 // limitations under the License.
 
 use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
 pub type DataMaskNameIdent = TIdent<Resource>;
+pub type DataMaskNameIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
+
+impl DataMaskNameIdent {
+    pub fn data_mask_name(&self) -> &str {
+        self.name()
+    }
+}
+
+impl DataMaskNameIdentRaw {
+    pub fn data_mask_name(&self) -> &str {
+        self.name()
+    }
+}
 
 mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::data_mask::DatamaskId;
+    use crate::data_mask::DataMaskIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -31,10 +45,10 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_datamask";
         const TYPE: &'static str = "DataMaskNameIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = DatamaskId;
+        type ValueType = DataMaskIdIdent;
     }
 
-    impl kvapi::Value for DatamaskId {
+    impl kvapi::Value for DataMaskIdIdent {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }

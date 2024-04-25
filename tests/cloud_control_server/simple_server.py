@@ -44,9 +44,9 @@ def load_data_from_json():
                 notification_history_data = json.load(f)
                 notification_history = notification_pb2.NotificationHistory()
                 json_format.ParseDict(notification_history_data, notification_history)
-                NOTIFICATION_HISTORY_DB[notification_history.name] = (
-                    notification_history
-                )
+                NOTIFICATION_HISTORY_DB[
+                    notification_history.name
+                ] = notification_history
 
 
 def create_task_request_to_task(id, create_task_request):

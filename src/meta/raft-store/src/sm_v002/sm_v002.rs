@@ -299,12 +299,26 @@ impl SMV002 {
         self.expire_cursor = ExpireKey::new(log_time_ms, 0);
     }
 
-    /// List expiration index by expiration time.
+    /// List expiration index by expiration time,
+    /// upto current time(exclusive) in milli seconds.
+    ///
+    /// Only records with expire time less than current time will be returned.
+    /// Expire time that equals to current time is not considered expired.
     pub(crate) async fn list_expire_index(
         &self,
+        curr_time_ms: u64,
     ) -> Result<impl Stream<Item = Result<(ExpireKey, String), io::Error>> + '_, io::Error> {
         let start = self.expire_cursor;
-        let strm = self.levels.expire_map().range(start..).await?;
+
+        // curr_time > expire_at => expired
+        let end = ExpireKey::new(curr_time_ms, 0);
+
+        // There is chance the raft leader produce smaller timestamp for later logs.
+        if start >= end {
+            return Ok(futures::stream::empty().boxed());
+        }
+
+        let strm = self.levels.expire_map().range(start..end).await?;
 
         let strm = strm
             // Return only non-deleted records
@@ -313,7 +327,7 @@ impl SMV002 {
                 future::ready(Ok(expire_entry))
             });
 
-        Ok(strm)
+        Ok(strm.boxed())
     }
 
     pub fn sys_data_ref(&self) -> &SysData {

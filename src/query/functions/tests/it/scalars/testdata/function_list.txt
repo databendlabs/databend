@@ -34,6 +34,8 @@ remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
+st_asbinary -> st_aswkb
+st_astext -> st_aswkt
 st_geom_point -> st_makegeompoint
 st_geometryfromewkb -> st_geometryfromwkb
 st_geometryfromewkt -> st_geometryfromwkt
@@ -3504,8 +3506,20 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
+0 st_asewkb(Geometry) :: Binary
+1 st_asewkb(Geometry NULL) :: Binary NULL
+0 st_asewkt(Geometry) :: String
+1 st_asewkt(Geometry NULL) :: String NULL
 0 st_asgeojson(Geometry) :: Variant
 1 st_asgeojson(Geometry NULL) :: Variant NULL
+0 st_aswkb(Geometry) :: Binary
+1 st_aswkb(Geometry NULL) :: Binary NULL
+0 st_aswkt(Geometry) :: String
+1 st_aswkt(Geometry NULL) :: String NULL
+0 st_geohash(Geometry) :: String
+1 st_geohash(Geometry NULL) :: String NULL
+2 st_geohash(Geometry, Int32) :: String
+3 st_geohash(Geometry NULL, Int32 NULL) :: String NULL
 0 st_geometryfromwkb(String) :: Geometry
 1 st_geometryfromwkb(String NULL) :: Geometry NULL
 2 st_geometryfromwkb(Binary) :: Geometry

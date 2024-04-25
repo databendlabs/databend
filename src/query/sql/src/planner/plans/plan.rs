@@ -454,7 +454,6 @@ impl Plan {
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
-            Plan::Insert(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),
             Plan::ShowShareEndpoint(plan) => plan.schema(),
