@@ -34,6 +34,7 @@ pub enum Feature {
     ComputedColumn,
     StorageEncryption,
     Stream,
+    StorageQuota,
 }
 
 impl Display for Feature {
@@ -71,6 +72,9 @@ impl Display for Feature {
             }
             Feature::Stream => {
                 write!(f, "stream")
+            }
+            Feature::StorageQuota => {
+                write!(f, "storage_quota")
             }
         }
     }
