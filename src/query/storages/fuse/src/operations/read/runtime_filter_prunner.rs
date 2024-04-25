@@ -90,16 +90,13 @@ pub fn runtime_filter_pruner(
         false
     });
 
-    if pruned {
-        info!(
-            "Pruned partition with {:?} rows by runtime filter",
-            part.nums_rows
-        );
-        Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
-        return Ok(true);
-    }
+    info!(
+        "Pruned partition with {:?} rows by runtime filter",
+        part.nums_rows
+    );
+    Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
 
-    Ok(false)
+    Ok(pruned)
 }
 
 pub(crate) fn update_bitmap_with_bloom_filter(
