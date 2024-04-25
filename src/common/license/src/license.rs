@@ -74,7 +74,35 @@ impl Display for Feature {
 
 impl Feature {
     pub fn verify(&self, feature: &Feature) -> bool {
-        self == feature
+        match (self, feature) {
+            (Feature::ComputeQuota(c), Feature::ComputeQuota(v)) => {
+                if let Some(thread_num) = c.threads_num {
+                    if thread_num <= v.threads_num.unwrap_or(usize::MAX) {
+                        return false;
+                    }
+                }
+
+                if let Some(max_memory_usage) = c.memory_usage {
+                    if max_memory_usage <= v.memory_usage.unwrap_or(usize::MAX) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+            (Feature::Test, Feature::Test)
+            | (Feature::AggregateIndex, Feature::AggregateIndex)
+            | (Feature::ComputedColumn, Feature::ComputedColumn)
+            | (Feature::Vacuum, Feature::Vacuum)
+            | (Feature::LicenseInfo, Feature::LicenseInfo)
+            | (Feature::Stream, Feature::Stream)
+            | (Feature::BackgroundService, Feature::BackgroundService)
+            | (Feature::DataMask, Feature::DataMask)
+            | (Feature::InvertedIndex, Feature::InvertedIndex)
+            | (Feature::VirtualColumn, Feature::VirtualColumn)
+            | (Feature::StorageEncryption, Feature::StorageEncryption) => true,
+            (_, _) => false,
+        }
     }
 }
 
@@ -167,6 +195,14 @@ mod tests {
                 "{\"ComputeQuota\":{\"threads_num\":1, \"memory_usage\":1}}"
             )
             .unwrap()
+        );
+
+        assert_eq!(
+            Feature::ComputeQuota(ComputeQuota {
+                threads_num: None,
+                memory_usage: Some(1),
+            }),
+            serde_json::from_str::<Feature>("{\"ComputeQuota\":{\"memory_usage\":1}}").unwrap()
         )
     }
 }
