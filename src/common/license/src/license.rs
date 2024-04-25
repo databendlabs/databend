@@ -17,11 +17,15 @@ use std::fmt::Formatter;
 
 use serde::Deserialize;
 use serde::Serialize;
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ComputeQuota {
+    threads_num: Option<usize>,
+    memory_usage: Option<usize>,
+}
 
 // All enterprise features are defined here.
-#[derive(Debug, PartialEq, EnumIter)]
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Feature {
     LicenseInfo,
     Vacuum,
@@ -34,45 +38,43 @@ pub enum Feature {
     ComputedColumn,
     StorageEncryption,
     Stream,
+    ComputeQuota(ComputeQuota),
 }
 
 impl Display for Feature {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Feature::VirtualColumn => {
-                write!(f, "virtual_column")
-            }
-            Feature::LicenseInfo => {
-                write!(f, "license_info")
-            }
-            Feature::Vacuum => {
-                write!(f, "vacuum")
-            }
-            Feature::Test => {
-                write!(f, "test")
-            }
-            Feature::BackgroundService => {
-                write!(f, "background_service")
-            }
-            Feature::DataMask => {
-                write!(f, "data_mask")
-            }
-            Feature::AggregateIndex => {
-                write!(f, "aggregate_index")
-            }
-            Feature::InvertedIndex => {
-                write!(f, "inverted_index")
-            }
-            Feature::ComputedColumn => {
-                write!(f, "computed_column")
-            }
-            Feature::StorageEncryption => {
-                write!(f, "storage_encryption")
-            }
-            Feature::Stream => {
-                write!(f, "stream")
+            Feature::LicenseInfo => write!(f, "license_info"),
+            Feature::Vacuum => write!(f, "vacuum"),
+            Feature::Test => write!(f, "test"),
+            Feature::VirtualColumn => write!(f, "virtual_column"),
+            Feature::BackgroundService => write!(f, "background_service"),
+            Feature::DataMask => write!(f, "data_mask"),
+            Feature::AggregateIndex => write!(f, "aggregate_index"),
+            Feature::InvertedIndex => write!(f, "inverted_index"),
+            Feature::ComputedColumn => write!(f, "computed_column"),
+            Feature::StorageEncryption => write!(f, "storage_encryption"),
+            Feature::Stream => write!(f, "stream"),
+            Feature::ComputeQuota(v) => {
+                write!(f, "compute_quota(")?;
+
+                match &v.threads_num {
+                    None => write!(f, "threads_num: unlimited,")?,
+                    Some(threads_num) => write!(f, "threads_num: {}", *threads_num)?,
+                };
+
+                match v.memory_usage {
+                    None => write!(f, "memory_usage: unlimited,"),
+                    Some(memory_usage) => write!(f, "memory_usage: {}", memory_usage),
+                }
             }
         }
+    }
+}
+
+impl Feature {
+    pub fn verify(&self, feature: &Feature) -> bool {
+        self == feature
     }
 }
 
@@ -82,25 +84,89 @@ pub struct LicenseInfo {
     pub r#type: Option<String>,
     pub org: Option<String>,
     pub tenants: Option<Vec<String>>,
-    pub features: Option<Vec<String>>,
+    pub features: Option<Vec<Feature>>,
 }
 
 impl LicenseInfo {
     pub fn display_features(&self) -> String {
         // sort all features in alphabet order and ignore test feature
-        let mut binding = self.features.clone().unwrap_or_default();
-        if binding.is_empty() {
-            binding = Feature::iter().map(|f| f.to_string()).collect::<Vec<_>>();
+        let mut features = self.features.clone().unwrap_or_default();
+
+        if features.is_empty() {
+            return String::from("Unlimited");
         }
-        let mut features = binding
-            .iter()
-            .filter(|f| *f != &Feature::Test.to_string())
-            .collect::<Vec<_>>();
+
         features.sort();
+
         features
             .iter()
+            .filter(|f| **f != Feature::Test)
             .map(|f| f.to_string())
             .collect::<Vec<_>>()
             .join(",")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::license::ComputeQuota;
+    use crate::license::Feature;
+
+    #[test]
+    fn test_deserialize_feature_from_string() {
+        assert_eq!(
+            Feature::LicenseInfo,
+            serde_json::from_str::<Feature>("\"LicenseInfo\"").unwrap()
+        );
+        assert_eq!(
+            Feature::Vacuum,
+            serde_json::from_str::<Feature>("\"Vacuum\"").unwrap()
+        );
+        assert_eq!(
+            Feature::Test,
+            serde_json::from_str::<Feature>("\"Test\"").unwrap()
+        );
+        assert_eq!(
+            Feature::VirtualColumn,
+            serde_json::from_str::<Feature>("\"VirtualColumn\"").unwrap()
+        );
+        assert_eq!(
+            Feature::BackgroundService,
+            serde_json::from_str::<Feature>("\"BackgroundService\"").unwrap()
+        );
+        assert_eq!(
+            Feature::DataMask,
+            serde_json::from_str::<Feature>("\"DataMask\"").unwrap()
+        );
+        assert_eq!(
+            Feature::AggregateIndex,
+            serde_json::from_str::<Feature>("\"AggregateIndex\"").unwrap()
+        );
+        assert_eq!(
+            Feature::InvertedIndex,
+            serde_json::from_str::<Feature>("\"InvertedIndex\"").unwrap()
+        );
+        assert_eq!(
+            Feature::ComputedColumn,
+            serde_json::from_str::<Feature>("\"ComputedColumn\"").unwrap()
+        );
+        assert_eq!(
+            Feature::StorageEncryption,
+            serde_json::from_str::<Feature>("\"StorageEncryption\"").unwrap()
+        );
+        assert_eq!(
+            Feature::Stream,
+            serde_json::from_str::<Feature>("\"Stream\"").unwrap()
+        );
+        assert_eq!(
+            Feature::ComputeQuota(ComputeQuota {
+                threads_num: Some(1),
+                memory_usage: Some(1),
+            }),
+            serde_json::from_str::<Feature>(
+                "{\"ComputeQuota\":{\"threads_num\":1, \"memory_usage\":1}}"
+            )
+            .unwrap()
+        )
     }
 }

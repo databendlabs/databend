@@ -3403,6 +3403,7 @@ dependencies = [
  "databend-common-exception",
  "jwt-simple",
  "serde",
+ "serde_json",
  "strum 0.24.1",
  "strum_macros 0.24.3",
 ]
