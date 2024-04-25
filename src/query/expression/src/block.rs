@@ -570,7 +570,7 @@ impl DataBlock {
 
 impl OwnedMemoryUsageSize for DataBlock {
     fn owned_memory_usage(&mut self) -> usize {
-        self.columns.owned_memory_usage()
+        self.columns.owned_memory_usage() /*+ self.meta.owned_memory_usage()*/
     }
 }
 

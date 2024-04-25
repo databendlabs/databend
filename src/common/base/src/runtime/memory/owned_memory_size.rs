@@ -47,8 +47,8 @@ impl<T: OwnedMemoryUsageSize> OwnedMemoryUsageSize for Vec<T> {
     }
 }
 
-// impl<T: OwnedMemoryUsageSize> OwnedMemoryUsageSize for dyn T {
-//     fn owned_memory_usage(&mut self) -> usize {
-//         T::owned_memory_usage(self)
-//     }
-// }
+impl<T: OwnedMemoryUsageSize> OwnedMemoryUsageSize for Option<T> {
+    fn owned_memory_usage(&mut self) -> usize {
+        self.as_mut().map(|x| x.owned_memory_usage()).unwrap_or(0)
+    }
+}
