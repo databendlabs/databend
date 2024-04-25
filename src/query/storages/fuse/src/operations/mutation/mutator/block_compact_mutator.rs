@@ -21,7 +21,7 @@ use std::vec;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::ErrorCode;
@@ -200,29 +200,25 @@ impl BlockCompactMutator {
                 .base_snapshot
                 .schema
                 .to_leaf_column_id_set();
-            let lazy_parts = parts
-                .into_iter()
-                .map(|v| {
-                    v.as_any()
-                        .downcast_ref::<CompactLazyPartInfo>()
-                        .unwrap()
-                        .clone()
-                })
-                .collect::<Vec<_>>();
-            Partitions::create(
-                PartitionsShuffleKind::Mod,
-                BlockCompactMutator::build_compact_tasks(
-                    self.ctx.clone(),
-                    column_ids,
-                    self.cluster_key_id,
-                    self.thresholds,
-                    lazy_parts,
-                )
-                .await?,
+            BlockCompactMutator::build_compact_tasks(
+                self.ctx.clone(),
+                column_ids,
+                self.cluster_key_id,
+                self.thresholds,
+                parts,
             )
+            .await?
+            .into_iter()
+            .map(|v| Arc::new(Box::new(v) as Box<dyn PartInfo>))
+            .collect()
         } else {
-            Partitions::create(PartitionsShuffleKind::Mod, parts)
+            parts
+                .into_iter()
+                .map(|v| Arc::new(Box::new(v) as Box<dyn PartInfo>))
+                .collect()
         };
+
+        let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);
         Ok(partitions)
     }
 
@@ -233,7 +229,7 @@ impl BlockCompactMutator {
         cluster_key_id: Option<u32>,
         thresholds: BlockThresholds,
         mut lazy_parts: Vec<CompactLazyPartInfo>,
-    ) -> Result<Vec<PartInfoPtr>> {
+    ) -> Result<Vec<CompactBlockPartInfo>> {
         let start = Instant::now();
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -299,7 +295,7 @@ impl BlockCompactMutator {
     fn generate_part(
         &mut self,
         segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
-        parts: &mut Vec<PartInfoPtr>,
+        parts: &mut Vec<CompactLazyPartInfo>,
         checker: &mut SegmentCompactChecker,
     ) {
         if !segments.is_empty() && checker.check_for_compact(&segments) {
@@ -494,7 +490,7 @@ impl CompactTaskBuilder {
         segment_indices: Vec<usize>,
         compact_segments: Vec<Arc<CompactSegmentInfo>>,
         semaphore: Arc<Semaphore>,
-    ) -> Result<Vec<PartInfoPtr>> {
+    ) -> Result<Vec<CompactBlockPartInfo>> {
         let mut block_idx = 0;
         // Used to identify whether the latest block is unchanged or needs to be compacted.
         let mut latest_flag = true;
@@ -580,24 +576,24 @@ impl CompactTaskBuilder {
 
         let mut removed_segment_indexes = segment_indices;
         let segment_idx = removed_segment_indexes.pop().unwrap();
-        let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
+        let mut partitions = Vec::with_capacity(tasks.len() + 1);
         for (block_idx, blocks) in tasks.into_iter() {
-            partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactTaskInfo(
+            partitions.push(CompactBlockPartInfo::CompactTaskInfo(
                 CompactTaskInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
                     block_idx,
                 }),
-            ))));
+            ));
         }
 
-        partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactExtraInfo(
+        partitions.push(CompactBlockPartInfo::CompactExtraInfo(
             CompactExtraInfo::create(
                 segment_idx,
                 unchanged_blocks,
                 removed_segment_indexes,
                 removed_segment_summary,
             ),
-        ))));
+        ));
         Ok(partitions)
     }
 }

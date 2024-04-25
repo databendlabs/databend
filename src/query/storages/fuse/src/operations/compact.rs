@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::lock::Lock;
+use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -87,7 +88,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn do_compact_blocks(
+    pub async fn do_compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
         limits: CompactionLimits,
@@ -163,7 +164,13 @@ impl FuseTable {
                     Result::<_, ErrorCode>::Ok(partitions)
                 })?;
 
-                let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);
+                let partitions = Partitions::create(
+                    PartitionsShuffleKind::Mod,
+                    partitions
+                        .into_iter()
+                        .map(|v| Arc::new(Box::new(v) as Box<dyn PartInfo>))
+                        .collect(),
+                );
                 query_ctx.set_partitions(partitions)?;
                 Ok(())
             });

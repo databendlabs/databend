@@ -44,7 +44,6 @@ use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseStorageFormat;
 
-// TODO rename this, it is serialization, or pass in a writer(if not rename)
 pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,

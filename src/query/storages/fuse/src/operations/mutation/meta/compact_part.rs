@@ -65,11 +65,16 @@ impl CompactLazyPartInfo {
     pub fn create(
         segment_indices: Vec<SegmentIndex>,
         compact_segments: Vec<Arc<CompactSegmentInfo>>,
-    ) -> PartInfoPtr {
-        Arc::new(Box::new(CompactLazyPartInfo {
+    ) -> CompactLazyPartInfo {
+        // Arc::new(Box::new(CompactLazyPartInfo {
+        //    segment_indices,
+        //    compact_segments,
+        //}))
+
+        CompactLazyPartInfo {
             segment_indices,
             compact_segments,
-        }))
+        }
     }
 }
 

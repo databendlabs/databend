@@ -195,31 +195,33 @@ impl Processor for TransformSerializeSegment {
                     segment: Arc::new(segment_info),
                 }
             }
-            State::PreCommitSegment { location, segment } => {
+            State::PreCommitSegment {
+                location: path,
+                segment,
+            } => {
                 if let Some(segment_cache) = SegmentInfo::cache() {
-                    segment_cache.put(location.clone(), Arc::new(segment.as_ref().try_into()?));
+                    segment_cache.put(path.clone(), Arc::new(segment.as_ref().try_into()?));
                 }
 
                 let mut abort_operation = AbortOperation::default();
                 for block_meta in &segment.blocks {
                     abort_operation.add_block(block_meta);
                 }
-                abort_operation.add_segment(location.clone());
-
-                let format_version = SegmentInfo::VERSION;
+                abort_operation.add_segment(path.clone());
 
                 // emit log entry.
                 // for newly created segment, always use the latest version
+                let format_version = SegmentInfo::VERSION;
                 let meta = MutationLogs {
                     entries: vec![MutationLogEntry::AppendSegment {
-                        segment_location: location.clone(),
+                        segment_location: path.clone(),
                         format_version,
                         abort_operation,
                         summary: segment.summary.clone(),
                     }],
                 };
 
-                self.ctx.add_segment_location((location, format_version))?;
+                self.ctx.add_segment_location((path, format_version))?;
 
                 self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));
             }

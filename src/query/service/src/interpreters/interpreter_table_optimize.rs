@@ -182,18 +182,21 @@ impl OptimizeTableInterpreter {
             }
         };
 
-        let res = table
-            .compact_blocks(self.ctx.clone(), compaction_limits)
-            .await?;
+        let res = {
+            let table = FuseTable::try_from_table(table.as_ref())?;
+            table
+                .do_compact_blocks(self.ctx.clone(), compaction_limits)
+                .await?
+        };
 
         let catalog_info = catalog.info();
         let compact_is_distributed = (!self.ctx.get_cluster().is_empty())
             && self.ctx.get_settings().get_enable_distributed_compact()?;
 
         // build the compact pipeline.
-        let mut compact_pipeline = if let Some((parts, snapshot)) = res {
+        let mut compact_pipeline = if let Some((part_info_ptr, snapshot)) = res {
             let physical_plan = Self::build_physical_plan(
-                parts,
+                part_info_ptr,
                 table_info,
                 snapshot,
                 catalog_info,
