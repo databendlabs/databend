@@ -26,7 +26,7 @@ use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleIdent;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::TenantOwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
@@ -105,8 +105,8 @@ impl RoleMgr {
     }
 
     /// Build meta-service for a role grantee, which is a tenant's database, table, stage, udf, etc.
-    fn ownership_object_ident(&self, object: &OwnershipObject) -> TenantOwnershipObject {
-        TenantOwnershipObject::new(self.tenant.clone(), object.clone())
+    fn ownership_object_ident(&self, object: &OwnershipObject) -> TenantOwnershipObjectIdent {
+        TenantOwnershipObjectIdent::new(self.tenant.clone(), object.clone())
     }
 
     /// Build meta-service for a listing keys belongs to the tenant.
@@ -116,7 +116,7 @@ impl RoleMgr {
         let dummy = OwnershipObject::UDF {
             name: "dummy".to_string(),
         };
-        let grantee = TenantOwnershipObject::new(self.tenant.clone(), dummy);
+        let grantee = TenantOwnershipObjectIdent::new(self.tenant.clone(), dummy);
         grantee.tenant_prefix()
     }
 
