@@ -53,8 +53,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: linux, arch: x86_64, target: x86_64-unknown-linux-gnu, runner: ubuntu-20.04 }
-          # - { os: linux, arch: aarch64, target: aarch64-unknown-linux-gnu, runner: ubuntu-20.04 }
+          - { os: linux, arch: x86_64, target: x86_64-unknown-linux-gnu, runner: ubuntu-latest }
+          - { os: linux, arch: aarch64, target: aarch64-unknown-linux-gnu, runner: ubuntu-latest }
           - { os: windows, arch: x86_64, target: x86_64-pc-windows-msvc, runner: windows-2019 }
           - { os: macos, arch: x86_64, target: x86_64-apple-darwin, runner: macos-11 }
           - { os: macos, arch: aarch64, target: aarch64-apple-darwin, runner: macos-11 }
@@ -69,6 +69,11 @@ jobs:
           else
             echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
           fi
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            echo "MANYLINUX=2_28" >> $GITHUB_OUTPUT
+          else
+            echo "MANYLINUX=auto" >> $GITHUB_OUTPUT
+          fi
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
         with:
@@ -79,6 +84,7 @@ jobs:
         with:
           working-directory: bindings/python
           target: ${{ matrix.target }}
+          manylinux: ${{ steps.opts.outputs.MANYLINUX }}
           sccache: 'true'
           args: ${{ steps.opts.outputs.BUILD_ARGS }}
       - name: Upload artifact
