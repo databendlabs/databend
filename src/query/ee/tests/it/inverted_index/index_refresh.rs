@@ -145,12 +145,15 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         &schema,
         &query_fields,
         &index_options,
+        false,
         &index_loc,
     )
     .await?;
 
     let query = "rust";
-    let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;
+    let matched_rows = index_reader
+        .clone()
+        .do_filter(query, block_meta.row_count)?;
     assert!(matched_rows.is_some());
     let matched_rows = matched_rows.unwrap();
     assert_eq!(matched_rows.len(), 2);
@@ -158,7 +161,9 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     assert_eq!(matched_rows[1].0, 1);
 
     let query = "java";
-    let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;
+    let matched_rows = index_reader
+        .clone()
+        .do_filter(query, block_meta.row_count)?;
     assert!(matched_rows.is_some());
     let matched_rows = matched_rows.unwrap();
     assert_eq!(matched_rows.len(), 1);

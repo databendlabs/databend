@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
@@ -27,7 +26,7 @@ use tantivy::schema::Field;
 use tantivy::Index;
 use tantivy::Score;
 
-use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_filter;
+use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
 use crate::io::write::create_tokenizer_manager;
 
 #[derive(Clone)]
@@ -35,7 +34,7 @@ pub struct InvertedIndexReader {
     fields: Vec<Field>,
     field_boosts: Vec<(Field, Score)>,
     filters: HashSet<String>,
-    directory: Arc<InvertedIndexDirectory>,
+    directory: InvertedIndexDirectory,
 }
 
 impl InvertedIndexReader {
@@ -44,6 +43,7 @@ impl InvertedIndexReader {
         schema: &DataSchema,
         query_fields: &Vec<(String, Option<F32>)>,
         index_options: &BTreeMap<String, String>,
+        need_position: bool,
         index_loc: &str,
     ) -> Result<Self> {
         let mut fields = Vec::with_capacity(query_fields.len());
@@ -56,7 +56,10 @@ impl InvertedIndexReader {
                 field_boosts.push((field, boost.0));
             }
         }
-        let directory = load_inverted_index_filter(dal.clone(), index_loc.to_string()).await?;
+        let field_nums = schema.num_fields();
+        let directory =
+            load_inverted_index_directory(dal.clone(), need_position, field_nums, index_loc)
+                .await?;
 
         let filters: HashSet<String> = match index_options.get("filters") {
             Some(filters_str) => filters_str.split(',').map(|v| v.to_string()).collect(),
@@ -73,10 +76,9 @@ impl InvertedIndexReader {
 
     // Filter the rows and scores in the block that can match the query text,
     // if there is no row that can match, this block can be pruned.
-    pub fn do_filter(&self, query: &str, row_count: u64) -> Result<Option<Vec<(usize, F32)>>> {
+    pub fn do_filter(self, query: &str, row_count: u64) -> Result<Option<Vec<(usize, F32)>>> {
         let tokenizer_manager = create_tokenizer_manager(&self.filters);
-        let directory = Arc::unwrap_or_clone(self.directory.clone());
-        let mut index = Index::open(directory)?;
+        let mut index = Index::open(self.directory)?;
         index.set_tokenizers(tokenizer_manager.clone());
         let reader = index.reader()?;
         let searcher = reader.searcher();

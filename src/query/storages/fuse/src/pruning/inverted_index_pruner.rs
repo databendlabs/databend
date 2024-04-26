@@ -73,11 +73,15 @@ impl InvertedIndexPruner {
             &self.inverted_index_info.index_version,
         );
 
+        // read tantivy position file only when query has phrase terms
+        let need_position = self.inverted_index_info.query_text.contains('"');
+
         let inverted_index_reader = InvertedIndexReader::try_create(
             self.dal.clone(),
             &self.inverted_index_info.index_schema,
             &self.inverted_index_info.query_fields,
             &self.inverted_index_info.index_options,
+            need_position,
             &index_loc,
         )
         .await?;
