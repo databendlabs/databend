@@ -280,9 +280,10 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     }
                 };
             } else {
-                return Err(ErrorCode::Internal(
-                    "Internal, TransformPartitionBucket only recv AggregateMeta.",
-                ));
+                return Err(ErrorCode::Internal(format!(
+                    "Internal, TransformPartitionBucket only recv AggregateMeta, but got {:?}",
+                    block_meta
+                )));
             }
         } else {
             return Err(ErrorCode::Internal(
