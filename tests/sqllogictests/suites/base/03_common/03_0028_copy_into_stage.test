@@ -46,6 +46,9 @@ statement ok
 COPY INTO @hello from (select number from numbers(1)) FILE_FORMAT = (type = parquet)
 
 statement ok
+with S as (select number from numbers(1000) where number > 100) COPY INTO @hello from (select number from numbers(1) where number not in (SELECT number FROM S)) FILE_FORMAT = (type = parquet)
+
+statement ok
 CREATE TABLE world(c1 int , c2 int);
 
 statement error (?s)1006.*Number of columns in select list \(1\) does not match that of the corresponding table \(2\)
@@ -55,7 +58,7 @@ statement ok
 DROP STAGE IF EXISTS hello
 
 statement ok
-drop table world 
+drop table world
 
 statement ok
 DROP DATABASE db1
