@@ -46,6 +46,9 @@ statement ok
 COPY INTO @hello from (select number from numbers(1)) FILE_FORMAT = (type = parquet)
 
 statement ok
+COPY INTO @hello from (select number from numbers(1) where number in  (select max(number) from numbers(1000)) ) FILE_FORMAT = (type = parquet)
+
+statement ok
 with S as (select number from numbers(1000) where number > 100) COPY INTO @hello from (select number from numbers(1) where number not in (SELECT number FROM S)) FILE_FORMAT = (type = parquet)
 
 statement ok
