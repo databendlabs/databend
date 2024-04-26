@@ -178,8 +178,8 @@ impl Node {
 const POINTS_MASK: u64 = 0xFFFFFFFF00000000;
 const EPOCH_MASK: u64 = 0x00000000FFFFFFFF;
 
-// TODO: Replace with a variable, not a const value
-const MAX_POINTS: u64 = 3;
+// DEFAULT_POINTS is equal to Priority::MEDIUM
+const DEFAULT_POINTS: u64 = 3;
 
 struct ExecutingGraph {
     finished_nodes: AtomicUsize,
@@ -209,7 +209,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
-            points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
+            points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             query_id,
             should_finish: AtomicBool::new(false),
             finish_condvar_notify,
@@ -232,7 +232,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
-            points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
+            points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             query_id,
             should_finish: AtomicBool::new(false),
             finish_condvar_notify,
@@ -606,7 +606,7 @@ impl ScheduleQueue {
         while let Some(processor) = self.async_queue.pop_front() {
             if processor
                 .graph
-                .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+                .can_perform_task(executor.epoch.load(Ordering::SeqCst), DEFAULT_POINTS)
             {
                 let query_id = processor.graph.get_query_id().clone();
                 Self::schedule_async_task_with_condition(
@@ -628,7 +628,7 @@ impl ScheduleQueue {
             while let Some(processor) = self.sync_queue.pop_front() {
                 if processor
                     .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+                    .can_perform_task(executor.epoch.load(Ordering::SeqCst), DEFAULT_POINTS)
                 {
                     context.set_task(ExecutorTask::Sync(processor));
                     break;
@@ -646,7 +646,7 @@ impl ScheduleQueue {
             while let Some(processor) = self.sync_queue.pop_front() {
                 if processor
                     .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+                    .can_perform_task(executor.epoch.load(Ordering::SeqCst), DEFAULT_POINTS)
                 {
                     current_tasks.push_back(ExecutorTask::Sync(processor));
                 } else {
@@ -939,7 +939,10 @@ impl RunningGraph {
         format!("{:?}", nodes_display)
     }
 
+    /// Change the priority
     pub fn change_priority(&self, priority: u64) {
+        // Update highest 32 bits of `points`, which store the number of points that can be consumed in an epoch
+        // See `points` definition in `ExecutingGraph` in detail
         let mut old = self.0.points.load(Ordering::Relaxed);
         loop {
             let new = (priority << 32) | (old & EPOCH_MASK);
