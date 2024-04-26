@@ -199,9 +199,8 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
+        by_pass_retention_period_checking: bool,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention =
-            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {
@@ -211,11 +210,17 @@ impl FuseTable {
         };
 
         assert!(root_snapshot.timestamp.is_some());
+        let retention =
+            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
         let mut time_point = root_snapshot.timestamp.unwrap() - retention;
 
         let (location, files) = match instant {
             Some(NavigationPoint::TimePoint(point)) => {
-                time_point = std::cmp::min(point, time_point);
+                time_point = if !by_pass_retention_period_checking {
+                    std::cmp::min(point, time_point)
+                } else {
+                    point
+                };
                 self.list_by_time_point(time_point).await
             }
             Some(NavigationPoint::SnapshotID(snapshot_id)) => {

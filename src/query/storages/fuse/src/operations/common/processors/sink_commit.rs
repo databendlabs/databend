@@ -20,6 +20,7 @@ use std::time::Instant;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
 use databend_common_catalog::lock::Lock;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -351,6 +352,7 @@ where F: SnapshotGenerator + Send + 'static
 
                 self.dal.write(&location, data).await?;
 
+                let snapshot_timestamp = snapshot.timestamp.unwrap();
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 match FuseTable::update_table_meta(
                     catalog.clone(),
@@ -380,31 +382,73 @@ where F: SnapshotGenerator + Send + 'static
                             let latest = self.table.refresh(self.ctx.as_ref()).await?;
                             let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
-                            warn!(
-                                "table detected, purging historical data. ({})",
-                                tbl.table_info.ident
-                            );
+                            let transient_data_retention_minutes = self
+                                .ctx
+                                .get_settings()
+                                .get_transient_data_retention_time_in_minutes()?;
+
+                            let instant = snapshot_timestamp
+                                - chrono::Duration::minutes(
+                                    transient_data_retention_minutes as i64,
+                                );
 
                             let keep_last_snapshot = true;
-                            let snapshot_files = tbl.list_snapshot_files().await?;
-                            if let Err(e) = tbl
-                                .do_purge(
+                            let dry_run = false;
+                            let by_pass_retention_period_checking = true;
+
+                            info!(
+                                "purging historical data. (name{}, id {})",
+                                tbl.table_info.name, tbl.table_info.ident
+                            );
+                            // pure historical data.
+                            // errors ignored (since it can be picked up by subsequent purge actions)
+                            match tbl
+                                .navigate_for_purge(
                                     &self.ctx,
-                                    snapshot_files,
-                                    None,
-                                    keep_last_snapshot,
-                                    false,
+                                    Some(NavigationPoint::TimePoint(instant)),
+                                    by_pass_retention_period_checking,
                                 )
                                 .await
                             {
-                                // Errors of GC, if any, are ignored, since GC task can be picked up
-                                warn!(
-                                    "GC of table not success (this is not a permanent error). the error : {}",
-                                    e
-                                );
-                            } else {
-                                info!("GC of table done");
+                                Ok((table, files)) => {
+                                    if let Err(e) = table
+                                        .do_purge(
+                                            &self.ctx,
+                                            files,
+                                            None,
+                                            keep_last_snapshot,
+                                            dry_run,
+                                        )
+                                        .await
+                                    {
+                                        // Errors of GC, if any, are ignored, since GC task can be picked up
+                                        warn!("table GC failed (none permanent error) : {}", e);
+                                    } else {
+                                        info!("table GC done");
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "table GC failed (none permanent error) : navigation error {:?}",
+                                        e
+                                    );
+                                }
                             }
+
+                            // let snapshot_files = tbl.list_snapshot_files().await?;
+
+                            // if let Err(e) = tbl
+                            //    .do_purge(
+                            //        &self.ctx,
+                            //        snapshot_files,
+                            //        None,
+                            //        keep_last_snapshot,
+                            //        dry_run,
+                            //    )
+                            //    .await
+                            //{
+                            //} else {
+                            //}
                         }
                         metrics_inc_commit_mutation_success();
                         {
