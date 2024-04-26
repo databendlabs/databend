@@ -496,7 +496,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
-                    return;
                 }
             };
             builder.commit_row();
@@ -531,7 +530,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             builder.len(),
                             ErrorCode::GeometryError(e.to_string()).to_string(),
                         );
-                        return;
                     }
                 };
                 builder.commit_row();
