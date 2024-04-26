@@ -202,7 +202,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         let (mut bucket, mut partition_count) = (0, 0);
         if let Some(block_meta) = data_block.get_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_ref_from(block_meta) {
-                let (bucket, partition_count) = match block_meta {
+                (bucket, partition_count) = match block_meta {
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
