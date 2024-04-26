@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -196,11 +197,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         Ok(self.initialized_all_inputs)
     }
 
+    #[allow(unused_assignments)]
     fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<(isize, usize)> {
         let (mut bucket, mut partition_count) = (0, 0);
         if let Some(block_meta) = data_block.get_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_ref_from(block_meta) {
-                (bucket, partition_count) = match block_meta {
+                let (bucket, partition_count) = match block_meta {
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
@@ -277,7 +279,15 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         (payload.bucket, payload.max_partition_count)
                     }
                 };
+            } else {
+                return Err(ErrorCode::Internal(
+                    "Internal, TransformPartitionBucket only recv AggregateMeta.",
+                ));
             }
+        } else {
+            return Err(ErrorCode::Internal(
+                "Internal, TransformPartitionBucket only recv DataBlock with meta.",
+            ));
         }
 
         if self.all_inputs_init {
