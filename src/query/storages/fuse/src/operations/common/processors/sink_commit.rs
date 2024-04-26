@@ -221,12 +221,19 @@ where F: SnapshotGenerator + Send + 'static
             .get_settings()
             .get_transient_data_retention_time_in_minutes()?;
 
+        if transient_data_retention_minutes == 0 {
+            // if transient_data_retention_time_in_minutes is set to 0,
+            // fallback to normal purge (which is slightly faster)
+            return self.purge_table(tbl).await;
+        }
+
         let instant =
             snapshot_timestamp - chrono::Duration::minutes(transient_data_retention_minutes as i64);
 
         let by_pass_retention_period_checking = true;
         let keep_last_snapshot = true;
         let dry_run = false;
+
         let (table, candidate_snapshots) = tbl
             .navigate_for_purge(
                 &self.ctx,
@@ -234,6 +241,7 @@ where F: SnapshotGenerator + Send + 'static
                 by_pass_retention_period_checking,
             )
             .await?;
+
         table
             .do_purge(
                 &self.ctx,
@@ -243,6 +251,7 @@ where F: SnapshotGenerator + Send + 'static
                 dry_run,
             )
             .await?;
+
         Ok(())
     }
 
@@ -434,7 +443,8 @@ where F: SnapshotGenerator + Send + 'static
                             );
 
                             // purge table, swallow errors
-                            let res = if tbl.transient() {
+                            let table_is_transient = tbl.transient();
+                            let res = if table_is_transient {
                                 self.purge_transient_table(tbl, snapshot_timestamp).await
                             } else {
                                 self.purge_table(tbl).await
@@ -442,12 +452,15 @@ where F: SnapshotGenerator + Send + 'static
 
                             match res {
                                 Err(e) => warn!(
-                                    "purge table  (name{}, id {}) failed (non-permanent error). the error : {}",
-                                    tbl.table_info.name, tbl.table_info.ident, e
+                                    "purge table (name: {}, id: {}, transient: {}) failed (non-permanent error). the error : {}",
+                                    tbl.table_info.name,
+                                    tbl.table_info.ident,
+                                    table_is_transient,
+                                    e
                                 ),
                                 Ok(()) => info!(
-                                    "purge table done.  (name{}, id {})",
-                                    tbl.table_info.name, tbl.table_info.ident
+                                    "purge table done. (name: {}, id: {}, transient: {})",
+                                    tbl.table_info.name, tbl.table_info.ident, table_is_transient,
                                 ),
                             }
                         }
