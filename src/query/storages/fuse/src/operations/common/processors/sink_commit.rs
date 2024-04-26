@@ -19,6 +19,8 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
@@ -121,7 +123,7 @@ where F: SnapshotGenerator + Send + 'static
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
     ) -> Result<ProcessorPtr> {
-        let purge = Self::do_purge(table, &snapshot_gen);
+        let purge = Self::need_purge(table, &snapshot_gen);
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
             ctx,
@@ -189,7 +191,7 @@ where F: SnapshotGenerator + Send + 'static
         Ok(Event::Async)
     }
 
-    fn do_purge(table: &FuseTable, snapshot_gen: &F) -> bool {
+    fn need_purge(table: &FuseTable, snapshot_gen: &F) -> bool {
         if table.transient() {
             return true;
         }
@@ -197,10 +199,54 @@ where F: SnapshotGenerator + Send + 'static
         snapshot_gen
             .as_any()
             .downcast_ref::<TruncateGenerator>()
-            .is_some_and(|gen| matches!(gen.mode(), TruncateMode::Purge))
+            .is_some_and(|gen| matches!(gen.mode(), TruncateMode::DropAllPurge))
     }
 
-    fn do_truncate(&self) -> bool {
+    async fn purge_table(&self, tbl: &FuseTable) -> Result<()> {
+        let snapshot_files = tbl.list_snapshot_files().await?;
+        let keep_last_snapshot = true;
+        let dry_run = false;
+        tbl.do_purge(&self.ctx, snapshot_files, None, keep_last_snapshot, dry_run)
+            .await?;
+        Ok(())
+    }
+
+    async fn purge_transient_table(
+        &self,
+        tbl: &FuseTable,
+        snapshot_timestamp: DateTime<Utc>,
+    ) -> Result<()> {
+        let transient_data_retention_minutes = self
+            .ctx
+            .get_settings()
+            .get_transient_data_retention_time_in_minutes()?;
+
+        let instant =
+            snapshot_timestamp - chrono::Duration::minutes(transient_data_retention_minutes as i64);
+
+        let by_pass_retention_period_checking = true;
+        let keep_last_snapshot = true;
+        let dry_run = false;
+        let (table, candidate_snapshots) = tbl
+            .navigate_for_purge(
+                &self.ctx,
+                Some(NavigationPoint::TimePoint(instant)),
+                by_pass_retention_period_checking,
+            )
+            .await?;
+        table
+            .do_purge(
+                &self.ctx,
+                candidate_snapshots,
+                None,
+                keep_last_snapshot,
+                dry_run,
+            )
+            .await?;
+        Ok(())
+    }
+
+    fn need_truncate(&self) -> bool {
         self.snapshot_gen
             .as_any()
             .downcast_ref::<TruncateGenerator>()
@@ -368,7 +414,7 @@ where F: SnapshotGenerator + Send + 'static
                 .await
                 {
                     Ok(_) => {
-                        if self.do_truncate() {
+                        if self.need_truncate() {
                             catalog
                                 .truncate_table(&table_info, TruncateTableReq {
                                     table_id: table_info.ident.table_id,
@@ -382,74 +428,30 @@ where F: SnapshotGenerator + Send + 'static
                             let latest = self.table.refresh(self.ctx.as_ref()).await?;
                             let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
-                            let transient_data_retention_minutes = self
-                                .ctx
-                                .get_settings()
-                                .get_transient_data_retention_time_in_minutes()?;
-
-                            let instant = snapshot_timestamp
-                                - chrono::Duration::minutes(
-                                    transient_data_retention_minutes as i64,
-                                );
-
-                            let keep_last_snapshot = true;
-                            let dry_run = false;
-                            let by_pass_retention_period_checking = true;
-
                             info!(
                                 "purging historical data. (name{}, id {})",
                                 tbl.table_info.name, tbl.table_info.ident
                             );
-                            // pure historical data.
-                            // errors ignored (since it can be picked up by subsequent purge actions)
-                            match tbl
-                                .navigate_for_purge(
-                                    &self.ctx,
-                                    Some(NavigationPoint::TimePoint(instant)),
-                                    by_pass_retention_period_checking,
-                                )
-                                .await
-                            {
-                                Ok((table, files)) => {
-                                    if let Err(e) = table
-                                        .do_purge(
-                                            &self.ctx,
-                                            files,
-                                            None,
-                                            keep_last_snapshot,
-                                            dry_run,
-                                        )
-                                        .await
-                                    {
-                                        // Errors of GC, if any, are ignored, since GC task can be picked up
-                                        warn!("table GC failed (none permanent error) : {}", e);
-                                    } else {
-                                        info!("table GC done");
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        "table GC failed (none permanent error) : navigation error {:?}",
-                                        e
-                                    );
-                                }
+
+                            // purge table, swallow errors
+                            let res = if tbl.transient() {
+                                self.purge_transient_table(tbl, snapshot_timestamp).await
+                            } else {
+                                self.purge_table(tbl).await
+                            };
+
+                            match res {
+                                Err(e) => warn!(
+                                    "purge table  (name{}, id {}) failed (non-permanent error). the error : {}",
+                                    tbl.table_info.name, tbl.table_info.ident, e
+                                ),
+                                Ok(()) => info!(
+                                    "purge table done.  (name{}, id {})",
+                                    tbl.table_info.name, tbl.table_info.ident
+                                ),
                             }
-
-                            // let snapshot_files = tbl.list_snapshot_files().await?;
-
-                            // if let Err(e) = tbl
-                            //    .do_purge(
-                            //        &self.ctx,
-                            //        snapshot_files,
-                            //        None,
-                            //        keep_last_snapshot,
-                            //        dry_run,
-                            //    )
-                            //    .await
-                            //{
-                            //} else {
-                            //}
                         }
+
                         metrics_inc_commit_mutation_success();
                         {
                             let elapsed_time = self.start_time.elapsed().as_millis();
