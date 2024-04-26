@@ -161,7 +161,7 @@ impl DefaultSettings {
                 }),
                 ("transient_data_retention_time_in_minutes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
-                    desc: "Sets the data retention time in minutes.",
+                    desc: "Sets the transient data retention time in minutes.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..= 24 * 60)),
                 }),
