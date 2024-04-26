@@ -938,6 +938,21 @@ impl RunningGraph {
 
         format!("{:?}", nodes_display)
     }
+
+    pub fn change_priority(&self, priority: u64) {
+        let mut old = self.0.points.load(Ordering::Relaxed);
+        loop {
+            let new = (priority << 32) | (old & EPOCH_MASK);
+            match self
+                .0
+                .points
+                .compare_exchange_weak(old, new, Ordering::SeqCst, Ordering::Relaxed)
+            {
+                Ok(_) => break,
+                Err(x) => old = x,
+            }
+        }
+    }
 }
 
 impl Debug for Node {

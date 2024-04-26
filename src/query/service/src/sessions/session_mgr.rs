@@ -160,6 +160,7 @@ impl SessionManager {
 
     pub fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
         let sessions = self.active_sessions.read();
+        println!("sessions: {:?}", sessions);
         sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
     }
 

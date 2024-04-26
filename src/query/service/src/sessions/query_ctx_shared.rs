@@ -528,6 +528,12 @@ impl QueryContextShared {
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
         &self.query_cache_metrics
     }
+
+    pub fn set_priority(&self, priority: u8) {
+        if let Some(executor) = self.executor.read().upgrade() {
+            executor.change_priority(priority)
+        }
+    }
 }
 
 impl Drop for QueryContextShared {
