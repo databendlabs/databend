@@ -35,7 +35,6 @@ use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
 use log::debug;
-use log::info;
 use log::trace;
 use minitrace::prelude::*;
 use parking_lot::Condvar;
@@ -473,7 +472,7 @@ impl ExecutingGraph {
                     if epoch > global_epoch as u64 {
                         desired_value = new_expected;
                     } else if epoch < global_epoch as u64 {
-                        desired_value = (max_points - 1 << 32) | global_epoch as u64;
+                        desired_value = (max_points - 1) << 32 | global_epoch as u64;
                     } else if remain_points >= 1 {
                         desired_value = (remain_points - 1) << 32 | epoch;
                     } else {
