@@ -384,6 +384,76 @@ async fn test_schedule_with_two_tasks() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_schedule_point_simple() -> Result<()> {
+    const POINTS_MASK: u64 = 0xFFFFFFFF00000000;
+    const EPOCH_MASK: u64 = 0x00000000FFFFFFFF;
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let graph = create_simple_pipeline(ctx)?;
+    let points = graph.get_points();
+    assert_eq!(points, (3 << 32) | 1);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (2 << 32) | 1);
+    assert_eq!(res, true);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (1 << 32) | 1);
+    assert_eq!(res, true);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (0 << 32) | 1);
+    assert_eq!(res, true);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (3 << 32) | 2);
+    assert_eq!(res, false);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (3 << 32) | 2);
+    assert_eq!(res, false);
+
+    let res = graph.can_perform_task(2, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (2 << 32) | 2);
+    assert_eq!(res, true);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_schedule_point_complex() -> Result<()> {
+    const POINTS_MASK: u64 = 0xFFFFFFFF00000000;
+    const EPOCH_MASK: u64 = 0x00000000FFFFFFFF;
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let graph = create_simple_pipeline(ctx)?;
+
+    let res = graph.can_perform_task(2, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (2 << 32) | 2);
+    assert_eq!(res, true);
+
+    for _ in 0..5 {
+        let _ = graph.can_perform_task(2, 3);
+    }
+
+    let res = graph.can_perform_task(3, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (2 << 32) | 3);
+    assert_eq!(res, true);
+
+    Ok(())
+}
+
 fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     let (_rx, sink_pipe) = create_sink_pipe(1)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
