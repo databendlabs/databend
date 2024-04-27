@@ -42,8 +42,6 @@ use log::debug;
 use log::info;
 use log::warn;
 use openraft::RaftLogId;
-use tokio::io::AsyncBufReadExt;
-use tokio::io::BufReader;
 use tokio::sync::RwLock;
 
 use crate::applier::Applier;
@@ -151,17 +149,43 @@ impl SMV002 {
 
         let mut importer = sm_v002::SMV002::new_importer();
 
-        let br = BufReader::new(data);
-        let mut lines = AsyncBufReadExt::lines(br);
+        // AsyncBufReadExt::lines() is a bit slow.
+        //
+        // let br = BufReader::with_capacity(16 * 1024 * 1024, data);
+        // let mut lines = AsyncBufReadExt::lines(br);
+        // while let Some(l) = lines.next_line().await? {
+        //     let ent: RaftStoreEntry = serde_json::from_str(&l)
+        //         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        //     importer.import(ent)?;
+        // }
 
-        while let Some(l) = lines.next_line().await? {
-            let ent: RaftStoreEntry = serde_json::from_str(&l)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let f = data.into_std().await;
 
-            importer.import(ent)?;
-        }
+        let h = databend_common_base::runtime::spawn_blocking(move || {
+            let mut br = std::io::BufReader::with_capacity(16 * 1024 * 1024, f);
+            let mut line_buf = String::with_capacity(4 * 1024);
 
-        let level_data = importer.commit();
+            loop {
+                line_buf.clear();
+                let n_read = std::io::BufRead::read_line(&mut br, &mut line_buf)?;
+                if n_read == 0 {
+                    break;
+                }
+
+                let ent: RaftStoreEntry = serde_json::from_str(&line_buf)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+                importer.import(ent)?;
+            }
+
+            let level_data = importer.commit();
+            Ok::<_, io::Error>(level_data)
+        });
+
+        let level_data = h
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))??;
+
         let new_last_applied = *level_data.last_applied_ref();
 
         {
