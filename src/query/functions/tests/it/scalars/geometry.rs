@@ -26,16 +26,75 @@ use crate::scalars::run_ast;
 fn test_geometry() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geometry.txt").unwrap();
+    test_st_asewkb(file);
+    test_st_aswkb(file);
+    test_st_asewkt(file);
+    test_st_aswkt(file);
+    test_st_geohash(file);
     test_st_asgeojson(file);
     test_st_geomfromgeohash(file);
     test_st_geompointfromgeohash(file);
     test_st_makeline(file);
     test_st_makepoint(file);
     test_st_makepolygon(file);
+    test_to_geometry(file);
     test_to_string(file);
+    test_try_to_geometry(file);
     test_st_geometryfromwkb(file);
     test_st_geometryfromwkt(file);
     // test_st_transform(file);
+}
+
+fn test_st_asewkb(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_asewkb(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_aswkb(file: &mut impl Write) {
+    run_ast(file, "st_aswkb(to_geometry('POINT(-122.35 37.55)'))", &[]);
+    run_ast(
+        file,
+        "st_aswkb(to_geometry('LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_asewkt(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_asewkt(to_geometry('SRID=4326;POINT(-122.35 37.55)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_asewkt(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_aswkt(file: &mut impl Write) {
+    run_ast(file, "st_asewkt(to_geometry('POINT(-122.35 37.55)'))", &[]);
+    run_ast(
+        file,
+        "st_asewkt(to_geometry('LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_geohash(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))",
+        &[],
+    );
 }
 
 fn test_st_asgeojson(file: &mut impl Write) {
@@ -115,12 +174,110 @@ fn test_st_makepolygon(file: &mut impl Write) {
     )]);
 }
 
+fn test_to_geometry(file: &mut impl Write) {
+    run_ast(file, "to_geometry('POINT(1820.12 890.56)')", &[]);
+    run_ast(file, "to_geometry('SRID=4326;POINT(1820.12 890.56)')", &[]);
+    run_ast(file, "to_geometry('POINT(1820.12 890.56)', 4326)", &[]);
+    run_ast(
+        file,
+        "to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)",
+        &[],
+    );
+    run_ast(
+        file,
+        r#"to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}', 4326)"#,
+        &[],
+    );
+    // Z coordinates will be supported in the future.
+    // run_ast(file, "to_geometry('SRID=32633;POINTZ(389866.35 5819003.03 30)')", &[]);
+}
+
 fn test_to_string(file: &mut impl Write) {
     run_ast(file, "to_string(st_makegeompoint(7.0, -8.0))", &[]);
     run_ast(file, "to_string(st_makegeompoint(a, b))", &[
         ("a", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
         ("b", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
     ]);
+}
+
+fn test_try_to_geometry(file: &mut impl Write) {
+    run_ast(file, "try_to_geometry(NULL)", &[]);
+    run_ast(file, "try_to_geometry('nuLL')", &[]);
+    run_ast(file, "try_to_geometry('null')", &[]);
+    run_ast(
+        file,
+        "try_to_geometry('SRID=4326;POINT(1820.12 890.56)')",
+        &[],
+    );
+    run_ast(file, "try_to_geometry('POINT(1820.12 890.56)', 4326)", &[]);
+    run_ast(
+        file,
+        "try_to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')",
+        &[],
+    );
+    run_ast(
+        file,
+        "try_to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)",
+        &[],
+    );
+    run_ast(
+        file,
+        "try_to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "try_to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)",
+        &[],
+    );
+    run_ast(
+        file,
+        r#"try_to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"try_to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}', 4326)"#,
+        &[],
+    );
+    run_ast(file, "try_to_geometry('POINT(1820.12 890.56)')", &[]);
+    run_ast(
+        file,
+        "try_to_geometry('SRID=4326;POINT(1820.12 890.56)')",
+        &[],
+    );
+    run_ast(file, "try_to_geometry('POINT(1820.12 890.56)', 4326)", &[]);
+    run_ast(file, "try_to_geometry('1234', 4326)", &[]);
+    run_ast(file, "try_to_geometry(unhex('1234'))", &[]);
+    run_ast(file, "try_to_geometry(unhex('3210'), 4326)", &[]);
+    run_ast(
+        file,
+        r#"try_to_geometry('{"coordinates":[],"type":"LineString"}')"#,
+        &[],
+    );
+    run_ast(file, r#"try_to_geometry('{}', 4326)"#, &[]);
+    // Z coordinates will be supported in the future.
+    // run_ast(file, "try_to_geometry('SRID=32633;POINTZ(389866.35 5819003.03 30)')", &[]);
 }
 
 fn test_st_geometryfromwkb(file: &mut impl Write) {

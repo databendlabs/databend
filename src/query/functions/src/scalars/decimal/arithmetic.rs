@@ -28,6 +28,9 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use ethnum::i256;
 
+use super::convert_to_decimal;
+use super::convert_to_decimal_domain;
+
 #[derive(Copy, Clone, Debug)]
 enum ArithmeticOp {
     Plus,
@@ -267,16 +270,13 @@ macro_rules! register_decimal_binary_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: format!("{:?}", $arithmetic_op).to_lowercase(),
-                    args_type: vec![
-                        DataType::Decimal(left.clone()),
-                        DataType::Decimal(right.clone()),
-                    ],
+                    args_type: args_type.clone(),
                     return_type: DataType::Decimal(return_decimal_type),
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(move |_ctx, d| {
-                        let lhs = d[0].as_decimal();
-                        let rhs = d[1].as_decimal();
+                    calc_domain: Box::new(move |ctx, d| {
+                        let lhs = convert_to_decimal_domain(ctx, d[0].clone(), left.clone());
+                        let rhs = convert_to_decimal_domain(ctx, d[1].clone(), right.clone());
 
                         if lhs.is_none() || rhs.is_none() {
                             return FunctionDomain::Full;
@@ -308,9 +308,15 @@ macro_rules! register_decimal_binary_op {
                         .unwrap_or($default_domain)
                     }),
                     eval: Box::new(move |args, ctx| {
+                        let a = convert_to_decimal(&args[0], ctx, &args_type[0], left);
+                        let b = convert_to_decimal(&args[1], ctx, &args_type[1], right);
+
+                        let a = a.as_ref();
+                        let b = b.as_ref();
+
                         let res = op_decimal!(
-                            &args[0],
-                            &args[1],
+                            &a,
+                            &b,
                             ctx,
                             left,
                             right,

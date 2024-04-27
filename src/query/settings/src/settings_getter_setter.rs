@@ -302,6 +302,10 @@ impl Settings {
         Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
     }
 
+    pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),

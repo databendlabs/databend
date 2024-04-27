@@ -53,7 +53,6 @@ use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
-use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::MaterializedCte;
 use crate::plans::Plan;
@@ -479,10 +478,7 @@ impl<'a> Binder {
             Statement::DropUDF {
                 if_exists,
                 udf_name,
-            } => Plan::DropUDF(Box::new(DropUDFPlan {
-                if_exists: *if_exists,
-                udf: udf_name.to_string(),
-            })),
+            } => self.bind_drop_udf(*if_exists, udf_name).await?,
             Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,

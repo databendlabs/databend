@@ -20,6 +20,7 @@ z3-prove = ["databend-common-constraint"]
 databend-common-ast = { path = "../ast" }
 databend-common-base = { path = "../../common/base" }
 databend-common-catalog = { path = "../catalog" }
+databend-common-compress = { path = "../../common/compress" }
 databend-common-config = { path = "../config" }
 databend-common-constraint = { path = "../constraint", optional = true }
 databend-common-exception = { path = "../../common/exception" }

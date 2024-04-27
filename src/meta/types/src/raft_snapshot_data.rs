@@ -77,6 +77,10 @@ impl SnapshotData {
         &self.path
     }
 
+    pub async fn into_std(self) -> std::fs::File {
+        self.f.into_std().await
+    }
+
     pub async fn sync_all(&mut self) -> Result<(), io::Error> {
         self.f.flush().await?;
         self.f.sync_all().await

@@ -49,7 +49,7 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         snapshot_files: Vec<String>,
-        limit: Option<usize>,
+        num_snapshot_limit: Option<usize>,
         keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
@@ -72,7 +72,7 @@ impl FuseTable {
 
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
         let location_gen = self.meta_location_generator();
-        let purged_snapshot_limit = limit.unwrap_or(snapshot_files.len());
+        let purged_snapshot_limit = num_snapshot_limit.unwrap_or(snapshot_files.len());
 
         let mut read_snapshot_count = 0;
         let mut remain_snapshots = Vec::<SnapshotLiteExtended>::new();
@@ -158,7 +158,7 @@ impl FuseTable {
 
             if !snapshots_to_be_purged.is_empty() {
                 if dry_run {
-                    debug_assert!(limit.is_some());
+                    debug_assert!(num_snapshot_limit.is_some());
                     self.dry_run_purge(
                         ctx,
                         &mut dry_run_purge_files,
@@ -170,7 +170,7 @@ impl FuseTable {
                     )
                     .await?;
 
-                    if dry_run_purge_files.len() >= limit.unwrap() {
+                    if dry_run_purge_files.len() >= num_snapshot_limit.unwrap() {
                         return Ok(Some(dry_run_purge_files));
                     }
                 } else {

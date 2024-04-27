@@ -627,7 +627,7 @@ fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
     columns.iter().for_each(|c| c.hash(state));
 }
 
-/// UDFCall includes server & lambda call
+/// UDFCall includes script & lambda call
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDFCall {
@@ -646,8 +646,9 @@ pub struct UDFCall {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
-    Server(String),                   // server_addr
-    Script((String, String, String)), // Lang, Version, Code
+    Server(String),                        // server_addr
+    Script((String, String, String)),      // Lang, Version, Code
+    WasmScript((String, String, Vec<u8>)), // Lang, Version, Code
 }
 
 impl UDFType {
@@ -655,6 +656,7 @@ impl UDFType {
         match self {
             UDFType::Server(_) => !is_script,
             UDFType::Script(_) => is_script,
+            UDFType::WasmScript(_) => is_script,
         }
     }
 }

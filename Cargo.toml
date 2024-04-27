@@ -108,7 +108,7 @@ members = [
 
 [workspace.dependencies]
 # databend maintains
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "a7325f4" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "3fe3acd" }
 
 opendal = { version = "0.45.1", features = [
     "layers-minitrace",
@@ -121,8 +121,8 @@ opendal = { version = "0.45.1", features = [
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 # openraft for debugging
-# openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.9.0", features = [
-openraft = { version = "0.9.1", features = [
+#openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
+openraft = { version = "0.9.7", features = [
     "serde",
     "tracing-log",
     "generic-snapshot-data",
@@ -205,6 +205,10 @@ arrow-schema = { version = "50", features = ["serde"] }
 arrow-select = { version = "50" }
 parquet = { version = "50", features = ["async"] }
 parquet_rs = { package = "parquet", version = "50" }
+
+# Crates from risingwavelabs
+arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "0d1a13c" }
+arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "0d1a13c" }
 
 # Serialization
 prost = { version = "0.12.1" }

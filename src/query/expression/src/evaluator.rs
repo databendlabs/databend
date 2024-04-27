@@ -1403,6 +1403,8 @@ impl<'a> Evaluator<'a> {
     }
 }
 
+const MAX_FUNCTION_ARGS_TO_FOLD: usize = 4096;
+
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: &'a HashMap<Index, Domain>,
     func_ctx: &'a FunctionContext,
@@ -1563,6 +1565,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 args,
                 return_type,
             } if function.signature.name == "and_filters" => {
+                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (expr.clone(), None);
+                }
+
                 let mut args_expr = Vec::new();
                 let mut result_domain = Some(BooleanDomain {
                     has_true: true,
@@ -1679,6 +1685,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 args,
                 return_type,
             } => {
+                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (expr.clone(), None);
+                }
+
                 let (mut args_expr, mut args_domain) = (
                     Vec::with_capacity(args.len()),
                     Some(Vec::with_capacity(args.len())),
@@ -1754,6 +1764,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 lambda_display,
                 return_type,
             } => {
+                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (expr.clone(), None);
+                }
+
                 let mut args_expr = Vec::with_capacity(args.len());
                 for arg in args {
                     let (expr, _) = self.fold_once(arg);

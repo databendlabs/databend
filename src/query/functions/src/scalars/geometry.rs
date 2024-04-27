@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::types::geometry::GeometryType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
@@ -28,26 +29,34 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::geometry_format;
 use databend_common_io::parse_to_ewkb;
+use databend_common_io::parse_to_subtype;
 use databend_common_io::read_ewkb_srid;
+use databend_common_io::GeometryDataType;
 use geo::MultiPoint;
 use geo::Point;
 use geo_types::Polygon;
 use geohash::decode_bbox;
+use geohash::encode;
 use geos::geo_types;
 use geos::geo_types::Coord;
 use geos::geo_types::LineString;
 use geos::Geom;
 use geos::Geometry;
+use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
 use geozero::wkb::Wkb;
 use geozero::CoordDimensions;
 use geozero::ToGeo;
 use geozero::ToJson;
 use geozero::ToWkb;
+use geozero::ToWkt;
 use jsonb::parse_value;
+use jsonb::to_string;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
+    registry.register_aliases("st_aswkb", &["st_asbinary"]);
+    registry.register_aliases("st_aswkt", &["st_astext"]);
     registry.register_aliases("st_makegeompoint", &["st_geom_point"]);
     registry.register_aliases("st_makepolygon", &["st_polygon"]);
     registry.register_aliases("st_makeline", &["st_make_line"]);
@@ -86,9 +95,125 @@ pub fn register(registry: &mut FunctionRegistry) {
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
+                }
+            };
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _, _>(
+        "st_asewkb",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, BinaryType>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
                     builder.commit_row();
                     return;
                 }
+            }
+
+            let srid = match read_ewkb_srid(&mut io::Cursor::new(&geometry)) {
+                Ok(srid) => srid,
+                _ => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError("input geometry must has the correct SRID")
+                            .to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            match Ewkb(geometry).to_ewkb(CoordDimensions::xy(), srid) {
+                Ok(wkb) => builder.put_slice(wkb.as_slice()),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                }
+            };
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _, _>(
+        "st_aswkb",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, BinaryType>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            match Ewkb(geometry).to_wkb(CoordDimensions::xy()) {
+                Ok(wkb) => builder.put_slice(wkb.as_slice()),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                }
+            };
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+        "st_asewkt",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, StringType>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            let srid = match read_ewkb_srid(&mut io::Cursor::new(&geometry)) {
+                Ok(srid) => srid,
+                _ => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError("input geometry must has the correct SRID")
+                            .to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            match Ewkb(geometry).to_ewkt(srid) {
+                Ok(ewkt) => builder.put_str(&ewkt),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            };
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+        "st_aswkt",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, StringType>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            match Ewkb(geometry).to_wkt() {
+                Ok(wkt) => builder.put_str(&wkt),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
             };
             builder.commit_row();
         }),
@@ -106,8 +231,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
 
             if geohash.len() > 12 {
-                ctx.set_error(builder.len(), "");
-                builder.put_str("Currently the precision only implement within 12 digits!");
+                ctx.set_error(
+                    builder.len(),
+                    "Currently the precision only implement within 12 digits!",
+                );
                 builder.commit_row();
                 return;
             }
@@ -119,7 +246,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
-                    builder.put_str("");
                     builder.commit_row();
                     return;
                 }
@@ -147,8 +273,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             if geohash.len() > 12 {
-                ctx.set_error(builder.len(), "");
-                builder.put_str("Currently the precision only implement within 12 digits!");
+                ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(
+                        "Currently the precision only implement within 12 digits!".to_string(),
+                    )
+                    .to_string(),
+                );
                 builder.commit_row();
                 return;
             }
@@ -160,7 +291,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
-                    builder.put_str("");
                     builder.commit_row();
                     return;
                 }
@@ -218,7 +348,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
-                    builder.put_str("");
                     builder.commit_row();
                     return;
                 }
@@ -278,7 +407,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 },
                                 Err(e) => {
                                     ctx.set_error(builder.len(), ErrorCode::GeometryError(e).to_string());
-                                    builder.put_str("");
                                     builder.commit_row();
                                     return;
                                 }
@@ -286,7 +414,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         },
                         Err(e) => {
                             ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
-                            builder.put_str("");
                             builder.commit_row();
                             return;
                         }
@@ -301,7 +428,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 Ok(point) => point,
                                 Err(e) => {
                                     ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
-                                    builder.put_str("");
                                     builder.commit_row();
                                     return;
                                 }
@@ -312,8 +438,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             let line: LineString = match g.try_into() {
                                 Ok(line) => line,
                                 Err(e) => {
-                                    ctx.set_error(builder.len(), e.to_string());
-                                    builder.put_str("");
+                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
                                     builder.commit_row();
                                     return;
                                 }
@@ -324,8 +449,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             let multi_point: MultiPoint = match g.try_into() {
                                 Ok(multi_point) => multi_point,
                                 Err(e) => {
-                                    ctx.set_error(builder.len(), e.to_string());
-                                    builder.put_str("");
+                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
                                     builder.commit_row();
                                     return;
                                 }
@@ -339,7 +463,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 builder.len(),
                                 ErrorCode::GeometryError("Geometry expression must be a Point, MultiPoint, or LineString.").to_string(),
                             );
-                            builder.put_str("");
                             builder.commit_row();
                             return;
                         }
@@ -350,6 +473,65 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Ok(data) => builder.put_slice(data.as_slice()),
                     Err(e) => ctx.set_error(builder.len(), e.to_string()),
                 }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+        "st_geohash",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, StringType>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            match point_to_geohash(geometry, None) {
+                Ok(hash) => builder.put_str(&hash),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                }
+            };
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<GeometryType, Int32Type, StringType, _, _>(
+        "st_geohash",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, Int32Type, StringType>(
+            |geometry, precision, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                if precision > 12 {
+                    ctx.set_error(
+                        builder.len(),
+                        "Currently the precision only implement within 12 digits!",
+                    );
+                    builder.commit_row();
+                    return;
+                }
+
+                match point_to_geohash(geometry, Some(precision)) {
+                    Ok(hash) => builder.put_str(&hash),
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                    }
+                };
                 builder.commit_row();
             },
         ),
@@ -416,29 +598,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
-                Ok(srid) => srid,
-                _ => {
-                    ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError("input geometry must has the correct SRID")
-                            .to_string(),
-                    );
-                    builder.commit_row();
-                    return;
-                }
-            };
 
-            match Ewkb(binary).to_ewkb(CoordDimensions::xy(), srid) {
-                Ok(ewkb) => {
-                    builder.put_slice(ewkb.as_slice());
-                }
-                Err(e) => {
-                    ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError(e.to_string()).to_string(),
-                    );
-                }
+            match binary_to_geometry_impl(binary, None) {
+                Ok(data) => builder.put_slice(data.as_slice()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
             }
             builder.commit_row();
         }),
@@ -494,10 +660,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let ewkb = Ewkb(&binary);
-                let r = ewkb.to_ewkb(CoordDimensions::xy(), Some(srid));
-                match r {
-                    Ok(ewkb) => builder.put_slice(ewkb.as_slice()),
+                match binary_to_geometry_impl(binary, Some(srid)) {
+                    Ok(data) => builder.put_slice(data.as_slice()),
                     Err(e) => ctx.set_error(
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
@@ -570,11 +734,303 @@ pub fn register(registry: &mut FunctionRegistry) {
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
-                    builder.put_str("");
                 }
             }
             builder.commit_row();
         }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+        "to_geometry",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<StringType, GeometryType>(|str, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+            match str_to_geometry_impl(str, None) {
+                Ok(data) => builder.put_slice(data.as_slice()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            }
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, Int32Type, GeometryType, _, _>(
+        "to_geometry",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<StringType, Int32Type, GeometryType>(
+            |str, srid, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+                match str_to_geometry_impl(str, Some(srid)) {
+                    Ok(data) => builder.put_slice(data.as_slice()),
+                    Err(e) => ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    ),
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _, _>(
+        "to_geometry",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<BinaryType, GeometryType>(|binary, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+            let srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
+                Ok(srid) => srid,
+                _ => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError("input geometry must has the correct SRID")
+                            .to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            match binary_to_geometry_impl(binary, srid) {
+                Ok(data) => builder.put_slice(data.as_slice()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            }
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<BinaryType, Int32Type, GeometryType, _, _>(
+        "to_geometry",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<BinaryType, Int32Type, GeometryType>(
+            |binary, srid, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                match binary_to_geometry_impl(binary, Some(srid)) {
+                    Ok(data) => builder.put_slice(data.as_slice()),
+                    Err(e) => ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    ),
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, GeometryType, _, _>(
+        "to_geometry",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, GeometryType>(|json, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+            match json_to_geometry_impl(json, None) {
+                Ok(data) => builder.put_slice(data.as_slice()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            }
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, Int32Type, GeometryType, _, _>(
+        "to_geometry",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, Int32Type, GeometryType>(
+            |json, srid, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+                match json_to_geometry_impl(json, Some(srid)) {
+                    Ok(data) => builder.put_slice(data.as_slice()),
+                    Err(e) => ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    ),
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, GeometryType, _, _>(
+        "try_to_geometry",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<GeometryType>>(
+            |json, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match json_to_geometry_impl(json, None) {
+                    Ok(data) => {
+                        output.validity.push(true);
+                        output.builder.put_slice(data.as_slice());
+                        output.builder.commit_row();
+                    }
+                    Err(_) => output.push_null(),
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_2_arg::<VariantType, Int32Type, GeometryType, _, _>(
+        "try_to_geometry",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, Int32Type, NullableType<GeometryType>>(
+            |json, srid, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match json_to_geometry_impl(json, Some(srid)) {
+                    Ok(data) => {
+                        output.validity.push(true);
+                        output.builder.put_slice(data.as_slice());
+                        output.builder.commit_row();
+                    }
+                    Err(_) => output.push_null(),
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<StringType, GeometryType, _, _>(
+        "try_to_geometry",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<StringType, NullableType<GeometryType>>(
+            |str, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match str_to_geometry_impl(str, None) {
+                    Ok(data) => {
+                        output.validity.push(true);
+                        output.builder.put_slice(data.as_slice());
+                        output.builder.commit_row();
+                    }
+                    Err(_) => output.push_null(),
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_2_arg::<StringType, Int32Type, GeometryType, _, _>(
+        "try_to_geometry",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, Int32Type, NullableType<GeometryType>>(
+            |str, srid, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match str_to_geometry_impl(str, Some(srid)) {
+                    Ok(data) => {
+                        output.validity.push(true);
+                        output.builder.put_slice(data.as_slice());
+                        output.builder.commit_row();
+                    }
+                    Err(_) => output.push_null(),
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<BinaryType, GeometryType, _, _>(
+        "try_to_geometry",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<BinaryType, NullableType<GeometryType>>(
+            |binary, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                let srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
+                    Ok(srid) => srid,
+                    Err(_) => {
+                        output.push_null();
+                        return;
+                    }
+                };
+
+                match binary_to_geometry_impl(binary, srid) {
+                    Ok(data) => {
+                        output.validity.push(true);
+                        output.builder.put_slice(data.as_slice());
+                        output.builder.commit_row();
+                    }
+                    Err(_) => output.push_null(),
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_2_arg::<BinaryType, Int32Type, GeometryType, _, _>(
+        "try_to_geometry",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<BinaryType, Int32Type, NullableType<GeometryType>>(
+            |binary, srid, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+
+                match binary_to_geometry_impl(binary, Some(srid)) {
+                    Ok(data) => {
+                        output.validity.push(true);
+                        output.builder.put_slice(data.as_slice());
+                        output.builder.commit_row();
+                    }
+                    Err(_) => output.push_null(),
+                }
+            },
+        ),
     );
 
     // registry.register_passthrough_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
@@ -737,4 +1193,92 @@ pub fn ewkb_to_json(buf: &[u8]) -> databend_common_exception::Result<String> {
                 .map_err(|e| ErrorCode::GeometryError(e.to_string()))
                 .map(|json: String| json)
         })
+}
+
+fn binary_to_geometry_impl(
+    binary: &[u8],
+    srid: Option<i32>,
+) -> databend_common_exception::Result<Vec<u8>> {
+    let ewkb_srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
+        Ok(srid) => srid,
+        Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+    };
+    match Ewkb(&binary).to_ewkb(CoordDimensions::xy(), srid.or(ewkb_srid)) {
+        Ok(ewkb) => Ok(ewkb),
+        Err(e) => Err(ErrorCode::GeometryError(e.to_string())),
+    }
+}
+
+/// The argument str must be a string expression that represents a valid geometric object in one of the following formats:
+///
+/// WKT (well-known text).
+/// WKB (well-known binary) in hexadecimal format (without a leading 0x).
+/// EWKT (extended well-known text).
+/// EWKB (extended well-known binary) in hexadecimal format (without a leading 0x).
+/// GEOJSON
+fn str_to_geometry_impl(
+    str: &str,
+    srid: Option<i32>,
+) -> databend_common_exception::Result<Vec<u8>> {
+    let geo_type = match parse_to_subtype(str.as_bytes()) {
+        Ok(geo_types) => geo_types,
+        Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+    };
+
+    let ewkb = match geo_type {
+        GeometryDataType::WKT | GeometryDataType::EWKT => parse_to_ewkb(str.as_bytes(), srid),
+        GeometryDataType::GEOJSON => GeoJson(str)
+            .to_ewkb(CoordDimensions::xy(), srid)
+            .map_err(|e| ErrorCode::GeometryError(e.to_string())),
+        GeometryDataType::WKB | GeometryDataType::EWKB => {
+            let binary = match hex::decode(str) {
+                Ok(binary) => binary,
+                Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+            };
+
+            let ewkb_srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
+                Ok(ewkb_srid) => ewkb_srid,
+                Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+            };
+            Ewkb(binary)
+                .to_ewkb(CoordDimensions::xy(), srid.or(ewkb_srid))
+                .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+        }
+    };
+
+    match ewkb {
+        Ok(data) => Ok(data),
+        Err(e) => Err(ErrorCode::GeometryError(e.to_string())),
+    }
+}
+
+fn json_to_geometry_impl(
+    binary: &[u8],
+    srid: Option<i32>,
+) -> databend_common_exception::Result<Vec<u8>> {
+    let s = to_string(binary);
+    let json = GeoJson(s.as_str());
+    match json.to_ewkb(CoordDimensions::xy(), srid) {
+        Ok(data) => Ok(data),
+        Err(e) => Err(ErrorCode::GeometryError(e.to_string())),
+    }
+}
+
+fn point_to_geohash(
+    geometry: &[u8],
+    precision: Option<i32>,
+) -> databend_common_exception::Result<String> {
+    let point = match Ewkb(geometry).to_geo() {
+        Ok(geo) => Point::try_from(geo),
+        Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+    };
+
+    let hash = match point {
+        Ok(point) => encode(point.0, precision.map_or(12, |p| p as usize)),
+        Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+    };
+    match hash {
+        Ok(hash) => Ok(hash),
+        Err(e) => Err(ErrorCode::GeometryError(e.to_string())),
+    }
 }

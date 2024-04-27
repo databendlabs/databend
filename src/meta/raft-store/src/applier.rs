@@ -469,7 +469,7 @@ impl<'a> Applier<'a> {
         info!("to clean expired kvs, log_time_ts: {}", log_time_ms);
 
         let mut to_clean = vec![];
-        let mut strm = self.sm.list_expire_index().await?;
+        let mut strm = self.sm.list_expire_index(log_time_ms).await?;
 
         {
             let mut strm = std::pin::pin!(strm);

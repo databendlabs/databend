@@ -1,3 +1,84 @@
+ast            : st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
+raw expr       : st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
+checked expr   : st_asewkb<Geometry>(to_geometry<String>("SRID=4326;POINT(-122.35 37.55)"))
+optimized expr : 0101000020E61000006666666666965EC06666666666C64240
+output type    : Binary
+output domain  : Undefined
+output         : 0101000020E61000006666666666965EC06666666666C64240
+
+
+ast            : st_asewkb(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))
+raw expr       : st_asewkb(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))
+checked expr   : st_asewkb<Geometry>(to_geometry<String>("SRID=0;LINESTRING(0.75 0.75, -10 20)"))
+optimized expr : 01020000200000000002000000000000000000E83F000000000000E83F00000000000024C00000000000003440
+output type    : Binary
+output domain  : Undefined
+output         : 01020000200000000002000000000000000000E83F000000000000E83F00000000000024C00000000000003440
+
+
+ast            : st_aswkb(to_geometry('POINT(-122.35 37.55)'))
+raw expr       : st_aswkb(to_geometry('POINT(-122.35 37.55)'))
+checked expr   : st_aswkb<Geometry>(to_geometry<String>("POINT(-122.35 37.55)"))
+optimized expr : 01010000006666666666965EC06666666666C64240
+output type    : Binary
+output domain  : Undefined
+output         : 01010000006666666666965EC06666666666C64240
+
+
+ast            : st_aswkb(to_geometry('LINESTRING(0.75 0.75, -10 20)'))
+raw expr       : st_aswkb(to_geometry('LINESTRING(0.75 0.75, -10 20)'))
+checked expr   : st_aswkb<Geometry>(to_geometry<String>("LINESTRING(0.75 0.75, -10 20)"))
+optimized expr : 010200000002000000000000000000E83F000000000000E83F00000000000024C00000000000003440
+output type    : Binary
+output domain  : Undefined
+output         : 010200000002000000000000000000E83F000000000000E83F00000000000024C00000000000003440
+
+
+ast            : st_asewkt(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
+raw expr       : st_asewkt(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
+checked expr   : st_asewkt<Geometry>(to_geometry<String>("SRID=4326;POINT(-122.35 37.55)"))
+optimized expr : "SRID=4326;POINT(-122.35 37.55)"
+output type    : String
+output domain  : {"SRID=4326;POINT(-122.35 37.55)"..="SRID=4326;POINT(-122.35 37.55)"}
+output         : 'SRID=4326;POINT(-122.35 37.55)'
+
+
+ast            : st_asewkt(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))
+raw expr       : st_asewkt(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))
+checked expr   : st_asewkt<Geometry>(to_geometry<String>("SRID=0;LINESTRING(0.75 0.75, -10 20)"))
+optimized expr : "LINESTRING(0.75 0.75,-10 20)"
+output type    : String
+output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)"}
+output         : 'LINESTRING(0.75 0.75,-10 20)'
+
+
+ast            : st_asewkt(to_geometry('POINT(-122.35 37.55)'))
+raw expr       : st_asewkt(to_geometry('POINT(-122.35 37.55)'))
+checked expr   : st_asewkt<Geometry>(to_geometry<String>("POINT(-122.35 37.55)"))
+optimized expr : "POINT(-122.35 37.55)"
+output type    : String
+output domain  : {"POINT(-122.35 37.55)"..="POINT(-122.35 37.55)"}
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_asewkt(to_geometry('LINESTRING(0.75 0.75, -10 20)'))
+raw expr       : st_asewkt(to_geometry('LINESTRING(0.75 0.75, -10 20)'))
+checked expr   : st_asewkt<Geometry>(to_geometry<String>("LINESTRING(0.75 0.75, -10 20)"))
+optimized expr : "LINESTRING(0.75 0.75,-10 20)"
+output type    : String
+output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)"}
+output         : 'LINESTRING(0.75 0.75,-10 20)'
+
+
+ast            : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
+raw expr       : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
+checked expr   : st_geohash<Geometry>(to_geometry<String, Int32>("POINT(-122.306100 37.554162)", to_int32<UInt16>(4326_u16)))
+optimized expr : "9q9j8ue2v71y"
+output type    : String
+output domain  : {"9q9j8ue2v71y"..="9q9j8ue2v71y"}
+output         : '9q9j8ue2v71y'
+
+
 ast            : st_asgeojson(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))
 raw expr       : st_asgeojson(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))
 checked expr   : st_asgeojson<Geometry>(st_geometryfromwkb<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")))
@@ -168,6 +249,87 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : to_geometry('POINT(1820.12 890.56)')
+raw expr       : to_geometry('POINT(1820.12 890.56)')
+checked expr   : to_geometry<String>("POINT(1820.12 890.56)")
+optimized expr : "POINT(1820.12 890.56)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(1820.12 890.56)'
+
+
+ast            : to_geometry('SRID=4326;POINT(1820.12 890.56)')
+raw expr       : to_geometry('SRID=4326;POINT(1820.12 890.56)')
+checked expr   : to_geometry<String>("SRID=4326;POINT(1820.12 890.56)")
+optimized expr : "SRID=4326;POINT(1820.12 890.56)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=4326;POINT(1820.12 890.56)'
+
+
+ast            : to_geometry('POINT(1820.12 890.56)', 4326)
+raw expr       : to_geometry('POINT(1820.12 890.56)', 4326)
+checked expr   : to_geometry<String, Int32>("POINT(1820.12 890.56)", to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;POINT(1820.12 890.56)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=4326;POINT(1820.12 890.56)'
+
+
+ast            : to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')
+raw expr       : to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')
+checked expr   : to_geometry<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")
+optimized expr : "SRID=32633;POINT(389866.35 5819003.03)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=32633;POINT(389866.35 5819003.03)'
+
+
+ast            : to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)
+raw expr       : to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)
+checked expr   : to_geometry<String, Int32>("0101000020797f000066666666a9cb17411f85ebc19e325641", to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;POINT(389866.35 5819003.03)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=4326;POINT(389866.35 5819003.03)'
+
+
+ast            : to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))
+raw expr       : to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))
+checked expr   : to_geometry<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641"))
+optimized expr : "SRID=32633;POINT(389866.35 5819003.03)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=32633;POINT(389866.35 5819003.03)'
+
+
+ast            : to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)
+raw expr       : to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)
+checked expr   : to_geometry<Binary, Int32>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641"), to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;POINT(389866.35 5819003.03)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=4326;POINT(389866.35 5819003.03)'
+
+
+ast            : to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')
+raw expr       : to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')
+checked expr   : to_geometry<String>("{\"coordinates\":[[389866,5819003],[390000,5830000]],\"type\":\"LineString\"}")
+optimized expr : "LINESTRING(389866 5819003,390000 5830000)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'LINESTRING(389866 5819003,390000 5830000)'
+
+
+ast            : to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}', 4326)
+raw expr       : to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}', 4326)
+checked expr   : to_geometry<String, Int32>("{\"coordinates\":[[389866,5819003],[390000,5830000]],\"type\":\"LineString\"}", to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;LINESTRING(389866 5819003,390000 5830000)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=4326;LINESTRING(389866 5819003,390000 5830000)'
+
+
 ast            : to_string(st_makegeompoint(7.0, -8.0))
 raw expr       : to_string(st_makegeompoint(7.0, minus(8.0)))
 checked expr   : to_string<Geometry>(st_makegeompoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d128(2,1)))))
@@ -198,6 +360,177 @@ evaluation (internal):
 | b      | Float64([1, 2, 3])                                                                                              |
 | Output | StringColumn { data: 0x504f494e542831203129504f494e542832203229504f494e542833203329, offsets: [0, 10, 20, 30] } |
 +--------+-----------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_geometry(NULL)
+raw expr       : try_to_geometry(NULL)
+checked expr   : try_to_geometry<Variant NULL>(CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geometry('nuLL')
+raw expr       : try_to_geometry('nuLL')
+checked expr   : try_to_geometry<String>("nuLL")
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geometry('null')
+raw expr       : try_to_geometry('null')
+checked expr   : try_to_geometry<String>("null")
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
+raw expr       : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
+checked expr   : try_to_geometry<String>("SRID=4326;POINT(1820.12 890.56)")
+optimized expr : "SRID=4326;POINT(1820.12 890.56)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=4326;POINT(1820.12 890.56)'
+
+
+ast            : try_to_geometry('POINT(1820.12 890.56)', 4326)
+raw expr       : try_to_geometry('POINT(1820.12 890.56)', 4326)
+checked expr   : try_to_geometry<String, Int32>("POINT(1820.12 890.56)", to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;POINT(1820.12 890.56)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=4326;POINT(1820.12 890.56)'
+
+
+ast            : try_to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')
+raw expr       : try_to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')
+checked expr   : try_to_geometry<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")
+optimized expr : "SRID=32633;POINT(389866.35 5819003.03)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=32633;POINT(389866.35 5819003.03)'
+
+
+ast            : try_to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)
+raw expr       : try_to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)
+checked expr   : try_to_geometry<String, Int32>("0101000020797f000066666666a9cb17411f85ebc19e325641", to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;POINT(389866.35 5819003.03)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=4326;POINT(389866.35 5819003.03)'
+
+
+ast            : try_to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))
+raw expr       : try_to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))
+checked expr   : try_to_geometry<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641"))
+optimized expr : "SRID=32633;POINT(389866.35 5819003.03)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=32633;POINT(389866.35 5819003.03)'
+
+
+ast            : try_to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)
+raw expr       : try_to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)
+checked expr   : try_to_geometry<Binary, Int32>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641"), to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;POINT(389866.35 5819003.03)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=4326;POINT(389866.35 5819003.03)'
+
+
+ast            : try_to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')
+raw expr       : try_to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')
+checked expr   : try_to_geometry<String>("{\"coordinates\":[[389866,5819003],[390000,5830000]],\"type\":\"LineString\"}")
+optimized expr : "LINESTRING(389866 5819003,390000 5830000)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'LINESTRING(389866 5819003,390000 5830000)'
+
+
+ast            : try_to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}', 4326)
+raw expr       : try_to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}', 4326)
+checked expr   : try_to_geometry<String, Int32>("{\"coordinates\":[[389866,5819003],[390000,5830000]],\"type\":\"LineString\"}", to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;LINESTRING(389866 5819003,390000 5830000)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=4326;LINESTRING(389866 5819003,390000 5830000)'
+
+
+ast            : try_to_geometry('POINT(1820.12 890.56)')
+raw expr       : try_to_geometry('POINT(1820.12 890.56)')
+checked expr   : try_to_geometry<String>("POINT(1820.12 890.56)")
+optimized expr : "POINT(1820.12 890.56)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POINT(1820.12 890.56)'
+
+
+ast            : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
+raw expr       : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
+checked expr   : try_to_geometry<String>("SRID=4326;POINT(1820.12 890.56)")
+optimized expr : "SRID=4326;POINT(1820.12 890.56)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=4326;POINT(1820.12 890.56)'
+
+
+ast            : try_to_geometry('POINT(1820.12 890.56)', 4326)
+raw expr       : try_to_geometry('POINT(1820.12 890.56)', 4326)
+checked expr   : try_to_geometry<String, Int32>("POINT(1820.12 890.56)", to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;POINT(1820.12 890.56)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=4326;POINT(1820.12 890.56)'
+
+
+ast            : try_to_geometry('1234', 4326)
+raw expr       : try_to_geometry('1234', 4326)
+checked expr   : try_to_geometry<String, Int32>("1234", to_int32<UInt16>(4326_u16))
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geometry(unhex('1234'))
+raw expr       : try_to_geometry(unhex('1234'))
+checked expr   : try_to_geometry<Binary>(from_hex<String>("1234"))
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geometry(unhex('3210'), 4326)
+raw expr       : try_to_geometry(unhex('3210'), 4326)
+checked expr   : try_to_geometry<Binary, Int32>(from_hex<String>("3210"), to_int32<UInt16>(4326_u16))
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geometry('{"coordinates":[],"type":"LineString"}')
+raw expr       : try_to_geometry('{"coordinates":[],"type":"LineString"}')
+checked expr   : try_to_geometry<String>("{\"coordinates\":[],\"type\":\"LineString\"}")
+optimized expr : "LINESTRING EMPTY"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'LINESTRING EMPTY'
+
+
+ast            : try_to_geometry('{}', 4326)
+raw expr       : try_to_geometry('{}', 4326)
+checked expr   : try_to_geometry<String, Int32>("{}", to_int32<UInt16>(4326_u16))
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : st_geometryfromwkb('0101000020797f000066666666a9cb17411f85ebc19e325641')

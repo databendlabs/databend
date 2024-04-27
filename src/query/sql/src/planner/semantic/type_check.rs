@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
@@ -23,6 +24,7 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
@@ -36,6 +38,7 @@ use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
@@ -48,6 +51,8 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -87,6 +92,7 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -100,6 +106,7 @@ use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::async_function::AsyncFunctionManager;
 use crate::binder::bind_values;
+use crate::binder::resolve_file_location;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::CteInfo;
@@ -2232,6 +2239,12 @@ impl<'a> TypeChecker<'a> {
                 continue;
             }
             let field_names: Vec<&str> = field_str.split(':').collect();
+            // if the field is JSON type, must specify the key path in the object
+            // for example:
+            // the field `info` has the value: `{"tags":{"id":10,"env":"prod","name":"test"}}`
+            // a query can be written like this `info.tags.env:prod`
+            let field_name = field_names[0].trim();
+            let sub_field_names: Vec<&str> = field_name.split('.').collect();
             let column_expr = Expr::ColumnRef {
                 span: query_scalar.span(),
                 column: ColumnRef {
@@ -2239,7 +2252,7 @@ impl<'a> TypeChecker<'a> {
                     table: None,
                     column: ColumnID::Name(Identifier::from_name(
                         query_scalar.span(),
-                        field_names[0].trim(),
+                        sub_field_names[0].trim(),
                     )),
                 },
             };
@@ -3500,6 +3513,91 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
+    async fn resolve_wasm_file_location(&mut self, udf_definition: &UDFScript) -> Result<UDFType> {
+        let file_location = match udf_definition.code.strip_prefix('@') {
+            Some(location) => FileLocation::Stage(location.to_string()),
+            None => {
+                let uri = UriLocation::from_uri(
+                    udf_definition.code.clone(),
+                    "".to_string(),
+                    BTreeMap::default(),
+                )?;
+                FileLocation::Uri(uri)
+            }
+        };
+
+        let (stage_info, wasm_module_path) =
+            resolve_file_location(self.ctx.as_ref(), &file_location)
+                .await
+                .map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to resolve WASM code location {:#?}: {}",
+                        &udf_definition.code, err
+                    ))
+                })?;
+
+        let op = StageTable::get_op(&stage_info).map_err(|err| {
+            ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
+        })?;
+
+        let code_blob = op.read(&wasm_module_path).await.map_err(|err| {
+            ErrorCode::SemanticError(format!(
+                "Failed to read WASM module {}: {}",
+                wasm_module_path, err
+            ))
+        })?;
+
+        let compress_algo = CompressAlgorithm::from_path(&wasm_module_path);
+        log::trace!(
+            "Detecting compression algorithm for WASM module: {}",
+            &wasm_module_path
+        );
+        log::info!("Detected compression algorithm: {:#?}", &compress_algo);
+
+        let code_blob = match compress_algo {
+            Some(algo) => {
+                log::trace!("Decompressing WASM module using {:?} algorithm", algo);
+                let mut decoder = DecompressDecoder::new(algo);
+                decoder.decompress_all(&code_blob).map_err(|err| {
+                    let error_msg = format!(
+                        "Failed to decompress WASM module {}: {}",
+                        wasm_module_path, err
+                    );
+                    log::error!("{}", error_msg);
+                    ErrorCode::SemanticError(error_msg)
+                })?
+            }
+            None => {
+                let ext = match PathBuf::from(&wasm_module_path).extension() {
+                    Some(ext) => ext.to_string_lossy().to_string(),
+                    None => {
+                        let error_msg = format!(
+                            "WASM module path {} has no file extension",
+                            wasm_module_path
+                        );
+                        log::error!("{}", error_msg);
+                        return Err(ErrorCode::SemanticError(error_msg));
+                    }
+                };
+
+                if ext == "wasm" {
+                    log::trace!("WASM module is already uncompressed");
+                    code_blob
+                } else {
+                    let error_msg = format!("Invalid WASM module: {}", wasm_module_path);
+                    log::error!("{}", error_msg);
+                    return Err(ErrorCode::SemanticError(error_msg));
+                }
+            }
+        };
+
+        Ok(UDFType::WasmScript((
+            udf_definition.language.clone(),
+            udf_definition.runtime_version.clone(),
+            code_blob,
+        )))
+    }
+
     #[async_recursion::async_recursion]
     async fn resolve_udf_script(
         &mut self,
@@ -3518,6 +3616,16 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
+        let const_udf_type = if udf_definition.language.to_lowercase().as_str() == "wasm" {
+            self.resolve_wasm_file_location(&udf_definition).await?
+        } else {
+            UDFType::Script((
+                udf_definition.language,
+                udf_definition.runtime_version,
+                udf_definition.code,
+            ))
+        };
+
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
@@ -3530,11 +3638,7 @@ impl<'a> TypeChecker<'a> {
                 display_name,
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
-                udf_type: UDFType::Script((
-                    udf_definition.language,
-                    udf_definition.runtime_version,
-                    udf_definition.code,
-                )),
+                udf_type: const_udf_type,
                 arguments: args,
             }
             .into(),

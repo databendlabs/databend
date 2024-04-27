@@ -414,6 +414,32 @@ error:
 
 
 ---------- Input ----------
+SELECT top -1 c a as b FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | SELECT top -1 c a as b FROM t
+  | ------ --- ^ expecting a literal number after keyword `TOP`, if you were referring to a column with name `top`, please quote it like `"top"`
+  | |      |    
+  | |      while parsing TOP <limit>
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+SELECT top c a as b FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | SELECT top c a as b FROM t
+  | ------ --- ^ expecting a literal number after keyword `TOP`, if you were referring to a column with name `top`, please quote it like `"top"`
+  | |      |    
+  | |      while parsing TOP <limit>
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
 SELECT * FROM t GROUP BY GROUPING SETS a, b
 ---------- Output ---------
 error: 

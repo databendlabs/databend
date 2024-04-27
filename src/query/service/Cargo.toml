@@ -102,9 +102,8 @@ jsonb = { workspace = true }
 # GitHub dependencies
 
 # Crates.io dependencies
-## TODO add python support
-# arrow-udf-python = {package = "arrow-udf-python", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
-arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "0d1a13c" }
+arrow-udf-js = { workspace = true }
+arrow-udf-wasm = { workspace = true }
 
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
@@ -184,7 +183,6 @@ xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"
 arrow-cast = { workspace = true }
 ordered-float = { workspace = true }
 
-base64 = "0.21.0"
 criterion = "0.4"
 goldenfile = "1.4"
 hex = "0.4.3"
