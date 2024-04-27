@@ -820,8 +820,7 @@ impl RunningGraph {
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
     pub fn can_perform_task(&self, global_epoch: u32) -> bool {
-        let res = self.0.can_perform_task(global_epoch);
-        return res;
+        self.0.can_perform_task(global_epoch)
     }
 
     pub fn get_query_id(&self) -> Arc<String> {
