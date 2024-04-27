@@ -27,8 +27,8 @@ impl Binder {
         object_id: &str,
     ) -> Result<Plan> {
         let priority_num: u8 = match &priority {
-            Priority::HIGH => 3,
-            Priority::MEDIUM => 2,
+            Priority::HIGH => 5,
+            Priority::MEDIUM => 3,
             Priority::LOW => 1,
         };
 

@@ -189,6 +189,7 @@ struct ExecutingGraph {
     /// - the high 32 bit store the number of points that can be consumed
     /// - the low 32 bit store this points belong to which epoch
     points: AtomicU64,
+    max_points: AtomicU64,
     query_id: Arc<String>,
     should_finish: AtomicBool,
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
@@ -210,6 +211,7 @@ impl ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
+            max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
             should_finish: AtomicBool::new(false),
             finish_condvar_notify,
@@ -233,6 +235,7 @@ impl ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
+            max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
             should_finish: AtomicBool::new(false),
             finish_condvar_notify,
@@ -451,7 +454,8 @@ impl ExecutingGraph {
     }
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
-    pub fn can_perform_task(&self, global_epoch: u32, max_points: u64) -> bool {
+    pub fn can_perform_task(&self, global_epoch: u32) -> bool {
+        let max_points = self.points.load(Ordering::SeqCst);
         let mut expected_value = 0;
         let mut desired_value = 0;
         loop {
@@ -606,7 +610,7 @@ impl ScheduleQueue {
         while let Some(processor) = self.async_queue.pop_front() {
             if processor
                 .graph
-                .can_perform_task(executor.epoch.load(Ordering::SeqCst), DEFAULT_POINTS)
+                .can_perform_task(executor.epoch.load(Ordering::SeqCst))
             {
                 let query_id = processor.graph.get_query_id().clone();
                 Self::schedule_async_task_with_condition(
@@ -628,7 +632,7 @@ impl ScheduleQueue {
             while let Some(processor) = self.sync_queue.pop_front() {
                 if processor
                     .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst), DEFAULT_POINTS)
+                    .can_perform_task(executor.epoch.load(Ordering::SeqCst))
                 {
                     context.set_task(ExecutorTask::Sync(processor));
                     break;
@@ -646,7 +650,7 @@ impl ScheduleQueue {
             while let Some(processor) = self.sync_queue.pop_front() {
                 if processor
                     .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst), DEFAULT_POINTS)
+                    .can_perform_task(executor.epoch.load(Ordering::SeqCst))
                 {
                     current_tasks.push_back(ExecutorTask::Sync(processor));
                 } else {
@@ -815,8 +819,9 @@ impl RunningGraph {
     }
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
-    pub fn can_perform_task(&self, global_epoch: u32, max_points: u64) -> bool {
-        self.0.can_perform_task(global_epoch, max_points)
+    pub fn can_perform_task(&self, global_epoch: u32) -> bool {
+        let res = self.0.can_perform_task(global_epoch);
+        return res;
     }
 
     pub fn get_query_id(&self) -> Arc<String> {
@@ -943,18 +948,7 @@ impl RunningGraph {
     pub fn change_priority(&self, priority: u64) {
         // Update highest 32 bits of `points`, which store the number of points that can be consumed in an epoch
         // See `points` definition in `ExecutingGraph` in detail
-        let mut old = self.0.points.load(Ordering::Relaxed);
-        loop {
-            let new = (priority << 32) | (old & EPOCH_MASK);
-            match self
-                .0
-                .points
-                .compare_exchange_weak(old, new, Ordering::SeqCst, Ordering::Relaxed)
-            {
-                Ok(_) => break,
-                Err(x) => old = x,
-            }
-        }
+        self.0.max_points.store(priority, Ordering::SeqCst);
     }
 }
 
