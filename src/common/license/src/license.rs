@@ -27,18 +27,33 @@ pub struct ComputeQuota {
 // All enterprise features are defined here.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Feature {
+    #[serde(alias = "license_info", alias = "LICENSE_INFO")]
     LicenseInfo,
+    #[serde(alias = "vacuum", alias = "VACUUM")]
     Vacuum,
+    #[serde(alias = "test", alias = "TEST")]
     Test,
+    #[serde(alias = "virtual_column", alias = "VIRTUAL_COLUMN")]
     VirtualColumn,
+    #[serde(alias = "background_service", alias = "BACKGROUND_SERVICE")]
     BackgroundService,
+    #[serde(alias = "data_mask", alias = "DATA_MASK")]
     DataMask,
+    #[serde(alias = "aggregate_index", alias = "AGGREGATE_INDEX")]
     AggregateIndex,
+    #[serde(alias = "inverted_index", alias = "INVERTED_INDEX")]
     InvertedIndex,
+    #[serde(alias = "computed_column", alias = "COMPUTED_COLUMN")]
     ComputedColumn,
+    #[serde(alias = "storage_encryption", alias = "STORAGE_ENCRYPTION")]
     StorageEncryption,
+    #[serde(alias = "stream", alias = "STREAM")]
     Stream,
+    #[serde(alias = "compute_quota", alias = "COMPUTE_QUOTA")]
     ComputeQuota(ComputeQuota),
+
+    #[serde(other)]
+    Unknown,
 }
 
 impl Display for Feature {
@@ -68,6 +83,7 @@ impl Display for Feature {
                     Some(memory_usage) => write!(f, "memory_usage: {}", memory_usage),
                 }
             }
+            Feature::Unknown => write!(f, "unknown"),
         }
     }
 }
@@ -144,7 +160,7 @@ mod tests {
     fn test_deserialize_feature_from_string() {
         assert_eq!(
             Feature::LicenseInfo,
-            serde_json::from_str::<Feature>("\"LicenseInfo\"").unwrap()
+            serde_json::from_str::<Feature>("\"license_info\"").unwrap()
         );
         assert_eq!(
             Feature::Vacuum,
@@ -156,7 +172,7 @@ mod tests {
         );
         assert_eq!(
             Feature::VirtualColumn,
-            serde_json::from_str::<Feature>("\"VirtualColumn\"").unwrap()
+            serde_json::from_str::<Feature>("\"VIRTUAL_COLUMN\"").unwrap()
         );
         assert_eq!(
             Feature::BackgroundService,
@@ -203,6 +219,11 @@ mod tests {
                 memory_usage: Some(1),
             }),
             serde_json::from_str::<Feature>("{\"ComputeQuota\":{\"memory_usage\":1}}").unwrap()
-        )
+        );
+
+        assert_eq!(
+            Feature::Unknown,
+            serde_json::from_str::<Feature>("\"ssss\"").unwrap()
+        );
     }
 }
