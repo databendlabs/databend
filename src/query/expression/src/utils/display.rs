@@ -434,6 +434,13 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
             } => {
                 write!(f, "{}::{}", display_name, data_type)
             }
+            RawExpr::AsyncFunctionCall {
+                return_type,
+                display_name,
+                ..
+            } => {
+                write!(f, "{}::{}", display_name, return_type)
+            }
             RawExpr::Cast {
                 is_try,
                 expr,
@@ -634,6 +641,7 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
         match self {
             Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
             Expr::ColumnRef { display_name, .. } => write!(f, "{display_name}"),
+            Expr::AsyncFunctionCall { display_name, .. } => write!(f, "{display_name}"),
             Expr::Cast {
                 is_try,
                 expr,
@@ -757,6 +765,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             match expr {
                 Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
                 Expr::ColumnRef { display_name, .. } => display_name.clone(),
+                Expr::AsyncFunctionCall { display_name, .. } => display_name.clone(),
                 Expr::Cast {
                     is_try,
                     expr,

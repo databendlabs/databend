@@ -89,7 +89,7 @@ impl AsyncFunction for SequenceAsyncFunction {
         let table_func = AsyncFunctionCall {
             span,
             func_name: self.func_name.clone(),
-            display_name: self.func_name.clone(),
+            display_name: format!("nextval({})", sequence_name),
             return_type: Box::new(self.return_type.clone()),
             arguments: vec![sequence_name],
         };

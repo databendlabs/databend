@@ -126,6 +126,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".fmt(f)?,
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".fmt(f)?,
             PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".fmt(f)?,
+            PhysicalPlan::AsyncFunction(_) => "AsyncFunction".fmt(f)?,
         }
 
         for node in self.node.children() {

@@ -265,6 +265,7 @@ fn to_format_tree(
         PhysicalPlan::ChunkCommitInsert(_) => {
             Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
         }
+        PhysicalPlan::AsyncFunction(_) => Ok(FormatTreeNode::new("AsyncFunction".to_string())),
     }
 }
 
