@@ -53,6 +53,7 @@ mod regexp;
 mod string;
 mod tuple;
 mod variant;
+mod variant_map_ops;
 mod vector;
 
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
