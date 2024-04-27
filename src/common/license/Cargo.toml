@@ -16,5 +16,4 @@ databend-common-base = { path = "../base" }
 databend-common-exception = { path = "../exception" }
 jwt-simple = "0.11.0"
 serde = { workspace = true }
-strum = "0.24.1"
-strum_macros = "0.24.3"
+serde_json = { workspace = true }
