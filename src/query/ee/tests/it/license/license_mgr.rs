@@ -27,7 +27,7 @@ use jwt_simple::prelude::UnixTimeStamp;
 fn build_custom_claims(
     license_type: String,
     org: String,
-    features: Option<Vec<String>>,
+    features: Option<Vec<Feature>>,
 ) -> LicenseInfo {
     LicenseInfo {
         r#type: Some(license_type),
@@ -99,10 +99,10 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
             "trial".to_string(),
             "expired".to_string(),
             Some(vec![
-                "test".to_string(),
-                "license_info".to_string(),
-                "vacuum".to_string(),
-                "stream".to_string(),
+                Feature::Test,
+                Feature::LicenseInfo,
+                Feature::Vacuum,
+                Feature::Stream,
             ]),
         ),
         Duration::from_hours(2),
@@ -153,11 +153,7 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
         build_custom_claims(
             "trial".to_string(),
             "expired".to_string(),
-            Some(vec![
-                "test".to_string(),
-                "license_info".to_string(),
-                "vacuum".to_string(),
-            ]),
+            Some(vec![Feature::Test, Feature::LicenseInfo, Feature::Vacuum]),
         ),
         Duration::from_hours(0),
     );

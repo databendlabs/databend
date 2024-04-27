@@ -924,6 +924,7 @@ impl HashJoinBuildState {
             dedup_build_key_column(&self.func_ctx, data_blocks, build_key)?
         {
             if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
+                info!("inlist_filter: {:?}", filter.sql_display());
                 runtime_filter.add_inlist(filter);
             }
         }
@@ -1027,6 +1028,7 @@ impl HashJoinBuildState {
                 _ => unreachable!(),
             };
             if let Some(min_max_filter) = min_max_filter {
+                info!("min_max_filter: {:?}", min_max_filter.sql_display());
                 runtime_filter.add_min_max(min_max_filter);
             }
         }

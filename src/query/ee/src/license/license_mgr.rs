@@ -128,14 +128,18 @@ impl RealLicenseManager {
         if l.custom.features.is_none() {
             return Ok(());
         }
-        let features = l.custom.features.as_ref().unwrap();
-        if !features.contains(&feature.to_string()) {
-            return Err(ErrorCode::LicenseKeyInvalid(format!(
-                "license key does not support feature {}, supported features: {}",
-                feature,
-                l.custom.display_features()
-            )));
+
+        let verify_features = l.custom.features.as_ref().unwrap();
+        for verify_feature in verify_features {
+            if verify_feature.verify(&feature) {
+                return Ok(());
+            }
         }
-        Ok(())
+
+        Err(ErrorCode::LicenseKeyInvalid(format!(
+            "license key does not support feature {}, supported features: {}",
+            feature,
+            l.custom.display_features()
+        )))
     }
 }
