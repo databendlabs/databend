@@ -99,7 +99,7 @@ impl AsyncSystemTable for BackgroundTaskTable {
                 task_run_secs.push(None);
             }
             creators.push(task.creator.map(|s| s.to_string()));
-            trigger.push(task.manual_trigger.map(|s| s.trigger.to_string()));
+            trigger.push(task.manual_trigger.map(|s| s.trigger.display().to_string()));
             create_timestamps.push(task.created_at.timestamp_micros());
             update_timestamps.push(task.last_updated.unwrap_or_default().timestamp_micros());
         }
