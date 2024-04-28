@@ -201,7 +201,7 @@ impl SessionContext {
 
     pub fn get_client_host(&self) -> Option<String> {
         let lock = self.client_host.read();
-        *lock.clone()
+        lock.clone()
     }
 
     pub fn set_client_host(&self, sock: Option<String>) {

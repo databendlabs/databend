@@ -175,12 +175,8 @@ impl Session {
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
     where F: FnOnce() + Send + Sync + 'static {
-        let ip = if let Some(host) = host {
-            Some(host.ip().to_string())
-        } else {
-            None
-        };
-        self.session_ctx.set_client_host(ip);
+        self.session_ctx
+            .set_client_host(host.map(|host| host.ip().to_string()));
         self.session_ctx.set_io_shutdown_tx(io_shutdown);
     }
 
