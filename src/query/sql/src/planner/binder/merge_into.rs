@@ -201,12 +201,18 @@ impl Binder {
         let source_data = source.transform_table_reference();
 
         // bind source data
-        let (mut source_expr, mut source_context) =
-            self.bind_single_table(bind_context, &source_data).await?;
+        let source_column_bindings_start_index = bind_context.columns.len();
+        let (mut source_expr, _) = self
+            .bind_table_reference(bind_context, &source_data)
+            .await?;
+
         // remove stream column.
-        source_context
+        bind_context
             .columns
             .retain(|v| v.visibility == Visibility::Visible);
+
+        let source_column_bindings =
+            bind_context.columns[source_column_bindings_start_index..].to_vec();
 
         // Wrap `LogicalMaterializedCte` to `source_expr`
         for (_, cte_info) in self.ctes_map.iter().rev() {
@@ -240,10 +246,9 @@ impl Binder {
                 let default_target_table_schema = table_schema.remove_computed_fields();
                 let mut update_columns =
                     HashMap::with_capacity(default_target_table_schema.num_fields());
-                let source_output_columns = &source_context.columns;
                 // we use Vec as the value, because there could be duplicate names
                 let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
-                for column in source_output_columns {
+                for column in source_column_bindings.iter() {
                     name_map
                         .entry(column.column_name.clone())
                         .or_default()
@@ -291,8 +296,9 @@ impl Binder {
         // Todo: (JackTan25) Maybe we can remove bind target_table
         // when the target table has been binded in bind_merge_into_source
         // bind table for target table
-        let (mut target_expr, mut target_context) = self
-            .bind_single_table(&mut source_context, &target_table)
+        let target_column_bindings_start_index = bind_context.columns.len();
+        let (mut target_expr, _) = self
+            .bind_table_reference(bind_context, &target_table)
             .await?;
 
         if table.change_tracking_enabled() && merge_type != MergeIntoType::InsertOnly {
@@ -318,7 +324,7 @@ impl Binder {
             },
         };
 
-        let column_binding = target_context.add_internal_column_binding(
+        let column_binding = bind_context.add_internal_column_binding(
             &row_id_column_binding,
             self.metadata.clone(),
             true,
@@ -340,6 +346,9 @@ impl Binder {
             columns_set.insert(column_binding.index);
         }
 
+        let target_column_bindings =
+            bind_context.columns[target_column_bindings_start_index..].to_vec();
+
         // add join, we use _row_id to check_duplicate join row.
         let join = Join {
             op: join_type,
@@ -350,10 +359,10 @@ impl Binder {
         };
 
         let (join_sexpr, mut bind_ctx) = self
-            .bind_join(
+            .bind_merge_into_join(
                 bind_context,
-                target_context.clone(),
-                source_context,
+                &target_column_bindings,
+                &source_column_bindings,
                 target_expr,
                 source_expr,
                 &join,

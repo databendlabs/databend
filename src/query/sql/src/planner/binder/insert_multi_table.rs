@@ -61,7 +61,8 @@ impl Binder {
                 alias: None,
             };
 
-            let (s_expr, bind_context) = self.bind_single_table(bind_context, &table_ref).await?;
+            let (s_expr, bind_context) =
+                self.bind_table_reference(bind_context, &table_ref).await?;
             let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
                 .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
 

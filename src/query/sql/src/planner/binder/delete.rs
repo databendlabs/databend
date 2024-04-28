@@ -70,9 +70,7 @@ impl<'a> Binder {
             ..
         } = stamt;
 
-        if let Some(with) = &with {
-            self.add_cte(with, bind_context)?;
-        }
+        self.init_cte(bind_context, with)?;
 
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,
@@ -89,7 +87,7 @@ impl<'a> Binder {
             ));
         };
 
-        let (table_expr, mut context) = self.bind_single_table(bind_context, table).await?;
+        let (table_expr, mut context) = self.bind_table_reference(bind_context, table).await?;
 
         context.allow_internal_columns(false);
         let mut scalar_binder = ScalarBinder::new(

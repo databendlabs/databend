@@ -62,8 +62,8 @@ use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
+use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::location::parse_uri_location;
-use crate::binder::select::MaxColumnPosition;
 use crate::binder::Binder;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;

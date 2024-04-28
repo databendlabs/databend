@@ -22,7 +22,6 @@ use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::ast::With;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -119,15 +118,6 @@ impl<'a> Binder {
         }
     }
 
-    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
-    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
-        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
-    }
-
-    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
-        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
-    }
-
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
@@ -138,49 +128,6 @@ impl<'a> Binder {
         self.bind_query_index(&mut init_bind_context, &plan).await?;
         info!("bind stmt to plan, time used: {:?}", start.elapsed());
         Ok(plan)
-    }
-
-    pub(crate) async fn opt_hints_set_var(
-        &mut self,
-        bind_context: &mut BindContext,
-        hints: &Hint,
-    ) -> Result<()> {
-        let mut type_checker = TypeChecker::try_create(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            false,
-        )?;
-        let mut hint_settings: HashMap<String, String> = HashMap::new();
-        for hint in &hints.hints_list {
-            let variable = &hint.name.name;
-            let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
-
-            let scalar = wrap_cast(&scalar, &DataType::String);
-            let expr = scalar.as_expr()?;
-
-            let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-            match new_expr {
-                Expr::Constant { scalar, .. } => {
-                    let value = scalar.into_string().unwrap();
-                    if variable.to_lowercase().as_str() == "timezone" {
-                        let tz = value.trim_matches(|c| c == '\'' || c == '\"');
-                        tz.parse::<Tz>().map_err(|_| {
-                            ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
-                        })?;
-                    }
-                    hint_settings.entry(variable.to_string()).or_insert(value);
-                }
-                _ => {
-                    warn!("fold hints {:?} failed. value must be constant value", hint);
-                }
-            }
-        }
-
-        self.ctx.get_settings().set_batch_settings(&hint_settings)
     }
 
     #[async_recursion::async_recursion]
@@ -652,6 +599,62 @@ impl<'a> Binder {
         Ok(plan)
     }
 
+    pub(crate) fn normalize_identifier(&self, ident: &Identifier) -> Identifier {
+        normalize_identifier(ident, &self.name_resolution_ctx)
+    }
+
+    pub(crate) async fn opt_hints_set_var(
+        &mut self,
+        bind_context: &mut BindContext,
+        hints: &Hint,
+    ) -> Result<()> {
+        let mut type_checker = TypeChecker::try_create(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false,
+        )?;
+        let mut hint_settings: HashMap<String, String> = HashMap::new();
+        for hint in &hints.hints_list {
+            let variable = &hint.name.name;
+            let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
+
+            let scalar = wrap_cast(&scalar, &DataType::String);
+            let expr = scalar.as_expr()?;
+
+            let (new_expr, _) =
+                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            match new_expr {
+                Expr::Constant { scalar, .. } => {
+                    let value = scalar.into_string().unwrap();
+                    if variable.to_lowercase().as_str() == "timezone" {
+                        let tz = value.trim_matches(|c| c == '\'' || c == '\"');
+                        tz.parse::<Tz>().map_err(|_| {
+                            ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
+                        })?;
+                    }
+                    hint_settings.entry(variable.to_string()).or_insert(value);
+                }
+                _ => {
+                    warn!("fold hints {:?} failed. value must be constant value", hint);
+                }
+            }
+        }
+
+        self.ctx.get_settings().set_batch_settings(&hint_settings)
+    }
+
+    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
+    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
+        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
+    }
+
+    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
+        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
+    }
+
     #[async_backtrace::framed]
     pub(crate) async fn bind_rewrite_to_query(
         &mut self,
@@ -693,13 +696,13 @@ impl<'a> Binder {
     ) -> (String, String, String) {
         let catalog_name = catalog
             .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .map(|ident| self.normalize_identifier(ident).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database_name = database
             .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .map(|ident| self.normalize_identifier(ident).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let object_name = normalize_identifier(object, &self.name_resolution_ctx).name;
+        let object_name = self.normalize_identifier(object).name;
         (catalog_name, database_name, object_name)
     }
 
@@ -865,32 +868,5 @@ impl<'a> Binder {
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())
-    }
-
-    pub(crate) fn add_cte(&mut self, with: &With, bind_context: &mut BindContext) -> Result<()> {
-        for (idx, cte) in with.ctes.iter().enumerate() {
-            let table_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
-            if bind_context.cte_map_ref.contains_key(&table_name) {
-                return Err(ErrorCode::SemanticError(format!(
-                    "duplicate cte {table_name}"
-                )));
-            }
-            let cte_info = CteInfo {
-                columns_alias: cte
-                    .alias
-                    .columns
-                    .iter()
-                    .map(|c| normalize_identifier(c, &self.name_resolution_ctx).name)
-                    .collect(),
-                query: *cte.query.clone(),
-                materialized: cte.materialized,
-                cte_idx: idx,
-                used_count: 0,
-                columns: vec![],
-            };
-            self.ctes_map.insert(table_name.clone(), cte_info.clone());
-            bind_context.cte_map_ref.insert(table_name, cte_info);
-        }
-        Ok(())
     }
 }
