@@ -75,7 +75,7 @@ impl PartialEq for Insert {
 }
 
 impl Insert {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn dest_schema(&self) -> DataSchemaRef {
         Arc::new(self.schema.clone().into())
     }
 

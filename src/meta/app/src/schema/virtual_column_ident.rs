@@ -45,6 +45,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_virtual_column";
         const TYPE: &'static str = "VirtualColumnIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = VirtualColumnMeta;
     }
 

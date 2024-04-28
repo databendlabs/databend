@@ -216,7 +216,8 @@ impl OptimizeTablePlan {
 pub enum OptimizeTableAction {
     All,
     Purge(Option<NavigationPoint>),
-    CompactBlocks,
+    // Optionally, specify the limit on the number of blocks to be compacted.
+    CompactBlocks(Option<usize>),
     CompactSegments,
 }
 

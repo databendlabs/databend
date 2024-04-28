@@ -1,0 +1,60 @@
+query 
+select name, size, creator from list_stage(location => '@data/udf/wasm/test10-udf-wasm-gcd/') order by name
+----
+udf/wasm/test10-udf-wasm-gcd/test10-udf-wasm-gcd.tar.gz 8932 NULL
+udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst 666082 NULL
+
+statement ok
+CREATE FUNCTION wasm_gcd (INT, INT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_gcd(int4,int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+
+query F
+select number, wasm_gcd(number * 3, number * 6) from numbers(5) where number > 0 order by 1;
+----
+1	3
+2	6
+3	9
+4	12
+
+statement ok
+CREATE FUNCTION wasm_lcm (INT, INT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_lcm(int4,int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+
+query F
+select number, wasm_lcm(number * 3, number * 6) from numbers(5) where number > 0 order by 1;
+----
+1 6
+2 12
+3 18
+4 24
+
+statement ok
+CREATE FUNCTION wasm_factorial (INT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_factorial(int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+
+query F
+select number, wasm_factorial(number) from numbers(5) where number > 0 order by 1;
+----
+1 1
+2 2
+3 6
+4 24
+
+statement ok
+CREATE FUNCTION wasm_fibonacci (INT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_fibonacci(int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+
+query F
+select number, wasm_fibonacci(number) from numbers(5) where number > 0 order by 1;
+----
+1 1
+2 1
+3 2
+4 3
+
+statement ok
+CREATE FUNCTION wasm_is_prime (INT) RETURNS BOOLEAN LANGUAGE wasm HANDLER = 'wasm_is_prime(int4)->boolean' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+
+query F
+select number, wasm_is_prime(number) from numbers(5) where number > 0 order by 1;
+----
+1 0
+2 1
+3 1
+4 0

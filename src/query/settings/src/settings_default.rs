@@ -290,6 +290,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("disable_merge_into_join_reorder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable merge into join reorder optimization.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",
@@ -535,7 +541,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(50),
+                    value: UserSettingValue::UInt64(25),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),

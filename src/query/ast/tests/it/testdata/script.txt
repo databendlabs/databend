@@ -61,6 +61,7 @@ LetStatement {
                         ),
                         hints: None,
                         distinct: false,
+                        top_n: None,
                         select_list: [
                             StarColumns {
                                 qualified: [
@@ -278,6 +279,7 @@ Return {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 AliasedExpr {
                                     expr: CountAll {
@@ -524,6 +526,7 @@ ForInStatement {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -1535,6 +1538,7 @@ Loop {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 AliasedExpr {
                                     expr: ColumnRef {
@@ -1677,6 +1681,7 @@ RunStatement {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -1741,6 +1746,7 @@ RunStatement {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
@@ -1804,6 +1810,7 @@ RunStatement {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {

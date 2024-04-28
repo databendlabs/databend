@@ -130,22 +130,30 @@ static PREPARE_TPCH: std::sync::Once = std::sync::Once::new();
 static PREPARE_TPCDS: std::sync::Once = std::sync::Once::new();
 static PREPARE_STAGE: std::sync::Once = std::sync::Once::new();
 static PREPARE_SPILL: std::sync::Once = std::sync::Once::new();
+static PREPARE_WASM: std::sync::Once = std::sync::Once::new();
 
 pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
     let file_path = file_path.to_str().unwrap_or_default();
     if file_path.contains("tpch/") {
         PREPARE_TPCH.call_once(|| {
+            println!("Calling the script prepare_tpch_data.sh ...");
             run_script("prepare_tpch_data.sh").unwrap();
         });
     } else if file_path.contains("tpcds/") {
         PREPARE_TPCDS.call_once(|| {
+            println!("Calling the script prepare_tpcds_data.sh ...");
             run_script("prepare_tpcds_data.sh").unwrap();
         });
     } else if file_path.contains("stage/") || file_path.contains("stage_parquet/") {
         PREPARE_STAGE.call_once(|| {
+            println!("Calling the script prepare_stage.sh ...");
             run_script("prepare_stage.sh").unwrap();
         });
+    } else if file_path.contains("udf_native/") {
+        println!("wasm context Calling the script prepare_stage.sh ...");
+        PREPARE_WASM.call_once(|| run_script("prepare_stage.sh").unwrap())
     } else if file_path.contains("spill/") {
+        println!("Calling the script prepare_spill_data.sh ...");
         PREPARE_SPILL.call_once(|| run_script("prepare_spill_data.sh").unwrap())
     }
     Ok(())

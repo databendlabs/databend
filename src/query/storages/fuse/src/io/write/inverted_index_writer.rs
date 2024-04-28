@@ -49,9 +49,11 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
 use tantivy::schema::Document;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
+use tantivy::schema::JsonObjectOptions;
 use tantivy::schema::Schema;
 use tantivy::schema::TextFieldIndexing;
 use tantivy::schema::TextOptions;
@@ -63,6 +65,7 @@ use tantivy::tokenizer::StopWordFilter;
 use tantivy::tokenizer::TextAnalyzer;
 use tantivy::tokenizer::TokenizerManager;
 use tantivy::Directory;
+// use tantivy::schema::document::OwnedValue;
 use tantivy::Index;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
@@ -163,18 +166,26 @@ impl InvertedIndexWriter {
         let text_field_indexing = TextFieldIndexing::default()
             .set_tokenizer(&tokenizer_name)
             .set_index_option(index_record);
-        let text_options = TextOptions::default().set_indexing_options(text_field_indexing);
+        let text_options = TextOptions::default().set_indexing_options(text_field_indexing.clone());
+        let json_options = JsonObjectOptions::default().set_indexing_options(text_field_indexing);
 
         let mut schema_builder = Schema::builder();
         let mut index_fields = Vec::with_capacity(schema.fields.len());
         for field in &schema.fields {
-            if field.data_type().remove_nullable() != DataType::String {
-                return Err(ErrorCode::IllegalDataType(format!(
-                    "inverted index only support String type, but got {}",
-                    field.data_type()
-                )));
-            }
-            let index_field = schema_builder.add_text_field(field.name(), text_options.clone());
+            let index_field = match field.data_type().remove_nullable() {
+                DataType::String => {
+                    schema_builder.add_text_field(field.name(), text_options.clone())
+                }
+                DataType::Variant => {
+                    schema_builder.add_json_field(field.name(), json_options.clone())
+                }
+                _ => {
+                    return Err(ErrorCode::IllegalDataType(format!(
+                        "inverted index only support String and Variant type, but got {}",
+                        field.data_type()
+                    )));
+                }
+            };
             index_fields.push(index_field);
         }
         let index_schema = schema_builder.build();
@@ -221,15 +232,33 @@ impl InvertedIndexWriter {
             }
         }
 
+        let mut types = Vec::with_capacity(self.schema.num_fields());
+        for field in self.schema.fields() {
+            let ty = field.data_type().remove_nullable();
+            types.push(ty);
+        }
         for i in 0..block.num_rows() {
             let mut doc = Document::new();
-            for j in 0..block.num_columns() {
+            for (j, typ) in types.iter().enumerate() {
                 let field = Field::from_field_id(j as u32);
                 let column = block.get_by_offset(j);
-                if let ScalarRef::String(text) = unsafe { column.value.index_unchecked(i) } {
-                    doc.add_text(field, text);
-                } else {
-                    doc.add_text(field, "");
+                match unsafe { column.value.index_unchecked(i) } {
+                    ScalarRef::String(text) => doc.add_text(field, text),
+                    ScalarRef::Variant(jsonb_val) => {
+                        // only support object JSON, other JSON type will not add index.
+                        if let Ok(Some(obj_val)) = jsonb::to_serde_json_object(jsonb_val) {
+                            doc.add_json_object(field, obj_val);
+                        } else {
+                            doc.add_json_object(field, Map::new());
+                        }
+                    }
+                    _ => {
+                        if typ == &DataType::Variant {
+                            doc.add_json_object(field, Map::new());
+                        } else {
+                            doc.add_text(field, "");
+                        }
+                    }
                 }
             }
             self.operations.push(UserOperation::Add(doc));

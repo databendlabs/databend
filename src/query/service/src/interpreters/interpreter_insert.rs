@@ -23,6 +23,7 @@ use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::insert::InsertValue;
@@ -113,7 +114,7 @@ impl Interpreter for InsertInterpreter {
             InsertInputSource::Values(InsertValue::Values { rows }) => {
                 build_res.main_pipeline.add_source(
                     |output| {
-                        let inner = ValueSource::new(rows.clone(), self.plan.schema());
+                        let inner = ValueSource::new(rows.clone(), self.plan.dest_schema());
                         AsyncSourcer::create(self.ctx.clone(), output, inner)
                     },
                     1,
@@ -130,7 +131,7 @@ impl Interpreter for InsertInterpreter {
                             data.to_string(),
                             self.ctx.clone(),
                             name_resolution_ctx,
-                            self.plan.schema(),
+                            self.plan.dest_schema(),
                             *start,
                         );
                         AsyncSourcer::create(self.ctx.clone(), output, inner)
@@ -146,7 +147,7 @@ impl Interpreter for InsertInterpreter {
 
                 match StageFileFormatType::from_str(format) {
                     Ok(f) if f.has_inner_schema() => {
-                        let dest_schema = self.plan.schema();
+                        let dest_schema = self.plan.dest_schema();
                         let func_ctx = self.ctx.get_function_context()?;
 
                         build_res.main_pipeline.add_transform(
@@ -174,7 +175,7 @@ impl Interpreter for InsertInterpreter {
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
                 if format.get_type().has_inner_schema() {
-                    let dest_schema = self.plan.schema();
+                    let dest_schema = self.plan.dest_schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
                     build_res.main_pipeline.add_transform(
@@ -229,7 +230,7 @@ impl Interpreter for InsertInterpreter {
                                 table_info: table1.get_table_info().clone(),
                                 select_schema: plan.schema(),
                                 select_column_bindings,
-                                insert_schema: self.plan.schema(),
+                                insert_schema: self.plan.dest_schema(),
                                 cast_needed: self.check_schema_cast(plan)?,
                             },
                         )));
@@ -246,7 +247,7 @@ impl Interpreter for InsertInterpreter {
                             table_info: table1.get_table_info().clone(),
                             select_schema: plan.schema(),
                             select_column_bindings,
-                            insert_schema: self.plan.schema(),
+                            insert_schema: self.plan.dest_schema(),
                             cast_needed: self.check_schema_cast(plan)?,
                         }))
                     }
@@ -273,7 +274,7 @@ impl Interpreter for InsertInterpreter {
                         self.plan.catalog.clone(),
                         self.plan.database.clone(),
                         self.plan.table.clone(),
-                        "insert_into_table".to_owned(),
+                        MutationKind::Insert,
                         true,
                     );
                     hook_operator.execute(&mut build_res.main_pipeline).await;
@@ -293,7 +294,7 @@ impl Interpreter for InsertInterpreter {
             self.ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),
-            self.plan.schema(),
+            self.plan.dest_schema(),
             None,
             vec![],
             self.plan.overwrite,
@@ -308,7 +309,7 @@ impl Interpreter for InsertInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
-                "insert_into_table".to_owned(),
+                MutationKind::Insert,
                 true,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;

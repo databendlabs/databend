@@ -272,7 +272,7 @@ impl InteractiveWorkerBase {
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         UserApiProvider::instance()
-            .update_user_login_result(ctx.get_tenant(), identity, authed)
+            .update_user_login_result(ctx.get_tenant(), identity, authed, &user_info)
             .await?;
         if authed {
             self.session.set_authed_user(user_info, None).await?;

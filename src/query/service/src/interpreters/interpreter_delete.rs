@@ -25,7 +25,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -296,7 +299,7 @@ impl Interpreter for DeleteInterpreter {
                 catalog_name.to_string(),
                 db_name.to_string(),
                 tbl_name.to_string(),
-                "delete".to_string(),
+                MutationKind::Delete,
                 // table lock has been added, no need to check.
                 false,
             );
@@ -419,32 +422,19 @@ pub async fn subquery_filter(
     let stream_blocks = PullingExecutorStream::create(pulling_executor)?
         .try_collect::<Vec<DataBlock>>()
         .await?;
-    let row_id_array = if !stream_blocks.is_empty() {
+
+    let row_id_column = if !stream_blocks.is_empty() {
         let block = DataBlock::concat(&stream_blocks)?;
-        let row_id_col = block.columns()[0]
+        block.columns()[0]
             .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), block.num_rows());
-        // Make a selection: `_row_id` IN (row_id_col)
-        // Construct array function for `row_id_col`
-        let mut row_id_array = Vec::with_capacity(row_id_col.len());
-        for row_id in row_id_col.iter() {
-            let scalar = row_id.to_owned();
-            let constant_scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: scalar,
-            });
-            row_id_array.push(constant_scalar_expr);
-        }
-        row_id_array
+            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), block.num_rows())
     } else {
-        vec![]
+        UInt64Type::from_data(vec![])
     };
 
-    let array_raw_expr = ScalarExpr::FunctionCall(FunctionCall {
+    let array_raw_expr = ScalarExpr::ConstantExpr(ConstantExpr {
         span: None,
-        func_name: "array".to_string(),
-        params: vec![],
-        arguments: row_id_array,
+        value: Scalar::Array(row_id_column),
     });
 
     let row_id_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {

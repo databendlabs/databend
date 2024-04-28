@@ -27,6 +27,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
@@ -713,14 +714,14 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
-        limit: Option<usize>,
+        num_snapshot_limit: Option<usize>,
         keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         match self.navigate_for_purge(&ctx, instant).await {
             Ok((table, files)) => {
                 table
-                    .do_purge(&ctx, files, limit, keep_last_snapshot, dry_run)
+                    .do_purge(&ctx, files, num_snapshot_limit, keep_last_snapshot, dry_run)
                     .await
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
@@ -883,9 +884,9 @@ impl Table for FuseTable {
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        limit: Option<usize>,
+        limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        self.do_compact_blocks(ctx, limit).await
+        self.do_compact_blocks(ctx, limits).await
     }
 
     #[async_backtrace::framed]

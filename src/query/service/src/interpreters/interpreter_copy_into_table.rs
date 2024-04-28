@@ -27,6 +27,7 @@ use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
@@ -386,7 +387,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.catalog_info.catalog_name().to_string(),
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
-                "copy_into_table".to_string(),
+                MutationKind::Insert,
                 true,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;

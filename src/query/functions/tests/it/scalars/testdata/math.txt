@@ -464,7 +464,7 @@ output         : 120
 
 ast            : truncate(0)(10.28*100, 0)
 raw expr       : truncate(0)(multiply(10.28, 100), 0)
-checked expr   : truncate<Decimal(7, 2), UInt8>(0)(multiply<Decimal(7, 2), Decimal(7, 0)>(to_decimal<Decimal(4, 2)>(7, 2)(10.28_d128(4,2)), to_decimal<UInt8>(7, 0)(100_u8)), 0_u8)
+checked expr   : truncate<Decimal(7, 2), UInt8>(0)(multiply<Decimal(4, 2), UInt8>(10.28_d128(4,2), 100_u8), 0_u8)
 optimized expr : 1028_d128(7,0)
 output type    : Decimal(7, 0)
 output domain  : {1028..=1028}

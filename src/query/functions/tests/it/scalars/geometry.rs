@@ -26,6 +26,11 @@ use crate::scalars::run_ast;
 fn test_geometry() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geometry.txt").unwrap();
+    test_st_asewkb(file);
+    test_st_aswkb(file);
+    test_st_asewkt(file);
+    test_st_aswkt(file);
+    test_st_geohash(file);
     test_st_asgeojson(file);
     test_st_geomfromgeohash(file);
     test_st_geompointfromgeohash(file);
@@ -38,6 +43,58 @@ fn test_geometry() {
     test_st_geometryfromwkb(file);
     test_st_geometryfromwkt(file);
     // test_st_transform(file);
+}
+
+fn test_st_asewkb(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_asewkb(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_aswkb(file: &mut impl Write) {
+    run_ast(file, "st_aswkb(to_geometry('POINT(-122.35 37.55)'))", &[]);
+    run_ast(
+        file,
+        "st_aswkb(to_geometry('LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_asewkt(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_asewkt(to_geometry('SRID=4326;POINT(-122.35 37.55)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_asewkt(to_geometry('SRID=0;LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_aswkt(file: &mut impl Write) {
+    run_ast(file, "st_asewkt(to_geometry('POINT(-122.35 37.55)'))", &[]);
+    run_ast(
+        file,
+        "st_asewkt(to_geometry('LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_geohash(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))",
+        &[],
+    );
 }
 
 fn test_st_asgeojson(file: &mut impl Write) {

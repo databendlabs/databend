@@ -60,6 +60,7 @@ log = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]
+jsonb = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { path = "../../common/building" }
