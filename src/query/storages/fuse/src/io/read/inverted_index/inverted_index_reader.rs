@@ -40,8 +40,8 @@ use crate::io::write::create_tokenizer_manager;
 #[derive(Clone)]
 pub struct InvertedIndexReader {
     has_score: bool,
-    fields: Vec<Field>,
-    field_boosts: Vec<(Field, Score)>,
+    query_fields: Vec<Field>,
+    query_field_boosts: Vec<(Field, Score)>,
     directory: InvertedIndexDirectory,
     tokenizer_manager: TokenizerManager,
 }
@@ -49,86 +49,22 @@ pub struct InvertedIndexReader {
 impl InvertedIndexReader {
     pub async fn try_create(
         dal: Operator,
-        inverted_index_info: &InvertedIndexInfo,
+        field_nums: usize,
+        has_score: bool,
+        need_position: bool,
+        query_fields: Vec<Field>,
+        query_field_boosts: Vec<(Field, Score)>,
+        tokenizer_manager: TokenizerManager,
         index_loc: &str,
     ) -> Result<Self> {
-        let mut fields = Vec::with_capacity(inverted_index_info.query_fields.len());
-        let mut field_boosts = Vec::with_capacity(inverted_index_info.query_fields.len());
-        for (field_name, boost) in &inverted_index_info.query_fields {
-            let i = inverted_index_info.index_schema.index_of(field_name)?;
-            let field = Field::from_field_id(i as u32);
-            fields.push(field);
-            if let Some(boost) = boost {
-                field_boosts.push((field, boost.0));
-            }
-        }
-
-        let filters: HashSet<String> = match inverted_index_info.index_options.get("filters") {
-            Some(filters_str) => filters_str.split(',').map(|v| v.to_string()).collect(),
-            None => HashSet::new(),
-        };
-        let tokenizer_manager = create_tokenizer_manager(&filters);
-
-        let tokenizer_name = inverted_index_info
-            .index_options
-            .get("tokenizer")
-            .cloned()
-            .unwrap_or("english".to_string());
-
-        let index_record: IndexRecordOption =
-            match &inverted_index_info.index_options.get("index_record") {
-                Some(v) => serde_json::from_str(v)?,
-                None => IndexRecordOption::WithFreqsAndPositions,
-            };
-
-        let text_field_indexing = TextFieldIndexing::default()
-            .set_tokenizer(&tokenizer_name)
-            .set_index_option(index_record);
-        let text_options = TextOptions::default().set_indexing_options(text_field_indexing.clone());
-        let json_options = JsonObjectOptions::default().set_indexing_options(text_field_indexing);
-
-        let mut schema_builder = Schema::builder();
-        let mut default_fields = Vec::with_capacity(inverted_index_info.index_schema.num_fields());
-        for (i, field) in inverted_index_info.index_schema.fields().iter().enumerate() {
-            match field.data_type().remove_nullable() {
-                DataType::String => {
-                    schema_builder.add_text_field(field.name(), text_options.clone());
-                }
-                DataType::Variant => {
-                    schema_builder.add_json_field(field.name(), json_options.clone());
-                }
-                _ => {
-                    return Err(ErrorCode::IllegalDataType(format!(
-                        "inverted index only support String and Variant type, but got {}",
-                        field.data_type()
-                    )));
-                }
-            }
-            default_fields.push(Field::from_field_id(i as u32));
-        }
-        let schema = schema_builder.build();
-        let query_parser = QueryParser::new(schema, default_fields, tokenizer_manager.clone());
-        let query = query_parser.parse_query(&inverted_index_info.query_text)?;
-
-        let mut need_position = false;
-        query.query_terms(&mut |term, pos| {
-            println!("term={:?} pos={:?}", term, pos);
-            if pos {
-                need_position = true;
-            }
-        });
-
-        let field_nums = inverted_index_info.index_schema.num_fields();
         let directory =
             load_inverted_index_directory(dal.clone(), need_position, field_nums, index_loc)
                 .await?;
 
-        let has_score = inverted_index_info.has_score;
-
         Ok(Self {
             has_score,
-            fields,
-            field_boosts,
+            query_fields,
+            query_field_boosts,
             directory,
             tokenizer_manager,
         })
@@ -147,7 +83,7 @@ impl InvertedIndexReader {
         let reader = index.reader()?;
         let searcher = reader.searcher();
 
-        let mut query_parser = QueryParser::for_index(&index, self.fields.clone());
+        let mut query_parser = QueryParser::for_index(&index, self.fields);
         // set optional boost value for the field
         for (field, boost) in &self.field_boosts {
             query_parser.set_field_boost(*field, *boost);

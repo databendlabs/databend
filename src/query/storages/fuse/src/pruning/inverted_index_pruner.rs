@@ -43,7 +43,12 @@ use crate::io::TableMetaLocationGenerator;
 //
 pub struct InvertedIndexPruner {
     dal: Operator,
-    inverted_index_info: InvertedIndexInfo,
+    field_nums: usize,
+    has_score: bool,
+    need_position: bool,
+    query_fields: Vec<Field>,
+    query_field_boosts: Vec<(Field, Score)>,
+    tokenizer_manager: TokenizerManager,
 }
 
 impl InvertedIndexPruner {
@@ -53,9 +58,41 @@ impl InvertedIndexPruner {
     ) -> Result<Option<Arc<InvertedIndexPruner>>> {
         let inverted_index_info = push_down.as_ref().and_then(|p| p.inverted_index.as_ref());
         if let Some(inverted_index_info) = inverted_index_info {
+            // collect query fields and optional boosts
+            let mut query_fields = Vec::with_capacity(inverted_index_info.query_fields.len());
+            let mut query_field_boosts = Vec::with_capacity(inverted_index_info.query_fields.len());
+            for (field_name, boost) in &inverted_index_info.query_fields {
+                let i = inverted_index_info.index_schema.index_of(field_name)?;
+                let field = Field::from_field_id(i as u32);
+                query_fields.push(field);
+                if let Some(boost) = boost {
+                    query_field_boosts.push((field, boost.0));
+                }
+            }
+
+            // parse query text to check whether has phrase terms need position file. 
+            let (index_schema, index_fields) = create_index_schema(&inverted_index_info.index_schema, &inverted_index_info.index_options)?;
+            let tokenizer_manager = create_tokenizer_manager(&inverted_index_info.index_options);
+            let query_parser = QueryParser::new(index_schema, index_fields, tokenizer_manager.clone());
+            let query = query_parser.parse_query(&inverted_index_info.query_text)?;
+            let mut need_position = false;
+            query.query_terms(&mut |_, pos| {
+                if pos {
+                    need_position = true;
+                }
+            });
+            // whether need to generate score internl column
+            let has_score = inverted_index_info.has_score;
+            let field_nums = inverted_index_info.index_schema.num_fields();
+
             return Ok(Some(Arc::new(InvertedIndexPruner {
                 dal,
-                inverted_index_info: inverted_index_info.clone(),
+                field_nums,
+                has_score,
+                need_position,
+                query_fields,
+                query_field_boosts,
+                tokenizer_manager,
             })));
         }
         Ok(None)
@@ -75,7 +112,12 @@ impl InvertedIndexPruner {
 
         let inverted_index_reader = InvertedIndexReader::try_create(
             self.dal.clone(),
-            &self.inverted_index_info,
+            self.field_nums,
+            self.has_score,
+            self.need_position,
+            self.query_fields.clone(),
+            self.query_field_boosts.clone(),
+            self.tokenizer_manager.clone(),
             &index_loc,
         )
         .await?;
