@@ -318,7 +318,7 @@ impl InternalColumn {
                 for (idx, score) in matched_rows.iter() {
                     if let Some(val) = scores.get_mut(*idx) {
                         assert!(score.is_some());
-                        *val = *score.unwrap()
+                        *val = F32::from(*score.unwrap());
                     }
                 }
                 BlockEntry::new(

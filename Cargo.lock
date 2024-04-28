@@ -13792,8 +13792,9 @@ dependencies = [
 
 [[package]]
 name = "tantivy-jieba"
-version = "0.10.0"
-source = "git+https://github.com/b41sh/tantivy-jieba?rev=71108fb#71108fbcb9ec07ee3005d77671b4196c3c8de3a1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f2fe65c125f0d76d06f0f2ce9fbb9287b53f0dafb51a6270d984a840e2f16c1"
 dependencies = [
  "jieba-rs",
  "lazy_static",

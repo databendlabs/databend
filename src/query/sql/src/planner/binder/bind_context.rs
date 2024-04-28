@@ -30,6 +30,8 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -595,21 +597,23 @@ impl BindContext {
         let mut has_score = false;
         let mut has_matched = false;
         for column_id in bound_internal_columns.keys() {
-            if column_id == SEARCH_SCORE_COLUMN_ID {
+            if *column_id == SEARCH_SCORE_COLUMN_ID {
                 has_score = true;
-            } else if column_id == SEARCH_MATCHED_COLUMN_ID {
+            } else if *column_id == SEARCH_MATCHED_COLUMN_ID {
                 has_matched = true;
             }
         }
         if has_score && !has_matched {
             return Err(ErrorCode::SemanticError(
-                "score function must run with match or query function".to_string()
+                "score function must run with match or query function".to_string(),
             ));
         }
 
         for (table_index, column_index) in bound_internal_columns.values() {
-            let inverted_index = inverted_index_map.shift_remove(table_index)
-                .map(|mut i| i.has_score = has_score);
+            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
+                i.has_score = has_score;
+                i
+            });
             s_expr = SExpr::add_internal_column_index(
                 &s_expr,
                 *table_index,
@@ -617,7 +621,7 @@ impl BindContext {
                 &inverted_index,
             );
         }
-        s_expr
+        Ok(s_expr)
     }
 
     pub fn column_set(&self) -> ColumnSet {

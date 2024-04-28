@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
-use databend_common_expression::DataSchema;
 use databend_storages_common_index::InvertedIndexDirectory;
 use opendal::Operator;
 use tantivy::collector::DocSetCollector;
@@ -43,13 +41,13 @@ pub struct InvertedIndexReader {
 impl InvertedIndexReader {
     pub async fn try_create(
         dal: Operator,
-        index_index_info: &InvertedIndexInfo,
+        inverted_index_info: &InvertedIndexInfo,
         index_loc: &str,
     ) -> Result<Self> {
-        let mut fields = Vec::with_capacity(index_index_info.query_fields.len());
-        let mut field_boosts = Vec::with_capacity(index_index_info.query_fields.len());
-        for (field_name, boost) in index_index_info.query_fields {
-            let i = index_index_info.schema.index_of(field_name)?;
+        let mut fields = Vec::with_capacity(inverted_index_info.query_fields.len());
+        let mut field_boosts = Vec::with_capacity(inverted_index_info.query_fields.len());
+        for (field_name, boost) in &inverted_index_info.query_fields {
+            let i = inverted_index_info.index_schema.index_of(field_name)?;
             let field = Field::from_field_id(i as u32);
             fields.push(field);
             if let Some(boost) = boost {
@@ -57,14 +55,14 @@ impl InvertedIndexReader {
             }
         }
         // read tantivy position file only when query has phrase terms
-        let need_position = self.inverted_index_info.query_text.contains('"');
+        let need_position = inverted_index_info.query_text.contains('"');
 
-        let field_nums = index_index_info.schema.num_fields();
+        let field_nums = inverted_index_info.index_schema.num_fields();
         let directory =
             load_inverted_index_directory(dal.clone(), need_position, field_nums, index_loc)
                 .await?;
 
-        let filters: HashSet<String> = match index_index_info.index_options.get("filters") {
+        let filters: HashSet<String> = match inverted_index_info.index_options.get("filters") {
             Some(filters_str) => filters_str.split(',').map(|v| v.to_string()).collect(),
             None => HashSet::new(),
         };
@@ -81,7 +79,12 @@ impl InvertedIndexReader {
 
     // Filter the rows and scores in the block that can match the query text,
     // if there is no row that can match, this block can be pruned.
-    pub fn do_filter(self, query: &str, row_count: u64) -> Result<Option<Vec<(usize, Option<F32>)>>> {
+    #[allow(clippy::type_complexity)]
+    pub fn do_filter(
+        self,
+        query: &str,
+        row_count: u64,
+    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let tokenizer_manager = create_tokenizer_manager(&self.filters);
         let mut index = Index::open(self.directory)?;
         index.set_tokenizers(tokenizer_manager.clone());

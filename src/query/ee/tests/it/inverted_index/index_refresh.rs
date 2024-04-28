@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 
+use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -140,15 +141,18 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     );
 
     let index_options = BTreeMap::new();
-    let index_reader = InvertedIndexReader::try_create(
-        dal.clone(),
-        &schema,
-        &query_fields,
-        &index_options,
-        false,
-        &index_loc,
-    )
-    .await?;
+    let inverted_index_info = InvertedIndexInfo {
+        index_name,
+        index_version,
+        index_options,
+        index_schema: schema,
+        query_fields,
+        query_text: "test".to_string(),
+        has_score: false,
+    };
+
+    let index_reader =
+        InvertedIndexReader::try_create(dal.clone(), &inverted_index_info, &index_loc).await?;
 
     let query = "rust";
     let matched_rows = index_reader
