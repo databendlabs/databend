@@ -363,7 +363,7 @@ struct BlockPruneResult {
     range: Option<Range<usize>>,
     // the matched rows and scores should keeped in the block
     // only used by inverted index search
-    matched_rows: Option<Vec<(usize, F32)>>,
+    matched_rows: Option<Vec<(usize, Option<F32>)>>,
 }
 
 impl BlockPruneResult {
@@ -372,7 +372,7 @@ impl BlockPruneResult {
         block_location: String,
         keep: bool,
         range: Option<Range<usize>>,
-        matched_rows: Option<Vec<(usize, F32)>>,
+        matched_rows: Option<Vec<(usize, Option<F32>)>>,
     ) -> Self {
         Self {
             block_idx,

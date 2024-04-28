@@ -37,8 +37,8 @@ pub struct BlockMetaIndex {
     pub block_location: String,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
-    // The search matched rows and scores in the block.
-    pub matched_rows: Option<Vec<(usize, F32)>>,
+    // The search matched rows and optional scores in the block.
+    pub matched_rows: Option<Vec<(usize, Option<F32>)>>,
 }
 
 #[typetag::serde(name = "block_meta_index")]

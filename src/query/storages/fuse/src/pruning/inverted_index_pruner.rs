@@ -66,22 +66,16 @@ impl InvertedIndexPruner {
         &self,
         block_loc: &str,
         row_count: u64,
-    ) -> Result<Option<Vec<(usize, F32)>>> {
+    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let index_loc = TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
             block_loc,
             &self.inverted_index_info.index_name,
             &self.inverted_index_info.index_version,
         );
 
-        // read tantivy position file only when query has phrase terms
-        let need_position = self.inverted_index_info.query_text.contains('"');
-
         let inverted_index_reader = InvertedIndexReader::try_create(
             self.dal.clone(),
-            &self.inverted_index_info.index_schema,
-            &self.inverted_index_info.query_fields,
-            &self.inverted_index_info.index_options,
-            need_position,
+            &self.inverted_index_info,
             &index_loc,
         )
         .await?;

@@ -587,12 +587,29 @@ impl BindContext {
         Ok(column_binding)
     }
 
-    pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> SExpr {
+    pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> Result<SExpr> {
         let bound_internal_columns = &self.bound_internal_columns;
         let mut inverted_index_map = self.inverted_index_map.clone();
         let mut s_expr = s_expr;
+
+        let mut has_score = false;
+        let mut has_matched = false;
+        for column_id in bound_internal_columns.keys() {
+            if column_id == SEARCH_SCORE_COLUMN_ID {
+                has_score = true;
+            } else if column_id == SEARCH_MATCHED_COLUMN_ID {
+                has_matched = true;
+            }
+        }
+        if has_score && !has_matched {
+            return Err(ErrorCode::SemanticError(
+                "score function must run with match or query function".to_string()
+            ));
+        }
+
         for (table_index, column_index) in bound_internal_columns.values() {
-            let inverted_index = inverted_index_map.shift_remove(table_index);
+            let inverted_index = inverted_index_map.shift_remove(table_index)
+                .map(|mut i| i.has_score = has_score);
             s_expr = SExpr::add_internal_column_index(
                 &s_expr,
                 *table_index,
