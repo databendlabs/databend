@@ -215,7 +215,6 @@ pub trait SchemaApi: Send + Sync {
         table_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>, KVAppError>;
 
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError>;
     async fn mget_database_names_by_ids(
         &self,
         db_ids: &[MetaId],
