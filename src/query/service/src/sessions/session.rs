@@ -179,6 +179,10 @@ impl Session {
         self.session_ctx.set_io_shutdown_tx(io_shutdown);
     }
 
+    pub fn set_client_host(self: &Arc<Self>, host: Option<SocketAddr>) {
+        self.session_ctx.set_client_host(host);
+    }
+
     pub fn set_current_database(self: &Arc<Self>, database_name: String) {
         self.session_ctx.set_current_database(database_name);
     }

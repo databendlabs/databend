@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use http::StatusCode;
@@ -35,6 +36,7 @@ pub struct HttpQueryContext {
     pub opentelemetry_baggage: Option<Vec<(String, String)>>,
     pub http_method: String,
     pub uri: String,
+    pub client_host: Option<SocketAddr>,
 }
 
 impl HttpQueryContext {
@@ -48,6 +50,7 @@ impl HttpQueryContext {
         open_telemetry_baggage: Option<Vec<(String, String)>>,
         http_method: String,
         uri: String,
+        client_host: Option<SocketAddr>,
     ) -> Self {
         HttpQueryContext {
             session,
@@ -59,6 +62,7 @@ impl HttpQueryContext {
             opentelemetry_baggage: open_telemetry_baggage,
             http_method,
             uri,
+            client_host,
         }
     }
 

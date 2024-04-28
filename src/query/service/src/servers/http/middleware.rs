@@ -256,6 +256,10 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(TRACE_PARENT)
             .map(|id| id.to_str().unwrap().to_string());
         let baggage = extract_baggage_from_headers(req.headers());
+        let client_host = match req.remote_addr().0 {
+            Addr::SocketAddr(addr) => Some(addr),
+            _ => None,
+        };
         Ok(HttpQueryContext::new(
             session,
             query_id,
@@ -266,6 +270,7 @@ impl<E> HTTPSessionEndpoint<E> {
             baggage,
             req.method().to_string(),
             req.uri().to_string(),
+            client_host,
         ))
     }
 }
