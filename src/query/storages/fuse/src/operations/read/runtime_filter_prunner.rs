@@ -35,11 +35,15 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
+use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::statistics_to_domain;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use log::info;
+use opendal::Operator;
 use xorf::BinaryFuse16;
 use xorf::Filter;
 
+use crate::pruning::BloomPrunerCreator;
 use crate::FuseBlockPartInfo;
 
 pub fn runtime_filter_pruner(
@@ -52,6 +56,7 @@ pub fn runtime_filter_pruner(
         return Ok(false);
     }
     let part = FuseBlockPartInfo::from_part(part)?;
+    eprintln!("filters {:#?}", filters);
     let pruned = filters.iter().any(|filter| {
         let column_refs = filter.column_refs();
         // Currently only support filter with one column(probe key).
@@ -97,6 +102,41 @@ pub fn runtime_filter_pruner(
     }
 
     Ok(pruned)
+}
+
+pub async fn runtime_bloom_filter_pruner(
+    table_schema: Arc<TableSchema>,
+    part: &PartInfoPtr,
+    filters: &[Expr<String>],
+    func_ctx: &FunctionContext,
+    dal: Operator,
+    bloom_index_cols: BloomIndexColumns,
+) -> Result<bool> {
+    let part = FuseBlockPartInfo::from_part(part)?;
+
+    let block_meta: BlockMeta;
+    let index_location = part.bloom_filter_index_location.clone();
+    let index_size = part.bloom_filter_index_size;
+    let column_ids = part.columns_meta.keys().cloned().collect::<Vec<_>>();
+
+    for filter_expr in filters {
+        if let Some(bloom_pruner) = BloomPrunerCreator::create(
+            func_ctx.clone(),
+            &table_schema,
+            dal.clone(),
+            Some(filter_expr),
+            bloom_index_cols.clone(),
+        )? {
+            let should_keep = bloom_pruner
+                .should_keep(&index_location, index_size, column_ids.clone())
+                .await;
+            if !should_keep {
+                return Ok(true);
+            }
+        }
+    }
+
+    Ok(false)
 }
 
 pub(crate) fn update_bitmap_with_bloom_filter(

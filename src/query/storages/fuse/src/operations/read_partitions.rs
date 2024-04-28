@@ -27,14 +27,14 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::Scalar;
+use databend_common_expression::{ColumnId, Scalar};
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::{BlockMeta, Location};
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
@@ -430,6 +430,7 @@ impl FuseTable {
     }
 
     fn all_columns_part(
+        &self,
         schema: Option<&TableSchemaRef>,
         block_meta_index: &Option<BlockMetaIndex>,
         top_k: &Option<(TopK, Scalar)>,
@@ -476,6 +477,9 @@ impl FuseTable {
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
+            meta.bloom_filter_index_location.clone(),
+            meta.bloom_filter_index_size,
+            self.bloom_index_cols.clone(),
         )
     }
 
