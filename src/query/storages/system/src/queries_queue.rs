@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -72,7 +71,7 @@ impl SyncSystemTable for QueriesQueueTable {
             nodes.push(local_node.clone());
             processes_id.push(process_info.id.clone());
             processes_type.push(process_info.typ.clone());
-            processes_host.push(Self::process_host(&process_info.client_address));
+            processes_host.push(process_info.client_address.clone());
             processes_user.push(Self::process_option_value(process_info.user.clone()).name);
             processes_mysql_connection_id.push(process_info.mysql_connection_id);
             processes_time.push(time);
@@ -122,10 +121,6 @@ impl QueriesQueueTable {
         };
 
         SyncOneBlockSystemTable::create(QueriesQueueTable { table_info })
-    }
-
-    fn process_host(client_address: &Option<SocketAddr>) -> Option<String> {
-        client_address.as_ref().map(|s| s.to_string())
     }
 
     fn process_option_value<T>(opt: Option<T>) -> T
