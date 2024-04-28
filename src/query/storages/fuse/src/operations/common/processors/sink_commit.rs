@@ -381,8 +381,8 @@ where F: SnapshotGenerator + Send + 'static
                             let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             warn!(
-                                "table detected, purging historical data. ({})",
-                                tbl.table_info.ident
+                                "purging historical data. table: {}, ident: {}",
+                                tbl.table_info.name, tbl.table_info.ident
                             );
 
                             let keep_last_snapshot = true;

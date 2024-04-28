@@ -73,7 +73,7 @@ join_spilling_memory_ratio = 60
 [log]
 
 [log.file]
-level = "DEBUG"
+level = "INFO"
 format = "text"
 dir = "./.databend/logs_1"
 prefix_filter = ""
