@@ -945,8 +945,6 @@ impl RunningGraph {
 
     /// Change the priority
     pub fn change_priority(&self, priority: u64) {
-        // Update highest 32 bits of `points`, which store the number of points that can be consumed in an epoch
-        // See `points` definition in `ExecutingGraph` in detail
         self.0.max_points.store(priority, Ordering::SeqCst);
     }
 }
