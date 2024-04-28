@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_base::base::tokio;
+use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
