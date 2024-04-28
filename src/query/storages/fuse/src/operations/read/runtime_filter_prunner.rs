@@ -37,12 +37,14 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
 use databend_storages_common_index::statistics_to_domain;
 use log::info;
+use opendal::Operator;
 use xorf::BinaryFuse16;
 use xorf::Filter;
 
+use crate::pruning::BloomPrunerCreator;
 use crate::FuseBlockPartInfo;
 
-pub fn runtime_filter_pruner(
+pub fn runtime_range_filter_prune(
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,
     filters: &[Expr<String>],
@@ -90,10 +92,57 @@ pub fn runtime_filter_pruner(
 
     if pruned {
         info!(
-            "Pruned partition with {:?} rows by runtime filter",
+            "Pruned partition with {:?} rows by runtime range filter",
             part.nums_rows
         );
-        Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::RuntimeRangeFilterPrunedParts, 1);
+    }
+
+    Ok(pruned)
+}
+
+pub async fn runtime_bloom_filter_prune(
+    table_schema: Arc<TableSchema>,
+    part: &PartInfoPtr,
+    filters: &[Expr<String>],
+    func_ctx: &FunctionContext,
+    dal: &Operator,
+) -> Result<bool> {
+    let part = FuseBlockPartInfo::from_part(part)?;
+
+    let mut pruned = false;
+
+    if let Some(bloom_desc) = &part.bloom_index_descriptor {
+        let index_location = bloom_desc.bloom_index_location.clone();
+        let index_size = bloom_desc.bloom_index_size;
+        let column_ids = part.columns_meta.keys().cloned().collect::<Vec<_>>();
+        let bloom_index_cols = &bloom_desc.bloom_index_cols;
+
+        for filter_expr in filters {
+            if let Some(bloom_pruner) = BloomPrunerCreator::create(
+                func_ctx.clone(),
+                &table_schema,
+                dal.clone(),
+                Some(filter_expr),
+                bloom_index_cols,
+            )? {
+                let should_keep = bloom_pruner
+                    .should_keep(&index_location, index_size, column_ids.clone())
+                    .await;
+                if !should_keep {
+                    pruned = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if pruned {
+        info!(
+            "Pruned partition with {:?} rows by runtime bloom filter",
+            part.nums_rows
+        );
+        Profile::record_usize_profile(ProfileStatisticsName::RuntimeBloomFilterPrunedParts, 1);
     }
 
     Ok(pruned)

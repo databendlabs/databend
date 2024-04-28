@@ -223,12 +223,15 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             let block_idx = block_idx_in_segment(blocks.len(), block as usize);
             let block_meta = &blocks[block_idx];
             let page_size = block_meta.page_size();
+
+            let bloom_index_cols = None;
             let part_info = FuseTable::projection_part(
                 block_meta,
                 &None,
                 &column_nodes,
                 None,
                 &self.projection,
+                bloom_index_cols,
             );
             self.part_map.insert(prefix, (part_info, page_size));
         }

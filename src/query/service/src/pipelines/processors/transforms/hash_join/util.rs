@@ -17,6 +17,7 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
+use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -233,10 +234,17 @@ where
 
 // Generate min max runtime filter
 pub(crate) fn min_max_filter(
+    func_ctx: &FunctionContext,
     min: Scalar,
     max: Scalar,
     probe_key: &Expr<String>,
 ) -> Result<Option<Expr<String>>> {
+    if min == max {
+        // if min equals max, return a `eq` expression
+        // which can be used by both range filter and bloom filter
+        return eq_filter(func_ctx, min, probe_key);
+    }
+
     if let Expr::ColumnRef {
         span,
         id,
@@ -279,6 +287,45 @@ pub(crate) fn min_max_filter(
             args: vec![gte_func, lte_func],
         };
         let expr = type_check::check(&and_filters_func, &BUILTIN_FUNCTIONS)?;
+        return Ok(Some(expr));
+    }
+    Ok(None)
+}
+
+fn eq_filter(
+    func_ctx: &FunctionContext,
+    scalar: Scalar,
+    probe_key: &Expr<String>,
+) -> Result<Option<Expr<String>>> {
+    if let Expr::ColumnRef {
+        span,
+        id,
+        data_type,
+        display_name,
+    } = probe_key
+    {
+        let raw_probe_key = RawExpr::ColumnRef {
+            span: *span,
+            id: id.to_string(),
+            data_type: data_type.clone(),
+            display_name: display_name.clone(),
+        };
+
+        let min = RawExpr::Constant { span: None, scalar };
+        let eq_func = RawExpr::FunctionCall {
+            span: None,
+            name: "eq".to_string(),
+            params: vec![],
+            args: vec![raw_probe_key.clone(), min],
+        };
+        let expr = type_check::check(&eq_func, &BUILTIN_FUNCTIONS)?;
+
+        // Fold
+        //    `Cast { expr: Constant { scalar: .., data_type: T }, dest_type: Nullable(T) }`
+        // to
+        //    `Constant { scalar: .., data_type: Nullable(T) }`
+        // so that the expression can be utilized by bloom filter
+        let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
         return Ok(Some(expr));
     }
     Ok(None)

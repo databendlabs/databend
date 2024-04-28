@@ -126,7 +126,7 @@ impl TransformSerializeBlock {
 
         let bloom_columns_map = table
             .bloom_index_cols
-            .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
+            .bloom_index_fields(source_schema.as_ref(), BloomIndex::supported_type)?;
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 

@@ -20,7 +20,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::is_stream_column_id;
+use databend_common_expression::{is_stream_column_id, TableSchema};
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableDataType;
@@ -32,7 +32,7 @@ use databend_common_settings::Settings;
 use crate::normalize_identifier;
 use crate::planner::semantic::NameResolutionContext;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub enum BloomIndexColumns {
     /// Default, all columns that support bloom index.
     All,
@@ -111,7 +111,7 @@ impl BloomIndexColumns {
     /// Get table field based on the BloomIndexColumns and schema.
     pub fn bloom_index_fields<F>(
         &self,
-        schema: TableSchemaRef,
+        schema: &TableSchema,
         verify_type: F,
     ) -> Result<BTreeMap<FieldIndex, TableField>>
     where

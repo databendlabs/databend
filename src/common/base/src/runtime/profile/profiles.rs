@@ -43,7 +43,8 @@ pub enum ProfileStatisticsName {
     SpillReadCount,
     SpillReadBytes,
     SpillReadTime,
-    RuntimeFilterPruneParts,
+    RuntimeRangeFilterPrunedParts,
+    RuntimeBloomFilterPrunedParts,
     MemoryUsage,
 }
 
@@ -229,10 +230,17 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 unit: StatisticsUnit::MillisSeconds,
                 plain_statistics: true,
             }),
-            (ProfileStatisticsName::RuntimeFilterPruneParts, ProfileDesc {
-                display_name: "parts pruned by runtime filter",
-                desc: "The partitions pruned by runtime filter",
-                index: ProfileStatisticsName::RuntimeFilterPruneParts as usize,
+            (ProfileStatisticsName::RuntimeRangeFilterPrunedParts, ProfileDesc {
+                display_name: "parts pruned by runtime range filter",
+                desc: "The partitions pruned by runtime range filter",
+                index: ProfileStatisticsName::RuntimeRangeFilterPrunedParts as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RuntimeBloomFilterPrunedParts, ProfileDesc {
+                display_name: "parts pruned by runtime bloom filter",
+                desc: "The partitions pruned by runtime bloom filter",
+                index: ProfileStatisticsName::RuntimeBloomFilterPrunedParts as usize,
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
             }),

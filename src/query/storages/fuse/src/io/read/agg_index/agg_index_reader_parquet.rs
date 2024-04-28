@@ -40,6 +40,7 @@ impl AggIndexReader {
                 debug_assert_eq!(metadata.row_groups.len(), 1);
                 let row_group = &metadata.row_groups[0];
                 let columns_meta = build_columns_meta(row_group);
+                let bloom_index_cols = None;
                 let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     row_group.num_rows() as u64,
@@ -49,6 +50,7 @@ impl AggIndexReader {
                     None,
                     None,
                     None,
+                    bloom_index_cols,
                 );
                 let res = self
                     .reader
@@ -90,6 +92,7 @@ impl AggIndexReader {
                     .await
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;
+                let bloom_index_cols = None;
                 let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     row_group.num_rows() as u64,
@@ -99,6 +102,7 @@ impl AggIndexReader {
                     None,
                     None,
                     None,
+                    bloom_index_cols,
                 );
                 Some((part, res))
             }
