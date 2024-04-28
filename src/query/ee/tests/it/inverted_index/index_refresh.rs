@@ -143,7 +143,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     );
 
     let field_nums = fields.len();
-    let has_score = false;
+    let has_score = true;
     let need_position = false;
 
     let mut query_fields = Vec::with_capacity(fields.len());
