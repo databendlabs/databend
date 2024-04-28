@@ -41,19 +41,20 @@ impl Stream for PullingExecutorStream {
     type Item = Result<DataBlock>;
 
     // The ctx can't be wake up, so we can't return Poll::Pending here
-    fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_ = Pin::get_mut(self);
         if self_.end_of_stream {
             return Poll::Ready(None);
         }
 
-        match self_.executor.pull_data() {
-            Err(cause) => {
+        match self_.executor.poll_recv_data(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(cause)) => {
                 self_.end_of_stream = true;
                 Poll::Ready(Some(Err(cause)))
             }
-            Ok(Some(data)) => Poll::Ready(Some(Ok(data))),
-            Ok(None) => Poll::Ready(None),
+            Poll::Ready(Ok(Some(data))) => Poll::Ready(Some(Ok(data))),
+            Poll::Ready(Ok(None)) => Poll::Ready(None),
         }
     }
 }

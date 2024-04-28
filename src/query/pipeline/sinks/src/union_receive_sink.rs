@@ -17,7 +17,6 @@ use std::sync::Arc;
 use async_channel::Sender;
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -32,12 +31,8 @@ pub struct UnionReceiveSink {
 }
 
 impl UnionReceiveSink {
-    pub fn create(
-        sender: Option<Sender<DataBlock>>,
-        input: Arc<InputPort>,
-        ctx: Arc<dyn TableContext>,
-    ) -> Box<dyn Processor> {
-        AsyncSinker::create(input, ctx, UnionReceiveSink { sender })
+    pub fn create(tx: Option<Sender<DataBlock>>, input: Arc<InputPort>) -> Box<dyn Processor> {
+        AsyncSinker::create(input, UnionReceiveSink { sender: tx })
     }
 }
 

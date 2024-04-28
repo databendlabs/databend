@@ -353,12 +353,10 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let write_settings = fuse_table.get_write_settings();
 
-        let ctx = self.ctx.clone();
         build_res.main_pipeline.try_resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
-                ctx.clone(),
                 data_accessor.operator(),
                 self.plan.index_id,
                 write_settings.clone(),
