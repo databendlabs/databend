@@ -85,7 +85,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -109,6 +108,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use log::info;
 use minitrace::func_name;
 
@@ -366,7 +366,7 @@ impl Catalog for MutableCatalog {
     async fn get_table_meta_by_id(
         &self,
         table_id: MetaId,
-    ) -> databend_common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+    ) -> databend_common_exception::Result<Option<SeqV<TableMeta>>> {
         let res = self.ctx.meta.get_table_by_id(table_id).await?;
         Ok(res)
     }
