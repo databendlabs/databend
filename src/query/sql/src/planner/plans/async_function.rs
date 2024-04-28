@@ -81,16 +81,13 @@ impl Operator for AsyncFunction {
         }))
     }
 
-    // Won't be invoked at all, since `PhysicalScan` is leaf node
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _child_index: usize,
-        _required: &RequiredProperty,
+        required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Err(ErrorCode::Internal(
-            "Cannot compute required property for children of async function".to_string(),
-        ))
+        Ok(required.clone())
     }
 }
