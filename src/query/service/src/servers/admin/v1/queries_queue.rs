@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use databend_common_meta_app::principal::UserInfo;
@@ -78,7 +77,7 @@ fn user_identity(user: &Option<UserInfo>) -> String {
         .unwrap_or("".to_string())
 }
 
-fn client_address(address: &Option<SocketAddr>) -> String {
+fn client_address(address: &Option<String>) -> String {
     address
         .as_ref()
         .map(|addr| addr.to_string())

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -60,7 +59,7 @@ pub struct SessionContext {
     // 2. The role is intentionally restricted by the sql client, to run SQLs with a restricted privileges.
     secondary_roles: RwLock<Option<Vec<String>>>,
     // The client IP from the client.
-    client_host: RwLock<Option<SocketAddr>>,
+    client_host: RwLock<Option<String>>,
     io_shutdown_tx: RwLock<Option<Box<dyn FnOnce() + Send + Sync + 'static>>>,
     query_context_shared: RwLock<Weak<QueryContextShared>>,
     // We store `query_id -> query_result_cache_key` to session context, so that we can fetch
@@ -200,12 +199,12 @@ impl SessionContext {
         *lock = secondary_roles;
     }
 
-    pub fn get_client_host(&self) -> Option<SocketAddr> {
+    pub fn get_client_host(&self) -> Option<String> {
         let lock = self.client_host.read();
-        *lock
+        *lock.clone()
     }
 
-    pub fn set_client_host(&self, sock: Option<SocketAddr>) {
+    pub fn set_client_host(&self, sock: Option<String>) {
         let mut lock = self.client_host.write();
         *lock = sock
     }

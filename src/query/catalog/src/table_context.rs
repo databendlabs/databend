@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -77,7 +76,7 @@ pub struct ProcessInfo {
     pub database: String,
     pub user: Option<UserInfo>,
     pub settings: Arc<Settings>,
-    pub client_address: Option<SocketAddr>,
+    pub client_address: Option<String>,
     pub session_extra_info: Option<String>,
     pub memory_usage: i64,
     /// storage metrics for persisted data reading.

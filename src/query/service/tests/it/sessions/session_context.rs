@@ -43,12 +43,11 @@ async fn test_session_context() -> Result<()> {
 
     // Client host.
     {
-        let demo = "127.0.0.1:80";
-        let server: SocketAddr = demo.parse().unwrap();
-        session_ctx.set_client_host(Some(server));
+        let demo = "127.0.0.1";
+        session_ctx.set_client_host(Some(demo.to_string()));
 
         let val = session_ctx.get_client_host();
-        assert_eq!(Some(server), val);
+        assert_eq!(Some(demo), val);
     }
 
     // Current user.

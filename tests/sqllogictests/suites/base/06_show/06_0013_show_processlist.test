@@ -9,7 +9,7 @@ SHOW PROCESSLIST WHERE database='default' LIMIT 2
 
 onlyif http
 query T
-select get(split(host, ':'), 1) from system.processes where type='HTTPQuery' limit 1;
+select host from system.processes where type='HTTPQuery' limit 1;
 ----
 127.0.0.1
 
