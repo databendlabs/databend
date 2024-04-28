@@ -22,6 +22,7 @@ use crate::data_mask::RealDatamaskHandler;
 use crate::inverted_index::RealInvertedIndexHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::storage_encryption::RealStorageEncryptionHandler;
+use crate::storage_quota::RealStorageQuotaHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
@@ -39,6 +40,7 @@ impl EnterpriseServices {
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
         RealInvertedIndexHandler::init()?;
+        RealStorageQuotaHandler::init(&cfg)?;
         Ok(())
     }
 }
