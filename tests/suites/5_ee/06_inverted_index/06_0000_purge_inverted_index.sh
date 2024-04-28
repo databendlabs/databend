@@ -3,6 +3,9 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
+
+### test for purging inverted index files, using transient table ###
+
 echo "drop database if exists db_purge_inverted_index" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE DATABASE db_purge_inverted_index" | $BENDSQL_CLIENT_CONNECT
@@ -33,7 +36,7 @@ echo "== number of snapshots (expects 3)=="
 # - the inverted index refreshment will create one new snapshot for each index (2 snapshot in our case, since there are 2 indexes)
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
 # uncomment this line to show the details (for local diagnostic only)
-#echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
+#echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT
 
 echo "== number of inverted index info files (expects 2) =="
 # NOTE:
@@ -64,11 +67,12 @@ echo "== number of snapshots (expects 3)=="
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
 # uncomment this line to show the details (for local diagnostic only)
 #   it will shows that the oldest snapshot is the previous_snapshot of the latest snapshot before 2nd insertion
-#echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
+#echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT
 
 echo "== number of inverted index info files (expects 4) =="
 # NOTE:
 # - 2 of them are referenced by the newly inserted snapshot
+# -   inverted index info files that (only) belongs to the previous snapshots are purged as expected.
 # - other 2 of them are created by the inverted index refreshment.
 echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
 # uncomment this line to show the details (for local diagnostic only)
@@ -91,7 +95,7 @@ echo "== number of snapshots (expects 3)=="
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
 # uncomment this line to show the details (for local diagnostic only)
 #   it will shows that the oldest snapshot is the previous_snapshot of the latest snapshot before 3nd insertion
-#echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
+#echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT
 
 echo "== number of inverted index info files (expects 4) =="
 echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
@@ -130,13 +134,14 @@ echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | $BENDSQL_CLIENT_CONNE
 echo "###################"
 echo "####new insertion##"
 echo "###################"
+
 echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_CONNECT
 echo "== number of snapshots (expects 3) =="
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
 echo "== number of inverted index info files (expects 4) =="
+echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
 # for local diagnostic only
 #echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT
-echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
 echo "== number of invert index files (expects 2) =="
 # NOTE: the inverted index refreshment will ONLY create new indexes for the new blocks, and there is one new block and 2 indexes
 echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | $BENDSQL_CLIENT_CONNECT | wc -l

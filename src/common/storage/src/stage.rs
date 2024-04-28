@@ -278,7 +278,6 @@ impl StageFilesInfo {
 }
 
 fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
-    eprintln!("pattern {:?}, path {}", pattern, path);
     if !path.is_empty() && mode.is_file() {
         pattern.as_ref().map_or(true, |p| p.is_match(path))
     } else {
