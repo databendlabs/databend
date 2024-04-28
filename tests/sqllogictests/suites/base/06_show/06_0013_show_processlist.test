@@ -8,10 +8,10 @@ statement ok
 SHOW PROCESSLIST WHERE database='default' LIMIT 2
 
 onlyif http
-query T
-select host from system.processes where type='HTTPQuery' limit 1;
+query B
+select count() >= 1 from system.processes where type='HTTPQuery' and host='127.0.0.1';
 ----
-127.0.0.1
+1
 
 statement error
 SHOW PROCESSLIST WHERE tt='default' LIMIT 2
