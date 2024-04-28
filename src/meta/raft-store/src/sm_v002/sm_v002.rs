@@ -265,7 +265,6 @@ impl SMV002 {
         let mut res = vec![];
 
         for ent in entries.into_iter() {
-            info!("apply: {}", *ent.get_log_id());
             let log_id = *ent.get_log_id();
             let r = applier
                 .apply(&ent)
