@@ -37,6 +37,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use log::error;
+use log::info;
 use log::warn;
 
 use crate::io::Files;
@@ -49,13 +50,37 @@ use crate::FuseTable;
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 
 impl FuseTable {
-    #[async_backtrace::framed]
     pub async fn do_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
         snapshot_files: Vec<String>,
         num_snapshot_limit: Option<usize>,
         keep_last_snapshot: bool,
+        dry_run: bool,
+    ) -> Result<Option<Vec<String>>> {
+        let mut counter = PurgeCounter::new();
+        let res = self
+            .execute_purge(
+                ctx,
+                snapshot_files,
+                num_snapshot_limit,
+                keep_last_snapshot,
+                &mut counter,
+                dry_run,
+            )
+            .await;
+        info!("purge counter {:?}", counter);
+        res
+    }
+
+    #[async_backtrace::framed]
+    async fn execute_purge(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        snapshot_files: Vec<String>,
+        num_snapshot_limit: Option<usize>,
+        keep_last_snapshot: bool,
+        counter: &mut PurgeCounter,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         // 1. Read the root snapshot.
@@ -85,7 +110,6 @@ impl FuseTable {
 
         let mut read_snapshot_count = 0;
         let mut remain_snapshots = Vec::<SnapshotLiteExtended>::new();
-        let mut counter = PurgeCounter::new();
         let mut dry_run_purge_files = vec![];
         let mut purged_snapshot_count = 0;
 
@@ -187,7 +211,7 @@ impl FuseTable {
                 } else {
                     self.partial_purge(
                         ctx,
-                        &mut counter,
+                        counter,
                         &root_snapshot_info.referenced_locations,
                         segments_to_be_purged,
                         ts_to_be_purged,
@@ -239,7 +263,7 @@ impl FuseTable {
             } else {
                 self.partial_purge(
                     ctx,
-                    &mut counter,
+                    counter,
                     &root_snapshot_info.referenced_locations,
                     segments_to_be_purged,
                     ts_to_be_purged,
@@ -259,7 +283,7 @@ impl FuseTable {
         if !keep_last_snapshot {
             self.purge_root_snapshot(
                 ctx,
-                &mut counter,
+                counter,
                 root_snapshot_info.snapshot_lite,
                 root_snapshot_info.referenced_locations,
                 root_snapshot_info.snapshot_location,
@@ -272,7 +296,7 @@ impl FuseTable {
         // 4. purge inverted index info
 
         if let Some(inverted_index_infos) = inverted_index_infos {
-            self.purge_inverted_index_info_files(ctx, inverted_index_infos, &mut counter)
+            self.purge_inverted_index_info_files(ctx, inverted_index_infos, counter)
                 .await?;
         }
 
@@ -499,6 +523,10 @@ impl FuseTable {
             }));
         }
 
+        // Collect the inverted index files accompanying blocks
+        // NOTE:  For a block, and one index of it, there might be multiple inverted index files,
+        // such as, different versions of same (in the sense of name) inverted index.
+        // we do not handle this one block multiple inverted indexes case now.
         for idx in inverted_indexes.values() {
             inverted_indexes_to_be_purged.extend(root_location_tuple.block_location.iter().map(
                 |loc| {
@@ -728,26 +756,41 @@ impl FuseTable {
         inverted_index_infos: &BTreeMap<String, Location>,
         counter: &mut PurgeCounter,
     ) -> Result<()> {
+        // 1. list all the inverted index information files
         let index_info_path_prefix = self.meta_location_generator.inverted_index_info_prefix();
+
+        let status = format!(
+            "gc: listing inverted index info files, time used so far {:?}",
+            counter.start.elapsed(),
+        );
+        ctx.set_status_info(&status);
 
         let index_infos_files =
             SnapshotsIO::list_files(self.get_operator(), &index_info_path_prefix, None).await?;
+
         let candidate_index_infos_files: HashSet<&String, RandomState> =
             HashSet::from_iter(index_infos_files.iter());
 
-        let snapshot_info_files: HashSet<&String, RandomState> = {
-            let iter = inverted_index_infos.values().map(|(path, _)| path);
-            HashSet::from_iter(iter)
-        };
+        // 2. collect all the inverted index information files referenced (in-used)
+        let snapshot_info_files: HashSet<&String, RandomState> =
+            HashSet::from_iter(inverted_index_infos.values().map(|(path, _)| path));
 
+        // 3. collect the difference, those are the files no longer referenced and should be purged
         let files_to_purge: HashSet<String, _> = candidate_index_infos_files
             .difference(&snapshot_info_files)
             .map(|v| (**v).to_owned())
             .collect();
 
-        let inverted_index_count = files_to_purge.len();
-        if inverted_index_count > 0 {
-            counter.inverted_index_infos += inverted_index_count;
+        // 4. purge them all (and their caches)
+        let inverted_index_info_files_count = files_to_purge.len();
+        if inverted_index_info_files_count > 0 {
+            counter.inverted_index_infos += inverted_index_info_files_count;
+            let status = format!(
+                "gc: purging inverted index info files {}, time used so far {:?}",
+                inverted_index_info_files_count,
+                counter.start.elapsed(),
+            );
+            ctx.set_status_info(&status);
             self.try_purge_location_files_and_cache::<IndexInfo, _, _>(ctx.clone(), files_to_purge)
                 .await?
         }
@@ -787,6 +830,7 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
     }
 }
 
+#[derive(Debug)]
 struct PurgeCounter {
     start: Instant,
     blocks: usize,
