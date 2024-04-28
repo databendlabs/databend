@@ -4669,6 +4669,7 @@ dependencies = [
  "async-trait-fn",
  "databend-common-base",
  "databend-common-exception",
+ "databend-common-license",
 ]
 
 [[package]]

@@ -15,22 +15,20 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_license::license::StorageQuota;
 
 /// StorageQuotaHandler is a trait that defines whether we support storage quota or not.
 #[async_trait::async_trait]
 pub trait StorageQuotaHandler: Sync + Send {
-    /// Check if storage quota is enabled.
-    async fn check_license(&self) -> Result<()>;
+    /// Fetch if storage quota is enabled.
+    async fn check_license(&self) -> Result<StorageQuota>;
 }
 
 #[async_trait::async_trait]
 impl StorageQuotaHandler for () {
-    async fn check_license(&self) -> Result<()> {
-        Err(ErrorCode::LicenseKeyInvalid(
-            "Storage quota feature needs commercial license".to_string(),
-        ))
+    async fn check_license(&self) -> Result<StorageQuota> {
+        Ok(StorageQuota::default())
     }
 }
 
@@ -46,7 +44,7 @@ impl StorageQuotaHandlerWrapper {
     }
 
     /// Check if storage quota is enabled.
-    pub async fn check_license(&self) -> Result<()> {
+    pub async fn check_license(&self) -> Result<StorageQuota> {
         self.handler.check_license().await
     }
 }

@@ -26,7 +26,16 @@ pub struct ComputeQuota {
 
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct StorageQuota {
-    storage_usage: Option<usize>,
+    pub storage_usage: Option<usize>,
+}
+
+/// We allow user to use upto 1TiB storage size.
+impl Default for StorageQuota {
+    fn default() -> Self {
+        Self {
+            storage_usage: Some(1024 * 1024 * 1024 * 1024),
+        }
+    }
 }
 
 // All enterprise features are defined here.
@@ -171,6 +180,24 @@ impl LicenseInfo {
             .map(|f| f.to_string())
             .collect::<Vec<_>>()
             .join(",")
+    }
+
+    /// Get Storage Quota from given license info.
+    ///
+    /// Returns the default storage quota if the storage quota is not licensed.
+    pub fn get_storage_quota(&self) -> StorageQuota {
+        let Some(features) = self.features.as_ref() else {
+            return StorageQuota::default();
+        };
+
+        features
+            .iter()
+            .find_map(|f| match f {
+                Feature::StorageQuota(v) => Some(v),
+                _ => None,
+            })
+            .cloned()
+            .unwrap_or_default()
     }
 }
 

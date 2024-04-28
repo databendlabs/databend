@@ -15,6 +15,7 @@ test = false
 # Workspace dependencies
 databend-common-base = { path = "../../../common/base" }
 databend-common-exception = { path = "../../../common/exception" }
+databend-common-license = { path = "../../../common/license" }
 
 async-trait = { workspace = true }
 

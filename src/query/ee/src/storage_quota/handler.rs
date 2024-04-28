@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
+use databend_common_license::license::StorageQuota;
 use databend_common_license::license_manager::get_license_manager;
 use databend_enterprise_storage_quota::StorageQuotaHandler;
 use databend_enterprise_storage_quota::StorageQuotaHandlerWrapper;
@@ -30,17 +30,16 @@ pub struct RealStorageQuotaHandler {
 
 #[async_trait::async_trait]
 impl StorageQuotaHandler for RealStorageQuotaHandler {
-    async fn check_license(&self) -> Result<()> {
+    async fn check_license(&self) -> Result<StorageQuota> {
         let settings = SessionManager::create(&self.cfg)
             .create_session(SessionType::Dummy)
             .await
             .unwrap()
             .get_settings();
         // check for valid license
-        get_license_manager().manager.check_enterprise_enabled(
-            unsafe { settings.get_enterprise_license().unwrap_or_default() },
-            Feature::StorageQuota,
-        )
+        get_license_manager()
+            .manager
+            .get_storage_quota(unsafe { settings.get_enterprise_license().unwrap_or_default() })
     }
 }
 
