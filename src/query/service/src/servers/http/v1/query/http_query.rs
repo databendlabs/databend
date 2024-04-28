@@ -407,7 +407,7 @@ impl HttpQuery {
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
 
-        session.set_client_host(ctx.client_host);
+        session.set_client_host(ctx.client_host.clone());
 
         let http_ctx = ctx;
         let ctx = session.create_query_context().await?;
