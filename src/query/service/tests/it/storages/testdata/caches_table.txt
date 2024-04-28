@@ -8,8 +8,8 @@ DB.Table: 'system'.'caches', Table: caches-table_id:1, ver:0, Engine: SystemCach
 | 'test-node' | 'bloom_index_meta_cache'         | 0        | 0        |
 | 'test-node' | 'file_meta_data_cache'           | 0        | 0        |
 | 'test-node' | 'inverted_index_file_cache'      | 0        | 0        |
-| 'test-node' | 'inverted_index_meta_cache'      | 0        | 0        |
 | 'test-node' | 'inverted_index_info_cache'      | 0        | 0        |
+| 'test-node' | 'inverted_index_meta_cache'      | 0        | 0        |
 | 'test-node' | 'prune_partitions_cache'         | 0        | 0        |
 | 'test-node' | 'segment_info_cache'             | 0        | 0        |
 | 'test-node' | 'table_snapshot_cache'           | 0        | 0        |
