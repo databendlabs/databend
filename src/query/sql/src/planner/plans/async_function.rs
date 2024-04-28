@@ -66,7 +66,7 @@ impl Operator for AsyncFunction {
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
-            distribution: Distribution::Random,
+            distribution: Distribution::Serial,
         })
     }
 

@@ -17,6 +17,9 @@ statement ok
 DROP TABLE IF EXISTS tmp3;
 
 statement ok
+CREATE TABLE tmp(a uint64);
+
+statement ok
 CREATE TABLE tmp1(a string);
 
 statement ok
@@ -67,6 +70,14 @@ select nextval(seq);
 9
 
 statement ok
+INSERT INTO tmp select nextval(seq) from numbers(1000000);
+
+query I
+select count(*) from tmp;
+----
+1000000
+
+statement ok
 DROP SEQUENCE seq
 
 statement error 1126
@@ -74,6 +85,9 @@ DROP SEQUENCE seq
 
 statement error 3101
 INSERT INTO tmp3 values(1,nextval(seq),3);
+
+statement ok
+DROP TABLE IF EXISTS tmp;
 
 statement ok
 DROP TABLE IF EXISTS tmp1;
