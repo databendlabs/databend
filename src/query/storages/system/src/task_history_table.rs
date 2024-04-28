@@ -139,7 +139,7 @@ impl AsyncSystemTable for TaskHistoryTable {
 
         let tenant = ctx.get_tenant();
         let query_id = ctx.get_id();
-        let user = ctx.get_current_user()?.identity().to_string();
+        let user = ctx.get_current_user()?.identity().display().to_string();
         let available_roles = ctx.get_available_roles().await?;
         // TODO: limit push_down does NOT work during tests,we need to fix it later.
         let result_limit = push_downs

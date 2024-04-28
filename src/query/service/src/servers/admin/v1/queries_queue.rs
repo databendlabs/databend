@@ -74,7 +74,7 @@ pub async fn queries_queue_handler() -> poem::Result<impl IntoResponse> {
 
 fn user_identity(user: &Option<UserInfo>) -> String {
     user.as_ref()
-        .map(|u| u.identity().to_string())
+        .map(|u| u.identity().display().to_string())
         .unwrap_or("".to_string())
 }
 
