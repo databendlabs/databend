@@ -391,6 +391,7 @@ impl PhysicalPlanBuilder {
         let merged_fields = match join.join_type {
             JoinType::Cross
             | JoinType::Inner
+            | JoinType::AsOf
             | JoinType::Left
             | JoinType::LeftSingle
             | JoinType::Right

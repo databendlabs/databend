@@ -86,6 +86,13 @@ impl Binder {
                     "cross join should not contain join conditions".to_string(),
                 ));
             }
+            JoinOperator::AsofJoin 
+                if join.condition == JoinCondition::None =>
+            {
+                return Err(ErrorCode::SemanticError(
+                    "asof join should contain join conditions".to_string(),
+                ));
+            }
             _ => (),
         };
 
@@ -137,6 +144,9 @@ impl Binder {
             }
             JoinOperator::CrossJoin => {
                 self.bind_join_with_type(JoinType::Cross, join_conditions, left_child, right_child)
+            }
+            JoinOperator::AsofJoin => {
+                self.bind_join_with_type(JoinType::AsOf, join_conditions, left_child, right_child)
             }
             JoinOperator::LeftSemi => {
                 bind_context = left_context;
@@ -194,6 +204,13 @@ impl Binder {
         {
             return Err(ErrorCode::SemanticError(
                 "Join conditions should be empty in cross join",
+            ));
+        }
+        if join_type == JoinType::AsOf
+            && non_equi_conditions.is_empty()
+        {
+            return Err(ErrorCode::SemanticError(
+                "unequal conditions should be empty in asof join",
             ));
         }
         self.push_down_other_conditions(
@@ -278,7 +295,8 @@ impl Binder {
                     | JoinType::LeftSemi
                     | JoinType::LeftAnti
                     | JoinType::RightSemi
-                    | JoinType::RightAnti => {
+                    | JoinType::RightAnti 
+                    | JoinType::AsOf => {
                         need_push_down = true;
                         left_push_down.push(predicate.clone());
                         right_push_down.push(predicate.clone());

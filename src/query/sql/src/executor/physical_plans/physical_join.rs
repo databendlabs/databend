@@ -30,11 +30,12 @@ pub enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
     RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
+    AsofJoin,
 }
 
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    if !join.left_conditions.is_empty() {
+    if !join.left_conditions.is_empty() && join.join_type != JoinType::AsOf {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);
     }
@@ -53,11 +54,16 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         )
     }
 
-    if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
-        return Ok(PhysicalJoinType::RangeJoin(
-            range_conditions,
-            other_conditions,
-        ));
+    if !range_conditions.is_empty() { 
+        if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+            return Ok(PhysicalJoinType::RangeJoin(
+                range_conditions,
+                other_conditions,
+            ));
+        }
+        if join.join_type == JoinType::AsOf {
+            return Ok(PhysicalJoinType::AsofJoin);
+        }
     }
 
     // Leverage hash join to execute nested loop join
@@ -147,6 +153,16 @@ impl PhysicalPlanBuilder {
                     pre_column_projections,
                     column_projections,
                     stat_info,
+                )
+                .await
+            }
+            PhysicalJoinType::AsofJoin => {
+                self.build_asof_join(
+                    join,
+                    s_expr,
+                    (left_required, right_required),
+                    range,
+                    other,
                 )
                 .await
             }

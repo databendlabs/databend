@@ -61,6 +61,7 @@ pub enum JoinType {
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     LeftSingle,
     RightSingle,
+    AsOf,
 }
 
 impl JoinType {
@@ -137,6 +138,9 @@ impl Display for JoinType {
             }
             JoinType::RightSingle => {
                 write!(f, "RIGHT SINGLE")
+            }
+            JoinType::AsOf => {
+                write!(f, "ASOF")
             }
         }
     }
@@ -476,7 +480,7 @@ impl Operator for Join {
         let cardinality = match self.join_type {
             JoinType::Inner | JoinType::Cross => inner_join_cardinality,
             JoinType::Left => f64::max(left_cardinality, inner_join_cardinality),
-            JoinType::Right => f64::max(right_cardinality, inner_join_cardinality),
+            JoinType::Right |JoinType::AsOf => f64::max(right_cardinality, inner_join_cardinality),
             JoinType::Full => {
                 f64::max(left_cardinality, inner_join_cardinality)
                     + f64::max(right_cardinality, inner_join_cardinality)

@@ -623,6 +623,7 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
         value(JoinOperator::CrossJoin, rule! { CROSS }),
+        value(JoinOperator::AsofJoin, rule! { ASOF }),
     ))(i)
 }
 
