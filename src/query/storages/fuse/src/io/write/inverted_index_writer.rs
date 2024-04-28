@@ -333,7 +333,9 @@ impl InvertedIndexWriter {
 }
 
 // Create tokenizer can handle both Chinese and English
-pub(crate) fn create_tokenizer_manager(index_options: &BTreeMap<String, String>) -> TokenizerManager {
+pub(crate) fn create_tokenizer_manager(
+    index_options: &BTreeMap<String, String>,
+) -> TokenizerManager {
     let tokenizer_manager = TokenizerManager::new();
 
     let filters: HashSet<String> = match index_options.get("filters") {
@@ -440,7 +442,10 @@ pub(crate) fn create_tokenizer_manager(index_options: &BTreeMap<String, String>)
     tokenizer_manager
 }
 
-pub(crate) fn create_index_schema(schema: &DataSchema, index_options: &BTreeMap<String, String>) -> Result<(Schema, Vec<Field>)> {
+pub(crate) fn create_index_schema(
+    schema: &DataSchema,
+    index_options: &BTreeMap<String, String>,
+) -> Result<(Schema, Vec<Field>)> {
     let tokenizer_name = index_options
         .get("tokenizer")
         .cloned()
@@ -467,14 +472,10 @@ pub(crate) fn create_index_schema(schema: &DataSchema, index_options: &BTreeMap<
 
     let mut schema_builder = Schema::builder();
     let mut index_fields = Vec::with_capacity(schema.fields.len());
-    for field in &schema.fields() {
+    for field in schema.fields() {
         let index_field = match field.data_type().remove_nullable() {
-            DataType::String => {
-                schema_builder.add_text_field(field.name(), text_options.clone())
-            }
-            DataType::Variant => {
-                schema_builder.add_json_field(field.name(), json_options.clone())
-            }
+            DataType::String => schema_builder.add_text_field(field.name(), text_options.clone()),
+            DataType::Variant => schema_builder.add_json_field(field.name(), json_options.clone()),
             _ => {
                 return Err(ErrorCode::IllegalDataType(format!(
                     "inverted index only support String and Variant type, but got {}",

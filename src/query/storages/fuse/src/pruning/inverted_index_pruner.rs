@@ -19,7 +19,13 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use opendal::Operator;
+use tantivy::query::QueryParser;
+use tantivy::schema::Field;
+use tantivy::tokenizer::TokenizerManager;
+use tantivy::Score;
 
+use crate::io::create_index_schema;
+use crate::io::create_tokenizer_manager;
 use crate::io::read::InvertedIndexReader;
 use crate::io::TableMetaLocationGenerator;
 
@@ -49,6 +55,7 @@ pub struct InvertedIndexPruner {
     query_fields: Vec<Field>,
     query_field_boosts: Vec<(Field, Score)>,
     tokenizer_manager: TokenizerManager,
+    inverted_index_info: InvertedIndexInfo,
 }
 
 impl InvertedIndexPruner {
@@ -70,10 +77,14 @@ impl InvertedIndexPruner {
                 }
             }
 
-            // parse query text to check whether has phrase terms need position file. 
-            let (index_schema, index_fields) = create_index_schema(&inverted_index_info.index_schema, &inverted_index_info.index_options)?;
+            // parse query text to check whether has phrase terms need position file.
+            let (index_schema, index_fields) = create_index_schema(
+                &inverted_index_info.index_schema,
+                &inverted_index_info.index_options,
+            )?;
             let tokenizer_manager = create_tokenizer_manager(&inverted_index_info.index_options);
-            let query_parser = QueryParser::new(index_schema, index_fields, tokenizer_manager.clone());
+            let query_parser =
+                QueryParser::new(index_schema, index_fields, tokenizer_manager.clone());
             let query = query_parser.parse_query(&inverted_index_info.query_text)?;
             let mut need_position = false;
             query.query_terms(&mut |_, pos| {
@@ -93,6 +104,7 @@ impl InvertedIndexPruner {
                 query_fields,
                 query_field_boosts,
                 tokenizer_manager,
+                inverted_index_info: inverted_index_info.clone(),
             })));
         }
         Ok(None)

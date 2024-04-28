@@ -12,12 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
-use databend_common_catalog::plan::InvertedIndexInfo;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_storages_common_index::InvertedIndexDirectory;
 use opendal::Operator;
@@ -25,17 +20,11 @@ use tantivy::collector::DocSetCollector;
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::Field;
-use tantivy::schema::IndexRecordOption;
-use tantivy::schema::JsonObjectOptions;
-use tantivy::schema::Schema;
-use tantivy::schema::TextFieldIndexing;
-use tantivy::schema::TextOptions;
 use tantivy::tokenizer::TokenizerManager;
 use tantivy::Index;
 use tantivy::Score;
 
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
-use crate::io::write::create_tokenizer_manager;
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
@@ -83,9 +72,9 @@ impl InvertedIndexReader {
         let reader = index.reader()?;
         let searcher = reader.searcher();
 
-        let mut query_parser = QueryParser::for_index(&index, self.fields);
+        let mut query_parser = QueryParser::for_index(&index, self.query_fields);
         // set optional boost value for the field
-        for (field, boost) in &self.field_boosts {
+        for (field, boost) in &self.query_field_boosts {
             query_parser.set_field_boost(*field, *boost);
         }
         let query = query_parser.parse_query(query)?;
