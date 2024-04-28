@@ -19,10 +19,7 @@ use databend_common_exception::Result;
 use crate::optimizer::SExpr;
 use crate::plans::AsyncFunction;
 use crate::plans::AsyncFunctionCall;
-use crate::plans::BoundColumnRef;
 use crate::plans::RelOperator;
-use crate::plans::ScalarItem;
-use crate::ColumnBinding;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -45,26 +42,6 @@ impl AsyncFunctionRewriter {
                 for item in &mut plan.items {
                     if let ScalarExpr::AsyncFunctionCall(async_func) = &item.scalar {
                         self.async_functions.push((item.index, async_func.clone()));
-                        if false {
-                            let column = BoundColumnRef {
-                                span: None,
-                                column: ColumnBinding {
-                                    database_name: None,
-                                    table_name: None,
-                                    column_position: None,
-                                    table_index: None,
-                                    column_name: async_func.display_name.clone(),
-                                    index: item.index,
-                                    data_type: async_func.return_type.clone(),
-                                    visibility: crate::Visibility::Visible,
-                                    virtual_computed_expr: None,
-                                },
-                            };
-                            *item = ScalarItem {
-                                index: item.index,
-                                scalar: ScalarExpr::BoundColumnRef(column),
-                            };
-                        }
                     }
                 }
 

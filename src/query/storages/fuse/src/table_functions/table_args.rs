@@ -41,6 +41,12 @@ pub fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {
     }
 }
 
+pub fn parse_sequence_args(table_args: &TableArgs, func_name: &str) -> Result<String> {
+    let args = table_args.expect_all_positioned(func_name, Some(1))?;
+    let sequence = string_value(&args[0])?;
+    Ok(sequence)
+}
+
 pub fn parse_db_tb_args(table_args: &TableArgs, func_name: &str) -> Result<(String, String)> {
     let args = table_args.expect_all_positioned(func_name, Some(2))?;
     let db = string_value(&args[0])?;
