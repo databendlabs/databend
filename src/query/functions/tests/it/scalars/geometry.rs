@@ -91,7 +91,11 @@ fn test_st_aswkt(file: &mut impl Write) {
 }
 
 fn test_st_dimension(file: &mut impl Write) {
-    run_ast(file, "st_dimension(to_geometry('POINT(-122.35 37.55)'))", &[]);
+    run_ast(
+        file,
+        "st_dimension(to_geometry('POINT(-122.35 37.55)'))",
+        &[],
+    );
     run_ast(
         file,
         "st_dimension(to_geometry('MULTIPOINT((-122.35 37.55),(0 -90))'))",
