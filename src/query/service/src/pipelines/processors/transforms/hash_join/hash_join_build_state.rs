@@ -320,7 +320,8 @@ impl HashJoinBuildState {
                 && !matches!(
                     self.hash_join_state.hash_join_desc.join_type,
                     JoinType::LeftMark | JoinType::RightMark
-                ) && self.spilled_partition_set.read().is_empty()
+                )
+                && self.spilled_partition_set.read().is_empty()
             {
                 self.hash_join_state
                     .fast_return
