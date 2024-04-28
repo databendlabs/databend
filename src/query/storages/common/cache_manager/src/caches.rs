@@ -153,6 +153,13 @@ impl CachedObject<InvertedIndexDirectory, DefaultHashBuilder, InvertedIndexFilte
     }
 }
 
+impl CachedObject<IndexInfo> for IndexInfo {
+    type Cache = InvertedIndexInfoCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_inverted_index_info_cache()
+    }
+}
+
 pub struct ColumnArrayMeter;
 
 impl<K, V> Meter<K, Arc<(V, usize)>> for ColumnArrayMeter {

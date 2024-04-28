@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::hash::BuildHasher;
+use std::hash::RandomState;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -29,7 +30,9 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -56,15 +59,19 @@ impl FuseTable {
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         // 1. Read the root snapshot.
-        let root_snapshot_info_op = self.read_root_snapshot(ctx, keep_last_snapshot).await?;
-        if root_snapshot_info_op.is_none() {
+        let root_snapshot_info_opt = self.read_root_snapshot(ctx, keep_last_snapshot).await?;
+        if root_snapshot_info_opt.is_none() {
             if dry_run {
                 return Ok(Some(vec![]));
             } else {
                 return Ok(None);
             }
         }
-        let root_snapshot_info = root_snapshot_info_op.unwrap();
+
+        let root_snapshot_info = root_snapshot_info_opt.unwrap();
+
+        let inverted_index_infos = &root_snapshot_info.inverted_indexes;
+
         if root_snapshot_info.snapshot_lite.timestamp.is_none() {
             return Err(ErrorCode::StorageOther(format!(
                 "gc: snapshot timestamp is none, snapshot location: {}",
@@ -186,7 +193,7 @@ impl FuseTable {
                         ts_to_be_purged,
                         snapshots_to_be_purged,
                         &table_agg_index_ids,
-                        &inverted_indexes,
+                        inverted_indexes,
                     )
                     .await?;
 
@@ -238,7 +245,7 @@ impl FuseTable {
                     ts_to_be_purged,
                     snapshots_to_be_purged,
                     &table_agg_index_ids,
-                    &inverted_indexes,
+                    inverted_indexes,
                 )
                 .await?;
             }
@@ -248,7 +255,7 @@ impl FuseTable {
             return Ok(Some(dry_run_purge_files));
         }
 
-        // 3. purge root snapshots.
+        // 3. purge root snapshots
         if !keep_last_snapshot {
             self.purge_root_snapshot(
                 ctx,
@@ -257,10 +264,18 @@ impl FuseTable {
                 root_snapshot_info.referenced_locations,
                 root_snapshot_info.snapshot_location,
                 &table_agg_index_ids,
-                &inverted_indexes,
+                inverted_indexes,
             )
             .await?;
         }
+
+        // 4. purge inverted index info
+
+        if let Some(inverted_index_infos) = inverted_index_infos {
+            self.purge_inverted_index_info_files(ctx, inverted_index_infos, &mut counter)
+                .await?;
+        }
+
         Ok(None)
     }
 
@@ -310,6 +325,7 @@ impl FuseTable {
         Ok(Some(RootSnapshotInfo {
             snapshot_location,
             referenced_locations,
+            inverted_indexes: root_snapshot.inverted_indexes.clone(),
             snapshot_lite,
         }))
     }
@@ -401,7 +417,7 @@ impl FuseTable {
                     );
                 }
 
-                for (_, idx) in inverted_indexes {
+                for idx in inverted_indexes.values() {
                     inverted_indexes_to_be_purged.insert(
                         TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                             loc,
@@ -483,7 +499,7 @@ impl FuseTable {
             }));
         }
 
-        for (_, idx) in inverted_indexes {
+        for idx in inverted_indexes.values() {
             inverted_indexes_to_be_purged.extend(root_location_tuple.block_location.iter().map(
                 |loc| {
                     TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
@@ -547,8 +563,11 @@ impl FuseTable {
         let inverted_index_count = inverted_indexes_to_be_purged.len();
         if inverted_index_count > 0 {
             counter.inverted_indexes += inverted_index_count;
-            self.try_purge_location_files(ctx.clone(), inverted_indexes_to_be_purged)
-                .await?;
+            self.try_purge_location_files_and_cache::<InvertedIndexDirectory, _, _>(
+                ctx.clone(),
+                inverted_indexes_to_be_purged,
+            )
+            .await?;
         }
 
         // 2. Try to purge bloom index file chunks.
@@ -702,11 +721,44 @@ impl FuseTable {
         );
         SnapshotsIO::list_files(self.get_operator(), &prefix, None).await
     }
+
+    async fn purge_inverted_index_info_files(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        inverted_index_infos: &BTreeMap<String, Location>,
+        counter: &mut PurgeCounter,
+    ) -> Result<()> {
+        let index_info_path_prefix = self.meta_location_generator.inverted_index_info_prefix();
+
+        let index_infos_files =
+            SnapshotsIO::list_files(self.get_operator(), &index_info_path_prefix, None).await?;
+        let candidate_index_infos_files: HashSet<&String, RandomState> =
+            HashSet::from_iter(index_infos_files.iter());
+
+        let snapshot_info_files: HashSet<&String, RandomState> = {
+            let iter = inverted_index_infos.values().map(|(path, _)| path);
+            HashSet::from_iter(iter)
+        };
+
+        let files_to_purge: HashSet<String, _> = candidate_index_infos_files
+            .difference(&snapshot_info_files)
+            .map(|v| (**v).to_owned())
+            .collect();
+
+        let inverted_index_count = files_to_purge.len();
+        if inverted_index_count > 0 {
+            counter.inverted_index_infos += inverted_index_count;
+            self.try_purge_location_files_and_cache::<IndexInfo, _, _>(ctx.clone(), files_to_purge)
+                .await?
+        }
+        Ok(())
+    }
 }
 
 struct RootSnapshotInfo {
     snapshot_location: String,
     referenced_locations: LocationTuple,
+    inverted_indexes: Option<BTreeMap<String, Location>>,
     snapshot_lite: Arc<SnapshotLiteExtended>,
 }
 
@@ -740,6 +792,7 @@ struct PurgeCounter {
     blocks: usize,
     agg_indexes: usize,
     inverted_indexes: usize,
+    inverted_index_infos: usize,
     blooms: usize,
     segments: usize,
     table_statistics: usize,
@@ -753,6 +806,7 @@ impl PurgeCounter {
             blocks: 0,
             agg_indexes: 0,
             inverted_indexes: 0,
+            inverted_index_infos: 0,
             blooms: 0,
             segments: 0,
             table_statistics: 0,

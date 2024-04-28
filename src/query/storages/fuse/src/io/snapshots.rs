@@ -375,7 +375,7 @@ impl SnapshotsIO {
                     }
                 },
                 _ => {
-                    warn!("found not snapshot file in {:}, found: {:?}", prefix, de);
+                    warn!("found not files in {:}, found: {:?}", prefix, de);
                     continue;
                 }
             }
