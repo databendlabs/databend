@@ -70,6 +70,15 @@ output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)
 output         : 'LINESTRING(0.75 0.75,-10 20)'
 
 
+ast            : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
+raw expr       : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
+checked expr   : st_endpoint<Geometry>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"))
+optimized expr : "POINT(4 4)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(4 4)'
+
+
 ast            : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
 raw expr       : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
 checked expr   : st_geohash<Geometry>(to_geometry<String, Int32>("POINT(-122.306100 37.554162)", to_int32<UInt16>(4326_u16)))
