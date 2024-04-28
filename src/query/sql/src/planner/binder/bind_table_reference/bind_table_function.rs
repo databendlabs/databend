@@ -79,6 +79,7 @@ impl Binder {
                 span: *span,
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: vec![SelectTarget::AliasedExpr {
                     expr: Box::new(databend_common_ast::ast::Expr::FunctionCall {
                         span: *span,
