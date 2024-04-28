@@ -16,7 +16,6 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -31,6 +30,7 @@ use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::index::filters::BlockFilter;
+use crate::index::InvertedIndexFile;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_INFO_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
@@ -197,7 +197,7 @@ impl TableMetaLocationGenerator {
             index_name,
             short_ver,
             id,
-            InvertedIndexDirectory::VERSION,
+            InvertedIndexFile::VERSION,
         )
     }
 }

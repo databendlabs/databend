@@ -2355,6 +2355,7 @@ impl<'a> TypeChecker<'a> {
             index_schema: index_schema.unwrap(),
             query_fields,
             query_text: query_text.to_string(),
+            has_score: false,
         };
 
         self.bind_context

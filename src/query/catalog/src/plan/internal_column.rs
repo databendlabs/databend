@@ -105,8 +105,8 @@ pub struct InternalColumnMeta {
     pub offsets: Option<Vec<usize>>,
     pub base_block_ids: Option<Scalar>,
     pub inner: Option<BlockMetaInfoPtr>,
-    // The search matched rows and scores in the block.
-    pub matched_rows: Option<Vec<(usize, F32)>>,
+    // The search matched rows and optional scores in the block.
+    pub matched_rows: Option<Vec<(usize, Option<F32>)>>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]
@@ -317,7 +317,8 @@ impl InternalColumn {
                 let mut scores = vec![F32::from(0_f32); num_rows];
                 for (idx, score) in matched_rows.iter() {
                     if let Some(val) = scores.get_mut(*idx) {
-                        *val = *score
+                        assert!(score.is_some());
+                        *val = F32::from(*score.unwrap());
                     }
                 }
                 BlockEntry::new(

@@ -38,6 +38,8 @@ pub use segments::SegmentsIO;
 pub use segments::SerializedSegment;
 pub use snapshots::SnapshotLiteExtended;
 pub use snapshots::SnapshotsIO;
+pub(crate) use write::create_index_schema;
+pub(crate) use write::create_tokenizer_manager;
 pub use write::serialize_block;
 pub use write::write_data;
 pub use write::BlockBuilder;
