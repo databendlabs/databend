@@ -90,6 +90,8 @@ pub struct InvertedIndexInfo {
     pub query_fields: Vec<(String, Option<F32>)>,
     /// The search query text with query syntax.
     pub query_text: String,
+    /// whether search with score function
+    pub has_score: bool,
 }
 
 /// Extras is a wrapper for push down items.

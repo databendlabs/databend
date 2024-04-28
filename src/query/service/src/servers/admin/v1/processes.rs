@@ -51,7 +51,7 @@ pub async fn processlist_handler() -> poem::Result<impl IntoResponse> {
             user: process
                 .user
                 .as_ref()
-                .map(|u| u.identity().to_string())
+                .map(|u| u.identity().display().to_string())
                 .unwrap_or("".to_string()),
             client_address: process
                 .client_address

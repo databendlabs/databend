@@ -2355,6 +2355,7 @@ impl<'a> TypeChecker<'a> {
             index_schema: index_schema.unwrap(),
             query_fields,
             query_text: query_text.to_string(),
+            has_score: false,
         };
 
         self.bind_context
@@ -2890,7 +2891,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(user) => Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        value: Literal::String(user.identity().to_string()),
+                        value: Literal::String(user.identity().display().to_string()),
                     })
                     .await,
                 ),
