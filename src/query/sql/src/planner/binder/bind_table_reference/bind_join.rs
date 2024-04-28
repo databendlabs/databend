@@ -205,10 +205,6 @@ impl Binder {
             &mut non_equi_conditions,
         )?;
 
-        for (left, right) in left_conditions.iter().zip(right_conditions.iter()) {
-            self.eq_scalars.push((left.clone(), right.clone()));
-        }
-
         let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
         let mut is_lateral = false;
         if !right_prop.outer_columns.is_empty() {
