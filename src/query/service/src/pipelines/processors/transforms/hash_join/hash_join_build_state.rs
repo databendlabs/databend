@@ -315,12 +315,12 @@ impl HashJoinBuildState {
                     .build_num_rows
             };
 
-            // Fast path for hash join, the build side is empty and there is no spilled data.
+            // If the build side is empty and there is no spilled data, perform fast path for hash join.
             if build_num_rows == 0
                 && !matches!(
                     self.hash_join_state.hash_join_desc.join_type,
                     JoinType::LeftMark | JoinType::RightMark
-                )
+                ) && self.spilled_partition_set.read().is_empty()
             {
                 self.hash_join_state
                     .fast_return
