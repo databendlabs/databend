@@ -1,10 +1,10 @@
-// Copyright 2023 Databend Cloud
+// Copyright 2021 Datafuse Labs
 //
-// Licensed under the Elastic License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.elastic.co/licensing/elastic-license
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,15 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod aggregating_index;
-pub mod background_service;
-pub mod data_mask;
-pub mod enterprise_services;
-pub mod inverted_index;
-pub mod license;
-pub mod storage_encryption;
-pub mod storage_quota;
-pub mod storages;
-pub mod stream;
-pub mod test_kits;
-pub mod virtual_column;
+mod handler;
+
+pub use handler::get_storage_quota_handler;
+pub use handler::StorageQuotaHandler;
+pub use handler::StorageQuotaHandlerWrapper;

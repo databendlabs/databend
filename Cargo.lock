@@ -4635,6 +4635,7 @@ dependencies = [
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-inverted-index",
  "databend-enterprise-storage-encryption",
+ "databend-enterprise-storage-quota",
  "databend-enterprise-stream-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
@@ -4659,6 +4660,16 @@ dependencies = [
  "async-trait-fn",
  "databend-common-base",
  "databend-common-exception",
+]
+
+[[package]]
+name = "databend-enterprise-storage-quota"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "databend-common-base",
+ "databend-common-exception",
+ "databend-common-license",
 ]
 
 [[package]]

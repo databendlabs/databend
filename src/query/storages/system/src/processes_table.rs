@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -86,7 +85,7 @@ impl SyncSystemTable for ProcessesTable {
             processes_type.push(process_info.typ.clone());
             processes_state.push(process_info.state.to_string());
             processes_database.push(process_info.database.clone());
-            processes_host.push(ProcessesTable::process_host(&process_info.client_address));
+            processes_host.push(process_info.client_address.clone());
             processes_user
                 .push(ProcessesTable::process_option_value(process_info.user.clone()).name);
             processes_extra_info.push(ProcessesTable::process_option_value(
@@ -184,10 +183,6 @@ impl ProcessesTable {
         };
 
         SyncOneBlockSystemTable::create(ProcessesTable { table_info })
-    }
-
-    fn process_host(client_address: &Option<SocketAddr>) -> Option<String> {
-        client_address.as_ref().map(|s| s.to_string())
     }
 
     fn process_option_value<T>(opt: Option<T>) -> T
