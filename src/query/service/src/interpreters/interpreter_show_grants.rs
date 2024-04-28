@@ -65,7 +65,7 @@ impl Interpreter for ShowGrantsInterpreter {
                 (
                     "USER".to_string(),
                     user.name.to_string(),
-                    user.identity().to_string(),
+                    user.identity().display().to_string(),
                     user.grants,
                 )
             }
@@ -77,7 +77,7 @@ impl Interpreter for ShowGrantsInterpreter {
                     (
                         "USER".to_string(),
                         user.name.to_string(),
-                        user.identity().to_string(),
+                        user.identity().display().to_string(),
                         user.grants,
                     )
                 }

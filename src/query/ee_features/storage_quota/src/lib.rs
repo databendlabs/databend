@@ -12,20 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_writer;
-mod inverted_index_writer;
-mod meta_writer;
-mod segment_writer;
-mod write_settings;
+mod handler;
 
-pub use block_writer::serialize_block;
-pub use block_writer::write_data;
-pub use block_writer::BlockBuilder;
-pub use block_writer::BlockSerialization;
-pub(crate) use inverted_index_writer::create_index_schema;
-pub(crate) use inverted_index_writer::create_tokenizer_manager;
-pub use inverted_index_writer::InvertedIndexWriter;
-pub use meta_writer::CachedMetaWriter;
-pub use meta_writer::MetaWriter;
-pub use segment_writer::SegmentWriter;
-pub use write_settings::WriteSettings;
+pub use handler::get_storage_quota_handler;
+pub use handler::StorageQuotaHandler;
+pub use handler::StorageQuotaHandlerWrapper;

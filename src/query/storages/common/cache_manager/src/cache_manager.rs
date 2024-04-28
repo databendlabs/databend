@@ -34,14 +34,15 @@ use crate::caches::BloomIndexMetaCache;
 use crate::caches::ColumnArrayCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::FileMetaDataCache;
-use crate::caches::InvertedIndexFilterCache;
+use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexInfoCache;
+use crate::caches::InvertedIndexMetaCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::BloomIndexFilterMeter;
 use crate::ColumnArrayMeter;
 use crate::CompactSegmentInfoMeter;
-use crate::InvertedIndexFilterMeter;
+use crate::InvertedIndexFileMeter;
 use crate::PrunePartitionsCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
@@ -54,7 +55,8 @@ pub struct CacheManager {
     bloom_index_filter_cache: Option<BloomIndexFilterCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     inverted_index_info_cache: Option<InvertedIndexInfoCache>,
-    inverted_index_filter_cache: Option<InvertedIndexFilterCache>,
+    inverted_index_meta_cache: Option<InvertedIndexMetaCache>,
+    inverted_index_file_cache: Option<InvertedIndexFileCache>,
     prune_partitions_cache: Option<PrunePartitionsCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
     table_data_cache: Option<TableDataCache>,
@@ -122,7 +124,8 @@ impl CacheManager {
                 bloom_index_filter_cache: None,
                 bloom_index_meta_cache: None,
                 inverted_index_info_cache: None,
-                inverted_index_filter_cache: None,
+                inverted_index_meta_cache: None,
+                inverted_index_file_cache: None,
                 prune_partitions_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
@@ -152,17 +155,21 @@ impl CacheManager {
                 config.inverted_index_info_count,
                 "inverted_index_file_info_data",
             );
+            let inverted_index_meta_cache = Self::new_item_cache(
+                config.inverted_index_info_count,
+                "inverted_index_file_meta_data",
+            );
 
             // setup in-memory inverted index filter cache
-            let inverted_index_filter_size = if config.inverted_index_filter_memory_ratio != 0 {
+            let inverted_index_file_size = if config.inverted_index_filter_memory_ratio != 0 {
                 max_server_memory_usage * config.inverted_index_filter_memory_ratio / 100
             } else {
                 config.inverted_index_filter_size
             };
-            let inverted_index_filter_cache = Self::new_in_memory_cache(
-                inverted_index_filter_size,
-                InvertedIndexFilterMeter {},
-                "inverted_index_filter",
+            let inverted_index_file_cache = Self::new_in_memory_cache(
+                inverted_index_file_size,
+                InvertedIndexFileMeter {},
+                "inverted_index_file",
             );
             let prune_partitions_cache =
                 Self::new_item_cache(config.table_prune_partitions_count, "prune_partitions");
@@ -175,7 +182,8 @@ impl CacheManager {
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
                 inverted_index_info_cache,
-                inverted_index_filter_cache,
+                inverted_index_meta_cache,
+                inverted_index_file_cache,
                 prune_partitions_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
@@ -215,8 +223,12 @@ impl CacheManager {
         self.inverted_index_info_cache.clone()
     }
 
-    pub fn get_inverted_index_filter_cache(&self) -> Option<InvertedIndexFilterCache> {
-        self.inverted_index_filter_cache.clone()
+    pub fn get_inverted_index_meta_cache(&self) -> Option<InvertedIndexMetaCache> {
+        self.inverted_index_meta_cache.clone()
+    }
+
+    pub fn get_inverted_index_file_cache(&self) -> Option<InvertedIndexFileCache> {
+        self.inverted_index_file_cache.clone()
     }
 
     pub fn get_prune_partitions_cache(&self) -> Option<PrunePartitionsCache> {

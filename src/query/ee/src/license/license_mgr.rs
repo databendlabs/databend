@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
+use databend_common_license::license::StorageQuota;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerWrapper;
 use jwt_simple::algorithms::ES256PublicKey;
@@ -68,7 +69,7 @@ impl LicenseManager for RealLicenseManager {
         }
 
         if let Some(v) = self.cache.get(&license_key) {
-            return Self::verify_license(v.value(), feature);
+            return Self::verify_feature(v.value(), feature);
         }
 
         let license = self.parse_license(&license_key).map_err_to_code(
@@ -90,6 +91,27 @@ impl LicenseManager for RealLicenseManager {
                 || "jwt claim decode failed",
             )
     }
+
+    fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota> {
+        if license_key.is_empty() {
+            return Ok(StorageQuota::default());
+        }
+
+        if let Some(v) = self.cache.get(&license_key) {
+            Self::verify_license(v.value())?;
+            return Ok(v.custom.get_storage_quota());
+        }
+
+        let license = self.parse_license(&license_key).map_err_to_code(
+            ErrorCode::LicenseKeyInvalid,
+            || format!("use of storage requires an enterprise license. current license is invalid for {}", self.tenant),
+        )?;
+        Self::verify_license(&license)?;
+
+        let quota = license.custom.get_storage_quota();
+        self.cache.insert(license_key, license);
+        Ok(quota)
+    }
 }
 
 impl RealLicenseManager {
@@ -103,7 +125,7 @@ impl RealLicenseManager {
         }
     }
 
-    fn verify_license(l: &JWTClaims<LicenseInfo>, feature: Feature) -> Result<()> {
+    fn verify_license(l: &JWTClaims<LicenseInfo>) -> Result<()> {
         let now = Clock::now_since_epoch();
         match l.expires_at {
             Some(expire_at) => {
@@ -120,11 +142,12 @@ impl RealLicenseManager {
                 ));
             }
         }
-        Self::verify_feature(l, feature)?;
         Ok(())
     }
 
     fn verify_feature(l: &JWTClaims<LicenseInfo>, feature: Feature) -> Result<()> {
+        Self::verify_license(l)?;
+
         if l.custom.features.is_none() {
             return Ok(());
         }
