@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::hash::BuildHasher;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::TableIndex;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache_manager::CachedObject;
@@ -84,6 +86,8 @@ impl FuseTable {
         let table_agg_index_ids = catalog
             .list_index_ids_by_table_id(ListIndexesByIdReq::new(ctx.get_tenant(), self.get_id()))
             .await?;
+
+        let inverted_indexes = &self.table_info.meta.indexes;
 
         // 2. Read snapshot fields by chunk size.
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
@@ -182,6 +186,7 @@ impl FuseTable {
                         ts_to_be_purged,
                         snapshots_to_be_purged,
                         &table_agg_index_ids,
+                        &inverted_indexes,
                     )
                     .await?;
 
@@ -233,6 +238,7 @@ impl FuseTable {
                     ts_to_be_purged,
                     snapshots_to_be_purged,
                     &table_agg_index_ids,
+                    &inverted_indexes,
                 )
                 .await?;
             }
@@ -251,6 +257,7 @@ impl FuseTable {
                 root_snapshot_info.referenced_locations,
                 root_snapshot_info.snapshot_location,
                 &table_agg_index_ids,
+                &inverted_indexes,
             )
             .await?;
         }
@@ -366,6 +373,7 @@ impl FuseTable {
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
         table_agg_index_ids: &[u64],
+        inverted_indexes: &BTreeMap<String, TableIndex>,
     ) -> Result<()> {
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         // Purge segments&blocks by chunk size
@@ -379,6 +387,7 @@ impl FuseTable {
 
             let mut blocks_to_be_purged = HashSet::new();
             let mut agg_indexes_to_be_purged = HashSet::new();
+            let mut inverted_indexes_to_be_purged = HashSet::new();
             for loc in &locations.block_location {
                 if locations_referenced_by_root.block_location.contains(loc) {
                     continue;
@@ -388,6 +397,16 @@ impl FuseTable {
                     agg_indexes_to_be_purged.insert(
                         TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                             loc, *index_id,
+                        ),
+                    );
+                }
+
+                for (_, idx) in inverted_indexes {
+                    inverted_indexes_to_be_purged.insert(
+                        TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                            loc,
+                            idx.name.as_str(),
+                            idx.version.as_str(),
                         ),
                     );
                 }
@@ -425,6 +444,7 @@ impl FuseTable {
                 counter,
                 blocks_to_be_purged,
                 agg_indexes_to_be_purged,
+                inverted_indexes_to_be_purged,
                 blooms_to_be_purged,
                 segment_locations_to_be_purged,
             )
@@ -443,6 +463,7 @@ impl FuseTable {
         root_location_tuple: LocationTuple,
         root_snapshot_location: String,
         table_agg_index_ids: &[u64],
+        inverted_indexes: &BTreeMap<String, TableIndex>,
     ) -> Result<()> {
         let segment_locations_to_be_purged = HashSet::from_iter(
             root_snapshot
@@ -453,6 +474,7 @@ impl FuseTable {
         );
 
         let mut agg_indexes_to_be_purged = HashSet::new();
+        let mut inverted_indexes_to_be_purged = HashSet::new();
         for index_id in table_agg_index_ids {
             agg_indexes_to_be_purged.extend(root_location_tuple.block_location.iter().map(|loc| {
                 TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
@@ -461,11 +483,24 @@ impl FuseTable {
             }));
         }
 
+        for (_, idx) in inverted_indexes {
+            inverted_indexes_to_be_purged.extend(root_location_tuple.block_location.iter().map(
+                |loc| {
+                    TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                        loc,
+                        idx.name.as_str(),
+                        idx.version.as_str(),
+                    )
+                },
+            ));
+        }
+
         self.purge_block_segments(
             ctx,
             counter,
             root_location_tuple.block_location,
             agg_indexes_to_be_purged,
+            inverted_indexes_to_be_purged,
             root_location_tuple.bloom_location,
             segment_locations_to_be_purged,
         )
@@ -490,6 +525,7 @@ impl FuseTable {
         counter: &mut PurgeCounter,
         blocks_to_be_purged: HashSet<String>,
         agg_indexes_to_be_purged: HashSet<String>,
+        inverted_indexes_to_be_purged: HashSet<String>,
         blooms_to_be_purged: HashSet<String>,
         segments_to_be_purged: HashSet<String>,
     ) -> Result<()> {
@@ -505,6 +541,13 @@ impl FuseTable {
         if agg_index_count > 0 {
             counter.agg_indexes += agg_index_count;
             self.try_purge_location_files(ctx.clone(), agg_indexes_to_be_purged)
+                .await?;
+        }
+
+        let inverted_index_count = inverted_indexes_to_be_purged.len();
+        if inverted_index_count > 0 {
+            counter.inverted_indexes += inverted_index_count;
+            self.try_purge_location_files(ctx.clone(), inverted_indexes_to_be_purged)
                 .await?;
         }
 
@@ -696,6 +739,7 @@ struct PurgeCounter {
     start: Instant,
     blocks: usize,
     agg_indexes: usize,
+    inverted_indexes: usize,
     blooms: usize,
     segments: usize,
     table_statistics: usize,
@@ -708,6 +752,7 @@ impl PurgeCounter {
             start: Instant::now(),
             blocks: 0,
             agg_indexes: 0,
+            inverted_indexes: 0,
             blooms: 0,
             segments: 0,
             table_statistics: 0,
