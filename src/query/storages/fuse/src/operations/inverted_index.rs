@@ -365,7 +365,7 @@ impl InvertedIndexSink {
         indexed_segments: BTreeSet<Location>,
         block_nums: usize,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, ctx.clone(), InvertedIndexSink {
+        let sinker = AsyncSinker::create(input, InvertedIndexSink {
             ctx,
             catalog,
             table,

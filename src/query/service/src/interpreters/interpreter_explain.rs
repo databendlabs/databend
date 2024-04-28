@@ -401,7 +401,7 @@ impl ExplainInterpreter {
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res)?;
+        let query_profiles = self.execute_and_get_profiles(build_res).await?;
 
         let result = plan
             .format(metadata.clone(), query_profiles)?
@@ -411,7 +411,7 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
-    fn execute_and_get_profiles(
+    async fn execute_and_get_profiles(
         &self,
         mut build_res: PipelineBuildResult,
     ) -> Result<HashMap<u32, PlanProfile>> {
@@ -432,7 +432,7 @@ impl ExplainInterpreter {
             false => {
                 let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
                 executor.start();
-                while (executor.pull_data()?).is_some() {}
+                while executor.recv_data().await?.is_some() {}
                 self.ctx
                     .add_query_profiles(&executor.get_inner().get_plans_profile());
             }

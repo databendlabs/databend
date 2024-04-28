@@ -61,7 +61,6 @@ impl ExchangeTransform {
                         true if max_threads == 1 => create_dummy_item(),
                         true => create_resize_item(1, max_threads),
                         false => create_writer_item(
-                            ctx.clone(),
                             sender,
                             false,
                             destination_id,

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -32,7 +31,6 @@ use databend_common_pipeline_sinks::Sinker;
 
 use crate::servers::flight::v1::exchange::serde::ExchangeSerializeMeta;
 use crate::servers::flight::FlightSender;
-use crate::sessions::QueryContext;
 
 pub struct ExchangeWriterSink {
     flight_sender: FlightSender,
@@ -43,14 +41,13 @@ pub struct ExchangeWriterSink {
 
 impl ExchangeWriterSink {
     pub fn create(
-        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         flight_sender: FlightSender,
         source_id: &str,
         destination_id: &str,
         fragment_id: usize,
     ) -> Box<dyn Processor> {
-        AsyncSinker::create(input, ctx, ExchangeWriterSink {
+        AsyncSinker::create(input, ExchangeWriterSink {
             flight_sender,
             source: source_id.to_string(),
             destination: destination_id.to_string(),
@@ -141,7 +138,6 @@ impl Sink for IgnoreExchangeSink {
 }
 
 pub fn create_writer_item(
-    ctx: Arc<QueryContext>,
     exchange: FlightSender,
     ignore: bool,
     destination_id: &str,
@@ -153,7 +149,6 @@ pub fn create_writer_item(
         match ignore {
             true => ProcessorPtr::create(IgnoreExchangeSink::create(input.clone(), exchange)),
             false => ProcessorPtr::create(ExchangeWriterSink::create(
-                ctx,
                 input.clone(),
                 exchange,
                 source_id,

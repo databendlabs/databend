@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::BlockRowIndex;
@@ -50,7 +49,6 @@ impl AggIndexSink {
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
-        ctx: Arc<dyn TableContext>,
         data_accessor: Operator,
         index_id: u64,
         write_settings: WriteSettings,
@@ -58,7 +56,7 @@ impl AggIndexSink {
         block_name_offset: usize,
         keep_block_name_col: bool,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, ctx.clone(), AggIndexSink {
+        let sinker = AsyncSinker::create(input, AggIndexSink {
             data_accessor,
             index_id,
             write_settings,
