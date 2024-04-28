@@ -1112,6 +1112,7 @@ pub enum JoinOperator {
     RightAnti,
     // CrossJoin can only work with `JoinCondition::None`
     CrossJoin,
+    AsofJoin,
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
