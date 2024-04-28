@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -47,6 +48,17 @@ pub enum ValidationMode {
     ReturnAllErrors,
 }
 
+impl Display for ValidationMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValidationMode::None => write!(f, ""),
+            ValidationMode::ReturnNRows(v) => write!(f, "RETURN_ROWS={v}"),
+            ValidationMode::ReturnErrors => write!(f, "RETURN_ERRORS"),
+            ValidationMode::ReturnAllErrors => write!(f, "RETURN_ALL_ERRORS"),
+        }
+    }
+}
+
 impl FromStr for ValidationMode {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, String> {
@@ -75,6 +87,21 @@ pub enum CopyIntoTableMode {
     Copy,
 }
 
+impl Display for CopyIntoTableMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CopyIntoTableMode::Insert { overwrite } => {
+                if *overwrite {
+                    write!(f, "INSERT OVERWRITE")
+                } else {
+                    write!(f, "INSERT")
+                }
+            }
+            CopyIntoTableMode::Replace => write!(f, "REPLACE"),
+            CopyIntoTableMode::Copy => write!(f, "COPY"),
+        }
+    }
+}
 impl CopyIntoTableMode {
     pub fn is_overwrite(&self) -> bool {
         match self {
