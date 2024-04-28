@@ -392,32 +392,32 @@ async fn test_schedule_point_simple() -> Result<()> {
     let points = graph.get_points();
     assert_eq!(points, (3 << 32) | 1);
 
-    let res = graph.can_perform_task(1, 3);
+    let res = graph.can_perform_task(1);
     let points = graph.get_points();
     assert_eq!(points, (2 << 32) | 1);
     assert!(res);
 
-    let res = graph.can_perform_task(1, 3);
+    let res = graph.can_perform_task(1);
     let points = graph.get_points();
     assert_eq!(points, (1 << 32) | 1);
     assert!(res);
 
-    let res = graph.can_perform_task(1, 3);
+    let res = graph.can_perform_task(1);
     let points = graph.get_points();
     assert_eq!(points, 1);
     assert!(res);
 
-    let res = graph.can_perform_task(1, 3);
+    let res = graph.can_perform_task(1);
     let points = graph.get_points();
     assert_eq!(points, (3 << 32) | 2);
     assert!(!res);
 
-    let res = graph.can_perform_task(1, 3);
+    let res = graph.can_perform_task(1);
     let points = graph.get_points();
     assert_eq!(points, (3 << 32) | 2);
     assert!(!res);
 
-    let res = graph.can_perform_task(2, 3);
+    let res = graph.can_perform_task(2);
     let points = graph.get_points();
     assert_eq!(points, (2 << 32) | 2);
     assert!(res);
@@ -431,16 +431,16 @@ async fn test_schedule_point_complex() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let graph = create_simple_pipeline(ctx)?;
 
-    let res = graph.can_perform_task(2, 3);
+    let res = graph.can_perform_task(2);
     let points = graph.get_points();
     assert_eq!(points, (2 << 32) | 2);
     assert!(res);
 
     for _ in 0..5 {
-        let _ = graph.can_perform_task(2, 3);
+        let _ = graph.can_perform_task(2);
     }
 
-    let res = graph.can_perform_task(3, 3);
+    let res = graph.can_perform_task(3);
     let points = graph.get_points();
     assert_eq!(points, (2 << 32) | 3);
     assert!(res);
