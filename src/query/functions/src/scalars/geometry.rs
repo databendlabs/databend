@@ -266,6 +266,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
             builder.commit_row();
         }),
+    );
 
     registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
         "st_dimension",
