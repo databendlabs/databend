@@ -321,7 +321,7 @@ impl Binder {
                 .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
         }
         // add internal column binding into expr
-        s_expr = from_context.add_internal_column_into_expr(s_expr);
+        s_expr = from_context.add_internal_column_into_expr(s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
