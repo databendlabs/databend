@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::future;
 use std::io;
+use std::iter::repeat_with;
 use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
@@ -38,6 +39,7 @@ use databend_common_meta_types::UpsertKV;
 use futures::Stream;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use itertools::Itertools;
 use log::debug;
 use log::info;
 use log::warn;
@@ -150,36 +152,51 @@ impl SMV002 {
 
         let mut importer = sm_v002::SMV002::new_importer();
 
-        // AsyncBufReadExt::lines() is a bit slow.
-        //
-        // let br = BufReader::with_capacity(16 * 1024 * 1024, data);
-        // let mut lines = AsyncBufReadExt::lines(br);
-        // while let Some(l) = lines.next_line().await? {
-        //     let ent: RaftStoreEntry = serde_json::from_str(&l)
-        //         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        //     importer.import(ent)?;
-        // }
-
         let f = data.into_std().await;
 
         let h = databend_common_base::runtime::spawn_blocking(move || {
-            let mut br = std::io::BufReader::with_capacity(16 * 1024 * 1024, f);
-            let mut line_buf = String::with_capacity(4 * 1024);
+            // Create a worker pool to deserialize the entries.
 
-            loop {
-                line_buf.clear();
-                let n_read = std::io::BufRead::read_line(&mut br, &mut line_buf)?;
-                if n_read == 0 {
-                    break;
+            let queue_depth = 1024;
+            let n_workers = 16;
+            let (tx, rx) = ordq::new(queue_depth, repeat_with(|| Deserializer).take(n_workers));
+
+            // Spawn a thread to import the deserialized entries.
+
+            let import_th = databend_common_base::runtime::Thread::spawn(move || {
+                while let Some(res) = rx.recv() {
+                    let entries: Result<Vec<RaftStoreEntry>, io::Error> =
+                        res.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                    let entries = entries?;
+
+                    for ent in entries {
+                        importer.import(ent)?;
+                    }
                 }
 
-                let ent: RaftStoreEntry = serde_json::from_str(&line_buf)
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                let level_data = importer.commit();
+                Ok::<_, io::Error>(level_data)
+            });
 
-                importer.import(ent)?;
+            // Feed input strings to the worker pool.
+            {
+                let mut br = io::BufReader::with_capacity(16 * 1024 * 1024, f);
+                let lines = io::BufRead::lines(&mut br);
+                for c in &lines.into_iter().chunks(1024) {
+                    let chunk = c.collect::<Result<Vec<_>, _>>()?;
+                    tx.send(chunk)
+                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+                }
+
+                // drop `tx` to notify the worker threads to exit.
+                tx.close()
             }
 
-            let level_data = importer.commit();
+            let level_data = import_th
+                .join()
+                .map_err(|_e| io::Error::new(io::ErrorKind::Other, "import thread failure"))??;
+
             Ok::<_, io::Error>(level_data)
         });
 
@@ -491,5 +508,22 @@ impl SMV002 {
         }
 
         Ok(())
+    }
+}
+
+struct Deserializer;
+
+impl ordq::Work for Deserializer {
+    type I = Vec<String>;
+    type O = Result<Vec<RaftStoreEntry>, io::Error>;
+
+    fn run(&mut self, strings: Self::I) -> Self::O {
+        let mut res = Vec::with_capacity(strings.len());
+        for s in strings {
+            let ent: RaftStoreEntry = serde_json::from_str(&s)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            res.push(ent);
+        }
+        Ok(res)
     }
 }
