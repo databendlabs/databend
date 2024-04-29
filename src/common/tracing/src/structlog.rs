@@ -80,20 +80,18 @@ impl<R: Reporter> Reporter for StructLogReporter<R> {
 pub fn pretty_print_trace(spans: &[&SpanRecord]) {
     debug_assert!(spans.iter().map(|span| span.trace_id).all_equal());
 
-    let mut tree = if let Some(tree) = build_tree(spans) {
-        tree
-    } else {
-        return;
-    };
-    let has_event = remove_no_event(&mut tree);
-    if !has_event {
-        return;
-    }
-    sort_tree(&mut tree);
-    let mut buf = String::new();
-    write_tree(&mut buf, &tree, "".to_string(), true, true).unwrap();
+    for mut tree in build_trees(spans) {
+        let has_event = remove_no_event(&mut tree);
+        if !has_event {
+            return;
+        }
 
-    info!(target: "databend::log::structlog", "{buf}");
+        sort_tree(&mut tree);
+        let mut buf = String::new();
+        write_tree(&mut buf, &tree, "".to_string(), true, true).unwrap();
+
+        info!(target: "databend::log::structlog", "{buf}");
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -154,14 +152,20 @@ impl TreeNode {
     }
 }
 
-fn build_tree(spans: &[&SpanRecord]) -> Option<TreeNode> {
+fn build_trees(spans: &[&SpanRecord]) -> Vec<TreeNode> {
+    let mut span_ids = HashSet::new();
     let mut raw = HashMap::new();
     for span in spans {
+        span_ids.insert(span.span_id);
         raw.entry(span.parent_id)
             .or_insert_with(Vec::new)
             .push(*span);
     }
-    build_sub_tree(SpanId::default(), &raw).pop()
+
+    let roots = raw.keys().filter(|id| !span_ids.contains(id)).cloned();
+    roots
+        .flat_map(|root| build_sub_tree(root, &raw).pop())
+        .collect_vec()
 }
 
 fn build_sub_tree(parent_id: SpanId, raw: &HashMap<SpanId, Vec<&SpanRecord>>) -> Vec<TreeNode> {

@@ -32,6 +32,8 @@ use databend_common_io::parse_to_ewkb;
 use databend_common_io::parse_to_subtype;
 use databend_common_io::read_ewkb_srid;
 use databend_common_io::GeometryDataType;
+use geo::dimensions::Dimensions;
+use geo::HasDimensions;
 use geo::MultiPoint;
 use geo::Point;
 use geo_types::Polygon;
@@ -264,6 +266,37 @@ pub fn register(registry: &mut FunctionRegistry) {
 
             builder.commit_row();
         }),
+
+    registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
+        "st_dimension",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<Int32Type>>(
+            |ewkb, output, ctx| {
+                let geo: geo_types::Geometry = match Ewkb(ewkb).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        output.push_null();
+                        return;
+                    }
+                };
+
+                let dimension: Option<i32> = match geo.dimensions() {
+                    Dimensions::Empty => None,
+                    Dimensions::ZeroDimensional => Some(0),
+                    Dimensions::OneDimensional => Some(1),
+                    Dimensions::TwoDimensional => Some(2),
+                };
+
+                match dimension {
+                    Some(dimension) => output.push(dimension),
+                    None => output.push_null(),
+                }
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(

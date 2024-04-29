@@ -31,6 +31,7 @@ fn test_geometry() {
     test_st_asewkt(file);
     test_st_aswkt(file);
     test_st_endpoint(file);
+    test_st_dimension(file);
     test_st_geohash(file);
     test_st_asgeojson(file);
     test_st_geomfromgeohash(file);
@@ -86,6 +87,49 @@ fn test_st_aswkt(file: &mut impl Write) {
     run_ast(
         file,
         "st_asewkt(to_geometry('LINESTRING(0.75 0.75, -10 20)'))",
+        &[],
+    );
+}
+
+fn test_st_dimension(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_dimension(to_geometry('POINT(-122.35 37.55)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dimension(to_geometry('MULTIPOINT((-122.35 37.55),(0 -90))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dimension(to_geometry('LINESTRING(-124.2 42,-120.01 41.99)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dimension(to_geometry('LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dimension(to_geometry('MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dimension(to_geometry('POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dimension(to_geometry('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dimension(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))'))",
         &[],
     );
 }
