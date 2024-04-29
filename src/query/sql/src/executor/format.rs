@@ -24,6 +24,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
+use super::physical_plans::AsyncFunction;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -265,7 +266,7 @@ fn to_format_tree(
         PhysicalPlan::ChunkCommitInsert(_) => {
             Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
         }
-        PhysicalPlan::AsyncFunction(_) => Ok(FormatTreeNode::new("AsyncFunction".to_string())),
+        PhysicalPlan::AsyncFunction(plan) => async_function_to_format_tree(plan, metadata, profs),
     }
 }
 
@@ -544,6 +545,31 @@ fn eval_scalar_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "EvalScalar".to_string(),
+        children,
+    ))
+}
+
+fn async_function_to_format_tree(
+    plan: &AsyncFunction,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    append_profile_info(&mut children, profs, plan.plan_id);
+
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
+
+    Ok(FormatTreeNode::with_children(
+        "AsyncFunction".to_string(),
         children,
     ))
 }

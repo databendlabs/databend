@@ -18,6 +18,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
@@ -33,6 +34,8 @@ pub struct AsyncFunction {
     pub return_type: DataType,
     pub schema: DataSchemaRef,
     pub input: Box<PhysicalPlan>,
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl AsyncFunction {
@@ -47,6 +50,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         async_func: &crate::plans::AsyncFunction,
         required: ColumnSet,
+        stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let child = s_expr.child(0)?;
         let input = self.build(child, required.clone()).await?;
@@ -65,6 +69,7 @@ impl PhysicalPlanBuilder {
             return_type: async_func.return_type.clone(),
             schema,
             input: Box::new(input),
+            stat_info: Some(stat_info),
         }))
     }
 }
