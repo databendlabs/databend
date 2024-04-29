@@ -41,6 +41,17 @@ use crate::io::MetaReaders;
 type CachedReader =
     InMemoryCacheReader<InvertedIndexFile, InvertedIndexFileLoader, InvertedIndexFileMeter>;
 
+const INDEX_COLUMN_NAMES: [&str; 8] = [
+    "fast",
+    "store",
+    "fieldnorm",
+    "pos",
+    "idx",
+    "term",
+    "meta.json",
+    ".managed.json",
+];
+
 /// Loads inverted index info data
 /// read data from cache, or populate cache items if possible
 #[minitrace::trace]
@@ -188,7 +199,7 @@ impl InvertedIndexFileReader {
         column_meta: &SingleColumnMeta,
         operator: Operator,
     ) -> Self {
-        let cache_key = format!("{index_path}-{name}");
+        let cache_key = Self::cache_key_of_column(&index_path, &name);
 
         let loader = InvertedIndexFileLoader {
             offset: column_meta.offset,
@@ -216,6 +227,17 @@ impl InvertedIndexFileReader {
     #[async_backtrace::framed]
     pub async fn read(&self) -> Result<Arc<InvertedIndexFile>> {
         self.cached_reader.read(&self.param).await
+    }
+
+    fn cache_key_of_column(index_path: &str, index_column_name: &str) -> String {
+        format!("{index_path}-{index_column_name}")
+    }
+
+    pub(crate) fn cache_key_of_index_columns(index_path: &str) -> Vec<String> {
+        INDEX_COLUMN_NAMES
+            .iter()
+            .map(|column_name| Self::cache_key_of_column(index_path, column_name))
+            .collect()
     }
 }
 
