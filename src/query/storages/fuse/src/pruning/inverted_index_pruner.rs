@@ -79,7 +79,7 @@ impl InvertedIndexPruner {
 
             // parse query text to check whether has phrase terms need position file.
             let (index_schema, index_fields) = create_index_schema(
-                &inverted_index_info.index_schema,
+                Arc::new(inverted_index_info.index_schema.clone()),
                 &inverted_index_info.index_options,
             )?;
             let tokenizer_manager = create_tokenizer_manager(&inverted_index_info.index_options);

@@ -11,7 +11,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'cache'   | 'enable_table_meta_cache'                  | 'true'                                                         | ''       |
 | 'cache'   | 'inverted_index_filter_memory_ratio'       | '0'                                                            | ''       |
 | 'cache'   | 'inverted_index_filter_size'               | '2147483648'                                                   | ''       |
-| 'cache'   | 'inverted_index_info_count'                | '3000'                                                         | ''       |
+| 'cache'   | 'inverted_index_meta_count'                | '3000'                                                         | ''       |
 | 'cache'   | 'table_bloom_index_filter_count'           | '0'                                                            | ''       |
 | 'cache'   | 'table_bloom_index_filter_size'            | '2147483648'                                                   | ''       |
 | 'cache'   | 'table_bloom_index_meta_count'             | '3000'                                                         | ''       |

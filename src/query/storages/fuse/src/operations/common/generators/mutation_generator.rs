@@ -105,7 +105,6 @@ impl SnapshotGenerator for MutationGenerator {
                         new_segments,
                         cluster_key_meta,
                         previous.table_statistics_location.clone(),
-                        previous.inverted_indexes.clone(),
                     );
 
                     if matches!(self.mutation_kind, MutationKind::Compact) {

@@ -143,8 +143,8 @@ table_bloom_index_meta_count = 3000
 table_bloom_index_filter_count = 1048576
 
 ### table inverted index caches ###
-# Max number of cached inverted index info objects. Set it to 0 to disable it.
-inverted_index_info_count = 3000
+# Max number of cached inverted index meta objects. Set it to 0 to disable it.
+inverted_index_meta_count = 3000
 # Max bytes of cached inverted index filters. Set it to 0 to disable it.
 inverted_index_filter_size = 2147483648
 

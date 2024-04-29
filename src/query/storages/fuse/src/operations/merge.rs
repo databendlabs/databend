@@ -96,6 +96,7 @@ impl FuseTable {
             write_settings: self.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            inverted_index_builders: Vec::new(),
         };
         let aggregator = MatchedAggregator::create(
             ctx,

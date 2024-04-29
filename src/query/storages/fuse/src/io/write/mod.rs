@@ -22,6 +22,7 @@ pub use block_writer::serialize_block;
 pub use block_writer::write_data;
 pub use block_writer::BlockBuilder;
 pub use block_writer::BlockSerialization;
+pub use block_writer::InvertedIndexBuilder;
 pub(crate) use inverted_index_writer::create_index_schema;
 pub(crate) use inverted_index_writer::create_tokenizer_manager;
 pub use inverted_index_writer::InvertedIndexWriter;

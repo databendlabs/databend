@@ -31,7 +31,6 @@ use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -54,7 +53,6 @@ pub type BloomIndexFilterCache =
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 
-pub type InvertedIndexInfoCache = NamedCache<InMemoryItemCacheHolder<IndexInfo>>;
 pub type InvertedIndexMetaCache = NamedCache<InMemoryItemCacheHolder<InvertedIndexMeta>>;
 pub type InvertedIndexFileCache = NamedCache<
     InMemoryItemCacheHolder<InvertedIndexFile, DefaultHashBuilder, InvertedIndexFileMeter>,
@@ -152,13 +150,6 @@ impl CachedObject<InvertedIndexFile, DefaultHashBuilder, InvertedIndexFileMeter>
     type Cache = InvertedIndexFileCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_inverted_index_file_cache()
-    }
-}
-
-impl CachedObject<IndexInfo> for IndexInfo {
-    type Cache = InvertedIndexInfoCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_inverted_index_info_cache()
     }
 }
 

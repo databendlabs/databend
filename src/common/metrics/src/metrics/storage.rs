@@ -142,6 +142,13 @@ static BLOCK_INDEX_WRITE_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_index_write_bytes"));
 static BLOCK_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_block_index_write_milliseconds"));
+static BLOCK_INVERTED_INDEX_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_inverted_index_write_nums"));
+static BLOCK_INVERTED_INDEX_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_inverted_index_write_bytes"));
+static BLOCK_INVERTED_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_write_milliseconds")
+});
 static BLOCK_INDEX_READ_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_index_read_bytes"));
 static COMPACT_BLOCK_READ_NUMS: LazyLock<Counter> =
@@ -494,6 +501,18 @@ pub fn metrics_inc_block_index_write_bytes(c: u64) {
 
 pub fn metrics_inc_block_index_write_milliseconds(c: u64) {
     BLOCK_INDEX_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_write_nums(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_NUMS.inc_by(c);
+}
+
+pub fn metrics_inc_block_inverted_index_write_bytes(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_BYTES.inc_by(c);
+}
+
+pub fn metrics_inc_block_inverted_index_write_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_MILLISECONDS.observe(c as f64);
 }
 
 pub fn metrics_inc_block_index_read_bytes(c: u64) {

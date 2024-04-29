@@ -192,7 +192,7 @@ impl BloomIndex {
         let mut column_distinct_count = HashMap::<usize, usize>::new();
         for (index, field) in bloom_columns_map.into_iter() {
             let field_type = &data_blocks_tobe_indexed[0].get_by_offset(index).data_type;
-            let (column, data_type) = match field_type {
+            let (column, data_type) = match field_type.remove_nullable() {
                 DataType::Map(box inner_ty) => {
                     // Add bloom filter for the value of map type
                     let val_type = match inner_ty {
@@ -205,8 +205,16 @@ impl BloomIndex {
                     let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
                         let value = &block.get_by_offset(index).value;
                         let column = value.convert_to_full_column(field_type, block.num_rows());
-                        let map_column =
-                            MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap();
+                        let map_column = if field_type.is_nullable() {
+                            let nullable_column =
+                                NullableType::<MapType<AnyType, AnyType>>::try_downcast_column(
+                                    &column,
+                                )
+                                .unwrap();
+                            nullable_column.column
+                        } else {
+                            MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap()
+                        };
                         map_column.values.values
                     });
                     let column = Column::concat_columns(source_columns_iter)?;
@@ -478,10 +486,11 @@ impl BloomIndex {
     }
 
     pub fn supported_data_type(data_type: &DataType) -> bool {
-        let mut data_type = data_type;
-        if let DataType::Map(box inner_ty) = data_type {
-            data_type = match inner_ty {
-                DataType::Tuple(kv_tys) => &kv_tys[1],
+        if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
+            match inner_ty {
+                DataType::Tuple(kv_tys) => {
+                    return Xor8Filter::supported_type(&kv_tys[1]);
+                }
                 _ => unreachable!(),
             };
         }

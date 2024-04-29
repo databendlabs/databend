@@ -23,6 +23,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -38,6 +39,7 @@ use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use crate::io::write::WriteSettings;
+use crate::io::InvertedIndexWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::column_parquet_metas;
 use crate::statistics::gen_columns_statistics;
@@ -151,11 +153,56 @@ impl BloomIndexState {
     }
 }
 
+#[derive(Clone)]
+pub struct InvertedIndexBuilder {
+    pub name: String,
+    pub version: String,
+    pub schema: DataSchema,
+    pub options: BTreeMap<String, String>,
+}
+
+pub struct InvertedIndexState {
+    pub(crate) data: Vec<u8>,
+    pub(crate) size: u64,
+    pub(crate) location: Location,
+}
+
+impl InvertedIndexState {
+    pub fn try_create(
+        source_schema: &TableSchemaRef,
+        block: &DataBlock,
+        block_location: &Location,
+        inverted_index_builder: &InvertedIndexBuilder,
+    ) -> Result<Self> {
+        let mut writer = InvertedIndexWriter::try_create(
+            Arc::new(inverted_index_builder.schema.clone()),
+            &inverted_index_builder.options,
+        )?;
+        writer.add_block(source_schema, block)?;
+        let data = writer.finalize()?;
+        let size = data.len() as u64;
+
+        let inverted_index_location =
+            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                &block_location.0,
+                &inverted_index_builder.name,
+                &inverted_index_builder.version,
+            );
+
+        Ok(Self {
+            data,
+            size,
+            location: (inverted_index_location, 0),
+        })
+    }
+}
+
 pub struct BlockSerialization {
     pub block_raw_data: Vec<u8>,
     pub size: u64, // TODO redundancy
     pub block_meta: BlockMeta,
     pub bloom_index_state: Option<BloomIndexState>,
+    pub inverted_index_states: Vec<InvertedIndexState>,
 }
 
 #[derive(Clone)]
@@ -166,6 +213,7 @@ pub struct BlockBuilder {
     pub write_settings: WriteSettings,
     pub cluster_stats_gen: ClusterStatsGenerator,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    pub inverted_index_builders: Vec<InvertedIndexBuilder>,
 }
 
 impl BlockBuilder {
@@ -185,6 +233,17 @@ impl BlockBuilder {
         let column_distinct_count = bloom_index_state
             .as_ref()
             .map(|i| i.column_distinct_count.clone());
+
+        let mut inverted_index_states = Vec::with_capacity(self.inverted_index_builders.len());
+        for inverted_index_builder in &self.inverted_index_builders {
+            let inverted_index_state = InvertedIndexState::try_create(
+                &self.source_schema,
+                &data_block,
+                &block_location,
+                inverted_index_builder,
+            )?;
+            inverted_index_states.push(inverted_index_state);
+        }
 
         let row_count = data_block.num_rows() as u64;
         let block_size = data_block.memory_size() as u64;
@@ -221,6 +280,7 @@ impl BlockBuilder {
             size: file_size,
             block_meta,
             bloom_index_state,
+            inverted_index_states,
         };
         Ok(serialized)
     }

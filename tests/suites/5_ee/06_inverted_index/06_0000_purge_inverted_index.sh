@@ -38,14 +38,6 @@ echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inve
 # uncomment this line to show the details (for local diagnostic only)
 #echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT
 
-echo "== number of inverted index info files (expects 2) =="
-# NOTE:
-# - there are 2 inverted indexes
-# - for each index, the inverted index refreshment will create a index info
-echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
-# uncomment this line to show the details (for local diagnostic only)
-#echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT
-
 echo "== number of invert index files (expects 2) =="
 # NOTE: since there are 1 block, 2 inverted indexes.
 echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | $BENDSQL_CLIENT_CONNECT | wc -l
@@ -69,15 +61,6 @@ echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inve
 #   it will shows that the oldest snapshot is the previous_snapshot of the latest snapshot before 2nd insertion
 #echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT
 
-echo "== number of inverted index info files (expects 4) =="
-# NOTE:
-# - 2 of them are referenced by the newly inserted snapshot
-# -   inverted index info files that (only) belongs to the previous snapshots are purged as expected.
-# - other 2 of them are created by the inverted index refreshment.
-echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
-# uncomment this line to show the details (for local diagnostic only)
-#echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT
-
 echo "== number of invert index files (expects 4) =="
 # NOTE: since there are 2 blocks now, each of them will have 2 inverted indexes.
 echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | $BENDSQL_CLIENT_CONNECT | wc -l
@@ -97,11 +80,6 @@ echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inve
 #   it will shows that the oldest snapshot is the previous_snapshot of the latest snapshot before 3nd insertion
 #echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT
 
-echo "== number of inverted index info files (expects 4) =="
-echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
-# uncomment this line to show the details (for local diagnostic only)
-#echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT
-
 echo "== number of invert index files (expects 6) =="
 # NOTE: since there are 2 blocks now, each of them will have 2 inverted indexes.
 echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | $BENDSQL_CLIENT_CONNECT | wc -l
@@ -118,12 +96,6 @@ echo "== number of snapshots (expects 1)=="
 # NOTE: since previous snapshot will be purged(transient table), but inverted index refreshment is NOT executed after compaction
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
 
-echo "== number of inverted index info files (expects 2) =="
-# NOTE: the 2 inverted index info referenced by the last (one) snapshot
-echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
-# uncomment this line to show the details (for local diagnostic only)
-#echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT
-
 echo "== number of invert index files (expects 0) =="
 # NOTE: since inverted index refreshment is NOT executed after compaction, and the inverted index files
 # that associated with data blocks are purged alone with the fragmented blocks.
@@ -138,10 +110,6 @@ echo "###################"
 echo "insert into ${TEST_DB}.customer_feedback values('a', 'b')" | $BENDSQL_CLIENT_CONNECT
 echo "== number of snapshots (expects 3) =="
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | $BENDSQL_CLIENT_CONNECT | wc -l
-echo "== number of inverted index info files (expects 4) =="
-echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT | wc -l
-# for local diagnostic only
-#echo "list @test_purge_ii PATTERN = '.*/_i_ii/.*.mpk'" | $BENDSQL_CLIENT_CONNECT
 echo "== number of invert index files (expects 2) =="
 # NOTE: the inverted index refreshment will ONLY create new indexes for the new blocks, and there is one new block and 2 indexes
 echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | $BENDSQL_CLIENT_CONNECT | wc -l

@@ -24,6 +24,8 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::Event;
@@ -39,6 +41,7 @@ use opendal::Operator;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
+use crate::io::InvertedIndexBuilder;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -126,6 +129,37 @@ impl TransformSerializeBlock {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
+
+        let table_meta = &table.table_info.meta;
+        let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
+        for index in table_meta.indexes.values() {
+            if !index.sync_creation {
+                continue;
+            }
+            let mut index_fields = Vec::with_capacity(index.column_ids.len());
+            for column_id in &index.column_ids {
+                for field in &table_meta.schema.fields {
+                    if field.column_id() == *column_id {
+                        index_fields.push(DataField::from(field));
+                        break;
+                    }
+                }
+            }
+            // ignore invalid index
+            if index_fields.len() != index.column_ids.len() {
+                continue;
+            }
+            let index_schema = DataSchema::new(index_fields);
+
+            let inverted_index_builder = InvertedIndexBuilder {
+                name: index.name.clone(),
+                version: index.version.clone(),
+                schema: index_schema,
+                options: index.options.clone(),
+            };
+            inverted_index_builders.push(inverted_index_builder);
+        }
+
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
@@ -133,6 +167,7 @@ impl TransformSerializeBlock {
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            inverted_index_builders,
         };
         Ok(TransformSerializeBlock {
             state: State::Consume,
@@ -315,7 +350,8 @@ impl Processor for TransformSerializeBlock {
                 // write index data.
                 let bloom_index_state = serialized.bloom_index_state;
                 if let Some(bloom_index_state) = bloom_index_state {
-                    let index_size = bloom_index_state.data.len();
+                    let start = Instant::now();
+                    let index_size = bloom_index_state.size;
                     write_data(
                         bloom_index_state.data,
                         &self.dal,
@@ -325,9 +361,29 @@ impl Processor for TransformSerializeBlock {
                     // Perf.
                     {
                         metrics_inc_block_index_write_nums(1);
-                        metrics_inc_block_index_write_bytes(index_size as u64);
+                        metrics_inc_block_index_write_bytes(index_size);
                         metrics_inc_block_index_write_milliseconds(
                             start.elapsed().as_millis() as u64
+                        );
+                    }
+                }
+
+                // write inverted index
+                for inverted_index_state in serialized.inverted_index_states {
+                    let start = Instant::now();
+                    let index_size = inverted_index_state.size;
+                    write_data(
+                        inverted_index_state.data,
+                        &self.dal,
+                        &inverted_index_state.location.0,
+                    )
+                    .await?;
+                    // Perf.
+                    {
+                        metrics_inc_block_inverted_index_write_nums(1);
+                        metrics_inc_block_inverted_index_write_bytes(index_size);
+                        metrics_inc_block_inverted_index_write_milliseconds(
+                            start.elapsed().as_millis() as u64,
                         );
                     }
                 }

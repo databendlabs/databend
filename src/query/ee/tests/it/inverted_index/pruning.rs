@@ -38,7 +38,6 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_sql::BloomIndexColumns;
-use databend_common_storages_fuse::io::read::load_inverted_index_info;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseTable;
@@ -506,7 +505,7 @@ async fn test_block_pruner() -> Result<()> {
         table_id,
         name: index_name.clone(),
         column_ids: vec![1, 2, 3],
-        sync_creation: true,
+        sync_creation: false,
         options: index_options.clone(),
     };
 
@@ -537,15 +536,12 @@ async fn test_block_pruner() -> Result<()> {
     assert!(snapshot.is_some());
     let snapshot = snapshot.unwrap();
 
-    let index_info_loc = snapshot
-        .inverted_indexes
-        .as_ref()
-        .and_then(|i| i.get(&index_name));
-    assert!(index_info_loc.is_some());
-    let index_info = load_inverted_index_info(fuse_table.get_operator(), index_info_loc).await?;
-    assert!(index_info.is_some());
-    let index_info = index_info.unwrap();
-    let index_version = index_info.index_version.clone();
+    let table_info = new_table.get_table_info();
+    let table_indexes = &table_info.meta.indexes;
+    let table_index = table_indexes.get(&index_name);
+    assert!(table_index.is_some());
+    let table_index = table_index.unwrap();
+    let index_version = table_index.version.clone();
 
     let index_schema = DataSchema::from(index_table_schema);
     let e1 = PushDownInfo {

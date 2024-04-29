@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_sql::plans::RefreshTableIndexPlan;
-use databend_common_storages_fuse::io::read::load_inverted_index_info;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
@@ -74,7 +73,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         table_id,
         name: index_name.clone(),
         column_ids: vec![0, 1],
-        sync_creation: true,
+        sync_creation: false,
         options,
     };
 
@@ -100,18 +99,13 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let new_snapshot = new_fuse_table.read_table_snapshot().await?;
     assert!(new_snapshot.is_some());
     let new_snapshot = new_snapshot.unwrap();
-    assert!(new_snapshot.inverted_indexes.is_some());
 
-    let index_info_loc = new_snapshot
-        .inverted_indexes
-        .as_ref()
-        .and_then(|i| i.get(&index_name));
-    assert!(index_info_loc.is_some());
-    let index_info =
-        load_inverted_index_info(new_fuse_table.get_operator(), index_info_loc).await?;
-    assert!(index_info.is_some());
-    let index_info = index_info.unwrap();
-    let index_version = index_info.index_version.clone();
+    let table_info = new_table.get_table_info();
+    let table_indexes = &table_info.meta.indexes;
+    let table_index = table_indexes.get(&index_name);
+    assert!(table_index.is_some());
+    let table_index = table_index.unwrap();
+    let index_version = table_index.version.clone();
 
     let segment_reader =
         MetaReaders::segment_info_reader(new_fuse_table.get_operator(), table_schema.clone());
