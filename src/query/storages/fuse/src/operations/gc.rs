@@ -30,7 +30,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
-use databend_storages_common_index::InvertedIndexDirectory;
+use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -591,7 +591,7 @@ impl FuseTable {
         let inverted_index_count = inverted_indexes_to_be_purged.len();
         if inverted_index_count > 0 {
             counter.inverted_indexes += inverted_index_count;
-            self.try_purge_location_files_and_cache::<InvertedIndexDirectory, _, _>(
+            self.try_purge_location_files_and_cache::<InvertedIndexMeta, _, _>(
                 ctx.clone(),
                 inverted_indexes_to_be_purged,
             )
