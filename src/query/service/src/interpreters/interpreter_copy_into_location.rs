@@ -15,25 +15,19 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::table::AppendMode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
 use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::StageTable;
 use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
