@@ -106,11 +106,14 @@ impl PipelineBuilder {
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
 
+        let in_cluster = !self.ctx.get_cluster().is_empty();
+
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
             enable_experimental_aggregate_hashtable,
+            in_cluster,
             max_block_size as usize,
             None,
         )?;
@@ -131,8 +134,12 @@ impl PipelineBuilder {
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config =
-            HashTableConfig::default().with_partial(true, max_threads as usize);
+        let partial_agg_config = if self.ctx.get_cluster().is_empty() {
+            HashTableConfig::default().with_partial(true, max_threads as usize)
+        } else {
+            HashTableConfig::default()
+                .cluster_with_partial(true, self.ctx.get_cluster().nodes.len())
+        };
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
@@ -164,7 +171,7 @@ impl PipelineBuilder {
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
         if self.ctx.get_cluster().is_empty() {
             let operator = DataOperator::instance().operator();
-            let location_prefix = query_spill_prefix(self.ctx.get_tenant().as_str());
+            let location_prefix = query_spill_prefix(self.ctx.get_tenant().tenant_name());
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(
                     match params.aggregate_functions.is_empty() {
@@ -213,12 +220,13 @@ impl PipelineBuilder {
         let enable_experimental_aggregate_hashtable = self
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
-
+        let in_cluster = !self.ctx.get_cluster().is_empty();
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,
             &aggregate.agg_funcs,
             enable_experimental_aggregate_hashtable,
+            in_cluster,
             max_block_size as usize,
             aggregate.limit,
         )?;
@@ -284,6 +292,7 @@ impl PipelineBuilder {
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
         enable_experimental_aggregate_hashtable: bool,
+        in_cluster: bool,
         max_block_size: usize,
         limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
@@ -325,6 +334,7 @@ impl PipelineBuilder {
             &aggs,
             &agg_args,
             enable_experimental_aggregate_hashtable,
+            in_cluster,
             max_block_size,
             limit,
         )?;

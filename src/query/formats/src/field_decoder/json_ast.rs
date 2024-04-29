@@ -63,12 +63,12 @@ impl FieldDecoder for FieldJsonAstDecoder {
 }
 
 impl FieldJsonAstDecoder {
-    pub fn create(options: &FileFormatOptionsExt, rounding_mode: bool) -> Self {
+    pub fn create(options: &FileFormatOptionsExt) -> Self {
         FieldJsonAstDecoder {
             timezone: options.timezone,
             ident_case_sensitive: options.ident_case_sensitive,
             is_select: options.is_select,
-            is_rounding_mode: rounding_mode,
+            is_rounding_mode: options.is_rounding_mode,
         }
     }
 
@@ -236,11 +236,24 @@ impl FieldJsonAstDecoder {
         match value {
             Value::String(s) => {
                 column.put_str(s.as_str());
-                column.commit_row();
-                Ok(())
             }
-            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be string")),
+            Value::Bool(v) => {
+                if *v {
+                    column.put_str("true");
+                } else {
+                    column.put_str("false");
+                }
+            }
+            Value::Number(n) => {
+                column.put_str(n.to_string().as_str());
+            }
+            Value::Null => {
+                column.put_str("null");
+            }
+            _ => return Err(ErrorCode::BadBytes("Incorrect json value, must be string")),
         }
+        column.commit_row();
+        Ok(())
     }
 
     fn read_date(&self, column: &mut Vec<i32>, value: &Value) -> Result<()> {

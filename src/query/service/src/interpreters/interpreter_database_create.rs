@@ -19,8 +19,10 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_sql::plans::CreateDatabasePlan;
@@ -47,22 +49,22 @@ impl CreateDatabaseInterpreter {
 
     async fn check_create_database_from_share(
         &self,
-        tenant: &String,
+        tenant: &Tenant,
         share_name: &ShareNameIdent,
     ) -> Result<()> {
         let share_specs = ShareEndpointManager::instance()
-            .get_inbound_shares(
-                tenant,
-                Some(share_name.tenant.clone()),
-                Some(share_name.clone()),
-            )
+            .get_inbound_shares(tenant, Some(share_name.tenant()), Some(share_name.clone()))
             .await?;
         match share_specs.first() {
             Some((_, share_spec)) => {
-                if !share_spec.tenants.contains(tenant) {
+                if !share_spec
+                    .tenants
+                    .contains(&tenant.tenant_name().to_string())
+                {
                     return Err(ErrorCode::UnknownShareAccounts(format!(
                         "share {} has not granted privilege to {}",
-                        share_name, tenant
+                        share_name.display(),
+                        tenant.tenant_name()
                     )));
                 }
                 match share_spec.db_privileges {
@@ -70,14 +72,16 @@ impl CreateDatabaseInterpreter {
                         if !db_privileges.contains(ShareGrantObjectPrivilege::Usage) {
                             return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
                                 "share {} has not granted privilege to {}",
-                                share_name, tenant
+                                share_name.display(),
+                                tenant.tenant_name()
                             )));
                         }
                     }
                     None => {
                         return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
                             "share {} has not granted privilege to {}",
-                            share_name, tenant
+                            share_name.display(),
+                            tenant.tenant_name()
                         )));
                     }
                 }
@@ -109,10 +113,11 @@ impl Interpreter for CreateDatabaseInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_database_execute");
 
         let tenant = self.plan.tenant.clone();
+
         let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let databases = catalog.list_databases(tenant.as_str()).await?;
+        let databases = catalog.list_databases(&tenant).await?;
         if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(
                 "Max databases quota exceeded {}",
@@ -121,7 +126,8 @@ impl Interpreter for CreateDatabaseInterpreter {
         };
         // if create from other tenant, check from share endpoint
         if let Some(ref share_name) = self.plan.meta.from_share {
-            self.check_create_database_from_share(&tenant.to_string(), share_name)
+            let share_name_ident = share_name.clone().to_tident(());
+            self.check_create_database_from_share(&tenant, &share_name_ident)
                 .await?;
         }
 
@@ -152,7 +158,7 @@ impl Interpreter for CreateDatabaseInterpreter {
             }
 
             save_share_spec(
-                &self.ctx.get_tenant().to_string(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_into),

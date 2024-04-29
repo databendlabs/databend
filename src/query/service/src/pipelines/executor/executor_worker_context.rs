@@ -18,6 +18,7 @@ use std::intrinsics::assume;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ThreadTracker;
@@ -67,20 +68,14 @@ impl CompletedAsyncTask {
 }
 
 pub struct ExecutorWorkerContext {
-    pub query_id: Arc<String>,
     worker_id: usize,
     task: ExecutorTask,
     workers_condvar: Arc<WorkersCondvar>,
 }
 
 impl ExecutorWorkerContext {
-    pub fn create(
-        worker_id: usize,
-        workers_condvar: Arc<WorkersCondvar>,
-        query_id: Arc<String>,
-    ) -> Self {
+    pub fn create(worker_id: usize, workers_condvar: Arc<WorkersCondvar>) -> Self {
         ExecutorWorkerContext {
-            query_id,
             worker_id,
             workers_condvar,
             task: ExecutorTask::None,
@@ -103,30 +98,49 @@ impl ExecutorWorkerContext {
         std::mem::replace(&mut self.task, ExecutorTask::None)
     }
 
+    pub fn get_task_info(&self) -> Option<(Arc<RunningGraph>, NodeIndex)> {
+        unsafe {
+            match &self.task {
+                ExecutorTask::None => None,
+                ExecutorTask::Sync(p) => Some((p.graph.clone(), p.processor.id())),
+                ExecutorTask::Async(p) => Some((p.graph.clone(), p.processor.id())),
+                ExecutorTask::AsyncCompleted(p) => Some((p.graph.clone(), p.id)),
+            }
+        }
+    }
+
     /// # Safety
     pub unsafe fn execute_task(
         &mut self,
         executor: Option<&Arc<QueriesPipelineExecutor>>,
-    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>, Box<NodeErrorType>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
-            ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
+            ExecutorTask::None => Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
+                "Execute none task.",
+            )))),
+            ExecutorTask::Sync(processor) => match self.execute_sync_task(processor) {
+                Ok(res) => Ok(res),
+                Err(cause) => Err(Box::new(NodeErrorType::SyncProcessError(cause))),
+            },
             ExecutorTask::Async(processor) => {
                 if let Some(executor) = executor {
-                    self.execute_async_task(
+                    match self.execute_async_task(
                         processor,
                         executor,
                         executor.global_tasks_queue.clone(),
-                    )
+                    ) {
+                        Ok(res) => Ok(res),
+                        Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
+                    }
                 } else {
-                    Err(ErrorCode::Internal(
+                    Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
                         "Async task should only be executed on queries executor",
-                    ))
+                    ))))
                 }
             }
             ExecutorTask::AsyncCompleted(task) => match task.res {
                 Ok(_) => Ok(Some((task.id, task.graph))),
-                Err(cause) => Err(cause),
+                Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
             },
         }
     }
@@ -142,7 +156,6 @@ impl ExecutorWorkerContext {
         let instant = Instant::now();
 
         proc.processor.process()?;
-
         let nanos = instant.elapsed().as_nanos();
         assume(nanos < 18446744073709551615_u128);
         Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
@@ -158,7 +171,7 @@ impl ExecutorWorkerContext {
         unsafe {
             let workers_condvar = self.workers_condvar.clone();
             workers_condvar.inc_active_async_worker();
-            let query_id = self.query_id.clone();
+            let query_id = proc.graph.get_query_id().clone();
             let wakeup_worker_id = self.worker_id;
             let process_future = proc.processor.async_process();
             let graph = proc.graph;

@@ -1,3 +1,5 @@
+control sortmode rowsort
+
 query T
 select 'Hello, world!'
 ----
@@ -59,7 +61,7 @@ select * from (values(1, 'one'), (2, ['two','three']))
 statement error 1065
 select * from (values(1, 'one'), (2, 'two')) t(a,b,c)
 
-query IT
+query IT rowsort
 select * from (values(1, 'one'), (2, 'two'), (3, 'three')) as t(a, b)
 ----
 1 one
@@ -70,8 +72,8 @@ query IT
 select col0, col1 from (values(1, 'one'), (null, 'two'), (3, null))
 ----
 1 one
-NULL two
 3 NULL
+NULL two
 
 query I
 select 1 from (values('a'),('b'),('c'))
@@ -93,14 +95,14 @@ from range(1,3) t(a) select t.a;
 1
 2
 
-query IT
+query IT rowsort
 select col0, col1 from (values(1, 'one'), (null, 'two'), (3 + 2, null))
 ----
 1 one
-NULL two
 5 NULL
+NULL two
 
-query IT
+query IT rowsort
 values (1, 'one'), (2, 'two'), (3, 'three')
 ----
 1 one
@@ -110,8 +112,8 @@ values (1, 'one'), (2, 'two'), (3, 'three')
 query IT
 values (1, 'one'), (2, 'two'), (3, 'three') order by col0 desc limit 2
 ----
-3 three
 2 two
+3 three
 
 statement error 1005
 select * from numbers(2) limit 0,1,dummy;
@@ -185,4 +187,16 @@ select * from t1 where a in (0, 1, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 8, 9, 9, 10, 11
 3 4
 
 statement ok
+set inlist_to_join_threshold = 1;
+
+query II
+select * from t1 where a in (1, 2) order by a;
+----
+1 2
+2 3
+
+statement ok
 drop table t1;
+
+statement ok
+unset inlist_to_join_threshold

@@ -65,7 +65,7 @@ impl SubqueryRewriter {
             if !need_cross_join {
                 return Ok(plan.clone());
             }
-            // Construct a LogicalGet plan by correlated columns.
+            // Construct a Scan plan by correlated columns.
             // Finally generate a cross join, so we finish flattening the subquery.
             let mut metadata = self.metadata.write();
             // Currently, we don't support left plan's from clause contains subquery.
@@ -136,7 +136,7 @@ impl SubqueryRewriter {
                 from_correlated_subquery: false,
                 need_hold_hash_table: false,
                 is_lateral: false,
-                original_join_type: None,
+                single_to_inner: None,
             }
             .into();
 
@@ -469,7 +469,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: false,
                     need_hold_hash_table: false,
                     is_lateral: false,
-                    original_join_type: None,
+                    single_to_inner: None,
                 }
                 .into(),
             ),

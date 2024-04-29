@@ -160,6 +160,7 @@ impl SharedSigner {
             .as_ref()
             .query
             .tenant_id
+            .tenant_name()
             .to_string();
         let req = Request::builder()
             .method(Method::POST)

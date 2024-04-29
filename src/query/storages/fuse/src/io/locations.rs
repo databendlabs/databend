@@ -30,6 +30,7 @@ use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::index::filters::BlockFilter;
+use crate::index::InvertedIndexFile;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_INFO_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
@@ -167,21 +168,36 @@ impl TableMetaLocationGenerator {
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
     }
 
-    pub fn gen_inverted_index_location(&self, id: String) -> String {
-        format!(
-            "{}/{}/{}.index",
-            &self.prefix, FUSE_TBL_INVERTED_INDEX_PREFIX, id
-        )
-    }
-
     pub fn gen_inverted_index_info_location(&self) -> String {
-        let segment_uuid = Uuid::new_v4().simple().to_string();
+        let uuid = Uuid::new_v4().simple().to_string();
         format!(
             "{}/{}/{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_INVERTED_INDEX_INFO_PREFIX,
-            segment_uuid,
+            uuid,
             IndexInfo::VERSION,
+        )
+    }
+
+    pub fn gen_inverted_index_location_from_block_location(
+        loc: &str,
+        index_name: &str,
+        index_version: &str,
+    ) -> String {
+        let splits = loc.split('/').collect::<Vec<_>>();
+        let len = splits.len();
+        let prefix = splits[..len - 2].join("/");
+        let block_name = splits[len - 1];
+        let id: String = block_name.chars().take(32).collect();
+        let short_ver: String = index_version.chars().take(7).collect();
+        format!(
+            "{}/{}/{}/{}/{}_v{}.index",
+            prefix,
+            FUSE_TBL_INVERTED_INDEX_PREFIX,
+            index_name,
+            short_ver,
+            id,
+            InvertedIndexFile::VERSION,
         )
     }
 }

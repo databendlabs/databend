@@ -19,8 +19,6 @@
 #![feature(assert_matches)]
 
 extern crate core;
-
-mod api;
 mod auth;
 mod catalogs;
 mod clusters;

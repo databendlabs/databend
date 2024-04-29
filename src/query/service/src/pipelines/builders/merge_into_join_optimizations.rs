@@ -14,27 +14,22 @@
 
 use databend_common_sql::executor::physical_plans::HashJoin;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::IndexType;
-use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_storages_fuse::operations::need_reserve_block_info;
 
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn merge_into_get_optimization_flag(&self, join: &HashJoin) -> (IndexType, bool) {
+    pub(crate) fn merge_into_get_optimization_flag(&self, join: &HashJoin) -> (bool, bool) {
         // for merge into target table as build side.
-        let (merge_into_build_table_index, merge_into_is_distributed) =
-            if let PhysicalPlan::TableScan(scan) = &*join.build {
-                let (need_block_info, is_distributed) =
-                    need_reserve_block_info(self.ctx.clone(), scan.table_index);
-                if need_block_info {
-                    (scan.table_index, is_distributed)
-                } else {
-                    (DUMMY_TABLE_INDEX, false)
-                }
-            } else {
-                (DUMMY_TABLE_INDEX, false)
-            };
-        (merge_into_build_table_index, merge_into_is_distributed)
+        match &*join.build {
+            PhysicalPlan::TableScan(scan) => match scan.table_index {
+                None | Some(databend_common_sql::DUMMY_TABLE_INDEX) => (false, false),
+                Some(table_index) => match need_reserve_block_info(self.ctx.clone(), table_index) {
+                    (true, is_distributed) => (true, is_distributed),
+                    _ => (false, false),
+                },
+            },
+            _ => (false, false),
+        }
     }
 }

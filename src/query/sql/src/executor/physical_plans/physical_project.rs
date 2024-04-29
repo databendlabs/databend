@@ -19,6 +19,7 @@ use databend_common_expression::DataSchemaRefExt;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::optimizer::ColumnSet;
+use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Project {
@@ -26,6 +27,7 @@ pub struct Project {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub projections: Vec<usize>,
+    pub ignore_result: bool,
 
     // Only used for display
     pub columns: ColumnSet,
@@ -40,5 +42,29 @@ impl Project {
             fields.push(input_schema.field(*i).clone());
         }
         Ok(DataSchemaRefExt::create(fields))
+    }
+
+    pub fn from_columns_binding(
+        plan_id: u32,
+        input: Box<PhysicalPlan>,
+        columns: Vec<ColumnBinding>,
+        ignore_result: bool,
+    ) -> Result<Project> {
+        let input_schema = input.output_schema()?;
+        let mut projections = Vec::with_capacity(columns.len());
+
+        for column_binding in &columns {
+            let index = column_binding.index;
+            projections.push(input_schema.index_of(index.to_string().as_str())?);
+        }
+
+        Ok(Project {
+            plan_id,
+            input,
+            projections,
+            ignore_result,
+            columns: Default::default(),
+            stat_info: None,
+        })
     }
 }

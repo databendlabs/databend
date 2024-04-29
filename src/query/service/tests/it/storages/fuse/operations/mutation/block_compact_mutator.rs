@@ -16,13 +16,15 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
+use databend_common_storages_fuse::operations::CompactBlockPartInfo;
 use databend_common_storages_fuse::operations::CompactOptions;
-use databend_common_storages_fuse::operations::CompactPartInfo;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_query::interpreters::OptimizeTableInterpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -59,7 +61,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+        .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -76,7 +78,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+        .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -107,7 +109,9 @@ async fn test_compact() -> Result<()> {
 async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<bool> {
     let settings = ctx.get_settings();
     let mut pipeline = databend_common_pipeline_core::Pipeline::create();
-    let res = table.compact_blocks(ctx.clone(), None).await?;
+    let res = table
+        .compact_blocks(ctx.clone(), CompactionLimits::default())
+        .await?;
 
     let table_info = table.get_table_info().clone();
     let catalog_info = ctx.get_catalog("default").await?.info();
@@ -128,8 +132,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
     if !pipeline.is_empty() {
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        let query_id = ctx.get_id();
-        let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         executor.execute()?;
@@ -206,6 +209,7 @@ async fn test_safety() -> Result<()> {
         let id = Uuid::new_v4();
         let snapshot = TableSnapshot::new(
             id,
+            None,
             &None,
             None,
             schema.as_ref().clone(),
@@ -221,6 +225,7 @@ async fn test_safety() -> Result<()> {
             base_snapshot: Arc::new(snapshot),
             block_per_seg: 10,
             num_segment_limit: Some(limit),
+            num_block_limit: None,
         };
 
         eprintln!("running target select");
@@ -236,15 +241,15 @@ async fn test_safety() -> Result<()> {
             eprintln!("no target select");
             continue;
         }
-        assert!(!selections.is_lazy);
+        assert!(selections.partitions_type() != PartInfoType::LazyLevel);
 
         let mut actual_blocks_number = 0;
         let mut compact_segment_indices = HashSet::new();
         let mut actual_block_ids = HashSet::new();
         for part in selections.partitions.into_iter() {
-            let part = CompactPartInfo::from_part(&part)?;
+            let part = CompactBlockPartInfo::from_part(&part)?;
             match part {
-                CompactPartInfo::CompactExtraInfo(extra) => {
+                CompactBlockPartInfo::CompactExtraInfo(extra) => {
                     compact_segment_indices.insert(extra.segment_index);
                     compact_segment_indices.extend(extra.removed_segment_indexes.iter());
                     actual_blocks_number += extra.unchanged_blocks.len();
@@ -252,7 +257,7 @@ async fn test_safety() -> Result<()> {
                         actual_block_ids.insert(b.1.location.clone());
                     }
                 }
-                CompactPartInfo::CompactTaskInfo(task) => {
+                CompactBlockPartInfo::CompactTaskInfo(task) => {
                     compact_segment_indices.insert(task.index.segment_idx);
                     actual_blocks_number += task.blocks.len();
                     for b in &task.blocks {

@@ -89,6 +89,7 @@ impl FieldEncoderCSV {
                     inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
                     binary_format: params.binary_format,
+                    geometry_format: params.geometry_format,
                 },
                 quote_char: 0, // not used
             },
@@ -110,6 +111,7 @@ impl FieldEncoderCSV {
                     inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
                     binary_format: Default::default(),
+                    geometry_format: Default::default(),
                 },
                 quote_char: 0, // not used
             },

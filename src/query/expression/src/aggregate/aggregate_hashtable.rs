@@ -91,6 +91,35 @@ impl AggregateHashTable {
         }
     }
 
+    pub fn new_directly(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+        config: HashTableConfig,
+        capacity: usize,
+        arena: Arc<Bump>,
+        need_init_entry: bool,
+    ) -> Self {
+        let entries = if need_init_entry {
+            vec![0u64; capacity]
+        } else {
+            vec![]
+        };
+        Self {
+            entries,
+            count: 0,
+            direct_append: !need_init_entry,
+            current_radix_bits: config.initial_radix_bits,
+            payload: PartitionedPayload::new(
+                group_types,
+                aggrs,
+                1 << config.initial_radix_bits,
+                vec![arena],
+            ),
+            capacity,
+            config,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.payload.len()
     }
@@ -191,9 +220,11 @@ impl AggregateHashTable {
             }
         }
 
-        if self.config.partial_agg && self.capacity >= self.config.max_partial_capacity {
+        if self.config.partial_agg {
             // check size
-            if self.count + BATCH_ADD_SIZE > self.resize_threshold() {
+            if self.count + BATCH_ADD_SIZE > self.resize_threshold()
+                && self.capacity >= self.config.max_partial_capacity
+            {
                 self.clear_ht();
                 self.reset_count();
             }
@@ -272,6 +303,7 @@ impl AggregateHashTable {
             // 2. append new_group_count to payload
             if new_entry_count != 0 {
                 new_group_count += new_entry_count;
+
                 self.payload
                     .append_rows(state, new_entry_count, group_columns);
 
@@ -535,6 +567,7 @@ impl AggregateHashTable {
     }
 
     pub fn clear_ht(&mut self) {
+        self.payload.mark_min_cardinality();
         self.entries.fill(0);
     }
 

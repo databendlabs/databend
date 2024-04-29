@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
@@ -68,6 +69,7 @@ impl Planner {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
+        let start = Instant::now();
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
@@ -102,7 +104,18 @@ impl Planner {
         let first_token = tokenizer
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind));
-        let is_insert_stmt = matches!(first_token, Some(TokenKind::INSERT));
+        let is_insert_stmt = matches!(first_token, Some(TokenKind::INSERT)) && {
+            let mut tokenizer = Tokenizer::new(&final_sql);
+            tokenizer.next_chunk::<3>().is_ok_and(|first_three_tokens| {
+                matches!(first_token, Some(TokenKind::INSERT))
+                    && !first_three_tokens.iter().any(|token| {
+                        matches!(
+                            token.as_ref().map(|t| t.kind),
+                            Ok(TokenKind::ALL) | Ok(TokenKind::FIRST)
+                        )
+                    })
+            })
+        };
         let is_replace_stmt = matches!(first_token, Some(TokenKind::REPLACE));
         let is_insert_or_replace_stmt = is_insert_stmt || is_replace_stmt;
         let mut tokens: Vec<Token> = if is_insert_or_replace_stmt {
@@ -134,13 +147,7 @@ impl Planner {
                     return Err(ErrorCode::SyntaxException("convert prql to sql failed."));
                 }
 
-                if matches!(stmt, Statement::CopyIntoLocation(_)) {
-                    // Indicate binder there is no need to collect column statistics for the binding table.
-                    self.ctx
-                        .attach_query_str(QueryKind::CopyIntoTable, String::new());
-                }
-
-                self.replace_stmt(&mut stmt, sql_dialect);
+                self.replace_stmt(&mut stmt);
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -151,17 +158,25 @@ impl Planner {
                     name_resolution_ctx,
                     metadata.clone(),
                 );
+
+                // Indicate binder there is no need to collect column statistics for the binding table.
+                self.ctx
+                    .attach_query_str(get_query_kind(&stmt), stmt.to_mask_sql());
                 let plan = binder.bind(&stmt).await?;
+                // attach again to avoid the query kind is overwritten by the subquery
+                self.ctx
+                    .attach_query_str(get_query_kind(&stmt), stmt.to_mask_sql());
 
                 // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
                 let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
                     .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
-                    .with_enable_join_reorder(unsafe {
-                        !self.ctx.get_settings().get_disable_join_reorder()?
-                    })
-                    .with_enable_dphyp(self.ctx.get_settings().get_enable_dphyp()?);
+                    .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
+                    .with_enable_dphyp(settings.get_enable_dphyp()?)
+                    .with_enable_merge_into_join_reorder(
+                        !settings.get_disable_merge_into_join_reorder()?,
+                    );
 
-                let optimized_plan = optimize(opt_ctx, plan)?;
+                let optimized_plan = optimize(opt_ctx, plan).await?;
                 Ok((optimized_plan, PlanExtras {
                     metadata,
                     format,
@@ -205,6 +220,7 @@ impl Planner {
                     tokens.extend(iter);
                 };
             } else {
+                info!("logical plan built, time used: {:?}", start.elapsed());
                 return res;
             }
         }
@@ -220,16 +236,32 @@ impl Planner {
             if query.limit.is_empty() {
                 query.limit = vec![Expr::Literal {
                     span: None,
-                    lit: Literal::UInt64(max_rows),
+                    value: Literal::UInt64(max_rows),
                 }];
             }
         }
     }
 
-    fn replace_stmt(&self, stmt: &mut Statement, sql_dialect: Dialect) {
+    fn replace_stmt(&self, stmt: &mut Statement) {
         stmt.drive_mut(&mut DistinctToGroupBy::default());
-        stmt.drive_mut(&mut AggregateRewriter { sql_dialect });
+        stmt.drive_mut(&mut AggregateRewriter);
 
         self.add_max_rows_limit(stmt);
+    }
+}
+
+pub fn get_query_kind(stmt: &Statement) -> QueryKind {
+    match stmt {
+        Statement::Query { .. } => QueryKind::Query,
+        Statement::CopyIntoTable(_) => QueryKind::CopyIntoTable,
+        Statement::CopyIntoLocation(_) => QueryKind::CopyIntoLocation,
+        Statement::Explain { .. } => QueryKind::Explain,
+        Statement::Insert(_) => QueryKind::Insert,
+        Statement::Replace(_)
+        | Statement::Delete(_)
+        | Statement::MergeInto(_)
+        | Statement::OptimizeTable(_)
+        | Statement::Update(_) => QueryKind::Update,
+        _ => QueryKind::Other,
     }
 }

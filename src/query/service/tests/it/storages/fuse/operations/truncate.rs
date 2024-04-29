@@ -17,13 +17,17 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
+use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_truncate() -> databend_common_exception::Result<()> {
+async fn test_fuse_table_truncate() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -34,7 +38,7 @@ async fn test_fuse_table_truncate() -> databend_common_exception::Result<()> {
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.seq;
-    let r = table.truncate(ctx.clone()).await;
+    let r = truncate_table(ctx.clone(), table.clone()).await;
     let table = fixture.latest_default_table().await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.seq);
@@ -66,7 +70,7 @@ async fn test_fuse_table_truncate() -> databend_common_exception::Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block));
 
     // truncate
-    let r = table.truncate(ctx.clone()).await;
+    let r = truncate_table(ctx.clone(), table.clone()).await;
     assert!(r.is_ok());
 
     // get the latest tbl
@@ -84,8 +88,7 @@ async fn test_fuse_table_truncate() -> databend_common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_truncate_appending_concurrently() -> databend_common_exception::Result<()>
-{
+async fn test_fuse_table_truncate_appending_concurrently() -> Result<()> {
     // the test scenario is as follows:
     // ┌──────┐
     // │  s0  │
@@ -149,7 +152,7 @@ async fn test_fuse_table_truncate_appending_concurrently() -> databend_common_ex
     let s2_table_to_appended = fixture.latest_default_table().await?;
 
     // 4. perform `truncate` operation on s1
-    let r = s1_table_to_be_truncated.truncate(ctx.clone()).await;
+    let r = truncate_table(ctx, s1_table_to_be_truncated).await;
     // version mismatched, and `truncate purge` should result in error (but nothing should have been removed)
     assert!(r.is_err());
 
@@ -177,5 +180,19 @@ async fn test_fuse_table_truncate_appending_concurrently() -> databend_common_ex
         num_blocks * rows_per_block * 3
     );
 
+    Ok(())
+}
+
+async fn truncate_table(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<()> {
+    let mut pipeline = databend_common_pipeline_core::Pipeline::create();
+    table.truncate(ctx.clone(), &mut pipeline).await?;
+    if !pipeline.is_empty() {
+        pipeline.set_max_threads(1);
+        let mut executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+        executor_settings.enable_queries_executor = false;
+        let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+        ctx.set_executor(executor.get_inner())?;
+        executor.execute()?;
+    }
     Ok(())
 }

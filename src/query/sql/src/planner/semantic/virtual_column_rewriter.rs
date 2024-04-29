@@ -93,10 +93,7 @@ impl VirtualColumnRewriter {
             }
 
             let table_id = table.get_id();
-            let req = ListVirtualColumnsReq {
-                tenant: self.ctx.get_tenant().to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListVirtualColumnsReq::new(&self.ctx.get_tenant(), Some(table_id));
             let catalog = self.ctx.get_catalog(table_entry.catalog()).await?;
 
             if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {

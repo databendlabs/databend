@@ -159,9 +159,9 @@ pub struct Join {
     // hash table to get not match data from source.
     pub need_hold_hash_table: bool,
     pub is_lateral: bool,
-    // Original join type. Left/Right single join may be convert to inner join
-    // Record the original join type and do some special processing during runtime.
-    pub original_join_type: Option<JoinType>,
+    // When left/right single join converted to inner join, record the original join type
+    // and do some special processing during runtime.
+    pub single_to_inner: Option<JoinType>,
 }
 
 impl Default for Join {
@@ -175,7 +175,7 @@ impl Default for Join {
             from_correlated_subquery: Default::default(),
             need_hold_hash_table: false,
             is_lateral: false,
-            original_join_type: None,
+            single_to_inner: None,
         }
     }
 }
@@ -619,15 +619,17 @@ impl Operator for Join {
             ]);
         }
 
-        // (Serial, Serial)
-        children_required.push(vec![
-            RequiredProperty {
-                distribution: Distribution::Serial,
-            },
-            RequiredProperty {
-                distribution: Distribution::Serial,
-            },
-        ]);
+        if children_required.is_empty() {
+            // (Serial, Serial)
+            children_required.push(vec![
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+                RequiredProperty {
+                    distribution: Distribution::Serial,
+                },
+            ]);
+        }
 
         Ok(children_required)
     }

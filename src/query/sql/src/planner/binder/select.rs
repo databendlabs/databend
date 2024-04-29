@@ -45,6 +45,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -55,10 +57,8 @@ use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::ColumnBindingBuilder;
-use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
-use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -308,8 +308,15 @@ impl Binder {
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
         s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
 
+        // check inverted index license
+        if !from_context.inverted_index_map.is_empty() {
+            let license_manager = get_license_manager();
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        }
         // add internal column binding into expr
-        s_expr = from_context.add_internal_column_into_expr(s_expr);
+        s_expr = from_context.add_internal_column_into_expr(s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -355,34 +362,11 @@ impl Binder {
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
-            for (idx, cte) in with.ctes.iter().enumerate() {
-                let table_name =
-                    normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
-                if bind_context.cte_map_ref.contains_key(&table_name) {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "duplicate cte {table_name}"
-                    )));
-                }
-                let cte_info = CteInfo {
-                    columns_alias: cte
-                        .alias
-                        .columns
-                        .iter()
-                        .map(|c| normalize_identifier(c, &self.name_resolution_ctx).name)
-                        .collect(),
-                    query: *cte.query.clone(),
-                    materialized: cte.materialized,
-                    cte_idx: idx,
-                    used_count: 0,
-                    stat_info: None,
-                    columns: vec![],
-                };
-                self.ctes_map.insert(table_name.clone(), cte_info.clone());
-                bind_context.cte_map_ref.insert(table_name, cte_info);
-            }
+            self.add_cte(with, bind_context)?;
         }
 
-        let (limit, offset) = if !query.limit.is_empty() {
+        let limit_empty = query.limit.is_empty();
+        let (mut limit, offset) = if !limit_empty {
             if query.limit.len() == 1 {
                 Self::analyze_limit(Some(&query.limit[0]), &query.offset)?
             } else {
@@ -394,8 +378,26 @@ impl Binder {
             (None, 0)
         };
 
-        let (mut s_expr, bind_context) = match query.body {
-            SetExpr::Select(_) | SetExpr::Query(_) => {
+        let mut contain_top_n = false;
+        let (mut s_expr, bind_context) = match &query.body {
+            SetExpr::Select(stmt) => {
+                if !limit_empty && stmt.top_n.is_some() {
+                    return Err(ErrorCode::SemanticError(
+                        "Duplicate LIMIT: TopN and Limit cannot be used together",
+                    ));
+                } else if let Some(n) = stmt.top_n {
+                    contain_top_n = true;
+                    limit = Some(n as usize);
+                }
+                self.bind_set_expr(
+                    bind_context,
+                    &query.body,
+                    &query.order_by,
+                    limit.unwrap_or_default(),
+                )
+                .await?
+            }
+            SetExpr::Query(_) => {
                 self.bind_set_expr(
                     bind_context,
                     &query.body,
@@ -417,7 +419,7 @@ impl Binder {
             }
         };
 
-        if !query.limit.is_empty() || query.offset.is_some() {
+        if !query.limit.is_empty() || contain_top_n || query.offset.is_some() {
             s_expr = Self::bind_limit(s_expr, limit, offset);
         }
 
@@ -836,15 +838,20 @@ impl Binder {
         // so if the inner query not match the lazy materialized but outer query matched, we can prevent
         // the cols that inner query required not be pruned when analyze outer query.
         {
+            let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
+            let mut finder = Finder::new(&f);
             let mut non_lazy_cols = HashSet::new();
+
             for s in select_list.items.iter() {
                 // The TableScan's schema uses name_mapping to prune columns,
                 // all lazy columns will be skipped to add to name_mapping in TableScan.
                 // When build physical window plan, if window's order by or partition by provided,
                 // we need create a `EvalScalar` for physical window inputs, so we should keep the window
                 // used cols not be pruned.
-                if let ScalarExpr::WindowFunction(_) = &s.scalar {
-                    non_lazy_cols.extend(s.scalar.used_columns())
+                finder.reset_finder();
+                finder.visit(&s.scalar)?;
+                for scalar in finder.scalars() {
+                    non_lazy_cols.extend(scalar.used_columns())
                 }
             }
             metadata.add_non_lazy_columns(non_lazy_cols);
@@ -964,6 +971,7 @@ impl<'a> SelectRewriter<'a> {
             a.eq_ignore_ascii_case(b)
         }
     }
+
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
@@ -971,14 +979,6 @@ impl<'a> SelectRewriter<'a> {
                 ..
             } => Ok((name, args)),
             _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
-        }
-    }
-
-    fn ident_from_string(s: &str) -> Identifier {
-        Identifier {
-            name: s.to_string(),
-            quote: None,
-            span: None,
         }
     }
 
@@ -1026,7 +1026,7 @@ impl<'a> SelectRewriter<'a> {
                 .into_iter()
                 .map(|expr| Expr::Literal {
                     span: None,
-                    lit: Literal::String(expr.name),
+                    value: Literal::String(expr.name),
                 })
                 .collect(),
         }
@@ -1052,7 +1052,7 @@ impl<'a> SelectRewriter<'a> {
     // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
     fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
         match expr {
-            Expr::Literal { lit, .. } => match lit {
+            Expr::Literal { value, .. } => match value {
                 Literal::String(v) => Some(v.clone()),
                 _ => Some(expr.to_string()),
             },
@@ -1107,7 +1107,7 @@ impl<'a> SelectRewriter<'a> {
                     })
                     .map(|col| Expr::Literal {
                         span: Span::default(),
-                        lit: Literal::UInt64(col.index as u64 + 1),
+                        value: Literal::UInt64(col.index as u64 + 1),
                     })
                     .collect(),
             )
@@ -1117,7 +1117,7 @@ impl<'a> SelectRewriter<'a> {
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             let mut exclude_columns: Vec<_> = aggregate_columns
                 .iter()
-                .map(|c| Identifier::from_name(c.column.name()))
+                .map(|c| Identifier::from_name(stmt.span, c.column.name()))
                 .collect();
             exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
@@ -1137,7 +1137,7 @@ impl<'a> SelectRewriter<'a> {
             new_select_list.push(Self::target_func_from_name_args(
                 new_aggregate_name.clone(),
                 args,
-                Some(Self::ident_from_string(&alias)),
+                Some(Identifier::from_name(stmt.span, &alias)),
             ));
         }
 
@@ -1164,14 +1164,14 @@ impl<'a> SelectRewriter<'a> {
             star.exclude(unpivot.names.clone());
         };
         new_select_list.push(Self::target_func_from_name_args(
-            Self::ident_from_string("unnest"),
+            Identifier::from_name(stmt.span, "unnest"),
             vec![Self::expr_literal_array_from_vec_ident(
                 unpivot.names.clone(),
             )],
             Some(unpivot.column_name.clone()),
         ));
         new_select_list.push(Self::target_func_from_name_args(
-            Self::ident_from_string("unnest"),
+            Identifier::from_name(stmt.span, "unnest"),
             vec![Self::expr_column_ref_array_from_vec_ident(
                 unpivot.names.clone(),
             )],

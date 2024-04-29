@@ -20,6 +20,7 @@ databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-grpc = { path = "../../common/grpc" }
 databend-common-management = { path = "../management" }
+databend-common-meta-api = { path = "../../meta/api" }
 databend-common-meta-app = { path = "../../meta/app" }
 databend-common-meta-kvapi = { path = "../../meta/kvapi" }
 databend-common-meta-store = { path = "../../meta/store" }

@@ -16,6 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
@@ -26,49 +27,55 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_connection(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         connection: UserDefinedConnection,
         create_option: &CreateOption,
     ) -> Result<()> {
-        let connection_api_provider = self.get_connection_api_client(tenant)?;
+        let connection_api_provider = self.connection_api(tenant);
         connection_api_provider
-            .add_connection(connection, create_option)
-            .await
+            .add(connection, create_option)
+            .await?;
+        Ok(())
     }
 
     // Get one connection from by tenant.
     #[async_backtrace::framed]
     pub async fn get_connection(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         connection_name: &str,
     ) -> Result<UserDefinedConnection> {
-        let connection_api_provider = self.get_connection_api_client(tenant)?;
-        let get_connection =
-            connection_api_provider.get_connection(connection_name, MatchSeq::GE(0));
+        let connection_api_provider = self.connection_api(tenant);
+        let get_connection = connection_api_provider.get(connection_name, MatchSeq::GE(0));
         Ok(get_connection.await?.data)
     }
 
     // Get the tenant all connection list.
     #[async_backtrace::framed]
-    pub async fn get_connections(&self, tenant: &str) -> Result<Vec<UserDefinedConnection>> {
-        let connection_api_provider = self.get_connection_api_client(tenant)?;
-        let get_connections = connection_api_provider.get_connections();
+    pub async fn get_connections(&self, tenant: &Tenant) -> Result<Vec<UserDefinedConnection>> {
+        let connection_api_provider = self.connection_api(tenant);
+        let get_connections = connection_api_provider.list();
 
         match get_connections.await {
-            Err(e) => Err(e.add_message_back(" (while get connection)")),
+            Err(e) => Err(ErrorCode::from(e).add_message_back(" (while get connection)")),
             Ok(seq_connections_info) => Ok(seq_connections_info),
         }
     }
 
     // Drop a connection by name.
     #[async_backtrace::framed]
-    pub async fn drop_connection(&self, tenant: &str, name: &str, if_exists: bool) -> Result<()> {
-        let connection_api_provider = self.get_connection_api_client(tenant)?;
-        let drop_connection = connection_api_provider.drop_connection(name, MatchSeq::GE(1));
+    pub async fn drop_connection(
+        &self,
+        tenant: &Tenant,
+        name: &str,
+        if_exists: bool,
+    ) -> Result<()> {
+        let connection_api_provider = self.connection_api(tenant);
+        let drop_connection = connection_api_provider.remove(name, MatchSeq::GE(1));
         match drop_connection.await {
             Ok(res) => Ok(res),
             Err(e) => {
+                let e = ErrorCode::from(e);
                 if if_exists && e.code() == ErrorCode::UNKNOWN_CONNECTION {
                     Ok(())
                 } else {

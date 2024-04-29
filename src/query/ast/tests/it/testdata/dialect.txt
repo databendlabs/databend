@@ -1,0 +1,1155 @@
+---------- Input ----------
+'a'
+---------- Output ---------
+'a'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..3,
+    ),
+    value: String(
+        "a",
+    ),
+}
+
+
+---------- Input ----------
+"a"
+---------- Output ---------
+"a"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..3,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..3,
+                ),
+                name: "a",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+`a`
+---------- Output ---------
+`a`
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..3,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..3,
+                ),
+                name: "a",
+                quote: Some(
+                    '`',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+'a''b'
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+'a""b'
+---------- Output ---------
+'a""b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a\"\"b",
+    ),
+}
+
+
+---------- Input ----------
+'a\'b'
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+'a"b'
+---------- Output ---------
+'a"b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a\"b",
+    ),
+}
+
+
+---------- Input ----------
+'a`b'
+---------- Output ---------
+'a`b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a`b",
+    ),
+}
+
+
+---------- Input ----------
+"a''b"
+---------- Output ---------
+"a''b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..6,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..6,
+                ),
+                name: "a''b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+"a""b"
+---------- Output ---------
+"a""b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..6,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..6,
+                ),
+                name: "a\"b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+"a'b"
+---------- Output ---------
+"a'b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..5,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..5,
+                ),
+                name: "a'b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+"a\"b"
+---------- Output ---------
+"a\""b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..6,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..6,
+                ),
+                name: "a\\\"b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+"a`b"
+---------- Output ---------
+"a`b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..5,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..5,
+                ),
+                name: "a`b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+'a'
+---------- Output ---------
+'a'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..3,
+    ),
+    value: String(
+        "a",
+    ),
+}
+
+
+---------- Input ----------
+"a"
+---------- Output ---------
+'a'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..3,
+    ),
+    value: String(
+        "a",
+    ),
+}
+
+
+---------- Input ----------
+`a`
+---------- Output ---------
+`a`
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..3,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..3,
+                ),
+                name: "a",
+                quote: Some(
+                    '`',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+'a''b'
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+'a""b'
+---------- Output ---------
+'a""b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a\"\"b",
+    ),
+}
+
+
+---------- Input ----------
+'a\'b'
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+'a"b'
+---------- Output ---------
+'a"b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a\"b",
+    ),
+}
+
+
+---------- Input ----------
+'a`b'
+---------- Output ---------
+'a`b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a`b",
+    ),
+}
+
+
+---------- Input ----------
+"a''b"
+---------- Output ---------
+'a\'\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a''b",
+    ),
+}
+
+
+---------- Input ----------
+"a""b"
+---------- Output ---------
+'a"b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a\"b",
+    ),
+}
+
+
+---------- Input ----------
+"a'b"
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+"a\"b"
+---------- Output ---------
+'a"b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a\"b",
+    ),
+}
+
+
+---------- Input ----------
+"a`b"
+---------- Output ---------
+'a`b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a`b",
+    ),
+}
+
+
+---------- Input ----------
+a
+---------- Output ---------
+a
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..1,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..1,
+                ),
+                name: "a",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+a.add(b)
+---------- Output ---------
+add(a, b)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        1..8,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                2..5,
+            ),
+            name: "add",
+            quote: None,
+            is_hole: false,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    0..1,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                0..1,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+            ColumnRef {
+                span: Some(
+                    6..7,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                6..7,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+a.sub(b).add(e)
+---------- Output ---------
+add(sub(a, b), e)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        8..15,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                9..12,
+            ),
+            name: "add",
+            quote: None,
+            is_hole: false,
+        },
+        args: [
+            FunctionCall {
+                span: Some(
+                    1..8,
+                ),
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier {
+                        span: Some(
+                            2..5,
+                        ),
+                        name: "sub",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    args: [
+                        ColumnRef {
+                            span: Some(
+                                0..1,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            0..1,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                ),
+                            },
+                        },
+                        ColumnRef {
+                            span: Some(
+                                6..7,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            6..7,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                ),
+                            },
+                        },
+                    ],
+                    params: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+            ColumnRef {
+                span: Some(
+                    13..14,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                13..14,
+                            ),
+                            name: "e",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+a.sub(b).add(e)
+---------- Output ---------
+add(sub(a, b), e)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        8..15,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                9..12,
+            ),
+            name: "add",
+            quote: None,
+            is_hole: false,
+        },
+        args: [
+            FunctionCall {
+                span: Some(
+                    1..8,
+                ),
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier {
+                        span: Some(
+                            2..5,
+                        ),
+                        name: "sub",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    args: [
+                        ColumnRef {
+                            span: Some(
+                                0..1,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            0..1,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                ),
+                            },
+                        },
+                        ColumnRef {
+                            span: Some(
+                                6..7,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            6..7,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                ),
+                            },
+                        },
+                    ],
+                    params: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+            ColumnRef {
+                span: Some(
+                    13..14,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                13..14,
+                            ),
+                            name: "e",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+1 + {'k1': 4}.k1
+---------- Output ---------
+1 + {'k1':4}:k1
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        2..3,
+    ),
+    op: Plus,
+    left: Literal {
+        span: Some(
+            0..1,
+        ),
+        value: UInt64(
+            1,
+        ),
+    },
+    right: MapAccess {
+        span: Some(
+            13..16,
+        ),
+        expr: Map {
+            span: Some(
+                4..13,
+            ),
+            kvs: [
+                (
+                    String(
+                        "k1",
+                    ),
+                    Literal {
+                        span: Some(
+                            11..12,
+                        ),
+                        value: UInt64(
+                            4,
+                        ),
+                    },
+                ),
+            ],
+        },
+        accessor: Colon {
+            key: Identifier {
+                span: Some(
+                    14..16,
+                ),
+                name: "k1",
+                quote: None,
+                is_hole: false,
+            },
+        },
+    },
+}
+
+
+---------- Input ----------
+'3'.plus(4)
+---------- Output ---------
+plus('3', 4)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        3..11,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                4..8,
+            ),
+            name: "plus",
+            quote: None,
+            is_hole: false,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    0..3,
+                ),
+                value: String(
+                    "3",
+                ),
+            },
+            Literal {
+                span: Some(
+                    9..10,
+                ),
+                value: UInt64(
+                    4,
+                ),
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+(3).add({'k1': 4 }.k1)
+---------- Output ---------
+add(3, {'k1':4}:k1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        3..22,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                4..7,
+            ),
+            name: "add",
+            quote: None,
+            is_hole: false,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    1..2,
+                ),
+                value: UInt64(
+                    3,
+                ),
+            },
+            MapAccess {
+                span: Some(
+                    18..21,
+                ),
+                expr: Map {
+                    span: Some(
+                        8..18,
+                    ),
+                    kvs: [
+                        (
+                            String(
+                                "k1",
+                            ),
+                            Literal {
+                                span: Some(
+                                    15..16,
+                                ),
+                                value: UInt64(
+                                    4,
+                                ),
+                            },
+                        ),
+                    ],
+                },
+                accessor: Colon {
+                    key: Identifier {
+                        span: Some(
+                            19..21,
+                        ),
+                        name: "k1",
+                        quote: None,
+                        is_hole: false,
+                    },
+                },
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]
+---------- Output ---------
+array_map(array_filter([1, 2, 3], x -> x % 2 = 0), x -> x * 100)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..41,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..41,
+            ),
+            name: "array_map",
+            quote: None,
+            is_hole: false,
+        },
+        args: [
+            FunctionCall {
+                span: Some(
+                    0..41,
+                ),
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier {
+                        span: Some(
+                            0..41,
+                        ),
+                        name: "array_filter",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    args: [
+                        Array {
+                            span: Some(
+                                19..26,
+                            ),
+                            exprs: [
+                                Literal {
+                                    span: Some(
+                                        20..21,
+                                    ),
+                                    value: UInt64(
+                                        1,
+                                    ),
+                                },
+                                Literal {
+                                    span: Some(
+                                        22..23,
+                                    ),
+                                    value: UInt64(
+                                        2,
+                                    ),
+                                },
+                                Literal {
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                    value: UInt64(
+                                        3,
+                                    ),
+                                },
+                            ],
+                        },
+                    ],
+                    params: [],
+                    window: None,
+                    lambda: Some(
+                        Lambda {
+                            params: [
+                                Identifier {
+                                    span: Some(
+                                        14..15,
+                                    ),
+                                    name: "x",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ],
+                            expr: BinaryOp {
+                                span: Some(
+                                    36..37,
+                                ),
+                                op: Eq,
+                                left: BinaryOp {
+                                    span: Some(
+                                        32..33,
+                                    ),
+                                    op: Modulo,
+                                    left: ColumnRef {
+                                        span: Some(
+                                            30..31,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        30..31,
+                                                    ),
+                                                    name: "x",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                    right: Literal {
+                                        span: Some(
+                                            34..35,
+                                        ),
+                                        value: UInt64(
+                                            2,
+                                        ),
+                                    },
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        38..39,
+                                    ),
+                                    value: UInt64(
+                                        0,
+                                    ),
+                                },
+                            },
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            14..15,
+                        ),
+                        name: "x",
+                        quote: None,
+                        is_hole: false,
+                    },
+                ],
+                expr: BinaryOp {
+                    span: Some(
+                        4..5,
+                    ),
+                    op: Multiply,
+                    left: ColumnRef {
+                        span: Some(
+                            2..3,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        2..3,
+                                    ),
+                                    name: "x",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            6..9,
+                        ),
+                        value: UInt64(
+                            100,
+                        ),
+                    },
+                },
+            },
+        ),
+    },
+}
+
+

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use databend_common_ast::ast::CreateIndexStmt;
 use databend_common_ast::ast::CreateInvertedIndexStmt;
@@ -36,8 +36,6 @@ use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -116,7 +114,7 @@ impl Binder {
                 {
                     let indexes = self
                         .resolve_table_indexes(
-                            self.ctx.get_tenant().as_str(),
+                            &self.ctx.get_tenant(),
                             catalog.as_str(),
                             table.get_id(),
                         )
@@ -263,15 +261,7 @@ impl Binder {
             .get_catalog(&self.ctx.get_current_catalog())
             .await?;
 
-        let tenant_name = self.ctx.get_tenant();
-
-        let non_empty = NonEmptyString::new(tenant_name.to_string()).map_err(|_| {
-            ErrorCode::TenantIsEmpty(
-                "Tenant is empty(when Binder::build_refresh_index()".to_string(),
-            )
-        })?;
-
-        let tenant = Tenant::new_nonempty(non_empty);
+        let tenant = self.ctx.get_tenant();
 
         let get_index_req = GetIndexReq {
             name_ident: IndexNameIdent::new(tenant, &index_name),
@@ -319,7 +309,7 @@ impl Binder {
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
             let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
-            Ok(optimize(opt_ctx, select_plan)?)
+            Ok(optimize(opt_ctx, select_plan).await?)
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };
@@ -356,11 +346,7 @@ impl Binder {
         if let SetExpr::Select(stmt) = &mut query.body {
             if let TableReference::Table { database, .. } = &mut stmt.from[0] {
                 if database.is_none() {
-                    *database = Some(Identifier {
-                        name: name.to_string(),
-                        quote: None,
-                        span: None,
-                    });
+                    *database = Some(Identifier::from_name(query.span, name));
                 }
             }
         }
@@ -380,6 +366,7 @@ impl Binder {
             table,
             columns,
             sync_creation,
+            index_options,
         } = stmt;
 
         let (catalog, database, table) =
@@ -393,25 +380,25 @@ impl Binder {
             )));
         }
         let table_schema = table.schema();
-        let mut column_set = HashSet::with_capacity(columns.len());
-        let mut column_ids = Vec::with_capacity(columns.len());
+        let mut column_set = BTreeSet::new();
         for column in columns {
             match table_schema.field_with_name(&column.name) {
                 Ok(field) => {
-                    if field.data_type.remove_nullable() != TableDataType::String {
+                    if field.data_type.remove_nullable() != TableDataType::String
+                        && field.data_type.remove_nullable() != TableDataType::Variant
+                    {
                         return Err(ErrorCode::UnsupportedIndex(format!(
-                            "Inverted index currently only support String type, but the type of column {} is {}",
+                            "Inverted index currently only support String and variant type, but the type of column {} is {}",
                             column, field.data_type
                         )));
                     }
-                    if column_set.contains(&column.name) {
+                    if column_set.contains(&field.column_id) {
                         return Err(ErrorCode::UnsupportedIndex(format!(
                             "Inverted index column must be unique, but column {} is duplicate",
                             column.name
                         )));
                     }
-                    column_set.insert(column.name.clone());
-                    column_ids.push(field.column_id);
+                    column_set.insert(field.column_id);
                 }
                 Err(_) => {
                     return Err(ErrorCode::UnsupportedIndex(format!(
@@ -421,6 +408,8 @@ impl Binder {
                 }
             }
         }
+        let column_ids = Vec::from_iter(column_set.into_iter());
+
         let table_id = table.get_id();
         let index_name = self.normalize_object_identifier(index_name);
 
@@ -431,6 +420,7 @@ impl Binder {
             column_ids,
             table_id,
             sync_creation: *sync_creation,
+            index_options: index_options.clone(),
         };
         Ok(Plan::CreateTableIndex(Box::new(plan)))
     }
@@ -494,6 +484,8 @@ impl Binder {
             database,
             table,
             index_name,
+            segment_locs: None,
+            need_lock: true,
         };
         Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }

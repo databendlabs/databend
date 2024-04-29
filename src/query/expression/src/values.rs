@@ -770,6 +770,10 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             (ScalarRef::Geometry(g1), ScalarRef::Geometry(g2)) => compare_geometry(g1, g2),
+
+            // By default, null is biggest in pgsql
+            (ScalarRef::Null, _) => Some(Ordering::Greater),
+            (_, ScalarRef::Null) => Some(Ordering::Less),
             _ => None,
         }
     }
@@ -1154,25 +1158,29 @@ impl Column {
         }
     }
 
-    pub fn random(ty: &DataType, len: usize) -> Self {
+    pub fn random(ty: &DataType, len: usize, seed: Option<u64>) -> Self {
         use rand::distributions::Alphanumeric;
         use rand::rngs::SmallRng;
         use rand::Rng;
         use rand::SeedableRng;
-
+        let mut rng = match seed {
+            None => SmallRng::from_entropy(),
+            Some(seed) => SmallRng::seed_from_u64(seed),
+        };
         match ty {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },
             DataType::EmptyMap => Column::EmptyMap { len },
-            DataType::Boolean => BooleanType::from_data(
-                (0..len)
-                    .map(|_| SmallRng::from_entropy().gen_bool(0.5))
-                    .collect_vec(),
-            ),
+            DataType::Boolean => {
+                BooleanType::from_data((0..len).map(|_| rng.gen_bool(0.5)).collect_vec())
+            }
             DataType::Binary => BinaryType::from_data(
                 (0..len)
                     .map(|_| {
-                        let rng = SmallRng::from_entropy();
+                        let rng = match seed {
+                            None => SmallRng::from_entropy(),
+                            Some(seed) => SmallRng::seed_from_u64(seed),
+                        };
                         rng.sample_iter(&Alphanumeric)
                             // randomly generate 5 characters.
                             .take(5)
@@ -1184,7 +1192,10 @@ impl Column {
             DataType::String => StringType::from_data(
                 (0..len)
                     .map(|_| {
-                        let rng = SmallRng::from_entropy();
+                        let rng = match seed {
+                            None => SmallRng::from_entropy(),
+                            Some(seed) => SmallRng::seed_from_u64(seed),
+                        };
                         rng.sample_iter(&Alphanumeric)
                             // randomly generate 5 characters.
                             .take(5)
@@ -1197,9 +1208,7 @@ impl Column {
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
                         NumberType::<NUM_TYPE>::from_data(
-                            (0..len)
-                                .map(|_| SmallRng::from_entropy().gen::<NUM_TYPE>())
-                                .collect_vec(),
+                            (0..len).map(|_| rng.gen::<NUM_TYPE>()).collect_vec(),
                         )
                     }
                 })
@@ -1207,45 +1216,41 @@ impl Column {
             DataType::Decimal(t) => match t {
                 DecimalDataType::Decimal128(size) => {
                     let values = (0..len)
-                        .map(|_| i128::from(SmallRng::from_entropy().gen::<i16>()))
+                        .map(|_| i128::from(rng.gen::<i16>()))
                         .collect::<Vec<i128>>();
                     Column::Decimal(DecimalColumn::Decimal128(values.into(), *size))
                 }
                 DecimalDataType::Decimal256(size) => {
                     let values = (0..len)
-                        .map(|_| i256::from(SmallRng::from_entropy().gen::<i16>()))
+                        .map(|_| i256::from(rng.gen::<i16>()))
                         .collect::<Vec<i256>>();
                     Column::Decimal(DecimalColumn::Decimal256(values.into(), *size))
                 }
             },
             DataType::Timestamp => TimestampType::from_data(
                 (0..len)
-                    .map(|_| SmallRng::from_entropy().gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
+                    .map(|_| rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
                     .collect::<Vec<i64>>(),
             ),
             DataType::Date => DateType::from_data(
                 (0..len)
-                    .map(|_| SmallRng::from_entropy().gen_range(DATE_MIN..=DATE_MAX))
+                    .map(|_| rng.gen_range(DATE_MIN..=DATE_MAX))
                     .collect::<Vec<i32>>(),
             ),
             DataType::Nullable(ty) => Column::Nullable(Box::new(NullableColumn {
-                column: Column::random(ty, len),
-                validity: Bitmap::from(
-                    (0..len)
-                        .map(|_| SmallRng::from_entropy().gen_bool(0.5))
-                        .collect::<Vec<bool>>(),
-                ),
+                column: Column::random(ty, len, seed),
+                validity: Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),
             })),
             DataType::Array(inner_ty) => {
                 let mut inner_len = 0;
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
                 offsets.push(0);
                 for _ in 0..len {
-                    inner_len += SmallRng::from_entropy().gen_range(0..=3);
+                    inner_len += rng.gen_range(0..=3);
                     offsets.push(inner_len);
                 }
                 Column::Array(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize),
+                    values: Column::random(inner_ty, inner_len as usize, seed),
                     offsets: offsets.into(),
                 }))
             }
@@ -1254,18 +1259,18 @@ impl Column {
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
                 offsets.push(0);
                 for _ in 0..len {
-                    inner_len += SmallRng::from_entropy().gen_range(0..=3);
+                    inner_len += rng.gen_range(0..=3);
                     offsets.push(inner_len);
                 }
                 Column::Map(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize),
+                    values: Column::random(inner_ty, inner_len as usize, seed),
                     offsets: offsets.into(),
                 }))
             }
             DataType::Bitmap => BitmapType::from_data(
                 (0..len)
                     .map(|_| {
-                        let data: [u64; 4] = SmallRng::from_entropy().gen();
+                        let data: [u64; 4] = rng.gen();
                         let rb = RoaringTreemap::from_iter(data.iter());
                         let mut buf = vec![];
                         rb.serialize_into(&mut buf)
@@ -1277,7 +1282,7 @@ impl Column {
             DataType::Tuple(fields) => {
                 let fields = fields
                     .iter()
-                    .map(|ty| Column::random(ty, len))
+                    .map(|ty| Column::random(ty, len, seed))
                     .collect::<Vec<_>>();
                 Column::Tuple(fields)
             }
@@ -1292,8 +1297,8 @@ impl Column {
             DataType::Geometry => {
                 let mut data = Vec::with_capacity(len);
                 (0..len).for_each(|_| {
-                    let x = SmallRng::from_entropy().gen::<f64>();
-                    let y = SmallRng::from_entropy().gen::<f64>();
+                    let x = rng.gen::<f64>();
+                    let y = rng.gen::<f64>();
                     let val = Point::new(x, y);
                     data.push(
                         Geometry::from(val)

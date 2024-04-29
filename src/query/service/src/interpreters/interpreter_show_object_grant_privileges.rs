@@ -53,7 +53,7 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = GetObjectGrantPrivilegesReq {
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             object: self.plan.object.clone(),
         };
         let resp = meta_api.get_grant_privileges_of_object(req).await?;

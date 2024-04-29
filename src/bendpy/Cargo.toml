@@ -25,7 +25,6 @@ databend-common-expression = { path = "../query/expression" }
 databend-common-license = { path = "../common/license" }
 databend-common-meta-app = { path = "../meta/app" }
 databend-common-meta-embedded = { path = "../meta/embedded" }
-databend-common-meta-types = { path = "../meta/types" }
 databend-common-users = { path = "../query/users" }
 databend-query = { path = "../query/service", features = [
     "simd",

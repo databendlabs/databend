@@ -24,13 +24,13 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_meta_types::NodeInfo;
 use itertools::Itertools;
 
-use crate::api::ConnectionInfo;
-use crate::api::DataExchange;
-use crate::api::ExecutePartialQueryPacket;
-use crate::api::FragmentPlanPacket;
-use crate::api::InitNodesChannelPacket;
-use crate::api::QueryFragmentsPlanPacket;
 use crate::clusters::ClusterHelper;
+use crate::servers::flight::v1::exchange::DataExchange;
+use crate::servers::flight::v1::packets::ConnectionInfo;
+use crate::servers::flight::v1::packets::ExecutePartialQueryPacket;
+use crate::servers::flight::v1::packets::FragmentPlanPacket;
+use crate::servers::flight::v1::packets::InitNodesChannelPacket;
+use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlan;
@@ -179,7 +179,7 @@ impl QueryFragmentsActions {
             cluster.local_id.clone(),
             fragments_packets.remove(&cluster.local_id).unwrap(),
             nodes_info.clone(),
-            settings.clone(),
+            settings.changes().clone(),
             cluster.local_id(),
         );
 
@@ -194,7 +194,7 @@ impl QueryFragmentsActions {
                 executor,
                 fragments,
                 executors_info,
-                settings.clone(),
+                settings.changes().clone(),
                 cluster.local_id(),
             ));
         }

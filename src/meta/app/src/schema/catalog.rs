@@ -18,7 +18,10 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::schema::CatalogNameIdent;
 use crate::storage::StorageParams;
+use crate::tenant::Tenant;
+use crate::KeyWithTenant;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum CatalogType {
@@ -73,11 +76,58 @@ pub struct IcebergCatalogOption {
     pub storage_params: Box<StorageParams>,
 }
 
+/// Same as `CatalogNameIdent`, but with `serde` support,
+/// and can be used a s part of a value.
+// #[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CatalogName {
+    pub tenant: String,
+    pub catalog_name: String,
+}
+
+impl From<CatalogNameIdent> for CatalogName {
+    fn from(ident: CatalogNameIdent) -> Self {
+        CatalogName {
+            tenant: ident.tenant_name().to_string(),
+            catalog_name: ident.name().to_string(),
+        }
+    }
+}
+
+impl Display for CatalogName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'/'{}'", self.tenant, self.catalog_name)
+    }
+}
+
+// serde is required by `DataSourcePlan.catalog_info`
+// serde is required by `CommitSink.catalog_info`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CatalogInfo {
-    pub id: CatalogId,
-    pub name_ident: CatalogNameIdent,
+    pub id: catalog_info::CatalogId,
+    pub name_ident: CatalogName,
     pub meta: CatalogMeta,
+}
+
+/// Private types for `CatalogInfo`.
+mod catalog_info {
+
+    /// Same as [`crate::schema::CatalogId`], except with serde support, and can be used in a value,
+    /// while CatalogId is only used for Key.
+    ///
+    /// This type is sealed in a private mod so that it is pub for use but can not be created directly.
+    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct CatalogId {
+        pub catalog_id: u64,
+    }
+
+    impl From<crate::schema::CatalogId> for CatalogId {
+        fn from(value: crate::schema::CatalogId) -> Self {
+            Self {
+                catalog_id: value.catalog_id,
+            }
+        }
+    }
 }
 
 impl CatalogInfo {
@@ -94,8 +144,8 @@ impl CatalogInfo {
     /// Create a new default catalog info.
     pub fn new_default() -> CatalogInfo {
         Self {
-            id: CatalogId { catalog_id: 0 },
-            name_ident: CatalogNameIdent {
+            id: CatalogId { catalog_id: 0 }.into(),
+            name_ident: CatalogName {
                 // tenant for default catalog is not used.
                 tenant: "".to_string(),
                 catalog_name: "default".to_string(),
@@ -114,13 +164,8 @@ pub struct CatalogMeta {
     pub created_on: DateTime<Utc>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct CatalogNameIdent {
-    pub tenant: String,
-    pub catalog_name: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+// serde is required by `CatalogInfo.id`
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogId {
     pub catalog_id: u64,
 }
@@ -131,13 +176,7 @@ impl CatalogId {
     }
 }
 
-impl Display for CatalogNameIdent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant, self.catalog_name)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogIdToName {
     pub catalog_id: u64,
 }
@@ -148,7 +187,7 @@ impl Display for CatalogIdToName {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogReq {
     pub if_not_exists: bool,
     pub name_ident: CatalogNameIdent,
@@ -157,10 +196,10 @@ pub struct CreateCatalogReq {
 
 impl CreateCatalogReq {
     pub fn tenant(&self) -> &str {
-        &self.name_ident.tenant
+        self.name_ident.tenant_name()
     }
     pub fn catalog_name(&self) -> &str {
-        &self.name_ident.catalog_name
+        self.name_ident.name()
     }
 }
 
@@ -169,7 +208,10 @@ impl Display for CreateCatalogReq {
         write!(
             f,
             "create_catalog(if_not_exists={}):{}/{}={:?}",
-            self.if_not_exists, self.name_ident.tenant, self.name_ident.catalog_name, self.meta
+            self.if_not_exists,
+            self.name_ident.tenant_name(),
+            self.name_ident.name(),
+            self.meta
         )
     }
 }
@@ -190,7 +232,9 @@ impl Display for DropCatalogReq {
         write!(
             f,
             "drop_catalog(if_exists={}):{}/{}",
-            self.if_exists, self.name_ident.tenant, self.name_ident.catalog_name
+            self.if_exists,
+            self.name_ident.tenant_name(),
+            self.name_ident.name()
         )
     }
 }
@@ -198,7 +242,7 @@ impl Display for DropCatalogReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropCatalogReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetCatalogReq {
     pub inner: CatalogNameIdent,
 }
@@ -212,68 +256,42 @@ impl Deref for GetCatalogReq {
 }
 
 impl GetCatalogReq {
-    pub fn new(tenant: impl Into<String>, catalog_name: impl Into<String>) -> GetCatalogReq {
-        GetCatalogReq {
-            inner: CatalogNameIdent {
-                tenant: tenant.into(),
-                catalog_name: catalog_name.into(),
-            },
-        }
+    pub fn new(ident: CatalogNameIdent) -> GetCatalogReq {
+        GetCatalogReq { inner: ident }
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListCatalogReq {
-    pub tenant: String,
+    pub tenant: Tenant,
 }
 
 impl ListCatalogReq {
-    pub fn new(tenant: impl Into<String>) -> ListCatalogReq {
-        ListCatalogReq {
-            tenant: tenant.into(),
-        }
+    pub fn new(tenant: Tenant) -> ListCatalogReq {
+        ListCatalogReq { tenant }
     }
 }
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use super::CatalogId;
     use super::CatalogIdToName;
-    use super::CatalogNameIdent;
     use crate::schema::CatalogMeta;
-    use crate::tenant::Tenant;
+    use crate::schema::CatalogNameIdent;
 
-    /// __fd_catalog/<tenant>/<catalog_name> -> <catalog_id>
-    impl kvapi::Key for CatalogNameIdent {
-        const PREFIX: &'static str = "__fd_catalog";
-
-        type ValueType = CatalogId;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+    impl kvapi::KeyCodec for CatalogId {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.catalog_id)
         }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
-                .push_str(&self.catalog_name)
-                .done()
-        }
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
+            let catalog_id = parser.next_u64()?;
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            let catalog_name = p.next_str()?;
-            p.done()?;
-
-            Ok(CatalogNameIdent {
-                tenant,
-                catalog_name,
-            })
+            Ok(Self { catalog_id })
         }
     }
 
@@ -286,20 +304,17 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             None
         }
+    }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.catalog_id)
-                .done()
+    impl kvapi::KeyCodec for CatalogIdToName {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.catalog_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
+            let catalog_id = parser.next_u64()?;
 
-            let catalog_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(CatalogId { catalog_id })
+            Ok(Self { catalog_id })
         }
     }
 
@@ -311,27 +326,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             Some(CatalogId::new(self.catalog_id).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.catalog_id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let catalog_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(CatalogIdToName { catalog_id })
-        }
-    }
-
-    impl kvapi::Value for CatalogId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
         }
     }
 

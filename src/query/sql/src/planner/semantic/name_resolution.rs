@@ -55,11 +55,7 @@ pub fn normalize_identifier(ident: &Identifier, context: &NameResolutionContext)
     {
         ident.clone()
     } else {
-        Identifier {
-            name: ident.name.to_lowercase(),
-            quote: ident.quote,
-            span: ident.span,
-        }
+        Identifier::from_name(ident.span, ident.name.to_lowercase())
     }
 }
 

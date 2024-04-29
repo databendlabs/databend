@@ -766,8 +766,7 @@ impl DPhpy {
 
     fn apply_rule(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
-        let rule =
-            RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone(), false)?;
+        let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone())?;
         let mut state = TransformResult::new();
         if rule
             .matchers()

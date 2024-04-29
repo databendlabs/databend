@@ -57,6 +57,7 @@ impl AsyncSystemTable for StagesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
+
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
@@ -107,7 +108,7 @@ impl AsyncSystemTable for StagesTable {
                     number_of_files.push(None);
                 }
             };
-            creator.push(stage.creator.map(|c| c.to_string()));
+            creator.push(stage.creator.map(|c| c.display().to_string()));
             created_on.push(stage.created_on.timestamp_micros());
             comment.push(stage.comment.clone());
         }

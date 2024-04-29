@@ -13,7 +13,9 @@
 // limitations under the License.
 
 mod common;
+mod physical_multi_table_insert;
 pub use common::*;
+pub use physical_multi_table_insert::*;
 mod physical_aggregate_expand;
 pub use physical_aggregate_expand::AggregateExpand;
 mod physical_aggregate_final;
@@ -26,8 +28,8 @@ mod physical_compact_source;
 pub use physical_compact_source::CompactSource;
 mod physical_constant_table_scan;
 pub use physical_constant_table_scan::ConstantTableScan;
-mod physical_copy_into;
-pub use physical_copy_into::*;
+mod physical_copy_into_table;
+pub use physical_copy_into_table::*;
 mod physical_cte_scan;
 pub use physical_cte_scan::CteScan;
 mod physical_delete_source;
@@ -87,6 +89,8 @@ mod physical_union_all;
 pub use physical_union_all::UnionAll;
 mod physical_window;
 pub use physical_window::*;
+mod physical_copy_into_location;
 mod physical_udf;
+pub use physical_copy_into_location::CopyIntoLocation;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;

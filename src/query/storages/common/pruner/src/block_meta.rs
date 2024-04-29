@@ -16,6 +16,7 @@ use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::number::F32;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
@@ -36,6 +37,8 @@ pub struct BlockMetaIndex {
     pub block_location: String,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
+    // The search matched rows and optional scores in the block.
+    pub matched_rows: Option<Vec<(usize, Option<F32>)>>,
 }
 
 #[typetag::serde(name = "block_meta_index")]

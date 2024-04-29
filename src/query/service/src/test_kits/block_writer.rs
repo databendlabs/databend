@@ -25,7 +25,6 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_storages_common_blocks::blocks_to_parquet;
-use databend_storages_common_blocks::ParquetFileMeta;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -34,6 +33,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
+use parquet::format::FileMetaData;
 use uuid::Uuid;
 
 pub struct BlockWriter<'a> {
@@ -59,7 +59,7 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<(BlockMeta, Option<ParquetFileMeta>)> {
+    ) -> Result<(BlockMeta, Option<FileMetaData>)> {
         let (location, block_id) = self.location_generator.gen_block_location();
 
         let data_accessor = &self.data_accessor;
@@ -75,7 +75,7 @@ impl<'a> BlockWriter<'a> {
         };
 
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let col_metas = serialize_block(&write_settings, schema, block, &mut buf, false)?;
+        let col_metas = serialize_block(&write_settings, schema, block, &mut buf)?;
         let file_size = buf.len() as u64;
 
         data_accessor.write(&location.0, buf).await?;
@@ -102,7 +102,7 @@ impl<'a> BlockWriter<'a> {
         schema: TableSchemaRef,
         block: &DataBlock,
         block_id: Uuid,
-    ) -> Result<(u64, Option<Location>, Option<ParquetFileMeta>)> {
+    ) -> Result<(u64, Option<Location>, Option<FileMetaData>)> {
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
@@ -126,7 +126,6 @@ impl<'a> BlockWriter<'a> {
                 vec![index_block],
                 &mut data,
                 TableCompression::None,
-                false,
             )?;
             let size = data.len() as u64;
             data_accessor.write(&location.0, data).await?;

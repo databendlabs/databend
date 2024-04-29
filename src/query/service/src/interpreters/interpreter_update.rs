@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -98,7 +99,7 @@ impl Interpreter for UpdateInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
         let tbl = catalog
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await?;
 
         // Add table lock.
@@ -119,7 +120,7 @@ impl Interpreter for UpdateInterpreter {
                     catalog_name.to_string(),
                     db_name.to_string(),
                     tbl_name.to_string(),
-                    "update".to_string(),
+                    MutationKind::Update,
                     // table lock has been added, no need to check.
                     false,
                 );
@@ -143,7 +144,7 @@ impl UpdateInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
         let tbl = catalog
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await?;
         // refresh table.
         let tbl = tbl.refresh(self.ctx.as_ref()).await?;
@@ -295,7 +296,7 @@ impl UpdateInterpreter {
         is_distributed: bool,
         ctx: Arc<QueryContext>,
     ) -> Result<PhysicalPlan> {
-        let merge_meta = partitions.is_lazy;
+        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: partitions,
             filters,

@@ -235,6 +235,10 @@ impl TransformHashJoinProbe {
         Ok(Event::Async)
     }
 
+    fn spill(&self) -> Result<Event> {
+        Ok(Event::Async)
+    }
+
     // Running
     // When spilling is enabled, the method contains two running paths
     // 1. Before spilling, it will pull data from input port and go to spill
@@ -272,14 +276,15 @@ impl TransformHashJoinProbe {
 
         if self.input_port.has_data() {
             let data = self.input_port.pull_data().unwrap()?;
+            if self.need_spill() {
+                self.input_data.push_back(data);
+                return self.set_spill_step();
+            }
             // Split data to `block_size` rows per sub block.
             let (sub_blocks, remain_block) = data.split_by_rows(self.max_block_size);
             self.input_data.extend(sub_blocks);
             if let Some(remain) = remain_block {
                 self.input_data.push_back(remain);
-            }
-            if self.need_spill() {
-                return self.set_spill_step();
             }
             return Ok(Event::Sync);
         }
@@ -391,7 +396,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinProbeStep::Running => self.run(),
             HashJoinProbeStep::Restore => self.restore(),
             HashJoinProbeStep::FinalScan => self.final_scan(),
-            HashJoinProbeStep::Spill => unreachable!("{:?}", self.step),
+            HashJoinProbeStep::Spill => self.spill(),
         }
     }
 

@@ -1,25 +1,25 @@
 PartitionsShuffleKind::Seq : 11 partitions of 3 executors
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"3"}, {"type":"fuse_lazy","loc":"4"}, {"type":"fuse_lazy","loc":"5"}, {"type":"fuse_lazy","loc":"6"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"7"}, {"type":"fuse_lazy","loc":"8"}, {"type":"fuse_lazy","loc":"9"}, {"type":"fuse_lazy","loc":"10"}], is_lazy: true }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"3"}, {"type":"fuse_lazy","loc":"4"}, {"type":"fuse_lazy","loc":"5"}, {"type":"fuse_lazy","loc":"6"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"7"}, {"type":"fuse_lazy","loc":"8"}, {"type":"fuse_lazy","loc":"9"}, {"type":"fuse_lazy","loc":"10"}] }
 PartitionsShuffleKind::Seq : 2 partitions of 3 executors
-Partitions { kind: Seq, partitions: [], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"1"}], is_lazy: true }
+Partitions { kind: Seq, partitions: [] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"1"}] }
 PartitionsShuffleKind::Mod : 10 partitions of 3 executors
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"2"}, {"type":"fuse_lazy","loc":"4"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"9"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"3"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"5"}, {"type":"fuse_lazy","loc":"7"}, {"type":"fuse_lazy","loc":"6"}, {"type":"fuse_lazy","loc":"8"}], is_lazy: true }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"2"}, {"type":"fuse_lazy","loc":"4"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"9"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"3"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"5"}, {"type":"fuse_lazy","loc":"7"}, {"type":"fuse_lazy","loc":"6"}, {"type":"fuse_lazy","loc":"8"}] }
 PartitionsShuffleKind::Mod : 11 partitions of 3 executors
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"2"}, {"type":"fuse_lazy","loc":"4"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"9"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"3"}, {"type":"fuse_lazy","loc":"5"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"7"}, {"type":"fuse_lazy","loc":"10"}, {"type":"fuse_lazy","loc":"6"}, {"type":"fuse_lazy","loc":"8"}], is_lazy: true }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"2"}, {"type":"fuse_lazy","loc":"4"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"9"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"3"}, {"type":"fuse_lazy","loc":"5"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"7"}, {"type":"fuse_lazy","loc":"10"}, {"type":"fuse_lazy","loc":"6"}, {"type":"fuse_lazy","loc":"8"}] }
 PartitionsShuffleKind::Mod : 11 partitions of 2 executors
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"4"}, {"type":"fuse_lazy","loc":"5"}, {"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"3"}, {"type":"fuse_lazy","loc":"6"}, {"type":"fuse_lazy","loc":"7"}, {"type":"fuse_lazy","loc":"8"}, {"type":"fuse_lazy","loc":"9"}, {"type":"fuse_lazy","loc":"10"}], is_lazy: true }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"4"}, {"type":"fuse_lazy","loc":"5"}, {"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"3"}, {"type":"fuse_lazy","loc":"6"}, {"type":"fuse_lazy","loc":"7"}, {"type":"fuse_lazy","loc":"8"}, {"type":"fuse_lazy","loc":"9"}, {"type":"fuse_lazy","loc":"10"}] }
 PartitionsShuffleKind::Rand: 11 partitions of 2 executors
 5
 6
 PartitionsShuffleKind::Broadcast: 3 partitions of 2 executors
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}], is_lazy: true }
-Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}], is_lazy: true }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }

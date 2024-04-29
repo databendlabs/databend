@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 use nom::branch::alt;
 use nom::combinator::map;
 
+use crate::ast::FileFormatOptions;
+use crate::ast::FileFormatValue;
 use crate::ast::FileLocation;
 use crate::ast::SelectStageOption;
 use crate::ast::UriLocation;
@@ -31,7 +33,8 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
     let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
     let boolean_to_string = |i| map(literal_bool, |v| v.to_string())(i);
-    rule! (
+
+    rule!(
         #literal_string
         | #ident_to_string
         | #u64_to_string
@@ -47,7 +50,6 @@ pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String
             },
             |(k, _, v)| (k.to_string().to_lowercase(), v),
         );
-
         let bool_options = map(
             rule! {
                 ENABLE_VIRTUAL_HOST_STYLE ~ #match_text(sep) ~ #literal_bool
@@ -55,7 +57,10 @@ pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String
             |(k, _, v)| (k.text().to_string().to_lowercase(), v.to_string()),
         );
 
-        alt((string_options, bool_options))(i)
+        rule!(
+            #string_options
+            | #bool_options
+        )(i)
     }
 }
 
@@ -69,24 +74,39 @@ pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
     )(i)
 }
 
-pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
+pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
     let option_type = map(
         rule! {
             TYPE ~ "=" ~ ( TSV | CSV | NDJSON | PARQUET | JSON | XML )
         },
-        |(_, _, v)| ("type".to_string(), v.text().to_string()),
+        |(_, _, v)| {
+            (
+                "type".to_string(),
+                FileFormatValue::Keyword(v.text().to_string()),
+            )
+        },
     );
 
     let option_compression = map(
         rule! {
             COMPRESSION ~ "=" ~ ( AUTO | NONE | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ )
         },
-        |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
+        |(_, _, v)| {
+            (
+                "COMPRESSION".to_string(),
+                FileFormatValue::Keyword(v.text().to_string()),
+            )
+        },
     );
 
     let ident_options = map(
         rule! { (BINARY_FORMAT | MISSING_FIELD_AS | EMPTY_FIELD_AS | NULL_FIELD_AS)  ~ "=" ~ (NULL | STRING | Ident)},
-        |(k, _, v)| (k.text().to_string(), v.text().to_string()),
+        |(k, _, v)| {
+            (
+                k.text().to_string(),
+                FileFormatValue::Keyword(v.text().to_string()),
+            )
+        },
     );
 
     let string_options = map(
@@ -104,21 +124,21 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
                 | MISSING_FIELD_AS
                 | ROW_TAG) ~ ^"=" ~ ^#literal_string
         },
-        |(k, _, v)| (k.text().to_string(), v),
+        |(k, _, v)| (k.text().to_string(), FileFormatValue::String(v)),
     );
 
     let int_options = map(
         rule! {
             SKIP_HEADER ~ ^"=" ~ ^#literal_u64
         },
-        |(k, _, v)| (k.text().to_string(), v.to_string()),
+        |(k, _, v)| (k.text().to_string(), FileFormatValue::U64(v)),
     );
 
     let bool_options = map(
         rule! {
             (ERROR_ON_COLUMN_COUNT_MISMATCH | OUTPUT_HEADER) ~ ^"=" ~ ^#literal_bool
         },
-        |(k, _, v)| (k.text().to_string(), v.to_string()),
+        |(k, _, v)| (k.text().to_string(), FileFormatValue::Bool(v)),
     );
 
     let none_options = map(
@@ -130,17 +150,17 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
                 | NON_DISPLAY
                 | ESCAPE ) ~ ^"=" ~ ^NONE
         },
-        |(k, _, v)| (k.text().to_string(), v.text().to_string()),
+        |(k, _, v)| {
+            (
+                k.text().to_string(),
+                FileFormatValue::Keyword(v.text().to_string()),
+            )
+        },
     );
 
     let null_if = map(
         rule! { NULL_IF ~ ^"=" ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" },
-        |(_, _, _, values, _)| {
-            (
-                "null_if".to_string(),
-                serde_json::to_string(&values).unwrap(),
-            )
-        },
+        |(_, _, _, values, _)| ("null_if".to_string(), FileFormatValue::StringList(values)),
     );
 
     map(
@@ -154,11 +174,16 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
         | #none_options
         | #null_if
         ) ~ ","?)* },
-        |opts| BTreeMap::from_iter(opts.iter().map(|((k, v), _)| (k.to_lowercase(), v.clone()))),
+        |opts| FileFormatOptions {
+            options: opts
+                .iter()
+                .map(|((k, v), _)| (k.to_lowercase(), v.clone()))
+                .collect(),
+        },
     )(i)
 }
 
-pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
+pub fn file_format_clause(i: Input) -> IResult<FileFormatOptions> {
     map(
         rule! { FILE_FORMAT ~ ^"=" ~ ^"(" ~ ^#format_options ~ ^")" },
         |(_, _, _, opts, _)| opts,

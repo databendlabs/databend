@@ -28,11 +28,11 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
 use super::PipelineBuilderData;
-use crate::api::DefaultExchangeInjector;
-use crate::api::ExchangeInjector;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
+use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 
 pub struct PipelineBuilder {
@@ -152,6 +152,7 @@ impl PipelineBuilder {
 
             // Copy into.
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
+            PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
             // Delete.
             PhysicalPlan::DeleteSource(delete) => self.build_delete_source(delete),
@@ -191,6 +192,26 @@ impl PipelineBuilder {
 
             // Update.
             PhysicalPlan::UpdateSource(update) => self.build_update_source(update),
+
+            PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
+            PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),
+            PhysicalPlan::ChunkFilter(chunk_filter) => self.build_chunk_filter(chunk_filter),
+            PhysicalPlan::ChunkEvalScalar(chunk_project) => {
+                self.build_chunk_eval_scalar(chunk_project)
+            }
+            PhysicalPlan::ChunkCastSchema(chunk_cast_schema) => {
+                self.build_chunk_cast_schema(chunk_cast_schema)
+            }
+            PhysicalPlan::ChunkFillAndReorder(chunk_fill_and_reorder) => {
+                self.build_chunk_fill_and_reorder(chunk_fill_and_reorder)
+            }
+            PhysicalPlan::ChunkAppendData(chunk_append_data) => {
+                self.build_chunk_append_data(chunk_append_data)
+            }
+            PhysicalPlan::ChunkMerge(chunk_merge) => self.build_chunk_merge(chunk_merge),
+            PhysicalPlan::ChunkCommitInsert(chunk_commit_insert) => {
+                self.build_chunk_commit_insert(chunk_commit_insert)
+            }
         }
     }
 }

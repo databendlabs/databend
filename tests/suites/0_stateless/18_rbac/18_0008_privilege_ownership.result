@@ -1,0 +1,13 @@
+1
+2
+3
+=== test drop role ===
+table1	d20_0014_owner
+table2	d20_0014_owner
+d20_0014	d20_0014_owner
+table1	account_admin
+table2	account_admin
+d20_0014	account_admin
+table1	account_admin
+table2	account_admin
+d20_0014	account_admin

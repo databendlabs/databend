@@ -22,7 +22,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::CreateStagePlan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::RoleCacheManager;
@@ -73,13 +72,11 @@ impl Interpreter for CreateUserStageInterpreter {
             ));
         }
 
-        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
-        })?;
+        let tenant = &plan.tenant;
 
-        let quota_api = user_mgr.tenant_quota_api(&tenant);
+        let quota_api = user_mgr.tenant_quota_api(tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
-        let stages = user_mgr.get_stages(&tenant).await?;
+        let stages = user_mgr.get_stages(tenant).await?;
         if quota.max_stages != 0 && stages.len() >= quota.max_stages as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(
                 "Max stages quota exceeded {}",
@@ -87,27 +84,21 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
-        })?;
+        let tenant = &plan.tenant;
 
         let old_stage = match plan.create_option {
             CreateOption::CreateOrReplace => user_mgr
-                .get_stage(&tenant, &user_stage.stage_name)
+                .get_stage(tenant, &user_stage.stage_name)
                 .await
                 .ok(),
             _ => None,
         };
 
-        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
-        })?;
-
         let mut user_stage = user_stage;
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());
         user_stage.created_on = Utc::now();
         let _ = user_mgr
-            .add_stage(&tenant, user_stage.clone(), &plan.create_option)
+            .add_stage(tenant, user_stage.clone(), &plan.create_option)
             .await?;
 
         // when create or replace stage success, if old stage is not External stage, remove stage files

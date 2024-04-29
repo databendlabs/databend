@@ -13,23 +13,10 @@
 // limitations under the License.
 
 use databend_common_exception::Span;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
 
-use super::walk_mut::walk_cte_mut;
-use super::walk_mut::walk_expr_mut;
-use super::walk_mut::walk_identifier_mut;
-use super::walk_mut::walk_join_condition_mut;
-use super::walk_mut::walk_query_mut;
-use super::walk_mut::walk_select_target_mut;
-use super::walk_mut::walk_set_expr_mut;
-use super::walk_mut::walk_statement_mut;
-use super::walk_mut::walk_table_reference_mut;
-use super::walk_stream_point_mut;
-use super::walk_time_travel_point_mut;
-use super::walk_window_definition_mut;
 use crate::ast::visitors::walk_column_id_mut;
 use crate::ast::*;
 
@@ -585,6 +572,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
 
+    fn visit_show_views(&mut self, _stmt: &mut ShowViewsStmt) {}
+
+    fn visit_describe_view(&mut self, _stmt: &mut DescribeViewStmt) {}
+
     fn visit_create_stream(&mut self, _stmt: &mut CreateStreamStmt) {}
 
     fn visit_drop_stream(&mut self, _stmt: &mut DropStreamStmt) {}
@@ -663,7 +654,7 @@ pub trait VisitorMut: Sized {
         &mut self,
         _create_option: &CreateOption,
         _name: &mut String,
-        _file_format_options: &mut FileFormatOptionsAst,
+        _file_format_options: &mut FileFormatOptions,
     ) {
     }
 
@@ -734,6 +725,10 @@ pub trait VisitorMut: Sized {
     fn visit_describe_task(&mut self, _stmt: &mut DescribeTaskStmt) {}
 
     fn visit_alter_task(&mut self, _stmt: &mut AlterTaskStmt) {}
+
+    fn visit_create_dynamic_table(&mut self, stmt: &mut CreateDynamicTableStmt) {
+        self.visit_query(&mut stmt.as_query)
+    }
 
     // notification
     fn visit_create_notification(&mut self, _stmt: &mut CreateNotificationStmt) {}
@@ -827,12 +822,12 @@ pub trait VisitorMut: Sized {
         walk_table_reference_mut(self, table);
     }
 
-    fn visit_time_travel_point(&mut self, time: &mut TimeTravelPoint) {
-        walk_time_travel_point_mut(self, time);
+    fn visit_temporal_clause(&mut self, clause: &mut TemporalClause) {
+        walk_temporal_clause_mut(self, clause);
     }
 
-    fn visit_stream_point(&mut self, stream: &mut StreamPoint) {
-        walk_stream_point_mut(self, stream);
+    fn visit_time_travel_point(&mut self, time: &mut TimeTravelPoint) {
+        walk_time_travel_point_mut(self, time);
     }
 
     fn visit_join(&mut self, join: &mut Join) {
@@ -853,4 +848,7 @@ pub trait VisitorMut: Sized {
     fn visit_drop_connection(&mut self, _stmt: &mut DropConnectionStmt) {}
     fn visit_describe_connection(&mut self, _stmt: &mut DescribeConnectionStmt) {}
     fn visit_show_connections(&mut self, _stmt: &mut ShowConnectionsStmt) {}
+
+    fn visit_create_sequence(&mut self, _stmt: &mut CreateSequenceStmt) {}
+    fn visit_drop_sequence(&mut self, _stmt: &mut DropSequenceStmt) {}
 }

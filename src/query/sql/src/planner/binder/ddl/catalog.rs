@@ -109,7 +109,7 @@ impl Binder {
 
         Ok(Plan::CreateCatalog(Box::new(CreateCatalogPlan {
             if_not_exists: *if_not_exists,
-            tenant: tenant.to_string(),
+            tenant,
             catalog: catalog.to_string(),
             meta,
         })))
@@ -125,7 +125,7 @@ impl Binder {
         let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
         Ok(Plan::DropCatalog(Box::new(DropCatalogPlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
         })))
     }

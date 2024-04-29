@@ -99,6 +99,10 @@ impl BuildSpillHandler {
         if join_type == &JoinType::Cross {
             return self.spill_cross_join().await;
         }
+        if self.pending_spill_data.is_empty() && !self.spill_state().spiller.empty_buffer() {
+            // Spill data in spiller buffer
+            return self.spill_state_mut().spiller.spill_buffer().await;
+        }
         // Concat the data blocks that pending to spill to reduce the spill file number.
         let pending_spill_data = DataBlock::concat(&self.pending_spill_data)?;
         let mut hashes = Vec::with_capacity(pending_spill_data.num_rows());
@@ -130,15 +134,7 @@ impl BuildSpillHandler {
         build_state: &Arc<HashJoinBuildState>,
         processor_id: usize,
     ) -> Result<HashJoinBuildStep> {
-        // Add spilled partition ids to `spill_partitions` of `HashJoinBuildState`
         let spilled_partition_set = self.spill_state().spiller.spilled_partitions();
-        if build_state.join_type() != JoinType::Cross {
-            info!(
-                "build processor-{:?}: spill finished with spilled partitions {:?}",
-                processor_id, spilled_partition_set
-            );
-        }
-
         // For left-related join, will spill all build input blocks which means there isn't first-round hash table.
         // Because first-round hash table will make left join generate wrong results.
         // Todo: make left-related join leverage first-round hash table to reduce I/O.
@@ -151,18 +147,29 @@ impl BuildSpillHandler {
             return Ok(HashJoinBuildStep::Spill);
         }
 
-        if !spilled_partition_set.is_empty() {
-            build_state
-                .spilled_partition_set
-                .write()
-                .extend(spilled_partition_set);
-        }
         // The processor has accepted all data from downstream
         // If there is still pending spill data, add to row space.
         for data in self.pending_spill_data.iter() {
             build_state.build(data.clone())?;
         }
         self.pending_spill_data.clear();
+        // Check if there is data in spiller buffer
+        if !self.spill_state().spiller.empty_buffer() {
+            return Ok(HashJoinBuildStep::Spill);
+        }
+        if build_state.join_type() != JoinType::Cross {
+            info!(
+                "Processor: {}, spill info: {}",
+                processor_id,
+                self.spill_state().spiller.format_spill_info()
+            );
+        }
+        if !spilled_partition_set.is_empty() {
+            build_state
+                .spilled_partition_set
+                .write()
+                .extend(spilled_partition_set);
+        }
         Ok(HashJoinBuildStep::Running)
     }
 
@@ -193,7 +200,7 @@ impl BuildSpillHandler {
         let spill_state = self.spill_state_mut();
         let spilled_files = spill_state.spiller.spilled_files();
         if !spilled_files.is_empty() {
-            let (block, _) = spill_state
+            let block = spill_state
                 .spiller
                 .read_spilled_file(&spilled_files[0])
                 .await?;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate;
 mod cascades;
 mod cost;
 mod decorrelate;
@@ -21,6 +22,7 @@ mod filter;
 mod format;
 mod group;
 mod hyper_dp;
+mod join;
 mod m_expr;
 mod memo;
 #[allow(clippy::module_inception)]
@@ -28,6 +30,7 @@ mod optimizer;
 mod property;
 mod rule;
 pub mod s_expr;
+mod statistics;
 mod util;
 
 pub use cascades::CascadesOptimizer;

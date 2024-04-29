@@ -24,7 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 
 use crate::operations::BlockMetaIndex;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
     let merge_into_join = ctx.get_merge_into_join();
@@ -39,7 +39,7 @@ pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> 
 
 pub(crate) fn add_data_block_meta(
     block: DataBlock,
-    fuse_part: &FusePartInfo,
+    fuse_part: &FuseBlockPartInfo,
     offsets: Option<Vec<usize>>,
     base_block_ids: Option<Scalar>,
     update_stream_columns: bool,
@@ -76,6 +76,7 @@ pub(crate) fn add_data_block_meta(
             offsets,
             base_block_ids,
             inner: meta,
+            matched_rows: block_meta.matched_rows.clone(),
         };
         meta = Some(Box::new(internal_column_meta));
     }

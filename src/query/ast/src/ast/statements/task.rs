@@ -19,6 +19,9 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::write_comma_separated_string_list;
+use crate::ast::write_comma_separated_string_map;
+use crate::ast::Expr;
 use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -59,11 +62,11 @@ pub struct CreateTaskStmt {
     #[drive(skip)]
     pub error_integration: Option<String>,
     #[drive(skip)]
-    pub comments: String,
+    pub comments: Option<String>,
     #[drive(skip)]
     pub after: Vec<String>,
     #[drive(skip)]
-    pub when_condition: Option<String>,
+    pub when_condition: Option<Expr>,
     #[drive(skip)]
     pub sql: TaskSql,
 }
@@ -74,43 +77,44 @@ impl Display for CreateTaskStmt {
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
         }
+
         write!(f, " {}", self.name)?;
 
-        write!(f, "{}", self.warehouse_opts)?;
-        if let Some(schedule_opt) = self.schedule_opts.as_ref() {
-            write!(f, "{}", schedule_opt)?;
+        if self.warehouse_opts.warehouse.is_some() {
+            write!(f, " {}", self.warehouse_opts)?;
         }
 
-        if !self.session_parameters.is_empty() {
-            for (key, value) in &self.session_parameters {
-                write!(f, " {} = '{}'", key, value)?;
-            }
+        if let Some(schedule_opt) = self.schedule_opts.as_ref() {
+            write!(f, " SCHEDULE = {}", schedule_opt)?;
         }
 
         if let Some(num) = self.suspend_task_after_num_failures {
-            write!(f, " SUSPEND_TASK_AFTER {} FAILURES", num)?;
-        }
-
-        if !self.comments.is_empty() {
-            write!(f, " COMMENTS = '{}'", self.comments)?;
+            write!(f, " SUSPEND_TASK_AFTER_NUM_FAILURES = {}", num)?;
         }
 
         if !self.after.is_empty() {
-            write!(f, " AFTER = '{:?}'", self.after)?;
+            write!(f, " AFTER ")?;
+            write_comma_separated_string_list(f, &self.after)?;
         }
 
-        if self.when_condition.is_some() {
-            write!(f, " WHEN = '{:?}'", self.when_condition)?;
+        if let Some(when_condition) = &self.when_condition {
+            write!(f, " WHEN {}", when_condition)?;
         }
-        if self.error_integration.is_some() {
-            write!(
-                f,
-                " ERROR INTEGRATION = '{}'",
-                self.error_integration.as_ref().unwrap()
-            )?;
+        if let Some(error_integration) = &self.error_integration {
+            write!(f, " ERROR_INTEGRATION = '{}'", error_integration)?;
+        }
+
+        if let Some(comments) = &self.comments {
+            write!(f, " COMMENTS = '{}'", comments)?;
+        }
+
+        if !self.session_parameters.is_empty() {
+            write!(f, " ")?;
+            write_comma_separated_string_map(f, &self.session_parameters)?;
         }
 
         write!(f, " AS {}", self.sql)?;
+
         Ok(())
     }
 }
@@ -124,7 +128,7 @@ pub struct WarehouseOptions {
 impl Display for WarehouseOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(wh) = &self.warehouse {
-            write!(f, " WAREHOUSE = {}", wh)?;
+            write!(f, "WAREHOUSE = '{}'", wh)?;
         }
         Ok(())
     }
@@ -140,12 +144,12 @@ impl Display for ScheduleOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ScheduleOptions::IntervalSecs(secs) => {
-                write!(f, " SCHEDULE {} SECOND", secs)
+                write!(f, "{} SECOND", secs)
             }
             ScheduleOptions::CronExpression(expr, tz) => {
-                write!(f, " SCHEDULE CRON '{}'", expr)?;
+                write!(f, "USING CRON '{}'", expr)?;
                 if let Some(tz) = tz {
-                    write!(f, " TIMEZONE '{}'", tz)?;
+                    write!(f, " '{}'", tz)?;
                 }
                 Ok(())
             }
@@ -160,6 +164,18 @@ pub struct AlterTaskStmt {
     #[drive(skip)]
     pub name: String,
     pub options: AlterTaskOptions,
+}
+
+impl Display for AlterTaskStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ALTER TASK")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        write!(f, " {}", self.options)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -185,7 +201,7 @@ pub enum AlterTaskOptions {
     },
     // Change SQL
     ModifyAs(#[drive(skip)] TaskSql),
-    ModifyWhen(#[drive(skip)] String),
+    ModifyWhen(Expr),
     AddAfter(#[drive(skip)] Vec<String>),
     RemoveAfter(#[drive(skip)] Vec<String>),
 }
@@ -193,8 +209,8 @@ pub enum AlterTaskOptions {
 impl Display for AlterTaskOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AlterTaskOptions::Resume => write!(f, " RESUME"),
-            AlterTaskOptions::Suspend => write!(f, " SUSPEND"),
+            AlterTaskOptions::Resume => write!(f, "RESUME"),
+            AlterTaskOptions::Suspend => write!(f, "SUSPEND"),
             AlterTaskOptions::Set {
                 warehouse,
                 schedule,
@@ -203,51 +219,45 @@ impl Display for AlterTaskOptions {
                 error_integration,
                 comments,
             } => {
+                write!(f, "SET")?;
                 if let Some(wh) = warehouse {
-                    write!(f, " SET WAREHOUSE = {}", wh)?;
+                    write!(f, " WAREHOUSE = '{wh}'")?;
                 }
                 if let Some(schedule) = schedule {
-                    write!(f, " SET {}", schedule)?;
-                }
-                if let Some(error_integration) = error_integration {
-                    write!(f, " ERROR INTEGRATION = '{}'", error_integration)?;
+                    write!(f, " SCHEDULE = {schedule}")?;
                 }
                 if let Some(num) = suspend_task_after_num_failures {
-                    write!(f, " SUSPEND TASK AFTER {} FAILURES", num)?;
+                    write!(f, " SUSPEND_TASK_AFTER_NUM_FAILURES = {num}")?;
                 }
                 if let Some(comments) = comments {
-                    write!(f, " COMMENTS = '{}'", comments)?;
+                    write!(f, " COMMENT = '{comments}'")?;
+                }
+                if let Some(error_integration) = error_integration {
+                    write!(f, " ERROR_INTEGRATION = '{error_integration}'")?;
                 }
                 if let Some(session) = session_parameters {
-                    for (key, value) in session {
-                        write!(f, " {} = '{}'", key, value)?;
-                    }
+                    write!(f, " ")?;
+                    write_comma_separated_string_map(f, session)?;
                 }
                 Ok(())
             }
             AlterTaskOptions::Unset { warehouse } => {
                 if *warehouse {
-                    write!(f, " UNSET WAREHOUSE")?;
+                    write!(f, "UNSET WAREHOUSE")?;
                 }
                 Ok(())
             }
-            AlterTaskOptions::ModifyAs(sql) => write!(f, " AS {}", sql),
-            AlterTaskOptions::ModifyWhen(when) => write!(f, " WHEN {}", when),
-            AlterTaskOptions::AddAfter(after) => write!(f, " ADD AFTER = '{:?}'", after),
-            AlterTaskOptions::RemoveAfter(after) => write!(f, " REMOVE AFTER = '{:?}'", after),
+            AlterTaskOptions::ModifyAs(sql) => write!(f, "MODIFY AS {sql}"),
+            AlterTaskOptions::ModifyWhen(expr) => write!(f, "MODIFY WHEN {expr}"),
+            AlterTaskOptions::AddAfter(after) => {
+                write!(f, "ADD AFTER ")?;
+                write_comma_separated_string_list(f, after)
+            }
+            AlterTaskOptions::RemoveAfter(after) => {
+                write!(f, "REMOVE AFTER ")?;
+                write_comma_separated_string_list(f, after)
+            }
         }
-    }
-}
-
-impl Display for AlterTaskStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ALTER TASK")?;
-        if self.if_exists {
-            write!(f, " IF EXISTS")?;
-        }
-        write!(f, " {}", self.name)?;
-        write!(f, "{}", self.options)?;
-        Ok(())
     }
 }
 

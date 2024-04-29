@@ -59,9 +59,7 @@ impl AsyncSystemTable for BackgroundJobTable {
         let tenant = ctx.get_tenant();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let jobs = meta_api
-            .list_background_jobs(ListBackgroundJobsReq {
-                tenant: tenant.to_string(),
-            })
+            .list_background_jobs(ListBackgroundJobsReq::new(&tenant))
             .await?;
         let mut names = Vec::with_capacity(jobs.len());
         let mut job_types = Vec::with_capacity(jobs.len());
@@ -133,7 +131,7 @@ impl AsyncSystemTable for BackgroundJobTable {
             );
             message.push(job.message);
             last_updated.push(job.last_updated.map(|t| t.timestamp_micros()));
-            creator.push(job.creator.map(|x| x.to_string()));
+            creator.push(job.creator.map(|x| x.display().to_string()));
             create_time.push(job.created_at.timestamp_micros());
         }
 

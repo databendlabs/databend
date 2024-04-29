@@ -35,11 +35,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use parking_lot::RwLock;
 
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::planner::optimizer::s_expr::SExpr;
 use crate::plans::Limit;
-use crate::plans::Plan;
 use crate::BindContext;
 use crate::Binder;
 use crate::Metadata;
@@ -59,13 +56,12 @@ impl Dataframe {
         table_name: &str,
     ) -> Result<Self> {
         let table = TableReference::Table {
-            database: db.map(Identifier::from_name),
-            table: Identifier::from_name(table_name),
+            database: db.map(|db| Identifier::from_name(None, db)),
+            table: Identifier::from_name(None, table_name),
             span: None,
             catalog: None,
             alias: None,
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };
@@ -88,7 +84,7 @@ impl Dataframe {
             let database = "system";
             let tenant = query_ctx.get_tenant();
             let table_meta: Arc<dyn Table> = binder
-                .resolve_data_source(tenant.as_str(), catalog, database, "one", &None, &None)
+                .resolve_data_source(tenant.tenant_name(), catalog, database, "one", None)
                 .await?;
 
             let table_index = metadata.write().add_table(
@@ -160,7 +156,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
 
         Ok(self)
     }
@@ -180,7 +176,7 @@ impl Dataframe {
                 span: None,
                 func: FunctionCall {
                     distinct: false,
-                    name: Identifier::from_name("count"),
+                    name: Identifier::from_name(None, "count"),
                     args: vec![],
                     params: vec![],
                     window: None,
@@ -217,7 +213,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -288,7 +284,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -335,7 +331,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -434,7 +430,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
 
         Ok(self)
     }
@@ -476,13 +472,12 @@ impl Dataframe {
         let mut table_ref = vec![];
         for (db, table_name) in from {
             let table = TableReference::Table {
-                database: db.map(Identifier::from_name),
-                table: Identifier::from_name(table_name),
+                database: db.map(|db| Identifier::from_name(None, db)),
+                table: Identifier::from_name(None, table_name),
                 span: None,
                 catalog: None,
                 alias: None,
-                travel_point: None,
-                since_point: None,
+                temporal: None,
                 pivot: None,
                 unpivot: None,
             };
@@ -548,20 +543,6 @@ impl Dataframe {
     pub fn get_expr(&self) -> &SExpr {
         &self.s_expr
     }
-
-    pub fn into_plan(self, enable_distributed_optimization: bool) -> Result<Plan> {
-        let plan = Plan::Query {
-            s_expr: Box::new(self.s_expr),
-            metadata: self.binder.metadata.clone(),
-            bind_context: Box::new(self.bind_context),
-            rewrite_kind: None,
-            ignore_result: false,
-            formatted_ast: None,
-        };
-        let opt_ctx = OptimizerContext::new(self.query_ctx.clone(), self.binder.metadata.clone())
-            .with_enable_distributed_optimization(enable_distributed_optimization);
-        optimize(opt_ctx, plan)
-    }
 }
 
 fn parse_cols(schema: DataSchemaRef, columns: &[&str]) -> Result<Vec<SelectTarget>> {
@@ -582,7 +563,7 @@ fn parse_cols(schema: DataSchemaRef, columns: &[&str]) -> Result<Vec<SelectTarge
                 column: ColumnRef {
                     database: None,
                     table: None,
-                    column: ColumnID::Name(Identifier::from_name_with_quoted(*c, Some('`'))),
+                    column: ColumnID::Name(Identifier::from_name_with_quoted(None, *c, Some('`'))),
                 },
             }),
             alias: None,

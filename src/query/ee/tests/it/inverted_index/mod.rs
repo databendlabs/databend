@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod index_refresh;
+mod pruning;

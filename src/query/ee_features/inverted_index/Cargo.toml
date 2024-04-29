@@ -16,10 +16,7 @@ test = false
 databend-common-base = { path = "../../../common/base" }
 databend-common-catalog = { path = "../../catalog" }
 databend-common-exception = { path = "../../../common/exception" }
-databend-common-expression = { path = "../../expression" }
 databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-storages-fuse = { path = "../../storages/fuse" }
-databend-storages-common-table-meta = { path = "../../storages/common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }

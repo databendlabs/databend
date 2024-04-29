@@ -171,6 +171,10 @@ impl RangeJoinState {
 }
 
 fn compare_scalar(left: &ScalarRef, right: &ScalarRef, op: &str) -> bool {
+    if left.is_null() || right.is_null() {
+        return false;
+    }
+
     match op {
         "gte" => left.cmp(right) != std::cmp::Ordering::Less,
         "gt" => left.cmp(right) == std::cmp::Ordering::Greater,

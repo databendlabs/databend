@@ -47,13 +47,11 @@ impl ExplainConfigBuilder {
 
     pub fn add_option(mut self, option: &ExplainOption) -> Self {
         match option {
-            ExplainOption::Verbose(v) => self.verbose = *v,
-            ExplainOption::Logical(v) => self.logical = *v,
-            ExplainOption::Optimized(v) => {
-                if *v {
-                    self.logical = true;
-                }
-                self.optimized = *v;
+            ExplainOption::Verbose => self.verbose = true,
+            ExplainOption::Logical => self.logical = true,
+            ExplainOption::Optimized => {
+                self.logical = true;
+                self.optimized = true;
             }
         }
 
@@ -81,13 +79,13 @@ impl Binder {
 
         // Rewrite `EXPLAIN RAW` to `EXPLAIN(LOGICAL)`
         if matches!(kind, ExplainKind::Raw) {
-            builder = builder.add_option(&ExplainOption::Logical(true));
+            builder = builder.add_option(&ExplainOption::Logical);
         }
 
         // Rewrite `EXPLAIN OPTIMIZED` to `EXPLAIN(LOGICAL, OPTIMIZED)`
         if matches!(kind, ExplainKind::Optimized) {
-            builder = builder.add_option(&ExplainOption::Logical(true));
-            builder = builder.add_option(&ExplainOption::Optimized(true));
+            builder = builder.add_option(&ExplainOption::Logical);
+            builder = builder.add_option(&ExplainOption::Optimized);
         }
 
         for option in options {

@@ -62,7 +62,7 @@ impl Interpreter for ExecuteTaskInterpreter {
         let task_client = cloud_api.get_task_client();
         let req = ExecuteTaskRequest {
             task_name: self.plan.task_name.clone(),
-            tenant_id: self.plan.tenant.clone(),
+            tenant_id: self.plan.tenant.tenant_name().to_string(),
         };
         let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);

@@ -100,6 +100,7 @@ build_exceptions! {
     TooManyUserConnections(1041),
     AbortedSession(1042),
     AbortedQuery(1043),
+    ClosedQuery(1044),
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),
@@ -150,6 +151,11 @@ build_exceptions! {
     UnknownCatalogType(1120),
     UnmatchMaskPolicyReturnType(1121),
     Timeout(1122),
+    Outdated(1123),
+    // sequence
+    OutofSequenceRange(1124),
+    WrongSequenceCount(1125),
+    UnknownSequence(1126),
 
     // Data Related Errors
 
@@ -193,6 +199,7 @@ build_exceptions! {
     // Index related errors.
     UnsupportedIndex(1601),
     RefreshIndexError(1602),
+    IndexOptionInvalid(1603),
 
     // Cloud control error codes
     CloudControlConnectError(1701),
@@ -201,7 +208,7 @@ build_exceptions! {
 
     // Geometry errors.
     GeometryError(1801),
-
+    InvalidGeometryFormat(1802),
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
@@ -334,6 +341,8 @@ build_exceptions! {
     UnknownIndex(2722),
     DropIndexWithDropTime(2723),
     GetIndexWithDropTime(2724),
+    DuplicatedIndexColumnId(2725),
+    IndexColumnIdNotFound(2726),
 
     // Stream error codes.
     UnknownStream(2730),
@@ -341,6 +350,9 @@ build_exceptions! {
     StreamAlreadyExists(2732),
     IllegalStream(2733),
     StreamVersionMismatched(2734),
+
+    // dynamic error codes.
+    IllegalDynamicTable(2740),
 
     // Variable error codes.
     UnknownVariable(2801),
@@ -352,6 +364,12 @@ build_exceptions! {
     TenantQuotaUnknown(2902),
     TenantQuotaExceeded(2903),
 
+    // Script error codes.
+    ScriptSemanticError(3001),
+    ScriptExecutionError(3002),
+
+    // sequence
+    SequenceError(3101),
 }
 
 // Storage errors [3001, 4000].

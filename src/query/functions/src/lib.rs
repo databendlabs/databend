@@ -38,6 +38,7 @@ pub fn is_builtin_function(name: &str) -> bool {
         || AggregateFunctionFactory::instance().contains(name)
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
         || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
+        || GENERAL_SEARCH_FUNCTIONS.contains(&name)
 }
 
 #[ctor]
@@ -66,6 +67,8 @@ pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 5] = [
     "array_filter",
     "array_reduce",
 ];
+
+pub const GENERAL_SEARCH_FUNCTIONS: [&str; 3] = ["match", "query", "score"];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

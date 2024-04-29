@@ -15,9 +15,11 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
@@ -37,7 +39,7 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
@@ -45,6 +47,7 @@ use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
@@ -102,11 +105,12 @@ pub struct QueryContextShared {
     pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
     pub(in crate::sessions) copy_status: Arc<CopyStatus>,
     pub(in crate::sessions) merge_status: Arc<RwLock<MergeStatus>>,
+    pub(in crate::sessions) multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
-    pub(in crate::sessions) auto_compact_after_write: Arc<AtomicBool>,
+    pub(in crate::sessions) num_fragmented_block_hint: Arc<AtomicU64>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
 
@@ -123,6 +127,8 @@ pub struct QueryContextShared {
 
     // Records query level data cache metrics
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
+
+    pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
 }
 
 impl QueryContextShared {
@@ -159,7 +165,7 @@ impl QueryContextShared {
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
-            auto_compact_after_write: Arc::new(AtomicBool::new(true)),
+            num_fragmented_block_hint: Arc::new(AtomicU64::new(0)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
@@ -170,6 +176,8 @@ impl QueryContextShared {
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
             merge_into_join: Default::default(),
+            multi_table_insert_status: Default::default(),
+            query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
         }))
     }
 
@@ -264,7 +272,7 @@ impl QueryContextShared {
         self.session.get_current_role()
     }
 
-    pub fn set_current_tenant(&self, tenant: String) {
+    pub fn set_current_tenant(&self, tenant: Tenant) {
         self.session.set_current_tenant(tenant);
     }
 
@@ -281,7 +289,7 @@ impl QueryContextShared {
         StorageMetrics::merge(&metrics)
     }
 
-    pub fn get_tenant(&self) -> NonEmptyString {
+    pub fn get_tenant(&self) -> Tenant {
         self.session.get_current_tenant()
     }
 
@@ -335,9 +343,13 @@ impl QueryContextShared {
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
         let catalog = self
             .catalog_manager
-            .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
+            .get_catalog(
+                tenant.tenant_name(),
+                catalog,
+                self.session.session_ctx.txn_mgr(),
+            )
             .await?;
-        let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
+        let cache_table = catalog.get_table(&tenant, database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
 
@@ -365,14 +377,27 @@ impl QueryContextShared {
                 let tenant = self.get_tenant();
                 let catalog = self
                     .catalog_manager
-                    .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
+                    .get_catalog(
+                        tenant.tenant_name(),
+                        catalog,
+                        self.session.session_ctx.txn_mgr(),
+                    )
                     .await?;
                 let source_table = match catalog.get_stream_source_table(stream_desc)? {
                     Some(source_table) => source_table,
                     None => {
                         let source_table = catalog
-                            .get_table(tenant.as_str(), database, table_name)
-                            .await?;
+                            .get_table(&tenant, database, table_name)
+                            .await
+                            .map_err(|err| {
+                            ErrorCode::IllegalStream(format!(
+                                "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                                database,
+                                table_name,
+                                stream_desc,
+                                err.message()
+                            ))
+                        })?;
                         catalog.cache_stream_source_table(
                             stream.get_table_info().clone(),
                             source_table.get_table_info().clone(),
@@ -497,7 +522,7 @@ impl QueryContextShared {
     pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
         let user_mgr = UserApiProvider::instance();
         let tenant = self.get_tenant();
-        user_mgr.get_connection(tenant.as_str(), name).await
+        user_mgr.get_connection(&tenant, name).await
     }
 
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {

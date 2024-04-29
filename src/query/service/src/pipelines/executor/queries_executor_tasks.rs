@@ -136,13 +136,6 @@ impl QueriesExecutorTasksQueue {
         }
 
         let workers_condvar = context.get_workers_condvar();
-        if !workers_condvar.has_waiting_async_task()
-            && workers_tasks.workers_waiting_status.is_last_active_worker()
-        {
-            drop(workers_tasks);
-            self.finish(workers_condvar.clone());
-            return;
-        }
 
         let worker_id = context.get_worker_id();
         workers_tasks.workers_waiting_status.wait_worker(worker_id);
@@ -150,7 +143,7 @@ impl QueriesExecutorTasksQueue {
         workers_condvar.wait(worker_id, self.finished.clone());
     }
 
-    pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorWrapper>) {
+    pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorWrapper>, condvar: Arc<WorkersCondvar>) {
         let mut workers_tasks = self.workers_tasks.lock();
 
         let mut worker_id = 0;
@@ -162,6 +155,40 @@ impl QueriesExecutorTasksQueue {
             worker_id += 1;
             if worker_id == workers_tasks.next_tasks.workers_sync_tasks.len() {
                 worker_id = 0;
+            }
+
+            if workers_tasks.workers_waiting_status.is_waiting(worker_id) {
+                workers_tasks
+                    .workers_waiting_status
+                    .wakeup_worker(worker_id);
+                condvar.wakeup(worker_id);
+            }
+        }
+    }
+
+    pub fn init_async_tasks(
+        &self,
+        tasks: VecDeque<ProcessorWrapper>,
+        condvar: Arc<WorkersCondvar>,
+    ) {
+        let mut workers_tasks = self.workers_tasks.lock();
+
+        let mut worker_id = 0;
+        for proc in tasks.into_iter() {
+            workers_tasks
+                .next_tasks
+                .push_task(worker_id, ExecutorTask::Async(proc));
+
+            worker_id += 1;
+            if worker_id == workers_tasks.next_tasks.workers_sync_tasks.len() {
+                worker_id = 0;
+            }
+
+            if workers_tasks.workers_waiting_status.is_waiting(worker_id) {
+                workers_tasks
+                    .workers_waiting_status
+                    .wakeup_worker(worker_id);
+                condvar.wakeup(worker_id);
             }
         }
     }

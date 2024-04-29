@@ -8,7 +8,7 @@ statement ok
 grant select on default.* to role 'role1';
 
 statement ok
-create table t(id int);
+create function a as (a) -> (a+1);
 
 statement ok
 drop role if exists 'role2';
@@ -17,4 +17,4 @@ statement ok
 create role 'role2';
 
 statement ok
-grant ownership on default.t to role 'role1';
+GRANT OWNERSHIP on udf a to role 'role1';

@@ -24,6 +24,7 @@ use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::plan::split_prefix;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
@@ -51,6 +52,10 @@ impl PartInfo for TestPartInfo {
         self.loc.hash(&mut s);
         s.finish()
     }
+
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::LazyLevel
+    }
 }
 
 impl TestPartInfo {
@@ -65,7 +70,7 @@ fn gen_parts(kind: PartitionsShuffleKind, size: usize) -> Partitions {
         parts.push(TestPartInfo::create(format!("{}", i)));
     }
 
-    Partitions::create(kind, parts, true)
+    Partitions::create(kind, parts)
 }
 
 #[test]

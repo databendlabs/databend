@@ -63,7 +63,7 @@ impl ApplyRuleTask {
         let group = optimizer.memo.group(self.target_group_index)?;
         let m_expr = group.m_expr(self.m_expr_index)?;
         let mut state = TransformResult::new();
-        let rule = RuleFactory::create_rule(self.rule_id, optimizer.metadata.clone(), false)?;
+        let rule = RuleFactory::create_rule(self.rule_id, optimizer.metadata.clone())?;
         m_expr.apply_rule(&optimizer.memo, &rule, &mut state)?;
         optimizer.insert_from_transform_state(self.target_group_index, state)?;
 

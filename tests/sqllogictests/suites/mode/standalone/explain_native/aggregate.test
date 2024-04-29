@@ -14,7 +14,7 @@ AggregateFinal
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 10
-        ├── read bytes: 80
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -37,7 +37,7 @@ AggregateFinal
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 10
-        ├── read bytes: 80
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -55,7 +55,7 @@ EvalScalar
     ├── table: default.system.numbers
     ├── output columns: []
     ├── read rows: 10
-    ├── read bytes: 80
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -67,7 +67,7 @@ query T
 explain select 1, number, number + 1, number -1 from numbers(10) group by number, abs(number), cast(number as int);
 ----
 EvalScalar
-├── output columns: [numbers.number (#0), 1 (#3), (number + 1) (#4), (number - 1) (#5)]
+├── output columns: [numbers.number (#0), 1 (#3), number + 1 (#4), number - 1 (#5)]
 ├── expressions: [1, numbers.number (#0) + 1, numbers.number (#0) - 1]
 ├── estimated rows: 10.00
 └── AggregateFinal
@@ -83,7 +83,7 @@ EvalScalar
             ├── table: default.system.numbers
             ├── output columns: [number (#0)]
             ├── read rows: 10
-            ├── read bytes: 80
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
@@ -110,7 +110,7 @@ EvalScalar
             ├── table: default.system.columns
             ├── output columns: [name (#0), type (#3)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -136,7 +136,7 @@ AggregateFinal
         ├── table: default.default.explain_agg_t1
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [false], limit: NONE]
@@ -158,7 +158,7 @@ AggregateFinal
         ├── table: default.default.explain_agg_t1
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [explain_agg_t1.a (#0) > 3], limit: NONE]
@@ -180,7 +180,7 @@ AggregateFinal
         ├── table: default.default.explain_agg_t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
@@ -190,7 +190,7 @@ query T
 explain select a, avg(b) from explain_agg_t1 group by a having a > 1 and max(b) > 10;
 ----
 EvalScalar
-├── output columns: [explain_agg_t1.a (#0), (sum(b) / if((count(b) = 0), 1, count(b))) (#4)]
+├── output columns: [explain_agg_t1.a (#0), sum(b) / if(count(b) = 0, 1, count(b)) (#4)]
 ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
 ├── estimated rows: 0.00
 └── Filter
@@ -210,7 +210,7 @@ EvalScalar
                 ├── table: default.default.explain_agg_t1
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
@@ -220,7 +220,7 @@ query T
 explain select a, avg(b) from explain_agg_t1 group by a having a > 1 and max(b) > 10;
 ----
 EvalScalar
-├── output columns: [explain_agg_t1.a (#0), (sum(b) / if((count(b) = 0), 1, count(b))) (#4)]
+├── output columns: [explain_agg_t1.a (#0), sum(b) / if(count(b) = 0, 1, count(b)) (#4)]
 ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
 ├── estimated rows: 0.00
 └── Filter
@@ -240,7 +240,7 @@ EvalScalar
                 ├── table: default.default.explain_agg_t1
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
@@ -283,20 +283,20 @@ AggregateFinal
         │   ├── table: default.default.t1
         │   ├── output columns: [a (#0)]
         │   ├── read rows: 10
-        │   ├── read bytes: 54
+        │   ├── read size: < 1 KiB
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         │   ├── push downs: [filters: [], limit: NONE]
         │   └── estimated rows: 10.00
         └── TableScan(Right)
             ├── table: default.default.t2
             ├── output columns: [a (#1)]
             ├── read rows: 100
-            ├── read bytes: 414
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 100.00
 
@@ -306,3 +306,38 @@ drop table t1;
 
 statement ok
 drop table t2;
+
+statement ok
+DROP TABLE IF EXISTS t;
+
+statement ok
+CREATE TABLE t (Referer TEXT NOT NULL, IsRefresh SMALLINT NOT NULL);
+
+query T
+EXPLAIN SELECT referer, avg(isrefresh), count(distinct referer) FROM t GROUP BY referer;
+----
+EvalScalar
+├── output columns: [count(DISTINCT referer) (#4), t.referer (#0), sum(isrefresh) / if(count(isrefresh) = 0, 1, count(isrefresh)) (#5)]
+├── expressions: [sum(isrefresh) (#2) / CAST(if(CAST(count(isrefresh) (#3) = 0 AS Boolean NULL), 1, count(isrefresh) (#3)) AS UInt64 NULL)]
+├── estimated rows: 0.00
+└── AggregateFinal
+    ├── output columns: [sum(isrefresh) (#2), count(isrefresh) (#3), count(DISTINCT referer) (#4), t.referer (#0)]
+    ├── group by: [referer]
+    ├── aggregate functions: [sum(isrefresh), count(), count()]
+    ├── estimated rows: 0.00
+    └── AggregatePartial
+        ├── group by: [referer]
+        ├── aggregate functions: [sum(isrefresh), count(), count()]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t
+            ├── output columns: [referer (#0), isrefresh (#1)]
+            ├── read rows: 0
+            ├── read size: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
+
+statement ok
+DROP TABLE IF EXISTS t;

@@ -23,10 +23,10 @@ use databend_common_management::udf::UdfMgr;
 use databend_common_management::*;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyStr;
 use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -234,6 +234,6 @@ fn create_test_udf_script() -> UserDefinedFunction {
 
 async fn new_udf_api() -> Result<(Arc<MetaEmbedded>, UdfMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = UdfMgr::create(test_api.clone(), NonEmptyStr::new("admin").unwrap());
+    let mgr = UdfMgr::create(test_api.clone(), &Tenant::new_literal("admin"));
     Ok((test_api, mgr))
 }

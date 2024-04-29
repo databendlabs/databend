@@ -23,6 +23,7 @@ pub const OPT_KEY_COMMENT: &str = "comment";
 pub const OPT_KEY_ENGINE: &str = "engine";
 pub const OPT_KEY_BLOOM_INDEX_COLUMNS: &str = "bloom_index_columns";
 pub const OPT_KEY_CHANGE_TRACKING: &str = "change_tracking";
+pub const OPT_KEY_CHANGE_TRACKING_BEGIN_VER: &str = "begin_version";
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
@@ -45,6 +46,8 @@ pub const OPT_KEY_ENGINE_META: &str = "engine_meta";
 ///
 /// If both OPT_KEY_SNAPSHOT_LOC and OPT_KEY_SNAPSHOT_LOCATION exist, the latter will be used
 pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
+// the following are used in for random engine
+pub const OPT_KEY_RANDOM_SEED: &str = "seed";
 
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specified this option keys in DDL
@@ -62,6 +65,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_ENGINE_META);
+    r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r
 });
 

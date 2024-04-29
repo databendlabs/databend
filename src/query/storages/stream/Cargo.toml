@@ -26,7 +26,6 @@ databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-log = { workspace = true }
 minitrace = { workspace = true }
 
 [build-dependencies]

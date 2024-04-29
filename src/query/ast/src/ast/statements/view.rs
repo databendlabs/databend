@@ -23,6 +23,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateViewStmt {
@@ -110,6 +111,61 @@ impl Display for DropViewStmt {
                 .iter()
                 .chain(&self.database)
                 .chain(Some(&self.view)),
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowViewsStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    #[drive(skip)]
+    pub full: bool,
+    pub limit: Option<ShowLimit>,
+    #[drive(skip)]
+    pub with_history: bool,
+}
+
+impl Display for ShowViewsStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW")?;
+        if self.full {
+            write!(f, " FULL")?;
+        }
+        write!(f, " VIEWS")?;
+        if self.with_history {
+            write!(f, " HISTORY")?;
+        }
+        if let Some(database) = &self.database {
+            write!(f, " FROM ")?;
+            if let Some(catalog) = &self.catalog {
+                write!(f, "{catalog}.",)?;
+            }
+            write!(f, "{database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct DescribeViewStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub view: Identifier,
+}
+
+impl Display for DescribeViewStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "DESCRIBE ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(self.database.iter().chain(Some(&self.view))),
         )
     }
 }

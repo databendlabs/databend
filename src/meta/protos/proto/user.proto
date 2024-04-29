@@ -120,6 +120,7 @@ message UserOption {
   optional string default_role = 2;
   optional string network_policy = 3;
   optional string password_policy = 4;
+  optional bool disabled = 5;
 }
 
 message UserInfo {

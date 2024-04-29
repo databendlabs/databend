@@ -17,6 +17,58 @@ select * from t1 left join t2 on t1.a = t2.b limit 10 offset 5;
 9 9
 
 statement ok
+drop table if exists t;
+
+statement ok
+create table t(id int, top int);
+
+statement ok
+insert into t values(1,10),(2,20),(3,30);
+
+statement error 1065
+select top 2 * from t order by id limit 2;
+
+query TT
+select top 2 * from t
+----
+1 10
+2 20
+
+query T
+select distinct top 2 id from t order by id;
+----
+1
+2
+
+query T
+select top 2 "top" from t order by top desc;
+----
+30
+20
+
+query T
+select "top" from t order by top limit 1;
+----
+10
+
+query TT
+select top 2 * from (select * from t limit 3) as t1 order by id;
+----
+1 10
+2 20
+
+query TT
+select top 2 * from (select * from t limit 3) as t1 order by id offset 2;
+----
+3 30
+
+statement error 1065
+select top 2 * from (select * from t limit 3) as t1 order by id limit 2 offset 2;
+
+statement ok
+drop table t;
+
+statement ok
 drop table t1;
 
 statement ok

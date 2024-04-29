@@ -17,7 +17,6 @@ mod segment;
 mod snapshot;
 
 pub use index::IndexInfo;
-pub use index::IndexSegmentInfo;
 pub use segment::CompactSegmentInfo;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;

@@ -43,7 +43,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::PartitionedPayload;
 use databend_common_hashtable::HashtableLike;
-use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -56,9 +55,8 @@ use log::info;
 use opendal::Operator;
 
 use super::SerializePayload;
-use crate::api::serialize_block;
-use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::agg_spilling_group_by_payload as local_agg_spilling_group_by_payload;
+use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::serialize_group_by;
 use crate::pipelines::processors::transforms::aggregator::spilling_group_by_payload as local_spilling_group_by_payload;
@@ -68,6 +66,8 @@ use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::SerializeGroupByStream;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::servers::flight::v1::exchange::serde::serialize_block;
+use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::sessions::QueryContext;
 
 pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {
@@ -190,7 +190,6 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                 Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
-                Some(AggregateMeta::AggregateHashTable(_)) => unreachable!(),
                 Some(AggregateMeta::Spilling(payload)) => {
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
@@ -238,16 +237,24 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                     }
 
                     let bucket = payload.bucket;
-                    let mut stream = SerializeGroupByStream::create(
+                    let stream = SerializeGroupByStream::create(
                         &self.method,
                         SerializePayload::<Method, ()>::HashTablePayload(payload),
                     );
-                    serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
-                        None => DataBlock::empty(),
-                        Some(data_block) => {
-                            serialize_block(bucket, data_block?, &self.ipc_fields, &self.options)?
+
+                    let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
+
+                    if stream_blocks.is_empty() {
+                        serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
+                    } else {
+                        let mut c = DataBlock::concat(&stream_blocks)?;
+                        if let Some(meta) = stream_blocks[0].take_meta() {
+                            c.replace_meta(meta);
                         }
-                    }));
+
+                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        serialized_blocks.push(FlightSerialized::DataBlock(c));
+                    }
                 }
                 Some(AggregateMeta::AggregatePayload(p)) => {
                     if index == self.local_pos {
@@ -257,17 +264,25 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         continue;
                     }
 
-                    let bucket = p.bucket;
-                    let mut stream = SerializeGroupByStream::create(
+                    let bucket = compute_block_number(p.bucket, p.max_partition_count)?;
+                    let stream = SerializeGroupByStream::create(
                         &self.method,
                         SerializePayload::<Method, ()>::AggregatePayload(p),
                     );
-                    serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
-                        None => DataBlock::empty(),
-                        Some(data_block) => {
-                            serialize_block(bucket, data_block?, &self.ipc_fields, &self.options)?
+
+                    let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
+
+                    if stream_blocks.is_empty() {
+                        serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
+                    } else {
+                        let mut c = DataBlock::concat(&stream_blocks)?;
+                        if let Some(meta) = stream_blocks[0].take_meta() {
+                            c.replace_meta(meta);
                         }
-                    }));
+
+                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        serialized_blocks.push(FlightSerialized::DataBlock(c));
+                    }
                 }
             };
         }
@@ -306,7 +321,6 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
             continue;
         }
 
-        let now = Instant::now();
         let data_block = payload.group_by_flush_all()?;
         rows += data_block.num_rows();
 
@@ -321,13 +335,6 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
-        }
-
-        // perf
-        {
-            metrics_inc_aggregate_spill_data_serialize_milliseconds(
-                now.elapsed().as_millis() as u64
-            );
         }
 
         write_data.push(columns_data);
@@ -357,10 +364,6 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
 
             // perf
             {
-                metrics_inc_group_by_spill_write_count();
-                metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
-                metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
-
                 Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
                 Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
                 Profile::record_usize_profile(
@@ -436,7 +439,6 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
             continue;
         }
 
-        let now = Instant::now();
         let data_block = serialize_group_by(method, inner_table)?;
         rows += 0;
 
@@ -451,13 +453,6 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
-        }
-
-        // perf
-        {
-            metrics_inc_aggregate_spill_data_serialize_milliseconds(
-                now.elapsed().as_millis() as u64
-            );
         }
 
         write_data.push(columns_data);
@@ -487,10 +482,6 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
 
             // perf
             {
-                metrics_inc_group_by_spill_write_count();
-                metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
-                metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
-
                 Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
                 Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
                 Profile::record_usize_profile(

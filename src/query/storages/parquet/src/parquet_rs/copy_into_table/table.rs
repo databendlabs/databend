@@ -107,10 +107,7 @@ impl ParquetTableForCopy {
         stats.partitions_total = parts.len();
         stats.read_bytes = total_size;
 
-        Ok((
-            stats,
-            Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts),
-        ))
+        Ok((stats, Partitions::create(PartitionsShuffleKind::Mod, parts)))
     }
 
     pub fn do_read_data(

@@ -129,15 +129,15 @@ fn test_user_grant_entry() -> Result<()> {
     );
     assert!(grant.verify_privilege(
         &GrantObject::Database("default".into(), "db1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
     assert!(!grant.verify_privilege(
         &GrantObject::Database("default".into(), "db1".into()),
-        vec![UserPrivilegeType::Insert]
+        UserPrivilegeType::Insert
     ));
     assert!(grant.verify_privilege(
         &GrantObject::Database("default".into(), "db2".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
 
     let grant = GrantEntry::new(
@@ -146,15 +146,15 @@ fn test_user_grant_entry() -> Result<()> {
     );
     assert!(grant.verify_privilege(
         &GrantObject::Table("default".into(), "db1".into(), "table1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
     assert!(!grant.verify_privilege(
         &GrantObject::Table("default".into(), "db2".into(), "table1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
     assert!(grant.verify_privilege(
         &GrantObject::Database("default".into(), "db1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
 
     let grant = GrantEntry::new(
@@ -163,19 +163,19 @@ fn test_user_grant_entry() -> Result<()> {
     );
     assert!(grant.verify_privilege(
         &GrantObject::Table("default".into(), "db1".into(), "table1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
     assert!(!grant.verify_privilege(
         &GrantObject::Table("default".into(), "db2".into(), "table1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
     assert!(!grant.verify_privilege(
         &GrantObject::Table("default".into(), "db1".into(), "table1".into()),
-        vec![UserPrivilegeType::Insert]
+        UserPrivilegeType::Insert
     ));
     assert!(grant.verify_privilege(
         &GrantObject::Table("default".into(), "db1".into(), "table1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
 
     Ok(())
@@ -216,23 +216,23 @@ fn test_user_grant_set() -> Result<()> {
 
     assert!(grants.verify_privilege(
         &GrantObject::Database("default".into(), "db1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
     assert!(!grants.verify_privilege(
         &GrantObject::Database("default".into(), "db1".into()),
-        vec![UserPrivilegeType::Select]
+        UserPrivilegeType::Select
     ));
     assert!(grants.verify_privilege(
         &GrantObject::Table("default".into(), "db1".into(), "table1".into()),
-        vec![UserPrivilegeType::Create]
+        UserPrivilegeType::Create
     ));
     assert!(!grants.verify_privilege(
         &GrantObject::Table("default".into(), "db1".into(), "table1".into()),
-        vec![UserPrivilegeType::Insert]
+        UserPrivilegeType::Insert
     ));
     assert!(grants.verify_privilege(
         &GrantObject::Table("default".into(), "db1".into(), "table1".into()),
-        vec![UserPrivilegeType::Select]
+        UserPrivilegeType::Select
     ));
     Ok(())
 }

@@ -1,0 +1,44 @@
+# test orphan data created by failed CTAS could be vacuumed
+statement ok
+create database ctas_test;
+
+statement ok
+use ctas_test;
+
+# generate orphan data files
+statement error 1006
+create or replace table t (c int) 'fs:///tmp/ctas/' as select number / (number-3999999) from numbers(4000000);
+
+# there should be one dropped table ctas_test.t
+query I
+select count() from system.tables_with_history where database = 'ctas_test' and name = 't';
+----
+1
+
+# verify the orphan files could be vacuumed
+
+statement ok
+set data_retention_time_in_days = 0;
+
+statement ok
+vacuum drop table from ctas_test;
+
+
+# the dropped table ctas_test.t should be vacuumed
+query I
+select count() from system.tables_with_history where database = 'ctas_test' and name = 't';
+----
+0
+
+# create a stage that points to the same location of table `ctas_test`
+statement ok
+create stage ctas_stage url='fs:///tmp/ctas/';
+
+
+# the data of dropped table should be purged:
+# list the stage, an empty result-set should be return
+query T
+list @ctas_stage;
+
+statement ok
+drop database ctas_test;

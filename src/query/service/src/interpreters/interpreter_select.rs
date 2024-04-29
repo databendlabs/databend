@@ -18,6 +18,9 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_store::MetaStore;
 use databend_common_pipeline_core::processors::InputPort;
@@ -84,6 +87,23 @@ impl SelectInterpreter {
         self.bind_context.columns.clone()
     }
 
+    pub fn get_result_schema(&self) -> DataSchemaRef {
+        // Building data schema from bind_context columns
+        // TODO(leiyskey): Extract the following logic as new API of BindContext.
+        let fields = self
+            .bind_context
+            .columns
+            .iter()
+            .map(|column_binding| {
+                DataField::new(
+                    &column_binding.column_name,
+                    *column_binding.data_type.clone(),
+                )
+            })
+            .collect();
+        DataSchemaRefExt::create(fields)
+    }
+
     #[inline]
     #[async_backtrace::framed]
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
@@ -135,7 +155,7 @@ impl SelectInterpreter {
         //              └─────────┘    └─────────┘    └─────────┘
 
         // 1. Duplicate the pipes.
-        pipeline.duplicate(false)?;
+        pipeline.duplicate(false, 2)?;
         // 2. Reorder the pipes.
         let output_len = pipeline.output_len();
         debug_assert!(output_len % 2 == 0);
@@ -243,6 +263,7 @@ impl Interpreter for SelectInterpreter {
             self.ctx.get_id(),
             query_plan
         );
+
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.

@@ -159,7 +159,6 @@ impl FuseTable {
                 });
             }
         }
-
         if !lazy_init_segments.is_empty() {
             let table = self.clone();
             let table_schema = self.schema_with_stream();

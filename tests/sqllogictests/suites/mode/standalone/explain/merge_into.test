@@ -2,6 +2,12 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
+DROP TABLE IF EXISTS employees2;
+
+statement ok
+DROP TABLE IF EXISTS salaries2;
+
+statement ok
 CREATE TABLE employees2 (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255));
 
 statement ok
@@ -28,23 +34,34 @@ target_table: default.default.salaries2
 ├── can_try_update_column_only: false
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
-├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
-└── Join(Left)
-    ├── build keys: [salaries2.employee_id (#3)]
-    ├── probe keys: [employees2.employee_id (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [employees2.employee_id (#0) AS (#0), employees2.employee_name (#1) AS (#1), employees2.department (#2) AS (#2)]
-    │   └── Scan
-    │       ├── table: default.employees2
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── Scan
-        ├── table: default.salaries2
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
+HashJoin
+├── output columns: [employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2), salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5)]
+├── join type: LEFT OUTER
+├── build keys: [salaries2.employee_id (#3)]
+├── probe keys: [employees2.employee_id (#0)]
+├── filters: []
+├── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.salaries2
+│   ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
+│   ├── read rows: 4
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 4.00
+└── TableScan(Probe)
+    ├── table: default.default.employees2
+    ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
 
 statement ok
 INSERT INTO salaries2 VALUES(1, 50000.00),(2, 60000.00);
@@ -59,23 +76,80 @@ target_table: default.default.salaries2
 ├── can_try_update_column_only: false
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
-├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
-└── Join(Right)
-    ├── build keys: [employees2.employee_id (#0)]
-    ├── probe keys: [salaries2.employee_id (#3)]
-    ├── other filters: []
-    ├── Scan
-    │   ├── table: default.salaries2
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── EvalScalar
-        ├── scalars: [employees2.employee_id (#0) AS (#0), employees2.employee_name (#1) AS (#1), employees2.department (#2) AS (#2)]
-        └── Scan
-            ├── table: default.employees2
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
+└── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
+HashJoin
+├── output columns: [salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5), employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
+├── join type: RIGHT OUTER
+├── build keys: [employees2.employee_id (#0)]
+├── probe keys: [salaries2.employee_id (#3)]
+├── filters: []
+├── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.employees2
+│   ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
+│   ├── read rows: 4
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 4.00
+└── TableScan(Probe)
+    ├── table: default.default.salaries2
+    ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 6.00
+
+## test disable_merge_into_join_reorder settings
+statement ok
+set disable_merge_into_join_reorder = 1;
+
+query T
+explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON salaries2.employee_id = employees2.employee_id WHEN MATCHED AND employees2.department = 'HR' THEN UPDATE SET salaries2.salary = salaries2.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries2.salary = salaries2.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees2.employee_id, 55000.00);
+----
+MergeInto:
+target_table: default.default.salaries2
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
+├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
+└── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
+HashJoin
+├── output columns: [salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5), employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
+├── join type: RIGHT OUTER
+├── build keys: [employees2.employee_id (#0)]
+├── probe keys: [salaries2.employee_id (#3)]
+├── filters: []
+├── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.employees2
+│   ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
+│   ├── read rows: 4
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 4.00
+└── TableScan(Probe)
+    ├── table: default.default.salaries2
+    ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 6.00
+
+statement ok
+set disable_merge_into_join_reorder = 0;
 
 ## test update column only optimization
 statement ok
@@ -90,6 +164,9 @@ create table column_only_optimization_target(a int,b string);
 statement ok
 create table column_only_optimization_source(a int,b string);
 
+statement ok
+set join_spilling_memory_ratio = 0;
+
 query T
 explain MERGE INTO column_only_optimization_target as t1 using column_only_optimization_source as t2
 on t1.a = t2.a when matched then update set t1.b = t2.b when not matched then insert *;
@@ -97,24 +174,35 @@ on t1.a = t2.a when matched then update set t1.b = t2.b when not matched then in
 MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
-├── target_build_optimization: false
+├── target_build_optimization: true
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set b = t2.b (#1)]
-├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#2)]
-    ├── probe keys: [t2.a (#0)]
-    ├── other filters: []
-    ├── Scan
-    │   ├── table: default.column_only_optimization_source
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Scan
-        ├── table: default.column_only_optimization_target
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
+HashJoin
+├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1.b (#3), t1._row_id (#4)]
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#2)]
+├── probe keys: [t2.a (#0)]
+├── filters: []
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.column_only_optimization_target
+│   ├── output columns: [a (#2), b (#3), _row_id (#4)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.column_only_optimization_source
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain MERGE INTO column_only_optimization_target as t1 using column_only_optimization_source as t2
@@ -123,24 +211,38 @@ on t1.a = t2.a when matched then update * when not matched then insert *;
 MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
-├── target_build_optimization: false
+├── target_build_optimization: true
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
-├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#2)]
-    ├── probe keys: [t2.a (#0)]
-    ├── other filters: []
-    ├── Scan
-    │   ├── table: default.column_only_optimization_source
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Scan
-        ├── table: default.column_only_optimization_target
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
+HashJoin
+├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1.b (#3), t1._row_id (#4)]
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#2)]
+├── probe keys: [t2.a (#0)]
+├── filters: []
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.column_only_optimization_target
+│   ├── output columns: [a (#2), b (#3), _row_id (#4)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.column_only_optimization_source
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
+
+statement ok
+set join_spilling_memory_ratio = 60;
 
 query T
 explain MERGE INTO column_only_optimization_target as t1 using column_only_optimization_source as t2
@@ -152,21 +254,32 @@ target_table: default.default.column_only_optimization_target
 ├── target_build_optimization: false
 ├── can_try_update_column_only: false
 ├── matched update: [condition: None,update set b = 'test']
-├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#2)]
-    ├── probe keys: [t2.a (#0)]
-    ├── other filters: []
-    ├── Scan
-    │   ├── table: default.column_only_optimization_source
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Scan
-        ├── table: default.column_only_optimization_target
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
+HashJoin
+├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1.b (#3), t1._row_id (#4)]
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#2)]
+├── probe keys: [t2.a (#0)]
+├── filters: []
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.column_only_optimization_target
+│   ├── output columns: [a (#2), b (#3), _row_id (#4)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.column_only_optimization_source
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain MERGE INTO column_only_optimization_target as t1 using column_only_optimization_source as t2
@@ -178,21 +291,32 @@ target_table: default.default.column_only_optimization_target
 ├── target_build_optimization: false
 ├── can_try_update_column_only: false
 ├── matched update: [condition: None,update set b = concat(t2.b (#1), 'test')]
-├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#2)]
-    ├── probe keys: [t2.a (#0)]
-    ├── other filters: []
-    ├── Scan
-    │   ├── table: default.column_only_optimization_source
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Scan
-        ├── table: default.column_only_optimization_target
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
+HashJoin
+├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1.b (#3), t1._row_id (#4)]
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#2)]
+├── probe keys: [t2.a (#0)]
+├── filters: []
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.column_only_optimization_target
+│   ├── output columns: [a (#2), b (#3), _row_id (#4)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.column_only_optimization_source
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
 
 statement ok
 set enable_experimental_merge_into = 0;

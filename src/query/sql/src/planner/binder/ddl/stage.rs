@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use databend_common_ast::ast::CreateStageStmt;
+use databend_common_ast::ast::FileFormatOptions;
 use databend_common_ast::ast::UriLocation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::StageInfo;
@@ -117,7 +116,7 @@ impl Binder {
 
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {
             create_option: *create_option,
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             stage_info,
         })))
     }
@@ -125,14 +124,13 @@ impl Binder {
     #[async_backtrace::framed]
     pub(crate) async fn try_resolve_file_format(
         &self,
-        options: &BTreeMap<String, String>,
+        options: &FileFormatOptions,
     ) -> Result<FileFormatParams> {
-        if let Some(name) = options.get("format_name") {
+        let options = options.to_meta_ast();
+        if let Some(name) = options.options.get("format_name") {
             self.ctx.get_file_format(name).await
         } else {
-            FileFormatParams::try_from(FileFormatOptionsAst {
-                options: options.clone(),
-            })
+            FileFormatParams::try_from(options)
         }
     }
 }

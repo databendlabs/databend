@@ -26,14 +26,14 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_password_policy() -> Result<()> {
     let conf = RpcClientConf::default();
     let tenant_name = "test";
-    let tenant = NonEmptyString::new(tenant_name.to_string()).unwrap();
+    let tenant = Tenant::new_literal(tenant_name);
 
     let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let username = "test-user1";
@@ -370,7 +370,7 @@ async fn test_password_policy() -> Result<()> {
         .await;
     assert!(res.is_err());
 
-    user_mgr.drop_user(tenant.clone(), identity, false).await?;
+    user_mgr.drop_user(&tenant, identity, false).await?;
 
     let res = user_mgr
         .drop_password_policy(&tenant, policy_name.as_ref(), false)

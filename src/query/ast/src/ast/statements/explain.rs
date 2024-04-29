@@ -41,7 +41,7 @@ pub enum ExplainKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum ExplainOption {
-    Verbose(#[drive(skip)] bool),
-    Logical(#[drive(skip)] bool),
-    Optimized(#[drive(skip)] bool),
+    Verbose,
+    Logical,
+    Optimized,
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod spiller;
+mod spiller_buffer;
 
 pub use spiller::Spiller;
 pub use spiller::SpillerConfig;

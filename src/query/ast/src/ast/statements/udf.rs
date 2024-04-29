@@ -55,24 +55,6 @@ pub enum UDFDefinition {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct CreateUDFStmt {
-    #[drive(skip)]
-    pub create_option: CreateOption,
-    pub udf_name: Identifier,
-    #[drive(skip)]
-    pub description: Option<String>,
-    pub definition: UDFDefinition,
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct AlterUDFStmt {
-    pub udf_name: Identifier,
-    #[drive(skip)]
-    pub description: Option<String>,
-    pub definition: UDFDefinition,
-}
-
 impl Display for UDFDefinition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -95,7 +77,7 @@ impl Display for UDFDefinition {
                 write_comma_separated_list(f, arg_types)?;
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
+                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' ADDRESS = '{address}'"
                 )?;
             }
             UDFDefinition::UDFScript {
@@ -104,18 +86,28 @@ impl Display for UDFDefinition {
                 code,
                 handler,
                 language,
-                runtime_version,
+                runtime_version: _,
             } => {
                 write!(f, "(")?;
                 write_comma_separated_list(f, arg_types)?;
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} runtime_version = {runtime_version} HANDLER = {handler} AS $${code}$$"
+                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' AS $$\n{code}\n$$"
                 )?;
             }
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct CreateUDFStmt {
+    #[drive(skip)]
+    pub create_option: CreateOption,
+    pub udf_name: Identifier,
+    #[drive(skip)]
+    pub description: Option<String>,
+    pub definition: UDFDefinition,
 }
 
 impl Display for CreateUDFStmt {
@@ -134,6 +126,14 @@ impl Display for CreateUDFStmt {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct AlterUDFStmt {
+    pub udf_name: Identifier,
+    #[drive(skip)]
+    pub description: Option<String>,
+    pub definition: UDFDefinition,
 }
 
 impl Display for AlterUDFStmt {

@@ -15,12 +15,14 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::io;
 
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
+use databend_common_io::read_ewkb_srid;
 use geozero::wkb::Ewkb;
 use geozero::ToWkt;
 use itertools::Itertools;
@@ -165,7 +167,9 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
+                let geom = Ewkb(s.to_vec())
+                    .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(s)).unwrap())
+                    .unwrap();
                 write!(f, "{geom:?}")
             }
         }
@@ -254,7 +258,9 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
+                let geom = Ewkb(s.to_vec())
+                    .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(s)).unwrap())
+                    .unwrap();
                 write!(f, "'{geom}'")
             }
         }

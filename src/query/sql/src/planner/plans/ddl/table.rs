@@ -31,7 +31,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 
 use crate::plans::Plan;
 
@@ -40,7 +40,7 @@ pub type TableOptions = BTreeMap<String, String>;
 #[derive(Clone, Debug)]
 pub struct CreateTablePlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -84,7 +84,7 @@ impl DescribeTablePlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTablePlan {
     pub if_exists: bool,
-    pub tenant: NonEmptyString,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     /// The table name
@@ -216,7 +216,8 @@ impl OptimizeTablePlan {
 pub enum OptimizeTableAction {
     All,
     Purge(Option<NavigationPoint>),
-    CompactBlocks,
+    // Optionally, specify the limit on the number of blocks to be compacted.
+    CompactBlocks(Option<usize>),
     CompactSegments,
 }
 
@@ -236,7 +237,7 @@ impl AnalyzeTablePlan {
 /// Rename.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTablePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub if_exists: bool,
     pub catalog: String,
     pub database: String,
@@ -246,6 +247,21 @@ pub struct RenameTablePlan {
 }
 
 impl RenameTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Modify table comment.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModifyTableCommentPlan {
+    pub new_comment: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl ModifyTableCommentPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
@@ -269,7 +285,7 @@ impl SetOptionsPlan {
 // Table add column
 #[derive(Clone, Debug, PartialEq)]
 pub struct AddTableColumnPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -294,7 +310,7 @@ pub enum AddColumnOption {
 // Table rename column
 #[derive(Clone, Debug, PartialEq)]
 pub struct RenameTableColumnPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -389,7 +405,7 @@ impl TruncateTablePlan {
 /// Undrop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTablePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -434,7 +450,7 @@ impl ExistsTablePlan {
 /// Cluster key.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterTableClusterKeyPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -449,7 +465,7 @@ impl AlterTableClusterKeyPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableClusterKeyPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,

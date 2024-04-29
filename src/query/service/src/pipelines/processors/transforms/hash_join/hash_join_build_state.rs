@@ -246,7 +246,7 @@ impl HashJoinBuildState {
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
         let block_outer_scan_map = if self.hash_join_state.need_outer_scan()
             || matches!(
-                self.hash_join_state.hash_join_desc.original_join_type,
+                self.hash_join_state.hash_join_desc.single_to_inner,
                 Some(JoinType::RightSingle)
             ) {
             vec![false; data_block.num_rows()]
@@ -266,7 +266,7 @@ impl HashJoinBuildState {
             let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
             if self.hash_join_state.need_outer_scan()
                 || matches!(
-                    self.hash_join_state.hash_join_desc.original_join_type,
+                    self.hash_join_state.hash_join_desc.single_to_inner,
                     Some(JoinType::RightSingle)
                 )
             {
@@ -315,6 +315,24 @@ impl HashJoinBuildState {
                     .build_num_rows
             };
 
+            // If the build side is empty and there is no spilled data, perform fast path for hash join.
+            if build_num_rows == 0
+                && !matches!(
+                    self.hash_join_state.hash_join_desc.join_type,
+                    JoinType::LeftMark | JoinType::RightMark
+                )
+                && self.spilled_partition_set.read().is_empty()
+            {
+                self.hash_join_state
+                    .fast_return
+                    .store(true, Ordering::Relaxed);
+                self.hash_join_state
+                    .build_done_watcher
+                    .send(self.send_val.load(Ordering::Acquire))
+                    .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
+                return Ok(());
+            }
+
             let build_chunks = unsafe {
                 (*self.hash_join_state.build_state.get())
                     .generation_state
@@ -333,24 +351,6 @@ impl HashJoinBuildState {
 
             // Divide the finalize phase into multiple tasks.
             self.generate_finalize_task()?;
-
-            // Fast path for hash join
-            if build_num_rows == 0
-                && !matches!(
-                    self.hash_join_state.hash_join_desc.join_type,
-                    JoinType::LeftMark | JoinType::RightMark
-                )
-                && self.ctx.get_settings().get_join_spilling_memory_ratio()? == 0
-            {
-                self.hash_join_state
-                    .fast_return
-                    .store(true, Ordering::Relaxed);
-                self.hash_join_state
-                    .build_done_watcher
-                    .send(self.send_val.load(Ordering::Acquire))
-                    .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
-                return Ok(());
-            }
 
             // Create a fixed size hash table.
             let hashjoin_hashtable = match self.method.clone() {
@@ -924,6 +924,7 @@ impl HashJoinBuildState {
             dedup_build_key_column(&self.func_ctx, data_blocks, build_key)?
         {
             if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
+                info!("inlist_filter: {:?}", filter.sql_display());
                 runtime_filter.add_inlist(filter);
             }
         }
@@ -1027,6 +1028,7 @@ impl HashJoinBuildState {
                 _ => unreachable!(),
             };
             if let Some(min_max_filter) = min_max_filter {
+                info!("min_max_filter: {:?}", min_max_filter.sql_display());
                 runtime_filter.add_min_max(min_max_filter);
             }
         }
@@ -1035,6 +1037,14 @@ impl HashJoinBuildState {
 
     pub(crate) fn join_type(&self) -> JoinType {
         self.hash_join_state.hash_join_desc.join_type.clone()
+    }
+
+    pub fn get_enable_bloom_runtime_filter(&self) -> bool {
+        self.enable_bloom_runtime_filter
+    }
+
+    pub fn get_enable_min_max_runtime_filter(&self) -> bool {
+        self.enable_min_max_runtime_filter
     }
 }
 

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
@@ -66,69 +65,6 @@ pub struct MutationTaskInfo {
 }
 
 impl FuseTable {
-    /// return None if the deletion is done, otherwise return the partitions to be deleted
-    #[async_backtrace::framed]
-    pub async fn fast_delete(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filters: Option<Filters>,
-        col_indices: Vec<usize>,
-        query_row_id_col: bool,
-    ) -> Result<Option<Arc<TableSnapshot>>> {
-        let snapshot_opt = self.read_table_snapshot().await?;
-
-        // check if table is empty
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
-            // no snapshot, no deletion
-            return Ok(None);
-        };
-
-        if snapshot.summary.row_count == 0 {
-            // empty snapshot, no deletion
-            return Ok(None);
-        }
-
-        // check if unconditional deletion
-        let deletion_filters = match filters {
-            None => {
-                let progress_values = ProgressValues {
-                    rows: snapshot.summary.row_count as usize,
-                    bytes: snapshot.summary.uncompressed_byte_size as usize,
-                };
-                ctx.get_write_progress().incr(&progress_values);
-                // deleting the whole table... just a truncate
-                let purge = false;
-                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
-            }
-            Some(filters) => filters,
-        };
-
-        if col_indices.is_empty() && !query_row_id_col {
-            // here the situation: filter_expr is not null, but col_indices in empty, which
-            // indicates the expr being evaluated is unrelated to the value of rows:
-            //   e.g.
-            //       `delete from t where 1 = 1`, `delete from t where now()`,
-            //       or `delete from t where RANDOM()::INT::BOOLEAN`
-            // if the `filter_expr` is of "constant" nullary :
-            //   for the whole block, whether all of the rows should be kept or dropped,
-            //   we can just return from here, without accessing the block data
-            if self.try_eval_const(ctx.clone(), &self.schema(), &deletion_filters.filter)? {
-                let progress_values = ProgressValues {
-                    rows: snapshot.summary.row_count as usize,
-                    bytes: snapshot.summary.uncompressed_byte_size as usize,
-                };
-                ctx.get_write_progress().incr(&progress_values);
-
-                // deleting the whole table... just a truncate
-                let purge = false;
-                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
-            }
-        }
-        Ok(Some(snapshot.clone()))
-    }
-
     pub fn try_eval_const(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -267,7 +203,7 @@ impl FuseTable {
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                 segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
             }
-            Partitions::create(PartitionsShuffleKind::Mod, segments, true)
+            Partitions::create(PartitionsShuffleKind::Mod, segments)
         } else {
             let projection = Projection::Columns(col_indices.clone());
             let prune_ctx = MutationBlockPruningContext {
@@ -374,7 +310,7 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
 
-        let mut parts = Partitions::create_nolazy(
+        let mut parts = Partitions::create(
             PartitionsShuffleKind::Mod,
             block_metas
                 .into_iter()

@@ -27,7 +27,6 @@ use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::read::ArrayIter;
 use databend_common_arrow::parquet::metadata::ColumnDescriptor;
 use databend_common_arrow::parquet::metadata::Descriptor;
-use databend_common_arrow::parquet::metadata::SchemaDescriptor;
 use databend_common_arrow::parquet::schema::types::FieldInfo;
 use databend_common_arrow::parquet::schema::types::ParquetType;
 use databend_common_arrow::parquet::schema::types::PhysicalType;
@@ -43,14 +42,12 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
-use databend_storages_common_table_meta::meta::Compression;
 
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::BlockReader;
 use crate::io::NativeReaderExt;
-use crate::io::UncompressedBuffer;
 
 impl BlockReader {
     /// Deserialize column chunks data from native format to DataBlock.
@@ -58,7 +55,6 @@ impl BlockReader {
         &self,
         block_path: &str,
         num_rows: usize,
-        compression: &Compression,
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
     ) -> Result<DataBlock> {
@@ -71,10 +67,8 @@ impl BlockReader {
         let deserialized_res = self.deserialize_native_chunks_with_buffer(
             block_path,
             num_rows,
-            compression,
             column_metas,
             column_chunks,
-            None,
         );
 
         // Perf.
@@ -90,10 +84,8 @@ impl BlockReader {
         &self,
         block_path: &str,
         num_rows: usize,
-        compression: &Compression,
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
-        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if column_chunks.is_empty() {
             return self.build_default_values_block(num_rows);
@@ -105,10 +97,6 @@ impl BlockReader {
         let field_deserialization_ctx = FieldDeserializationContext {
             column_metas,
             column_chunks: &column_chunks,
-            num_rows,
-            compression,
-            uncompressed_buffer: &uncompressed_buffer,
-            parquet_schema_descriptor: &None::<SchemaDescriptor>,
         };
 
         for column_node in &self.project_column_nodes {

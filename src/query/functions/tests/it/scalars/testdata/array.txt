@@ -439,6 +439,78 @@ evaluation (internal):
 +----------+-----------------------+
 
 
+ast            : contains(['5000', '6000', '7000'], string_col)
+raw expr       : contains(array('5000', '6000', '7000'), string_col::String)
+checked expr   : contains<Array(String), String>(array<T0=String><T0, T0, T0>("5000", "6000", "7000"), string_col)
+optimized expr : false
+evaluation:
++--------+-------------+---------+
+|        | string_col  | Output  |
++--------+-------------+---------+
+| Type   | String      | Boolean |
+| Domain | {"1"..="5"} | {FALSE} |
+| Row 0  | '1'         | false   |
+| Row 1  | '2'         | false   |
+| Row 2  | '5'         | false   |
+| Row 3  | '1234'      | false   |
++--------+-------------+---------+
+evaluation (internal):
++------------+-------------------------------------------------------------------+
+| Column     | Data                                                              |
++------------+-------------------------------------------------------------------+
+| string_col | StringColumn { data: 0x31323531323334, offsets: [0, 1, 2, 3, 7] } |
+| Output     | Boolean([0b____0000])                                             |
++------------+-------------------------------------------------------------------+
+
+
+ast            : contains(['1', '5'], string_col)
+raw expr       : contains(array('1', '5'), string_col::String)
+checked expr   : contains<Array(String), String>(array<T0=String><T0, T0>("1", "5"), string_col)
+optimized expr : contains<Array(String), String>(['1', '5'], string_col)
+evaluation:
++--------+-------------+---------------+
+|        | string_col  | Output        |
++--------+-------------+---------------+
+| Type   | String      | Boolean       |
+| Domain | {"1"..="5"} | {FALSE, TRUE} |
+| Row 0  | '1'         | true          |
+| Row 1  | '2'         | false         |
+| Row 2  | '5'         | true          |
+| Row 3  | '1234'      | false         |
++--------+-------------+---------------+
+evaluation (internal):
++------------+-------------------------------------------------------------------+
+| Column     | Data                                                              |
++------------+-------------------------------------------------------------------+
+| string_col | StringColumn { data: 0x31323531323334, offsets: [0, 1, 2, 3, 7] } |
+| Output     | Boolean([0b____0101])                                             |
++------------+-------------------------------------------------------------------+
+
+
+ast            : contains(['15000', '6000', '7000'], string_col)
+raw expr       : contains(array('15000', '6000', '7000'), string_col::String)
+checked expr   : contains<Array(String), String>(array<T0=String><T0, T0, T0>("15000", "6000", "7000"), string_col)
+optimized expr : contains<Array(String), String>(['15000', '6000', '7000'], string_col)
+evaluation:
++--------+-------------+---------------+
+|        | string_col  | Output        |
++--------+-------------+---------------+
+| Type   | String      | Boolean       |
+| Domain | {"1"..="5"} | {FALSE, TRUE} |
+| Row 0  | '1'         | false         |
+| Row 1  | '2'         | false         |
+| Row 2  | '5'         | false         |
+| Row 3  | '1234'      | false         |
++--------+-------------+---------------+
+evaluation (internal):
++------------+-------------------------------------------------------------------+
+| Column     | Data                                                              |
++------------+-------------------------------------------------------------------+
+| string_col | StringColumn { data: 0x31323531323334, offsets: [0, 1, 2, 3, 7] } |
+| Output     | Boolean([0b____0000])                                             |
++------------+-------------------------------------------------------------------+
+
+
 ast            : contains([1,2,null], nullable_col)
 raw expr       : contains(array(1, 2, NULL), nullable_col::Int64 NULL)
 checked expr   : contains<T0=Int64 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), nullable_col)

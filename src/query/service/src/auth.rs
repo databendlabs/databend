@@ -22,8 +22,10 @@ use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
+use minitrace::func_name;
 
 use crate::sessions::Session;
 
@@ -83,6 +85,7 @@ impl AuthMgr {
 
                 // setup tenant if the JWT claims contain extra.tenant_id
                 if let Some(tenant) = jwt.custom.tenant_id {
+                    let tenant = Tenant::new_or_err(tenant, func_name!())?;
                     session.set_current_tenant(tenant);
                 };
 
@@ -159,7 +162,7 @@ impl AuthMgr {
                     _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                 };
                 UserApiProvider::instance()
-                    .update_user_login_result(tenant, identity, authed.is_ok())
+                    .update_user_login_result(tenant, identity, authed.is_ok(), &user)
                     .await?;
 
                 authed?;

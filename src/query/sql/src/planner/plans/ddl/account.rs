@@ -28,6 +28,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {
@@ -77,7 +78,14 @@ pub struct ShowGrantsPlan {
 
 impl ShowGrantsPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("Grants", DataType::String)])
+        DataSchemaRefExt::create(vec![
+            DataField::new("Privileges", DataType::String),
+            DataField::new("Object Name", DataType::String),
+            DataField::new("Object Id", DataType::Nullable(Box::new(DataType::String))),
+            DataField::new("Grant To", DataType::String),
+            DataField::new("Name", DataType::String),
+            DataField::new("Grants", DataType::String),
+        ])
     }
 }
 
@@ -130,7 +138,7 @@ pub struct RevokePrivilegePlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateNetworkPolicyPlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
     pub allowed_ip_list: Vec<String>,
     pub blocked_ip_list: Vec<String>,
@@ -146,7 +154,7 @@ impl CreateNetworkPolicyPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AlterNetworkPolicyPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
     pub allowed_ip_list: Option<Vec<String>>,
     pub blocked_ip_list: Option<Vec<String>>,
@@ -162,7 +170,7 @@ impl AlterNetworkPolicyPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DropNetworkPolicyPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
 }
 
@@ -205,7 +213,7 @@ impl ShowNetworkPoliciesPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreatePasswordPolicyPlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
     pub set_options: PasswordSetOptions,
 }
@@ -219,7 +227,7 @@ impl CreatePasswordPolicyPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AlterPasswordPolicyPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
     pub action: AlterPasswordAction,
 }
@@ -233,7 +241,7 @@ impl AlterPasswordPolicyPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DropPasswordPolicyPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
 }
 

@@ -28,6 +28,8 @@ io-uring = [
     # "databend-common-meta-raft-store/io-uring",
 ]
 
+enable_queries_executor = []
+
 [dependencies]
 # Workspace dependencies
 databend-common-arrow = { path = "../../common/arrow" }
@@ -48,6 +50,7 @@ databend-common-io = { path = "../../common/io" }
 databend-common-management = { path = "../management" }
 databend-common-meta-api = { path = "../../meta/api" }
 databend-common-meta-app = { path = "../../meta/app" }
+databend-common-script = { path = "../script" }
 
 databend-common-cloud-control = { path = "../../common/cloud_control" }
 databend-common-license = { path = "../../common/license" }
@@ -99,9 +102,8 @@ jsonb = { workspace = true }
 # GitHub dependencies
 
 # Crates.io dependencies
-## TODO add python support
-# arrow-udf-python = {package = "arrow-udf-python", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
-arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
+arrow-udf-js = { workspace = true }
+arrow-udf-wasm = { workspace = true }
 
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
@@ -125,7 +127,7 @@ derive-visitor = { workspace = true }
 ethnum = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-h2 = "0.3.17"
+h2 = "0.3.26"
 headers = "0.3.8"
 highway = "1.1"
 http = "0.2.8"
@@ -139,9 +141,13 @@ match-template = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
+num_cpus = "1.16.0"
 once_cell = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.5.0", features = ["tls"] }
+opentelemetry = { version = "0.21", features = ["trace", "logs"] }
+opentelemetry-http = "0.10.0"
+opentelemetry_sdk = { version = "0.21", features = ["trace", "logs", "rt-tokio"] }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"
@@ -152,7 +158,7 @@ prost = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
-rustls = "0.21.6"
+rustls = "0.21.11"
 rustls-pemfile = "1.0.2"
 rustyline = "11.0.0"
 serde = { workspace = true }
@@ -177,7 +183,6 @@ xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"
 arrow-cast = { workspace = true }
 ordered-float = { workspace = true }
 
-base64 = "0.21.0"
 criterion = "0.4"
 goldenfile = "1.4"
 hex = "0.4.3"

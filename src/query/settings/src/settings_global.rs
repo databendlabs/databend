@@ -19,8 +19,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
@@ -33,7 +33,7 @@ impl Settings {
     #[async_backtrace::framed]
     pub async fn load_settings(
         user_api: Arc<UserApiProvider>,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
     ) -> Result<Vec<UserSetting>> {
         user_api.setting_api(tenant).get_settings().await
     }

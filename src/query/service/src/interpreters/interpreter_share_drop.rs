@@ -52,7 +52,7 @@ impl Interpreter for DropShareInterpreter {
         let resp = meta_api.drop_share(self.plan.clone().into()).await?;
 
         save_share_spec(
-            &self.ctx.get_tenant().to_string(),
+            self.ctx.get_tenant().tenant_name(),
             self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
             Some(vec![(self.plan.share.clone(), None)]),

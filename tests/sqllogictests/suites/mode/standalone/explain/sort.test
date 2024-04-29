@@ -16,7 +16,7 @@ Sort
         ├── table: default.default.t1
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
@@ -37,7 +37,7 @@ Sort
         ├── table: default.default.t1
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
@@ -58,7 +58,7 @@ Sort
         ├── table: default.default.t1
         ├── output columns: [a (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
@@ -67,6 +67,8 @@ Sort
 statement ok
 set max_threads = 4;
 
+statement ok
+set sort_spilling_memory_ratio = 0;
 
 # Sort without pre-projection
 query T
@@ -81,6 +83,25 @@ CompoundBlockOperator(Project) × 1 processor
             SyncReadParquetDataSource × 1 processor
 
 
+# Sort spilling
+statement ok
+set sort_spilling_memory_ratio = 60;
+
+query T
+explain pipeline select a, b from t1 order by a;
+----
+CompoundBlockOperator(Project) × 1 processor
+  Merge (TransformSortSpill × 4 processors) to (CompoundBlockOperator(Project) × 1)
+    TransformSortSpill × 4 processors
+      TransformSortMerge × 4 processors
+        SortPartialTransform × 4 processors
+          Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
+            DeserializeDataTransform × 1 processor
+              SyncReadParquetDataSource × 1 processor
+
+statement ok
+set sort_spilling_memory_ratio = 0;
+
 # Sort with pre-projection
 query T
 explain pipeline select a + 1, b from t1 order by a + 1;
@@ -94,6 +115,23 @@ CompoundBlockOperator(Project) × 1 processor
             DeserializeDataTransform × 1 processor
               SyncReadParquetDataSource × 1 processor
 
+
+# Sort spilling
+statement ok
+set sort_spilling_memory_ratio = 60;
+
+query T
+explain pipeline select a + 1, b from t1 order by a + 1;
+----
+CompoundBlockOperator(Project) × 1 processor
+  Merge (TransformSortSpill × 4 processors) to (CompoundBlockOperator(Project) × 1)
+    TransformSortSpill × 4 processors
+      TransformSortMerge × 4 processors
+        SortPartialTransform × 4 processors
+          Merge (CompoundBlockOperator(Map) × 1 processor) to (SortPartialTransform × 4)
+            CompoundBlockOperator(Map) × 1 processor
+              DeserializeDataTransform × 1 processor
+                SyncReadParquetDataSource × 1 processor
 
 statement ok
 drop table if exists t1;

@@ -1,0 +1,232 @@
+# push down filter left outer join
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+create table t2(a int, b int);
+
+statement ok
+insert into t1 values(null, null), (1, 1), (2, 2), (3, 3);
+
+statement ok
+insert into t2 values(null, null), (1, 1), (2, 2);
+
+# left outer join, can propagate t1.a > 0 and convert it to inner join
+query T
+explain select * from t1 left join t2 on t1.a = t2.a where t1.a > 0;
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── join type: LEFT OUTER
+├── build keys: [t2.a (#2)]
+├── probe keys: [t1.a (#0)]
+├── filters: []
+├── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
+│   └── estimated rows: 0.60
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+    └── estimated rows: 4.00
+
+# left outer join, can not propagate t1.a > 0
+query T
+explain select * from t1 left join t2 on t1.a = t2.a and t1.a > 0;
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── join type: LEFT OUTER
+├── build keys: [t2.a (#2)]
+├── probe keys: [t1.a (#0)]
+├── filters: [t1.a (#0) > 0]
+├── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
+
+# left outer join, can not propagate t1.b > 0
+query T
+explain select * from t1 left join t2 on t1.a = t2.a where t1.b > 0;
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── join type: LEFT OUTER
+├── build keys: [t2.a (#2)]
+├── probe keys: [t1.a (#0)]
+├── filters: []
+├── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(t1.b (#1) > 0)], limit: NONE]
+    └── estimated rows: 4.00
+
+# convert left outer join to inner join, can propagate t2.a > 0
+query T
+explain select * from t1 left join t2 on t1.a = t2.a where t2.a > 0;
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
+├── join type: INNER
+├── build keys: [t2.a (#2)]
+├── probe keys: [t1.a (#0)]
+├── filters: []
+├── estimated rows: 0.80
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
+│   └── estimated rows: 0.60
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+    └── estimated rows: 4.00
+
+# convert left outer join to inner join, can not propagate t2.b > 0
+query T
+explain select * from t1 left join t2 on t1.a = t2.a where t2.b > 0;
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
+├── join type: INNER
+├── build keys: [t2.a (#2)]
+├── probe keys: [t1.a (#0)]
+├── filters: []
+├── estimated rows: 0.80
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [is_true(t2.b (#3) > 0)], limit: NONE]
+│   └── estimated rows: 0.60
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+drop table if exists m1;
+
+statement ok
+drop table if exists j1;
+
+statement ok
+create table m1(id varchar, "context" varchar);
+
+statement ok
+create table j1(id varchar);
+
+# In `can_filter_null`, if the function is `assume_not_null` or `remove_nullable`, we cannot replace the column bindings with `Scalar::Null`.
+query T
+explain WITH base AS (SELECT id, context FROM m1), src1 AS (SELECT base.id FROM base WHERE IFNULL(base.context, '') = ''), join1 AS (SELECT id FROM j1) SELECT src1.id FROM src1 LEFT OUTER JOIN join1 ON TRUE;
+----
+HashJoin
+├── output columns: [m1.id (#0)]
+├── join type: LEFT OUTER
+├── build keys: []
+├── probe keys: []
+├── filters: []
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.j1
+│   ├── output columns: []
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.m1
+    ├── output columns: [id (#0)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [is_true(if(CAST(is_not_null(m1.context (#1)) AS Boolean NULL), CAST(assume_not_null(m1.context (#1)) AS String NULL), true, '', NULL) = '')], limit: NONE]
+    └── estimated rows: 0.00
+
+statement ok
+drop table if exists m1;
+
+statement ok
+drop table if exists j1;

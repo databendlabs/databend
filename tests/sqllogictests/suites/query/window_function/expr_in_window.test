@@ -247,7 +247,7 @@ SELECT enroll_date, salary, last_value(salary + 1) OVER (ORDER BY enroll_date) F
 2008-01-01 4500 4501
 
 # nth_value
-query III
+query TII
 SELECT depname, empno,
 	nth_value(empno + 1, 2) OVER (
 		PARTITION BY depname ORDER BY empno ASC
@@ -268,7 +268,7 @@ sales 3 5
 sales 4 NULL
 
 # nth_value
-query III
+query TII
 SELECT depname, empno,
 	nth_value(empno + 1, 2) OVER (
 		PARTITION BY depname ORDER BY empno ASC

@@ -1,0 +1,98 @@
+>>>> drop database if exists db01;
+>>>> create database db01;
+>>>> drop database if exists dbnotexists;
+>>>> GRANT SELECT ON db01.tbnotexists TO 'test-user'
+Error: APIError: ResponseError with 1025: Unknown table 'tbnotexists'
+<<<<
+>>>> GRANT SELECT ON dbnotexists.* TO 'test-user'
+Error: APIError: ResponseError with 1003: Unknown database 'dbnotexists'
+<<<<
+information_schema
+system
+test -- insert
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public]
+1
+2
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+1
+2
+test -- update
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Update] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+2
+3
+test -- delete
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+true
+test -- insert overwrite
+2
+3
+test -- optimize table
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Super] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+true
+test -- select
+1
+1
+1
+1
+test -- select view
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default2'.'v_t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+1
+test -- clustering_information
+true
+true
+true
+true
+SELECT default  USER a GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
+SELECT default.grant_db.t  USER a GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'
+default
+grant_db
+information_schema
+system
+test -- show tables from system
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
+test -- show tables from grant_db
+t
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
+test -- show columns from one from system
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'system.one'
+c1	INT	NO		NULL	NULL
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'system.tables'
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
+1
+0
+1	64	378
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+a b/data_UUID_0000_00000000.parquet	1	0	NULL	NULL
+=== check db/table_id ===
+Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
+CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+SELECT,INSERT default.c.t  USER b GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
+OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
+1
+Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
+CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+SELECT,INSERT default.c.t1  USER b GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
+OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
+1
+2
+Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
+CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+SELECT,INSERT default.d.t1  USER b GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'
+OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
+1
+2
+3

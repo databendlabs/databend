@@ -10,15 +10,15 @@ CREATE TABLE `test`.`a` (    a bigint not null, b int not null default 3, c varc
 query TT
 SHOW CREATE TABLE `test`.`a`
 ----
-a CREATE TABLE `a` (   `a` BIGINT NOT NULL,   `b` INT NOT NULL DEFAULT 3,   `c` VARCHAR NOT NULL DEFAULT 'x',   `d` SMALLINT NULL,   `e` DATE NOT NULL ) ENGINE=NULL
+a CREATE TABLE a ( a BIGINT NOT NULL, b INT NOT NULL DEFAULT 3, c VARCHAR NOT NULL DEFAULT 'x', d SMALLINT NULL, e DATE NOT NULL ) ENGINE=NULL
 
 statement ok
-CREATE TABLE `test`.`b` (    a bigint not null, b int null default null, c varchar(255) not null, d smallint unsigned null) Engine = Null COMMENT = 'test b'
+CREATE TABLE `test`.`b` ( a bigint not null, b int null default null, c varchar(255) not null, d smallint unsigned null) Engine = Null COMMENT = 'test b'
 
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE `b` (   `a` BIGINT NOT NULL,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR NOT NULL,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT = 'test b'
+b CREATE TABLE b ( a BIGINT NOT NULL, b INT NULL DEFAULT NULL, c VARCHAR NOT NULL, d SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT = 'test b'
 
 statement ok
 set hide_options_in_show_create_table=0
@@ -26,7 +26,7 @@ set hide_options_in_show_create_table=0
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE `b` (   `a` BIGINT NOT NULL,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR NOT NULL,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT = 'test b'
+b CREATE TABLE b (  a BIGINT NOT NULL, b INT NULL DEFAULT NULL, c VARCHAR NOT NULL, d SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT = 'test b'
 
 statement ok
 create view test.v_b as select * from `test`.`b`
@@ -42,20 +42,20 @@ CREATE TABLE test.c (a int not null) CLUSTER BY (a, a % 3) COMPRESSION='lz4' STO
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE `c` (   `a` INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, (a % 3)) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 statement ok
-CREATE TABLE test.d (a int not null) ENGINE=FUSE 's3://load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, (a % 3)) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+CREATE TABLE test.d (a int not null) ENGINE=FUSE 's3://load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 query TT
 SHOW CREATE TABLE `test`.`d`
 ----
-d CREATE TABLE `d` (   `a` INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, (a % 3)) COMPRESSION='lz4' STORAGE_FORMAT='parquet' LOCATION = 's3 | bucket=load,root=/files/,endpoint=https://s3.amazonaws.com'
+d CREATE TABLE d ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet' LOCATION = 's3 | bucket=load,root=/files/,endpoint=https://s3.amazonaws.com'
 
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE `c` (   `a` INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, (a % 3)) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 statement ok
 DROP TABLE `test`.`a`
@@ -138,7 +138,7 @@ v_subquery CREATE VIEW `default`.`v_subquery` AS SELECT * FROM (SELECT c1 FROM d
 query TT
 show create table default.v_join;
 ----
-v_join CREATE VIEW `default`.`v_join` AS SELECT * FROM (SELECT c1 FROM default.t UNION ALL SELECT c1 FROM default.t1) AS res INNER JOIN default.t1 ON (t1.c1 = res.c1)
+v_join CREATE VIEW `default`.`v_join` AS SELECT * FROM (SELECT c1 FROM default.t UNION ALL SELECT c1 FROM default.t1) AS res INNER JOIN default.t1 ON t1.c1 = res.c1
 
 query II
 select * from default.v_t order by c1;
@@ -205,3 +205,42 @@ drop table default.t1;
 
 statement ok
 drop database db1;
+
+statement ok
+drop table if exists default.tc
+
+statement ok
+set hide_options_in_show_create_table=1
+
+statement ok
+create table default.tc(id int, Id1_ int, "id2)" int, "ID4" int, "ID""5" int);
+
+statement ok
+set quoted_ident_case_sensitive=0;
+
+query TT
+show create table default.tc
+----
+tc CREATE TABLE tc ( id INT NULL, id1_ INT NULL, "id2)" INT NULL, ID4 INT NULL, "ID""5" INT NULL ) ENGINE=FUSE
+
+statement ok
+set quoted_ident_case_sensitive=1;
+
+query TT
+show create table default.tc
+----
+tc CREATE TABLE tc ( id INT NULL, id1_ INT NULL, "id2)" INT NULL, "ID4" INT NULL, "ID""5" INT NULL ) ENGINE=FUSE
+
+statement ok
+set quoted_ident_case_sensitive=1;
+
+statement ok
+set sql_dialect='MySQL';
+
+query TT
+show create table default.tc
+----
+tc CREATE TABLE tc ( id INT NULL, id1_ INT NULL, `id2)` INT NULL, `ID4` INT NULL, `ID"5` INT NULL ) ENGINE=FUSE
+
+statement ok
+drop table default.tc;

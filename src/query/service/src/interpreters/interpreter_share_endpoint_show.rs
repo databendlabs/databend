@@ -60,7 +60,7 @@ impl Interpreter for ShowShareEndpointInterpreter {
         let mut comments: Vec<String> = vec![];
         let mut created_on_vec: Vec<String> = vec![];
         for (endpoint, meta) in resp.share_endpoint_meta_vec {
-            endpoints.push(endpoint.endpoint.clone());
+            endpoints.push(endpoint.name().to_string());
             urls.push(meta.url.clone());
             to_tenants.push(meta.tenant.clone());
             args.push(format!("{:?}", meta.args));

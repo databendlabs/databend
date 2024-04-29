@@ -78,6 +78,7 @@ impl Plan {
             Plan::UndropTable(_) => Ok("UndropTable".to_string()),
             Plan::DescribeTable(_) => Ok("DescribeTable".to_string()),
             Plan::RenameTable(_) => Ok("RenameTable".to_string()),
+            Plan::ModifyTableComment(_) => Ok("ModifyTableComment".to_string()),
             Plan::SetOptions(_) => Ok("SetOptions".to_string()),
             Plan::RenameTableColumn(_) => Ok("RenameTableColumn".to_string()),
             Plan::AddTableColumn(_) => Ok("AddTableColumn".to_string()),
@@ -98,10 +99,14 @@ impl Plan {
             Plan::CreateView(_) => Ok("CreateView".to_string()),
             Plan::AlterView(_) => Ok("AlterView".to_string()),
             Plan::DropView(_) => Ok("DropView".to_string()),
+            Plan::DescribeView(_) => Ok("DescribeView".to_string()),
 
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),
             Plan::DropStream(_) => Ok("DropStream".to_string()),
+
+            // Dynamic Tables
+            Plan::CreateDynamicTable(_) => Ok("CreateDynamicTable".to_string()),
 
             // Indexes
             Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
@@ -119,6 +124,7 @@ impl Plan {
 
             // Insert
             Plan::Insert(_) => Ok("Insert".to_string()),
+            Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
             Plan::MergeInto(merge_into) => format_merge_into(merge_into),
             Plan::Delete(delete) => format_delete(delete),
@@ -212,6 +218,13 @@ impl Plan {
             Plan::DropNotification(_) => Ok("DropNotification".to_string()),
             Plan::DescNotification(_) => Ok("DescNotification".to_string()),
             Plan::AlterNotification(_) => Ok("AlterNotification".to_string()),
+
+            // Stored procedures
+            Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
+
+            // sequence
+            Plan::CreateSequence(_) => Ok("CreateSequence".to_string()),
+            Plan::DropSequence(_) => Ok("DropSequence".to_string()),
         }
     }
 }
@@ -258,6 +271,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             prewhere: None,
             agg_index: None,
             change_type: None,
+            inverted_index: None,
             statistics: Default::default(),
             update_stream_columns: false,
         });
@@ -380,16 +394,12 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
             condition_format, unmatched_format
         )));
     }
-    let s_expr = merge_into.input.as_ref();
-    let metadata = &*merge_into.meta_data.read();
-    let input_format_child = s_expr.to_format_tree(metadata, false)?;
     let all_children = [
         vec![distributed_format],
         vec![target_build_optimization_format],
         vec![can_try_update_column_only_format],
         matched_children,
         unmatched_children,
-        vec![input_format_child],
     ]
     .concat();
     let res = FormatTreeNode::with_children(target_table_format, all_children).format_pretty()?;

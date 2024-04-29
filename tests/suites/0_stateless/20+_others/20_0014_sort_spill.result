@@ -3,10 +3,7 @@
 1
 NULL
 ===================
-transform_spill_write_count_total	{"spill":"sort_spill"}	2.0
-transform_spill_write_bytes_total	{"spill":"sort_spill"}	2336.0
-transform_spill_read_count_total	{"spill":"sort_spill"}	2.0
-transform_spill_read_bytes_total	{"spill":"sort_spill"}	2336.0
+2
 ===================
 0
 1
@@ -36,10 +33,7 @@ NULL	6
 NULL	6
 2	5
 ===================
-transform_spill_write_count_total	{"spill":"sort_spill"}	18.0
-transform_spill_write_bytes_total	{"spill":"sort_spill"}	27608.0
-transform_spill_read_count_total	{"spill":"sort_spill"}	18.0
-transform_spill_read_bytes_total	{"spill":"sort_spill"}	27608.0
+16
 ===================
 2	NULL
 2	5
@@ -65,10 +59,7 @@ NULL	NULL
 ===================
 0
 ===================
-transform_spill_write_count_total	{"spill":"sort_spill"}	1.0
-transform_spill_write_bytes_total	{"spill":"sort_spill"}	1168.0
-transform_spill_read_count_total	{"spill":"sort_spill"}	1.0
-transform_spill_read_bytes_total	{"spill":"sort_spill"}	1168.0
+1
 ===================
 2	NULL
 2	5
@@ -80,7 +71,4 @@ NULL	6
 NULL	NULL
 2	5
 ===================
-transform_spill_write_count_total	{"spill":"sort_spill"}	7.0
-transform_spill_write_bytes_total	{"spill":"sort_spill"}	11968.0
-transform_spill_read_count_total	{"spill":"sort_spill"}	7.0
-transform_spill_read_bytes_total	{"spill":"sort_spill"}	11968.0
+9

@@ -61,7 +61,7 @@ pub trait SessionPrivilegeManager {
     async fn validate_privilege(
         &self,
         object: &GrantObject,
-        privilege: Vec<UserPrivilegeType>,
+        privilege: UserPrivilegeType,
     ) -> Result<()>;
 
     async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool>;
@@ -241,13 +241,11 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     async fn validate_privilege(
         &self,
         object: &GrantObject,
-        privilege: Vec<UserPrivilegeType>,
+        privilege: UserPrivilegeType,
     ) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
-        let user_verified = current_user
-            .grants
-            .verify_privilege(object, privilege.clone());
+        let user_verified = current_user.grants.verify_privilege(object, privilege);
         if user_verified {
             return Ok(());
         }
@@ -257,7 +255,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         let effective_roles = self.get_all_effective_roles().await?;
         let role_verified = &effective_roles
             .iter()
-            .any(|r| r.grants.verify_privilege(object, privilege.clone()));
+            .any(|r| r.grants.verify_privilege(object, privilege));
         if *role_verified {
             return Ok(());
         }

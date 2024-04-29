@@ -50,18 +50,12 @@ pub fn serialize_block(
     schema: &TableSchemaRef,
     block: DataBlock,
     buf: &mut Vec<u8>,
-    use_parquet2: bool,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result = blocks_to_parquet(
-                &schema,
-                vec![block],
-                buf,
-                write_settings.table_compression,
-                use_parquet2,
-            )?;
+            let result =
+                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)
         }
@@ -143,7 +137,6 @@ impl BloomIndexState {
                 vec![index_block],
                 &mut data,
                 TableCompression::None,
-                true,
             )?;
             let data_size = data.len() as u64;
             Ok(Some(Self {
@@ -204,7 +197,6 @@ impl BlockBuilder {
             &self.source_schema,
             data_block,
             &mut buffer,
-            self.ctx.get_settings().get_fuse_write_use_parquet2()?,
         )?;
         let file_size = buffer.len() as u64;
         let block_meta = BlockMeta {

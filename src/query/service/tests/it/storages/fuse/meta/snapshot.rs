@@ -26,7 +26,18 @@ fn default_snapshot() -> TableSnapshot {
     let uuid = Uuid::new_v4();
     let schema = TableSchema::empty();
     let stats = Default::default();
-    TableSnapshot::new(uuid, &None, None, schema, stats, vec![], None, None, None)
+    TableSnapshot::new(
+        uuid,
+        None,
+        &None,
+        None,
+        schema,
+        stats,
+        vec![],
+        None,
+        None,
+        None,
+    )
 }
 
 #[test]
@@ -42,6 +53,7 @@ fn snapshot_timestamp_monotonic_increase() {
     let uuid = Uuid::new_v4();
     let current = TableSnapshot::new(
         uuid,
+        None,
         &prev.timestamp,
         prev.prev_snapshot_id,
         schema,
@@ -67,6 +79,7 @@ fn snapshot_timestamp_time_skew_tolerance() {
 
     let current = TableSnapshot::new(
         uuid,
+        None,
         &prev.timestamp,
         prev.prev_snapshot_id,
         schema,

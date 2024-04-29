@@ -1,0 +1,156 @@
+statement ok
+use default
+
+statement ok
+DROP VIEW IF EXISTS v
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(a bigint null, b int null, c varchar(255) null, d smallint not null, e Date not null ) ENGINE = Null
+
+statement ok
+CREATE VIEW v AS SELECT * FROM t
+
+onlyif http
+query TTTTT
+DESCRIBE VIEW v
+----
+a BIGINT YES NULL (empty)
+b INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d SMALLINT NO 0 (empty)
+e DATE NO '1970-01-01' (empty)
+
+onlyif http
+query TTTTT
+DESC VIEW v
+----
+a BIGINT YES NULL (empty)
+b INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d SMALLINT NO 0 (empty)
+e DATE NO '1970-01-01' (empty)
+
+
+statement ok
+DROP VIEW IF EXISTS v1
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1(a bigint null, b int null, c char(255) null, d smallint not null, e Date not null, f char(120) not null default '' ) ENGINE = Null
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM t1
+
+onlyif http
+query VVVVV
+DESCRIBE VIEW v1
+----
+a BIGINT YES NULL (empty)
+b INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d SMALLINT NO 0 (empty)
+e DATE NO '1970-01-01' (empty)
+f VARCHAR NO '' (empty)
+
+onlyif http
+query VVVVV
+DESC VIEW v1
+----
+a BIGINT YES NULL (empty)
+b INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d SMALLINT NO 0 (empty)
+e DATE NO '1970-01-01' (empty)
+f VARCHAR NO '' (empty)
+
+
+query VVV
+select column_name, nullable, is_nullable from INFORMATION_SCHEMA.COLUMNS where table_name='tables_with_history' and column_name in ('num_rows', 'dropped_on') order by column_name
+----
+dropped_on 1 YES
+num_rows 1 YES
+
+statement ok
+DROP VIEW IF EXISTS v
+
+statement ok
+DROP VIEW IF EXISTS v1
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+statement ok
+CREATE TABLE t(c1 varchar, c2 varchar) ENGINE = Null
+
+statement ok
+CREATE TABLE t1(c1 varchar, c2 varchar) ENGINE = Null
+
+statement ok
+CREATE TABLE t2(c1 varchar, c2 varchar) ENGINE = Null
+
+statement ok
+DROP VIEW IF EXISTS v2
+
+statement ok
+DROP VIEW IF EXISTS v3
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM t
+
+statement ok
+CREATE VIEW v2 AS SELECT c1 AS v2_c1, c2 AS v2_c2 FROM (SELECT t1.c1, t2.c2 from t1 JOIN t2 ON t1.c1 = t2.c1) AS v_t
+
+statement ok
+CREATE VIEW v3 AS SELECT * FROM v2 UNION ALL select * from v1
+
+onlyif http
+query VVVVV
+DESC VIEW v1
+----
+c1 VARCHAR YES NULL (empty)
+c2 VARCHAR YES NULL (empty)
+
+onlyif http
+query VVVVV
+DESC VIEW v2
+----
+v2_c1 VARCHAR YES NULL (empty)
+v2_c2 VARCHAR YES NULL (empty)
+
+onlyif http
+query VVVVV
+DESC VIEW v3
+----
+v2_c1 VARCHAR YES NULL (empty)
+v2_c2 VARCHAR YES NULL (empty)
+
+statement ok
+DROP VIEW IF EXISTS v1
+
+statement ok
+DROP VIEW IF EXISTS v2
+
+statement ok
+DROP VIEW IF EXISTS v3
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+

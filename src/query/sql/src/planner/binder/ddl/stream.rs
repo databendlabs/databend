@@ -17,7 +17,6 @@ use databend_common_ast::ast::DescribeStreamStmt;
 use databend_common_ast::ast::DropStreamStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowStreamsStmt;
-use databend_common_ast::ast::StreamPoint;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
@@ -29,7 +28,6 @@ use crate::plans::CreateStreamPlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
-use crate::plans::StreamNavigation;
 use crate::BindContext;
 use crate::SelectBuilder;
 
@@ -37,6 +35,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_stream(
         &mut self,
+        bind_context: &mut BindContext,
         stmt: &CreateStreamStmt,
     ) -> Result<Plan> {
         let CreateStreamStmt {
@@ -46,7 +45,7 @@ impl Binder {
             stream,
             table_database,
             table,
-            stream_point,
+            travel_point,
             append_only,
             comment,
         } = stmt;
@@ -61,20 +60,15 @@ impl Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
 
-        let navigation = stream_point.as_ref().map(|point| match point {
-            StreamPoint::AtStream { database, name } => {
-                let database = database
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_database());
-                let name = normalize_identifier(name, &self.name_resolution_ctx).name;
-                StreamNavigation::AtStream { database, name }
-            }
-        });
+        let navigation = if let Some(point) = travel_point {
+            Some(self.resolve_data_travel_point(bind_context, point).await?)
+        } else {
+            None
+        };
 
         let plan = CreateStreamPlan {
             create_option: *create_option,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             stream_name,
@@ -100,11 +94,13 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
+
         let (catalog, database, stream_name) =
             self.normalize_object_identifier_triple(catalog, database, stream);
+
         let plan = DropStreamPlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             stream_name,

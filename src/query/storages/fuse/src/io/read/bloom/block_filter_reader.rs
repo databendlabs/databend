@@ -16,6 +16,9 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
 
+use arrow::datatypes::Field;
+use arrow::datatypes::Fields;
+use arrow::datatypes::Schema;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
@@ -33,12 +36,13 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
 use opendal::Operator;
+use parquet_rs::arrow::arrow_to_parquet_schema;
+use parquet_rs::schema::types::SchemaDescPtr;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;
 use crate::io::read::bloom::column_filter_reader::BloomColumnFilterReader;
 use crate::io::MetaReaders;
-
 #[async_trait::async_trait]
 pub trait BloomBlockFilterReader {
     async fn read_block_filter(
@@ -102,10 +106,24 @@ async fn load_bloom_filter_by_columns<'a>(
     }
 
     // 3. load filters
+    let bloom_index_fields: Vec<_> = bloom_index_meta
+        .columns
+        .iter()
+        .map(|col| Field::new(col.0.clone(), arrow::datatypes::DataType::Binary, false))
+        .collect();
+    let bloom_index_schema = Schema::new(Fields::from(bloom_index_fields));
+    let bloom_index_schema_desc = Arc::new(arrow_to_parquet_schema(&bloom_index_schema)?);
+
     let futs = col_metas
         .iter()
-        .map(|(idx, (name, col_chunk_meta))| {
-            load_column_xor8_filter(*idx, (*name).to_owned(), col_chunk_meta, index_path, &dal)
+        .map(|(idx, (_, col_chunk_meta))| {
+            load_column_xor8_filter(
+                *idx,
+                col_chunk_meta,
+                index_path,
+                &dal,
+                bloom_index_schema_desc.clone(),
+            )
         })
         .collect::<Vec<_>>();
 
@@ -130,19 +148,19 @@ async fn load_bloom_filter_by_columns<'a>(
 #[minitrace::trace]
 async fn load_column_xor8_filter<'a>(
     idx: ColumnId,
-    column_name: String,
     col_chunk_meta: &'a SingleColumnMeta,
     index_path: &'a str,
     dal: &'a Operator,
+    bloom_index_schema_desc: SchemaDescPtr,
 ) -> Result<Arc<Xor8Filter>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
         let column_data_reader = BloomColumnFilterReader::new(
             index_path.to_owned(),
             idx,
-            column_name,
             col_chunk_meta,
             dal.clone(),
+            bloom_index_schema_desc,
         );
         async move { column_data_reader.read().await }
     }

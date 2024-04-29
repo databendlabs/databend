@@ -37,6 +37,8 @@ use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use dyn_clone::DynClone;
 
 use crate::table::Table;
@@ -60,12 +62,12 @@ pub trait Database: DynClone + Sync + Send {
 
     fn get_db_info(&self) -> &DatabaseInfo;
 
-    fn get_tenant(&self) -> &String {
-        &self.get_db_info().name_ident.tenant
+    fn get_tenant(&self) -> &Tenant {
+        self.get_db_info().name_ident.tenant()
     }
 
-    fn get_db_name(&self) -> &String {
-        &self.get_db_info().name_ident.db_name
+    fn get_db_name(&self) -> &str {
+        self.get_db_info().name_ident.database_name()
     }
 
     // Initial a database.

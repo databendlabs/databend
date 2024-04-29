@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::share;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use maplit::btreemap;
 use minitrace::func_name;
 
@@ -53,10 +53,7 @@ fn test_decode_v5_database_meta() -> anyhow::Result<()> {
         comment: "foo bar".to_string(),
         drop_on: None,
         shared_by: BTreeSet::new(),
-        from_share: Some(share::ShareNameIdent {
-            tenant: "tenant".to_string(),
-            share_name: "share".to_string(),
-        }),
+        from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

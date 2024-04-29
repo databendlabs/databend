@@ -28,7 +28,6 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_hashtable::HashtableLike;
-use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -220,7 +219,6 @@ pub fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
             continue;
         }
 
-        let now = Instant::now();
         let data_block = payload.group_by_flush_all()?;
         rows += data_block.num_rows();
 
@@ -234,13 +232,6 @@ pub fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
-        }
-
-        // perf
-        {
-            metrics_inc_aggregate_spill_data_serialize_milliseconds(
-                now.elapsed().as_millis() as u64
-            );
         }
 
         write_data.push(columns_data);
@@ -274,10 +265,6 @@ pub fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
 
         // perf
         {
-            metrics_inc_group_by_spill_write_count();
-            metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
-            metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
-
             Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
             Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
             Profile::record_usize_profile(
@@ -325,7 +312,6 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
             continue;
         }
 
-        let now = Instant::now();
         let data_block = serialize_group_by(method, inner_table)?;
         rows += data_block.num_rows();
 
@@ -339,13 +325,6 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
-        }
-
-        // perf
-        {
-            metrics_inc_aggregate_spill_data_serialize_milliseconds(
-                now.elapsed().as_millis() as u64
-            );
         }
 
         write_data.push(columns_data);
@@ -379,10 +358,6 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
 
         // perf
         {
-            metrics_inc_group_by_spill_write_count();
-            metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
-            metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
-
             Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
             Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
             Profile::record_usize_profile(

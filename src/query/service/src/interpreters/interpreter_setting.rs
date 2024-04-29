@@ -18,10 +18,11 @@ use chrono_tz::Tz;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::SettingPlan;
 use databend_common_sql::plans::VarValue;
 use databend_common_users::UserApiProvider;
+use minitrace::func_name;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -92,9 +93,7 @@ impl Interpreter for SettingInterpreter {
                     if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
                         UserApiProvider::try_create_simple(
                             config.meta.to_meta_grpc_client_conf(),
-                            &NonEmptyString::new(tenant).map_err(|_e| {
-                                ErrorCode::TenantIsEmpty("when SettingInterpreter")
-                            })?,
+                            &Tenant::new_or_err(tenant, func_name!())?,
                         )
                         .await?;
                     }

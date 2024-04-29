@@ -28,7 +28,8 @@ use parquet_rs::basic::Compression as ParquetCompression;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 
-pub fn deserialize_column_chunks(
+/// The returned record batch contains all deserialized columns in the same nested structure as the original schema.
+pub fn column_chunks_to_record_batch(
     original_schema: &TableSchema,
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,

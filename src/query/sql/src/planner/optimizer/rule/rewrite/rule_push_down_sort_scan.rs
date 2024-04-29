@@ -29,12 +29,12 @@ use crate::plans::Sort;
 
 /// Input:  Sort
 ///           \
-///          LogicalGet
+///          Scan
 ///
 /// Output:
 ///         Sort
 ///           \
-///           LogicalGet(padding order_by and limit)
+///           Scan(padding order_by and limit)
 pub struct RulePushDownSortScan {
     id: RuleID,
     matchers: Vec<Matcher>,

@@ -42,8 +42,8 @@ use databend_common_sql::plans::RefreshIndexPlan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_storages_fuse::operations::AggIndexSink;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
+use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseLazyPartInfo;
-use databend_common_storages_fuse::FusePartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
 use databend_enterprise_aggregating_index::get_agg_index_handler;
@@ -168,8 +168,8 @@ impl RefreshIndexInterpreter {
 
             // first, sort the partitions by create_on.
             source.parts.partitions.sort_by(|p1, p2| {
-                let p1 = FusePartInfo::from_part(p1).unwrap();
-                let p2 = FusePartInfo::from_part(p2).unwrap();
+                let p1 = FuseBlockPartInfo::from_part(p1).unwrap();
+                let p2 = FuseBlockPartInfo::from_part(p2).unwrap();
                 p1.create_on.partial_cmp(&p2.create_on).unwrap()
             });
 
@@ -178,7 +178,7 @@ impl RefreshIndexInterpreter {
                 .parts
                 .partitions
                 .binary_search_by(|p| {
-                    let fp = FusePartInfo::from_part(p).unwrap();
+                    let fp = FuseBlockPartInfo::from_part(p).unwrap();
                     fp.create_on
                         .partial_cmp(&self.plan.index_meta.updated_on)
                         .unwrap()
@@ -203,7 +203,7 @@ impl RefreshIndexInterpreter {
     }
 
     fn update_index_meta(&self, read_source: &DataSourcePlan) -> Result<IndexMeta> {
-        let fuse_part = FusePartInfo::from_part(read_source.parts.partitions.last().unwrap())?;
+        let fuse_part = FuseBlockPartInfo::from_part(read_source.parts.partitions.last().unwrap())?;
         let mut index_meta = self.plan.index_meta.clone();
         index_meta.updated_on = fuse_part.create_on;
         Ok(index_meta)

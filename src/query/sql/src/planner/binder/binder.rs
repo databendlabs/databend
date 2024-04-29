@@ -15,12 +15,14 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono_tz::Tz;
 use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::With;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -34,6 +36,7 @@ use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
+use log::info;
 use log::warn;
 
 use super::Finder;
@@ -50,7 +53,6 @@ use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
-use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::MaterializedCte;
 use crate::plans::Plan;
@@ -129,10 +131,12 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
+        let start = Instant::now();
         self.ctx.set_status_info("binding");
         let mut init_bind_context = BindContext::new();
         let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
         self.bind_query_index(&mut init_bind_context, &plan).await?;
+        info!("bind stmt to plan, time used: {:?}", start.elapsed());
         Ok(plan)
     }
 
@@ -311,6 +315,8 @@ impl<'a> Binder {
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
+            Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
+            Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
 
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
@@ -333,7 +339,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
@@ -394,6 +400,9 @@ impl<'a> Binder {
                 }
                 self.bind_insert(bind_context, stmt).await?
             }
+            Statement::InsertMultiTable(stmt) => {
+                self.bind_insert_multi_table(bind_context, stmt).await?
+            }
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
@@ -445,7 +454,7 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: *create_option,
                     name: name.clone(),
-                    file_format_params: file_format_options.clone().try_into()?,
+                    file_format_params: file_format_options.to_meta_ast().try_into()?,
                 }))
             }
             Statement::DropFileFormat {
@@ -474,10 +483,7 @@ impl<'a> Binder {
             Statement::DropUDF {
                 if_exists,
                 udf_name,
-            } => Plan::DropUDF(Box::new(DropUDFPlan {
-                if_exists: *if_exists,
-                udf: udf_name.to_string(),
-            })),
+            } => self.bind_drop_udf(*if_exists, udf_name).await?,
             Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
@@ -605,10 +611,13 @@ impl<'a> Binder {
             }
 
             // Streams
-            Statement::CreateStream(stmt) => self.bind_create_stream(stmt).await?,
+            Statement::CreateStream(stmt) => self.bind_create_stream(bind_context, stmt).await?,
             Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?,
             Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
             Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
+
+            // Dynamic Table
+            Statement::CreateDynamicTable(stmt) => self.bind_create_dynamic_table(stmt).await?,
 
             Statement::CreatePipe(_) => {
                 todo!()
@@ -634,9 +643,16 @@ impl<'a> Binder {
             Statement::DescribeNotification(stmt) => {
                 self.bind_desc_notification(stmt).await?
             }
+            Statement::CreateSequence(stmt) => {
+                self.bind_create_sequence(stmt).await?
+            }
+            Statement::DropSequence(stmt) => {
+                self.bind_drop_sequence(stmt).await?
+            }
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
+            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?
         };
         Ok(plan)
     }
@@ -823,6 +839,21 @@ impl<'a> Binder {
         }
     }
 
+    pub(crate) fn check_allowed_scalar_expr_with_subquery_for_copy_table(
+        &self,
+        scalar: &ScalarExpr,
+    ) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
+    }
+
     pub(crate) fn check_allowed_scalar_expr_with_subquery(
         &self,
         scalar: &ScalarExpr,
@@ -835,8 +866,36 @@ impl<'a> Binder {
                     | ScalarExpr::UDFCall(_)
             )
         };
+
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())
+    }
+
+    pub(crate) fn add_cte(&mut self, with: &With, bind_context: &mut BindContext) -> Result<()> {
+        for (idx, cte) in with.ctes.iter().enumerate() {
+            let table_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
+            if bind_context.cte_map_ref.contains_key(&table_name) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "duplicate cte {table_name}"
+                )));
+            }
+            let cte_info = CteInfo {
+                columns_alias: cte
+                    .alias
+                    .columns
+                    .iter()
+                    .map(|c| normalize_identifier(c, &self.name_resolution_ctx).name)
+                    .collect(),
+                query: *cte.query.clone(),
+                materialized: cte.materialized,
+                cte_idx: idx,
+                used_count: 0,
+                columns: vec![],
+            };
+            self.ctes_map.insert(table_name.clone(), cte_info.clone());
+            bind_context.cte_map_ref.insert(table_name, cte_info);
+        }
+        Ok(())
     }
 }

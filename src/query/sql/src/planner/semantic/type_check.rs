@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
 
@@ -21,6 +24,7 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
@@ -34,6 +38,7 @@ use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
@@ -42,7 +47,12 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -59,6 +69,7 @@ use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::F32;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -69,15 +80,19 @@ use databend_common_expression::FunctionKind;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
+use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -90,10 +105,12 @@ use simsearch::SimSearch;
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::bind_values;
+use crate::binder::resolve_file_location;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
+use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
@@ -208,7 +225,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
+    //#[async_backtrace::framed]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
@@ -350,7 +367,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span: *span,
-                            lit: Literal::Boolean(*not),
+                            value: Literal::Boolean(*not),
                         },
                         &Expr::BinaryOp {
                             span: *span,
@@ -360,7 +377,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span: *span,
-                            lit: Literal::Boolean(!*not),
+                            value: Literal::Boolean(!*not),
                         },
                         &Expr::BinaryOp {
                             span: *span,
@@ -380,7 +397,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if self.ctx.get_cluster().is_empty() && list.len() >= 1024 {
+                if list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
                     if *not {
                         return self
                             .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {
@@ -404,7 +421,7 @@ impl<'a> TypeChecker<'a> {
                     let array_expr = Expr::FunctionCall {
                         span: *span,
                         func: ASTFunctionCall {
-                            name: Identifier::from_name("array_distinct"),
+                            name: Identifier::from_name(*span, "array_distinct"),
                             args: vec![array_expr],
                             params: vec![],
                             window: None,
@@ -418,11 +435,7 @@ impl<'a> TypeChecker<'a> {
                             span: *span,
                             func: ASTFunctionCall {
                                 distinct: false,
-                                name: Identifier {
-                                    name: "contains".to_string(),
-                                    quote: None,
-                                    span: *span,
-                                },
+                                name: Identifier::from_name(*span, "contains"),
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
                                 window: None,
@@ -670,11 +683,7 @@ impl<'a> TypeChecker<'a> {
                                 span: *span,
                                 func: ASTFunctionCall {
                                     distinct: false,
-                                    name: Identifier {
-                                        name: "eq".to_string(),
-                                        quote: None,
-                                        span: *span,
-                                    },
+                                    name: Identifier::from_name(*span, "eq"),
                                     args: vec![*operand.clone(), c.clone()],
                                     params: vec![],
                                     window: None,
@@ -689,7 +698,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 let null_arg = Expr::Literal {
                     span: None,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 };
 
                 if let Some(expr) = else_result {
@@ -718,7 +727,7 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
-            Expr::Literal { span, lit } => self.resolve_literal(*span, lit)?,
+            Expr::Literal { span, value } => self.resolve_literal(*span, value)?,
 
             Expr::FunctionCall {
                 span,
@@ -747,6 +756,7 @@ impl<'a> TypeChecker<'a> {
                             .chain(AggregateFunctionFactory::instance().registered_names())
                             .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
+                            .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(
                                 Self::all_sugar_functions()
                                     .iter()
@@ -772,7 +782,7 @@ impl<'a> TypeChecker<'a> {
                                 "no function matches the given name: '{func_name}', do you mean {}?",
                                 possible_funcs.join(", ")
                             ))
-                                .set_span(*span));
+                            .set_span(*span));
                         }
                     }
                 }
@@ -836,7 +846,8 @@ impl<'a> TypeChecker<'a> {
                     if window.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
                             "window function {func_name} can only be used in window clause"
-                        )));
+                        ))
+                        .set_span(*span));
                     }
                     let func = self
                         .resolve_general_window_function(*span, func_name, &args)
@@ -887,11 +898,28 @@ impl<'a> TypeChecker<'a> {
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
                             "function {func_name} must have a lambda expression",
-                        )));
+                        ))
+                        .set_span(*span));
                     }
                     let lambda = lambda.as_ref().unwrap();
                     self.resolve_lambda_function(*span, func_name, &args, lambda)
                         .await?
+                } else if GENERAL_SEARCH_FUNCTIONS.contains(&func_name) {
+                    match func_name {
+                        "score" => {
+                            self.resolve_score_search_function(*span, func_name, &args)
+                                .await?
+                        }
+                        "match" => {
+                            self.resolve_match_search_function(*span, func_name, &args)
+                                .await?
+                        }
+                        "query" => {
+                            self.resolve_query_search_function(*span, func_name, &args)
+                                .await?
+                        }
+                        _ => unreachable!(),
+                    }
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -991,16 +1019,16 @@ impl<'a> TypeChecker<'a> {
                     expr = &**inner_expr;
                     let path = match accessor {
                         MapAccessor::Bracket {
-                            key: box Expr::Literal { lit, .. },
+                            key: box Expr::Literal { value, .. },
                         } => {
-                            if !matches!(lit, Literal::UInt64(_) | Literal::String(_)) {
+                            if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
                                 return Err(ErrorCode::SemanticError(format!(
                                     "Unsupported accessor: {:?}",
-                                    lit
+                                    value
                                 ))
                                 .set_span(*span));
                             }
-                            lit.clone()
+                            value.clone()
                         }
                         MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                         MapAccessor::DotNumber { key } => Literal::UInt64(*key),
@@ -1085,6 +1113,8 @@ impl<'a> TypeChecker<'a> {
             Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs).await?,
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
+
+            Expr::Hole { .. } => unreachable!("hole is impossible in trivial query"),
         };
 
         Ok(Box::new((scalar, data_type)))
@@ -1103,7 +1133,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     async fn resolve_window(
         &mut self,
         span: Span,
@@ -1186,8 +1215,8 @@ impl<'a> TypeChecker<'a> {
     // just support integer
     #[inline]
     fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
-        if let Expr::Literal { lit, .. } = expr {
-            let box (value, _) = self.resolve_literal_scalar(lit)?;
+        if let Expr::Literal { value, .. } = expr {
+            let box (value, _) = self.resolve_literal_scalar(value)?;
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
                     return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
@@ -1268,7 +1297,6 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    #[async_backtrace::framed]
     async fn resolve_range_offset(&mut self, bound: &WindowFrameBound) -> Result<Option<Scalar>> {
         match bound {
             WindowFrameBound::Following(Some(box expr))
@@ -1289,7 +1317,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     async fn resolve_window_range_frame(&mut self, frame: WindowFrame) -> Result<WindowFuncFrame> {
         let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
         let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
@@ -1316,7 +1343,6 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    #[async_backtrace::framed]
     async fn resolve_window_frame(
         &mut self,
         span: Span,
@@ -1400,7 +1426,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve general window function call.
-    #[async_backtrace::framed]
+
     async fn resolve_general_window_function(
         &mut self,
         span: Span,
@@ -1464,7 +1490,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     async fn resolve_lag_lead_window_function(
         &mut self,
         func_name: &str,
@@ -1532,7 +1557,6 @@ impl<'a> TypeChecker<'a> {
         }))
     }
 
-    #[async_backtrace::framed]
     async fn resolve_nth_value_window_function(
         &mut self,
         func_name: &str,
@@ -1605,7 +1629,6 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    #[async_backtrace::framed]
     async fn resolve_ntile_window_function(
         &mut self,
         args: &[ScalarExpr],
@@ -1640,7 +1663,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve aggregation function call.
-    #[async_backtrace::framed]
+
     async fn resolve_aggregate_function(
         &mut self,
         span: Span,
@@ -1816,7 +1839,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     async fn resolve_lambda_function(
         &mut self,
         span: Span,
@@ -1843,18 +1865,25 @@ impl<'a> TypeChecker<'a> {
         // ARRAY_REDUCE have two params
         if params.len() != 1 && func_name != "array_reduce" {
             return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
-            )));
+                "incorrect number of parameters in lambda function, {} expects 1 parameter, but got {}",
+                func_name, params.len()
+            ))
+            .set_span(span));
         } else if func_name == "array_reduce" && params.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {func_name} expects 2 parameter",
-            )));
+                "incorrect number of parameters in lambda function, {} expects 2 parameters, but got {}",
+                func_name, params.len()
+            ))
+            .set_span(span));
         }
 
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for lambda function, {func_name} expects 1 argument"
-            )));
+                "invalid arguments for lambda function, {} expects 1 argument, but got {}",
+                func_name,
+                args.len()
+            ))
+            .set_span(span));
         }
         let box (mut arg, arg_type) = self.resolve(args[0]).await?;
 
@@ -1863,9 +1892,10 @@ impl<'a> TypeChecker<'a> {
             DataType::Null | DataType::EmptyArray => DataType::Null,
             _ => {
                 return Err(ErrorCode::SemanticError(
-                    "invalid arguments for lambda function, argument data type must be array"
+                    "invalid arguments for lambda function, argument data type must be an array"
                         .to_string(),
-                ));
+                )
+                .set_span(span));
             }
         };
 
@@ -1891,7 +1921,8 @@ impl<'a> TypeChecker<'a> {
             } else {
                 return Err(ErrorCode::SemanticError(
                     "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
-                ));
+                )
+                .set_span(span));
             }
         } else if func_name == "array_reduce" {
             // transform arg type
@@ -1977,8 +2008,381 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((lambda_func, data_type)))
     }
 
+    async fn resolve_score_search_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if !args.is_empty() {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, {} expects 0 argument, but got {}",
+                func_name,
+                args.len()
+            ))
+            .set_span(span));
+        }
+        let internal_column =
+            InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore);
+
+        let internal_column_binding = InternalColumnBinding {
+            database_name: None,
+            table_name: None,
+            internal_column,
+        };
+        let column = self.bind_context.add_internal_column_binding(
+            &internal_column_binding,
+            self.metadata.clone(),
+            false,
+        )?;
+
+        let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span, column });
+        let data_type = DataType::Number(NumberDataType::Float32);
+        Ok(Box::new((scalar_expr, data_type)))
+    }
+
+    /// Resolve match search function.
+    /// The first argument is the field or fields to match against,
+    /// multiple fields can have a optional per-field boosting that
+    /// gives preferential weight to fields being searched in.
+    /// For example: title^5, content^1.2
+    /// The scond argument is the query text without query syntax.
+    async fn resolve_match_search_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
+            return Err(ErrorCode::SemanticError(format!(
+                "search function {} can only be used in where clause",
+                func_name
+            ))
+            .set_span(span));
+        }
+
+        // TODO: support options field
+        if args.len() != 2 {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, {} expects 2 arguments, but got {}",
+                func_name,
+                args.len()
+            ))
+            .set_span(span));
+        }
+
+        let field_arg = args[0];
+        let query_arg = args[1];
+
+        let box (field_scalar, _) = self.resolve(field_arg).await?;
+        let column_refs = match field_scalar {
+            // single field without boost
+            ScalarExpr::BoundColumnRef(column_ref) => {
+                vec![(column_ref, None)]
+            }
+            // constant multiple fields with boosts
+            ScalarExpr::ConstantExpr(constant_expr) => {
+                let Some(constant_field) = constant_expr.value.as_string() else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "invalid arguments for search function, field must be a column or constant string, but got {}",
+                        constant_expr.value
+                    ))
+                    .set_span(constant_expr.span));
+                };
+
+                // fields are separated by commas and boost is separated by ^
+                let field_strs: Vec<&str> = constant_field.split(',').collect();
+                let mut column_refs = Vec::with_capacity(field_strs.len());
+                for field_str in field_strs {
+                    let field_boosts: Vec<&str> = field_str.split('^').collect();
+                    if field_boosts.len() > 2 {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "invalid arguments for search function, field string must have only one boost, but got {}",
+                            constant_field
+                        ))
+                        .set_span(constant_expr.span));
+                    }
+                    let column_expr = Expr::ColumnRef {
+                        span: constant_expr.span,
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: ColumnID::Name(Identifier::from_name(
+                                constant_expr.span,
+                                field_boosts[0].trim(),
+                            )),
+                        },
+                    };
+                    let box (field_scalar, _) = self.resolve(&column_expr).await?;
+                    let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
+                        return Err(ErrorCode::SemanticError(
+                            "invalid arguments for search function, field must be a column"
+                                .to_string(),
+                        )
+                        .set_span(constant_expr.span));
+                    };
+                    let boost = if field_boosts.len() == 2 {
+                        match f32::from_str(field_boosts[1].trim()) {
+                            Ok(boost) => Some(F32::from(boost)),
+                            Err(_) => {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "invalid arguments for search function, boost must be a float value, but got {}",
+                                    field_boosts[1]
+                                ))
+                                .set_span(constant_expr.span));
+                            }
+                        }
+                    } else {
+                        None
+                    };
+                    column_refs.push((column_ref, boost));
+                }
+                column_refs
+            }
+            _ => {
+                return Err(ErrorCode::SemanticError(
+                    "invalid arguments for search function, field must be a column or constant string".to_string(),
+                )
+                .set_span(span));
+            }
+        };
+
+        let box (query_scalar, _) = self.resolve(query_arg).await?;
+        let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(query_scalar.span()));
+        };
+        let Some(query_text) = query_expr.value.as_string() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(query_scalar.span()));
+        };
+
+        // match function didn't support query syntax,
+        // convert query text to lowercase and remove punctuation characters,
+        // so that tantivy query parser can parse the query text as plain text
+        // without syntax
+        let formated_query_text: String = query_text
+            .to_lowercase()
+            .chars()
+            .map(|v| if v.is_ascii_punctuation() { ' ' } else { v })
+            .collect();
+
+        self.resolve_search_function(span, column_refs, &formated_query_text)
+            .await
+    }
+
+    /// Resolve query search function.
+    /// The first argument query text with query syntax.
+    /// The following query syntax is supported:
+    /// 1. simple terms, like `title:quick`
+    /// 2. bool operator terms, like `title:fox AND dog OR cat`
+    /// 3. must and negative operator terms, like `title:+fox -cat`
+    /// 4. phrase terms, like `title:"quick brown fox"`
+    /// 5. multiple field with boost terms, like `title:fox^5 content:dog^2`
+    async fn resolve_query_search_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
+            return Err(ErrorCode::SemanticError(format!(
+                "search function {} can only be used in where clause",
+                func_name
+            ))
+            .set_span(span));
+        }
+
+        // TODO: support options field
+        if args.len() != 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, {} expects 1 argument, but got {}",
+                func_name,
+                args.len()
+            ))
+            .set_span(span));
+        }
+
+        let query_arg = args[0];
+
+        let box (query_scalar, _) = self.resolve(query_arg).await?;
+        let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(query_scalar.span()));
+        };
+        let Some(query_text) = query_expr.value.as_string() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(query_scalar.span()));
+        };
+
+        let field_strs: Vec<&str> = query_text.split(' ').collect();
+        let mut column_refs = Vec::with_capacity(field_strs.len());
+        for field_str in field_strs {
+            if !field_str.contains(':') {
+                continue;
+            }
+            let field_names: Vec<&str> = field_str.split(':').collect();
+            // if the field is JSON type, must specify the key path in the object
+            // for example:
+            // the field `info` has the value: `{"tags":{"id":10,"env":"prod","name":"test"}}`
+            // a query can be written like this `info.tags.env:prod`
+            let field_name = field_names[0].trim();
+            let sub_field_names: Vec<&str> = field_name.split('.').collect();
+            let column_expr = Expr::ColumnRef {
+                span: query_scalar.span(),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(Identifier::from_name(
+                        query_scalar.span(),
+                        sub_field_names[0].trim(),
+                    )),
+                },
+            };
+            let box (field_scalar, _) = self.resolve(&column_expr).await?;
+            let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
+                return Err(ErrorCode::SemanticError(
+                    "invalid arguments for search function, field must be a column".to_string(),
+                )
+                .set_span(query_scalar.span()));
+            };
+            column_refs.push((column_ref, None));
+        }
+
+        self.resolve_search_function(span, column_refs, query_text)
+            .await
+    }
+
+    async fn resolve_search_function(
+        &mut self,
+        span: Span,
+        column_refs: Vec<(BoundColumnRef, Option<F32>)>,
+        query_text: &String,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if column_refs.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "invalid arguments for search function, must specify at least one search column"
+                    .to_string(),
+            )
+            .set_span(span));
+        }
+        if !column_refs.windows(2).all(|c| {
+            c[0].0.column.table_index.is_some()
+                && c[0].0.column.table_index == c[1].0.column.table_index
+        }) {
+            return Err(ErrorCode::SemanticError(
+                "invalid arguments for search function, all columns must in a table".to_string(),
+            )
+            .set_span(span));
+        }
+        let table_index = column_refs[0].0.column.table_index.unwrap();
+
+        let table_entry = self.metadata.read().table(table_index).clone();
+        let table = table_entry.table();
+        let table_info = table.get_table_info();
+        let table_schema = table_info.schema();
+        let table_indexes = &table_info.meta.indexes;
+
+        let mut query_fields = Vec::with_capacity(column_refs.len());
+        let mut column_ids = Vec::with_capacity(column_refs.len());
+        for (column_ref, boost) in &column_refs {
+            let column_name = &column_ref.column.column_name;
+            let column_id = table_schema.column_id_of(column_name)?;
+            column_ids.push(column_id);
+            query_fields.push((column_name.clone(), *boost));
+        }
+
+        // find inverted index and check schema
+        let mut index_name = "".to_string();
+        let mut index_version = "".to_string();
+        let mut index_schema = None;
+        let mut index_options = BTreeMap::new();
+        for table_index in table_indexes.values() {
+            if column_ids
+                .iter()
+                .all(|id| table_index.column_ids.contains(id))
+            {
+                index_name = table_index.name.clone();
+                index_version = table_index.version.clone();
+
+                let mut index_fields = Vec::with_capacity(table_index.column_ids.len());
+                for column_id in &table_index.column_ids {
+                    let table_field = table_schema.field_of_column_id(*column_id)?;
+                    let field = DataField::from(table_field);
+                    index_fields.push(field);
+                }
+                index_schema = Some(DataSchema::new(index_fields));
+                index_options = table_index.options.clone();
+                break;
+            }
+        }
+
+        if index_schema.is_none() {
+            let column_names = query_fields.iter().map(|c| c.0.clone()).join(", ");
+            return Err(ErrorCode::SemanticError(format!(
+                "columns {} don't have inverted index",
+                column_names
+            ))
+            .set_span(span));
+        }
+
+        if self
+            .bind_context
+            .inverted_index_map
+            .contains_key(&table_index)
+        {
+            return Err(ErrorCode::SemanticError(format!(
+                "duplicate search function for table {table_index}"
+            ))
+            .set_span(span));
+        }
+        let index_info = InvertedIndexInfo {
+            index_name,
+            index_version,
+            index_options,
+            index_schema: index_schema.unwrap(),
+            query_fields,
+            query_text: query_text.to_string(),
+            has_score: false,
+        };
+
+        self.bind_context
+            .inverted_index_map
+            .insert(table_index, index_info);
+
+        let internal_column =
+            InternalColumn::new(SEARCH_MATCHED_COL_NAME, InternalColumnType::SearchMatched);
+
+        let internal_column_binding = InternalColumnBinding {
+            database_name: column_refs[0].0.column.database_name.clone(),
+            table_name: column_refs[0].0.column.table_name.clone(),
+            internal_column,
+        };
+        let column = self.bind_context.add_internal_column_binding(
+            &internal_column_binding,
+            self.metadata.clone(),
+            false,
+        )?;
+
+        let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span, column });
+        let data_type = DataType::Boolean;
+        Ok(Box::new((scalar_expr, data_type)))
+    }
+
     /// Resolve function call.
-    #[async_backtrace::framed]
+
     pub async fn resolve_function(
         &mut self,
         span: Span,
@@ -2125,7 +2529,6 @@ impl<'a> TypeChecker<'a> {
     /// would be transformed into `FunctionCall`, except comparison
     /// expressions, conjunction(`AND`) and disjunction(`OR`).
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_binary_op(
         &mut self,
         span: Span,
@@ -2166,7 +2569,7 @@ impl<'a> TypeChecker<'a> {
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
                 if let Expr::Literal {
-                    lit: Literal::String(str),
+                    value: Literal::String(str),
                     ..
                 } = right
                 {
@@ -2186,7 +2589,6 @@ impl<'a> TypeChecker<'a> {
 
     /// Resolve unary expressions.
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_unary_op(
         &mut self,
         span: Span,
@@ -2207,7 +2609,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_extract_expr(
         &mut self,
         span: Span,
@@ -2253,7 +2654,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_date_add(
         &mut self,
         span: Span,
@@ -2279,7 +2679,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     pub async fn resolve_date_trunc(
         &mut self,
         span: Span,
@@ -2347,7 +2746,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_backtrace::framed]
     pub async fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
@@ -2468,7 +2866,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,
@@ -2479,14 +2876,14 @@ impl<'a> TypeChecker<'a> {
             ("database" | "currentdatabase" | "current_database", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_current_database()),
+                    value: Literal::String(self.ctx.get_current_database()),
                 })
                 .await,
             ),
             ("version", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_fuse_version()),
+                    value: Literal::String(self.ctx.get_fuse_version()),
                 })
                 .await,
             ),
@@ -2494,7 +2891,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(user) => Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        lit: Literal::String(user.identity().to_string()),
+                        value: Literal::String(user.identity().display().to_string()),
                     })
                     .await,
                 ),
@@ -2503,7 +2900,7 @@ impl<'a> TypeChecker<'a> {
             ("current_role", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(
+                    value: Literal::String(
                         self.ctx
                             .get_current_role()
                             .map(|r| r.name)
@@ -2515,7 +2912,7 @@ impl<'a> TypeChecker<'a> {
             ("connection_id", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_connection_id()),
+                    value: Literal::String(self.ctx.get_connection_id()),
                 })
                 .await,
             ),
@@ -2524,7 +2921,7 @@ impl<'a> TypeChecker<'a> {
                 Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        lit: Literal::String(tz),
+                        value: Literal::String(tz),
                     })
                     .await,
                 )
@@ -2541,7 +2938,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span,
-                            lit: Literal::Null,
+                            value: Literal::Null,
                         },
                         arg_x,
                     ])
@@ -2585,11 +2982,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "is_not_null".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "is_not_null"),
                             args: vec![arg_x.clone()],
                             params: vec![],
                             window: None,
@@ -2606,11 +2999,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "is_not_error".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "is_not_error"),
                             args: vec![arg_x.clone()],
                             params: vec![],
                             window: None,
@@ -2630,11 +3019,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "is_not_error".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "is_not_error"),
                             args: vec![(*arg).clone()],
                             params: vec![],
                             window: None,
@@ -2646,7 +3031,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 new_args.push(Expr::Literal {
                     span,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 });
 
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
@@ -2661,7 +3046,7 @@ impl<'a> TypeChecker<'a> {
                 for arg in args.iter() {
                     if let Expr::Literal {
                         span: _,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     } = arg
                     {
                         continue;
@@ -2677,11 +3062,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "assume_not_null".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "assume_not_null"),
                             args: vec![(*arg).clone()],
                             params: vec![],
                             window: None,
@@ -2694,18 +3075,18 @@ impl<'a> TypeChecker<'a> {
                 }
                 new_args.push(Expr::Literal {
                     span,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 });
 
                 // coalesce(all_null) => null
                 if new_args.len() == 1 {
                     new_args.push(Expr::Literal {
                         span,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     });
                     new_args.push(Expr::Literal {
                         span,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     });
                 }
 
@@ -2749,7 +3130,7 @@ impl<'a> TypeChecker<'a> {
                         let query_id = self.ctx.get_last_query_id(index as i32);
                         self.resolve(&Expr::Literal {
                             span,
-                            lit: Literal::String(query_id),
+                            value: Literal::String(query_id),
                         })
                         .await
                     }
@@ -2876,7 +3257,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_trim_function(
         &mut self,
         span: Span,
@@ -2936,7 +3316,6 @@ impl<'a> TypeChecker<'a> {
     // TODO(leiysky): use an array builder function instead, since we should allow declaring
     // an array with variable as element.
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_array(
         &mut self,
         span: Span,
@@ -2952,7 +3331,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_map(
         &mut self,
         span: Span,
@@ -2976,7 +3354,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_tuple(
         &mut self,
         span: Span,
@@ -2992,7 +3369,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_like(
         &mut self,
         op: &BinaryOperator,
@@ -3015,13 +3391,13 @@ impl<'a> TypeChecker<'a> {
             let (new_left, _) = *self
                 .resolve_binary_op(span, &BinaryOperator::Gte, left, &Expr::Literal {
                     span: None,
-                    lit: Literal::String(like_str[..like_str.len() - 1].to_owned()),
+                    value: Literal::String(like_str[..like_str.len() - 1].to_owned()),
                 })
                 .await?;
             let (new_right, _) = *self
                 .resolve_binary_op(span, &BinaryOperator::Lt, left, &Expr::Literal {
                     span: None,
-                    lit: Literal::String(like_str_plus),
+                    value: Literal::String(like_str_plus),
                 })
                 .await?;
             self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
@@ -3033,7 +3409,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_udf(
         &mut self,
         span: Span,
@@ -3071,7 +3446,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_udf_server(
         &mut self,
         span: Span,
@@ -3135,8 +3509,92 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
+    async fn resolve_wasm_file_location(&mut self, udf_definition: &UDFScript) -> Result<UDFType> {
+        let file_location = match udf_definition.code.strip_prefix('@') {
+            Some(location) => FileLocation::Stage(location.to_string()),
+            None => {
+                let uri = UriLocation::from_uri(
+                    udf_definition.code.clone(),
+                    "".to_string(),
+                    BTreeMap::default(),
+                )?;
+                FileLocation::Uri(uri)
+            }
+        };
+
+        let (stage_info, wasm_module_path) =
+            resolve_file_location(self.ctx.as_ref(), &file_location)
+                .await
+                .map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to resolve WASM code location {:#?}: {}",
+                        &udf_definition.code, err
+                    ))
+                })?;
+
+        let op = StageTable::get_op(&stage_info).map_err(|err| {
+            ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
+        })?;
+
+        let code_blob = op.read(&wasm_module_path).await.map_err(|err| {
+            ErrorCode::SemanticError(format!(
+                "Failed to read WASM module {}: {}",
+                wasm_module_path, err
+            ))
+        })?;
+
+        let compress_algo = CompressAlgorithm::from_path(&wasm_module_path);
+        log::trace!(
+            "Detecting compression algorithm for WASM module: {}",
+            &wasm_module_path
+        );
+        log::info!("Detected compression algorithm: {:#?}", &compress_algo);
+
+        let code_blob = match compress_algo {
+            Some(algo) => {
+                log::trace!("Decompressing WASM module using {:?} algorithm", algo);
+                let mut decoder = DecompressDecoder::new(algo);
+                decoder.decompress_all(&code_blob).map_err(|err| {
+                    let error_msg = format!(
+                        "Failed to decompress WASM module {}: {}",
+                        wasm_module_path, err
+                    );
+                    log::error!("{}", error_msg);
+                    ErrorCode::SemanticError(error_msg)
+                })?
+            }
+            None => {
+                let ext = match PathBuf::from(&wasm_module_path).extension() {
+                    Some(ext) => ext.to_string_lossy().to_string(),
+                    None => {
+                        let error_msg = format!(
+                            "WASM module path {} has no file extension",
+                            wasm_module_path
+                        );
+                        log::error!("{}", error_msg);
+                        return Err(ErrorCode::SemanticError(error_msg));
+                    }
+                };
+
+                if ext == "wasm" {
+                    log::trace!("WASM module is already uncompressed");
+                    code_blob
+                } else {
+                    let error_msg = format!("Invalid WASM module: {}", wasm_module_path);
+                    log::error!("{}", error_msg);
+                    return Err(ErrorCode::SemanticError(error_msg));
+                }
+            }
+        };
+
+        Ok(UDFType::WasmScript((
+            udf_definition.language.clone(),
+            udf_definition.runtime_version.clone(),
+            code_blob,
+        )))
+    }
+
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_udf_script(
         &mut self,
         span: Span,
@@ -3154,6 +3612,16 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
+        let const_udf_type = if udf_definition.language.to_lowercase().as_str() == "wasm" {
+            self.resolve_wasm_file_location(&udf_definition).await?
+        } else {
+            UDFType::Script((
+                udf_definition.language,
+                udf_definition.runtime_version,
+                udf_definition.code,
+            ))
+        };
+
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
@@ -3166,11 +3634,7 @@ impl<'a> TypeChecker<'a> {
                 display_name,
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
-                udf_type: UDFType::Script((
-                    udf_definition.language,
-                    udf_definition.runtime_version,
-                    udf_definition.code,
-                )),
+                udf_type: const_udf_type,
                 arguments: args,
             }
             .into(),
@@ -3179,7 +3643,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_lambda_udf(
         &mut self,
         span: Span,
@@ -3229,7 +3692,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_cast_to_variant(
         &mut self,
         span: Span,
@@ -3245,9 +3707,8 @@ impl<'a> TypeChecker<'a> {
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
             let column_entry = self.metadata.read().column(column.index).clone();
             if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
-                let new_scalar = self
-                    .rewrite_cast_to_variant(span, scalar, &data_type, is_try)
-                    .await;
+                let new_scalar =
+                    Self::rewrite_cast_to_variant(span, scalar, &data_type, is_try).await;
                 let return_type = if is_try || source_type.is_nullable() {
                     DataType::Nullable(Box::new(DataType::Variant))
                 } else {
@@ -3260,9 +3721,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn rewrite_cast_to_variant(
-        &mut self,
         span: Span,
         scalar: &ScalarExpr,
         data_type: &TableDataType,
@@ -3293,8 +3752,7 @@ impl<'a> TypeChecker<'a> {
 
                     let value =
                         if matches!(field_type.remove_nullable(), TableDataType::Tuple { .. }) {
-                            self.rewrite_cast_to_variant(span, &value, field_type, is_try)
-                                .await
+                            Self::rewrite_cast_to_variant(span, &value, field_type, is_try).await
                         } else {
                             value
                         };
@@ -3333,7 +3791,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_map_access(
         &mut self,
         expr: &Expr,
@@ -3435,7 +3892,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
     async fn resolve_tuple_map_access_pushdown(
         &mut self,
         span: Span,
@@ -3499,11 +3955,7 @@ impl<'a> TypeChecker<'a> {
             };
         }
 
-        let inner_column_ident = Identifier {
-            name: names.join(":"),
-            quote: None,
-            span,
-        };
+        let inner_column_ident = Identifier::from_name(span, names.join(":"));
         match self.bind_context.resolve_name(
             column.database_name.as_deref(),
             column.table_name.as_deref(),
@@ -3962,6 +4414,7 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
     let ast = databend_common_ast::parser::run_parser(
         &sql_tokens,
         databend_common_ast::parser::Dialect::default(),
+        databend_common_ast::parser::ParseMode::Default,
         false,
         databend_common_ast::parser::expr::type_name,
     )?;
@@ -4132,7 +4585,7 @@ fn check_prefix(like_str: &str) -> bool {
 // Note: the method mainly checks if list contains NULL literal, because `contain` can't handle NULL.
 fn satisfy_contain_func(expr: &Expr) -> bool {
     match expr {
-        Expr::Literal { lit, .. } => !matches!(lit, Literal::Null),
+        Expr::Literal { value, .. } => !matches!(value, Literal::Null),
         Expr::Tuple { exprs, .. } => {
             // For each expr in `exprs`, check if it satisfies the conditions
             exprs.iter().all(satisfy_contain_func)

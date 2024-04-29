@@ -42,14 +42,7 @@ mod kvapi_key_impl {
     use crate::tenant::Tenant;
     use crate::KeyWithTenant;
 
-    impl kvapi::Key for StageFileIdent {
-        const PREFIX: &'static str = "__fd_stage_files";
-        type ValueType = StageFile;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.stage.to_string_key())
-        }
-
+    impl kvapi::KeyCodec for StageFileIdent {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             b.push_str(self.stage.tenant_name())
                 .push_str(self.stage.name())
@@ -60,6 +53,15 @@ mod kvapi_key_impl {
             let stage = StageIdent::decode_key(p)?;
             let path = p.next_str()?;
             Ok(StageFileIdent::new(stage, path))
+        }
+    }
+
+    impl kvapi::Key for StageFileIdent {
+        const PREFIX: &'static str = "__fd_stage_files";
+        type ValueType = StageFile;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.stage.to_string_key())
         }
     }
 
@@ -86,7 +88,7 @@ mod tests {
 
     #[test]
     fn test_kvapi_key_for_stage_file_ident() {
-        let tenant = Tenant::new("tenant1");
+        let tenant = Tenant::new_literal("tenant1");
         let stage = StageIdent::new(tenant, "stage1");
         let sfi = StageFileIdent::new(stage, "file1");
 

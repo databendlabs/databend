@@ -17,9 +17,11 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::lock::Lock;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -48,6 +50,7 @@ pub struct CompactOptions {
     pub base_snapshot: Arc<TableSnapshot>,
     pub block_per_seg: usize,
     pub num_segment_limit: Option<usize>,
+    pub num_block_limit: Option<usize>,
 }
 
 impl FuseTable {
@@ -56,9 +59,12 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         lock: Arc<dyn Lock>,
-        limit: Option<usize>,
+        num_segment_limit: Option<usize>,
     ) -> Result<()> {
-        let compact_options = if let Some(v) = self.compact_options(limit).await? {
+        let compact_options = if let Some(v) = self
+            .compact_options_with_segment_limit(num_segment_limit)
+            .await?
+        {
             v
         } else {
             return Ok(());
@@ -84,9 +90,12 @@ impl FuseTable {
     pub(crate) async fn do_compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        limit: Option<usize>,
+        limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        let compact_options = if let Some(v) = self.compact_options(limit).await? {
+        let compact_options = if let Some(v) = self
+            .compact_options(limits.segment_limit, limits.block_limit)
+            .await?
+        {
             v
         } else {
             return Ok(None);
@@ -119,10 +128,11 @@ impl FuseTable {
         column_ids: HashSet<ColumnId>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let is_lazy = parts.is_lazy;
+        let is_lazy = parts.partitions_type() == PartInfoType::LazyLevel;
         let thresholds = self.get_block_thresholds();
         let cluster_key_id = self.cluster_key_id();
         let mut max_threads = ctx.get_settings().get_max_threads()? as usize;
+
         if is_lazy {
             let query_ctx = ctx.clone();
 
@@ -153,7 +163,7 @@ impl FuseTable {
                     Result::<_, ErrorCode>::Ok(partitions)
                 })?;
 
-                let partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, partitions);
+                let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);
                 query_ctx.set_partitions(partitions)?;
                 Ok(())
             });
@@ -227,8 +237,19 @@ impl FuseTable {
         Ok(())
     }
 
+    async fn compact_options_with_segment_limit(
+        &self,
+        num_segment_limit: Option<usize>,
+    ) -> Result<Option<CompactOptions>> {
+        self.compact_options(num_segment_limit, None).await
+    }
+
     #[async_backtrace::framed]
-    async fn compact_options(&self, limit: Option<usize>) -> Result<Option<CompactOptions>> {
+    async fn compact_options(
+        &self,
+        num_segment_limit: Option<usize>,
+        num_block_limit: Option<usize>,
+    ) -> Result<Option<CompactOptions>> {
         let snapshot_opt = self.read_table_snapshot().await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
@@ -247,7 +268,8 @@ impl FuseTable {
         Ok(Some(CompactOptions {
             base_snapshot,
             block_per_seg,
-            num_segment_limit: limit,
+            num_segment_limit,
+            num_block_limit,
         }))
     }
 }

@@ -22,13 +22,14 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use log::error;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
 use super::interpreter_table_create::is_valid_bloom_index_columns;
-use super::interpreter_table_create::is_valid_change_tracking;
 use super::interpreter_table_create::is_valid_create_opt;
 use super::interpreter_table_create::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
@@ -64,7 +65,6 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
-        is_valid_change_tracking(&self.plan.set_options)?;
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
         if self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT).is_some() {
@@ -95,8 +95,21 @@ impl Interpreter for SetOptionsInterpreter {
         let database = self.plan.database.as_str();
         let table_name = self.plan.table.as_str();
         let table = catalog
-            .get_table(self.ctx.get_tenant().as_str(), database, table_name)
+            .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+
+        let table_version = table.get_table_info().ident.seq;
+        if let Some(value) = self.plan.set_options.get(OPT_KEY_CHANGE_TRACKING) {
+            let change_tracking = value.to_lowercase().parse::<bool>()?;
+            if table.change_tracking_enabled() != change_tracking {
+                let begin_version = if change_tracking {
+                    Some(table_version.to_string())
+                } else {
+                    None
+                };
+                options_map.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
+            }
+        }
 
         // check mutability
         table.check_mutable()?;
@@ -106,12 +119,12 @@ impl Interpreter for SetOptionsInterpreter {
 
         let req = UpsertTableOptionReq {
             table_id: table.get_id(),
-            seq: MatchSeq::Exact(table.get_table_info().ident.seq),
+            seq: MatchSeq::Exact(table_version),
             options: options_map,
         };
 
         catalog
-            .upsert_table_option(self.ctx.get_tenant().as_str(), database, req)
+            .upsert_table_option(&self.ctx.get_tenant(), database, req)
             .await?;
         Ok(PipelineBuildResult::create())
     }

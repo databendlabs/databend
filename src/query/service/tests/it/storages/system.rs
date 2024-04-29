@@ -45,7 +45,6 @@ use databend_common_storages_system::EnginesTable;
 use databend_common_storages_system::FunctionsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::RolesTable;
-use databend_common_storages_system::TracingTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
@@ -298,9 +297,11 @@ async fn test_metrics_table() -> Result<()> {
 
     let table = MetricsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None, true).await?;
-    let counter1 = databend_common_metrics::register_counter("test_metrics_table_count");
-    let histogram1 =
-        databend_common_metrics::register_histogram_in_milliseconds("test_metrics_table_histogram");
+    let counter1 =
+        databend_common_base::runtime::metrics::register_counter("test_metrics_table_count");
+    let histogram1 = databend_common_base::runtime::metrics::register_histogram_in_milliseconds(
+        "test_metrics_table_histogram",
+    );
 
     counter1.inc();
     histogram1.observe(2.0);
@@ -352,23 +353,6 @@ async fn test_roles_table() -> Result<()> {
     }
     let table = RolesTable::create(1);
     run_table_tests(file, ctx, table).await?;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_tracing_table() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-
-    let table: Arc<dyn Table> = Arc::new(TracingTable::create(1));
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
-
-    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
-    let result = stream.try_collect::<Vec<_>>().await?;
-    let block = &result[0];
-    assert_eq!(block.num_columns(), 1);
-    assert!(block.num_rows() > 0);
 
     Ok(())
 }

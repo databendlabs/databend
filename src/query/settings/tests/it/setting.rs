@@ -14,12 +14,12 @@
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
-    let settings = Settings::create(NonEmptyString::new("test").unwrap());
+    let settings = Settings::create(Tenant::new_literal("test"));
     // Number range.
     {
         settings.set_max_threads(2).unwrap();
@@ -102,7 +102,7 @@ async fn test_set_settings() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_global_settings() {
-    let settings = Settings::create(NonEmptyString::new("test").unwrap());
+    let settings = Settings::create(Tenant::new_literal("test"));
     let result = settings
         .set_global_setting(
             "query_flight_compression_notfound".to_string(),
@@ -124,7 +124,7 @@ async fn test_set_data_retention_time_in_days() {
         GlobalConfig::init(&InnerConfig::default()).unwrap();
     }
 
-    let settings = Settings::create(NonEmptyString::new("test").unwrap());
+    let settings = Settings::create(Tenant::new_literal("test"));
 
     // Default.
     {
@@ -176,7 +176,7 @@ async fn test_set_data_retention_time_in_days_from_config() {
         GlobalConfig::init(&conf).unwrap();
     }
 
-    let settings = Settings::create(NonEmptyString::new("test").unwrap());
+    let settings = Settings::create(Tenant::new_literal("test"));
 
     // Ok, 0.
     {

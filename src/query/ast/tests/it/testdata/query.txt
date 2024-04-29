@@ -1,7 +1,7 @@
 ---------- Input ----------
 select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1
 ---------- Output ---------
-SELECT * EXCLUDE (c1), b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders ON (a = b) LIMIT 1
+SELECT * EXCLUDE (c1), b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders ON a = b LIMIT 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -15,6 +15,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -33,6 +34,7 @@ Query {
                                     ),
                                     name: "c1",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ],
                         ),
@@ -47,6 +49,7 @@ Query {
                                 ),
                                 name: "b",
                                 quote: None,
+                                is_hole: false,
                             },
                         ),
                         Star(
@@ -64,6 +67,7 @@ Query {
                                     ),
                                     name: "c2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 Identifier {
                                     span: Some(
@@ -71,6 +75,7 @@ Query {
                                     ),
                                     name: "c3",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 Identifier {
                                     span: Some(
@@ -78,6 +83,7 @@ Query {
                                     ),
                                     name: "c4",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ],
                         ),
@@ -111,6 +117,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -129,6 +136,7 @@ Query {
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -147,10 +155,10 @@ Query {
                                 ),
                                 name: "customer",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -166,10 +174,10 @@ Query {
                                 ),
                                 name: "orders",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -189,7 +197,7 @@ Query {
             span: Some(
                 93..94,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -202,7 +210,7 @@ Query {
 ---------- Input ----------
 select columns('abc'), columns(a -> length(a) = 3) from t
 ---------- Output ---------
-SELECT COLUMNS(_t -> (_t REGEXP 'abc')), COLUMNS(a -> (length(a) = 3)) FROM t
+SELECT COLUMNS(_t -> _t REGEXP 'abc'), COLUMNS(a -> length(a) = 3) FROM t
 ---------- AST ------------
 Query {
     span: Some(
@@ -216,6 +224,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -230,9 +239,12 @@ Query {
                             Lambda {
                                 params: [
                                     Identifier {
-                                        span: None,
+                                        span: Some(
+                                            7..14,
+                                        ),
                                         name: "_t",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ],
                                 expr: BinaryOp {
@@ -247,9 +259,12 @@ Query {
                                             table: None,
                                             column: Name(
                                                 Identifier {
-                                                    span: None,
+                                                    span: Some(
+                                                        7..14,
+                                                    ),
                                                     name: "_t",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -258,7 +273,7 @@ Query {
                                         span: Some(
                                             7..14,
                                         ),
-                                        lit: String(
+                                        value: String(
                                             "abc",
                                         ),
                                     },
@@ -285,6 +300,7 @@ Query {
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ],
                                 expr: BinaryOp {
@@ -304,6 +320,7 @@ Query {
                                                 ),
                                                 name: "length",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                             args: [
                                                 ColumnRef {
@@ -320,6 +337,7 @@ Query {
                                                                 ),
                                                                 name: "a",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                     },
@@ -334,7 +352,7 @@ Query {
                                         span: Some(
                                             48..49,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             3,
                                         ),
                                     },
@@ -357,10 +375,108 @@ Query {
                         ),
                         name: "t",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
+                    pivot: None,
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from customer at(offset => -10 * 30)
+---------- Output ---------
+SELECT * FROM customer AT (OFFSET => - 10 * 30)
+---------- AST ------------
+Query {
+    span: Some(
+        0..45,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..45,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..45,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            14..22,
+                        ),
+                        name: "customer",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    alias: None,
+                    temporal: Some(
+                        TimeTravel(
+                            Offset(
+                                BinaryOp {
+                                    span: Some(
+                                        40..41,
+                                    ),
+                                    op: Multiply,
+                                    left: UnaryOp {
+                                        span: Some(
+                                            36..37,
+                                        ),
+                                        op: Minus,
+                                        expr: Literal {
+                                            span: Some(
+                                                37..39,
+                                            ),
+                                            value: UInt64(
+                                                10,
+                                            ),
+                                        },
+                                    },
+                                    right: Literal {
+                                        span: Some(
+                                            42..44,
+                                        ),
+                                        value: UInt64(
+                                            30,
+                                        ),
+                                    },
+                                },
+                            ),
+                        ),
+                    ),
                     pivot: None,
                     unpivot: None,
                 },
@@ -396,6 +512,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -428,10 +545,10 @@ Query {
                                 ),
                                 name: "customer",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -447,10 +564,10 @@ Query {
                                 ),
                                 name: "orders",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -488,6 +605,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -520,10 +638,10 @@ Query {
                                 ),
                                 name: "customer",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -539,10 +657,10 @@ Query {
                                 ),
                                 name: "orders",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -566,7 +684,7 @@ Query {
 ---------- Input ----------
 select * from customer inner join orders on (a = b)
 ---------- Output ---------
-SELECT * FROM customer INNER JOIN orders ON (a = b)
+SELECT * FROM customer INNER JOIN orders ON a = b
 ---------- AST ------------
 Query {
     span: Some(
@@ -580,6 +698,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -619,6 +738,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -637,6 +757,7 @@ Query {
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -655,10 +776,10 @@ Query {
                                 ),
                                 name: "customer",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -674,10 +795,10 @@ Query {
                                 ),
                                 name: "orders",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -701,7 +822,7 @@ Query {
 ---------- Input ----------
 select * from customer inner join orders on a = b limit 1
 ---------- Output ---------
-SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 1
+SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -715,6 +836,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -754,6 +876,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -772,6 +895,7 @@ Query {
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -790,10 +914,10 @@ Query {
                                 ),
                                 name: "customer",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -809,10 +933,10 @@ Query {
                                 ),
                                 name: "orders",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -832,7 +956,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -845,7 +969,7 @@ Query {
 ---------- Input ----------
 select * from customer inner join orders on a = b limit 2 offset 3
 ---------- Output ---------
-SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 2 OFFSET 3
+SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 2 OFFSET 3
 ---------- AST ------------
 Query {
     span: Some(
@@ -859,6 +983,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -898,6 +1023,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -916,6 +1042,7 @@ Query {
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -934,10 +1061,10 @@ Query {
                                 ),
                                 name: "customer",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -953,10 +1080,10 @@ Query {
                                 ),
                                 name: "orders",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -976,7 +1103,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -986,7 +1113,7 @@ Query {
             span: Some(
                 65..66,
             ),
-            lit: UInt64(
+            value: UInt64(
                 3,
             ),
         },
@@ -1012,6 +1139,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -1044,10 +1172,10 @@ Query {
                                 ),
                                 name: "customer",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -1063,10 +1191,10 @@ Query {
                                 ),
                                 name: "orders",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -1104,6 +1232,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -1131,6 +1260,7 @@ Query {
                                     ),
                                     name: "id",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ],
                         ),
@@ -1153,10 +1283,10 @@ Query {
                                         ),
                                         name: "customer",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -1172,10 +1302,10 @@ Query {
                                         ),
                                         name: "orders",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -1193,10 +1323,10 @@ Query {
                                 ),
                                 name: "detail",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -1220,7 +1350,7 @@ Query {
 ---------- Input ----------
 with t2(tt) as (select a from t) select t2.tt from t2  where t2.tt > 1
 ---------- Output ---------
-WITH t2(tt) AS (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE (t2.tt > 1)
+WITH t2(tt) AS (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE t2.tt > 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -1244,6 +1374,7 @@ Query {
                             ),
                             name: "t2",
                             quote: None,
+                            is_hole: false,
                         },
                         columns: [
                             Identifier {
@@ -1252,6 +1383,7 @@ Query {
                                 ),
                                 name: "tt",
                                 quote: None,
+                                is_hole: false,
                             },
                         ],
                     },
@@ -1268,6 +1400,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -1284,6 +1417,7 @@ Query {
                                                         ),
                                                         name: "a",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -1304,10 +1438,10 @@ Query {
                                             ),
                                             name: "t",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         alias: None,
-                                        travel_point: None,
-                                        since_point: None,
+                                        temporal: None,
                                         pivot: None,
                                         unpivot: None,
                                     },
@@ -1335,6 +1469,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -1350,6 +1485,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -1359,6 +1495,7 @@ Query {
                                     ),
                                     name: "tt",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -1379,10 +1516,10 @@ Query {
                         ),
                         name: "t2",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -1406,6 +1543,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -1415,6 +1553,7 @@ Query {
                                     ),
                                     name: "tt",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -1423,7 +1562,7 @@ Query {
                         span: Some(
                             69..70,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1445,7 +1584,7 @@ Query {
 ---------- Input ----------
 with t2(tt) as materialized (select a from t) select t2.tt from t2  where t2.tt > 1
 ---------- Output ---------
-WITH t2(tt) AS MATERIALIZED (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE (t2.tt > 1)
+WITH t2(tt) AS MATERIALIZED (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE t2.tt > 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -1469,6 +1608,7 @@ Query {
                             ),
                             name: "t2",
                             quote: None,
+                            is_hole: false,
                         },
                         columns: [
                             Identifier {
@@ -1477,6 +1617,7 @@ Query {
                                 ),
                                 name: "tt",
                                 quote: None,
+                                is_hole: false,
                             },
                         ],
                     },
@@ -1493,6 +1634,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -1509,6 +1651,7 @@ Query {
                                                         ),
                                                         name: "a",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -1529,10 +1672,10 @@ Query {
                                             ),
                                             name: "t",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         alias: None,
-                                        travel_point: None,
-                                        since_point: None,
+                                        temporal: None,
                                         pivot: None,
                                         unpivot: None,
                                     },
@@ -1560,6 +1703,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -1575,6 +1719,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -1584,6 +1729,7 @@ Query {
                                     ),
                                     name: "tt",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -1604,10 +1750,10 @@ Query {
                         ),
                         name: "t2",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -1631,6 +1777,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -1640,6 +1787,7 @@ Query {
                                     ),
                                     name: "tt",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -1648,7 +1796,7 @@ Query {
                         span: Some(
                             82..83,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1670,7 +1818,7 @@ Query {
 ---------- Input ----------
 with t2 as (select a from t) select t2.a from t2  where t2.a > 1
 ---------- Output ---------
-WITH t2 AS (SELECT a FROM t) SELECT t2.a FROM t2 WHERE (t2.a > 1)
+WITH t2 AS (SELECT a FROM t) SELECT t2.a FROM t2 WHERE t2.a > 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -1694,6 +1842,7 @@ Query {
                             ),
                             name: "t2",
                             quote: None,
+                            is_hole: false,
                         },
                         columns: [],
                     },
@@ -1710,6 +1859,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -1726,6 +1876,7 @@ Query {
                                                         ),
                                                         name: "a",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -1746,10 +1897,10 @@ Query {
                                             ),
                                             name: "t",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         alias: None,
-                                        travel_point: None,
-                                        since_point: None,
+                                        temporal: None,
                                         pivot: None,
                                         unpivot: None,
                                     },
@@ -1777,6 +1928,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -1792,6 +1944,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -1801,6 +1954,7 @@ Query {
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -1821,10 +1975,10 @@ Query {
                         ),
                         name: "t2",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -1848,6 +2002,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -1857,6 +2012,7 @@ Query {
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -1865,7 +2021,7 @@ Query {
                         span: Some(
                             63..64,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1887,7 +2043,7 @@ Query {
 ---------- Input ----------
 with t2(tt) as materialized (select a from t), t3 as materialized (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1
 ---------- Output ---------
-WITH t2(tt) AS MATERIALIZED (SELECT a FROM t), t3 AS MATERIALIZED (SELECT * FROM t), t4 AS (SELECT a FROM t WHERE (a > 1)) SELECT t2.tt, t3.a, t4.a FROM t2, t3, t4 WHERE (t2.tt > 1)
+WITH t2(tt) AS MATERIALIZED (SELECT a FROM t), t3 AS MATERIALIZED (SELECT * FROM t), t4 AS (SELECT a FROM t WHERE a > 1) SELECT t2.tt, t3.a, t4.a FROM t2, t3, t4 WHERE t2.tt > 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -1911,6 +2067,7 @@ Query {
                             ),
                             name: "t2",
                             quote: None,
+                            is_hole: false,
                         },
                         columns: [
                             Identifier {
@@ -1919,6 +2076,7 @@ Query {
                                 ),
                                 name: "tt",
                                 quote: None,
+                                is_hole: false,
                             },
                         ],
                     },
@@ -1935,6 +2093,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -1951,6 +2110,7 @@ Query {
                                                         ),
                                                         name: "a",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -1971,10 +2131,10 @@ Query {
                                             ),
                                             name: "t",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         alias: None,
-                                        travel_point: None,
-                                        since_point: None,
+                                        temporal: None,
                                         pivot: None,
                                         unpivot: None,
                                     },
@@ -2003,6 +2163,7 @@ Query {
                             ),
                             name: "t3",
                             quote: None,
+                            is_hole: false,
                         },
                         columns: [],
                     },
@@ -2019,6 +2180,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     StarColumns {
                                         qualified: [
@@ -2044,10 +2206,10 @@ Query {
                                             ),
                                             name: "t",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         alias: None,
-                                        travel_point: None,
-                                        since_point: None,
+                                        temporal: None,
                                         pivot: None,
                                         unpivot: None,
                                     },
@@ -2076,6 +2238,7 @@ Query {
                             ),
                             name: "t4",
                             quote: None,
+                            is_hole: false,
                         },
                         columns: [],
                     },
@@ -2092,6 +2255,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -2108,6 +2272,7 @@ Query {
                                                         ),
                                                         name: "a",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -2128,10 +2293,10 @@ Query {
                                             ),
                                             name: "t",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         alias: None,
-                                        travel_point: None,
-                                        since_point: None,
+                                        temporal: None,
                                         pivot: None,
                                         unpivot: None,
                                     },
@@ -2156,6 +2321,7 @@ Query {
                                                         ),
                                                         name: "a",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -2164,7 +2330,7 @@ Query {
                                             span: Some(
                                                 118..119,
                                             ),
-                                            lit: UInt64(
+                                            value: UInt64(
                                                 1,
                                             ),
                                         },
@@ -2192,6 +2358,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -2207,6 +2374,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -2216,6 +2384,7 @@ Query {
                                     ),
                                     name: "tt",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2236,6 +2405,7 @@ Query {
                                     ),
                                     name: "t3",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -2245,6 +2415,7 @@ Query {
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2265,6 +2436,7 @@ Query {
                                     ),
                                     name: "t4",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -2274,6 +2446,7 @@ Query {
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2294,10 +2467,10 @@ Query {
                         ),
                         name: "t2",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -2313,10 +2486,10 @@ Query {
                         ),
                         name: "t3",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -2332,10 +2505,10 @@ Query {
                         ),
                         name: "t4",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -2359,6 +2532,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -2368,6 +2542,7 @@ Query {
                                     ),
                                     name: "tt",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2376,7 +2551,7 @@ Query {
                         span: Some(
                             176..177,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -2422,6 +2597,7 @@ Query {
                             ),
                             name: "t2",
                             quote: None,
+                            is_hole: false,
                         },
                         columns: [
                             Identifier {
@@ -2430,6 +2606,7 @@ Query {
                                 ),
                                 name: "tt",
                                 quote: None,
+                                is_hole: false,
                             },
                         ],
                     },
@@ -2453,6 +2630,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -2469,6 +2647,7 @@ Query {
                                                                 ),
                                                                 name: "a",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                     },
@@ -2489,10 +2668,10 @@ Query {
                                                     ),
                                                     name: "t1",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 alias: None,
-                                                travel_point: None,
-                                                since_point: None,
+                                                temporal: None,
                                                 pivot: None,
                                                 unpivot: None,
                                             },
@@ -2511,6 +2690,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -2527,6 +2707,7 @@ Query {
                                                                 ),
                                                                 name: "tt",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                     },
@@ -2547,10 +2728,10 @@ Query {
                                                     ),
                                                     name: "t2",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 alias: None,
-                                                travel_point: None,
-                                                since_point: None,
+                                                temporal: None,
                                                 pivot: None,
                                                 unpivot: None,
                                             },
@@ -2580,6 +2761,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -2595,6 +2777,7 @@ Query {
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -2604,6 +2787,7 @@ Query {
                                     ),
                                     name: "tt",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2624,10 +2808,10 @@ Query {
                         ),
                         name: "t2",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -2673,6 +2857,7 @@ Query {
                             ),
                             name: "t",
                             quote: None,
+                            is_hole: false,
                         },
                         columns: [
                             Identifier {
@@ -2681,6 +2866,7 @@ Query {
                                 ),
                                 name: "a",
                                 quote: None,
+                                is_hole: false,
                             },
                             Identifier {
                                 span: Some(
@@ -2688,6 +2874,7 @@ Query {
                                 ),
                                 name: "b",
                                 quote: None,
+                                is_hole: false,
                             },
                         ],
                     },
@@ -2707,7 +2894,7 @@ Query {
                                         span: Some(
                                             23..24,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -2715,7 +2902,7 @@ Query {
                                         span: Some(
                                             25..26,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -2725,7 +2912,7 @@ Query {
                                         span: Some(
                                             29..30,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -2733,7 +2920,7 @@ Query {
                                         span: Some(
                                             31..35,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                 ],
                                 [
@@ -2741,13 +2928,13 @@ Query {
                                         span: Some(
                                             38..42,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                     Literal {
                                         span: Some(
                                             43..44,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             5,
                                         ),
                                     },
@@ -2770,6 +2957,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -2785,6 +2973,7 @@ Query {
                                     ),
                                     name: "t",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -2794,6 +2983,7 @@ Query {
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2814,6 +3004,7 @@ Query {
                                     ),
                                     name: "t",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             column: Name(
@@ -2823,6 +3014,7 @@ Query {
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2843,10 +3035,10 @@ Query {
                         ),
                         name: "t",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -2883,7 +3075,7 @@ group by c_count
 order by custdist desc nulls first, c_count asc, totacctbal nulls last
 limit 10, totacctbal
 ---------- Output ---------
-SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer, orders AS ODS, (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON ((c_custkey = o_custkey) AND (o_comment NOT LIKE '%:1%:2%')) GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC NULLS FIRST, c_count ASC, totacctbal NULLS LAST LIMIT 10, totacctbal
+SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer, orders AS ODS, (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC NULLS FIRST, c_count ASC, totacctbal NULLS LAST LIMIT 10, totacctbal
 ---------- AST ------------
 Query {
     span: Some(
@@ -2897,6 +3089,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -2913,6 +3106,7 @@ Query {
                                     ),
                                     name: "c_count",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2924,6 +3118,7 @@ Query {
                             ),
                             name: "cc",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -2941,6 +3136,7 @@ Query {
                             ),
                             name: "custdist",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -2957,6 +3153,7 @@ Query {
                                 ),
                                 name: "sum",
                                 quote: None,
+                                is_hole: false,
                             },
                             args: [
                                 ColumnRef {
@@ -2973,6 +3170,7 @@ Query {
                                                 ),
                                                 name: "c_acctbal",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -2990,6 +3188,7 @@ Query {
                             ),
                             name: "totacctbal",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3007,10 +3206,10 @@ Query {
                         ),
                         name: "customer",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -3026,6 +3225,7 @@ Query {
                         ),
                         name: "orders",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: Some(
                         TableAlias {
@@ -3035,12 +3235,12 @@ Query {
                                 ),
                                 name: "ODS",
                                 quote: None,
+                                is_hole: false,
                             },
                             columns: [],
                         },
                     ),
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -3061,6 +3261,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -3077,6 +3278,7 @@ Query {
                                                         ),
                                                         name: "c_custkey",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -3096,6 +3298,7 @@ Query {
                                                     ),
                                                     name: "count",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 args: [
                                                     ColumnRef {
@@ -3112,6 +3315,7 @@ Query {
                                                                     ),
                                                                     name: "o_orderkey",
                                                                     quote: None,
+                                                                    is_hole: false,
                                                                 },
                                                             ),
                                                         },
@@ -3157,6 +3361,7 @@ Query {
                                                                         ),
                                                                         name: "c_custkey",
                                                                         quote: None,
+                                                                        is_hole: false,
                                                                     },
                                                                 ),
                                                             },
@@ -3175,6 +3380,7 @@ Query {
                                                                         ),
                                                                         name: "o_custkey",
                                                                         quote: None,
+                                                                        is_hole: false,
                                                                     },
                                                                 ),
                                                             },
@@ -3199,6 +3405,7 @@ Query {
                                                                         ),
                                                                         name: "o_comment",
                                                                         quote: None,
+                                                                        is_hole: false,
                                                                     },
                                                                 ),
                                                             },
@@ -3207,7 +3414,7 @@ Query {
                                                             span: Some(
                                                                 308..317,
                                                             ),
-                                                            lit: String(
+                                                            value: String(
                                                                 "%:1%:2%",
                                                             ),
                                                         },
@@ -3226,10 +3433,10 @@ Query {
                                                     ),
                                                     name: "customer",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 alias: None,
-                                                travel_point: None,
-                                                since_point: None,
+                                                temporal: None,
                                                 pivot: None,
                                                 unpivot: None,
                                             },
@@ -3245,10 +3452,10 @@ Query {
                                                     ),
                                                     name: "orders",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 alias: None,
-                                                travel_point: None,
-                                                since_point: None,
+                                                temporal: None,
                                                 pivot: None,
                                                 unpivot: None,
                                             },
@@ -3273,6 +3480,7 @@ Query {
                                                             ),
                                                             name: "c_custkey",
                                                             quote: None,
+                                                            is_hole: false,
                                                         },
                                                     ),
                                                 },
@@ -3298,6 +3506,7 @@ Query {
                                 ),
                                 name: "c_orders",
                                 quote: None,
+                                is_hole: false,
                             },
                             columns: [],
                         },
@@ -3322,6 +3531,7 @@ Query {
                                         ),
                                         name: "c_count",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -3350,6 +3560,7 @@ Query {
                             ),
                             name: "custdist",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3376,6 +3587,7 @@ Query {
                             ),
                             name: "c_count",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3400,6 +3612,7 @@ Query {
                             ),
                             name: "totacctbal",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3415,7 +3628,7 @@ Query {
             span: Some(
                 469..471,
             ),
-            lit: UInt64(
+            value: UInt64(
                 10,
             ),
         },
@@ -3433,6 +3646,7 @@ Query {
                         ),
                         name: "totacctbal",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -3467,6 +3681,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3492,10 +3707,10 @@ Query {
                                 ),
                                 name: "t1",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -3514,6 +3729,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3539,10 +3755,10 @@ Query {
                                 ),
                                 name: "t2",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -3587,6 +3803,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3612,10 +3829,10 @@ Query {
                                 ),
                                 name: "t1",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -3634,6 +3851,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3659,10 +3877,10 @@ Query {
                                 ),
                                 name: "t2",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -3714,6 +3932,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -3739,10 +3958,10 @@ Query {
                                         ),
                                         name: "t1",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -3761,6 +3980,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -3786,10 +4006,10 @@ Query {
                                         ),
                                         name: "t2",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -3810,6 +4030,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3835,10 +4056,10 @@ Query {
                                 ),
                                 name: "t3",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -3890,6 +4111,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -3915,10 +4137,10 @@ Query {
                                         ),
                                         name: "t1",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -3937,6 +4159,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -3962,10 +4185,10 @@ Query {
                                         ),
                                         name: "t2",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -3986,6 +4209,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4011,10 +4235,10 @@ Query {
                                 ),
                                 name: "t3",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -4059,6 +4283,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4084,10 +4309,10 @@ Query {
                                 ),
                                 name: "t1",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -4113,6 +4338,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4138,10 +4364,10 @@ Query {
                                         ),
                                         name: "t2",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -4160,6 +4386,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4185,10 +4412,10 @@ Query {
                                         ),
                                         name: "t3",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -4242,6 +4469,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4267,10 +4495,10 @@ Query {
                                         ),
                                         name: "t1",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -4289,6 +4517,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4314,10 +4543,10 @@ Query {
                                         ),
                                         name: "t2",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -4338,6 +4567,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4363,10 +4593,10 @@ Query {
                                 ),
                                 name: "t3",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -4411,6 +4641,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4436,10 +4667,10 @@ Query {
                                 ),
                                 name: "t1",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -4465,6 +4696,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4490,10 +4722,10 @@ Query {
                                         ),
                                         name: "t2",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -4512,6 +4744,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4537,10 +4770,10 @@ Query {
                                         ),
                                         name: "t3",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     alias: None,
-                                    travel_point: None,
-                                    since_point: None,
+                                    temporal: None,
                                     pivot: None,
                                     unpivot: None,
                                 },
@@ -4580,6 +4813,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -4617,6 +4851,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             StarColumns {
                                                 qualified: [
@@ -4644,6 +4879,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             StarColumns {
                                                 qualified: [
@@ -4679,6 +4915,7 @@ Query {
                                 ),
                                 name: "foo",
                                 quote: None,
+                                is_hole: false,
                             },
                             columns: [],
                         },
@@ -4716,6 +4953,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -4753,6 +4991,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             StarColumns {
                                                 qualified: [
@@ -4780,6 +5019,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             StarColumns {
                                                 qualified: [
@@ -4815,6 +5055,7 @@ Query {
                                 ),
                                 name: "foo",
                                 quote: None,
+                                is_hole: false,
                             },
                             columns: [],
                         },
@@ -4852,6 +5093,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -4882,6 +5124,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     StarColumns {
                                         qualified: [
@@ -4907,10 +5150,10 @@ Query {
                                             ),
                                             name: "xyu",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         alias: None,
-                                        travel_point: None,
-                                        since_point: None,
+                                        temporal: None,
                                         pivot: None,
                                         unpivot: None,
                                     },
@@ -4938,6 +5181,7 @@ Query {
                                                 ),
                                                 name: "x",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -4960,6 +5204,7 @@ Query {
                                                 ),
                                                 name: "y",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -4980,6 +5225,7 @@ Query {
                                 ),
                                 name: "xyu",
                                 quote: None,
+                                is_hole: false,
                             },
                             columns: [],
                         },
@@ -5017,6 +5263,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -5042,10 +5289,10 @@ Query {
                         ),
                         name: "monthly_sales",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: Some(
                         Pivot {
                             aggregate: FunctionCall {
@@ -5060,6 +5307,7 @@ Query {
                                         ),
                                         name: "sum",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     args: [
                                         ColumnRef {
@@ -5076,6 +5324,7 @@ Query {
                                                         ),
                                                         name: "amount",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -5092,13 +5341,14 @@ Query {
                                 ),
                                 name: "month",
                                 quote: None,
+                                is_hole: false,
                             },
                             values: [
                                 Literal {
                                     span: Some(
                                         60..65,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "JAN",
                                     ),
                                 },
@@ -5106,7 +5356,7 @@ Query {
                                     span: Some(
                                         67..72,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "FEB",
                                     ),
                                 },
@@ -5114,7 +5364,7 @@ Query {
                                     span: Some(
                                         74..79,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "MAR",
                                     ),
                                 },
@@ -5122,7 +5372,7 @@ Query {
                                     span: Some(
                                         81..86,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "APR",
                                     ),
                                 },
@@ -5155,6 +5405,7 @@ Query {
                             ),
                             name: "empid",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -5186,6 +5437,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -5211,10 +5463,10 @@ Query {
                         ),
                         name: "monthly_sales_1",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: Some(
                         Unpivot {
@@ -5224,6 +5476,7 @@ Query {
                                 ),
                                 name: "sales",
                                 quote: None,
+                                is_hole: false,
                             },
                             column_name: Identifier {
                                 span: Some(
@@ -5231,6 +5484,7 @@ Query {
                                 ),
                                 name: "month",
                                 quote: None,
+                                is_hole: false,
                             },
                             names: [
                                 Identifier {
@@ -5239,6 +5493,7 @@ Query {
                                     ),
                                     name: "jan",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 Identifier {
                                     span: Some(
@@ -5246,6 +5501,7 @@ Query {
                                     ),
                                     name: "feb",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 Identifier {
                                     span: Some(
@@ -5253,6 +5509,7 @@ Query {
                                     ),
                                     name: "mar",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 Identifier {
                                     span: Some(
@@ -5260,6 +5517,7 @@ Query {
                                     ),
                                     name: "april",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ],
                         },
@@ -5289,6 +5547,7 @@ Query {
                             ),
                             name: "empid",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -5320,6 +5579,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -5344,13 +5604,14 @@ Query {
                         ),
                         name: "range",
                         quote: None,
+                        is_hole: false,
                     },
                     params: [
                         Literal {
                             span: Some(
                                 20..21,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -5358,7 +5619,7 @@ Query {
                             span: Some(
                                 23..24,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 2,
                             ),
                         },
@@ -5384,7 +5645,7 @@ Query {
 ---------- Input ----------
 select sum(a) over w from customer window w as (partition by a order by b)
 ---------- Output ---------
-SELECT sum(a) OVER (WINDOW w) FROM customer
+SELECT sum(a) OVER w FROM customer WINDOW w AS ( PARTITION BY a ORDER BY b )
 ---------- AST ------------
 Query {
     span: Some(
@@ -5398,6 +5659,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: FunctionCall {
@@ -5412,6 +5674,7 @@ Query {
                                 ),
                                 name: "sum",
                                 quote: None,
+                                is_hole: false,
                             },
                             args: [
                                 ColumnRef {
@@ -5428,6 +5691,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -5443,6 +5707,7 @@ Query {
                                             ),
                                             name: "w",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     },
                                 ),
@@ -5466,10 +5731,10 @@ Query {
                         ),
                         name: "customer",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -5486,6 +5751,7 @@ Query {
                             ),
                             name: "w",
                             quote: None,
+                            is_hole: false,
                         },
                         spec: WindowSpec {
                             existing_window_name: None,
@@ -5504,6 +5770,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -5525,6 +5792,7 @@ Query {
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5551,7 +5819,7 @@ Query {
 ---------- Input ----------
 select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a
 ---------- Output ---------
-SELECT a, sum(a) OVER (WINDOW w), sum(a) OVER (WINDOW w1), sum(a) OVER (WINDOW w2) FROM t1 ORDER BY a
+SELECT a, sum(a) OVER w, sum(a) OVER w1, sum(a) OVER w2 FROM t1 WINDOW w AS ( PARTITION BY a ), w2 AS ( w1 ROWS BETWEEN CURRENT ROW AND CURRENT ROW ), w1 AS ( w ORDER BY a ) ORDER BY a
 ---------- AST ------------
 Query {
     span: Some(
@@ -5565,6 +5833,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -5581,6 +5850,7 @@ Query {
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -5600,6 +5870,7 @@ Query {
                                 ),
                                 name: "sum",
                                 quote: None,
+                                is_hole: false,
                             },
                             args: [
                                 ColumnRef {
@@ -5616,6 +5887,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -5631,6 +5903,7 @@ Query {
                                             ),
                                             name: "w",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     },
                                 ),
@@ -5653,6 +5926,7 @@ Query {
                                 ),
                                 name: "sum",
                                 quote: None,
+                                is_hole: false,
                             },
                             args: [
                                 ColumnRef {
@@ -5669,6 +5943,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -5684,6 +5959,7 @@ Query {
                                             ),
                                             name: "w1",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     },
                                 ),
@@ -5706,6 +5982,7 @@ Query {
                                 ),
                                 name: "sum",
                                 quote: None,
+                                is_hole: false,
                             },
                             args: [
                                 ColumnRef {
@@ -5722,6 +5999,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -5737,6 +6015,7 @@ Query {
                                             ),
                                             name: "w2",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     },
                                 ),
@@ -5760,10 +6039,10 @@ Query {
                         ),
                         name: "t1",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -5780,6 +6059,7 @@ Query {
                             ),
                             name: "w",
                             quote: None,
+                            is_hole: false,
                         },
                         spec: WindowSpec {
                             existing_window_name: None,
@@ -5798,6 +6078,7 @@ Query {
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -5814,6 +6095,7 @@ Query {
                             ),
                             name: "w2",
                             quote: None,
+                            is_hole: false,
                         },
                         spec: WindowSpec {
                             existing_window_name: Some(
@@ -5823,6 +6105,7 @@ Query {
                                     ),
                                     name: "w1",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             partition_by: [],
@@ -5843,6 +6126,7 @@ Query {
                             ),
                             name: "w1",
                             quote: None,
+                            is_hole: false,
                         },
                         spec: WindowSpec {
                             existing_window_name: Some(
@@ -5852,6 +6136,7 @@ Query {
                                     ),
                                     name: "w",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                             partition_by: [],
@@ -5871,6 +6156,7 @@ Query {
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5903,6 +6189,7 @@ Query {
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -5934,6 +6221,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -5964,6 +6252,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     StarColumns {
                                         qualified: [
@@ -5989,10 +6278,10 @@ Query {
                                             ),
                                             name: "xyu",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         alias: None,
-                                        travel_point: None,
-                                        since_point: None,
+                                        temporal: None,
                                         pivot: None,
                                         unpivot: None,
                                     },
@@ -6020,6 +6309,7 @@ Query {
                                                 ),
                                                 name: "x",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -6042,6 +6332,7 @@ Query {
                                                 ),
                                                 name: "y",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -6062,6 +6353,7 @@ Query {
                                 ),
                                 name: "xyu",
                                 quote: None,
+                                is_hole: false,
                             },
                             columns: [],
                         },
@@ -6099,6 +6391,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -6132,7 +6425,7 @@ Query {
                                         span: Some(
                                             22..23,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -6140,7 +6433,7 @@ Query {
                                         span: Some(
                                             24..25,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -6150,7 +6443,7 @@ Query {
                                         span: Some(
                                             28..29,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -6158,7 +6451,7 @@ Query {
                                         span: Some(
                                             30..34,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                 ],
                                 [
@@ -6166,13 +6459,13 @@ Query {
                                         span: Some(
                                             37..41,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                     Literal {
                                         span: Some(
                                             42..43,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             5,
                                         ),
                                     },
@@ -6192,6 +6485,7 @@ Query {
                                 ),
                                 name: "t",
                                 quote: None,
+                                is_hole: false,
                             },
                             columns: [
                                 Identifier {
@@ -6200,6 +6494,7 @@ Query {
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 Identifier {
                                     span: Some(
@@ -6207,6 +6502,7 @@ Query {
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ],
                         },
@@ -6247,7 +6543,7 @@ Query {
                     span: Some(
                         7..8,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -6255,7 +6551,7 @@ Query {
                     span: Some(
                         9..12,
                     ),
-                    lit: String(
+                    value: String(
                         "a",
                     ),
                 },
@@ -6265,7 +6561,7 @@ Query {
                     span: Some(
                         15..16,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -6273,7 +6569,7 @@ Query {
                     span: Some(
                         17..20,
                     ),
-                    lit: String(
+                    value: String(
                         "b",
                     ),
                 },
@@ -6283,13 +6579,13 @@ Query {
                     span: Some(
                         23..27,
                     ),
-                    lit: Null,
+                    value: Null,
                 },
                 Literal {
                     span: Some(
                         28..31,
                     ),
-                    lit: String(
+                    value: String(
                         "c",
                     ),
                 },
@@ -6312,6 +6608,7 @@ Query {
                             ),
                             name: "col0",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -6325,7 +6622,7 @@ Query {
             span: Some(
                 53..54,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -6352,6 +6649,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -6376,7 +6674,7 @@ Query {
                                 span: Some(
                                     47..51,
                                 ),
-                                lit: Boolean(
+                                value: Boolean(
                                     true,
                                 ),
                             },
@@ -6393,10 +6691,10 @@ Query {
                                 ),
                                 name: "t",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
-                            travel_point: None,
-                            since_point: None,
+                            temporal: None,
                             pivot: None,
                             unpivot: None,
                         },
@@ -6417,13 +6715,14 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: Literal {
                                                     span: Some(
                                                         41..42,
                                                     ),
-                                                    lit: UInt64(
+                                                    value: UInt64(
                                                         1,
                                                     ),
                                                 },
@@ -6464,13 +6763,14 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: Literal {
                                             span: Some(
                                                 68..69,
                                             ),
-                                            lit: UInt64(
+                                            value: UInt64(
                                                 2,
                                             ),
                                         },
@@ -6524,6 +6824,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -6549,10 +6850,10 @@ Query {
                         ),
                         name: "t",
                         quote: None,
+                        is_hole: false,
                     },
                     alias: None,
-                    travel_point: None,
-                    since_point: None,
+                    temporal: None,
                     pivot: None,
                     unpivot: None,
                 },
@@ -6567,6 +6868,7 @@ Query {
                         ),
                         name: "flatten",
                         quote: None,
+                        is_hole: false,
                     },
                     params: [],
                     named_params: [
@@ -6577,6 +6879,7 @@ Query {
                                 ),
                                 name: "input",
                                 quote: None,
+                                is_hole: false,
                             },
                             ColumnRef {
                                 span: Some(
@@ -6591,6 +6894,7 @@ Query {
                                             ),
                                             name: "u",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                     column: Name(
@@ -6600,6 +6904,7 @@ Query {
                                             ),
                                             name: "col",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -6614,10 +6919,132 @@ Query {
                                 ),
                                 name: "f",
                                 quote: None,
+                                is_hole: false,
                             },
                             columns: [],
                         },
                     ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from flatten(input => parse_json('{"a":1, "b":[77,88]}'), outer => true)
+---------- Output ---------
+SELECT * FROM flatten(input=>parse_json('{"a":1, "b":[77,88]}'),outer=>TRUE)
+---------- AST ------------
+Query {
+    span: Some(
+        0..81,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..81,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                TableFunction {
+                    span: Some(
+                        14..81,
+                    ),
+                    lateral: false,
+                    name: Identifier {
+                        span: Some(
+                            14..21,
+                        ),
+                        name: "flatten",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    params: [],
+                    named_params: [
+                        (
+                            Identifier {
+                                span: Some(
+                                    22..27,
+                                ),
+                                name: "input",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            FunctionCall {
+                                span: Some(
+                                    31..65,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            31..41,
+                                        ),
+                                        name: "parse_json",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    args: [
+                                        Literal {
+                                            span: Some(
+                                                42..64,
+                                            ),
+                                            value: String(
+                                                "{\"a\":1, \"b\":[77,88]}",
+                                            ),
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                        ),
+                        (
+                            Identifier {
+                                span: Some(
+                                    67..72,
+                                ),
+                                name: "outer",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            Literal {
+                                span: Some(
+                                    76..80,
+                                ),
+                                value: Boolean(
+                                    true,
+                                ),
+                            },
+                        ),
+                    ],
+                    alias: None,
                 },
             ],
             selection: None,

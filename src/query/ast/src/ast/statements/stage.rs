@@ -21,8 +21,9 @@ use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_map;
-use crate::ast::write_comma_separated_quoted_list;
+use crate::ast::write_comma_separated_string_list;
+use crate::ast::write_comma_separated_string_map;
+use crate::ast::FileFormatOptions;
 use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -34,8 +35,7 @@ pub struct CreateStageStmt {
 
     pub location: Option<UriLocation>,
 
-    #[drive(skip)]
-    pub file_format_options: BTreeMap<String, String>,
+    pub file_format_options: FileFormatOptions,
     #[drive(skip)]
     pub on_error: String,
     #[drive(skip)]
@@ -44,6 +44,46 @@ pub struct CreateStageStmt {
     pub validation_mode: String,
     #[drive(skip)]
     pub comments: String,
+}
+
+impl Display for CreateStageStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CREATE")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " STAGE")?;
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, " IF NOT EXISTS")?;
+        }
+        write!(f, " {}", self.stage_name)?;
+
+        if let Some(ul) = &self.location {
+            write!(f, " {ul}")?;
+        }
+
+        if !self.file_format_options.is_empty() {
+            write!(f, " FILE_FORMAT = ({})", self.file_format_options)?;
+        }
+
+        if !self.on_error.is_empty() {
+            write!(f, " ON_ERROR = '{}'", self.on_error)?;
+        }
+
+        if self.size_limit != 0 {
+            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
+        }
+
+        if !self.validation_mode.is_empty() {
+            write!(f, " VALIDATION_MODE = {}", self.validation_mode)?;
+        }
+
+        if !self.comments.is_empty() {
+            write!(f, " COMMENTS = '{}'", self.comments)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -90,48 +130,6 @@ impl SelectStageOptions {
     }
 }
 
-impl Display for CreateStageStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, " OR REPLACE")?;
-        }
-        write!(f, " STAGE")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
-            write!(f, " IF NOT EXISTS")?;
-        }
-        write!(f, " {}", self.stage_name)?;
-
-        if let Some(ul) = &self.location {
-            write!(f, " {ul}")?;
-        }
-
-        if !self.file_format_options.is_empty() {
-            write!(f, " FILE_FORMAT = (")?;
-            write_comma_separated_map(f, &self.file_format_options)?;
-            write!(f, " )")?;
-        }
-
-        if !self.on_error.is_empty() {
-            write!(f, " ON_ERROR = '{}'", self.on_error)?;
-        }
-
-        if self.size_limit != 0 {
-            write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
-        }
-
-        if !self.validation_mode.is_empty() {
-            write!(f, " VALIDATION_MODE = {}", self.validation_mode)?;
-        }
-
-        if !self.comments.is_empty() {
-            write!(f, " COMMENTS = '{}'", self.comments)?;
-        }
-
-        Ok(())
-    }
-}
-
 // SELECT <columns> FROM
 // {@<stage_name>[/<path>] | '<uri>'} [(
 // [ PATTERN => '<regex_pattern>']
@@ -153,7 +151,7 @@ impl Display for SelectStageOptions {
 
         if let Some(files) = self.files.as_ref() {
             write!(f, " FILES => (")?;
-            write_comma_separated_quoted_list(f, files)?;
+            write_comma_separated_string_list(f, files)?;
             write!(f, "),")?;
         }
 
@@ -167,7 +165,7 @@ impl Display for SelectStageOptions {
 
         if !self.connection.is_empty() {
             write!(f, " CONNECTION => (")?;
-            write_comma_separated_map(f, &self.connection)?;
+            write_comma_separated_string_map(f, &self.connection)?;
             write!(f, " )")?;
         }
 

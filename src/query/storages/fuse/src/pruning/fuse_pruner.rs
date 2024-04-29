@@ -50,6 +50,7 @@ use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
+use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
 
 pub struct PruningContext {
@@ -63,6 +64,7 @@ pub struct PruningContext {
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
+    pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
@@ -140,6 +142,9 @@ impl PruningContext {
             cluster_keys,
         )?;
 
+        // inverted index pruner, used to search matched rows in block
+        let inverted_index_pruner = InvertedIndexPruner::try_create(dal.clone(), push_down)?;
+
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
         let internal_column_pruner =
@@ -166,6 +171,7 @@ impl PruningContext {
             bloom_pruner,
             page_pruner,
             internal_column_pruner,
+            inverted_index_pruner,
             pruning_stats,
         });
         Ok(pruning_ctx)
@@ -260,6 +266,7 @@ impl FusePruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         self.pruning(segment_locs, true).await
     }
+
     // Pruning chain:
     // segment pruner -> block pruner -> topn pruner
     #[async_backtrace::framed]
@@ -480,6 +487,11 @@ impl FusePruner {
         let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
         let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
 
+        let blocks_inverted_index_pruning_before =
+            stats.get_blocks_inverted_index_pruning_before() as usize;
+        let blocks_inverted_index_pruning_after =
+            stats.get_blocks_inverted_index_pruning_after() as usize;
+
         databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,
             segments_range_pruning_after,
@@ -487,6 +499,8 @@ impl FusePruner {
             blocks_range_pruning_after,
             blocks_bloom_pruning_before,
             blocks_bloom_pruning_after,
+            blocks_inverted_index_pruning_before,
+            blocks_inverted_index_pruning_after,
         }
     }
 

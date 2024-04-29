@@ -23,13 +23,17 @@ use futures::Stream;
 use crate::pipelines::executor::PipelinePullingExecutor;
 
 pub struct PullingExecutorStream {
+    end_of_stream: bool,
     executor: PipelinePullingExecutor,
 }
 
 impl PullingExecutorStream {
     pub fn create(mut executor: PipelinePullingExecutor) -> Result<Self> {
         executor.start();
-        Ok(Self { executor })
+        Ok(Self {
+            end_of_stream: false,
+            executor,
+        })
     }
 }
 
@@ -39,8 +43,15 @@ impl Stream for PullingExecutorStream {
     // The ctx can't be wake up, so we can't return Poll::Pending here
     fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_ = Pin::get_mut(self);
+        if self_.end_of_stream {
+            return Poll::Ready(None);
+        }
+
         match self_.executor.pull_data() {
-            Err(cause) => Poll::Ready(Some(Err(cause))),
+            Err(cause) => {
+                self_.end_of_stream = true;
+                Poll::Ready(Some(Err(cause)))
+            }
             Ok(Some(data)) => Poll::Ready(Some(Ok(data))),
             Ok(None) => Poll::Ready(None),
         }

@@ -52,6 +52,37 @@ pub struct Query {
     pub ignore_result: bool,
 }
 
+impl Display for Query {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // CTE, with clause
+        if let Some(with) = &self.with {
+            write!(f, "WITH {with} ")?;
+        }
+
+        // Query body
+        write!(f, "{}", self.body)?;
+
+        // ORDER BY clause
+        if !self.order_by.is_empty() {
+            write!(f, " ORDER BY ")?;
+            write_comma_separated_list(f, &self.order_by)?;
+        }
+
+        // LIMIT clause
+        if !self.limit.is_empty() {
+            write!(f, " LIMIT ")?;
+            write_comma_separated_list(f, &self.limit)?;
+        }
+
+        // TODO: We should validate if offset exists, limit should be empty or just one element
+        if let Some(offset) = &self.offset {
+            write!(f, " OFFSET {offset}")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct With {
     #[drive(skip)]
@@ -59,6 +90,17 @@ pub struct With {
     #[drive(skip)]
     pub recursive: bool,
     pub ctes: Vec<CTE>,
+}
+
+impl Display for With {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.recursive {
+            write!(f, "RECURSIVE ")?;
+        }
+
+        write_comma_separated_list(f, &self.ctes)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -69,6 +111,17 @@ pub struct CTE {
     #[drive(skip)]
     pub materialized: bool,
     pub query: Box<Query>,
+}
+
+impl Display for CTE {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} AS ", self.alias)?;
+        if self.materialized {
+            write!(f, "MATERIALIZED ")?;
+        }
+        write!(f, "({})", self.query)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -90,6 +143,8 @@ pub struct SelectStmt {
     pub hints: Option<Hint>,
     #[drive(skip)]
     pub distinct: bool,
+    #[drive(skip)]
+    pub top_n: Option<u64>,
     // Result set of current subquery
     pub select_list: Vec<SelectTarget>,
     // `FROM` clause, a list of table references.
@@ -106,6 +161,82 @@ pub struct SelectStmt {
     pub window_list: Option<Vec<WindowDefinition>>,
     // `QUALIFY` clause
     pub qualify: Option<Expr>,
+}
+
+impl Display for SelectStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // SELECT clause
+        write!(f, "SELECT ")?;
+        if let Some(hints) = &self.hints {
+            write!(f, "{} ", hints)?;
+        }
+        if self.distinct {
+            write!(f, "DISTINCT ")?;
+        }
+        if let Some(topn) = &self.top_n {
+            write!(f, "TOP {} ", topn)?;
+        }
+        write_comma_separated_list(f, &self.select_list)?;
+
+        // FROM clause
+        if !self.from.is_empty() {
+            write!(f, " FROM ")?;
+            write_comma_separated_list(f, &self.from)?;
+        }
+
+        // WHERE clause
+        if let Some(expr) = &self.selection {
+            write!(f, " WHERE {expr}")?;
+        }
+
+        // GROUP BY clause
+        if self.group_by.is_some() {
+            write!(f, " GROUP BY ")?;
+            match self.group_by.as_ref().unwrap() {
+                GroupBy::Normal(exprs) => {
+                    write_comma_separated_list(f, exprs)?;
+                }
+                GroupBy::All => {
+                    write!(f, "ALL")?;
+                }
+                GroupBy::GroupingSets(sets) => {
+                    write!(f, "GROUPING SETS (")?;
+                    for (i, set) in sets.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "(")?;
+                        write_comma_separated_list(f, set)?;
+                        write!(f, ")")?;
+                    }
+                    write!(f, ")")?;
+                }
+                GroupBy::Cube(exprs) => {
+                    write!(f, "CUBE (")?;
+                    write_comma_separated_list(f, exprs)?;
+                    write!(f, ")")?;
+                }
+                GroupBy::Rollup(exprs) => {
+                    write!(f, "ROLLUP (")?;
+                    write_comma_separated_list(f, exprs)?;
+                    write!(f, ")")?;
+                }
+            }
+        }
+
+        // HAVING clause
+        if let Some(having) = &self.having {
+            write!(f, " HAVING {having}")?;
+        }
+
+        // WINDOW clause
+        if let Some(windows) = &self.window_list {
+            write!(f, " WINDOW ")?;
+            write_comma_separated_list(f, windows)?;
+        }
+
+        Ok(())
+    }
 }
 
 /// Group by Clause.
@@ -140,6 +271,49 @@ pub enum SetExpr {
     },
 }
 
+impl Display for SetExpr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SetExpr::Select(select_stmt) => {
+                write!(f, "{select_stmt}")?;
+            }
+            SetExpr::Query(query) => {
+                write!(f, "({query})")?;
+            }
+            SetExpr::SetOperation(set_operation) => {
+                write!(f, "{}", set_operation.left)?;
+                match set_operation.op {
+                    SetOperator::Union => {
+                        write!(f, " UNION ")?;
+                    }
+                    SetOperator::Except => {
+                        write!(f, " EXCEPT ")?;
+                    }
+                    SetOperator::Intersect => {
+                        write!(f, " INTERSECT ")?;
+                    }
+                }
+                if set_operation.all {
+                    write!(f, "ALL ")?;
+                }
+                write!(f, "{}", set_operation.right)?;
+            }
+            SetExpr::Values { values, .. } => {
+                write!(f, "VALUES")?;
+                for (i, value) in values.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, value)?;
+                    write!(f, ")")?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SetOperator {
     Union,
@@ -151,27 +325,48 @@ pub enum SetOperator {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct OrderByExpr {
     pub expr: Expr,
-    // Optional `ASC` or `DESC`
+    /// `ASC` or `DESC`
     #[drive(skip)]
     pub asc: Option<bool>,
-    // Optional `NULLS FIRST` or `NULLS LAST`
+    /// `NULLS FIRST` or `NULLS LAST`
     #[drive(skip)]
     pub nulls_first: Option<bool>,
+}
+
+impl Display for OrderByExpr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expr)?;
+        if let Some(asc) = self.asc {
+            if asc {
+                write!(f, " ASC")?;
+            } else {
+                write!(f, " DESC")?;
+            }
+        }
+        if let Some(nulls_first) = self.nulls_first {
+            if nulls_first {
+                write!(f, " NULLS FIRST")?;
+            } else {
+                write!(f, " NULLS LAST")?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SelectTarget {
-    // Expression with alias, e.g. `SELECT t.a, b AS a, a+1 AS b FROM t`
+    /// Expression with alias, e.g. `SELECT t.a, b AS a, a+1 AS b FROM t`
     AliasedExpr {
         expr: Box<Expr>,
         alias: Option<Identifier>,
     },
 
-    // Qualified star name, e.g. `SELECT t.*  exclude a, columns(expr) FROM t`.
-    // Columns("pattern_str")
-    // Columns(lambda expression)
-    // For simplicity, star wildcard is involved.
+    /// Qualified star name, e.g. `SELECT t.*  exclude a, columns(expr) FROM t`.
+    /// Columns("pattern_str")
+    /// Columns(lambda expression)
+    /// For simplicity, star wildcard is involved.
     StarColumns {
         qualified: QualifiedName,
         column_filter: Option<ColumnFilter>,
@@ -220,6 +415,37 @@ impl SelectTarget {
     }
 }
 
+impl Display for SelectTarget {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SelectTarget::AliasedExpr { expr, alias } => {
+                write!(f, "{expr}")?;
+                if let Some(ident) = alias {
+                    write!(f, " AS {ident}")?;
+                }
+            }
+            SelectTarget::StarColumns {
+                qualified,
+                column_filter,
+            } => match column_filter {
+                Some(ColumnFilter::Excludes(excludes)) => {
+                    write_dot_separated_list(f, qualified)?;
+                    write!(f, " EXCLUDE (")?;
+                    write_comma_separated_list(f, excludes)?;
+                    write!(f, ")")?;
+                }
+                Some(ColumnFilter::Lambda(lambda)) => {
+                    write!(f, "COLUMNS({lambda})")?;
+                }
+                None => {
+                    write_dot_separated_list(f, qualified)?;
+                }
+            },
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ColumnFilter {
     Excludes(Vec<Identifier>),
@@ -256,11 +482,61 @@ pub enum Indirection {
     Star(#[drive(skip)] Span),
 }
 
+impl Display for Indirection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Indirection::Identifier(ident) => {
+                write!(f, "{ident}")?;
+            }
+            Indirection::Star(_) => {
+                write!(f, "*")?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TimeTravelPoint {
     Snapshot(#[drive(skip)] String),
     Timestamp(Box<Expr>),
+    Offset(Box<Expr>),
+    Stream {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        name: Identifier,
+    },
+}
+
+impl Display for TimeTravelPoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeTravelPoint::Snapshot(sid) => {
+                write!(f, "(SNAPSHOT => '{sid}')")?;
+            }
+            TimeTravelPoint::Timestamp(ts) => {
+                write!(f, "(TIMESTAMP => {ts})")?;
+            }
+            TimeTravelPoint::Offset(num) => {
+                write!(f, "(OFFSET => {num})")?;
+            }
+            TimeTravelPoint::Stream {
+                catalog,
+                database,
+                name,
+            } => {
+                write!(f, "(STREAM => ")?;
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(name)),
+                )?;
+                write!(f, ")")?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -270,11 +546,77 @@ pub struct Pivot {
     pub values: Vec<Expr>,
 }
 
+impl Display for Pivot {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
+        write_comma_separated_list(f, &self.values)?;
+        write!(f, "))")?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Unpivot {
     pub value_column: Identifier,
     pub column_name: Identifier,
     pub names: Vec<Identifier>,
+}
+
+impl Display for Unpivot {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "UNPIVOT({} FOR {} IN (",
+            self.value_column, self.column_name
+        )?;
+        write_comma_separated_list(f, &self.names)?;
+        write!(f, "))")?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ChangesInterval {
+    #[drive(skip)]
+    pub append_only: bool,
+    pub at_point: TimeTravelPoint,
+    pub end_point: Option<TimeTravelPoint>,
+}
+
+impl Display for ChangesInterval {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CHANGES (INFORMATION => ")?;
+        if self.append_only {
+            write!(f, "APPEND_ONLY")?;
+        } else {
+            write!(f, "DEFAULT")?;
+        }
+        write!(f, ") AT {}", self.at_point)?;
+        if let Some(end_point) = &self.end_point {
+            write!(f, " END {}", end_point)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum TemporalClause {
+    TimeTravel(TimeTravelPoint),
+    Changes(ChangesInterval),
+}
+
+impl Display for TemporalClause {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TemporalClause::TimeTravel(point) => {
+                write!(f, "AT {}", point)?;
+            }
+            TemporalClause::Changes(changes) => {
+                write!(f, "{}", changes)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A table name or a parenthesized subquery with an optional alias
@@ -288,8 +630,7 @@ pub enum TableReference {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
-        travel_point: Option<TimeTravelPoint>,
-        since_point: Option<TimeTravelPoint>,
+        temporal: Option<TemporalClause>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -352,124 +693,6 @@ impl TableReference {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub struct TableAlias {
-    pub name: Identifier,
-    pub columns: Vec<Identifier>,
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct Join {
-    pub op: JoinOperator,
-    pub condition: JoinCondition,
-    pub left: Box<TableReference>,
-    pub right: Box<TableReference>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum JoinOperator {
-    Inner,
-    // Outer joins can not work with `JoinCondition::None`
-    LeftOuter,
-    RightOuter,
-    FullOuter,
-    LeftSemi,
-    LeftAnti,
-    RightSemi,
-    RightAnti,
-    // CrossJoin can only work with `JoinCondition::None`
-    CrossJoin,
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum JoinCondition {
-    On(Box<Expr>),
-    Using(Vec<Identifier>),
-    Natural,
-    None,
-}
-
-impl SetExpr {
-    pub fn span(&self) -> Span {
-        match self {
-            SetExpr::Select(stmt) => stmt.span,
-            SetExpr::Query(query) => query.span,
-            SetExpr::SetOperation(op) => op.span,
-            SetExpr::Values { span, .. } => *span,
-        }
-    }
-
-    pub fn into_query(self) -> Query {
-        match self {
-            SetExpr::Query(query) => *query,
-            _ => Query {
-                span: self.span(),
-                with: None,
-                body: self,
-                order_by: vec![],
-                limit: vec![],
-                offset: None,
-                ignore_result: false,
-            },
-        }
-    }
-}
-
-impl Display for OrderByExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.expr)?;
-        if let Some(asc) = self.asc {
-            if asc {
-                write!(f, " ASC")?;
-            } else {
-                write!(f, " DESC")?;
-            }
-        }
-        if let Some(nulls_first) = self.nulls_first {
-            if nulls_first {
-                write!(f, " NULLS FIRST")?;
-            } else {
-                write!(f, " NULLS LAST")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Display for TableAlias {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.name)?;
-        if !self.columns.is_empty() {
-            write!(f, "(")?;
-            write_comma_separated_list(f, &self.columns)?;
-            write!(f, ")")?;
-        }
-        Ok(())
-    }
-}
-
-impl Display for Pivot {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
-        write_comma_separated_list(f, &self.values)?;
-        write!(f, "))")?;
-        Ok(())
-    }
-}
-
-impl Display for Unpivot {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "UNPIVOT({} FOR {} IN (",
-            self.value_column, self.column_name
-        )?;
-        write_comma_separated_list(f, &self.names)?;
-        write!(f, "))")?;
-        Ok(())
-    }
-}
-
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -479,8 +702,7 @@ impl Display for TableReference {
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot,
                 unpivot,
             } => {
@@ -489,20 +711,8 @@ impl Display for TableReference {
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
 
-                if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
-                    write!(f, " AT (SNAPSHOT => {sid})")?;
-                }
-
-                if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
-                    write!(f, " AT (TIMESTAMP => {ts})")?;
-                }
-
-                if let Some(TimeTravelPoint::Snapshot(sid)) = since_point {
-                    write!(f, " SINCE (SNAPSHOT => {sid})")?;
-                }
-
-                if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {
-                    write!(f, " SINCE (TIMESTAMP => {ts})")?;
+                if let Some(temporal) = temporal {
+                    write!(f, " {temporal}")?;
                 }
 
                 if let Some(alias) = alias {
@@ -623,225 +833,77 @@ impl Display for TableReference {
     }
 }
 
-impl Display for Indirection {
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct TableAlias {
+    pub name: Identifier,
+    pub columns: Vec<Identifier>,
+}
+
+impl Display for TableAlias {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Indirection::Identifier(ident) => {
-                write!(f, "{ident}")?;
-            }
-            Indirection::Star(_) => {
-                write!(f, "*")?;
-            }
+        write!(f, "{}", &self.name)?;
+        if !self.columns.is_empty() {
+            write!(f, "(")?;
+            write_comma_separated_list(f, &self.columns)?;
+            write!(f, ")")?;
         }
         Ok(())
     }
 }
 
-impl Display for SelectTarget {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct Join {
+    pub op: JoinOperator,
+    pub condition: JoinCondition,
+    pub left: Box<TableReference>,
+    pub right: Box<TableReference>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum JoinOperator {
+    Inner,
+    // Outer joins can not work with `JoinCondition::None`
+    LeftOuter,
+    RightOuter,
+    FullOuter,
+    LeftSemi,
+    LeftAnti,
+    RightSemi,
+    RightAnti,
+    // CrossJoin can only work with `JoinCondition::None`
+    CrossJoin,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum JoinCondition {
+    On(Box<Expr>),
+    Using(Vec<Identifier>),
+    Natural,
+    None,
+}
+
+impl SetExpr {
+    pub fn span(&self) -> Span {
         match self {
-            SelectTarget::AliasedExpr { expr, alias } => {
-                write!(f, "{expr}")?;
-                if let Some(ident) = alias {
-                    write!(f, " AS {ident}")?;
-                }
-            }
-            SelectTarget::StarColumns {
-                qualified,
-                column_filter,
-            } => match column_filter {
-                Some(ColumnFilter::Excludes(excludes)) => {
-                    write_dot_separated_list(f, qualified)?;
-                    write!(f, " EXCLUDE (")?;
-                    write_comma_separated_list(f, excludes)?;
-                    write!(f, ")")?;
-                }
-                Some(ColumnFilter::Lambda(lambda)) => {
-                    write!(f, "COLUMNS({lambda})")?;
-                }
-                None => {
-                    write_dot_separated_list(f, qualified)?;
-                }
+            SetExpr::Select(stmt) => stmt.span,
+            SetExpr::Query(query) => query.span,
+            SetExpr::SetOperation(op) => op.span,
+            SetExpr::Values { span, .. } => *span,
+        }
+    }
+
+    pub fn into_query(self) -> Query {
+        match self {
+            SetExpr::Query(query) => *query,
+            _ => Query {
+                span: self.span(),
+                with: None,
+                body: self,
+                order_by: vec![],
+                limit: vec![],
+                offset: None,
+                ignore_result: false,
             },
         }
-        Ok(())
-    }
-}
-
-impl Display for SelectStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // SELECT clause
-        write!(f, "SELECT ")?;
-        if let Some(hints) = &self.hints {
-            write!(f, "{} ", hints)?;
-        }
-        if self.distinct {
-            write!(f, "DISTINCT ")?;
-        }
-        write_comma_separated_list(f, &self.select_list)?;
-
-        // FROM clause
-        if !self.from.is_empty() {
-            write!(f, " FROM ")?;
-            write_comma_separated_list(f, &self.from)?;
-        }
-
-        // WHERE clause
-        if let Some(expr) = &self.selection {
-            write!(f, " WHERE {expr}")?;
-        }
-
-        // GROUP BY clause
-        if self.group_by.is_some() {
-            write!(f, " GROUP BY ")?;
-            match self.group_by.as_ref().unwrap() {
-                GroupBy::Normal(exprs) => {
-                    write_comma_separated_list(f, exprs)?;
-                }
-                GroupBy::All => {
-                    write!(f, "ALL")?;
-                }
-                GroupBy::GroupingSets(sets) => {
-                    write!(f, "GROUPING SETS (")?;
-                    for (i, set) in sets.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "(")?;
-                        write_comma_separated_list(f, set)?;
-                        write!(f, ")")?;
-                    }
-                    write!(f, ")")?;
-                }
-                GroupBy::Cube(exprs) => {
-                    write!(f, "CUBE (")?;
-                    write_comma_separated_list(f, exprs)?;
-                    write!(f, ")")?;
-                }
-                GroupBy::Rollup(exprs) => {
-                    write!(f, "ROLLUP (")?;
-                    write_comma_separated_list(f, exprs)?;
-                    write!(f, ")")?;
-                }
-            }
-        }
-
-        // HAVING clause
-        if let Some(having) = &self.having {
-            write!(f, " HAVING {having}")?;
-        }
-
-        Ok(())
-    }
-}
-
-impl Display for SetExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SetExpr::Select(select_stmt) => {
-                write!(f, "{select_stmt}")?;
-            }
-            SetExpr::Query(query) => {
-                write!(f, "({query})")?;
-            }
-            SetExpr::SetOperation(set_operation) => {
-                write!(f, "{}", set_operation.left)?;
-                match set_operation.op {
-                    SetOperator::Union => {
-                        write!(f, " UNION ")?;
-                    }
-                    SetOperator::Except => {
-                        write!(f, " EXCEPT ")?;
-                    }
-                    SetOperator::Intersect => {
-                        write!(f, " INTERSECT ")?;
-                    }
-                }
-                if set_operation.all {
-                    write!(f, "ALL ")?;
-                }
-                write!(f, "{}", set_operation.right)?;
-            }
-            SetExpr::Values { values, .. } => {
-                write!(f, "VALUES")?;
-                for (i, value) in values.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, value)?;
-                    write!(f, ")")?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Display for CTE {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} AS ", self.alias)?;
-        if self.materialized {
-            write!(f, "MATERIALIZED ")?;
-        }
-        write!(f, "({})", self.query)?;
-        Ok(())
-    }
-}
-
-impl Display for With {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.recursive {
-            write!(f, "RECURSIVE ")?;
-        }
-
-        write_comma_separated_list(f, &self.ctes)?;
-        Ok(())
-    }
-}
-
-impl Display for Query {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // CTE, with clause
-        if let Some(with) = &self.with {
-            write!(f, "WITH {with} ")?;
-        }
-
-        // Query body
-        write!(f, "{}", self.body)?;
-
-        // ORDER BY clause
-        if !self.order_by.is_empty() {
-            write!(f, " ORDER BY ")?;
-            write_comma_separated_list(f, &self.order_by)?;
-        }
-
-        // LIMIT clause
-        if !self.limit.is_empty() {
-            write!(f, " LIMIT ")?;
-            write_comma_separated_list(f, &self.limit)?;
-        }
-
-        // TODO: We should validate if offset exists, limit should be empty or just one element
-        if let Some(offset) = &self.offset {
-            write!(f, " OFFSET {offset}")?;
-        }
-
-        Ok(())
-    }
-}
-
-impl Display for TimeTravelPoint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TimeTravelPoint::Snapshot(sid) => {
-                write!(f, " (SNAPSHOT => {sid})")?;
-            }
-            TimeTravelPoint::Timestamp(ts) => {
-                write!(f, " (TIMESTAMP => {ts})")?;
-            }
-        }
-
-        Ok(())
     }
 }

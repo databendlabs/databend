@@ -16,10 +16,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::time::Instant;
 
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -30,12 +27,6 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_metrics::transform::metrics_inc_sort_spill_read_bytes;
-use databend_common_metrics::transform::metrics_inc_sort_spill_read_count;
-use databend_common_metrics::transform::metrics_inc_sort_spill_read_milliseconds;
-use databend_common_metrics::transform::metrics_inc_sort_spill_write_bytes;
-use databend_common_metrics::transform::metrics_inc_sort_spill_write_count;
-use databend_common_metrics::transform::metrics_inc_sort_spill_write_milliseconds;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -277,22 +268,7 @@ where R: Rows + Sync + Send + 'static
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
         debug_assert!(self.num_merge >= 2 && self.batch_size > 0);
 
-        let ins = Instant::now();
-        let (location, bytes) = self.spiller.spill_block(block).await?;
-
-        // perf
-        {
-            metrics_inc_sort_spill_write_count();
-            metrics_inc_sort_spill_write_bytes(bytes);
-            metrics_inc_sort_spill_write_milliseconds(ins.elapsed().as_millis() as u64);
-
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, bytes as usize);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::SpillWriteTime,
-                ins.elapsed().as_millis() as usize,
-            );
-        }
+        let location = self.spiller.spill_block(block).await?;
 
         self.unmerged_blocks.push_back(vec![location].into());
         Ok(())
@@ -343,25 +319,7 @@ where R: Rows + Sync + Send + 'static
             let files = self.unmerged_blocks.pop_front().unwrap();
             debug_assert!(files.len() == 1);
 
-            let ins = Instant::now();
-            let (block, bytes) = self.spiller.read_spilled_file(&files[0]).await?;
-
-            // perf
-            {
-                metrics_inc_sort_spill_read_count();
-                metrics_inc_sort_spill_read_bytes(bytes);
-                metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
-
-                Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
-                Profile::record_usize_profile(
-                    ProfileStatisticsName::SpillReadBytes,
-                    bytes as usize,
-                );
-                Profile::record_usize_profile(
-                    ProfileStatisticsName::SpillReadTime,
-                    ins.elapsed().as_millis() as usize,
-                );
-            }
+            let block = self.spiller.read_spilled_file(&files[0]).await?;
 
             self.output_data = Some(block);
             self.state = State::Finish;
@@ -387,25 +345,7 @@ where R: Rows + Sync + Send + 'static
 
         let mut spilled = VecDeque::new();
         while let Some(block) = merger.async_next_block().await? {
-            let ins = Instant::now();
-            let (location, bytes) = self.spiller.spill_block(block).await?;
-
-            // perf
-            {
-                metrics_inc_sort_spill_write_count();
-                metrics_inc_sort_spill_write_bytes(bytes);
-                metrics_inc_sort_spill_write_milliseconds(ins.elapsed().as_millis() as u64);
-
-                Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-                Profile::record_usize_profile(
-                    ProfileStatisticsName::SpillWriteBytes,
-                    bytes as usize,
-                );
-                Profile::record_usize_profile(
-                    ProfileStatisticsName::SpillWriteTime,
-                    ins.elapsed().as_millis() as usize,
-                );
-            }
+            let location = self.spiller.spill_block(block).await?;
 
             spilled.push_back(location);
         }
@@ -429,25 +369,7 @@ impl SortedStream for BlockStream {
             BlockStream::Block(block) => block.take(),
             BlockStream::Spilled((files, spiller)) => {
                 if let Some(file) = files.pop_front() {
-                    let ins = Instant::now();
-                    let (block, bytes) = spiller.read_spilled_file(&file).await?;
-
-                    // perf
-                    {
-                        metrics_inc_sort_spill_read_count();
-                        metrics_inc_sort_spill_read_bytes(bytes);
-                        metrics_inc_sort_spill_read_milliseconds(ins.elapsed().as_millis() as u64);
-
-                        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
-                        Profile::record_usize_profile(
-                            ProfileStatisticsName::SpillReadBytes,
-                            bytes as usize,
-                        );
-                        Profile::record_usize_profile(
-                            ProfileStatisticsName::SpillReadTime,
-                            ins.elapsed().as_millis() as usize,
-                        );
-                    }
+                    let block = spiller.read_spilled_file(&file).await?;
 
                     Some(block)
                 } else {

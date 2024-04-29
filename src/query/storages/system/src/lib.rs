@@ -114,6 +114,8 @@ pub use table_functions_table::TableFunctionsTable;
 pub use tables_table::TablesTable;
 pub use tables_table::TablesTableWithHistory;
 pub use tables_table::TablesTableWithoutHistory;
+pub use tables_table::ViewsTableWithHistory;
+pub use tables_table::ViewsTableWithoutHistory;
 pub use task_history_table::parse_task_runs_to_datablock;
 pub use task_history_table::TaskHistoryTable;
 pub use tasks_table::parse_tasks_to_datablock;

@@ -250,7 +250,7 @@ impl DefaultSettings {
                 }),
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
-                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", and \"Hive\".",
+                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", \"Prql\", and \"Hive\".",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
@@ -273,7 +273,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -287,6 +287,18 @@ impl DefaultSettings {
                 ("join_spilling_partition_bits", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("disable_merge_into_join_reorder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable merge into join reorder optimization.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("inlist_to_join_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Set the threshold for converting IN list to JOIN.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
@@ -374,6 +386,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("query_result_cache_min_execute_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "For a query to be cached, it must take at least this many seconds to fetch the first block. It helps to avoid caching queries that are too fast to execute or queries with streaming scan.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("query_result_cache_ttl_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(300), // seconds
                     desc: "Sets the time-to-live (TTL) in seconds for cached query results. \
@@ -406,7 +424,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -418,7 +436,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -442,8 +460,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("parquet_fast_read_bytes", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Parquet file with smaller size will be read as a whole file, instead of column by column.",
+                    value: UserSettingValue::UInt64(16 * 1024 * 1024),
+                    desc: "Parquet file with smaller size will be read as a whole file, instead of column by column. Default value: 16MB",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
@@ -463,13 +481,13 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10),
+                    value: UserSettingValue::UInt64(15),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(15),
+                    value: UserSettingValue::UInt64(20),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -487,7 +505,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_merge_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables the experimental feature for 'MERGE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -523,7 +541,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(50),
+                    value: UserSettingValue::UInt64(25),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -531,18 +549,6 @@ impl DefaultSettings {
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "This setting is deprecated",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("fuse_write_use_parquet2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when writing data with fuse engine.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("fuse_read_use_parquet2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when reading data with fuse engine.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -631,7 +637,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental aggregate hashtable",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -669,6 +675,12 @@ impl DefaultSettings {
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Refresh aggregating index after new data written",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("parse_datetime_ignore_remainder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Ignore trailing chars when parse string to datetime(disable by default)",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -718,6 +730,18 @@ impl DefaultSettings {
                 ("statement_queued_timeout_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The maximum waiting seconds in the queue. The default value is 0(no limit).",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("geometry_output_format", DefaultSettingValue {
+                    value: UserSettingValue::String("GeoJSON".to_owned()),
+                    desc: "Display format for GEOMETRY values.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::String(vec!["WKT".into(), "WKB".into(), "EWKT".into(), "EWKB".into(), "GeoJSON".into()]))
+                }),
+                ("script_max_steps", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "The maximum steps allowed in a single execution of script.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 })

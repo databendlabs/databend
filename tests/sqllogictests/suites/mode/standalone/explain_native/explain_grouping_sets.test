@@ -26,7 +26,7 @@ EvalScalar
                     ├── table: default.system.numbers
                     ├── output columns: [number (#0)]
                     ├── read rows: 1
-                    ├── read bytes: 8
+                    ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── push downs: [filters: [], limit: NONE]
@@ -60,7 +60,7 @@ EvalScalar
                     ├── table: default.system.numbers
                     ├── output columns: [number (#0)]
                     ├── read rows: 1
-                    ├── read bytes: 8
+                    ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── push downs: [filters: [], limit: NONE]

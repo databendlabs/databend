@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
@@ -49,6 +48,7 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Versioned;
+use parquet::format::FileMetaData;
 
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::Filter;
@@ -63,10 +63,10 @@ pub struct BloomIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
 }
 
-impl TryFrom<ThriftFileMetaData> for BloomIndexMeta {
+impl TryFrom<FileMetaData> for BloomIndexMeta {
     type Error = databend_common_exception::ErrorCode;
 
-    fn try_from(mut meta: ThriftFileMetaData) -> std::result::Result<Self, Self::Error> {
+    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
         let rg = meta.row_groups.remove(0);
         let mut col_metas = Vec::with_capacity(rg.columns.len());
         for x in &rg.columns {
@@ -600,15 +600,22 @@ fn visit_map_column(
     return_type: &DataType,
     visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
 ) -> Result<Option<Expr<String>>> {
-    if let Expr::ColumnRef { id, data_type, .. } = &args[0] {
-        if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
-            let val_type = match inner_ty {
-                DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                _ => unreachable!(),
-            };
-            debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
-            return visitor(span, id, scalar, &val_type, return_type);
+    match &args[0] {
+        Expr::ColumnRef { id, data_type, .. }
+        | Expr::Cast {
+            expr: box Expr::ColumnRef { id, data_type, .. },
+            ..
+        } => {
+            if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
+                let val_type = match inner_ty {
+                    DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                    _ => unreachable!(),
+                };
+                debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
+                return visitor(span, id, scalar, &val_type, return_type);
+            }
         }
+        _ => {}
     }
     Ok(None)
 }

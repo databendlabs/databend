@@ -1,4 +1,4 @@
 ==TEST SHOW USER FUNCTIONS==
 isnotempty	NULL		{"parameters":["p"]}	SQL	yyyy-mm-dd HH:MM:SS.ssssss
 ==TEST SELECT * FROM SYSTEM.USER_FUNCTIONS==
-isnotempty	NULL		{"parameters":["p"]}	SQL	 (p) -> (NOT is_null(p))	yyyy-mm-dd HH:MM:SS.ssssss
+isnotempty	NULL		{"parameters":["p"]}	SQL	 (p) -> NOT is_null(p)	yyyy-mm-dd HH:MM:SS.ssssss

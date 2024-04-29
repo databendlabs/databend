@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -29,7 +27,9 @@ use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::QuerySource;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::Project;
+use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
@@ -66,7 +66,7 @@ impl CopyIntoTableInterpreter {
     async fn build_query(
         &self,
         query: &Plan,
-    ) -> Result<(SelectInterpreter, DataSchemaRef, Vec<UpdateStreamMetaReq>)> {
+    ) -> Result<(SelectInterpreter, Vec<UpdateStreamMetaReq>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -89,21 +89,7 @@ impl CopyIntoTableInterpreter {
             false,
         )?;
 
-        // Building data schema from bind_context columns
-        // TODO(leiyskey): Extract the following logic as new API of BindContext.
-        let fields = bind_context
-            .columns
-            .iter()
-            .map(|column_binding| {
-                DataField::new(
-                    &column_binding.column_name,
-                    *column_binding.data_type.clone(),
-                )
-            })
-            .collect();
-        let data_schema = DataSchemaRefExt::create(fields);
-
-        Ok((select_interpreter, data_schema, update_stream_meta))
+        Ok((select_interpreter, update_stream_meta))
     }
 
     #[async_backtrace::framed]
@@ -111,7 +97,6 @@ impl CopyIntoTableInterpreter {
         &self,
         plan: &CopyIntoTablePlan,
     ) -> Result<(PhysicalPlan, Vec<UpdateStreamMetaReq>)> {
-        let mut next_plan_id = 0;
         let to_table = self
             .ctx
             .get_table(
@@ -122,37 +107,50 @@ impl CopyIntoTableInterpreter {
             .await?;
         let mut update_stream_meta_reqs = vec![];
         let source = if let Some(ref query) = plan.query {
-            let (select_interpreter, query_source_schema, update_stream_meta) =
-                self.build_query(query).await?;
+            let (query_interpreter, update_stream_meta) = self.build_query(query).await?;
             update_stream_meta_reqs = update_stream_meta;
-            let plan_query = select_interpreter.build_physical_plan().await?;
-            next_plan_id = plan_query.get_id() + 1;
-            let result_columns = select_interpreter.get_result_columns();
-            CopyIntoTableSource::Query(Box::new(QuerySource {
-                plan: plan_query,
-                ignore_result: select_interpreter.get_ignore_result(),
-                result_columns,
-                query_source_schema,
-            }))
+            let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
+
+            let result_columns = query_interpreter.get_result_columns();
+            CopyIntoTableSource::Query(Box::new(PhysicalPlan::Project(
+                Project::from_columns_binding(
+                    0,
+                    query_physical_plan,
+                    result_columns,
+                    query_interpreter.get_ignore_result(),
+                )?,
+            )))
         } else {
             let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
-            let read_source_plan = Box::new(
-                stage_table
-                    .read_plan_with_catalog(
-                        self.ctx.clone(),
-                        plan.catalog_info.catalog_name().to_string(),
-                        None,
-                        None,
-                        false,
-                        false,
-                    )
-                    .await?,
-            );
-            CopyIntoTableSource::Stage(read_source_plan)
+
+            let data_source_plan = stage_table
+                .read_plan_with_catalog(
+                    self.ctx.clone(),
+                    plan.catalog_info.catalog_name().to_string(),
+                    None,
+                    None,
+                    false,
+                    false,
+                )
+                .await?;
+
+            let mut name_mapping = BTreeMap::new();
+            for (idx, field) in data_source_plan.schema().fields.iter().enumerate() {
+                name_mapping.insert(field.name.clone(), idx);
+            }
+
+            CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
+                plan_id: 0,
+                name_mapping,
+                stat_info: None,
+                table_index: None,
+                internal_column: None,
+                source: Box::new(data_source_plan),
+            })))
         };
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-            plan_id: next_plan_id,
+            plan_id: 0,
             catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
@@ -165,10 +163,10 @@ impl CopyIntoTableInterpreter {
 
             source,
         }));
-        next_plan_id += 1;
+
         if plan.enable_distributed {
             root = PhysicalPlan::Exchange(Exchange {
-                plan_id: next_plan_id,
+                plan_id: 0,
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
@@ -176,6 +174,10 @@ impl CopyIntoTableInterpreter {
                 ignore_exchange: false,
             });
         }
+
+        let mut next_plan_id = 0;
+        root.adjust_plan_id(&mut next_plan_id);
+
         Ok((root, update_stream_meta_reqs))
     }
 
@@ -385,7 +387,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.catalog_info.catalog_name().to_string(),
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
-                "copy_into_table".to_string(),
+                MutationKind::Insert,
                 true,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;

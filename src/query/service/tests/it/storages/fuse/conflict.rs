@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::vec;
 
 use databend_common_expression::TableSchema;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SnapshotChanges;
@@ -35,14 +36,14 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 ///
 /// so the delete operation cannot be applied
 fn test_unresolvable_delete_conflict() {
-    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
+    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
         ("3".to_string(), 1),
     ];
 
-    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
+    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
     latest_snapshot.segments = vec![("1".to_string(), 1), ("4".to_string(), 1)];
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
@@ -53,13 +54,14 @@ fn test_unresolvable_delete_conflict() {
         merged_statistics: Statistics::default(),
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
         TableSchema::default(),
         None,
         Some(Arc::new(latest_snapshot)),
+        None,
     );
     assert!(result.is_err());
 }
@@ -75,7 +77,7 @@ fn test_unresolvable_delete_conflict() {
 ///
 /// the delete operation is merged into the latest snapshot, by removing segments 2, 3, and adding segment 8 in the latest snapshot
 fn test_resolvable_delete_conflict() {
-    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
+    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
@@ -93,7 +95,7 @@ fn test_resolvable_delete_conflict() {
         cluster_stats: None,
     };
 
-    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
+    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
     latest_snapshot.segments = vec![
         ("2".to_string(), 1),
         ("3".to_string(), 1),
@@ -141,13 +143,14 @@ fn test_resolvable_delete_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
         TableSchema::default(),
         None,
         Some(Arc::new(latest_snapshot)),
+        None,
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -178,7 +181,7 @@ fn test_resolvable_delete_conflict() {
 ///
 /// the replace operation is merged into the latest snapshot, by removing segments 2, 3, and adding segment 6,5 in the latest snapshot
 fn test_resolvable_replace_conflict() {
-    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
+    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
@@ -196,7 +199,7 @@ fn test_resolvable_replace_conflict() {
         cluster_stats: None,
     };
 
-    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
+    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
     latest_snapshot.segments = vec![
         ("2".to_string(), 1),
         ("3".to_string(), 1),
@@ -244,13 +247,14 @@ fn test_resolvable_replace_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Replace);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
         TableSchema::default(),
         None,
         Some(Arc::new(latest_snapshot)),
+        None,
     );
     let snapshot = result.unwrap();
     let expected = vec![

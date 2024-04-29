@@ -153,9 +153,12 @@ impl AsyncSource for ExecuteBackgroundJobSource {
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let background_handler = get_background_service_handler();
+
+        let tenant = self.ctx.get_tenant();
+
         background_handler
             .execute_scheduled_job(
-                self.ctx.get_tenant().to_string(),
+                tenant,
                 self.ctx.get_current_user()?.identity(),
                 self.job_name.clone(),
             )

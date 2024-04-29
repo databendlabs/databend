@@ -302,6 +302,18 @@ impl StringColumn {
         std::str::from_utf8_unchecked(bytes)
     }
 
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    #[inline]
+    pub unsafe fn index_unchecked_bytes(&self, index: usize) -> &[u8] {
+        debug_assert!(index + 1 < self.offsets.len());
+
+        let start = *self.offsets.get_unchecked(index) as usize;
+        let end = *self.offsets.get_unchecked(index + 1) as usize;
+        self.data.get_unchecked(start..end)
+    }
+
     pub fn slice(&self, range: Range<usize>) -> Self {
         let offsets = self
             .offsets

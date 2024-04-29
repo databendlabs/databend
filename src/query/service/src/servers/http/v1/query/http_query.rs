@@ -42,7 +42,6 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use super::RemoveReason;
-use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -113,6 +112,7 @@ impl HttpQueryRequest {
             final_uri: None,
             kill_uri: None,
             error: Some(QueryError::from_error_code(err)),
+            has_result_set: None,
         })
     }
 }
@@ -132,7 +132,7 @@ impl Debug for HttpQueryRequest {
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
 const DEFAULT_MAX_ROWS_PER_PAGE: usize = 10000;
-const DEFAULT_WAIT_TIME_SECS: u32 = 1;
+const DEFAULT_WAIT_TIME_SECS: u32 = 10;
 
 fn default_max_rows_in_buffer() -> usize {
     DEFAULT_MAX_ROWS_IN_BUFFER
@@ -218,6 +218,7 @@ pub struct StageAttachmentConf {
 
 #[derive(Debug, Clone)]
 pub struct ResponseState {
+    pub has_result_set: Option<bool>,
     pub schema: Vec<QueryResponseField>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
@@ -235,10 +236,11 @@ pub struct HttpQueryResponseInternal {
     pub node_id: String,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum ExpireState {
     Working,
     ExpireAt(Instant),
-    Removed,
+    Removed(RemoveReason),
 }
 
 pub enum ExpireResult {
@@ -254,7 +256,7 @@ pub struct HttpQuery {
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
-    expire_state: Arc<TokioMutex<ExpireState>>,
+    expire_state: Arc<parking_lot::Mutex<ExpireState>>,
     /// The timeout for the query result polling. In the normal case, the client driver
     /// should fetch the paginated result in a timely manner, and the interval should not
     /// exceed this result_timeout_secs.
@@ -330,15 +332,13 @@ impl HttpQuery {
             })?;
             let mut n = 1;
             while let ExpiringState::InUse(query_id) = session.expire_state() {
-                if let Some(last_query) = &http_query_manager.get_query(&query_id).await {
+                if let Some(last_query) = &http_query_manager.get_query(&query_id) {
                     if last_query.get_state().await.state == ExecuteStateKind::Running {
                         return Err(ErrorCode::BadArguments(
                             "last query on the session not finished",
                         ));
                     }
-                    let _ = http_query_manager
-                        .remove_query(&query_id, RemoveReason::Canceled)
-                        .await;
+                    let _ = http_query_manager.remove_query(&query_id, RemoveReason::Canceled);
                 }
                 // wait for Arc<QueryContextShared> to drop and detach itself from session
                 // should not take too long
@@ -406,6 +406,9 @@ impl HttpQuery {
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
+
+        session.set_client_host(ctx.client_host.clone());
+
         let http_ctx = ctx;
         let ctx = session.create_query_context().await?;
 
@@ -480,10 +483,10 @@ impl HttpQuery {
                 )
                 .await
                 {
-                    InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         schema: vec![],
+                        has_result_set: None,
                         reason: Err(e.clone()),
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
@@ -517,7 +520,7 @@ impl HttpQuery {
             state,
             page_manager: data,
             result_timeout_secs,
-            expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
+            expire_state: Arc::new(parking_lot::Mutex::new(ExpireState::Working)),
             is_txn_mgr_saved: AtomicBool::new(false),
         };
 
@@ -557,16 +560,7 @@ impl HttpQuery {
     #[async_backtrace::framed]
     async fn get_state(&self) -> ResponseState {
         let state = self.state.read().await;
-        let (exe_state, err) = state.state.extract();
-        ResponseState {
-            running_time_ms: state.get_query_duration_ms(),
-            progresses: state.get_progress(),
-            state: exe_state,
-            error: err,
-            warnings: state.get_warnings(),
-            affect: state.get_affect(),
-            schema: state.get_schema(),
-        }
+        state.get_response_state()
     }
 
     #[async_backtrace::framed]
@@ -638,18 +632,16 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn kill(&self, reason: &str) {
+    pub async fn kill(&self, reason: ErrorCode) {
         // the query will be removed from the query manager before the session is dropped.
         self.detach().await;
 
-        Executor::stop(&self.state, Err(ErrorCode::AbortedQuery(reason)), true).await;
+        Executor::stop(&self.state, Err(reason)).await;
     }
 
     #[async_backtrace::framed]
     async fn detach(&self) {
-        info!("{}: http query detached", &self.id);
-
-        let data = self.page_manager.lock().await;
+        let mut data = self.page_manager.lock().await;
         data.detach().await
     }
 
@@ -662,20 +654,33 @@ impl HttpQuery {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
-        let mut t = self.expire_state.lock().await;
+        let mut t = self.expire_state.lock();
         *t = ExpireState::ExpireAt(deadline);
     }
 
-    #[async_backtrace::framed]
-    pub async fn mark_removed(&self) {
-        let mut t = self.expire_state.lock().await;
-        *t = ExpireState::Removed;
+    pub fn mark_removed(&self, remove_reason: RemoveReason) -> bool {
+        let mut t = self.expire_state.lock();
+        if !matches!(*t, ExpireState::Removed(_)) {
+            *t = ExpireState::Removed(remove_reason);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn check_removed(&self) -> Option<RemoveReason> {
+        let t = self.expire_state.lock();
+        if let ExpireState::Removed(r) = *t {
+            Some(r)
+        } else {
+            None
+        }
     }
 
     // return Duration to sleep
     #[async_backtrace::framed]
     pub async fn check_expire(&self) -> ExpireResult {
-        let expire_state = self.expire_state.lock().await;
+        let expire_state = self.expire_state.lock();
         match *expire_state {
             ExpireState::ExpireAt(expire_at) => {
                 let now = Instant::now();
@@ -685,7 +690,7 @@ impl HttpQuery {
                     ExpireResult::Sleep(expire_at - now)
                 }
             }
-            ExpireState::Removed => ExpireResult::Removed,
+            ExpireState::Removed(_) => ExpireResult::Removed,
             ExpireState::Working => {
                 ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
             }

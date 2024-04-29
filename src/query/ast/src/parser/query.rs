@@ -30,6 +30,7 @@ use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::statement::hint;
+use crate::parser::statement::top_n;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
 use crate::rule;
@@ -53,6 +54,7 @@ pub enum SetOperationElement {
     SelectStmt {
         hints: Option<Hint>,
         distinct: bool,
+        top_n: Option<u64>,
         select_list: Vec<SelectTarget>,
         from: Vec<TableReference>,
         selection: Option<Expr>,
@@ -101,7 +103,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     let select_stmt = map_res(
         rule! {
             ( FROM ~ ^#comma_separated_list1(table_reference) )?
-            ~ SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+            ~ SELECT ~ #hint? ~ DISTINCT? ~ #top_n? ~ ^#comma_separated_list1(select_target)
             ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
             ~ ( WHERE ~ ^#expr )?
             ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
@@ -114,6 +116,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             _select,
             opt_hints,
             opt_distinct,
+            opt_top_n,
             select_list,
             opt_from_block_second,
             opt_where_block,
@@ -131,6 +134,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             Ok(SetOperationElement::SelectStmt {
                 hints: opt_hints,
                 distinct: opt_distinct.is_some(),
+                top_n: opt_top_n,
                 select_list,
                 from: opt_from_block_first
                     .or(opt_from_block_second)
@@ -229,6 +233,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
             SetOperationElement::SelectStmt {
                 hints,
                 distinct,
+                top_n,
                 select_list,
                 from,
                 selection,
@@ -237,8 +242,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 window_list,
                 qualify,
             } => SetExpr::Select(Box::new(SelectStmt {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 hints,
+                top_n,
                 distinct,
                 select_list,
                 from,
@@ -249,7 +255,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 qualify,
             })),
             SetOperationElement::Values(values) => SetExpr::Values {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 values,
             },
             _ => unreachable!(),
@@ -266,7 +272,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
         let set_expr = match input.elem {
             SetOperationElement::SetOperation { op, all, .. } => {
                 SetExpr::SetOperation(Box::new(SetOperation {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     op,
                     all,
                     left: Box::new(lhs),
@@ -350,7 +356,7 @@ pub fn with(i: Input) -> IResult<With> {
             #table_alias_without_as ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
         }),
         |(span, (table_alias, _, materialized, _, query, _))| CTE {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             alias: table_alias,
             materialized: materialized.is_some(),
             query: Box::new(query),
@@ -362,7 +368,7 @@ pub fn with(i: Input) -> IResult<With> {
             WITH ~ RECURSIVE? ~ ^#comma_separated_list1(cte)
         }),
         |(span, (_, recursive, ctes))| With {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             recursive: recursive.is_some(),
             ctes,
         },
@@ -446,7 +452,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         |(t, _, s, _)| SelectTarget::StarColumns {
             qualified: vec![Indirection::Star(Some(t.span))],
             column_filter: Some(ColumnFilter::Lambda(Lambda {
-                params: vec![Identifier::from_name("_t")],
+                params: vec![Identifier::from_name(Some(t.span), "_t")],
                 expr: Box::new(Expr::BinaryOp {
                     span: Some(t.span),
                     op: BinaryOperator::Regexp,
@@ -455,12 +461,12 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
                         column: ColumnRef {
                             database: None,
                             table: None,
-                            column: ColumnID::Name(Identifier::from_name("_t")),
+                            column: ColumnID::Name(Identifier::from_name(Some(t.span), "_t")),
                         },
                     }),
                     right: Box::new(Expr::Literal {
                         span: Some(t.span),
-                        lit: Literal::String(s),
+                        value: Literal::String(s),
                     }),
                 }),
             })),
@@ -500,6 +506,21 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
 }
 
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
+    let at_stream = map(
+        rule! { "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_3 ~ ")" },
+        |(_, _, _, (catalog, database, name), _)| TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        },
+    );
+
+    rule!(
+        #at_stream | #at_snapshot_or_ts
+    )(i)
+}
+
+pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
     let at_snapshot = map(
         rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
         |(_, _, _, s, _)| TimeTravelPoint::Snapshot(s),
@@ -508,9 +529,41 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
         rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
         |(_, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
     );
+    let at_offset = map(
+        rule! { "(" ~ OFFSET ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| TimeTravelPoint::Offset(Box::new(e)),
+    );
 
     rule!(
-        #at_snapshot | #at_timestamp
+        #at_snapshot | #at_timestamp | #at_offset
+    )(i)
+}
+
+pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
+    let time_travel = map(
+        rule! {
+            AT ~ ^#travel_point
+        },
+        |(_, travel_point)| TemporalClause::TimeTravel(travel_point),
+    );
+
+    let changes = map(
+        rule! {
+            CHANGES ~ "(" ~ INFORMATION ~ "=>" ~ ( DEFAULT | APPEND_ONLY ) ~ ")" ~ AT ~ ^#travel_point ~ (END ~ ^#at_snapshot_or_ts)?
+        },
+        |(_, _, _, _, changes_type, _, _, at_point, opt_end_point)| {
+            let append_only = matches!(changes_type.kind, APPEND_ONLY);
+            TemporalClause::Changes(ChangesInterval {
+                append_only,
+                at_point,
+                end_point: opt_end_point.map(|p| p.1),
+            })
+        },
+    );
+
+    rule!(
+        #time_travel
+        | #changes
     )(i)
 }
 
@@ -625,8 +678,7 @@ pub enum TableReferenceElement {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
-        travel_point: Option<TimeTravelPoint>,
-        since_point: Option<TimeTravelPoint>,
+        temporal: Option<TemporalClause>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -685,16 +737,15 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ (AT ~ ^#travel_point)?  ~ (SINCE ~ ^#travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |((catalog, database, table), travel_point_opt, since_point_opt, alias, pivot, unpivot)| {
+        |((catalog, database, table), temporal, alias, pivot, unpivot)| {
             TableReferenceElement::Table {
                 catalog,
                 database,
                 table,
                 alias,
-                travel_point: travel_point_opt.map(|p| p.1),
-                since_point: since_point_opt.map(|p| p.1),
+                temporal,
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
             }
@@ -804,18 +855,16 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot,
                 unpivot,
             } => TableReference::Table {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 catalog,
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot,
                 unpivot,
             },
@@ -840,7 +889,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     })
                     .collect();
                 TableReference::TableFunction {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     lateral,
                     name,
                     params: normal_params,
@@ -853,7 +902,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 subquery,
                 alias,
             } => TableReference::Subquery {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 lateral,
                 subquery,
                 alias,
@@ -865,7 +914,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
             } => {
                 let options = SelectStageOptions::from(options);
                 TableReference::Location {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     location,
                     options,
                     alias,
@@ -890,7 +939,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     JoinCondition::None
                 };
                 TableReference::Join {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     join: Join {
                         op,
                         condition,
@@ -1002,7 +1051,7 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
     map(
         rule! {
-            (#ident )?
+            #ident?
             ~ ( PARTITION ~ ^BY ~ ^#comma_separated_list1(subexpr(0)) )?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( (ROWS | RANGE) ~ ^#window_frame_between )?
@@ -1032,24 +1081,27 @@ pub fn window_spec_ident(i: Input) -> IResult<Window> {
     alt((
         map(
             rule! {
-               ("(" ~ #window_spec ~ ")")
+               "(" ~ #window_spec ~ ")"
             },
             |(_, spec, _)| Window::WindowSpec(spec),
         ),
-        map(rule! {#ident}, |window_name| {
-            Window::WindowReference(WindowRef { window_name })
-        }),
+        map(
+            rule! {
+                #ident
+            },
+            |window_name| Window::WindowReference(WindowRef { window_name }),
+        ),
     ))(i)
 }
 
 pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
     map(
         rule! {
-            #ident ~ (AS ~ "(" ~ #window_spec ~ ")")
+            #ident ~ AS ~ "(" ~ #window_spec ~ ")"
         },
-        |(ident, window)| WindowDefinition {
+        |(ident, _, _, window, _)| WindowDefinition {
             name: ident,
-            spec: window.2,
+            spec: window,
         },
     )(i)
 }

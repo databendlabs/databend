@@ -38,7 +38,7 @@ use crate::reducer::try_reduce_query;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-const KNOWN_ERRORS: [&str; 31] = [
+const KNOWN_ERRORS: &[&str] = &[
     // Errors caused by illegal parameters
     "Overflow on date YMD",
     "timestamp is out of range",
@@ -68,7 +68,9 @@ const KNOWN_ERRORS: [&str; 31] = [
     "The arguments of AggregateRetention should be an expression which returns a Boolean result",
     "AggregateWindowFunnelFunction does not support type",
     "nth_value should count from 1",
-    "start must be less than or equal to end when step is positive vice versa",
+    "step must not be zero",
+    "start must be less than or equal to end when step is positive",
+    "start must be greater than or equal to end when step is negative",
     "Expected Number, Date or Timestamp type, but got",
     "Unsupported data type for generate_series",
     "Having clause can't contain window functions",

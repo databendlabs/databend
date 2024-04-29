@@ -18,6 +18,8 @@ use databend_common_exception::Result;
 use tonic::transport::Channel;
 use tonic::Request;
 
+use crate::client_config::make_request;
+use crate::client_config::ClientConfig;
 use crate::pb::task_service_client::TaskServiceClient;
 use crate::pb::AlterTaskRequest;
 use crate::pb::AlterTaskResponse;
@@ -102,6 +104,30 @@ impl TaskClient {
         let mut client = self.task_client.clone();
         let resp = client.show_task_runs(req).await?;
         Ok(resp.into_inner())
+    }
+
+    pub async fn show_task_runs_full(
+        &self,
+        config: ClientConfig,
+        req: crate::pb::ShowTaskRunsRequest,
+    ) -> Result<Vec<crate::pb::ShowTaskRunsResponse>> {
+        let mut client = self.task_client.clone();
+        let request = make_request(req.clone(), config.clone());
+        let resp = client.show_task_runs(request).await?;
+        let mut has_next = resp.get_ref().next_page_token.is_some();
+        // it is a pagination request, so we need to handle the response
+        let mut result = vec![resp.into_inner()];
+        while has_next {
+            let mut req = req.clone();
+            req.next_page_token = result.last().unwrap().next_page_token;
+            let resp = client
+                .show_task_runs(make_request(req.clone(), config.clone()))
+                .await?;
+            let resp = resp.into_inner();
+            has_next = resp.next_page_token.is_some();
+            result.push(resp);
+        }
+        Ok(result)
     }
 
     pub async fn get_task_dependents(

@@ -44,6 +44,9 @@ pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
 // internal stream column id.
 pub const BASE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 5;
 pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
+// internal search column id.
+pub const SEARCH_MATCHED_COLUMN_ID: u32 = u32::MAX - 7;
+pub const SEARCH_SCORE_COLUMN_ID: u32 = u32::MAX - 8;
 
 // internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
@@ -53,6 +56,10 @@ pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
 // internal stream column name.
 pub const BASE_ROW_ID_COL_NAME: &str = "_base_row_id";
 pub const BASE_BLOCK_IDS_COL_NAME: &str = "_base_block_ids";
+// internal search column name.
+pub const SEARCH_MATCHED_COL_NAME: &str = "_search_matched";
+pub const SEARCH_SCORE_COL_NAME: &str = "_search_score";
+
 pub const CHANGE_ACTION_COL_NAME: &str = "change$action";
 pub const CHANGE_IS_UPDATE_COL_NAME: &str = "change$is_update";
 pub const CHANGE_ROW_ID_COL_NAME: &str = "change$row_id";
@@ -73,7 +80,7 @@ pub const ROW_VERSION_COL_NAME: &str = "_row_version";
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= BASE_BLOCK_IDS_COLUMN_ID
+    column_id >= SEARCH_SCORE_COLUMN_ID
 }
 
 #[inline]
@@ -94,6 +101,8 @@ pub fn is_internal_column(column_name: &str) -> bool {
             // to the computation of the two following internal columns
             | ORIGIN_BLOCK_ROW_NUM_COL_NAME
             | BASE_ROW_ID_COL_NAME
+            | SEARCH_MATCHED_COL_NAME
+            | SEARCH_SCORE_COL_NAME
     )
 }
 
@@ -430,6 +439,19 @@ impl TableSchema {
         }
 
         true
+    }
+
+    pub fn field_of_column_id(&self, column_id: ColumnId) -> Result<&TableField> {
+        for field in &self.fields {
+            if field.contain_column_id(column_id) {
+                return Ok(field);
+            }
+        }
+        let valid_column_ids = self.to_column_ids();
+        Err(ErrorCode::BadArguments(format!(
+            "Unable to get column_id {}. Valid column_ids: {:?}",
+            column_id, valid_column_ids
+        )))
     }
 
     pub fn add_columns(&mut self, fields: &[TableField]) -> Result<()> {

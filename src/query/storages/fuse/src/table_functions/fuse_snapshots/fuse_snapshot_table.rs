@@ -186,7 +186,7 @@ impl AsyncSource for FuseSnapshotSource {
             .get_catalog(CATALOG_DEFAULT)
             .await?
             .get_table(
-                tenant_id.as_str(),
+                &tenant_id,
                 self.arg_database_name.as_str(),
                 self.arg_table_name.as_str(),
             )

@@ -12,6 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod indexer;
 mod inverted_index_handler;
 pub use inverted_index_handler::RealInvertedIndexHandler;

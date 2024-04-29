@@ -33,8 +33,10 @@ use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::ListCatalogReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_common_meta_types::anyerror::func_name;
 use databend_storages_common_txn::TxnManagerRef;
 
 use super::Catalog;
@@ -98,11 +100,8 @@ impl CatalogManager {
                 ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
             })?;
             let ctl = creator.try_create(&CatalogInfo {
-                id: CatalogId { catalog_id: 0 },
-                name_ident: CatalogNameIdent {
-                    tenant: tenant.to_string(),
-                    catalog_name: name.clone(),
-                },
+                id: CatalogId { catalog_id: 0 }.into(),
+                name_ident: CatalogNameIdent::new(tenant.clone(), name).into(),
                 meta: CatalogMeta {
                     catalog_option: CatalogOption::Hive(HiveCatalogOption {
                         address: hive_ctl_cfg.metastore_address.clone(),
@@ -136,11 +135,15 @@ impl CatalogManager {
     }
 
     /// build_catalog builds a catalog from catalog info.
-    pub fn build_catalog(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+    pub fn build_catalog(
+        &self,
+        info: &CatalogInfo,
+        txn_mgr: TxnManagerRef,
+    ) -> Result<Arc<dyn Catalog>> {
         let typ = info.meta.catalog_option.catalog_type();
 
         if typ == CatalogType::Default {
-            return Ok(self.default_catalog.clone());
+            return self.get_default_catalog(txn_mgr);
         }
 
         let creator = self
@@ -160,6 +163,7 @@ impl CatalogManager {
     #[async_backtrace::framed]
     pub async fn get_catalog(
         &self,
+        // TODO: use Tenant or NonEmptyString
         tenant: &str,
         catalog_name: &str,
         txn_mgr: TxnManagerRef,
@@ -172,13 +176,13 @@ impl CatalogManager {
             return Ok(ctl.clone());
         }
 
-        // Get catalog from metasrv.
-        let info = self
-            .meta
-            .get_catalog(GetCatalogReq::new(tenant, catalog_name))
-            .await?;
+        let tenant = Tenant::new_or_err(tenant, func_name!())?;
+        let ident = CatalogNameIdent::new(tenant, catalog_name);
 
-        self.build_catalog(&info)
+        // Get catalog from metasrv.
+        let info = self.meta.get_catalog(GetCatalogReq::new(ident)).await?;
+
+        self.build_catalog(&info, txn_mgr)
     }
 
     /// Create a new catalog.
@@ -212,7 +216,7 @@ impl CatalogManager {
     /// Trying to drop default catalog will return an error.
     #[async_backtrace::framed]
     pub async fn drop_catalog(&self, req: DropCatalogReq) -> Result<()> {
-        let catalog_name = &req.name_ident.catalog_name;
+        let catalog_name = req.name_ident.name();
 
         if catalog_name == CATALOG_DEFAULT {
             return Err(ErrorCode::BadArguments(
@@ -234,10 +238,10 @@ impl CatalogManager {
     #[async_backtrace::framed]
     pub async fn list_catalogs(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         txn_mgr: TxnManagerRef,
     ) -> Result<Vec<Arc<dyn Catalog>>> {
-        let mut catalogs = vec![self.get_default_catalog(txn_mgr)?];
+        let mut catalogs = vec![self.get_default_catalog(txn_mgr.clone())?];
 
         // insert external catalogs.
         for ctl in self.external_catalogs.values() {
@@ -245,10 +249,13 @@ impl CatalogManager {
         }
 
         // fecth catalogs from metasrv.
-        let infos = self.meta.list_catalogs(ListCatalogReq::new(tenant)).await?;
+        let infos = self
+            .meta
+            .list_catalogs(ListCatalogReq::new(tenant.clone()))
+            .await?;
 
         for info in infos {
-            catalogs.push(self.build_catalog(&info)?);
+            catalogs.push(self.build_catalog(&info, txn_mgr.clone())?);
         }
 
         Ok(catalogs)

@@ -34,6 +34,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use log::debug;
 
+use crate::interpreters::util::format_name;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -66,7 +67,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
 
         match table.engine() {
@@ -87,15 +88,27 @@ impl ShowCreateTableInterpreter {
         let schema = table.schema();
         let field_comments = table.field_comments();
         let n_fields = schema.fields().len();
+        let settings = self.ctx.get_settings();
 
-        let mut table_create_sql = format!("CREATE TABLE `{}` (\n", name);
+        let quoted_ident_case_sensitive = settings.get_quoted_ident_case_sensitive()?;
+        let sql_dialect = settings.get_sql_dialect()?;
+
+        let mut table_create_sql = format!(
+            "CREATE TABLE {} (\n",
+            format_name(name, quoted_ident_case_sensitive, sql_dialect)
+        );
         if table.options().contains_key("TRANSIENT") {
-            table_create_sql = format!("CREATE TRANSIENT TABLE `{}` (\n", name)
+            table_create_sql = format!(
+                "CREATE TRANSIENT TABLE {} (\n",
+                format_name(name, quoted_ident_case_sensitive, sql_dialect)
+            )
         }
 
-        // Append columns.
+        let table_info = table.get_table_info();
+
+        // Append columns and indexes.
         {
-            let mut columns = vec![];
+            let mut create_defs = vec![];
             for (idx, field) in schema.fields().iter().enumerate() {
                 let nullable = if field.is_nullable() {
                     " NULL".to_string()
@@ -129,9 +142,9 @@ impl ShowCreateTableInterpreter {
                 } else {
                     "".to_string()
                 };
-                let column = format!(
-                    "  `{}` {}{}{}{}{}",
-                    field.name(),
+                let column_str = format!(
+                    "  {} {}{}{}{}{}",
+                    format_name(field.name(), quoted_ident_case_sensitive, sql_dialect),
                     field.data_type().remove_recursive_nullable().sql_name(),
                     nullable,
                     default_expr,
@@ -139,21 +152,51 @@ impl ShowCreateTableInterpreter {
                     comment
                 );
 
-                columns.push(column);
+                create_defs.push(column_str);
             }
+
+            for index_field in table_info.meta.indexes.values() {
+                let sync = if index_field.sync_creation {
+                    "SYNC"
+                } else {
+                    "ASYNC"
+                };
+                let mut column_names = Vec::with_capacity(index_field.column_ids.len());
+                for column_id in index_field.column_ids.iter() {
+                    let field = schema.field_of_column_id(*column_id)?;
+                    column_names.push(field.name().to_string());
+                }
+                let column_names_str = column_names.join(", ").to_string();
+                let mut options = Vec::with_capacity(index_field.options.len());
+                for (key, value) in index_field.options.iter() {
+                    let option = format!("{} = '{}'", key, value);
+                    options.push(option);
+                }
+                let mut index_str = format!(
+                    "  {} INVERTED INDEX {} ({})",
+                    sync,
+                    format_name(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
+                    column_names_str
+                );
+                if !options.is_empty() {
+                    let options_str = options.join(", ").to_string();
+                    index_str.push(' ');
+                    index_str.push_str(&options_str);
+                }
+                create_defs.push(index_str);
+            }
+
             // Format is:
             //  (
             //      x,
             //      y
             //  )
-            let columns_str = format!("{}\n", columns.join(",\n"));
-            table_create_sql.push_str(&columns_str);
+            let create_defs_str = format!("{}\n", create_defs.join(",\n"));
+            table_create_sql.push_str(&create_defs_str);
         }
-
         let table_engine = format!(") ENGINE={}", engine);
         table_create_sql.push_str(table_engine.as_str());
 
-        let table_info = table.get_table_info();
         if let Some((_, cluster_keys_str)) = table_info.meta.cluster_key() {
             table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
         }

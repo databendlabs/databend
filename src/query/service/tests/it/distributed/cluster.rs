@@ -19,7 +19,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_query::api::RpcService;
+use databend_query::servers::flight::FlightService;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
@@ -57,7 +57,7 @@ fn test_simple_cluster() -> Result<()> {
                 let inner_async = async move {
                     let fixture = TestFixture::setup_with_config(&conf_clone).await?;
 
-                    let mut srv = RpcService::create(conf_clone.clone())?;
+                    let mut srv = FlightService::create(conf_clone.clone())?;
                     srv.start(conf_clone.query.flight_api_address.parse()?)
                         .await?;
 

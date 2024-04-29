@@ -67,7 +67,7 @@ enum MutTableAction {
 
 impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     pub(crate) fn gen_insert(&mut self, table: &Table, row_count: usize) -> InsertStmt {
-        let table_name = Identifier::from_name(table.name.clone());
+        let table_name = Identifier::from_name(None, table.name.clone());
         let data_types = table
             .schema
             .fields()
@@ -79,6 +79,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         InsertStmt {
             // TODO
             hints: None,
+            with: None,
             catalog: None,
             database: None,
             table: table_name,
@@ -99,6 +100,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             hints,
             table: table_reference,
             selection,
+            with: None,
         }
     }
 
@@ -115,7 +117,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         let mut update_list = Vec::with_capacity(fields.len());
         for field in fields {
             update_list.push(UpdateExpr {
-                name: Identifier::from_name(field.name().clone()),
+                name: Identifier::from_name(None, field.name().clone()),
                 expr: self.gen_scalar_value(&DataType::from(field.data_type())),
             });
         }
@@ -124,6 +126,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             table: table_reference,
             update_list,
             selection,
+            with: None,
         }
     }
 
@@ -149,7 +152,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             hints,
             catalog: None,
             database: None,
-            table: Identifier::from_name(table.name.clone()),
+            table: Identifier::from_name(None, table.name.clone()),
             on_conflict_columns,
             columns,
             source,
@@ -197,7 +200,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         self.only_scalar_expr = true;
                         let update_expr = MergeUpdateExpr {
                             table: None,
-                            name: Identifier::from_name(field.name().clone()),
+                            name: Identifier::from_name(None, field.name().clone()),
                             expr: self.gen_expr(&DataType::from(field.data_type())),
                         };
                         update_list.push(update_expr);
@@ -258,7 +261,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             hints,
             catalog: None,
             database: None,
-            table_ident: Identifier::from_name(table.name),
+            table_ident: Identifier::from_name(None, table.name),
             source,
             target_alias: None,
             join_expr,
@@ -274,7 +277,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 let idx = self.rng.gen_range(0..self.settings.len());
                 let (name, ty) = &self.settings[idx];
                 let hint = HintItem {
-                    name: Identifier::from_name(name.clone()),
+                    name: Identifier::from_name(None, name.clone()),
                     expr: self.gen_scalar_value(&ty.clone()),
                 };
                 hints_list.push(hint);
@@ -293,10 +296,9 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             span: Span::default(),
             catalog: None,
             database: None,
-            table: Identifier::from_name(table.name.clone()),
+            table: Identifier::from_name(None, table.name.clone()),
             alias: None,
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };
@@ -326,7 +328,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     fn fields_to_identifiers(&mut self, fields: &[TableField]) -> Vec<Identifier> {
         fields
             .iter()
-            .map(|f| Identifier::from_name(f.name()))
+            .map(|f| Identifier::from_name(None, f.name()))
             .collect::<Vec<_>>()
     }
 
@@ -394,7 +396,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     format!("{}_{}", table.name.clone(), self.rng.gen_range(0..10));
                 (
                     AlterTableAction::RenameTable {
-                        new_table: Identifier::from_name(new_table_name.clone()),
+                        new_table: Identifier::from_name(None, new_table_name.clone()),
                     },
                     None,
                     MutTableAction::RenameTable(new_table_name),
@@ -407,7 +409,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     1 => AddColumnOption::First,
                     2 => {
                         let field = self.random_select_field(table);
-                        let column = Identifier::from_name(field.name);
+                        let column = Identifier::from_name(None, field.name);
                         AddColumnOption::After(column)
                     }
                     _ => unreachable!(),
@@ -423,7 +425,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             }
             2 => {
                 let field = self.random_select_field(table);
-                let old_column = Identifier::from_name(field.name);
+                let old_column = Identifier::from_name(None, field.name);
                 let new_column = self.gen_new_column().name;
                 (
                     AlterTableAction::RenameColumn {
@@ -436,7 +438,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             }
             3 => {
                 let field = self.random_select_field(table);
-                let name = Identifier::from_name(field.name);
+                let name = Identifier::from_name(None, field.name);
                 let data_type = self.gen_data_type_name(None);
                 let new_column = ColumnDefinition {
                     name,
@@ -456,7 +458,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             }
             4 => {
                 let field = self.random_select_field(table);
-                let column = Identifier::from_name(field.name);
+                let column = Identifier::from_name(None, field.name);
                 (
                     AlterTableAction::DropColumn {
                         column: column.clone(),
@@ -471,7 +473,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         Self::mut_table(&mut new_table, mut_action);
 
         let insert_stmt_opt = if let Some(new_column) = new_column {
-            let table_name = Identifier::from_name(table.name.clone());
+            let table_name = Identifier::from_name(None, table.name.clone());
             let columns = vec![new_column.name.clone()];
             let data_type = resolve_type_name(&new_column.data_type, true).unwrap();
             let data_types = vec![(&data_type).into()];
@@ -480,6 +482,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             Some(InsertStmt {
                 // TODO
                 hints: None,
+                with: None,
                 catalog: None,
                 database: None,
                 table: table_name,
@@ -495,10 +498,9 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             span: Span::default(),
             catalog: None,
             database: None,
-            table: Identifier::from_name(table.name.clone()),
+            table: Identifier::from_name(None, table.name.clone()),
             alias: None,
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };
@@ -527,6 +529,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                         timezone: Tz::UTC,
                         binary_format: Default::default(),
+                        geometry_format: Default::default(),
                     },
                     quote_char: b'\'',
                 };
@@ -578,7 +581,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     fn gen_columns(&mut self, data_types: &[DataType], row_count: usize) -> Vec<Column> {
         data_types
             .iter()
-            .map(|ty| Column::random(ty, row_count))
+            .map(|ty| Column::random(ty, row_count, None))
             .collect()
     }
 }

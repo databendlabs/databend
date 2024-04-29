@@ -15,12 +15,12 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use crate::register_counter;
-use crate::register_gauge;
-use crate::register_histogram_in_milliseconds;
-use crate::Counter;
-use crate::Gauge;
-use crate::Histogram;
+use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_gauge;
+use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
+use databend_common_base::runtime::metrics::Counter;
+use databend_common_base::runtime::metrics::Gauge;
+use databend_common_base::runtime::metrics::Histogram;
 
 pub static SESSION_CONNECT_NUMBERS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("session_connect_numbers"));
@@ -38,6 +38,9 @@ pub static SESSION_QUEUE_ACQUIRE_TIMEOUT_COUNT: LazyLock<Counter> =
     LazyLock::new(|| register_counter("session_queue_acquire_timeout_count"));
 pub static SESSION_QUEUE_ACQUIRE_DURATION_MS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("session_queue_acquire_duration_ms"));
+
+pub static SESSION_RUNNING_ACQUIRED_QUERIES: LazyLock<Gauge> =
+    LazyLock::new(|| register_gauge("session_running_acquired_queries"));
 
 pub fn incr_session_connect_numbers() {
     SESSION_CONNECT_NUMBERS.inc();
@@ -69,4 +72,12 @@ pub fn incr_session_queue_acquire_timeout_count() {
 
 pub fn record_session_queue_acquire_duration_ms(duration: Duration) {
     SESSION_QUEUE_ACQUIRE_DURATION_MS.observe(duration.as_millis() as f64);
+}
+
+pub fn inc_session_running_acquired_queries() {
+    SESSION_RUNNING_ACQUIRED_QUERIES.inc();
+}
+
+pub fn dec_session_running_acquired_queries() {
+    SESSION_RUNNING_ACQUIRED_QUERIES.dec();
 }

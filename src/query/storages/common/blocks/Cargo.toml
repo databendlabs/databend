@@ -12,11 +12,8 @@ doctest = false
 test = false
 
 [dependencies]
-databend-common-arrow = { path = "../../../../common/arrow" }
-databend-common-config = { path = "../../../config" }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-expression = { path = "../../../expression" }
-parquet-format-safe = "0.2"
 parquet_rs = { workspace = true }
 
 databend-storages-common-table-meta = { path = "../table_meta" }

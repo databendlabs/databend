@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant_key::TIdent;
+use crate::tenant_key::ident::TIdent;
 
 /// Defines the meta-service key for network policy.
 pub type NetworkPolicyIdent = TIdent<Resource>;
@@ -20,41 +20,21 @@ pub type NetworkPolicyIdent = TIdent<Resource>;
 pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
-    use std::fmt::Display;
 
     use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::NetworkPolicy;
-    use crate::tenant::Tenant;
-    use crate::tenant_key::TenantResource;
+    use crate::tenant_key::errors::ExistError;
+    use crate::tenant_key::errors::UnknownError;
+    use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_network_policies";
+        const TYPE: &'static str = "NetworkPolicyIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = NetworkPolicy;
-        type UnknownError = ErrorCode;
-
-        fn error_unknown<D: Display>(
-            _tenant: &Tenant,
-            name: &str,
-            ctx: impl FnOnce() -> D,
-        ) -> Self::UnknownError {
-            ErrorCode::UnknownNetworkPolicy(format!("Unknown network policy '{name}': {}", ctx()))
-        }
-
-        type ExistError = ErrorCode;
-
-        fn error_exist<D: Display>(
-            _tenant: &Tenant,
-            name: &str,
-            ctx: impl FnOnce() -> D,
-        ) -> Self::ExistError {
-            ErrorCode::NetworkPolicyAlreadyExists(format!(
-                "Network policy '{name}' already exists: {}",
-                ctx()
-            ))
-        }
     }
 
     impl kvapi::Value for NetworkPolicy {
@@ -68,6 +48,18 @@ mod kvapi_impl {
             &self.name
         }
     }
+
+    impl From<ExistError<Resource>> for ErrorCode {
+        fn from(err: ExistError<Resource>) -> Self {
+            ErrorCode::NetworkPolicyAlreadyExists(err.to_string())
+        }
+    }
+
+    impl From<UnknownError<Resource>> for ErrorCode {
+        fn from(err: UnknownError<Resource>) -> Self {
+            ErrorCode::UnknownNetworkPolicy(err.to_string())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -79,7 +71,7 @@ mod tests {
 
     #[test]
     fn test_network_policy_ident() {
-        let tenant = Tenant::new("test".to_string());
+        let tenant = Tenant::new_literal("test");
         let ident = NetworkPolicyIdent::new(tenant, "test1");
 
         let key = ident.to_string_key();

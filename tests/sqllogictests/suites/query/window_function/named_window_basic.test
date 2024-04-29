@@ -53,7 +53,7 @@ SELECT sum(salary) OVER w ss FROM empsalary WINDOW w AS (PARTITION BY depname OR
 14600
 
 # row_number
-query I
+query II
 SELECT row_number() OVER w1 rn1, dense_rank() OVER w2 rn2 FROM empsalary WINDOW w1 AS (PARTITION BY depname ORDER BY salary), w2 AS (PARTITION BY depname ORDER BY salary DESC) ORDER BY depname, rn1
 ----
 1 4
@@ -68,7 +68,7 @@ SELECT row_number() OVER w1 rn1, dense_rank() OVER w2 rn2 FROM empsalary WINDOW 
 3 1
 
 # row_number with inherited window
-query I
+query II
 SELECT row_number() OVER w1 rn1, dense_rank() OVER w2 rn2 FROM empsalary WINDOW w1 AS (PARTITION BY depname), w2 AS (w1 ORDER BY salary DESC) ORDER BY depname, rn1
 ----
 1 2

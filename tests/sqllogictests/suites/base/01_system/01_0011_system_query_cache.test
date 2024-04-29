@@ -17,6 +17,20 @@ statement ok
 SET enable_query_result_cache = 1;
 
 statement ok
+SET query_result_cache_min_execute_secs = 5;
+
+statement ok
+SELECT * FROM t1;
+
+query I
+SELECT count() FROM system.query_cache;
+----
+0
+
+statement ok
+SET query_result_cache_min_execute_secs = 0;
+
+statement ok
 SELECT * FROM t1;
 
 query I

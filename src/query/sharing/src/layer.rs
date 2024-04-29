@@ -18,6 +18,7 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 use databend_common_auth::RefreshableToken;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use http::Request;
 use http::Response;
 use http::StatusCode;
@@ -55,8 +56,7 @@ use crate::SharedSigner;
 pub fn create_share_table_operator(
     share_endpoint_address: Option<String>,
     share_endpoint_token: RefreshableToken,
-    share_tenant_id: &str,
-    share_name: &str,
+    share_ident_raw: &ShareNameIdentRaw,
     table_name: &str,
 ) -> databend_common_exception::Result<Operator> {
     let op = match share_endpoint_address {
@@ -64,7 +64,10 @@ pub fn create_share_table_operator(
             let signer = SharedSigner::new(
                 &format!(
                     "http://{}/tenant/{}/{}/table/{}/presign",
-                    share_endpoint_address, share_tenant_id, share_name, table_name
+                    share_endpoint_address,
+                    share_ident_raw.tenant_name(),
+                    share_ident_raw.share_name(),
+                    table_name
                 ),
                 share_endpoint_token,
                 HttpClient::new()?,
@@ -86,7 +89,8 @@ pub fn create_share_table_operator(
         None => {
             return Err(ErrorCode::EmptyShareEndpointConfig(format!(
                 "Empty share config for creating operator of shared table {}.{}",
-                share_name, table_name,
+                share_ident_raw.share_name(),
+                table_name,
             )));
         }
     };

@@ -29,14 +29,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -48,6 +48,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -57,6 +59,10 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -92,6 +98,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::*;
 use faststr::FastStr;
 use hive_metastore::Partition;
@@ -270,7 +277,7 @@ impl Catalog for HiveCatalog {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db = self
             .client
             .get_database(FastStr::new(db_name))
@@ -285,7 +292,7 @@ impl Catalog for HiveCatalog {
     // Get all the databases.
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let db_names = self
             .client
             .get_all_databases()
@@ -360,7 +367,11 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(
+        &self,
+        _tenant: &Tenant,
+        _table_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
         ))
@@ -372,7 +383,11 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(
+        &self,
+        _tenant: &Tenant,
+        _db_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get dbs name by ids in HIVE catalog",
         ))
@@ -383,7 +398,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn get_table(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -421,7 +436,7 @@ impl Catalog for HiveCatalog {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn list_tables(&self, _tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_names = self
             .client
             .get_all_tables(FastStr::new(db_name))
@@ -441,7 +456,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
@@ -479,7 +494,7 @@ impl Catalog for HiveCatalog {
 
     // Check a db.table is exists or not.
     #[async_backtrace::framed]
-    async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
+    async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
         // TODO refine this
         match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
@@ -496,7 +511,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -529,7 +544,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -577,11 +592,6 @@ impl Catalog for HiveCatalog {
 
     #[async_backtrace::framed]
     async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
         unimplemented!()
     }
 
@@ -673,6 +683,24 @@ impl Catalog for HiveCatalog {
 
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
+        unimplemented!()
+    }
+
+    async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        unimplemented!()
+    }
+    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+        unimplemented!()
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        _req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        unimplemented!()
+    }
+
+    async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
     }
 }

@@ -55,7 +55,7 @@ impl PullUpFilterOptimizer {
         if self.predicates.is_empty() {
             Ok(s_expr)
         } else {
-            let predicates = InferFilterOptimizer::new().run(self.predicates)?;
+            let predicates = InferFilterOptimizer::new(None).run(self.predicates)?;
             let predicates = NormalizeDisjunctiveFilterOptimizer::new().run(predicates)?;
             let filter = Filter { predicates };
             Ok(SExpr::create_unary(

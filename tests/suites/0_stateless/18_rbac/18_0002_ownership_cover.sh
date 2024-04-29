@@ -105,18 +105,18 @@ echo "create table db_a.t1(id int);" | $USER_A_CONNECT
 echo "show tables from db_a" | $USER_A_CONNECT
 echo "show databases" | $USER_A_CONNECT
 
-echo "show grants for role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for role role1;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 
 echo "grant role role1 to b;" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for b;" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for a;" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for b;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for a;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 
 
 echo "show tables from db_a;" | $USER_A_CONNECT
 echo "show tables from db_a;" | $USER_B_CONNECT
 
 echo "revoke role role1 from a;" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for a ;" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for a ;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 
 echo "show tables from db_a;" | $USER_A_CONNECT
 echo "show tables from db_a;" | $USER_B_CONNECT
@@ -152,7 +152,7 @@ echo "grant ownership on a.t to role drop_role1;" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.databases where name='a'" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.tables where database='a'" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.tables where database='a'" | $USER_U1_CONNECT
-echo "show grants for role drop_role1" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for role drop_role1" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 echo "drop role drop_role1" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1" | $BENDSQL_CLIENT_CONNECT
 echo "drop database a" | $BENDSQL_CLIENT_CONNECT

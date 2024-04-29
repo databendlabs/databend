@@ -30,7 +30,7 @@ pub struct CreateNotificationStmt {
     pub enabled: bool,
     pub webhook_opts: Option<NotificationWebhookOptions>,
     #[drive(skip)]
-    pub comments: String,
+    pub comments: Option<String>,
 }
 
 impl Display for CreateNotificationStmt {
@@ -41,11 +41,12 @@ impl Display for CreateNotificationStmt {
         }
         write!(f, " {}", self.name)?;
         write!(f, " TYPE = {}", self.notification_type)?;
+        write!(f, " ENABLED = {}", self.enabled)?;
         if let Some(webhook_opts) = &self.webhook_opts {
             write!(f, " {}", webhook_opts)?;
         }
-        if !self.comments.is_empty() {
-            write!(f, " COMMENTS = '{}'", self.comments)?;
+        if let Some(comments) = &self.comments {
+            write!(f, " COMMENTS = '{comments}'")?;
         }
         Ok(())
     }
@@ -69,9 +70,9 @@ impl Display for NotificationWebhookOptions {
             authorization_header,
         } = self;
         {
-            write!(f, " WEBHOOK = (")?;
+            write!(f, "WEBHOOK = (")?;
             if let Some(url) = url {
-                write!(f, "URL = '{}'", url)?;
+                write!(f, " URL = '{}'", url)?;
             }
             if let Some(method) = method {
                 write!(f, " METHOD = '{}'", method)?;

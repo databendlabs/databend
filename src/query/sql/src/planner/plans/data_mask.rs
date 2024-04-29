@@ -21,14 +21,15 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
-use databend_common_meta_app::data_mask::DatamaskNameIdent;
+use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDatamaskPolicyPlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
     pub policy: DataMaskPolicy,
 }
@@ -43,10 +44,7 @@ impl From<CreateDatamaskPolicyPlan> for CreateDatamaskReq {
     fn from(p: CreateDatamaskPolicyPlan) -> Self {
         CreateDatamaskReq {
             create_option: p.create_option,
-            name: DatamaskNameIdent {
-                tenant: p.tenant.clone(),
-                name: p.name.clone(),
-            },
+            name: DataMaskNameIdent::new(p.tenant.clone(), &p.name),
             args: p
                 .policy
                 .args
@@ -64,7 +62,7 @@ impl From<CreateDatamaskPolicyPlan> for CreateDatamaskReq {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DropDatamaskPolicyPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
 }
 
@@ -78,10 +76,7 @@ impl From<DropDatamaskPolicyPlan> for DropDatamaskReq {
     fn from(p: DropDatamaskPolicyPlan) -> Self {
         DropDatamaskReq {
             if_exists: p.if_exists,
-            name: DatamaskNameIdent {
-                tenant: p.tenant.clone(),
-                name: p.name,
-            },
+            name: DataMaskNameIdent::new(&p.tenant, &p.name),
         }
     }
 }

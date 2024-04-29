@@ -14,16 +14,27 @@
 
 use databend_common_ast::ast::AlterViewStmt;
 use databend_common_ast::ast::CreateViewStmt;
+use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowViewsStmt;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
 use derive_visitor::DriveMut;
+use log::debug;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AlterViewPlan;
 use crate::plans::CreateViewPlan;
+use crate::plans::DescribeViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
+use crate::plans::RewriteKind;
+use crate::BindContext;
+use crate::SelectBuilder;
 use crate::ViewRewriter;
 
 impl Binder {
@@ -56,7 +67,7 @@ impl Binder {
 
         let plan = CreateViewPlan {
             create_option: *create_option,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             view_name,
@@ -94,7 +105,7 @@ impl Binder {
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             view_name,
@@ -121,11 +132,116 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, view);
         let plan = DropViewPlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             view_name,
         };
         Ok(Plan::DropView(plan.into()))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_views(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowViewsStmt,
+    ) -> Result<Plan> {
+        let ShowViewsStmt {
+            catalog,
+            database,
+            full,
+            limit,
+            with_history,
+        } = stmt;
+
+        let database = self.check_database_exist(catalog, database).await?;
+
+        let mut select_builder = if stmt.with_history {
+            SelectBuilder::from("system.views_with_history")
+        } else {
+            SelectBuilder::from("system.views")
+        };
+
+        if *full {
+            select_builder
+                .with_column("name AS Views")
+                .with_column("database AS Database")
+                .with_column("catalog AS Catalog")
+                .with_column("owner")
+                .with_column("engine")
+                .with_column("created_on AS create_time");
+        } else {
+            select_builder.with_column(format!("name AS `Views_in_{database}`"));
+        }
+
+        select_builder.with_column("view_query");
+        if *with_history {
+            select_builder.with_column("dropped_on AS drop_time");
+        }
+
+        select_builder
+            .with_order_by("catalog")
+            .with_order_by("database")
+            .with_order_by("name");
+
+        select_builder.with_filter(format!("database = '{database}'"));
+
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                self.ctx.get_catalog(&catalog).await?;
+                catalog
+            }
+        };
+
+        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        let query = match limit {
+            None => select_builder.build(),
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+                select_builder.build()
+            }
+        };
+        debug!("show views rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowTables(catalog_name, database),
+        )
+        .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_describe_view(
+        &mut self,
+        stmt: &DescribeViewStmt,
+    ) -> Result<Plan> {
+        let DescribeViewStmt {
+            catalog,
+            database,
+            view,
+        } = stmt;
+
+        let (catalog, database, view_name) =
+            self.normalize_object_identifier_triple(catalog, database, view);
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("Field", DataType::String),
+            DataField::new("Type", DataType::String),
+            DataField::new("Null", DataType::String),
+            DataField::new("Default", DataType::String),
+            DataField::new("Extra", DataType::String),
+        ]);
+
+        Ok(Plan::DescribeView(Box::new(DescribeViewPlan {
+            catalog,
+            database,
+            view_name,
+            schema,
+        })))
     }
 }

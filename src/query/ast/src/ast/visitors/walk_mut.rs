@@ -96,7 +96,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             expr,
             trim_where,
         } => visitor.visit_trim(*span, expr, trim_where),
-        Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
+        Expr::Literal { span, value } => visitor.visit_literal(*span, value),
         Expr::CountAll { span, window } => visitor.visit_count_all(*span, window),
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
@@ -149,6 +149,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             unit,
         } => visitor.visit_date_sub(*span, unit, interval, date),
         Expr::DateTrunc { span, unit, date } => visitor.visit_date_trunc(*span, unit, date),
+        Expr::Hole { .. } => {}
     }
 }
 
@@ -279,7 +280,7 @@ pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut 
             database,
             table,
             alias,
-            travel_point,
+            temporal,
             ..
         } => {
             if let Some(catalog) = catalog {
@@ -296,8 +297,8 @@ pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut 
                 visitor.visit_identifier(&mut alias.name);
             }
 
-            if let Some(travel_point) = travel_point {
-                visitor.visit_time_travel_point(travel_point);
+            if let Some(temporal) = temporal {
+                visitor.visit_temporal_clause(temporal);
             }
         }
         TableReference::Subquery {
@@ -333,17 +334,37 @@ pub fn walk_time_travel_point_mut<V: VisitorMut>(visitor: &mut V, time: &mut Tim
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
-    }
-}
+        TimeTravelPoint::Offset(expr) => visitor.visit_expr(expr),
+        TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        } => {
+            if let Some(catalog) = catalog {
+                visitor.visit_identifier(catalog);
+            }
 
-pub fn walk_stream_point_mut<V: VisitorMut>(visitor: &mut V, stream: &mut StreamPoint) {
-    match stream {
-        StreamPoint::AtStream { database, name } => {
             if let Some(database) = database {
                 visitor.visit_identifier(database);
             }
 
             visitor.visit_identifier(name);
+        }
+    }
+}
+
+pub fn walk_temporal_clause_mut<V: VisitorMut>(visitor: &mut V, clause: &mut TemporalClause) {
+    match clause {
+        TemporalClause::TimeTravel(point) => visitor.visit_time_travel_point(point),
+        TemporalClause::Changes(ChangesInterval {
+            at_point,
+            end_point,
+            ..
+        }) => {
+            visitor.visit_time_travel_point(at_point);
+            if let Some(point) = end_point {
+                visitor.visit_time_travel_point(point);
+            }
         }
     }
 }
@@ -446,6 +467,8 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::ShowViews(stmt) => visitor.visit_show_views(stmt),
+        Statement::DescribeView(stmt) => visitor.visit_describe_view(stmt),
         Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
         Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
         Statement::ShowStreams(stmt) => visitor.visit_show_streams(stmt),
@@ -547,6 +570,8 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowTasks(stmt) => visitor.visit_show_tasks(stmt),
         Statement::DescribeTask(stmt) => visitor.visit_describe_task(stmt),
 
+        Statement::CreateDynamicTable(stmt) => visitor.visit_create_dynamic_table(stmt),
+
         Statement::CreateConnection(stmt) => visitor.visit_create_connection(stmt),
         Statement::DropConnection(stmt) => visitor.visit_drop_connection(stmt),
         Statement::DescribeConnection(stmt) => visitor.visit_describe_connection(stmt),
@@ -563,5 +588,9 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::AlterNotification(stmt) => visitor.visit_alter_notification(stmt),
         Statement::DropNotification(stmt) => visitor.visit_drop_notification(stmt),
         Statement::DescribeNotification(stmt) => visitor.visit_describe_notification(stmt),
+        Statement::InsertMultiTable(_) => {}
+        Statement::ExecuteImmediate(_) => {}
+        Statement::CreateSequence(stmt) => visitor.visit_create_sequence(stmt),
+        Statement::DropSequence(stmt) => visitor.visit_drop_sequence(stmt),
     }
 }

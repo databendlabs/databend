@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::future::Future;
-use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -56,6 +55,7 @@ use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::date_helper::TzFactory;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -71,7 +71,7 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
@@ -81,6 +81,7 @@ use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
@@ -95,13 +96,14 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
-use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
@@ -121,6 +123,7 @@ pub struct QueryContext {
     version: String,
     mysql_version: String,
     clickhouse_version: String,
+    block_threshold: Arc<RwLock<BlockThresholds>>,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
@@ -148,6 +151,7 @@ impl QueryContext {
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
+            block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
         })
     }
 
@@ -160,7 +164,10 @@ impl QueryContext {
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
+        let catalog = self
+            .shared
+            .catalog_manager
+            .build_catalog(catalog_info, self.txn_mgr())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -202,10 +209,7 @@ impl QueryContext {
         let catalog = self
             .get_catalog(self.get_current_catalog().as_str())
             .await?;
-        match catalog
-            .get_database(tenant_id.as_str(), &new_database_name)
-            .await
-        {
+        match catalog.get_database(&tenant_id, &new_database_name).await {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -247,7 +251,7 @@ impl QueryContext {
     }
 
     /// Get the client socket address.
-    pub fn get_client_address(&self) -> Option<SocketAddr> {
+    pub fn get_client_address(&self) -> Option<String> {
         self.shared.session.session_ctx.get_client_host()
     }
 
@@ -486,15 +490,18 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
-    // Need compact after write, over the threshold.
-    fn get_need_compact_after_write(&self) -> bool {
-        self.shared.auto_compact_after_write.load(Ordering::Acquire)
+    // get a hint at the number of blocks that need to be compacted.
+    fn get_compaction_num_block_hint(&self) -> u64 {
+        self.shared
+            .num_fragmented_block_hint
+            .load(Ordering::Acquire)
     }
 
-    fn set_need_compact_after_write(&self, enable: bool) {
+    // set a hint at the number of blocks that need to be compacted.
+    fn set_compaction_num_block_hint(&self, hint: u64) {
         self.shared
-            .auto_compact_after_write
-            .store(enable, Ordering::Release);
+            .num_fragmented_block_hint
+            .store(hint, Ordering::Release);
     }
 
     fn attach_query_str(&self, kind: QueryKind, query: String) {
@@ -515,7 +522,7 @@ impl TableContext for QueryContext {
         self.shared
             .catalog_manager
             .get_catalog(
-                self.get_tenant().as_str(),
+                self.get_tenant().tenant_name(),
                 catalog_name.as_ref(),
                 self.txn_mgr(),
             )
@@ -589,11 +596,15 @@ impl TableContext for QueryContext {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-        let format = FormatSettings { timezone };
+        let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let format = FormatSettings {
+            timezone,
+            geometry_format,
+        };
         Ok(format)
     }
 
-    fn get_tenant(&self) -> NonEmptyString {
+    fn get_tenant(&self) -> Tenant {
         self.shared.get_tenant()
     }
 
@@ -602,19 +613,19 @@ impl TableContext for QueryContext {
     }
 
     fn get_function_context(&self) -> Result<FunctionContext> {
-        let external_server_connect_timeout_secs = self
-            .get_settings()
-            .get_external_server_connect_timeout_secs()?;
-        let external_server_request_timeout_secs = self
-            .get_settings()
-            .get_external_server_request_timeout_secs()?;
+        let settings = self.get_settings();
+        let external_server_connect_timeout_secs =
+            settings.get_external_server_connect_timeout_secs()?;
+        let external_server_request_timeout_secs =
+            settings.get_external_server_request_timeout_secs()?;
 
-        let tz = self.get_settings().get_timezone()?;
+        let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
-        let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
+        let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
-        let disable_variant_check = self.get_settings().get_disable_variant_check()?;
-
+        let disable_variant_check = settings.get_disable_variant_check()?;
+        let geometry_output_format = settings.get_geometry_output_format()?;
+        let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -631,6 +642,8 @@ impl TableContext for QueryContext {
 
             external_server_connect_timeout_secs,
             external_server_request_timeout_secs,
+            geometry_output_format,
+            parse_datetime_ignore_remainder,
         })
     }
 
@@ -642,7 +655,7 @@ impl TableContext for QueryContext {
         if !self.query_settings.is_changed() {
             unsafe {
                 self.query_settings
-                    .unchecked_apply_changes(&self.shared.get_settings());
+                    .unchecked_apply_changes(self.shared.get_settings().changes());
             }
         }
 
@@ -752,7 +765,7 @@ impl TableContext for QueryContext {
                 let user_mgr = UserApiProvider::instance();
                 let tenant = self.get_tenant();
                 Ok(user_mgr
-                    .get_file_format(tenant.as_str(), name)
+                    .get_file_format(&tenant, name)
                     .await?
                     .file_format_params)
             }
@@ -816,7 +829,7 @@ impl TableContext for QueryContext {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table(tenant.as_str(), database_name, table_name)
+            .get_table(&tenant, database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
@@ -832,7 +845,7 @@ impl TableContext for QueryContext {
             let req = GetTableCopiedFileReq { table_id, files };
             let start_request = Instant::now();
             let copied_files = catalog
-                .get_table_copied_file_info(tenant.as_str(), database_name, req)
+                .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
 
@@ -924,6 +937,24 @@ impl TableContext for QueryContext {
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
         self.shared.merge_status.clone()
+    }
+
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
+        let mut multi_table_insert_status = self.shared.multi_table_insert_status.lock();
+        match multi_table_insert_status.insert_rows.get_mut(&table_id) {
+            Some(v) => {
+                *v += num_rows;
+            }
+            None => {
+                multi_table_insert_status
+                    .insert_rows
+                    .insert(table_id, num_rows);
+            }
+        }
+    }
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
+        self.shared.multi_table_insert_status.clone()
     }
 
     fn get_license_key(&self) -> String {
@@ -1044,6 +1075,22 @@ impl TableContext for QueryContext {
 
     fn txn_mgr(&self) -> TxnManagerRef {
         self.shared.session.session_ctx.txn_mgr()
+    }
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        *self.block_threshold.read()
+    }
+
+    fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
+        *self.block_threshold.write() = thresholds;
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        *self.shared.query_queued_duration.read()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: Duration) {
+        *self.shared.query_queued_duration.write() = queued_duration;
     }
 }
 

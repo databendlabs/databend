@@ -12,23 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_meta_app::schema::CreateOption;
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum StreamNavigation {
-    AtStream { database: String, name: String },
-}
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStreamPlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub stream_name: String,
     pub table_database: String,
     pub table_name: String,
-    pub navigation: Option<StreamNavigation>,
+    pub navigation: Option<NavigationPoint>,
     pub append_only: bool,
     pub comment: Option<String>,
 }
@@ -36,7 +33,7 @@ pub struct CreateStreamPlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropStreamPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub stream_name: String,

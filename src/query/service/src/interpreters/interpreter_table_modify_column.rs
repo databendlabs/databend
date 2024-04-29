@@ -85,11 +85,7 @@ impl ModifyTableColumnInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
         let policy = handler
-            .get_data_mask(
-                meta_api,
-                self.ctx.get_tenant().to_string(),
-                mask_name.clone(),
-            )
+            .get_data_mask(meta_api, &self.ctx.get_tenant(), mask_name.clone())
             .await?;
 
         // check if column type match to the input type
@@ -121,7 +117,7 @@ impl ModifyTableColumnInterpreter {
                 None
             };
         let req = SetTableColumnMaskPolicyReq {
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             seq: MatchSeq::Exact(table_version),
             table_id,
             column,
@@ -132,59 +128,12 @@ impl ModifyTableColumnInterpreter {
 
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(
-                self.ctx.get_tenant().as_str(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 share_table_info,
             )
             .await?;
         }
-        Ok(PipelineBuildResult::create())
-    }
-
-    // unset data mask policy to a column is a ee feature.
-    async fn do_unset_data_mask_policy(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        table: &Arc<dyn Table>,
-        column: String,
-    ) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
-            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
-
-        let table_info = table.get_table_info();
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
-
-        let prev_column_mask_name =
-            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
-                column_mask_policy.get(&column).cloned()
-            } else {
-                None
-            };
-
-        if let Some(prev_column_mask_name) = prev_column_mask_name {
-            let req = SetTableColumnMaskPolicyReq {
-                tenant: self.ctx.get_tenant().to_string(),
-                seq: MatchSeq::Exact(table_version),
-                table_id,
-                column,
-                action: SetTableColumnMaskPolicyAction::Unset(prev_column_mask_name),
-            };
-
-            let res = catalog.set_table_column_mask_policy(req).await?;
-
-            if let Some(share_table_info) = res.share_table_info {
-                save_share_table_info(
-                    self.ctx.get_tenant().as_str(),
-                    self.ctx.get_data_operator()?.operator(),
-                    share_table_info,
-                )
-                .await?;
-            }
-        }
-
         Ok(PipelineBuildResult::create())
     }
 
@@ -242,6 +191,7 @@ impl ModifyTableColumnInterpreter {
 
         let mut table_info = table.get_table_info().clone();
         table_info.meta.fill_field_comments();
+        let mut modify_comment = false;
         for (field, comment) in field_and_comments {
             let column = &field.name.to_string();
             let data_type = &field.data_type;
@@ -267,7 +217,10 @@ impl ModifyTableColumnInterpreter {
                         )));
                     }
                     new_schema.fields[i].data_type = data_type.clone();
+                }
+                if table_info.meta.field_comments[i] != *comment {
                     table_info.meta.field_comments[i] = comment.to_string();
+                    modify_comment = true;
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
@@ -278,7 +231,28 @@ impl ModifyTableColumnInterpreter {
         }
 
         // check if schema has changed
-        if schema == new_schema {
+        if schema == new_schema && !modify_comment {
+            return Ok(PipelineBuildResult::create());
+        }
+
+        // if schema is same and only modify comment, don't need to modify schema
+        if schema == new_schema && modify_comment {
+            let table_id = table_info.ident.table_id;
+            let table_version = table_info.ident.seq;
+
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table_version),
+                new_table_meta: table_info.meta,
+                copied_files: None,
+                deduplicated_label: None,
+                update_stream_meta: vec![],
+            };
+
+            catalog
+                .update_table_meta(table.get_table_info(), req)
+                .await?;
+
             return Ok(PipelineBuildResult::create());
         }
 
@@ -342,6 +316,7 @@ impl ModifyTableColumnInterpreter {
                         && (old_data_type == new_data_type
                             || is_string_to_binary(&old_field.data_type, &new_field.data_type))
                 });
+
         if is_alter_column_string_to_binary {
             table_info.meta.schema = new_schema.into();
 
@@ -363,7 +338,7 @@ impl ModifyTableColumnInterpreter {
 
             if let Some(share_table_info) = res.share_table_info {
                 save_share_table_info(
-                    self.ctx.get_tenant().as_str(),
+                    self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_data_operator()?.operator(),
                     share_table_info,
                 )
@@ -449,6 +424,53 @@ impl ModifyTableColumnInterpreter {
         Ok(build_res)
     }
 
+    // unset data mask policy to a column is a ee feature.
+    async fn do_unset_data_mask_policy(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        table: &Arc<dyn Table>,
+        column: String,
+    ) -> Result<PipelineBuildResult> {
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
+
+        let table_info = table.get_table_info();
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
+
+        let prev_column_mask_name =
+            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
+                column_mask_policy.get(&column).cloned()
+            } else {
+                None
+            };
+
+        if let Some(prev_column_mask_name) = prev_column_mask_name {
+            let req = SetTableColumnMaskPolicyReq {
+                tenant: self.ctx.get_tenant(),
+                seq: MatchSeq::Exact(table_version),
+                table_id,
+                column,
+                action: SetTableColumnMaskPolicyAction::Unset(prev_column_mask_name),
+            };
+
+            let res = catalog.set_table_column_mask_policy(req).await?;
+
+            if let Some(share_table_info) = res.share_table_info {
+                save_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_data_operator()?.operator(),
+                    share_table_info,
+                )
+                .await?;
+            }
+        }
+
+        Ok(PipelineBuildResult::create())
+    }
+
     async fn do_convert_stored_computed_column(
         &self,
         catalog: Arc<dyn Catalog>,
@@ -504,7 +526,7 @@ impl ModifyTableColumnInterpreter {
 
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(
-                self.ctx.get_tenant().as_str(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 share_table_info,
             )
@@ -535,7 +557,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .ctx
             .get_catalog(catalog_name)
             .await?
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await
             .ok();
 

@@ -15,7 +15,6 @@
 use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::hash::Hash;
-use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
@@ -23,6 +22,7 @@ use databend_common_ast::ast::Query;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::WindowSpec;
 use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
@@ -30,6 +30,8 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -41,7 +43,6 @@ use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -136,6 +137,8 @@ pub struct BindContext {
     /// The key is the `Expr::to_string` of the function.
     pub srfs: DashMap<String, ScalarExpr>,
 
+    pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
+
     pub expr_context: ExprContext,
 
     pub allow_internal_columns: bool,
@@ -154,8 +157,6 @@ pub struct CteInfo {
     pub cte_idx: IndexType,
     // Record how many times this cte is used
     pub used_count: usize,
-    // If cte is materialized, it has stat_info
-    pub stat_info: Option<Arc<StatInfo>>,
     // If cte is materialized, save it's columns
     pub columns: Vec<ColumnBinding>,
 }
@@ -174,6 +175,7 @@ impl BindContext {
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
+            inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -193,6 +195,7 @@ impl BindContext {
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
+            inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -369,7 +372,6 @@ impl BindContext {
         result: &mut Vec<NameResolutionResult>,
     ) {
         let mut bind_context: &BindContext = self;
-
         loop {
             for column_binding in bind_context.columns.iter() {
                 if Self::match_column_binding(database, table, column, column_binding) {
@@ -587,13 +589,39 @@ impl BindContext {
         Ok(column_binding)
     }
 
-    pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> SExpr {
+    pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> Result<SExpr> {
         let bound_internal_columns = &self.bound_internal_columns;
+        let mut inverted_index_map = self.inverted_index_map.clone();
         let mut s_expr = s_expr;
-        for (table_index, column_index) in bound_internal_columns.values() {
-            s_expr = SExpr::add_internal_column_index(&s_expr, *table_index, *column_index);
+
+        let mut has_score = false;
+        let mut has_matched = false;
+        for column_id in bound_internal_columns.keys() {
+            if *column_id == SEARCH_SCORE_COLUMN_ID {
+                has_score = true;
+            } else if *column_id == SEARCH_MATCHED_COLUMN_ID {
+                has_matched = true;
+            }
         }
-        s_expr
+        if has_score && !has_matched {
+            return Err(ErrorCode::SemanticError(
+                "score function must run with match or query function".to_string(),
+            ));
+        }
+
+        for (table_index, column_index) in bound_internal_columns.values() {
+            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
+                i.has_score = has_score;
+                i
+            });
+            s_expr = SExpr::add_internal_column_index(
+                &s_expr,
+                *table_index,
+                *column_index,
+                &inverted_index,
+            );
+        }
+        Ok(s_expr)
     }
 
     pub fn column_set(&self) -> ColumnSet {

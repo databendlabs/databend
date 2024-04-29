@@ -313,7 +313,7 @@ impl IcebergTable {
 
         Ok((
             PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
-            Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts),
+            Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
     }
 }

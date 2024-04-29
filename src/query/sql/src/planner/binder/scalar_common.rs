@@ -124,10 +124,6 @@ impl<'a> JoinPredicate<'a> {
         left_prop: &RelationalProperty,
         right_prop: &RelationalProperty,
     ) -> Self {
-        if contain_subquery(scalar) {
-            return Self::Other(scalar);
-        }
-
         if scalar.used_columns().is_empty() {
             return Self::ALL(scalar);
         }

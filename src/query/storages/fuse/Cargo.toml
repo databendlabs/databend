@@ -31,6 +31,7 @@ databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
 databend-common-sharing = { path = "../../sharing" }
 databend-common-sql = { path = "../../sql" }
 databend-common-storage = { path = "../../../common/storage" }
+databend-common-storages-share = { path = "../share" }
 jsonb = { workspace = true }
 
 databend-storages-common-blocks = { path = "../common/blocks" }
@@ -41,13 +42,13 @@ databend-storages-common-pruner = { path = "../common/pruner" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 ahash = "0.8.3"
+arrow = { workspace = true }
 arrow-array = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = { workspace = true }
 chrono = { workspace = true }
-crc32fast = "1.3.2"
 enum-as-inner = "0.5"
 futures = { workspace = true }
 futures-util = { workspace = true }
@@ -57,25 +58,19 @@ log = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
-parquet-format-safe = "0.2"
 parquet_rs = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"
 siphasher = "0.3.10"
-streaming-decompression = "0.1.2"
 sys-info = "0.9"
-tantivy = "0.21.1"
-tantivy-common = "0.6.0"
+tantivy = { workspace = true }
+tantivy-jieba = "0.11.0"
+thrift = "0.17.0"
 typetag = { workspace = true }
 uuid = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 
 [dev-dependencies]
 criterion = "0.4"
-
-[[bench]]
-name = "bench"
-harness = false
-required-features = ["dev"]

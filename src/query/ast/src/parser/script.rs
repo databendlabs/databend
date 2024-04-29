@@ -19,32 +19,90 @@ use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
-use crate::parser::query::*;
 use crate::parser::statement::*;
 use crate::parser::token::*;
 use crate::rule;
 
-pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
-    let let_query_stmt = map(
+pub fn script_block(i: Input) -> IResult<ScriptBlock> {
+    map(
         consumed(rule! {
-            LET ~^#ident ~ RESULTSET ~ ^":=" ~ ^#query
+            ( DECLARE ~ #semicolon_terminated_list1(declare_item) )?
+            ~ BEGIN
+            ~ #semicolon_terminated_list1(script_stmt)
+            ~ END
+            ~ ";"
         }),
-        |(span, (_, name, _, _, query))| ScriptStatement::LetQuery {
-            span: transform_span(span.0),
-            declare: QueryDeclare { name, query },
+        |(span, (declares, _, body, _, _))| {
+            let declares = declares.map(|(_, declare)| declare).unwrap_or_default();
+            ScriptBlock {
+                span: transform_span(span.tokens),
+                declares,
+                body,
+            }
         },
-    );
-    let let_var_stmt = map(
+    )(i)
+}
+
+pub fn declare_item(i: Input) -> IResult<DeclareItem> {
+    let declare_var = map(declare_var, DeclareItem::Var);
+    let declare_set = map(declare_set, DeclareItem::Set);
+
+    rule!(
+        #declare_var
+        | #declare_set
+    )(i)
+}
+
+pub fn declare_var(i: Input) -> IResult<DeclareVar> {
+    map(
         consumed(rule! {
-            LET ~^#ident ~ #type_name? ~ ^":=" ~ ^#expr
+            #ident ~ ":=" ~ ^#expr
         }),
-        |(span, (_, name, data_type, _, default))| ScriptStatement::LetVar {
-            span: transform_span(span.0),
-            declare: VariableDeclare {
-                name,
-                data_type,
-                default,
-            },
+        |(span, (name, _, default))| DeclareVar {
+            span: transform_span(span.tokens),
+            name,
+            default,
+        },
+    )(i)
+}
+
+pub fn declare_set(i: Input) -> IResult<DeclareSet> {
+    map(
+        consumed(rule! {
+            #ident ~ RESULTSET ~ ^":=" ~ ^#statement_body
+        }),
+        |(span, (name, _, _, stmt))| DeclareSet {
+            span: transform_span(span.tokens),
+            name,
+            stmt,
+        },
+    )(i)
+}
+
+pub fn script_stmts(i: Input) -> IResult<Vec<ScriptStatement>> {
+    semicolon_terminated_list1(script_stmt)(i)
+}
+
+pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
+    let let_var_stmt = map(
+        rule! {
+            LET ~ #declare_var
+        },
+        |(_, declare)| ScriptStatement::LetVar { declare },
+    );
+    let let_stmt_stmt = map(
+        rule! {
+            LET ~ #declare_set
+        },
+        |(_, declare)| ScriptStatement::LetStatement { declare },
+    );
+    let run_stmt = map(
+        consumed(rule! {
+            #statement_body
+        }),
+        |(span, stmt)| ScriptStatement::RunStatement {
+            span: transform_span(span.tokens),
+            stmt,
         },
     );
     let assign_stmt = map(
@@ -52,18 +110,45 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             #ident ~ ":=" ~ ^#expr
         }),
         |(span, (name, _, value))| ScriptStatement::Assign {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             name,
             value,
         },
     );
+    let return_set_stmt = map(
+        consumed(rule! {
+            RETURN ~ TABLE ~ "(" ~ #ident ~ ^")"
+        }),
+        |(span, (_, _, _, name, _))| ScriptStatement::Return {
+            span: transform_span(span.tokens),
+            value: Some(ReturnItem::Set(name)),
+        },
+    );
+    let return_stmt_stmt = map(
+        consumed(rule! {
+            RETURN ~ TABLE ~ "(" ~ #statement_body ~ ^")"
+        }),
+        |(span, (_, _, _, stmt, _))| ScriptStatement::Return {
+            span: transform_span(span.tokens),
+            value: Some(ReturnItem::Statement(stmt)),
+        },
+    );
+    let return_var_stmt = map(
+        consumed(rule! {
+            RETURN ~ #expr
+        }),
+        |(span, (_, expr))| ScriptStatement::Return {
+            span: transform_span(span.tokens),
+            value: Some(ReturnItem::Var(expr)),
+        },
+    );
     let return_stmt = map(
         consumed(rule! {
-            RETURN ~ #expr?
+            RETURN
         }),
-        |(span, (_, value))| ScriptStatement::Return {
-            span: transform_span(span.0),
-            value,
+        |(span, _)| ScriptStatement::Return {
+            span: transform_span(span.tokens),
+            value: None,
         },
     );
     let for_loop_stmt = map(
@@ -77,7 +162,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             span,
             (_, variable, _, is_reverse, lower_bound, _, upper_bound, _, body, _, _, label),
         )| ScriptStatement::ForLoop {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             variable,
             is_reverse: is_reverse.is_some(),
             lower_bound,
@@ -86,16 +171,30 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             label,
         },
     );
-    let for_in_stmt = map(
+    let for_in_set_stmt = map(
         consumed(rule! {
             FOR ~ ^#ident ~ ^IN ~ #ident ~ ^DO
             ~ ^#semicolon_terminated_list1(script_stmt)
             ~ ^END ~ ^FOR ~ #ident?
         }),
-        |(span, (_, variable, _, resultset, _, body, _, _, label))| ScriptStatement::ForIn {
-            span: transform_span(span.0),
+        |(span, (_, variable, _, resultset, _, body, _, _, label))| ScriptStatement::ForInSet {
+            span: transform_span(span.tokens),
             variable,
             resultset,
+            body,
+            label,
+        },
+    );
+    let for_in_stmt_stmt = map(
+        consumed(rule! {
+            FOR ~ ^#ident ~ ^IN ~ ^#statement_body ~ ^DO
+            ~ ^#semicolon_terminated_list1(script_stmt)
+            ~ ^END ~ ^FOR ~ #ident?
+        }),
+        |(span, (_, variable, _, stmt, _, body, _, _, label))| ScriptStatement::ForInStatement {
+            span: transform_span(span.tokens),
+            variable,
+            stmt,
             body,
             label,
         },
@@ -107,7 +206,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             ~ ^END ~ ^WHILE ~ #ident?
         }),
         |(span, (_, condition, _, body, _, _, label))| ScriptStatement::WhileLoop {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             condition,
             body,
             label,
@@ -121,7 +220,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             ~ ^END ~ ^REPEAT ~ #ident?
         }),
         |(span, (_, body, _, until_condition, _, _, label))| ScriptStatement::RepeatLoop {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             body,
             until_condition,
             label,
@@ -132,7 +231,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             LOOP ~ ^#semicolon_terminated_list1(script_stmt) ~ ^END ~ ^LOOP ~ #ident?
         }),
         |(span, (_, body, _, _, label))| ScriptStatement::Loop {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             body,
             label,
         },
@@ -142,7 +241,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             BREAK ~ #ident?
         }),
         |(span, (_, label))| ScriptStatement::Break {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             label,
         },
     );
@@ -151,7 +250,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             CONTINUE ~ #ident?
         }),
         |(span, (_, label))| ScriptStatement::Continue {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             label,
         },
     );
@@ -169,7 +268,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
                 .unzip();
             let else_result = else_result.map(|(_, result)| result);
             ScriptStatement::Case {
-                span: transform_span(span.0),
+                span: transform_span(span.tokens),
                 operand,
                 conditions,
                 results,
@@ -192,30 +291,26 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             }
             let else_result = else_result.map(|(_, result)| result);
             ScriptStatement::If {
-                span: transform_span(span.0),
+                span: transform_span(span.tokens),
                 conditions,
                 results,
                 else_result,
             }
         },
     );
-    let sql_stmt = map(
-        consumed(rule! {
-            #statement_body
-        }),
-        |(span, stmt)| ScriptStatement::SQLStatement {
-            span: transform_span(span.0),
-            stmt,
-        },
-    );
 
     rule!(
-        #let_query_stmt
+        #let_stmt_stmt
         | #let_var_stmt
+        | #run_stmt
         | #assign_stmt
+        | #return_set_stmt
+        | #return_stmt_stmt
+        | #return_var_stmt
         | #return_stmt
         | #for_loop_stmt
-        | #for_in_stmt
+        | #for_in_set_stmt
+        | #for_in_stmt_stmt
         | #while_loop_stmt
         | #repeat_loop_stmt
         | #loop_stmt
@@ -223,6 +318,5 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         | #continue_stmt
         | #case_stmt
         | #if_stmt
-        | #sql_stmt
     )(i)
 }

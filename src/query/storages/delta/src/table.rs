@@ -304,29 +304,30 @@ impl DeltaTable {
                         (None, Some(s)) => {
                             let stats = serde_json::from_str::<Stats>(s.as_str()).unwrap();
                             Some(stats.num_records)
-                        },
-                        _ =>  None,
+                        }
+                        _ => None,
                     }
                     ).unwrap_or(1);
                 read_rows += num_records as usize;
                 read_bytes += add.size as usize;
                 let partition_values = get_partition_values(add, &partition_fields[..])?;
                 Ok(Arc::new(
-                    Box::new(DeltaPartInfo{
+                    Box::new(DeltaPartInfo {
                         partition_values,
                         data: ParquetPart::ParquetFiles(
                             ParquetFilesPart {
-                            files: vec![(add.path.clone(), add.size as u64)],
-                            estimated_uncompressed_size: add.size as u64, // This field is not used here.
-                        },
-                    )}) as Box<dyn PartInfo>
+                                files: vec![(add.path.clone(), add.size as u64)],
+                                estimated_uncompressed_size: add.size as u64, // This field is not used here.
+                            },
+                        ),
+                    }) as Box<dyn PartInfo>
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
 
         Ok((
             PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
-            Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts),
+            Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
     }
 }

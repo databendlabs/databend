@@ -15,6 +15,7 @@
 use databend_common_exception::Range;
 use databend_common_exception::Span;
 use nom::branch::alt;
+use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::multi::many1;
 use nom::sequence::terminated;
@@ -48,7 +49,7 @@ macro_rules! rule {
 }
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.0.first().filter(|token| token.text() == text) {
+    move |i| match i.tokens.first().filter(|token| token.text() == text) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -58,7 +59,7 @@ pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.0.first().filter(|token| token.kind == kind) {
+    move |i| match i.tokens.first().filter(|token| token.kind == kind) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -68,7 +69,7 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn any_token(i: Input) -> IResult<&Token> {
-    match i.0.first().filter(|token| token.kind != EOI) {
+    match i.tokens.first().filter(|token| token.kind != EOI) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -102,10 +103,8 @@ pub fn function_name(i: Input) -> IResult<Identifier> {
 }
 
 pub fn stage_name(i: Input) -> IResult<Identifier> {
-    let anonymous_stage = map(rule! { "~" }, |token| Identifier {
-        span: transform_span(&[token.clone()]),
-        name: token.text().to_string(),
-        quote: None,
+    let anonymous_stage = map(consumed(rule! { "~" }), |(span, _)| {
+        Identifier::from_name(transform_span(span.tokens), "~")
     });
 
     rule!(
@@ -114,13 +113,32 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
     )(i)
 }
 
+fn plain_identifier(
+    is_reserved_keyword: fn(&TokenKind) -> bool,
+) -> impl FnMut(Input) -> IResult<Identifier> {
+    move |i| {
+        map(
+            rule! {
+                Ident
+                | #non_reserved_keyword(is_reserved_keyword)
+            },
+            |token| Identifier {
+                span: transform_span(&[token.clone()]),
+                name: token.text().to_string(),
+                quote: None,
+                is_hole: false,
+            },
+        )(i)
+    }
+}
+
 fn quoted_identifier(i: Input) -> IResult<Identifier> {
     match_token(QuotedString)(i).and_then(|(i2, token)| {
         if token
             .text()
             .chars()
             .next()
-            .filter(|c| i.1.is_ident_quote(*c))
+            .filter(|c| i.dialect.is_ident_quote(*c))
             .is_some()
         {
             let quote = token.text().chars().next().unwrap();
@@ -128,6 +146,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
                 span: transform_span(&[token.clone()]),
                 name: unquote_ident(token.text(), quote),
                 quote: Some(quote),
+                is_hole: false,
             }))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(
@@ -138,24 +157,29 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
     })
 }
 
+fn identifier_hole(i: Input) -> IResult<Identifier> {
+    check_template_mode(map(
+        consumed(rule! {
+            IDENTIFIER ~ ^"(" ~ ^#template_hole ~ ^")"
+        }),
+        |(span, (_, _, (_, name), _))| Identifier {
+            span: transform_span(span.tokens),
+            name,
+            quote: None,
+            is_hole: true,
+        },
+    ))(i)
+}
+
 fn non_reserved_identifier(
     is_reserved_keyword: fn(&TokenKind) -> bool,
 ) -> impl FnMut(Input) -> IResult<Identifier> {
     move |i| {
-        alt((
-            map(
-                rule! {
-                    Ident
-                    | #non_reserved_keyword(is_reserved_keyword)
-                },
-                |token| Identifier {
-                    span: transform_span(&[token.clone()]),
-                    name: token.text().to_string(),
-                    quote: None,
-                },
-            ),
-            quoted_identifier,
-        ))(i)
+        rule!(
+            #plain_identifier(is_reserved_keyword)
+            | #quoted_identifier
+            | #identifier_hole
+        )(i)
     }
 }
 
@@ -163,7 +187,7 @@ fn non_reserved_keyword(
     is_reserved_keyword: fn(&TokenKind) -> bool,
 ) -> impl FnMut(Input) -> IResult<&Token> {
     move |i: Input| match i
-        .0
+        .tokens
         .first()
         .filter(|token| token.kind.is_keyword() && !is_reserved_keyword(&token.kind))
     {
@@ -219,7 +243,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
 pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Identifier)> {
     map(
         rule! {
-           #ident ~ ("." ~ #ident)?
+           #ident ~ ( "." ~ #ident )?
         },
         |res| match res {
             (ident1, None) => (None, ident1),
@@ -236,7 +260,7 @@ pub fn dot_separated_idents_1_to_3(
 ) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
     map(
         rule! {
-            #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
+            #ident ~ ( "." ~ #ident ~ ( "." ~ #ident )? )?
         },
         |res| match res {
             (ident2, None) => (None, None, ident2),
@@ -256,6 +280,12 @@ pub fn comma_separated_list0_ignore_trailing<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     nom::multi::separated_list0(match_text(","), item)
+}
+
+pub fn comma_separated_list1_ignore_trailing<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    nom::multi::separated_list1(match_text(","), item)
 }
 
 pub fn semicolon_terminated_list1<'a, T>(
@@ -435,7 +465,7 @@ where
         .parse_input(&mut iter, Precedence(0))
         .map_err(|err| {
             // Rollback parsing footprint on unused expr elements.
-            input.2.clear();
+            input.backtrace.clear();
 
             let err_kind = match err {
                 PrattError::EmptyInput => ErrorKind::Other("expecting more subsequent tokens"),
@@ -462,11 +492,38 @@ where
         })?;
     if let Some(elem) = iter.peek() {
         // Rollback parsing footprint on unused expr elements.
-        input.2.clear();
+        input.backtrace.clear();
         Ok((input.slice(input.offset(&elem.span)..), expr))
     } else {
         Ok((rest, expr))
     }
+}
+
+pub fn check_template_mode<'a, O, F>(mut parser: F) -> impl FnMut(Input<'a>) -> IResult<'a, O>
+where F: nom::Parser<Input<'a>, O, Error<'a>> {
+    move |input: Input| {
+        parser.parse(input).and_then(|(i, res)| {
+            if input.mode.is_template() {
+                Ok((i, res))
+            } else {
+                i.backtrace.clear();
+                let error = Error::from_error_kind(
+                    input,
+                    ErrorKind::Other("variable is only available in SQL template"),
+                );
+                Err(nom::Err::Failure(error))
+            }
+        })
+    }
+}
+
+pub fn template_hole(i: Input) -> IResult<(Span, String)> {
+    check_template_mode(map(
+        consumed(rule! {
+            ":" ~ ^#plain_identifier(|token| token.is_reserved_ident(false))
+        }),
+        |(span, (_, ident))| (transform_span(span.tokens), ident.name),
+    ))(i)
 }
 
 macro_rules! declare_experimental_feature {
@@ -480,16 +537,16 @@ macro_rules! declare_experimental_feature {
         {
             move |input: Input| {
                 parser.parse(input).and_then(|(i, res)| {
-                    if input.1.is_experimental() {
+                    if input.dialect.is_experimental() {
                         Ok((i, res))
                     } else {
-                        i.2.clear();
+                        i.backtrace.clear();
                         let error = Error::from_error_kind(
                             input,
                             ErrorKind::Other(
                                 concat!(
                                     $feature_name,
-                                    " only works in experimental dialect, try `set sql_dialect = experimental`"
+                                    " only works in experimental dialect, try `set sql_dialect = 'experimental'`"
                                 )
                             ),
                         );

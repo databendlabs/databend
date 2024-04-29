@@ -16,14 +16,19 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -52,12 +57,14 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Visibility;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::debug;
 
 use crate::interpreters::common::create_push_down_filters;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::locks::LockManager;
@@ -109,7 +116,7 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
         let tbl = catalog
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await?;
 
         // Add table lock.
@@ -174,21 +181,25 @@ impl Interpreter for DeleteInterpreter {
                 ));
             }
 
+            let mut used_columns = scalar.used_columns().clone();
             let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
+                // add scalar.used_columns() but ignore _row_id index
                 let mut col_indices = HashSet::new();
                 for subquery_desc in &self.plan.subquery_desc {
                     col_indices.extend(subquery_desc.outer_columns.iter());
+                    used_columns.remove(&subquery_desc.index);
                 }
+                col_indices.extend(used_columns.iter());
                 col_indices.into_iter().collect()
             } else {
-                scalar.used_columns().into_iter().collect()
+                used_columns.into_iter().collect()
             };
             (Some(filters), col_indices)
         } else {
             (None, vec![])
         };
 
-        let fuse_table = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+        let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::Unimplemented(format!(
                 "table {}, engine type {}, does not support DELETE FROM",
                 tbl.name(),
@@ -197,47 +208,105 @@ impl Interpreter for DeleteInterpreter {
         })?;
 
         let mut build_res = PipelineBuildResult::create();
-        let query_row_id_col = !self.plan.subquery_desc.is_empty();
-        if let Some(snapshot) = fuse_table
-            .fast_delete(
-                self.ctx.clone(),
-                filters.clone(),
-                col_indices.clone(),
-                query_row_id_col,
-            )
-            .await?
-        {
-            let cluster = self.ctx.get_cluster();
-            let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
-            let partitions = fuse_table
-                .mutation_read_partitions(
-                    self.ctx.clone(),
-                    snapshot.clone(),
-                    col_indices.clone(),
-                    filters.clone(),
-                    is_lazy,
-                    true,
-                )
-                .await?;
 
-            // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.
-            let filters = filters.unwrap();
-            let physical_plan = Self::build_physical_plan(
-                filters,
-                partitions,
-                fuse_table.get_table_info().clone(),
-                col_indices,
-                snapshot,
-                catalog_info,
-                is_distributed,
-                query_row_id_col,
-            )?;
-
-            build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        // check if table is empty
+        let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
+            // no snapshot, no deletion
+            return Ok(build_res);
+        };
+        if snapshot.summary.row_count == 0 {
+            // empty snapshot, no deletion
+            return Ok(build_res);
         }
 
         build_res.main_pipeline.add_lock_guard(lock_guard);
+        // check if unconditional deletion
+        let Some(filters) = filters else {
+            let progress_values = ProgressValues {
+                rows: snapshot.summary.row_count as usize,
+                bytes: snapshot.summary.uncompressed_byte_size as usize,
+            };
+            self.ctx.get_write_progress().incr(&progress_values);
+            // deleting the whole table... just a truncate
+            fuse_table
+                .do_truncate(
+                    self.ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    TruncateMode::Delete,
+                )
+                .await?;
+            return Ok(build_res);
+        };
+
+        let query_row_id_col = !self.plan.subquery_desc.is_empty();
+        if col_indices.is_empty() && !query_row_id_col {
+            // here the situation: filter_expr is not null, but col_indices in empty, which
+            // indicates the expr being evaluated is unrelated to the value of rows:
+            //   e.g.
+            //       `delete from t where 1 = 1`, `delete from t where now()`,
+            //       or `delete from t where RANDOM()::INT::BOOLEAN`
+            // if the `filter_expr` is of "constant" nullary :
+            //   for the whole block, whether all of the rows should be kept or dropped,
+            //   we can just return from here, without accessing the block data
+            if fuse_table.try_eval_const(self.ctx.clone(), &fuse_table.schema(), &filters.filter)? {
+                let progress_values = ProgressValues {
+                    rows: snapshot.summary.row_count as usize,
+                    bytes: snapshot.summary.uncompressed_byte_size as usize,
+                };
+                self.ctx.get_write_progress().incr(&progress_values);
+
+                // deleting the whole table... just a truncate
+                fuse_table
+                    .do_truncate(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        TruncateMode::Delete,
+                    )
+                    .await?;
+                return Ok(build_res);
+            }
+        }
+
+        let cluster = self.ctx.get_cluster();
+        let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
+        let partitions = fuse_table
+            .mutation_read_partitions(
+                self.ctx.clone(),
+                snapshot.clone(),
+                col_indices.clone(),
+                Some(filters.clone()),
+                is_lazy,
+                true,
+            )
+            .await?;
+
+        let physical_plan = Self::build_physical_plan(
+            filters,
+            partitions,
+            fuse_table.get_table_info().clone(),
+            col_indices,
+            snapshot,
+            catalog_info,
+            is_distributed,
+            query_row_id_col,
+        )?;
+
+        build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        {
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                catalog_name.to_string(),
+                db_name.to_string(),
+                tbl_name.to_string(),
+                MutationKind::Delete,
+                // table lock has been added, no need to check.
+                false,
+            );
+            hook_operator
+                .execute_refresh(&mut build_res.main_pipeline)
+                .await;
+        }
 
         Ok(build_res)
     }
@@ -255,7 +324,7 @@ impl DeleteInterpreter {
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
-        let merge_meta = partitions.is_lazy;
+        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
             parts: partitions,
             filters,
@@ -320,11 +389,11 @@ pub async fn subquery_filter(
     bind_context.add_column_binding(row_id_column_binding.clone());
 
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
-        .with_enable_distributed_optimization(false)
+        .with_enable_distributed_optimization(!ctx.get_cluster().is_empty())
         .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
         .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
 
-    s_expr = optimize_query(opt_ctx, s_expr.clone())?;
+    s_expr = optimize_query(opt_ctx, s_expr.clone()).await?;
 
     // Create `input_expr` pipeline and execute it to get `_row_id` data block.
     let select_interpreter = SelectInterpreter::try_create(
@@ -347,40 +416,25 @@ pub async fn subquery_filter(
     .await?;
 
     // Execute pipeline
-    let settings = ctx.get_settings();
-    let query_id = ctx.get_id();
-    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
     let pulling_executor = PipelinePullingExecutor::from_pipelines(pipeline, settings)?;
     ctx.set_executor(pulling_executor.get_inner())?;
     let stream_blocks = PullingExecutorStream::create(pulling_executor)?
         .try_collect::<Vec<DataBlock>>()
         .await?;
-    let row_id_array = if !stream_blocks.is_empty() {
+
+    let row_id_column = if !stream_blocks.is_empty() {
         let block = DataBlock::concat(&stream_blocks)?;
-        let row_id_col = block.columns()[0]
+        block.columns()[0]
             .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), block.num_rows());
-        // Make a selection: `_row_id` IN (row_id_col)
-        // Construct array function for `row_id_col`
-        let mut row_id_array = Vec::with_capacity(row_id_col.len());
-        for row_id in row_id_col.iter() {
-            let scalar = row_id.to_owned();
-            let constant_scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: scalar,
-            });
-            row_id_array.push(constant_scalar_expr);
-        }
-        row_id_array
+            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), block.num_rows())
     } else {
-        vec![]
+        UInt64Type::from_data(vec![])
     };
 
-    let array_raw_expr = ScalarExpr::FunctionCall(FunctionCall {
+    let array_raw_expr = ScalarExpr::ConstantExpr(ConstantExpr {
         span: None,
-        func_name: "array".to_string(),
-        params: vec![],
-        arguments: row_id_array,
+        value: Scalar::Array(row_id_column),
     });
 
     let row_id_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {

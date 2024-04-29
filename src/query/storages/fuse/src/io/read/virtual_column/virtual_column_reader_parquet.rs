@@ -15,11 +15,9 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
-use std::sync::Arc;
 
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::io::parquet::read as pread;
-use databend_common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
@@ -32,17 +30,14 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::infer_schema_with_extension;
-use databend_common_storage::ColumnNodes;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use super::VirtualColumnReader;
-use crate::io::read::block::DeserializedArray;
-use crate::io::read::block::FieldDeserializationContext;
+use crate::io::read::block::parquet::column_chunks_to_record_batch;
 use crate::io::read::utils::build_columns_meta;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::io::UncompressedBuffer;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 use crate::MergeIOReadResult;
 
 pub struct VirtualMergeIOReadResult {
@@ -87,7 +82,7 @@ impl VirtualColumnReader {
         let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
 
         if !ranges.is_empty() {
-            let part = FusePartInfo::create(
+            let part = FuseBlockPartInfo::create(
                 loc.to_string(),
                 row_group.num_rows() as u64,
                 columns_meta,
@@ -129,7 +124,7 @@ impl VirtualColumnReader {
         let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
 
         if !ranges.is_empty() {
-            let part = FusePartInfo::create(
+            let part = FuseBlockPartInfo::create(
                 loc.to_string(),
                 row_group.num_rows() as u64,
                 columns_meta,
@@ -197,58 +192,35 @@ impl VirtualColumnReader {
         &self,
         mut data_block: DataBlock,
         virtual_data: Option<VirtualMergeIOReadResult>,
-        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
-        let mut virtual_values = HashMap::new();
-        if let Some(virtual_data) = virtual_data {
-            let columns_chunks = virtual_data.data.columns_chunks()?;
-            let part = FusePartInfo::from_part(&virtual_data.part)?;
-            let schema = virtual_data.schema;
-
-            let table_schema = TableSchema::try_from(&schema).unwrap();
-            let parquet_schema_descriptor = to_parquet_schema(&schema)?;
-            let column_nodes = ColumnNodes::new_from_schema(&schema, Some(&table_schema));
-
-            let field_deserialization_ctx = FieldDeserializationContext {
-                column_metas: &part.columns_meta,
-                column_chunks: &columns_chunks,
-                num_rows: part.nums_rows,
-                compression: &part.compression,
-                uncompressed_buffer: &uncompressed_buffer,
-                parquet_schema_descriptor: &Some(parquet_schema_descriptor),
-            };
-            for (index, virtual_column) in self.virtual_column_infos.iter().enumerate() {
-                for (i, f) in schema.fields.iter().enumerate() {
-                    if f.name == virtual_column.name {
-                        let column_node = &column_nodes.column_nodes[i];
-                        if let Some(v) = self
-                            .reader
-                            .deserialize_field(&field_deserialization_ctx, column_node)?
-                        {
-                            let array = match v {
-                                DeserializedArray::Deserialized((_, array, ..)) => array,
-                                DeserializedArray::NoNeedToCache(array) => array,
-                                DeserializedArray::Cached(sized_column) => sized_column.0.clone(),
-                            };
-                            let data_type = DataType::from(&*virtual_column.data_type);
-                            let column = BlockEntry::new(
-                                data_type.clone(),
-                                Value::Column(Column::from_arrow(array.as_ref(), &data_type)?),
-                            );
-                            virtual_values.insert(index, column);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
+        let record_batch = virtual_data
+            .map(|virtual_data| {
+                let columns_chunks = virtual_data.data.columns_chunks()?;
+                let part = FuseBlockPartInfo::from_part(&virtual_data.part)?;
+                let schema = virtual_data.schema;
+                let table_schema = TableSchema::try_from(&schema).unwrap();
+                column_chunks_to_record_batch(
+                    &table_schema,
+                    part.nums_rows,
+                    &columns_chunks,
+                    &part.compression,
+                )
+            })
+            .transpose()?;
 
         // If the virtual column has already generated, add it directly,
         // otherwise extract it from the source column
         let func_ctx = self.ctx.get_function_context()?;
-        for (index, virtual_column) in self.virtual_column_infos.iter().enumerate() {
-            if let Some(column) = virtual_values.remove(&index) {
-                data_block.add_column(column);
+        for virtual_column in self.virtual_column_infos.iter() {
+            if let Some(arrow_array) = record_batch
+                .as_ref()
+                .and_then(|r| r.column_by_name(&virtual_column.name).cloned())
+            {
+                let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
+                    arrow_array.into();
+                let data_type: DataType = virtual_column.data_type.as_ref().into();
+                let value = Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?);
+                data_block.add_column(BlockEntry::new(data_type, value));
                 continue;
             }
             let src_index = self

@@ -51,7 +51,7 @@ pub struct RulePushDownLimitWindow {
 impl RulePushDownLimitWindow {
     pub fn new(max_limit: usize) -> Self {
         Self {
-            id: RuleID::PushDownLimitSort,
+            id: RuleID::PushDownLimitWindow,
             matchers: vec![Matcher::MatchOp {
                 op_type: RelOp::Limit,
                 children: vec![Matcher::MatchOp {

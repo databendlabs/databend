@@ -19,6 +19,8 @@ use std::time::Duration;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::parser::unescape::escape_at_string;
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum PresignAction {
     Download,
@@ -49,7 +51,7 @@ pub enum PresignLocation {
 impl Display for PresignLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PresignLocation::StageLocation(v) => v.fmt(f),
+            PresignLocation::StageLocation(v) => write!(f, "@{}", escape_at_string(v)),
         }
     }
 }

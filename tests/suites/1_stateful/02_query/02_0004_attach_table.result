@@ -3,7 +3,7 @@
 >>>> drop table if exists table_to;
 >>>> drop table if exists table_to2;
 >>>> create table table_from(a int) 's3://testbucket/admin/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900');
->>>> drop connection if exists my_conn ;
+>>>> drop connection if exists my_conn;
 >>>> create connection my_conn storage_type = 's3' access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900'
 >>>> insert into table_from(a) values(0)
 >>>> insert into table_from(a) values(1)

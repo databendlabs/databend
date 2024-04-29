@@ -60,6 +60,7 @@ use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
 use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
+use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
@@ -203,6 +204,9 @@ impl InterpreterFactory {
                 ctx,
                 *set_options.clone(),
             )?)),
+            Plan::ModifyTableComment(new_comment) => Ok(Arc::new(
+                ModifyTableCommentInterpreter::try_create(ctx, *new_comment.clone())?,
+            )),
             Plan::RenameTableColumn(rename_table_column) => Ok(Arc::new(
                 RenameTableColumnInterpreter::try_create(ctx, *rename_table_column.clone())?,
             )),
@@ -262,6 +266,10 @@ impl InterpreterFactory {
                 ctx,
                 *drop_view.clone(),
             )?)),
+            Plan::DescribeView(describe_view) => Ok(Arc::new(DescribeViewInterpreter::try_create(
+                ctx,
+                *describe_view.clone(),
+            )?)),
 
             // Streams
             Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
@@ -272,6 +280,9 @@ impl InterpreterFactory {
                 ctx,
                 *drop_stream.clone(),
             )?)),
+
+            // dynamic tables
+            Plan::CreateDynamicTable(_) => Err(ErrorCode::Unimplemented("todo")),
 
             // Indexes
             Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
@@ -566,6 +577,21 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::DescNotification(p) => Ok(Arc::new(DescNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::InsertMultiTable(p) => {
+                Ok(InsertMultiTableInterpreter::try_create(ctx, *p.clone())?)
+            }
+            Plan::ExecuteImmediate(p) => Ok(Arc::new(ExecuteImmediateInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::CreateSequence(p) => Ok(Arc::new(CreateSequenceInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropSequence(p) => Ok(Arc::new(DropSequenceInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

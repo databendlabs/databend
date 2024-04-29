@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table_context::TableContext;
@@ -39,8 +40,22 @@ impl Files {
         &self,
         file_locations: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Result<()> {
-        let batch_size = 1000;
         let locations = Vec::from_iter(file_locations.into_iter().map(|v| v.as_ref().to_string()));
+
+        if locations.is_empty() {
+            return Ok(());
+        }
+
+        // adjusts batch_size according to the `max_threads` settings,
+        // limits its min/max value to 1 and 1000.
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let batch_size = (locations.len() / threads_nums).min(1000).max(1);
+
+        info!(
+            "remove file in batch, batch_size: {}, number of chunks {}",
+            batch_size,
+            (locations.len() / batch_size).max(1)
+        );
 
         if locations.len() <= batch_size {
             Self::delete_files(self.operator.clone(), locations).await?;
@@ -52,8 +67,6 @@ impl Files {
                     .next()
                     .map(|location| Self::delete_files(self.operator.clone(), location.to_vec()))
             });
-
-            let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
 
             execute_futures_in_parallel(
                 tasks,
@@ -69,14 +82,23 @@ impl Files {
 
     #[async_backtrace::framed]
     async fn delete_files(op: Operator, locations: Vec<String>) -> Result<()> {
+        let start = Instant::now();
         // temporary fix for https://github.com/datafuselabs/databend/issues/13804
         let locations = locations
             .into_iter()
             .map(|loc| loc.trim_start_matches('/').to_owned())
             .filter(|loc| !loc.is_empty())
             .collect::<Vec<_>>();
-        info!("deleting files: {:?}", &locations);
+        info!("deleting files {:?}", &locations);
+        let num_of_files = locations.len();
+
         op.remove(locations).await?;
+
+        info!(
+            "deleted files, number of files {}, time used {:?}",
+            num_of_files,
+            start.elapsed(),
+        );
         Ok(())
     }
 }

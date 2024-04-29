@@ -21,63 +21,59 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_query::catalogs::Catalog;
 
 use crate::tests::create_catalog;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_catalogs_get_database() -> Result<()> {
-    let tenant = "test";
+    let tenant_name = "test";
+    let tenant = Tenant::new_literal(tenant_name);
     let catalog = create_catalog().await?;
 
     // get system database
-    let database = catalog.get_database(tenant, "system").await?;
+    let database = catalog.get_database(&tenant, "system").await?;
     assert_eq!(database.name(), "system");
 
-    let db_list = catalog.list_databases(tenant).await?;
+    let db_list = catalog.list_databases(&tenant).await?;
     assert_eq!(db_list.len(), 3);
 
     // get default database
-    let db_2 = catalog.get_database(tenant, "default").await?;
+    let db_2 = catalog.get_database(&tenant, "default").await?;
     assert_eq!(db_2.name(), "default");
 
     // get non-exist database
-    let db_3 = catalog.get_database("test", "test").await;
+    let db_3 = catalog.get_database(&tenant, "test").await;
     assert!(db_3.is_err());
-
-    // tenant is empty.
-    let res = catalog.get_database("", "system").await;
-    assert!(res.is_err());
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_catalogs_database() -> Result<()> {
-    let tenant = "admin";
+    let tenant_name = "admin";
+    let tenant = Tenant::new_literal(tenant_name);
     let catalog = create_catalog().await?;
 
-    let db_list = catalog.list_databases(tenant).await?;
+    let db_list = catalog.list_databases(&tenant).await?;
     let db_count = db_list.len();
 
     // Create.
     {
-        let mut req = CreateDatabaseReq {
+        let req = CreateDatabaseReq {
             create_option: CreateOption::Create,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "db1"),
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -86,45 +82,29 @@ async fn test_catalogs_database() -> Result<()> {
         let res = catalog.create_database(req.clone()).await;
         assert!(res.is_ok());
 
-        let db_list_1 = catalog.list_databases(tenant).await?;
+        let db_list_1 = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_1.len(), db_count + 1);
-
-        // Tenant empty.
-        req.name_ident.tenant = "".to_string();
-        let res = catalog.create_database(req).await;
-        assert!(res.is_err());
     }
 
     // Rename.
     {
-        let mut req = RenameDatabaseReq {
+        let req = RenameDatabaseReq {
             if_exists: false,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "db1"),
             new_db_name: "db2".to_string(),
         };
         let res = catalog.rename_database(req.clone()).await;
         assert!(res.is_ok());
 
-        let db_list_1 = catalog.list_databases(tenant).await?;
+        let db_list_1 = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_1.len(), db_count + 1);
-
-        // Tenant empty.
-        req.name_ident.tenant = "".to_string();
-        let res = catalog.rename_database(req).await;
-        assert!(res.is_err());
     }
 
     // Drop old db.
     {
         let req = DropDatabaseReq {
             if_exists: false,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "db1"),
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_err());
@@ -132,23 +112,15 @@ async fn test_catalogs_database() -> Result<()> {
 
     // Drop renamed db.
     {
-        let mut req = DropDatabaseReq {
+        let req = DropDatabaseReq {
             if_exists: false,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(&tenant, "db2"),
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_ok());
 
-        let db_list_drop = catalog.list_databases(tenant).await?;
+        let db_list_drop = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_drop.len(), db_count);
-
-        // Tenant empty.
-        req.name_ident.tenant = "".to_string();
-        let res = catalog.drop_database(req).await;
-        assert!(res.is_err());
     }
 
     Ok(())
@@ -156,15 +128,16 @@ async fn test_catalogs_database() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_catalogs_table() -> Result<()> {
-    let tenant = "test";
+    let tenant_name = "test";
+    let tenant = Tenant::new_literal(tenant_name);
     let catalog = create_catalog().await?;
 
     // Check system/default.
     {
-        let table_list = catalog.list_tables(tenant, "system").await?;
+        let table_list = catalog.list_tables(&tenant, "system").await?;
         assert!(!table_list.is_empty());
 
-        let table_list_1 = catalog.list_tables(tenant, "default").await?;
+        let table_list_1 = catalog.list_tables(&tenant, "default").await?;
         assert!(table_list_1.is_empty());
     }
 
@@ -179,10 +152,10 @@ async fn test_catalogs_table() -> Result<()> {
         let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
         let created_on = Utc::now();
 
-        let mut req = CreateTableReq {
+        let req = CreateTableReq {
             create_option: CreateOption::Create,
             name_ident: TableNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant.clone(),
                 db_name: "default".to_string(),
                 table_name: "test_table".to_string(),
             },
@@ -193,39 +166,35 @@ async fn test_catalogs_table() -> Result<()> {
                 created_on,
                 ..TableMeta::default()
             },
+            as_dropped: false,
         };
         let res = catalog.create_table(req.clone()).await;
         assert!(res.is_ok());
 
         // list tables
-        let table_list_3 = catalog.list_tables(tenant, "default").await?;
+        let table_list_3 = catalog.list_tables(&tenant, "default").await?;
         assert_eq!(table_list_3.len(), 1);
-        let table = catalog.get_table(tenant, "default", "test_table").await?;
+        let table = catalog.get_table(&tenant, "default", "test_table").await?;
         assert_eq!(table.name(), "test_table");
         let table = catalog.get_table_by_info(table.get_table_info())?;
         assert_eq!(table.name(), "test_table");
-
-        // Tenant empty.
-        req.name_ident.tenant = "".to_string();
-        let res = catalog.create_table(req.clone()).await;
-        assert!(res.is_err());
     }
 
     // Drop.
     {
-        let tbl = catalog.get_table(tenant, "default", "test_table").await?;
-        let db = catalog.get_database(tenant, "default").await?;
+        let tbl = catalog.get_table(&tenant, "default", "test_table").await?;
+        let db = catalog.get_database(&tenant, "default").await?;
         let res = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                tenant: tenant.to_string(),
+                tenant: tenant.clone(),
                 table_name: "test_table".to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().ident.db_id,
             })
             .await;
         assert!(res.is_ok());
-        let table_list_4 = catalog.list_tables(tenant, "default").await?;
+        let table_list_4 = catalog.list_tables(&tenant, "default").await?;
         assert!(table_list_4.is_empty());
     }
 

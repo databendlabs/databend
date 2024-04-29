@@ -54,91 +54,75 @@ pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
-        let higher_prec_expr_element =
-            |i| {
-                expr_element(i).and_then(|(rest, elem)| {
-                    match PrattParser::<std::iter::Once<_>>::query(&mut ExprParser, &elem).unwrap()
-                    {
-                        Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
-                            if prec <= Precedence(min_precedence) =>
-                        {
-                            Err(nom::Err::Error(Error::from_error_kind(
-                                i,
-                                ErrorKind::Other("expected more tokens for expression"),
-                            )))
-                        }
-                        _ => Ok((rest, elem)),
-                    }
-                })
-            };
+        let higher_prec_expr_element = |i| {
+            expr_element(i).and_then(|(rest, elem)| match elem.elem.affix() {
+                Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
+                    if prec <= Precedence(min_precedence) =>
+                {
+                    Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("expected more tokens for expression"),
+                    )))
+                }
+                _ => Ok((rest, elem)),
+            })
+        };
 
         let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }(i)?;
 
         for (prev, curr) in (-1..(expr_elements.len() as isize)).tuple_windows() {
-            // Replace binary Plus and Minus to the unary one, if it's following another op
-            // or it's the first element.
+            // If it's following a prefix or infix element or it's the first element, ...
             if prev == -1
                 || matches!(
-                    expr_elements[prev as usize].elem,
-                    ExprElement::UnaryOp { .. } | ExprElement::BinaryOp { .. }
+                    expr_elements[prev as usize].elem.affix(),
+                    Affix::Prefix(_) | Affix::Infix(_, _)
                 )
             {
-                match &mut expr_elements[curr as usize].elem {
-                    elem @ ExprElement::BinaryOp {
+                let span = expr_elements[curr as usize].span;
+                let elem = &mut expr_elements[curr as usize].elem;
+                match elem {
+                    // replace bracket map access to an array, ...
+                    ExprElement::MapAccess {
+                        accessor: MapAccessor::Bracket { key },
+                    } => {
+                        *elem = ExprElement::Array {
+                            exprs: vec![(**key).clone()],
+                        };
+                    }
+                    // replace binary `+` and `-` to unary one, ...
+                    ExprElement::BinaryOp {
                         op: BinaryOperator::Plus,
                     } => {
                         *elem = ExprElement::UnaryOp {
                             op: UnaryOperator::Plus,
                         };
                     }
-                    elem @ ExprElement::BinaryOp {
+                    ExprElement::BinaryOp {
                         op: BinaryOperator::Minus,
                     } => {
                         *elem = ExprElement::UnaryOp {
                             op: UnaryOperator::Minus,
                         };
                     }
+                    // replace `:ident` to hole, ...
+                    ExprElement::MapAccess {
+                        accessor: MapAccessor::Colon { key },
+                    } => {
+                        if !key.is_quoted() && !key.is_hole {
+                            *elem = ExprElement::Hole {
+                                name: key.to_string(),
+                            };
+                        }
+                    }
+                    // and replace `.<number>` map access to floating point literal.
+                    ExprElement::MapAccess {
+                        accessor: MapAccessor::DotNumber { .. },
+                    } => {
+                        *elem = ExprElement::Literal {
+                            value: literal(span)?.1,
+                        };
+                    }
                     _ => {}
-                }
-            }
-
-            // If it's following a prefix or infix element or it's the first element, ...
-            if prev == -1
-                || matches!(
-                    PrattParser::<std::iter::Once<_>>::query(
-                        &mut ExprParser,
-                        &expr_elements[prev as usize]
-                    )
-                    .unwrap(),
-                    Affix::Prefix(_) | Affix::Infix(_, _)
-                )
-            {
-                // replace bracket map access to an array, ...
-                if let ExprElement::MapAccess {
-                    accessor: MapAccessor::Bracket { key },
-                } = &expr_elements[curr as usize].elem
-                {
-                    let span = expr_elements[curr as usize].span;
-                    expr_elements[curr as usize] = WithSpan {
-                        span,
-                        elem: ExprElement::Array {
-                            exprs: vec![(**key).clone()],
-                        },
-                    };
-                }
-
-                // and replace `.<number>` map access to floating point literal.
-                if let ExprElement::MapAccess {
-                    accessor: MapAccessor::DotNumber { .. },
-                } = &expr_elements[curr as usize].elem
-                {
-                    let span = expr_elements[curr as usize].span;
-                    expr_elements[curr as usize] = WithSpan {
-                        span,
-                        elem: ExprElement::Literal {
-                            lit: literal(span)?.1,
-                        },
-                    };
                 }
             }
         }
@@ -247,7 +231,7 @@ pub enum ExprElement {
     },
     /// A literal value, such as string, number, date or NULL
     Literal {
-        lit: Literal,
+        value: Literal,
     },
     /// `Count(*)` expression
     CountAll {
@@ -323,17 +307,14 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
+    Hole {
+        name: String,
+    },
 }
 
-struct ExprParser;
-
-impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
-    type Error = &'static str;
-    type Input = WithSpan<'a, ExprElement>;
-    type Output = Expr;
-
-    fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
-        let affix = match &elem.elem {
+impl ExprElement {
+    pub fn affix(&self) -> Affix {
+        match &self {
             ExprElement::ChainFunctionCall { .. } => Affix::Postfix(Precedence(61)),
             ExprElement::DotAccess { .. } => Affix::Postfix(Precedence(60)),
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(60)),
@@ -402,34 +383,150 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,
-        };
-        Ok(affix)
+        }
+    }
+}
+
+impl From<Expr> for ExprElement {
+    fn from(expr: Expr) -> Self {
+        match expr {
+            Expr::ColumnRef { column, .. } => ExprElement::ColumnRef { column },
+            Expr::IsNull { not, .. } => ExprElement::IsNull { not },
+            Expr::IsDistinctFrom { not, .. } => ExprElement::IsDistinctFrom { not },
+            Expr::InList { list, not, .. } => ExprElement::InList { list, not },
+            Expr::InSubquery { subquery, not, .. } => ExprElement::InSubquery { subquery, not },
+            Expr::Between { low, high, not, .. } => ExprElement::Between { low, high, not },
+            Expr::BinaryOp { op, .. } => ExprElement::BinaryOp { op },
+            Expr::JsonOp { op, .. } => ExprElement::JsonOp { op },
+            Expr::UnaryOp { op, .. } => ExprElement::UnaryOp { op },
+            Expr::Cast {
+                target_type,
+                pg_style: true,
+                ..
+            } => ExprElement::PgCast { target_type },
+            Expr::Cast {
+                expr,
+                target_type,
+                pg_style: false,
+                ..
+            } => ExprElement::Cast { expr, target_type },
+            Expr::TryCast {
+                expr, target_type, ..
+            } => ExprElement::TryCast { expr, target_type },
+            Expr::Extract { kind, expr, .. } => ExprElement::Extract { field: kind, expr },
+            Expr::DatePart { kind, expr, .. } => ExprElement::DatePart { field: kind, expr },
+            Expr::Position {
+                substr_expr,
+                str_expr,
+                ..
+            } => ExprElement::Position {
+                substr_expr,
+                str_expr,
+            },
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => ExprElement::SubString {
+                expr,
+                substring_from,
+                substring_for,
+            },
+            Expr::Trim {
+                expr, trim_where, ..
+            } => ExprElement::Trim { expr, trim_where },
+            Expr::Literal { value, .. } => ExprElement::Literal { value },
+            Expr::CountAll { window, .. } => ExprElement::CountAll { window },
+            Expr::Tuple { exprs, .. } => ExprElement::Tuple { exprs },
+            Expr::FunctionCall { func, .. } => ExprElement::FunctionCall { func },
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+                ..
+            } => ExprElement::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            },
+            Expr::Exists { subquery, not, .. } => ExprElement::Exists {
+                subquery: *subquery,
+                not,
+            },
+            Expr::Subquery {
+                modifier, subquery, ..
+            } => ExprElement::Subquery {
+                modifier,
+                subquery: *subquery,
+            },
+            Expr::MapAccess { accessor, .. } => ExprElement::MapAccess { accessor },
+            Expr::Array { exprs, .. } => ExprElement::Array { exprs },
+            Expr::Map { kvs, .. } => ExprElement::Map { kvs },
+            Expr::Interval { expr, unit, .. } => ExprElement::Interval { expr: *expr, unit },
+            Expr::DateAdd {
+                unit,
+                interval,
+                date,
+                ..
+            } => ExprElement::DateAdd {
+                unit,
+                interval: *interval,
+                date: *date,
+            },
+            Expr::DateSub {
+                unit,
+                interval,
+                date,
+                ..
+            } => ExprElement::DateSub {
+                unit,
+                interval: *interval,
+                date: *date,
+            },
+            Expr::DateTrunc { unit, date, .. } => ExprElement::DateTrunc { unit, date: *date },
+            Expr::Hole { name, .. } => ExprElement::Hole { name },
+        }
+    }
+}
+
+struct ExprParser;
+
+impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
+    type Error = &'static str;
+    type Input = WithSpan<'a, ExprElement>;
+    type Output = Expr;
+
+    fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
+        Ok(elem.elem.affix())
     }
 
     fn primary(&mut self, elem: WithSpan<'a, ExprElement>) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
             ExprElement::ColumnRef { column } => Expr::ColumnRef {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 column,
             },
             ExprElement::Cast { expr, target_type } => Expr::Cast {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr,
                 target_type,
                 pg_style: false,
             },
             ExprElement::TryCast { expr, target_type } => Expr::TryCast {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr,
                 target_type,
             },
             ExprElement::Extract { field, expr } => Expr::Extract {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 kind: field,
                 expr,
             },
             ExprElement::DatePart { field, expr } => Expr::DatePart {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 kind: field,
                 expr,
             },
@@ -437,7 +534,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 substr_expr,
                 str_expr,
             } => Expr::Position {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 substr_expr,
                 str_expr,
             },
@@ -446,30 +543,30 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 substring_from,
                 substring_for,
             } => Expr::Substring {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr,
                 substring_from,
                 substring_for,
             },
             ExprElement::Trim { expr, trim_where } => Expr::Trim {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr,
                 trim_where,
             },
-            ExprElement::Literal { lit } => Expr::Literal {
-                span: transform_span(elem.span.0),
-                lit,
+            ExprElement::Literal { value } => Expr::Literal {
+                span: transform_span(elem.span.tokens),
+                value,
             },
             ExprElement::CountAll { window } => Expr::CountAll {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 window,
             },
             ExprElement::Tuple { exprs } => Expr::Tuple {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 exprs,
             },
             ExprElement::FunctionCall { func } => Expr::FunctionCall {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 func,
             },
             ExprElement::Case {
@@ -478,25 +575,25 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 results,
                 else_result,
             } => Expr::Case {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 operand,
                 conditions,
                 results,
                 else_result,
             },
             ExprElement::Exists { subquery, not } => Expr::Exists {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 not,
                 subquery: Box::new(subquery),
             },
             ExprElement::Subquery { subquery, modifier } => Expr::Subquery {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 modifier,
                 subquery: Box::new(subquery),
             },
             ExprElement::Group(expr) => expr,
             ExprElement::Array { exprs } => Expr::Array {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 exprs,
             },
             ExprElement::ListComprehension {
@@ -505,7 +602,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 filter,
                 result,
             } => {
-                let span = transform_span(elem.span.0);
+                let span = transform_span(elem.span.tokens);
                 let mut source = source;
 
                 // array_filter(source, filter)
@@ -514,7 +611,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                         span,
                         func: FunctionCall {
                             distinct: false,
-                            name: Identifier::from_name("array_filter"),
+                            name: Identifier::from_name(
+                                transform_span(elem.span.tokens),
+                                "array_filter",
+                            ),
                             args: vec![source],
                             params: vec![],
                             window: None,
@@ -530,7 +630,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     span,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("array_map"),
+                        name: Identifier::from_name(transform_span(elem.span.tokens), "array_map"),
                         args: vec![source],
                         params: vec![],
                         window: None,
@@ -542,11 +642,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 }
             }
             ExprElement::Map { kvs } => Expr::Map {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 kvs,
             },
             ExprElement::Interval { expr, unit } => Expr::Interval {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr: Box::new(expr),
                 unit,
             },
@@ -555,7 +655,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 interval,
                 date,
             } => Expr::DateAdd {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 unit,
                 interval: Box::new(interval),
                 date: Box::new(date),
@@ -565,15 +665,19 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 interval,
                 date,
             } => Expr::DateSub {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 unit,
                 interval: Box::new(interval),
                 date: Box::new(date),
             },
             ExprElement::DateTrunc { unit, date } => Expr::DateTrunc {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 unit,
                 date: Box::new(date),
+            },
+            ExprElement::Hole { name } => Expr::Hole {
+                span: transform_span(elem.span.tokens),
+                name,
             },
             _ => unreachable!(),
         };
@@ -588,19 +692,19 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     ) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 op,
             },
             ExprElement::IsDistinctFrom { not } => Expr::IsDistinctFrom {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 not,
             },
             ExprElement::JsonOp { op } => Expr::JsonOp {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 op,
@@ -613,7 +717,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     fn prefix(&mut self, elem: WithSpan<'a, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 op,
                 expr: Box::new(rhs),
             },
@@ -629,39 +733,35 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     ) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
                 accessor,
             },
-            // Lift level up the identifier
             ExprElement::DotAccess { key } => {
-                let mut is_map_access = true;
+                // `database.table.column` is parsed into [database] [.table] [.column],
+                // so we need to transform it into the right `ColumnRef` form.
                 if let Expr::ColumnRef { column, .. } = &mut lhs {
                     if let ColumnID::Name(name) = &column.column {
-                        is_map_access = false;
                         column.database = column.table.take();
                         column.table = Some(name.clone());
                         column.column = key.clone();
+                        return Ok(lhs);
                     }
                 }
 
-                if is_map_access {
-                    match key {
-                        ColumnID::Name(id) => Expr::MapAccess {
-                            span: transform_span(elem.span.0),
-                            expr: Box::new(lhs),
-                            accessor: MapAccessor::Colon { key: id },
-                        },
-                        _ => {
-                            return Err("dot access position must be after ident");
-                        }
+                match key {
+                    ColumnID::Name(id) => Expr::MapAccess {
+                        span: transform_span(elem.span.tokens),
+                        expr: Box::new(lhs),
+                        accessor: MapAccessor::Colon { key: id },
+                    },
+                    _ => {
+                        return Err("dot access position must be after ident");
                     }
-                } else {
-                    lhs
                 }
             }
             ExprElement::ChainFunctionCall { name, args, lambda } => Expr::FunctionCall {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 func: FunctionCall {
                     distinct: false,
                     name,
@@ -672,37 +772,37 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 },
             },
             ExprElement::IsNull { not } => Expr::IsNull {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
                 not,
             },
             ExprElement::InList { list, not } => Expr::InList {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
                 list,
                 not,
             },
             ExprElement::InSubquery { subquery, not } => Expr::InSubquery {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
                 subquery,
                 not,
             },
             ExprElement::Between { low, high, not } => Expr::Between {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
                 low,
                 high,
                 not,
             },
             ExprElement::PgCast { target_type } => Expr::Cast {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
                 target_type,
                 pg_style: true,
             },
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
-                span: transform_span(elem.span.0),
+                span: transform_span(elem.span.tokens),
                 op,
                 expr: Box::new(lhs),
             },
@@ -868,15 +968,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let count_all_with_window = map(
         rule! {
-        COUNT ~ "(" ~ "*" ~ ")" ~ (OVER ~ #window_spec_ident)?
+            COUNT ~ "(" ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
         },
         |(_, _, _, _, window)| ExprElement::CountAll {
             window: window.map(|w| w.1),
         },
     );
+
     let tuple = map(
         rule! {
-            "(" ~ #comma_separated_list0_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
+            "(" ~ #comma_separated_list1_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
         },
         |(_, mut exprs, opt_trail, _)| {
             if exprs.len() == 1 && opt_trail.is_none() {
@@ -884,6 +985,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             } else {
                 ExprElement::Tuple { exprs }
             }
+        },
+    );
+    let subquery = map(
+        rule! {
+            ( ANY | SOME | ALL )? ~ "(" ~ #query ~ ^")"
+        },
+        |(modifier, _, subquery, _)| {
+            let modifier = modifier.map(|m| match m.kind {
+                TokenKind::ALL => SubqueryModifier::All,
+                TokenKind::ANY => SubqueryModifier::Any,
+                TokenKind::SOME => SubqueryModifier::Some,
+                _ => unreachable!(),
+            });
+            ExprElement::Subquery { modifier, subquery }
         },
     );
 
@@ -978,27 +1093,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let exists = map(
-        rule! { NOT? ~ EXISTS ~ "(" ~ ^#query ~ ^")" },
+        rule! {
+            NOT? ~ EXISTS ~ "(" ~ ^#query ~ ^")"
+        },
         |(opt_not, _, _, subquery, _)| ExprElement::Exists {
             subquery,
             not: opt_not.is_some(),
-        },
-    );
-    let subquery = map(
-        rule! {
-            (ANY | SOME | ALL)? ~
-            "("
-            ~ #query
-            ~ ^")"
-        },
-        |(modifier, _, subquery, _)| {
-            let modifier = modifier.map(|m| match m.kind {
-                TokenKind::ALL => SubqueryModifier::All,
-                TokenKind::ANY => SubqueryModifier::Any,
-                TokenKind::SOME => SubqueryModifier::Some,
-                _ => unreachable!(),
-            });
-            ExprElement::Subquery { modifier, subquery }
         },
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
@@ -1068,7 +1168,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
     // is not following a primary element nor a postfix element.
-    let literal = map(literal, |lit| ExprElement::Literal { lit });
+    let literal = map(literal, |value| ExprElement::Literal { value });
     let array = map(
         // Array that contains a single literal item will be parsed as a bracket map access,
         // and then will be converted back to an array if the map access is not following
@@ -1129,8 +1229,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
-                span: transform_span(span.0),
-                lit: Literal::String(date),
+                span: transform_span(span.tokens),
+                value: Literal::String(date),
             }),
             target_type: TypeName::Date,
         },
@@ -1142,8 +1242,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
-                span: transform_span(span.0),
-                lit: Literal::String(date),
+                span: transform_span(span.tokens),
+                value: Literal::String(date),
             }),
             target_type: TypeName::Timestamp,
         },
@@ -1156,19 +1256,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
 
-    let current_timestamp = value(
+    let current_timestamp = map(consumed(rule! { CURRENT_TIMESTAMP }), |(span, _)| {
         ExprElement::FunctionCall {
             func: FunctionCall {
                 distinct: false,
-                name: Identifier::from_name("current_timestamp"),
+                name: Identifier::from_name(transform_span(span.tokens), "current_timestamp"),
                 args: vec![],
                 params: vec![],
                 window: None,
                 lambda: None,
             },
-        },
-        rule! { CURRENT_TIMESTAMP },
-    );
+        }
+    });
 
     let (rest, (span, elem)) = consumed(alt((
         // Note: each `alt` call supports maximum of 21 parsers
@@ -1206,8 +1305,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #function_call_with_params : "`function(...)(...)`"
             | #function_call : "`function(...)`"
             | #case : "`CASE ... END`"
-            | #subquery : "`(SELECT ...)`"
             | #tuple : "`(<expr> [, ...])`"
+            | #subquery : "`(SELECT ...)`"
             | #column_ref : "<column>"
             | #dot_access : "<dot_access>"
             | #map_access : "[<key>] | .<key> | :<key>"
@@ -1381,21 +1480,17 @@ pub fn literal_string(i: Input) -> IResult<String> {
             QuotedString
         },
         |token| {
-            if token
-                .text()
-                .chars()
-                .next()
-                .filter(|c| i.1.is_string_quote(*c))
-                .is_some()
-            {
-                let str = &token.text()[1..token.text().len() - 1];
-                let unescaped = unescape_string(str, '\'').ok_or(nom::Err::Failure(
-                    ErrorKind::Other("invalid escape or unicode"),
-                ))?;
-                Ok(unescaped)
-            } else {
-                Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
+            if let Some(quote) = token.text().chars().next() {
+                if i.dialect.is_string_quote(quote) {
+                    let str = &token.text()[1..token.text().len() - 1];
+                    let unescaped = unescape_string(str, quote).ok_or(nom::Err::Failure(
+                        ErrorKind::Other("invalid escape or unicode"),
+                    ))?;
+                    return Ok(unescaped);
+                }
             }
+
+            Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
         },
     )(i)
 }
@@ -1421,8 +1516,9 @@ pub fn at_string(i: Input) -> IResult<String> {
 
 pub fn code_string(i: Input) -> IResult<String> {
     map_res(rule! { CodeString }, |token| {
-        let path = &token.text()[2..token.text().len() - 2];
-        Ok(path.to_string())
+        let content = &token.text()[2..token.text().len() - 2];
+        let trimmed = unindent::unindent(content).trim().to_string();
+        Ok(trimmed)
     })(i)
 }
 
@@ -1516,15 +1612,23 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             fields_type,
         },
     );
-    let ty_named_tuple = map(
+    let ty_named_tuple = map_res(
         rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
         |(_, _, fields, _)| {
-            let (fields_name, fields_type) =
+            let (fields_name, fields_type): (Vec<String>, Vec<TypeName>) =
                 fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
-            TypeName::Tuple {
+            if fields_name
+                .iter()
+                .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
+            {
+                return Err(nom::Err::Failure(ErrorKind::Other(
+                    "Invalid tuple field name, only support alphanumeric characters",
+                )));
+            }
+            Ok(TypeName::Tuple {
                 fields_name: Some(fields_name),
                 fields_type,
-            }
+            })
         },
     );
     let ty_date = value(TypeName::Date, rule! { DATE });

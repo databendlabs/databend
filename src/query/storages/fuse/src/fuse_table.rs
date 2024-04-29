@@ -27,7 +27,9 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,7 +40,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::ROW_VERSION_COL_NAME;
-use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_meta_app::schema::DatabaseType;
@@ -57,8 +59,6 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::ClusterKey;
-use databend_storages_common_table_meta::meta::IndexInfo;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -87,6 +87,8 @@ use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::operations::ChangesDesc;
+use crate::operations::TruncateMode;
 use crate::table_functions::unwrap_tuple;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
@@ -117,7 +119,7 @@ pub struct FuseTable {
     table_type: FuseTableType,
 
     // If this is set, reading from fuse_table should only returns the increment blocks
-    pub(crate) since_table: Option<Arc<FuseTable>>,
+    pub(crate) changes_desc: Option<ChangesDesc>,
 }
 
 impl FuseTable {
@@ -163,8 +165,7 @@ impl FuseTable {
                 let operator = create_share_table_operator(
                     ShareTableConfig::share_endpoint_address(),
                     ShareTableConfig::share_endpoint_token(),
-                    &share_ident.tenant,
-                    &share_ident.share_name,
+                    &share_ident,
                     &table_info.name,
                 )?;
                 (operator, FuseTableType::SharedReadOnly)
@@ -232,7 +233,7 @@ impl FuseTable {
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
-            since_table: None,
+            changes_desc: None,
         }))
     }
 
@@ -343,27 +344,6 @@ impl FuseTable {
             Ok(Some(reader.read(&params).await?))
         } else {
             Ok(None)
-        }
-    }
-
-    #[minitrace::trace]
-    #[async_backtrace::framed]
-    pub async fn read_index_info(
-        &self,
-        index_info_loc: Option<&Location>,
-    ) -> Result<Option<Arc<IndexInfo>>> {
-        match index_info_loc {
-            Some((index_info_loc, ver)) => {
-                let reader = MetaReaders::inverted_index_info_reader(self.get_operator());
-                let params = LoadParams {
-                    location: index_info_loc.clone(),
-                    len_hint: None,
-                    ver: *ver,
-                    put_cache: true,
-                };
-                Ok(Some(reader.read(&params).await?))
-            }
-            None => Ok(None),
         }
     }
 
@@ -493,7 +473,7 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        column_id >= SNAPSHOT_NAME_COLUMN_ID
+        column_id >= SEARCH_SCORE_COLUMN_ID
     }
 
     fn support_column_projection(&self) -> bool {
@@ -577,15 +557,18 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_index_info_locations = prev.as_ref().and_then(|v| v.index_info_locations.clone());
+        let prev_inverted_indexes = prev.as_ref().and_then(|v| v.inverted_indexes.clone());
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
             (FuseStatistics::default(), vec![])
         };
 
+        let table_version = Some(self.get_table_info().ident.seq);
+
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
+            table_version,
             &prev_timestamp,
             prev_snapshot_id,
             schema,
@@ -593,7 +576,7 @@ impl Table for FuseTable {
             segments,
             cluster_key_meta,
             prev_statistics_location,
-            prev_index_info_locations,
+            prev_inverted_indexes,
         );
 
         let mut table_info = self.table_info.clone();
@@ -629,7 +612,7 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_index_info_locations = prev.as_ref().and_then(|v| v.index_info_locations.clone());
+        let prev_inverted_indexes = prev.as_ref().and_then(|v| v.inverted_indexes.clone());
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
@@ -637,8 +620,11 @@ impl Table for FuseTable {
             (FuseStatistics::default(), vec![])
         };
 
+        let table_version = Some(self.get_table_info().ident.seq);
+
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
+            table_version,
             &prev_timestamp,
             prev_snapshot_id,
             schema,
@@ -646,7 +632,7 @@ impl Table for FuseTable {
             segments,
             None,
             prev_statistics_location,
-            prev_index_info_locations,
+            prev_inverted_indexes,
         );
 
         let mut table_info = self.table_info.clone();
@@ -718,9 +704,8 @@ impl Table for FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let purge = false;
-        self.do_truncate(ctx, purge).await
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
     }
 
     #[minitrace::trace]
@@ -729,14 +714,14 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
-        limit: Option<usize>,
+        num_snapshot_limit: Option<usize>,
         keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         match self.navigate_for_purge(&ctx, instant).await {
             Ok((table, files)) => {
                 table
-                    .do_purge(&ctx, files, limit, keep_last_snapshot, dry_run)
+                    .do_purge(&ctx, files, num_snapshot_limit, keep_last_snapshot, dry_run)
                     .await
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
@@ -750,8 +735,15 @@ impl Table for FuseTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
-        _change_type: Option<ChangeType>,
+        change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
+        if let Some(desc) = &self.changes_desc {
+            assert!(change_type.is_some());
+            return self
+                .changes_table_statistics(ctx, &desc.location, change_type.unwrap())
+                .await;
+        }
+
         let stats = match self.table_type {
             FuseTableType::AttachedReadOnly => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
@@ -772,22 +764,14 @@ impl Table for FuseTable {
             }
             _ => {
                 let s = &self.table_info.meta.statistics;
-                let mut res = TableStatistics {
+                TableStatistics {
                     num_rows: Some(s.number_of_rows),
                     data_size: Some(s.data_bytes),
                     data_size_compressed: Some(s.compressed_data_bytes),
                     index_size: Some(s.index_data_bytes),
                     number_of_blocks: s.number_of_blocks,
                     number_of_segments: s.number_of_segments,
-                };
-
-                if let Some(since) = &self.since_table {
-                    if let Some(since_stats) = since.table_statistics(ctx, None).await? {
-                        res = res.increment_since_from(&since_stats);
-                    }
                 }
-
-                res
             }
         };
         Ok(Some(stats))
@@ -822,21 +806,57 @@ impl Table for FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn navigate_since_to(
+    async fn navigate_to(&self, navigation: &TimeNavigation) -> Result<Arc<dyn Table>> {
+        match navigation {
+            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(point).await?),
+            TimeNavigation::Changes {
+                append_only,
+                at,
+                end,
+                desc,
+            } => {
+                let mut end_point = if let Some(end) = end {
+                    self.navigate_to_point(end).await?.as_ref().clone()
+                } else {
+                    self.clone()
+                };
+                let changes_desc = end_point
+                    .get_change_descriptor(*append_only, desc.clone(), Some(at))
+                    .await?;
+                end_point.changes_desc = Some(changes_desc);
+                Ok(Arc::new(end_point))
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn generage_changes_query(
         &self,
-        since_point: &Option<NavigationPoint>,
-        to_point: &Option<NavigationPoint>,
-    ) -> Result<Arc<dyn Table>> {
-        let mut to_point = if let Some(to_point) = to_point {
-            self.navigate_to(to_point).await?.as_ref().clone()
-        } else {
-            self.clone()
+        _ctx: Arc<dyn TableContext>,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<String> {
+        let Some(ChangesDesc {
+            seq,
+            desc,
+            mode,
+            location,
+        }) = self.changes_desc.as_ref()
+        else {
+            return Err(ErrorCode::Internal(format!(
+                "No changes descriptor found in table {} {}",
+                database_name, table_name
+            )));
         };
 
-        if let Some(since_point) = since_point {
-            to_point.since_table = Some(self.navigate_to(since_point).await?);
-        }
-        Ok(Arc::new(to_point))
+        self.check_changes_valid(database_name, table_name, *seq)?;
+        self.get_changes_query(
+            mode,
+            location,
+            format!("{}.{} {}", database_name, table_name, desc),
+            *seq,
+        )
+        .await
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {
@@ -864,9 +884,9 @@ impl Table for FuseTable {
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        limit: Option<usize>,
+        limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        self.do_compact_blocks(ctx, limit).await
+        self.do_compact_blocks(ctx, limits).await
     }
 
     #[async_backtrace::framed]

@@ -21,21 +21,17 @@ EvalScalar
 ├── output columns: [testdb.t.a, testdb.t.b]
 ├── outer columns: []
 ├── used columns: [testdb.t.a, testdb.t.b]
-├── cardinality: 1.000
+├── cardinality: 0.000
 ├── precise cardinality: N/A
 ├── statistics
-│   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
-│   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
 └── Filter
     ├── filters: [eq(t.a (#0), 1)]
     ├── output columns: [testdb.t.a, testdb.t.b]
     ├── outer columns: []
     ├── used columns: [testdb.t.a, testdb.t.b]
-    ├── cardinality: 1.000
+    ├── cardinality: 0.000
     ├── precise cardinality: N/A
     ├── statistics
-    │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
-    │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
     └── Scan
         ├── table: testdb.t
         ├── filters: []
@@ -44,11 +40,9 @@ EvalScalar
         ├── output columns: [testdb.t.a, testdb.t.b]
         ├── outer columns: []
         ├── used columns: [testdb.t.a, testdb.t.b]
-        ├── cardinality: 1000.000
-        ├── precise cardinality: 1000
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
         └── statistics
-            ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
-            └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
 
 query T
 explain(verbose, logical, optimized) select * from t where a = 1

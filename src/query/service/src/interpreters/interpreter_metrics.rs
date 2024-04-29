@@ -41,7 +41,7 @@ impl InterpreterMetrics {
         vec![
             (LABEL_HANDLER, handler_type),
             (LABEL_KIND, query_kind),
-            (LABEL_TENANT, tenant_id.to_string()),
+            (LABEL_TENANT, tenant_id.tenant_name().to_string()),
             (LABEL_CLUSTER, cluster_id),
         ]
     }

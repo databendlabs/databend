@@ -17,8 +17,8 @@ use databend_common_management::udf::UdfApiError;
 use databend_common_management::udf::UdfError;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 
 use crate::UserApiProvider;
 
@@ -28,7 +28,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_udf(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         info: UserDefinedFunction,
         create_option: &CreateOption,
     ) -> Result<()> {
@@ -39,11 +39,7 @@ impl UserApiProvider {
 
     // Update a UDF.
     #[async_backtrace::framed]
-    pub async fn update_udf(
-        &self,
-        tenant: &NonEmptyString,
-        info: UserDefinedFunction,
-    ) -> Result<u64> {
+    pub async fn update_udf(&self, tenant: &Tenant, info: UserDefinedFunction) -> Result<u64> {
         let res = self
             .udf_api(tenant)
             .update_udf(info, MatchSeq::GE(1))
@@ -57,7 +53,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_udf(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         udf_name: &str,
     ) -> Result<Option<UserDefinedFunction>, UdfApiError> {
         let seqv = self.udf_api(tenant).get_udf(udf_name).await?;
@@ -65,14 +61,14 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn exists_udf(&self, tenant: &NonEmptyString, udf_name: &str) -> Result<bool> {
+    pub async fn exists_udf(&self, tenant: &Tenant, udf_name: &str) -> Result<bool> {
         let res = self.get_udf(tenant, udf_name).await?;
         Ok(res.is_some())
     }
 
     // Get all UDFs for the tenant.
     #[async_backtrace::framed]
-    pub async fn list_udf(&self, tenant: &NonEmptyString) -> Result<Vec<UserDefinedFunction>> {
+    pub async fn list_udf(&self, tenant: &Tenant) -> Result<Vec<UserDefinedFunction>> {
         let udf_api = self.udf_api(tenant);
 
         let udfs = udf_api
@@ -87,7 +83,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_udf(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         udf_name: &str,
         allow_no_change: bool,
     ) -> std::result::Result<std::result::Result<(), UdfError>, UdfApiError> {
@@ -101,7 +97,7 @@ impl UserApiProvider {
                 Ok(())
             } else {
                 Err(UdfError::NotFound {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.tenant_name().to_string(),
                     name: udf_name.to_string(),
                     context: "while drop_udf".to_string(),
                 })

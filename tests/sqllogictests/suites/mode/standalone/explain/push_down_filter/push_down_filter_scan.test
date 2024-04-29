@@ -1,0 +1,30 @@
+# push down alias filter scan
+statement ok
+drop table if exists t;
+
+statement ok
+create table t (x INT);
+
+statement ok
+insert into t(x) values (1), (2);
+
+query I
+explain select * from t as a(id) where a.id > 1;
+----
+Filter
+├── output columns: [a.x (#0)]
+├── filters: [is_true(a.id (#0) > 1)]
+├── estimated rows: 0.40
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [x (#0)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(t.x (#0) > 1)], limit: NONE]
+    └── estimated rows: 2.00
+
+statement ok
+drop table if exists t;

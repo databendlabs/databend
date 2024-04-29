@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_app::principal::GrantEntry;
@@ -58,23 +59,38 @@ impl Interpreter for ShowGrantsInterpreter {
         let tenant = self.ctx.get_tenant();
 
         // TODO: add permission check on reading user grants
-        let (identity, grant_set) = match self.plan.principal {
+        let (grant_to, name, identity, grant_set) = match self.plan.principal {
             None => {
                 let user = self.ctx.get_current_user()?;
-                (user.identity().to_string(), user.grants)
+                (
+                    "USER".to_string(),
+                    user.name.to_string(),
+                    user.identity().display().to_string(),
+                    user.grants,
+                )
             }
             Some(ref principal) => match principal {
                 PrincipalIdentity::User(user) => {
                     let user = UserApiProvider::instance()
                         .get_user(&tenant, user.clone())
                         .await?;
-                    (user.identity().to_string(), user.grants)
+                    (
+                        "USER".to_string(),
+                        user.name.to_string(),
+                        user.identity().display().to_string(),
+                        user.grants,
+                    )
                 }
                 PrincipalIdentity::Role(role) => {
-                    let role = UserApiProvider::instance()
+                    let role_info = UserApiProvider::instance()
                         .get_role(&tenant, role.clone())
                         .await?;
-                    (format!("ROLE `{}`", role.identity()), role.grants)
+                    (
+                        "ROLE".to_string(),
+                        role.to_string(),
+                        format!("ROLE `{}`", role_info.identity()),
+                        role_info.grants,
+                    )
                 }
             },
         };
@@ -104,6 +120,9 @@ impl Interpreter for ShowGrantsInterpreter {
             }
         }
 
+        let mut object_id = vec![];
+        let mut object_name = vec![];
+        let mut privileges = vec![];
         for grant_entry in grant_entries {
             let object = grant_entry.object();
             match object {
@@ -131,7 +150,35 @@ impl Interpreter for ShowGrantsInterpreter {
                         catalog_db_ids.insert(catalog_name.clone(), vec![(*db_id, privileges_str)]);
                     }
                 }
-                _ => {
+                GrantObject::Database(catalog_name, database_name) => {
+                    object_name.push(format!("{}.{}.*", catalog_name, database_name));
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::Table(catalog_name, database_name, table_name) => {
+                    object_name.push(format!("{}.{}.{}", catalog_name, database_name, table_name));
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::Stage(stage_name) => {
+                    object_name.push(stage_name.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::UDF(udf_name) => {
+                    object_name.push(udf_name.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::Global => {
+                    // grant all on *.* to a
+                    object_name.push("*.*".to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
             }
@@ -144,13 +191,18 @@ impl Interpreter for ShowGrantsInterpreter {
                 .iter()
                 .map(|res| res.1.clone())
                 .collect::<Vec<String>>();
-            let dbs_name = catalog.mget_database_names_by_ids(&db_ids).await?;
+            let dbs_name = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
 
             for (i, db_name) in dbs_name.iter().enumerate() {
-                grant_list.push(format!(
-                    "GRANT {} ON '{}'.'{}'.* TO {}",
-                    &privileges_strs[i], catalog_name, db_name, identity
-                ));
+                if let Some(db_name) = db_name {
+                    object_name.push(db_name.to_string());
+                    object_id.push(Some(db_ids[i]));
+                    privileges.push(privileges_strs[i].to_string());
+                    grant_list.push(format!(
+                        "GRANT {} ON '{}'.'{}'.* TO {}",
+                        &privileges_strs[i], catalog_name, db_name, identity
+                    ));
+                }
             }
         }
 
@@ -162,18 +214,32 @@ impl Interpreter for ShowGrantsInterpreter {
                 .iter()
                 .map(|res| res.2.clone())
                 .collect::<Vec<String>>();
-            let dbs_name = catalog.mget_database_names_by_ids(&db_ids).await?;
-            let tables_name = catalog.mget_table_names_by_ids(&table_ids).await?;
+            let dbs_name = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
+            let tables_name = catalog.mget_table_names_by_ids(&tenant, &table_ids).await?;
 
             for (i, table_name) in tables_name.iter().enumerate() {
-                grant_list.push(format!(
-                    "GRANT {} ON '{}'.'{}'.'{}' TO {}",
-                    &privileges_strs[i], catalog_name, dbs_name[i], table_name, identity
-                ));
+                if let Some(table_name) = table_name {
+                    if let Some(db_name) = &dbs_name[i] {
+                        object_name.push(format!("{}.{}.{}", catalog_name, db_name, table_name));
+                        object_id.push(Some(table_ids[i]));
+                        privileges.push(privileges_strs[i].to_string());
+                        grant_list.push(format!(
+                            "GRANT {} ON '{}'.'{}'.'{}' TO {}",
+                            &privileges_strs[i], catalog_name, db_name, table_name, identity
+                        ));
+                    }
+                }
             }
         }
 
+        let names: Vec<String> = vec![name; privileges.len()];
+        let grant_tos: Vec<String> = vec![grant_to; privileges.len()];
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(privileges),
+            StringType::from_data(object_name),
+            UInt64Type::from_opt_data(object_id),
+            StringType::from_data(grant_tos),
+            StringType::from_data(names),
             StringType::from_data(grant_list),
         ])])
     }

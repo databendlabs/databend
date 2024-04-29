@@ -17,9 +17,14 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Instant;
 
+use byte_unit::Byte;
+use byte_unit::ByteUnit;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
@@ -28,14 +33,16 @@ use databend_common_expression::DataBlock;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
+use crate::spillers::spiller_buffer::SpillerBuffer;
 
 /// Spiller type, currently only supports HashJoin
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SpillerType {
     HashJoinBuild,
     HashJoinProbe,
-    OrderBy, /* Todo: Add more spillers type
-              * Aggregation */
+    OrderBy,
+    // Todo: Add more spillers type
+    // Aggregation
 }
 
 impl Display for SpillerType {
@@ -72,11 +79,14 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     _spiller_type: SpillerType,
+    spiller_buffer: SpillerBuffer,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<u8, Vec<String>>,
     /// Record columns layout for spilled data, will be used when read data from disk
     pub columns_layout: HashMap<String, Vec<usize>>,
+    /// Record how many bytes have been spilled for each partition.
+    pub partition_spilled_bytes: HashMap<u8, u64>,
 }
 
 impl Spiller {
@@ -93,9 +103,11 @@ impl Spiller {
             operator,
             config,
             _spiller_type: spiller_type,
+            spiller_buffer: SpillerBuffer::create(),
             join_spilling_partition_bits,
             partition_location: Default::default(),
             columns_layout: Default::default(),
+            partition_spilled_bytes: Default::default(),
         })
     }
 
@@ -105,12 +117,13 @@ impl Spiller {
 
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
-    pub async fn read_spilled_file(&self, file: &str) -> Result<(DataBlock, u64)> {
+    pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
         debug_assert!(self.columns_layout.contains_key(file));
         let data = self.operator.read(file).await?;
-        let bytes = data.len() as u64;
+        let bytes = data.len();
 
         let mut begin = 0;
+        let instant = Instant::now();
         let mut columns = Vec::with_capacity(self.columns_layout.len());
         let columns_layout = self.columns_layout.get(file).unwrap();
         for column_layout in columns_layout.iter() {
@@ -118,11 +131,20 @@ impl Spiller {
             begin += column_layout;
         }
         let block = DataBlock::new_from_columns(columns);
-        Ok((block, bytes))
+
+        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::SpillReadTime,
+            instant.elapsed().as_millis() as usize,
+        );
+
+        Ok(block)
     }
 
     /// Write a [`DataBlock`] to storage.
-    pub async fn spill_block(&mut self, data: DataBlock) -> Result<(String, u64)> {
+    pub async fn spill_block(&mut self, data: DataBlock) -> Result<String> {
+        let instant = Instant::now();
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
         let mut write_bytes = 0;
@@ -143,7 +165,7 @@ impl Spiller {
                     layouts.push(column_data.len());
                 })
                 .or_insert(vec![column_data.len()]);
-            write_bytes += column_data.len() as u64;
+            write_bytes += column_data.len();
             columns_data.push(column_data);
         }
 
@@ -152,7 +174,14 @@ impl Spiller {
         }
         writer.close().await?;
 
-        Ok((location, write_bytes))
+        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::SpillWriteTime,
+            instant.elapsed().as_millis() as usize,
+        );
+
+        Ok(location)
     }
 
     #[async_backtrace::framed]
@@ -163,7 +192,14 @@ impl Spiller {
             bytes: data.memory_size(),
         };
 
-        let (location, _) = self.spill_block(data).await?;
+        self.partition_spilled_bytes
+            .entry(p_id)
+            .and_modify(|bytes| {
+                *bytes += data.memory_size() as u64;
+            })
+            .or_insert(data.memory_size() as u64);
+
+        let location = self.spill_block(data).await?;
         self.partition_location
             .entry(p_id)
             .and_modify(|locs| {
@@ -179,19 +215,20 @@ impl Spiller {
     /// Read spilled data with partition id
     pub async fn read_spilled_partition(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
+
         let files = self.partition_location.get(p_id).unwrap().to_vec();
         let mut spilled_data = Vec::with_capacity(files.len());
         for file in files.iter() {
-            let (block, _) = self.read_spilled_file(file).await?;
+            let block = self.read_spilled_file(file).await?;
             if block.num_rows() != 0 {
                 spilled_data.push(block);
             }
         }
+
         Ok(spilled_data)
     }
 
     #[async_backtrace::framed]
-    // Directly spill input data without buffering.
     // Need to compute hashes for data block advanced.
     // For probe, only need to spill rows in build spilled partitions.
     // For left-related join, need to record rows not in build spilled partitions.
@@ -234,8 +271,12 @@ impl Spiller {
                 &block_row_indexes,
                 row_indexes.len(),
             );
-            // Spill block with partition id
-            self.spill_with_partition(*p_id, block).await?;
+            if let Some((p_id, block)) = self
+                .spiller_buffer
+                .add_partition_unspilled_data(*p_id, block)?
+            {
+                self.spill_with_partition(p_id, block).await?;
+            }
         }
         if !left_related_join {
             return Ok(None);
@@ -251,8 +292,44 @@ impl Spiller {
         )))
     }
 
+    // Spill the data in the buffer at the end of spilling
+    pub(crate) async fn spill_buffer(&mut self) -> Result<()> {
+        let partition_unspilled_data = self.spiller_buffer.partition_unspilled_data();
+        for (partition_id, blocks) in partition_unspilled_data.iter() {
+            if !blocks.is_empty() {
+                let merged_block = DataBlock::concat(blocks)?;
+                self.spill_with_partition(*partition_id, merged_block)
+                    .await?;
+            }
+        }
+        self.spiller_buffer.reset();
+        Ok(())
+    }
+
+    pub(crate) fn empty_buffer(&self) -> bool {
+        self.spiller_buffer.empty()
+    }
+
     pub(crate) fn spilled_files(&self) -> Vec<String> {
         self.columns_layout.keys().cloned().collect()
+    }
+
+    pub(crate) fn format_spill_info(&self) -> String {
+        // Using a single line to print how many bytes have been spilled and how many files have been spiled for each partition.
+        let mut info = String::new();
+        for (p_id, bytes) in self.partition_spilled_bytes.iter() {
+            // Covert bytes to GB
+            let spill_gb = Byte::from_unit(*bytes as f64, ByteUnit::B)
+                .unwrap()
+                .get_appropriate_unit(false)
+                .format(2);
+            let files = self.partition_location.get(p_id).unwrap().len();
+            info.push_str(&format!(
+                "Partition {}: spilled {}, {} files \n",
+                p_id, spill_gb, files
+            ));
+        }
+        info
     }
 }
 

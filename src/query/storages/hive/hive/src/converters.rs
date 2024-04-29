@@ -21,14 +21,15 @@ use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::resolve_type_name_by_str;
 use hive_metastore as hms;
 
@@ -44,10 +45,10 @@ impl From<hms::Database> for HiveDatabase {
         HiveDatabase {
             database_info: DatabaseInfo {
                 ident: DatabaseIdent { db_id: 0, seq: 0 },
-                name_ident: DatabaseNameIdent {
-                    tenant: "TODO".to_owned(),
-                    db_name: hms_database.name.unwrap_or_default().to_string(),
-                },
+                name_ident: DatabaseNameIdent::new(
+                    Tenant::new_literal("dummy"),
+                    hms_database.name.unwrap_or_default().to_string(),
+                ),
                 meta: DatabaseMeta {
                     engine: HIVE_DATABASE_ENGINE.to_owned(),
                     created_on: Utc::now(),

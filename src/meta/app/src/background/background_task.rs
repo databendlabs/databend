@@ -20,9 +20,13 @@ use std::time::Duration;
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::background::task_creator::BackgroundTaskCreator;
 use crate::background::BackgroundJobIdent;
+use crate::background::BackgroundTaskIdent;
 use crate::background::ManualTriggerParams;
 use crate::schema::TableStatistics;
+use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 #[derive(
     serde::Serialize,
@@ -71,12 +75,6 @@ impl Display for BackgroundTaskType {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct BackgroundTaskIdent {
-    pub tenant: String,
-    pub task_id: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct CompactionStats {
     pub db_id: u64,
     pub table_id: u64,
@@ -109,6 +107,7 @@ impl Display for VacuumStats {
     }
 }
 
+// Serde is required by `ListBackgroundTasksResponse.task_infos`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundTaskInfo {
     pub last_updated: Option<DateTime<Utc>>,
@@ -119,13 +118,13 @@ pub struct BackgroundTaskInfo {
     pub vacuum_stats: Option<VacuumStats>,
 
     pub manual_trigger: Option<ManualTriggerParams>,
-    pub creator: Option<BackgroundJobIdent>,
+    pub creator: Option<BackgroundTaskCreator>,
     pub created_at: DateTime<Utc>,
 }
 
 impl BackgroundTaskInfo {
     pub fn new_compaction_task(
-        creator: BackgroundJobIdent,
+        job_ident: BackgroundJobIdent,
         db_id: u64,
         tb_id: u64,
         tb_stats: TableStatistics,
@@ -147,13 +146,13 @@ impl BackgroundTaskInfo {
             }),
             vacuum_stats: None,
             manual_trigger,
-            creator: Some(creator),
+            creator: Some(job_ident.into()),
             created_at: now,
         }
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReq {
     pub task_name: BackgroundTaskIdent,
     pub task_info: BackgroundTaskInfo,
@@ -174,13 +173,13 @@ impl Display for UpdateBackgroundTaskReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReply {
     pub last_updated: DateTime<Utc>,
     pub expire_at: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundTaskReq {
     pub name: BackgroundTaskIdent,
 }
@@ -191,73 +190,26 @@ impl Display for GetBackgroundTaskReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundTaskReply {
     pub task_info: Option<BackgroundTaskInfo>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListBackgroundTasksReq {
-    pub tenant: String,
+    pub tenant: Tenant,
 }
 
 impl Display for ListBackgroundTasksReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "list_background_tasks({})", self.tenant)
+        write!(f, "list_background_tasks({})", self.tenant.tenant_name())
     }
 }
 
 impl ListBackgroundTasksReq {
-    pub fn new(tenant: impl Into<String>) -> ListBackgroundTasksReq {
+    pub fn new(tenant: impl ToTenant) -> ListBackgroundTasksReq {
         ListBackgroundTasksReq {
-            tenant: tenant.into(),
-        }
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::background::background_task::BackgroundTaskIdent;
-    use crate::background::BackgroundTaskInfo;
-    use crate::tenant::Tenant;
-
-    // task is named by id, and will not encounter renaming issue.
-    /// <prefix>/<tenant>/<background_task_ident> -> info
-    impl kvapi::Key for BackgroundTaskIdent {
-        const PREFIX: &'static str = "__fd_background_task_by_name";
-
-        type ValueType = BackgroundTaskInfo;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
-                .push_str(&self.task_id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            let id = p.next_str()?;
-            p.done()?;
-
-            Ok(BackgroundTaskIdent {
-                tenant,
-                task_id: id,
-            })
-        }
-    }
-
-    impl kvapi::Value for BackgroundTaskInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
+            tenant: tenant.to_tenant(),
         }
     }
 }

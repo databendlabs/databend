@@ -38,6 +38,8 @@ pub struct ProbeSpillHandler {
     next_restore_file: usize,
     // Save input block from the processor if the input block has zero columns.
     input_blocks: Vec<DataBlock>,
+    // The flag indicates whether spill the buffer data
+    spill_buffer: bool,
 }
 
 impl ProbeSpillHandler {
@@ -48,6 +50,7 @@ impl ProbeSpillHandler {
             probe_first_round_hashtable: true,
             next_restore_file: 0,
             input_blocks: vec![],
+            spill_buffer: false,
         }
     }
 
@@ -85,6 +88,14 @@ impl ProbeSpillHandler {
         self.spill_done = true;
     }
 
+    pub fn need_spill_buffer(&self) -> bool {
+        self.spill_buffer
+    }
+
+    pub fn set_need_spill_buffer(&mut self) {
+        self.spill_buffer = true;
+    }
+
     pub fn add_partition_loc(&mut self, id: u8, loc: Vec<String>) {
         self.spill_state_mut()
             .spiller
@@ -111,7 +122,7 @@ impl ProbeSpillHandler {
     }
 
     // Read spilled file
-    pub async fn read_spilled_file(&self, file: &str) -> Result<(DataBlock, u64)> {
+    pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
         self.spill_state().spiller.read_spilled_file(file).await
     }
 
@@ -137,6 +148,21 @@ impl ProbeSpillHandler {
             .spiller
             .spill_input(data_block, hashes, left_related_join, spilled_partitions)
             .await
+    }
+
+    // Print spill info
+    pub fn format_spill_info(&self) -> String {
+        self.spill_state().spiller.format_spill_info()
+    }
+
+    // Check if spiller buffer is empty
+    pub fn empty_buffer(&self) -> bool {
+        self.spill_state().spiller.empty_buffer()
+    }
+
+    // Spill buffer data
+    pub async fn spill_buffer(&mut self) -> Result<()> {
+        self.spill_state_mut().spiller.spill_buffer().await
     }
 }
 
@@ -226,13 +252,22 @@ impl TransformHashJoinProbe {
     //    then add spill_partitions to `spill_partition_set` and set `spill_done` to true.
     //    change current step to `WaitBuild`
     pub(crate) fn spill_finished(&mut self, processor_id: usize) -> Result<Event> {
+        if !self.spill_handler.empty_buffer() {
+            self.step = HashJoinProbeStep::Spill;
+            self.step_logs.push(HashJoinProbeStep::Spill);
+            self.spill_handler.set_need_spill_buffer();
+            return Ok(Event::Async);
+        }
         self.spill_handler.set_spill_done();
         // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
         let spilled_partition_set = &self.spill_handler.spilled_partitions();
-        info!(
-            "probe processor-{:?}: spill finished with spilled partitions {:?}",
-            processor_id, spilled_partition_set
-        );
+        if self.join_probe_state.join_type() != JoinType::Cross {
+            info!(
+                "Processor: {}, spill info: {}",
+                processor_id,
+                self.spill_handler.format_spill_info()
+            );
+        }
         if self.join_probe_state.hash_join_state.need_final_scan() {
             // Assign build spilled partitions to `self.join_probe_state.spill_partitions`
             let mut spill_partitions = self.join_probe_state.spill_partitions.write();
@@ -293,6 +328,11 @@ impl TransformHashJoinProbe {
 
     // Async spill action
     pub(crate) async fn spill_action(&mut self) -> Result<()> {
+        if self.spill_handler.need_spill_buffer() {
+            self.spill_handler.spill_buffer().await?;
+            self.spill_finished(self.processor_id)?;
+            return Ok(());
+        }
         // Before spilling, if there is a hash table, probe the hash table first
         self.try_probe_first_round_hashtable(self.input_data.clone())?;
         let left_related_join_type = matches!(
@@ -300,6 +340,7 @@ impl TransformHashJoinProbe {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full
         );
         let mut unmatched_data_blocks = vec![];
+        debug_assert!(self.input_data.len() == 1);
         for data in self.input_data.drain(..) {
             if self.join_probe_state.join_type() == JoinType::Cross {
                 if data.columns().is_empty() {
@@ -368,7 +409,7 @@ impl TransformHashJoinProbe {
             let next_restore_file = self.spill_handler.next_restore_file();
             let spilled_files = self.spill_handler.spilled_files();
             if !spilled_files.is_empty() {
-                let (spilled_data, _) = self
+                let spilled_data = self
                     .spill_handler
                     .read_spilled_file(&spilled_files[next_restore_file])
                     .await?;

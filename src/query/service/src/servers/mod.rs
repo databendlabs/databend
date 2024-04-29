@@ -25,8 +25,11 @@ pub use self::mysql::MySQLFederated;
 pub use self::mysql::MySQLHandler;
 pub use self::mysql::MySQLTlsConfig;
 
+pub mod admin;
 pub(crate) mod federated_helper;
+pub mod flight;
 pub mod flight_sql;
 pub mod http;
+pub mod metrics;
 mod mysql;
 pub(crate) mod server;

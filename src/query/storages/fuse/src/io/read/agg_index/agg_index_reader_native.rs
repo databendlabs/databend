@@ -24,7 +24,7 @@ use log::debug;
 use super::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::NativeSourceData;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 
 impl AggIndexReader {
     pub fn sync_read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
@@ -46,7 +46,7 @@ impl AggIndexReader {
                     .enumerate()
                     .map(|(i, c)| (i as u32, ColumnMeta::Native(c)))
                     .collect();
-                let part = FusePartInfo::create(
+                let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     num_rows,
                     columns_meta,
@@ -98,7 +98,7 @@ impl AggIndexReader {
                     .enumerate()
                     .map(|(i, c)| (i as u32, ColumnMeta::Native(c)))
                     .collect();
-                let part = FusePartInfo::create(
+                let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     num_rows,
                     columns_meta,

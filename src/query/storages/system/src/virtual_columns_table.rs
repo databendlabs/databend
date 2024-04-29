@@ -57,12 +57,8 @@ impl AsyncSystemTable for VirtualColumnsTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
-        let virtual_column_metas = catalog
-            .list_virtual_columns(ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: None,
-            })
-            .await?;
+        let req = ListVirtualColumnsReq::new(tenant, None);
+        let virtual_column_metas = catalog.list_virtual_columns(req).await?;
 
         let mut database_names = Vec::with_capacity(virtual_column_metas.len());
         let mut table_names: Vec<String> = Vec::with_capacity(virtual_column_metas.len());

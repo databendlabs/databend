@@ -47,13 +47,13 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
-use databend_common_sql::Planner;
 use databend_common_storages_factory::Table;
 use databend_enterprise_background_service::Suggestion;
 use futures_util::StreamExt;
 use log::error;
 use log::info;
 
+use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 
@@ -163,9 +163,9 @@ impl SuggestedBackgroundTasksSource {
         ctx: Arc<QueryContext>,
         sql: String,
     ) -> Result<Option<RecordBatch>> {
-        let mut planner = Planner::new(ctx.clone());
-        let (plan, plan_extras) = planner.plan_sql(sql.as_str()).await?;
-        ctx.attach_query_str(plan.kind(), plan_extras.statement.to_mask_sql());
+        // Use interpreter_plan_sql, we can write the query log if an error occurs.
+        let (plan, _) = interpreter_plan_sql(ctx.clone(), sql.as_str()).await?;
+
         let data_schema = plan.schema();
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;
@@ -198,7 +198,7 @@ impl SuggestedBackgroundTasksSource {
         let ctx = ctx.clone();
         info!(
             background = true,
-            tenant = ctx.get_tenant().to_string();
+            tenant = ctx.get_tenant().tenant_name().to_string();
             "list all lsuggestions"
         );
         Self::get_suggested_compaction_tasks(ctx).await

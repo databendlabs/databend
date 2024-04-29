@@ -152,7 +152,7 @@ impl Display for ShowVirtualColumnsStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW VIRTUAL COLUMNS")?;
         if let Some(table) = &self.table {
-            write!(f, "FROM {}", table)?;
+            write!(f, " FROM {}", table)?;
         }
         if let Some(database) = &self.database {
             write!(f, " FROM ")?;

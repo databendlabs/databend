@@ -31,9 +31,14 @@ impl TxnRequest {
 impl pb::TxnCondition {
     /// Create a txn condition that checks if the `seq` matches.
     pub fn eq_seq(key: impl ToString, seq: u64) -> Self {
+        Self::match_seq(key, pb::txn_condition::ConditionResult::Eq, seq)
+    }
+
+    /// Create a txn condition that checks if the `seq` match.
+    pub fn match_seq(key: impl ToString, op: pb::txn_condition::ConditionResult, seq: u64) -> Self {
         Self {
             key: key.to_string(),
-            expected: pb::txn_condition::ConditionResult::Eq as i32,
+            expected: op as i32,
             target: Some(pb::txn_condition::Target::Seq(seq)),
         }
     }

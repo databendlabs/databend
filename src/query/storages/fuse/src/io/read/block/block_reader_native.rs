@@ -36,13 +36,14 @@ use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
 
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 
 // Native storage format
 
 pub trait NativeReaderExt: NativeReadBuf + std::io::Seek + Send + Sync {}
+
 impl<T: NativeReadBuf + std::io::Seek + Send + Sync> NativeReaderExt for T {}
 
 pub type Reader = Box<dyn NativeReaderExt>;
@@ -62,7 +63,7 @@ impl BlockReader {
             metrics_inc_remote_io_read_parts(1);
         }
 
-        let part = FusePartInfo::from_part(part)?;
+        let part = FuseBlockPartInfo::from_part(part)?;
         let settings = ReadSettings::from_ctx(ctx)?;
         let read_res = self
             .read_columns_data_by_merge_io(
@@ -140,7 +141,7 @@ impl BlockReader {
         part: &PartInfoPtr,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<NativeSourceData> {
-        let part = FusePartInfo::from_part(part)?;
+        let part = FuseBlockPartInfo::from_part(part)?;
 
         let mut results: BTreeMap<usize, Vec<NativeReader<Reader>>> = BTreeMap::new();
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {

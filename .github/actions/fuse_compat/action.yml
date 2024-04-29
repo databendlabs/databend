@@ -23,6 +23,8 @@ runs:
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.46 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.241 revoke
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.306 rbac
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.307 rbac
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.318 rbac
           bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.307 rbac
           bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.318 rbac
     - name: Upload failure

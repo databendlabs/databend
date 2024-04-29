@@ -136,7 +136,10 @@ impl ParquetRSTable {
 
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
-        let need_stats_provider = !matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
+        let need_stats_provider = !matches!(
+            ctx.get_query_kind(),
+            QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation
+        );
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
@@ -250,11 +253,13 @@ impl Table for ParquetRSTable {
 
     async fn column_statistics_provider(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         if !self.need_stats_provider {
             return Ok(Box::new(DummyColumnStatisticsProvider));
         }
+
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
 
         // This method can only be called once.
         // Unwrap safety: no other thread will hold this lock.
@@ -269,7 +274,7 @@ impl Table for ParquetRSTable {
                 .collect::<Vec<_>>(),
             None => self
                 .files_info
-                .list(&self.operator, false, None)
+                .list(&self.operator, thread_num, None)
                 .await?
                 .into_iter()
                 .map(|f| (f.path, f.size))

@@ -10,6 +10,36 @@ statement ok
 set join_spilling_bytes_threshold_per_proc = 1;
 
 statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a varchar not null);
+
+statement ok
+create table t2(b varchar not null);
+
+statement ok
+insert into t1 values('a'),('b');
+
+statement ok
+insert into t2 values('a'),('b');
+
+query TT
+select a from t2 right join t1 on t1.a = t2.b order by a;
+----
+a
+b
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
 drop table if exists t3;
 
 statement ok

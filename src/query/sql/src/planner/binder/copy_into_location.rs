@@ -59,6 +59,9 @@ impl<'a> Binder {
                 }
             }
             CopyIntoLocationSource::Query(query) => {
+                if let Some(with) = &stmt.with {
+                    self.add_cte(with, bind_context)?;
+                }
                 let select_plan = self
                     .bind_statement(bind_context, &Statement::Query(query.clone()))
                     .await?;

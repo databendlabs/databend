@@ -32,15 +32,16 @@ use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use log::info;
 use opendal::Operator;
 
 use crate::io::SegmentsIO;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::CompactBlockPartInfo;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::CompactLazyPartInfo;
-use crate::operations::mutation::CompactPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::mutation::MAX_BLOCK_COUNT;
@@ -82,12 +83,16 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
-        let (num_segment_limit, num_block_limit) =
-            if let Some(limit) = self.compact_params.num_segment_limit {
-                (limit, MAX_BLOCK_COUNT * 100)
-            } else {
-                (number_segments, MAX_BLOCK_COUNT)
-            };
+        let num_segment_limit = self
+            .compact_params
+            .num_segment_limit
+            .unwrap_or(number_segments);
+        let num_block_limit = self
+            .compact_params
+            .num_block_limit
+            .unwrap_or(MAX_BLOCK_COUNT);
+
+        info!("block compaction limits: seg {num_segment_limit},  block {num_block_limit}");
 
         // Status.
         self.ctx
@@ -141,8 +146,13 @@ impl BlockCompactMutator {
                     self.generate_part(segments, &mut parts, &mut checker);
                 }
 
-                if checker.compacted_segment_cnt + checker.segments.len() >= num_segment_limit
-                    || checker.compacted_block_cnt >= num_block_limit as u64
+                let residual_segment_cnt = checker.segments.len();
+                let residual_block_cnt = checker
+                    .segments
+                    .iter()
+                    .fold(0, |acc, e| acc + e.1.summary.block_count);
+                if checker.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
+                    || checker.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
                 {
                     is_end = true;
                     break;
@@ -199,7 +209,7 @@ impl BlockCompactMutator {
                         .clone()
                 })
                 .collect::<Vec<_>>();
-            Partitions::create_nolazy(
+            Partitions::create(
                 PartitionsShuffleKind::Mod,
                 BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
@@ -211,7 +221,7 @@ impl BlockCompactMutator {
                 .await?,
             )
         } else {
-            Partitions::create(PartitionsShuffleKind::Mod, parts, true)
+            Partitions::create(PartitionsShuffleKind::Mod, parts)
         };
         Ok(partitions)
     }
@@ -572,7 +582,7 @@ impl CompactTaskBuilder {
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
         for (block_idx, blocks) in tasks.into_iter() {
-            partitions.push(Arc::new(Box::new(CompactPartInfo::CompactTaskInfo(
+            partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactTaskInfo(
                 CompactTaskInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
                     block_idx,
@@ -580,7 +590,7 @@ impl CompactTaskBuilder {
             ))));
         }
 
-        partitions.push(Arc::new(Box::new(CompactPartInfo::CompactExtraInfo(
+        partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactExtraInfo(
             CompactExtraInfo::create(
                 segment_idx,
                 unchanged_blocks,

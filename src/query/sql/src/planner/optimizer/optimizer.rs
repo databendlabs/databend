@@ -28,6 +28,7 @@ use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
 use super::Memo;
 use crate::binder::MergeIntoType;
+use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
@@ -35,7 +36,9 @@ use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
+use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
@@ -60,6 +63,7 @@ pub struct OptimizerContext {
     enable_distributed_optimization: bool,
     enable_join_reorder: bool,
     enable_dphyp: bool,
+    enable_merge_into_join_reorder: bool,
 }
 
 impl OptimizerContext {
@@ -71,6 +75,7 @@ impl OptimizerContext {
             enable_distributed_optimization: false,
             enable_join_reorder: true,
             enable_dphyp: true,
+            enable_merge_into_join_reorder: true,
         }
     }
 
@@ -88,6 +93,11 @@ impl OptimizerContext {
         self.enable_dphyp = enable;
         self
     }
+
+    pub fn with_enable_merge_into_join_reorder(mut self, enable: bool) -> Self {
+        self.enable_merge_into_join_reorder = enable;
+        self
+    }
 }
 
 /// A recursive optimizer that will apply the given rules recursively.
@@ -96,16 +106,11 @@ impl OptimizerContext {
 pub struct RecursiveOptimizer<'a> {
     ctx: &'a OptimizerContext,
     rules: &'static [RuleID],
-    after_join_reorder: bool,
 }
 
 impl<'a> RecursiveOptimizer<'a> {
     pub fn new(rules: &'static [RuleID], ctx: &'a OptimizerContext) -> Self {
-        Self {
-            ctx,
-            rules,
-            after_join_reorder: false,
-        }
+        Self { ctx, rules }
     }
 
     /// Run the optimizer on the given expression.
@@ -127,11 +132,7 @@ impl<'a> RecursiveOptimizer<'a> {
     fn apply_transform_rules(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
         for rule_id in rules {
-            let rule = RuleFactory::create_rule(
-                *rule_id,
-                self.ctx.metadata.clone(),
-                self.after_join_reorder,
-            )?;
+            let rule = RuleFactory::create_rule(*rule_id, self.ctx.metadata.clone())?;
             let mut state = TransformResult::new();
             if rule
                 .matchers()
@@ -152,14 +153,10 @@ impl<'a> RecursiveOptimizer<'a> {
 
         Ok(s_expr.clone())
     }
-
-    fn set_after_join_reorder(&mut self, after_join_reorder: bool) {
-        self.after_join_reorder = after_join_reorder;
-    }
 }
 
 #[minitrace::trace]
-pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
+pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
             s_expr,
@@ -169,7 +166,7 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             formatted_ast,
             ignore_result,
         } => Ok(Plan::Query {
-            s_expr: Box::new(optimize_query(opt_ctx, *s_expr)?),
+            s_expr: Box::new(optimize_query(opt_ctx, *s_expr).await?),
             bind_context,
             metadata,
             rewrite_kind,
@@ -182,7 +179,7 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             ExplainKind::Memo(_) => {
                 if let box Plan::Query { ref s_expr, .. } = plan {
-                    let memo = get_optimized_memo(opt_ctx, *s_expr.clone())?;
+                    let memo = get_optimized_memo(opt_ctx, *s_expr.clone()).await?;
                     Ok(Plan::Explain {
                         config,
                         kind: ExplainKind::Memo(display_memo(&memo)?),
@@ -196,7 +193,7 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             _ => {
                 if config.optimized || !config.logical {
-                    let optimized_plan = optimize(opt_ctx.clone(), *plan)?;
+                    let optimized_plan = Box::pin(optimize(opt_ctx.clone(), *plan)).await?;
                     Ok(Plan::Explain {
                         kind,
                         config,
@@ -208,13 +205,13 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
         },
         Plan::ExplainAnalyze { plan } => Ok(Plan::ExplainAnalyze {
-            plan: Box::new(optimize(opt_ctx, *plan)?),
+            plan: Box::new(Box::pin(optimize(opt_ctx, *plan)).await?),
         }),
         Plan::CopyIntoLocation(CopyIntoLocationPlan { stage, path, from }) => {
             Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
                 stage,
                 path,
-                from: Box::new(optimize(opt_ctx, *from)?),
+                from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
             }))
         }
         Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
@@ -229,14 +226,14 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             );
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan),
+        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan).await,
 
         // Pass through statements.
         _ => Ok(plan),
     }
 }
 
-pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
+pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
 
@@ -248,6 +245,14 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             s_expr.clone(),
         )?;
     }
+
+    // Collect statistics for each leaf node in SExpr.
+    s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)
+        .await?;
+
+    // Normalize aggregate, it should be executed before RuleSplitAggregate.
+    s_expr = RuleNormalizeAggregateOptimizer::new().run(&s_expr)?;
 
     // Pull up and infer filter.
     s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;
@@ -262,16 +267,12 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone()).optimize(&s_expr)?;
         if optimized {
             s_expr = (*dp_res).clone();
-            s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
-            // After join reorder, we need to run push down filter join again.
-            // There may be some changes to change join type, such as single join to inner join.
-            s_expr.clear_applied_rules();
-            let mut optimizer = RecursiveOptimizer::new(&[RuleID::PushDownFilterJoin], &opt_ctx);
-            optimizer.set_after_join_reorder(true);
-            s_expr = optimizer.run(&s_expr)?;
             dphyp_optimized = true;
         }
     }
+
+    // After join reorder, Convert some single join to inner join.
+    s_expr = SingleToInnerOptimizer::new().run(&s_expr)?;
 
     // Deduplicate join conditions.
     s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
@@ -320,7 +321,7 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
-fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
+async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
 
@@ -332,6 +333,11 @@ fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Me
             s_expr.clone(),
         )?;
     }
+
+    // Collect statistics for each leaf node in SExpr.
+    s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)
+        .await?;
 
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
@@ -357,12 +363,12 @@ fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Me
     Ok(cascades.memo)
 }
 
-fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
+async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
     // optimize source :fix issue #13733
     // reason: if there is subquery,windowfunc exprs etc. see
     // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
     // get dummy index. So we need to use optimizer to solve this.
-    let mut right_source = optimize_query(opt_ctx.clone(), plan.input.child(1)?.clone())?;
+    let mut right_source = optimize_query(opt_ctx.clone(), plan.input.child(1)?.clone()).await?;
 
     // if it's not distributed execution, we should reserve
     // exchange to merge source data.
@@ -380,10 +386,9 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     }
     // replace right source
     let mut join_sexpr = plan.input.clone();
-    join_sexpr = Box::new(join_sexpr.replace_children(vec![
-        Arc::new(join_sexpr.child(0)?.clone()),
-        Arc::new(right_source),
-    ]));
+    let left_target = optimize_query(opt_ctx.clone(), join_sexpr.child(0)?.clone()).await?;
+    join_sexpr =
+        Box::new(join_sexpr.replace_children(vec![Arc::new(left_target), Arc::new(right_source)]));
 
     let join_op = Join::try_from(join_sexpr.plan().clone())?;
     let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
@@ -393,15 +398,19 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     // 3. for full merge into, we use right outer join
     // for now, let's import the statistic info to determine left join or right join
     // we just do optimization for the top join (target and source),won't do recursive optimization.
-    let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone(), false)?;
-    let mut state = TransformResult::new();
-    // we will reorder the join order according to the cardinality of target and source.
-    rule.apply(&join_sexpr, &mut state)?;
-    assert!(state.results().len() <= 1);
-    // we need to check whether we do swap left and right.
-    let change_join_order = if state.results().len() == 1 {
-        join_sexpr = Box::new(state.results()[0].clone());
-        true
+    let change_join_order = if opt_ctx.enable_merge_into_join_reorder {
+        let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
+        let mut state = TransformResult::new();
+        // we will reorder the join order according to the cardinality of target and source.
+        rule.apply(&join_sexpr, &mut state)?;
+        assert!(state.results().len() <= 1);
+        // we need to check whether we do swap left and right.
+        if state.results().len() == 1 {
+            join_sexpr = Box::new(state.results()[0].clone());
+            true
+        } else {
+            false
+        }
     } else {
         false
     };

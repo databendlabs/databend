@@ -46,10 +46,9 @@ use xorf::BinaryFuse16;
 use super::parquet_data_source::ParquetDataSource;
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
-use crate::io::UncompressedBuffer;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
@@ -67,7 +66,6 @@ pub struct DeserializeDataTransform {
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<ParquetDataSource>,
-    uncompressed_buffer: Arc<UncompressedBuffer>,
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
@@ -90,7 +88,6 @@ impl DeserializeDataTransform {
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
-        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
@@ -122,7 +119,6 @@ impl DeserializeDataTransform {
             output_schema,
             parts: vec![],
             chunks: vec![],
-            uncompressed_buffer: UncompressedBuffer::new(buffer_size),
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
@@ -188,7 +184,6 @@ impl Processor for DeserializeDataTransform {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
-            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -225,7 +220,6 @@ impl Processor for DeserializeDataTransform {
 
         if self.input.is_finished() {
             self.output.finish();
-            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -240,11 +234,7 @@ impl Processor for DeserializeDataTransform {
             match read_res {
                 ParquetDataSource::AggIndex((actual_part, data)) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize_parquet_data(
-                        actual_part,
-                        data,
-                        self.uncompressed_buffer.clone(),
-                    )?;
+                    let block = agg_index_reader.deserialize_parquet_data(actual_part, data)?;
 
                     let progress_values = ProgressValues {
                         rows: block.num_rows(),
@@ -261,15 +251,14 @@ impl Processor for DeserializeDataTransform {
                 ParquetDataSource::Normal((data, virtual_data)) => {
                     let start = Instant::now();
                     let columns_chunks = data.columns_chunks()?;
-                    let part = FusePartInfo::from_part(&part)?;
+                    let part = FuseBlockPartInfo::from_part(&part)?;
 
-                    let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                        &part.location,
+                    let mut data_block = self.block_reader.deserialize_parquet_chunks(
                         part.nums_rows,
-                        &part.compression,
                         &part.columns_meta,
                         columns_chunks,
-                        Some(self.uncompressed_buffer.clone()),
+                        &part.compression,
+                        &part.location,
                     )?;
 
                     let origin_num_rows = data_block.num_rows();
@@ -284,11 +273,8 @@ impl Processor for DeserializeDataTransform {
 
                     // Add optional virtual columns
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                        data_block = virtual_reader.deserialize_virtual_columns(
-                            data_block.clone(),
-                            virtual_data,
-                            Some(self.uncompressed_buffer.clone()),
-                        )?;
+                        data_block = virtual_reader
+                            .deserialize_virtual_columns(data_block.clone(), virtual_data)?;
                     }
 
                     // Perf.

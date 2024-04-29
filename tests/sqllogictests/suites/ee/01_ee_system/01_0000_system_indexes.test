@@ -57,8 +57,8 @@ SHOW INDEXES
 query TTT
 SELECT name, type, definition FROM system.indexes
 ----
-idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b
-idx2 AGGREGATING SELECT b FROM test_index_db.t1 WHERE (a < 10)
+idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE b > 3 GROUP BY b
+idx2 AGGREGATING SELECT b FROM test_index_db.t1 WHERE a < 10
 idx3 AGGREGATING SELECT * FROM test_index_db.t2
 
 statement ok
@@ -67,7 +67,7 @@ DROP AGGREGATING INDEX idx2
 query TTT
 SELECT name, type, definition FROM system.indexes
 ----
-idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b
+idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE b > 3 GROUP BY b
 idx3 AGGREGATING SELECT * FROM test_index_db.t2
 
 statement ok

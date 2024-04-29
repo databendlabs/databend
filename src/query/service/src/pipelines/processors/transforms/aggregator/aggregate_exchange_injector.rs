@@ -35,12 +35,6 @@ use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
-use crate::api::DataExchange;
-use crate::api::ExchangeInjector;
-use crate::api::ExchangeSorting;
-use crate::api::FlightScatter;
-use crate::api::MergeExchangeParams;
-use crate::api::ShuffleExchangeParams;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
@@ -58,10 +52,20 @@ use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::servers::flight::v1::exchange::DataExchange;
+use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::exchange::ExchangeSorting;
+use crate::servers::flight::v1::exchange::MergeExchangeParams;
+use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::sessions::QueryContext;
 
 struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'static> {
     _phantom: PhantomData<(Method, V)>,
+}
+
+pub fn compute_block_number(bucket: isize, max_partition_count: usize) -> Result<isize> {
+    Ok(max_partition_count as isize * 1000 + bucket)
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
@@ -78,14 +82,17 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                     ))),
                     Some(meta_info) => match meta_info {
                         AggregateMeta::Partitioned { .. } => unreachable!(),
-                        AggregateMeta::Serialized(v) => Ok(v.bucket),
+                        AggregateMeta::Serialized(v) => {
+                            compute_block_number(v.bucket, v.max_partition_count)
+                        }
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
-                        AggregateMeta::AggregateHashTable(_) => unreachable!(),
-                        AggregateMeta::AggregatePayload(v) => Ok(v.bucket),
+                        AggregateMeta::AggregatePayload(v) => {
+                            compute_block_number(v.bucket, v.max_partition_count)
+                        }
                         AggregateMeta::AggregateSpilling(_)
                         | AggregateMeta::Spilled(_)
-                        | AggregateMeta::Spilling(_)
-                        | AggregateMeta::BucketSpilled(_) => Ok(-1),
+                        | AggregateMeta::BucketSpilled(_)
+                        | AggregateMeta::Spilling(_) => Ok(-1),
                     },
                 }
             }
@@ -144,7 +151,7 @@ fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     Ok(res)
 }
 
-fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
+fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
     let mut buckets = Vec::with_capacity(buckets);
 
     let group_types = payload.group_types.clone();
@@ -152,11 +159,8 @@ fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
     let mut state = PayloadFlushState::default();
 
     for _ in 0..buckets.capacity() {
-        buckets.push(Payload::new(
-            payload.arena.clone(),
-            group_types.clone(),
-            aggrs.clone(),
-        ));
+        let p = Payload::new(payload.arena.clone(), group_types.clone(), aggrs.clone());
+        buckets.push(p);
     }
 
     // scatter each page of the payload.
@@ -224,7 +228,7 @@ fn scatter_partitioned_payload(
     }
 
     for (idx, payload) in payloads.into_iter().enumerate() {
-        buckets[idx].combine_single(payload, &mut state);
+        buckets[idx].combine_single(payload, &mut state, None);
     }
 
     Ok(buckets)
@@ -255,9 +259,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     }
                     AggregateMeta::AggregateSpilling(payload) => {
                         for p in scatter_partitioned_payload(payload, self.buckets)? {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_agg_spilling(p),
-                            ))
+                            blocks.push(match p.len() == 0 {
+                                true => DataBlock::empty(),
+                                false => DataBlock::empty_with_meta(
+                                    AggregateMeta::<Method, V>::create_agg_spilling(p),
+                                ),
+                            });
                         }
                     }
                     AggregateMeta::HashTable(payload) => {
@@ -274,16 +281,18 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                             });
                         }
                     }
-                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
-                        for payload in scatter_paylaod(p.payload, self.buckets)? {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_agg_payload(
-                                    p.bucket,
-                                    payload,
-                                    p.max_partition_count,
+                        for payload in scatter_payload(p.payload, self.buckets)? {
+                            blocks.push(match payload.len() == 0 {
+                                true => DataBlock::empty(),
+                                false => DataBlock::empty_with_meta(
+                                    AggregateMeta::<Method, V>::create_agg_payload(
+                                        p.bucket,
+                                        payload,
+                                        p.max_partition_count,
+                                    ),
                                 ),
-                            ))
+                            });
                         }
                     }
                 };
@@ -316,7 +325,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjecto
         Arc::new(AggregateInjector::<Method, V> {
             ctx,
             method,
-            tenant: tenant.to_string(),
+            tenant: tenant.tenant_name().to_string(),
             aggregator_params: params,
             _phantom: Default::default(),
         })

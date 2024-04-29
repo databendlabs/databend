@@ -20,10 +20,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::KillPlan;
 
-use crate::api::KillQueryPacket;
-use crate::api::Packet;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::flight::v1::packets::KillQueryPacket;
+use crate::servers::flight::v1::packets::Packet;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 

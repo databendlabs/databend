@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateCatalogReply;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -78,7 +76,6 @@ use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -86,6 +83,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -187,17 +185,14 @@ pub trait SchemaApi: Send + Sync {
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError>;
 
-    /// List all tables belonging to every db and every tenant.
-    ///
-    /// I.e.: all tables found in key-space: `__fd_table_by_id/`.
-    /// Notice that this key space includes both deleted and non-deleted table-metas. `TableMeta.drop_on.is_some()` indicates it's a deleted(but not yet garbage collected) one.
-    ///
-    /// It returns a list of (table-id, table-meta-seq, table-meta).
-    async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError>;
-
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply, KVAppError>;
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError>;
+
+    async fn undrop_table_by_id(
+        &self,
+        req: UndropTableByIdReq,
+    ) -> Result<UndropTableReply, KVAppError>;
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError>;
 
@@ -216,13 +211,13 @@ pub trait SchemaApi: Send + Sync {
     async fn mget_table_names_by_ids(
         &self,
         table_ids: &[MetaId],
-    ) -> Result<Vec<String>, KVAppError>;
+    ) -> Result<Vec<Option<String>>, KVAppError>;
 
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError>;
     async fn mget_database_names_by_ids(
         &self,
         db_ids: &[MetaId],
-    ) -> Result<Vec<String>, KVAppError>;
+    ) -> Result<Vec<Option<String>>, KVAppError>;
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String, KVAppError>;
 
@@ -271,8 +266,6 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: GcDroppedTableReq,
     ) -> Result<GcDroppedTableResp, KVAppError>;
-
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError>;
 
     async fn list_lock_revisions(
         &self,

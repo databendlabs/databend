@@ -79,7 +79,7 @@ error:
   --> SQL:1:15
   |
 1 | select * order
-  | ------        ^ unexpected end of line, expecting `BY`
+  | ------        ^ unexpected end of input, expecting `BY`
   | |             
   | while parsing `SELECT ...`
 
@@ -105,6 +105,6 @@ error:
   --> SQL:1:10
   |
 1 | select 1 1
-  |          ^ unexpected `1`, expecting <Ident>, <QuotedString>, `AS`, `,`, `FROM`, `WHERE`, `GROUP`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, `VALUES`, `ORDER`, `LIMIT`, `OFFSET`, or `IGNORE_RESULT`
+  |          ^ unexpected `1`, expecting <Ident>, <QuotedString>, `IDENTIFIER`, `AS`, `,`, `FROM`, `WHERE`, `GROUP`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, `VALUES`, `ORDER`, `LIMIT`, `OFFSET`, or `IGNORE_RESULT`
 
 

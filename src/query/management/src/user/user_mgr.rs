@@ -28,7 +28,6 @@ use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyStr;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 
@@ -42,10 +41,10 @@ pub struct UserMgr {
 }
 
 impl UserMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: NonEmptyStr) -> Self {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
         UserMgr {
             kv_api,
-            tenant: Tenant::new_nonempty(tenant.into()),
+            tenant: tenant.clone(),
         }
     }
 
@@ -108,7 +107,7 @@ impl UserApi for UserMgr {
             if res.prev.is_some() {
                 return Err(ErrorCode::UserAlreadyExists(format!(
                     "User {} already exists.",
-                    user_info.identity()
+                    user_info.identity().display()
                 )));
             }
         }
@@ -122,8 +121,9 @@ impl UserApi for UserMgr {
         let key = self.user_key(&user.username, &user.hostname);
 
         let res = self.kv_api.get_kv(&key).await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownUser(format!("User {} does not exist.", user)))?;
+        let seq_value = res.ok_or_else(|| {
+            ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
+        })?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
@@ -132,7 +132,7 @@ impl UserApi for UserMgr {
             )),
             Err(_) => Err(ErrorCode::UnknownUser(format!(
                 "User {} does not exist.",
-                user
+                user.display()
             ))),
         }
     }
@@ -189,7 +189,7 @@ impl UserApi for UserMgr {
         } else {
             Err(ErrorCode::UnknownUser(format!(
                 "Cannot delete user {}. User does not exist or invalid operation.",
-                user
+                user.display()
             )))
         }
     }

@@ -70,7 +70,7 @@ pub struct TableScan {
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 
-    pub table_index: IndexType,
+    pub table_index: Option<IndexType>,
     pub stat_info: Option<PlanStatsInfo>,
 }
 
@@ -246,7 +246,7 @@ impl PhysicalPlanBuilder {
             plan_id: 0,
             name_mapping,
             source: Box::new(source),
-            table_index: scan.table_index,
+            table_index: Some(scan.table_index),
             stat_info: Some(stat_info),
             internal_column,
         }))
@@ -256,7 +256,7 @@ impl PhysicalPlanBuilder {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.txn_mgr())?
-            .get_table(self.ctx.get_tenant().as_str(), "system", "one")
+            .get_table(&self.ctx.get_tenant(), "system", "one")
             .await?;
 
         if !table.result_can_be_cached() {
@@ -277,7 +277,7 @@ impl PhysicalPlanBuilder {
             plan_id: 0,
             name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
             source: Box::new(source),
-            table_index: DUMMY_TABLE_INDEX,
+            table_index: Some(DUMMY_TABLE_INDEX),
             stat_info: Some(PlanStatsInfo {
                 estimated_rows: 1.0,
             }),
@@ -487,6 +487,7 @@ impl PhysicalPlanBuilder {
             lazy_materialization: !metadata.lazy_columns().is_empty(),
             agg_index: None,
             change_type: scan.change_type.clone(),
+            inverted_index: scan.inverted_index.clone(),
         })
     }
 

@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::format;
 use std::time::Duration;
 
 use databend_common_meta_app::schema::CreateOption;
@@ -24,8 +23,9 @@ use derive_visitor::DriveMut;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_comma_separated_map;
+use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
+use crate::ast::write_space_separated_string_map;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -173,12 +173,12 @@ impl Display for CreateTableStmt {
             write!(f, " {source}")?;
         }
 
-        if let Some(uri_location) = &self.uri_location {
-            write!(f, " {uri_location}")?;
-        }
-
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
+        }
+
+        if let Some(uri_location) = &self.uri_location {
+            write!(f, " {uri_location}")?;
         }
 
         if !self.cluster_by.is_empty() {
@@ -188,7 +188,11 @@ impl Display for CreateTableStmt {
         }
 
         // Format table options
-        write_comma_separated_map(f, &self.table_options)?;
+        if !self.table_options.is_empty() {
+            write!(f, " ")?;
+            write_space_separated_string_map(f, &self.table_options)?;
+        }
+
         if let Some(as_query) = &self.as_query {
             write!(f, " AS {as_query}")?;
         }
@@ -218,7 +222,7 @@ impl Display for AttachTableStmt {
                 .chain(Some(&self.table)),
         )?;
 
-        write!(f, " FROM {}", self.uri_location)?;
+        write!(f, " {}", self.uri_location)?;
 
         if self.read_only {
             write!(f, " READ_ONLY")?;
@@ -361,6 +365,10 @@ pub enum AlterTableAction {
         old_column: Identifier,
         new_column: Identifier,
     },
+    ModifyTableComment {
+        #[drive(skip)]
+        new_comment: String,
+    },
     ModifyColumn {
         action: ModifyColumnAction,
     },
@@ -378,7 +386,7 @@ pub enum AlterTableAction {
         #[drive(skip)]
         limit: Option<u64>,
     },
-    RevertTo {
+    FlashbackTo {
         point: TimeTravelPoint,
     },
     SetOptions {
@@ -392,11 +400,14 @@ impl Display for AlterTableAction {
         match self {
             AlterTableAction::SetOptions { set_options } => {
                 write!(f, "SET OPTIONS (")?;
-                write_comma_separated_map(f, set_options)?;
+                write_comma_separated_string_map(f, set_options)?;
                 write!(f, ")")?;
             }
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")?;
+            }
+            AlterTableAction::ModifyTableComment { new_comment } => {
+                write!(f, "COMMENT='{new_comment}'")?;
             }
             AlterTableAction::RenameColumn {
                 old_column,
@@ -414,8 +425,9 @@ impl Display for AlterTableAction {
                 write!(f, "DROP COLUMN {column}")?;
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                write!(f, "CLUSTER BY ")?;
+                write!(f, "CLUSTER BY (")?;
                 write_comma_separated_list(f, cluster_by)?;
+                write!(f, ")")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
@@ -436,8 +448,8 @@ impl Display for AlterTableAction {
                     write!(f, " LIMIT {limit}")?;
                 }
             }
-            AlterTableAction::RevertTo { point } => {
-                write!(f, "REVERT TO {}", point)?;
+            AlterTableAction::FlashbackTo { point } => {
+                write!(f, "FLASHBACK TO {}", point)?;
             }
         };
         Ok(())
@@ -844,35 +856,8 @@ impl Display for ModifyColumnAction {
             ModifyColumnAction::UnsetMaskingPolicy(column) => {
                 write!(f, "{} UNSET MASKING POLICY", column)?
             }
-            ModifyColumnAction::SetDataType(column_def_vec) => {
-                let ret = column_def_vec
-                    .iter()
-                    .enumerate()
-                    .map(|(i, column_def)| {
-                        let default_expr_str = match &column_def.expr {
-                            Some(default_expr) => default_expr.to_string(),
-                            None => "".to_string(),
-                        };
-                        let comment = match &column_def.comment {
-                            Some(comment) => format!(" COMMENT {}", comment),
-                            None => "".to_string(),
-                        };
-                        if i > 0 {
-                            format!(
-                                " COLUMN {} {}{}{}",
-                                column_def.name, column_def.data_type, default_expr_str, comment
-                            )
-                        } else {
-                            format!(
-                                "{} {}{}{}",
-                                column_def.name, column_def.data_type, default_expr_str, comment
-                            )
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
-
-                write!(f, "{}", ret)?
+            ModifyColumnAction::SetDataType(column_defs) => {
+                write_comma_separated_list(f, column_defs)?
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 write!(f, "{} DROP STORED", column)?

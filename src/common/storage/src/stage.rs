@@ -16,6 +16,7 @@ use std::path::Path;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
@@ -107,7 +108,7 @@ impl StageFilesInfo {
     pub async fn list(
         &self,
         operator: &Operator,
-        first_only: bool,
+        thread_num: usize,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         if self.path == STDIN_FD {
@@ -116,54 +117,40 @@ impl StageFilesInfo {
 
         let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
-            let mut res = Vec::new();
-            let mut limit: usize = 0;
-            for file in files {
-                let full_path = Path::new(&self.path)
-                    .join(file)
-                    .to_string_lossy()
-                    .to_string();
-                let meta = operator.stat(&full_path).await?;
-                if meta.mode().is_file() {
-                    res.push(StageFileInfo::new(full_path, &meta))
-                } else {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "{full_path} is not a file"
-                    )));
-                }
-                if first_only {
-                    return Ok(res);
-                }
-                limit += 1;
-                if limit == max_files {
-                    return Ok(res);
+            let file_infos = self
+                .stat_concurrent(operator, thread_num, max_files, files)
+                .await?;
+            let mut res = Vec::with_capacity(file_infos.len());
+
+            for file_info in file_infos {
+                match file_info {
+                    Ok((path, meta)) if meta.is_dir() => {
+                        return Err(ErrorCode::BadArguments(format!("{path} is not a file")));
+                    }
+                    Ok((path, meta)) => res.push(StageFileInfo::new(path, &meta)),
+                    Err(e) => {
+                        return Err(e);
+                    }
                 }
             }
             Ok(res)
         } else {
             let pattern = self.get_pattern()?;
-            StageFilesInfo::list_files_with_pattern(
-                operator,
-                &self.path,
-                pattern,
-                self.start_after.as_deref(),
-                first_only,
-                max_files,
-            )
-            .await
+            StageFilesInfo::list_files_with_pattern(operator, &self.path, pattern, self.start_after.as_deref(), max_files).await
         }
     }
 
     #[async_backtrace::framed]
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
-        let mut files = self.list(operator, true, None).await?;
+        // We only fetch first file.
+        let mut files = self.list(operator, 1, Some(1)).await?;
         files
             .pop()
             .ok_or_else(|| ErrorCode::BadArguments("no file found"))
     }
 
     pub fn blocking_first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
-        let mut files = self.blocking_list(operator, true, None)?;
+        let mut files = self.blocking_list(operator, Some(1))?;
         files
             .pop()
             .ok_or_else(|| ErrorCode::BadArguments("no file found"))
@@ -172,17 +159,16 @@ impl StageFilesInfo {
     pub fn blocking_list(
         &self,
         operator: &Operator,
-        first_only: bool,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let max_files = max_files.unwrap_or(usize::MAX);
-        let mut limit = 0;
         if let Some(files) = &self.files {
             let mut res = Vec::new();
             for file in files {
                 let full_path = Path::new(&self.path)
                     .join(file)
                     .to_string_lossy()
+                    .trim_start_matches('/')
                     .to_string();
                 let meta = operator.blocking().stat(&full_path)?;
                 if meta.mode().is_file() {
@@ -192,18 +178,14 @@ impl StageFilesInfo {
                         "{full_path} is not a file"
                     )));
                 }
-                if first_only {
-                    break;
-                }
-                limit += 1;
-                if limit == max_files {
+                if res.len() == max_files {
                     return Ok(res);
                 }
             }
             Ok(res)
         } else {
             let pattern = self.get_pattern()?;
-            blocking_list_files_with_pattern(operator, &self.path, pattern, first_only, max_files)
+            blocking_list_files_with_pattern(operator, &self.path, pattern, max_files)
         }
     }
 
@@ -213,7 +195,6 @@ impl StageFilesInfo {
         path: &str,
         pattern: Option<Regex>,
         start_after: Option<&str>,
-        first_only: bool,
         max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
         if path == STDIN_FD {
@@ -234,26 +215,72 @@ impl StageFilesInfo {
         let mut fut = operator
             .lister_with(path)
             .recursive(true)
-            .metakey(StageFileInfo::meta_query());
+            .metakey(StageFileInfo::meta_query())
+            ;
+
         if let Some(start_after) = start_after {
             fut = fut.start_after(start_after)
         }
         let mut lister = fut.await?;
-        let mut limit: usize = 0;
+
+        if files.len() == max_files {
+            return Ok(files);
+        }
         while let Some(obj) = lister.try_next().await? {
             let meta = obj.metadata();
             if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
                 files.push(StageFileInfo::new(obj.path().to_string(), meta));
-                if first_only {
-                    return Ok(files);
-                }
-                limit += 1;
-                if limit == max_files {
+                if files.len() == max_files {
                     return Ok(files);
                 }
             }
         }
         Ok(files)
+    }
+
+    /// Stat files concurrently.
+    #[async_backtrace::framed]
+    pub async fn stat_concurrent(
+        &self,
+        operator: &Operator,
+        thread_num: usize,
+        max_files: usize,
+        files: &[String],
+    ) -> Result<Vec<Result<(String, Metadata)>>> {
+        if max_files == 1 {
+            let Some(file) = files.first() else {
+                return Ok(vec![]);
+            };
+            let full_path = Path::new(&self.path)
+                .join(file)
+                .to_string_lossy()
+                .trim_start_matches('/')
+                .to_string();
+            let meta = operator.stat(&full_path).await;
+            return Ok(vec![meta.map(|m| (full_path, m)).map_err(Into::into)]);
+        }
+
+        // This clone is required to make sure we are not referring to `file: &String` in the closure
+        let tasks = files.iter().take(max_files).cloned().map(|file| {
+            let full_path = Path::new(&self.path)
+                .join(file)
+                .to_string_lossy()
+                .trim_start_matches('/')
+                .to_string();
+            let operator = operator.clone();
+            async move {
+                let meta = operator.stat(&full_path).await?;
+                Ok((full_path, meta))
+            }
+        });
+
+        execute_futures_in_parallel(
+            tasks,
+            thread_num * 5,
+            thread_num * 10,
+            "batch-stat-file-worker".to_owned(),
+        )
+        .await
     }
 }
 
@@ -269,7 +296,6 @@ fn blocking_list_files_with_pattern(
     operator: &Operator,
     path: &str,
     pattern: Option<Regex>,
-    first_only: bool,
     max_files: usize,
 ) -> Result<Vec<StageFileInfo>> {
     if path == STDIN_FD {
@@ -293,17 +319,15 @@ fn blocking_list_files_with_pattern(
         .recursive(true)
         .metakey(StageFileInfo::meta_query())
         .call()?;
-    let mut limit = 0;
+    if files.len() == max_files {
+        return Ok(files);
+    }
     for obj in list {
         let obj = obj?;
         let meta = obj.metadata();
         if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
             files.push(StageFileInfo::new(obj.path().to_string(), meta));
-            if first_only {
-                return Ok(files);
-            }
-            limit += 1;
-            if limit == max_files {
+            if files.len() == max_files {
                 return Ok(files);
             }
         }

@@ -15,7 +15,9 @@
 use databend_common_ast::ast::*;
 use databend_common_exception::Result;
 use databend_common_meta_app::share::ShareEndpointIdent;
+use databend_common_meta_app::tenant::UninitTenant;
 use itertools::Itertools;
+use minitrace::func_name;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -50,13 +52,16 @@ impl Binder {
 
         let endpoint = normalize_identifier(endpoint, &self.name_resolution_ctx).name;
 
+        let tenant = {
+            let tenant_name = tenant.to_string();
+            let uninit_tenant = UninitTenant::new_or_err(tenant_name, func_name!())?;
+            uninit_tenant.initialize(())
+        };
+
         let plan = CreateShareEndpointPlan {
             create_option: *create_option,
-            endpoint: ShareEndpointIdent {
-                tenant: self.ctx.get_tenant().to_string(),
-                endpoint,
-            },
-            tenant: tenant.to_string(),
+            endpoint: ShareEndpointIdent::new(self.ctx.get_tenant(), endpoint),
+            tenant,
             url: format!("{}://{}{}", url.protocol, url.name, url.path),
             args: args.clone(),
             comment: comment.as_ref().cloned(),
@@ -70,7 +75,7 @@ impl Binder {
         _stmt: &ShowShareEndpointStmt,
     ) -> Result<Plan> {
         let plan = ShowShareEndpointPlan {
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
         };
         Ok(Plan::ShowShareEndpoint(Box::new(plan)))
     }
@@ -86,7 +91,7 @@ impl Binder {
         } = stmt;
         let plan = DropShareEndpointPlan {
             if_exists: *if_exists,
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             endpoint: endpoint.to_string(),
         };
         Ok(Plan::DropShareEndpoint(Box::new(plan)))
@@ -107,7 +112,7 @@ impl Binder {
 
         let plan = CreateSharePlan {
             if_not_exists: *if_not_exists,
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             share,
             comment: comment.as_ref().cloned(),
         };
@@ -125,7 +130,7 @@ impl Binder {
 
         let plan = DropSharePlan {
             if_exists: *if_exists,
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant(),
             share,
         };
         Ok(Plan::DropShare(Box::new(plan)))

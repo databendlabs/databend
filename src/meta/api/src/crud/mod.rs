@@ -14,23 +14,27 @@
 
 //! A generic CRUD interface for meta data operations.
 
+mod errors;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::TIdent;
-use databend_common_meta_app::tenant_key::TenantResource;
+use databend_common_meta_app::tenant_key::errors::ExistError;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
+use databend_common_meta_app::tenant_key::ident::TIdent;
+use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::ValueWithName;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
+pub use errors::CrudError;
 use futures::TryStreamExt;
 
 use crate::kv_pb_api::KVPbApi;
@@ -45,28 +49,25 @@ use crate::kv_pb_api::UpsertPB;
 /// One `CrudMgr` instance can only access keys of exactly one [`Tenant`].
 ///
 /// [`TIdent<R>`]: TIdent
-pub struct CrudMgr<R> {
+pub struct CrudMgr<R, N = String> {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
-    _p: PhantomData<R>,
+    _p: PhantomData<(R, N)>,
 }
 
 impl<R> CrudMgr<R> {
     /// Create a new `CrudMgr` instance providing CRUD access for a key space defined by `R`: [`TenantResource`].
-    pub fn create(
-        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-        tenant: &NonEmptyString,
-    ) -> Self {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
         CrudMgr {
             kv_api,
-            tenant: Tenant::new_nonempty(tenant.clone()),
+            tenant: tenant.clone(),
             _p: Default::default(),
         }
     }
 
     /// Create a structured key for the given name.
     fn ident(&self, name: &str) -> TIdent<R> {
-        TIdent::new(self.tenant.clone(), name)
+        TIdent::<R, String>::new(self.tenant.clone(), name)
     }
 }
 
@@ -76,8 +77,6 @@ type ValueOf<R> = <TIdent<R> as kvapi::Key>::ValueType;
 impl<R> CrudMgr<R>
 where
     R: TenantResource + Send + 'static,
-    R::UnknownError: From<MetaError>,
-    R::ExistError: From<MetaError>,
     // As a kvapi::Key, the corresponding value contains a name.
     ValueOf<R>: ValueWithName + FromToProto + Clone,
 {
@@ -87,7 +86,7 @@ where
         &self,
         value: ValueOf<R>,
         create_option: &CreateOption,
-    ) -> Result<(), R::ExistError> {
+    ) -> Result<(), CrudError<ExistError<R>>> {
         let ident = self.ident(value.name());
 
         let seq = MatchSeq::from(*create_option);
@@ -97,11 +96,7 @@ where
 
         if let CreateOption::Create = create_option {
             if res.prev.is_some() {
-                return Err(R::error_exist(
-                    &self.tenant,
-                    value.name(),
-                    || "Exist when add",
-                ));
+                return Err(ExistError::new(value.name(), "Exist when add").into());
             }
         }
 
@@ -114,32 +109,35 @@ where
         &self,
         value: ValueOf<R>,
         match_seq: MatchSeq,
-    ) -> Result<u64, R::UnknownError> {
+    ) -> Result<u64, CrudError<UnknownError<R>>> {
         let ident = self.ident(value.name());
         let upsert = UpsertPB::update(ident, value.clone()).with(match_seq);
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
         match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(s),
-            None => Err(R::error_unknown(
-                &self.tenant,
-                value.name(),
-                || "NotFound when update",
-            )),
+            Some(SeqV { seq, .. }) => Ok(seq),
+            None => Err(UnknownError::new(value.name(), "NotFound when update").into()),
         }
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn remove(&self, name: &str, seq: MatchSeq) -> Result<(), R::UnknownError> {
+    pub async fn remove(
+        &self,
+        name: &str,
+        seq: MatchSeq,
+    ) -> Result<(), CrudError<UnknownError<R>>> {
         let ident = self.ident(name);
 
         let upsert = UpsertPB::delete(ident).with(seq);
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
         res.removed_or_else(|e| {
-            R::error_unknown(&self.tenant, name, || format!("Exist when remove: {:?}", e))
+            UnknownError::new(
+                name,
+                format_args!("NotFound when remove, seq of existing record: {}", e.seq()),
+            )
         })?;
 
         Ok(())
@@ -151,17 +149,16 @@ where
         &self,
         name: &str,
         seq: MatchSeq,
-    ) -> Result<SeqV<ValueOf<R>>, R::UnknownError> {
+    ) -> Result<SeqV<ValueOf<R>>, CrudError<UnknownError<R>>> {
         let ident = self.ident(name);
 
         let res = self.kv_api.get_pb(&ident).await?;
 
-        let seq_value =
-            res.ok_or_else(|| R::error_unknown(&self.tenant, name, || "NotFound when get"))?;
+        let seq_value = res.ok_or_else(|| UnknownError::new(name, "NotFound when get"))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value),
-            Err(e) => Err(R::error_unknown(&self.tenant, name, || e)),
+            Err(e) => Err(UnknownError::new(name, format_args!("NotFound when get: {}", e)).into()),
         }
     }
 

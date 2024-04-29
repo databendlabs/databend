@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -21,6 +22,7 @@ use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
+use crate::ast::write_space_separated_string_map;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
@@ -63,8 +65,10 @@ impl Display for CreateIndexStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
-        write!(f, "{} {} INDEX", sync, self.index_type)?;
+        if !self.sync_creation {
+            write!(f, "ASYNC ")?;
+        }
+        write!(f, "{} INDEX", self.index_type)?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
@@ -124,6 +128,8 @@ pub struct CreateInvertedIndexStmt {
     pub columns: Vec<Identifier>,
     #[drive(skip)]
     pub sync_creation: bool,
+    #[drive(skip)]
+    pub index_options: BTreeMap<String, String>,
 }
 
 impl Display for CreateInvertedIndexStmt {
@@ -132,8 +138,10 @@ impl Display for CreateInvertedIndexStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
-        write!(f, "{} INVERTED INDEX", sync)?;
+        if !self.sync_creation {
+            write!(f, "ASYNC ")?;
+        }
+        write!(f, "INVERTED INDEX")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
@@ -149,7 +157,14 @@ impl Display for CreateInvertedIndexStmt {
         )?;
         write!(f, " (")?;
         write_comma_separated_list(f, &self.columns)?;
-        write!(f, ")")
+        write!(f, ")")?;
+
+        if !self.index_options.is_empty() {
+            write!(f, " ")?;
+            write_space_separated_string_map(f, &self.index_options)?;
+        }
+
+        Ok(())
     }
 }
 

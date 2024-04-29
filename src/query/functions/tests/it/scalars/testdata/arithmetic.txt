@@ -69,8 +69,7 @@ evaluation (internal):
 
 ast            : c + 0.5
 raw expr       : plus(c::UInt32, 0.5)
-checked expr   : plus<Decimal(12, 1), Decimal(12, 1)>(to_decimal<UInt32>(12, 1)(c), to_decimal<Decimal(1, 1)>(12, 1)(0.5_d128(1,1)))
-optimized expr : plus<Decimal(12, 1), Decimal(12, 1)>(to_decimal<UInt32>(12, 1)(c), 0.5_d128(12,1))
+checked expr   : plus<UInt32, Decimal(1, 1)>(c, 0.5_d128(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -138,7 +137,7 @@ evaluation (internal):
 
 ast            : c + e
 raw expr       : plus(c::UInt32, e::Decimal(10, 1))
-checked expr   : plus<Decimal(12, 1), Decimal(12, 1)>(to_decimal<UInt32>(12, 1)(c), to_decimal<Decimal(10, 1)>(12, 1)(e))
+checked expr   : plus<UInt32, Decimal(10, 1)>(c, e)
 evaluation:
 +--------+-----------+----------------+----------------+
 |        | c         | e              | Output         |
@@ -184,7 +183,7 @@ evaluation (internal):
 
 ast            : d2 + e
 raw expr       : plus(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : plus<Decimal(11, 1) NULL, Decimal(11, 1) NULL>(CAST(d2 AS Decimal(11, 1) NULL), CAST(e AS Decimal(11, 1) NULL))
+checked expr   : plus<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+------------------------+
 |        | d2               | e              | Output                 |
@@ -207,7 +206,7 @@ evaluation (internal):
 
 ast            : d2 + f
 raw expr       : plus(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : plus<Decimal(76, 2) NULL, Decimal(76, 2) NULL>(CAST(d2 AS Decimal(76, 2) NULL), CAST(f AS Decimal(76, 2) NULL))
+checked expr   : plus<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+-------------------------+
 |        | d2               | f              | Output                  |
@@ -230,7 +229,7 @@ evaluation (internal):
 
 ast            : e + f
 raw expr       : plus(e::Decimal(10, 1), f::Decimal(76, 2))
-checked expr   : plus<Decimal(76, 2), Decimal(76, 2)>(to_decimal<Decimal(10, 1)>(76, 2)(e), f)
+checked expr   : plus<Decimal(10, 1), Decimal(76, 2)>(e, f)
 evaluation:
 +--------+----------------+----------------+-----------------+
 |        | e              | f              | Output          |
@@ -322,8 +321,7 @@ evaluation (internal):
 
 ast            : c - 0.5
 raw expr       : minus(c::UInt32, 0.5)
-checked expr   : minus<Decimal(12, 1), Decimal(12, 1)>(to_decimal<UInt32>(12, 1)(c), to_decimal<Decimal(1, 1)>(12, 1)(0.5_d128(1,1)))
-optimized expr : minus<Decimal(12, 1), Decimal(12, 1)>(to_decimal<UInt32>(12, 1)(c), 0.5_d128(12,1))
+checked expr   : minus<UInt32, Decimal(1, 1)>(c, 0.5_d128(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -391,7 +389,7 @@ evaluation (internal):
 
 ast            : c - e
 raw expr       : minus(c::UInt32, e::Decimal(10, 1))
-checked expr   : minus<Decimal(12, 1), Decimal(12, 1)>(to_decimal<UInt32>(12, 1)(c), to_decimal<Decimal(10, 1)>(12, 1)(e))
+checked expr   : minus<UInt32, Decimal(10, 1)>(c, e)
 evaluation:
 +--------+-----------+----------------+-----------------+
 |        | c         | e              | Output          |
@@ -437,7 +435,7 @@ evaluation (internal):
 
 ast            : d2 - e
 raw expr       : minus(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : minus<Decimal(11, 1) NULL, Decimal(11, 1) NULL>(CAST(d2 AS Decimal(11, 1) NULL), CAST(e AS Decimal(11, 1) NULL))
+checked expr   : minus<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+--------------------------+
 |        | d2               | e              | Output                   |
@@ -460,7 +458,7 @@ evaluation (internal):
 
 ast            : d2 - f
 raw expr       : minus(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : minus<Decimal(76, 2) NULL, Decimal(76, 2) NULL>(CAST(d2 AS Decimal(76, 2) NULL), CAST(f AS Decimal(76, 2) NULL))
+checked expr   : minus<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+--------------------------+
 |        | d2               | f              | Output                   |
@@ -483,7 +481,7 @@ evaluation (internal):
 
 ast            : e - f
 raw expr       : minus(e::Decimal(10, 1), f::Decimal(76, 2))
-checked expr   : minus<Decimal(76, 2), Decimal(76, 2)>(to_decimal<Decimal(10, 1)>(76, 2)(e), f)
+checked expr   : minus<Decimal(10, 1), Decimal(76, 2)>(e, f)
 evaluation:
 +--------+----------------+----------------+------------------+
 |        | e              | f              | Output           |
@@ -759,8 +757,7 @@ evaluation (internal):
 
 ast            : c * 0.5
 raw expr       : multiply(c::UInt32, 0.5)
-checked expr   : multiply<Decimal(11, 0), Decimal(11, 1)>(to_decimal<UInt32>(11, 0)(c), to_decimal<Decimal(1, 1)>(11, 1)(0.5_d128(1,1)))
-optimized expr : multiply<Decimal(11, 0), Decimal(11, 1)>(to_decimal<UInt32>(11, 0)(c), 0.5_d128(11,1))
+checked expr   : multiply<UInt32, Decimal(1, 1)>(c, 0.5_d128(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -828,7 +825,7 @@ evaluation (internal):
 
 ast            : c * e
 raw expr       : multiply(c::UInt32, e::Decimal(10, 1))
-checked expr   : multiply<Decimal(20, 0), Decimal(20, 1)>(to_decimal<UInt32>(20, 0)(c), to_decimal<Decimal(10, 1)>(20, 1)(e))
+checked expr   : multiply<UInt32, Decimal(10, 1)>(c, e)
 evaluation:
 +--------+-----------+----------------+-----------------+
 |        | c         | e              | Output          |
@@ -874,7 +871,7 @@ evaluation (internal):
 
 ast            : d2 * e
 raw expr       : multiply(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : multiply<Decimal(13, 0) NULL, Decimal(13, 1) NULL>(CAST(d2 AS Decimal(13, 0) NULL), CAST(e AS Decimal(13, 1) NULL))
+checked expr   : multiply<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+------------------------+
 |        | d2               | e              | Output                 |
@@ -897,7 +894,7 @@ evaluation (internal):
 
 ast            : d2 * f
 raw expr       : multiply(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : multiply<Decimal(76, 0) NULL, Decimal(76, 2) NULL>(CAST(d2 AS Decimal(76, 0) NULL), CAST(f AS Decimal(76, 2) NULL))
+checked expr   : multiply<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+-------------------------+
 |        | d2               | f              | Output                  |
@@ -920,7 +917,7 @@ evaluation (internal):
 
 ast            : e * f
 raw expr       : multiply(e::Decimal(10, 1), f::Decimal(76, 2))
-checked expr   : multiply<Decimal(76, 1), Decimal(76, 2)>(to_decimal<Decimal(10, 1)>(76, 1)(e), f)
+checked expr   : multiply<Decimal(10, 1), Decimal(76, 2)>(e, f)
 evaluation:
 +--------+----------------+----------------+--------------------+
 |        | e              | f              | Output             |
@@ -943,8 +940,7 @@ evaluation (internal):
 
 ast            : e * 0.5
 raw expr       : multiply(e::Decimal(10, 1), 0.5)
-checked expr   : multiply<Decimal(11, 1), Decimal(11, 1)>(to_decimal<Decimal(10, 1)>(11, 1)(e), to_decimal<Decimal(1, 1)>(11, 1)(0.5_d128(1,1)))
-optimized expr : multiply<Decimal(11, 1), Decimal(11, 1)>(to_decimal<Decimal(10, 1)>(11, 1)(e), 0.5_d128(11,1))
+checked expr   : multiply<Decimal(10, 1), Decimal(1, 1)>(e, 0.5_d128(1,1))
 evaluation:
 +--------+----------------+----------------+
 |        | e              | Output         |
@@ -1035,7 +1031,7 @@ evaluation (internal):
 
 ast            : c / 0.5
 raw expr       : divide(c::UInt32, 0.5)
-checked expr   : divide<Decimal(10, 0), Decimal(1, 1)>(to_decimal<UInt32>(10, 0)(c), 0.5_d128(1,1))
+checked expr   : divide<UInt32, Decimal(1, 1)>(c, 0.5_d128(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -1134,7 +1130,7 @@ error:
 
 ast            : c / e
 raw expr       : divide(c::UInt32, e::Decimal(10, 1))
-checked expr   : divide<Decimal(10, 0), Decimal(10, 1)>(to_decimal<UInt32>(10, 0)(c), e)
+checked expr   : divide<UInt32, Decimal(10, 1)>(c, e)
 evaluation:
 +--------+-----------+----------------+----------------+
 |        | c         | e              | Output         |
@@ -1180,7 +1176,7 @@ evaluation (internal):
 
 ast            : d2 / e
 raw expr       : divide(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : divide<Decimal(3, 0) NULL, Decimal(10, 1) NULL>(CAST(d2 AS Decimal(3, 0) NULL), CAST(e AS Decimal(10, 1) NULL))
+checked expr   : divide<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+---------------------+
 |        | d2               | e              | Output              |
@@ -1203,7 +1199,7 @@ evaluation (internal):
 
 ast            : d2 / f
 raw expr       : divide(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : divide<Decimal(39, 0) NULL, Decimal(76, 2) NULL>(CAST(d2 AS Decimal(39, 0) NULL), CAST(f AS Decimal(76, 2) NULL))
+checked expr   : divide<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+---------------------+
 |        | d2               | f              | Output              |
@@ -1226,7 +1222,7 @@ evaluation (internal):
 
 ast            : e / f
 raw expr       : divide(e::Decimal(10, 1), f::Decimal(76, 2))
-checked expr   : divide<Decimal(39, 1), Decimal(76, 2)>(to_decimal<Decimal(10, 1)>(39, 1)(e), f)
+checked expr   : divide<Decimal(10, 1), Decimal(76, 2)>(e, f)
 evaluation:
 +--------+----------------+----------------+----------------+
 |        | e              | f              | Output         |

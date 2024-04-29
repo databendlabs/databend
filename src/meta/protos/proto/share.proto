@@ -16,17 +16,6 @@ syntax = "proto3";
 
 package databend_proto;
 
-message ShareNameIdent {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  // The user this share belongs to
-  string tenant = 1;
-
-  // share name
-  string share_name = 2;
-}
-
 message ShareDatabaseObject {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;

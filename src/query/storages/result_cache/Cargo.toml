@@ -1,7 +1,10 @@
 [package]
 name = "databend-common-storages-result-cache"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -9,6 +12,7 @@ doctest = false
 test = false
 
 [dependencies]
+bytes = { workspace = true }
 databend-common-arrow = { path = "../../../common/arrow" }
 databend-common-catalog = { path = "../../catalog" }
 databend-common-exception = { path = "../../../common/exception" }
@@ -23,6 +27,7 @@ databend-common-pipeline-sources = { path = "../../pipeline/sources" }
 databend-common-storage = { path = "../../../common/storage" }
 databend-storages-common-blocks = { path = "../common/blocks" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
+parquet_rs = { workspace = true }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
@@ -30,4 +35,5 @@ opendal = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"
+tokio = { workspace = true }
 uuid = { workspace = true }

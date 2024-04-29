@@ -27,6 +27,26 @@ pub trait AppErrorMessage: Display {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("Tenant is empty when: `{context}`")]
+pub struct TenantIsEmpty {
+    context: String,
+}
+
+impl TenantIsEmpty {
+    pub fn new(context: impl ToString) -> Self {
+        Self {
+            context: context.to_string(),
+        }
+    }
+}
+
+impl From<TenantIsEmpty> for ErrorCode {
+    fn from(err: TenantIsEmpty) -> Self {
+        ErrorCode::TenantIsEmpty(err.to_string())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DatabaseAlreadyExists: `{db_name}` while `{context}`")]
 pub struct DatabaseAlreadyExists {
     db_name: String,
@@ -97,9 +117,9 @@ pub struct CreateDatabaseWithDropTime {
 }
 
 impl CreateDatabaseWithDropTime {
-    pub fn new(db_name: impl Into<String>) -> Self {
+    pub fn new(db_name: impl ToString) -> Self {
         Self {
-            db_name: db_name.into(),
+            db_name: db_name.to_string(),
         }
     }
 }
@@ -535,10 +555,10 @@ pub struct ShareEndpointAlreadyExists {
 }
 
 impl ShareEndpointAlreadyExists {
-    pub fn new(endpoint: impl Into<String>, context: impl Into<String>) -> Self {
+    pub fn new(endpoint: impl ToString, context: impl ToString) -> Self {
         Self {
-            endpoint: endpoint.into(),
-            context: context.into(),
+            endpoint: endpoint.to_string(),
+            context: context.to_string(),
         }
     }
 }
@@ -590,9 +610,9 @@ pub struct WrongShareObject {
 }
 
 impl WrongShareObject {
-    pub fn new(obj_name: impl Into<String>) -> Self {
+    pub fn new(obj_name: impl ToString) -> Self {
         Self {
-            obj_name: obj_name.into(),
+            obj_name: obj_name.to_string(),
         }
     }
 }
@@ -810,7 +830,7 @@ impl IndexAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("CreateIndexWithDropTime: create {index_name} with drop time")]
+#[error("UnknownIndex: `{index_name}` while `{context}`")]
 pub struct UnknownIndex {
     index_name: String,
     context: String,
@@ -854,6 +874,38 @@ impl GetIndexWithDropTime {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DuplicatedIndexColumnId: {column_id} is duplicated with index {index_name}")]
+pub struct DuplicatedIndexColumnId {
+    column_id: u32,
+    index_name: String,
+}
+
+impl DuplicatedIndexColumnId {
+    pub fn new(column_id: u32, index_name: impl Into<String>) -> Self {
+        Self {
+            column_id,
+            index_name: index_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("IndexColumnIdNotFound: index {index_name} column id {column_id} is not found")]
+pub struct IndexColumnIdNotFound {
+    column_id: u32,
+    index_name: String,
+}
+
+impl IndexColumnIdNotFound {
+    pub fn new(column_id: u32, index_name: impl Into<String>) -> Self {
+        Self {
+            column_id,
+            index_name: index_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("VirtualColumnAlreadyExists: `{table_id}` while `{context}`")]
 pub struct VirtualColumnAlreadyExists {
     table_id: u64,
@@ -885,11 +937,92 @@ impl VirtualColumnNotFound {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CreateSequenceError: `{name}` while `{context}`")]
+pub struct CreateSequenceError {
+    name: String,
+    context: String,
+}
+
+impl CreateSequenceError {
+    pub fn new(name: impl ToString, context: impl ToString) -> Self {
+        Self {
+            name: name.to_string(),
+            context: context.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("SequenceAlreadyExists: `{name}` while `{context}`")]
+pub struct SequenceAlreadyExists {
+    name: String,
+    context: String,
+}
+
+impl SequenceAlreadyExists {
+    pub fn new(name: impl ToString, context: impl ToString) -> Self {
+        Self {
+            name: name.to_string(),
+            context: context.to_string(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownSequence: `{name}` while `{context}`")]
+pub struct UnknownSequence {
+    name: String,
+    context: String,
+}
+
+impl UnknownSequence {
+    pub fn new(name: impl ToString, context: impl ToString) -> Self {
+        Self {
+            name: name.to_string(),
+            context: context.to_string(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("OutofSequenceRange: `{name}` while `{context}`")]
+pub struct OutofSequenceRange {
+    name: String,
+    context: String,
+}
+
+impl OutofSequenceRange {
+    pub fn new(name: impl ToString, context: impl ToString) -> Self {
+        Self {
+            name: name.to_string(),
+            context: context.to_string(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("WrongSequenceCount: `{name}`")]
+pub struct WrongSequenceCount {
+    name: String,
+}
+
+impl WrongSequenceCount {
+    pub fn new(name: impl ToString) -> Self {
+        Self {
+            name: name.to_string(),
+        }
+    }
+}
+
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum AppError {
+    #[error(transparent)]
+    TenantIsEmpty(#[from] TenantIsEmpty),
+
     #[error(transparent)]
     TableVersionMismatched(#[from] TableVersionMismatched),
 
@@ -1012,7 +1145,13 @@ pub enum AppError {
     DropIndexWithDropTime(#[from] DropIndexWithDropTime),
 
     #[error(transparent)]
-    GetIndexWithDropTIme(#[from] GetIndexWithDropTime),
+    GetIndexWithDropTime(#[from] GetIndexWithDropTime),
+
+    #[error(transparent)]
+    DuplicatedIndexColumnId(#[from] DuplicatedIndexColumnId),
+
+    #[error(transparent)]
+    IndexColumnIdNotFound(#[from] IndexColumnIdNotFound),
 
     #[error(transparent)]
     DatamaskAlreadyExists(#[from] DatamaskAlreadyExists),
@@ -1049,6 +1188,34 @@ pub enum AppError {
 
     #[error(transparent)]
     MultiStatementTxnCommitFailed(#[from] MultiStmtTxnCommitFailed),
+
+    // sequence
+    #[error(transparent)]
+    SequenceError(#[from] SequenceError),
+}
+
+#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum SequenceError {
+    #[error(transparent)]
+    CreateSequenceError(#[from] CreateSequenceError),
+
+    #[error(transparent)]
+    SequenceAlreadyExists(#[from] SequenceAlreadyExists),
+
+    #[error(transparent)]
+    UnknownSequence(#[from] UnknownSequence),
+
+    #[error(transparent)]
+    OutofSequenceRange(#[from] OutofSequenceRange),
+
+    #[error(transparent)]
+    WrongSequenceCount(#[from] WrongSequenceCount),
+}
+
+impl AppErrorMessage for TenantIsEmpty {
+    fn message(&self) -> String {
+        self.to_string()
+    }
 }
 
 impl AppErrorMessage for UnknownBackgroundJob {
@@ -1332,6 +1499,24 @@ impl AppErrorMessage for GetIndexWithDropTime {
     }
 }
 
+impl AppErrorMessage for DuplicatedIndexColumnId {
+    fn message(&self) -> String {
+        format!(
+            "{} is duplicated with index '{}'",
+            self.column_id, self.index_name
+        )
+    }
+}
+
+impl AppErrorMessage for IndexColumnIdNotFound {
+    fn message(&self) -> String {
+        format!(
+            "index '{}' column id {} is not found",
+            self.index_name, self.column_id
+        )
+    }
+}
+
 impl AppErrorMessage for DatamaskAlreadyExists {
     fn message(&self) -> String {
         format!("Datamask '{}' already exists", self.name)
@@ -1377,9 +1562,60 @@ impl AppErrorMessage for VirtualColumnAlreadyExists {
     }
 }
 
+impl AppErrorMessage for CreateSequenceError {
+    fn message(&self) -> String {
+        format!("Create Sequence {} Error", self.name)
+    }
+}
+
+impl AppErrorMessage for SequenceAlreadyExists {
+    fn message(&self) -> String {
+        format!("Sequence '{}' already exists", self.name)
+    }
+}
+
+impl AppErrorMessage for UnknownSequence {
+    fn message(&self) -> String {
+        format!("Sequence '{}' does not exists", self.name)
+    }
+}
+
+impl AppErrorMessage for OutofSequenceRange {
+    fn message(&self) -> String {
+        format!("Sequence '{}' out of range", self.name)
+    }
+}
+
+impl AppErrorMessage for WrongSequenceCount {
+    fn message(&self) -> String {
+        format!("Require zero Sequence count for '{}'", self.name)
+    }
+}
+
+impl AppErrorMessage for SequenceError {
+    fn message(&self) -> String {
+        match self {
+            SequenceError::CreateSequenceError(e) => {
+                format!("CreateSequenceError: '{}'", e.message())
+            }
+            SequenceError::SequenceAlreadyExists(e) => {
+                format!("SequenceAlreadyExists: '{}'", e.message())
+            }
+            SequenceError::UnknownSequence(e) => format!("UnknownSequence: '{}'", e.message()),
+            SequenceError::OutofSequenceRange(e) => {
+                format!("OutofSequenceRange: '{}'", e.message())
+            }
+            SequenceError::WrongSequenceCount(e) => {
+                format!("SequenceAlreadyExists: '{}'", e.message())
+            }
+        }
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
+            AppError::TenantIsEmpty(err) => ErrorCode::TenantIsEmpty(err.message()),
             AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.message()),
             AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.message()),
             AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),
@@ -1453,7 +1689,12 @@ impl From<AppError> for ErrorCode {
             AppError::IndexAlreadyExists(err) => ErrorCode::IndexAlreadyExists(err.message()),
             AppError::UnknownIndex(err) => ErrorCode::UnknownIndex(err.message()),
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
-            AppError::GetIndexWithDropTIme(err) => ErrorCode::GetIndexWithDropTime(err.message()),
+            AppError::GetIndexWithDropTime(err) => ErrorCode::GetIndexWithDropTime(err.message()),
+            AppError::DuplicatedIndexColumnId(err) => {
+                ErrorCode::DuplicatedIndexColumnId(err.message())
+            }
+            AppError::IndexColumnIdNotFound(err) => ErrorCode::IndexColumnIdNotFound(err.message()),
+
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
 
@@ -1472,6 +1713,19 @@ impl From<AppError> for ErrorCode {
             AppError::MultiStatementTxnCommitFailed(err) => {
                 ErrorCode::UnresolvableConflict(err.message())
             }
+            AppError::SequenceError(err) => ErrorCode::SequenceError(err.message()),
+        }
+    }
+}
+
+impl From<SequenceError> for ErrorCode {
+    fn from(app_err: SequenceError) -> Self {
+        match app_err {
+            SequenceError::CreateSequenceError(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::SequenceAlreadyExists(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::UnknownSequence(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::OutofSequenceRange(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::WrongSequenceCount(err) => ErrorCode::SequenceError(err.message()),
         }
     }
 }

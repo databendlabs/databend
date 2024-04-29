@@ -248,7 +248,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         let slice_end = rng.gen_range(slice_start..len);
         let slice_len = slice_end - slice_start;
 
-        let mut filter = Column::random(&DataType::Boolean, len)
+        let mut filter = Column::random(&DataType::Boolean, len, None)
             .into_boolean()
             .unwrap();
         filter.slice(slice_start, slice_len);
@@ -405,7 +405,7 @@ pub fn test_filters() -> databend_common_exception::Result<()> {
             let end = (start + rng.gen_range(1..num_rows)).min(c.num_rows() - a.num_rows());
 
             // random filter
-            let mut f = Column::random(&DataType::Boolean, num_rows * blocks)
+            let mut f = Column::random(&DataType::Boolean, num_rows * blocks, None)
                 .into_boolean()
                 .unwrap();
             f.slice(start, end - start);

@@ -37,7 +37,7 @@ use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,

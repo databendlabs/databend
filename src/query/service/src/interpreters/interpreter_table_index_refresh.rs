@@ -20,16 +20,12 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use databend_common_storages_share::save_share_table_info;
-use databend_enterprise_inverted_index::get_inverted_index_handler;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::interpreters::Interpreter;
+use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -61,16 +57,14 @@ impl Interpreter for RefreshTableIndexInterpreter {
             .manager
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
 
-        let index_name = self.plan.index_name.clone();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-
         let table = self
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
-        // check mutability
-        table.check_mutable()?;
 
+        let index_name = self.plan.index_name.clone();
+        let segment_locs = self.plan.segment_locs.clone();
         let table_meta = &table.get_table_info().meta;
         let Some(index) = table_meta.indexes.get(&index_name) else {
             return Err(ErrorCode::RefreshIndexError(format!(
@@ -93,51 +87,42 @@ impl Interpreter for RefreshTableIndexInterpreter {
                 index_name
             )));
         }
+        let index_version = index.version.clone();
         let index_schema = TableSchemaRefExt::create(index_fields);
 
+        // Add table lock if need.
+        let lock_guard = if self.plan.need_lock {
+            let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
+            let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+            Some(lock_guard)
+        } else {
+            None
+        };
+
+        // refresh table.
+        let table = table.refresh(self.ctx.as_ref()).await?;
+        // check mutability
+        table.check_mutable()?;
+
+        let mut build_res = PipelineBuildResult::create();
+        if let Some(lock_guard) = lock_guard {
+            build_res.main_pipeline.add_lock_guard(lock_guard);
+        }
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-        // build index for segments and add new index info location to snapshot
-        let handler = get_inverted_index_handler();
-        let Some(new_snapshot_location) = handler
-            .do_refresh_index(fuse_table, self.ctx.clone(), index_name, index_schema, None)
-            .await?
-        else {
-            return Ok(PipelineBuildResult::create());
-        };
-
-        // generate new table meta with new snapshot location
-        let mut new_table_meta = table.get_table_info().meta.clone();
-
-        new_table_meta.options.insert(
-            OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-            new_snapshot_location.clone(),
-        );
-
-        let table_info = table.get_table_info();
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
-
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta,
-            copied_files: None,
-            deduplicated_label: None,
-            update_stream_meta: vec![],
-        };
-
-        let res = catalog.update_table_meta(table_info, req).await?;
-
-        if let Some(share_table_info) = res.share_table_info {
-            save_share_table_info(
-                self.ctx.get_tenant().as_str(),
-                self.ctx.get_data_operator()?.operator(),
-                share_table_info,
+        fuse_table
+            .do_refresh_inverted_index(
+                self.ctx.clone(),
+                catalog.clone(),
+                table.clone(),
+                index_name,
+                index_version,
+                &index.options,
+                index_schema,
+                segment_locs,
+                &mut build_res.main_pipeline,
             )
             .await?;
-        }
 
-        Ok(PipelineBuildResult::create())
+        Ok(build_res)
     }
 }

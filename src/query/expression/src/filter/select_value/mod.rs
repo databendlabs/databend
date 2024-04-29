@@ -15,6 +15,7 @@
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 
+use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ValueType;
 use crate::with_mapped_cmp_method;
@@ -26,6 +27,8 @@ use crate::Value;
 mod select_column;
 mod select_column_scalar;
 mod select_scalar;
+
+use crate::LikePattern;
 
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -217,6 +220,135 @@ impl<'a> Selector<'a> {
                 column,
                 true_selection,
                 false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn select_like_adapt<C: Fn(&[u8], &[u8]) -> bool>(
+        &self,
+        cmp: C,
+        column: StringColumn,
+        like_pattern: &LikePattern,
+        like_str: &[u8],
+        not: bool,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        let has_false = false_selection.1;
+        let is_simple_pattern = matches!(like_pattern, LikePattern::SimplePattern(_));
+        match (has_false, is_simple_pattern) {
+            (true, true) => self.select_like_not::<_, true, true>(
+                cmp,
+                column,
+                like_pattern,
+                like_str,
+                not,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            (true, false) => self.select_like_not::<_, true, false>(
+                cmp,
+                column,
+                like_pattern,
+                like_str,
+                not,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            (false, true) => self.select_like_not::<_, false, true>(
+                cmp,
+                column,
+                like_pattern,
+                like_str,
+                not,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            (false, false) => self.select_like_not::<_, false, false>(
+                cmp,
+                column,
+                like_pattern,
+                like_str,
+                not,
+                validity,
+                true_selection,
+                false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn select_like_not<
+        C: Fn(&[u8], &[u8]) -> bool,
+        const FALSE: bool,
+        const SIMPLE_PATTERN: bool,
+    >(
+        &self,
+        cmp: C,
+        column: StringColumn,
+        like_pattern: &LikePattern,
+        like_str: &[u8],
+        not: bool,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: &mut [u32],
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        if not {
+            self.select_column_like::<_, FALSE, SIMPLE_PATTERN, true>(
+                cmp,
+                column,
+                like_pattern,
+                like_str,
+                validity,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )
+        } else {
+            self.select_column_like::<_, FALSE, SIMPLE_PATTERN, false>(
+                cmp,
+                column,
+                like_pattern,
+                like_str,
+                validity,
+                true_selection,
+                false_selection,
                 mutable_true_idx,
                 mutable_false_idx,
                 select_strategy,

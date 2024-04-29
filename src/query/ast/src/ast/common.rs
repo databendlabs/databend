@@ -30,6 +30,8 @@ pub struct Identifier {
     pub name: String,
     #[drive(skip)]
     pub quote: Option<char>,
+    #[drive(skip)]
+    pub is_hole: bool,
 }
 
 impl Identifier {
@@ -37,26 +39,30 @@ impl Identifier {
         self.quote.is_some()
     }
 
-    pub fn from_name(name: impl Into<String>) -> Self {
+    pub fn from_name(span: Span, name: impl Into<String>) -> Self {
         Self {
-            span: Span::default(),
+            span,
             name: name.into(),
             quote: None,
+            is_hole: false,
         }
     }
 
-    pub fn from_name_with_quoted(name: impl Into<String>, quote: Option<char>) -> Self {
+    pub fn from_name_with_quoted(span: Span, name: impl Into<String>, quote: Option<char>) -> Self {
         Self {
-            span: Span::default(),
+            span,
             name: name.into(),
             quote,
+            is_hole: false,
         }
     }
 }
 
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(c) = self.quote {
+        if self.is_hole {
+            write!(f, "IDENTIFIER(:{})", self.name)
+        } else if let Some(c) = self.quote {
             let quoted = quote_ident(&self.name, c, true);
             write!(f, "{}", quoted)
         } else {
@@ -210,7 +216,7 @@ pub(crate) fn write_comma_separated_list(
 }
 
 /// Write input items into `'a', 'b', 'c'`
-pub(crate) fn write_comma_separated_quoted_list(
+pub(crate) fn write_comma_separated_string_list(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = impl Display>,
 ) -> std::fmt::Result {
@@ -231,6 +237,34 @@ pub(crate) fn write_comma_separated_map(
     for (i, (k, v)) in items.into_iter().enumerate() {
         if i > 0 {
             write!(f, ", ")?;
+        }
+        write!(f, "{k} = {v}")?;
+    }
+    Ok(())
+}
+
+/// Write input map items into `field_a='x', field_b='y'`
+pub(crate) fn write_comma_separated_string_map(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = (impl Display, impl Display)>,
+) -> std::fmt::Result {
+    for (i, (k, v)) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, ", ")?;
+        }
+        write!(f, "{k} = '{v}'")?;
+    }
+    Ok(())
+}
+
+/// Write input map items into `field_a='x' field_b='y'`
+pub(crate) fn write_space_separated_string_map(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = (impl Display, impl Display)>,
+) -> std::fmt::Result {
+    for (i, (k, v)) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, " ")?;
         }
         write!(f, "{k} = '{v}'")?;
     }

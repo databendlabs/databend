@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+pub type Span = Option<Range>;
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct Range {
     pub start: u32,
@@ -26,12 +28,11 @@ impl Range {
     pub fn start(&self) -> usize {
         self.start as usize
     }
+
     pub fn end(&self) -> usize {
         self.end as usize
     }
 }
-
-pub type Span = Option<Range>;
 
 impl Debug for Range {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -57,6 +58,25 @@ impl From<std::ops::Range<usize>> for Range {
             start: range.start as u32,
             end: range.end as u32,
         }
+    }
+}
+
+pub fn offset_span(span: Span, offset: usize) -> Span {
+    span.map(|range| Range {
+        start: range.start + offset as u32,
+        end: range.end + offset as u32,
+    })
+}
+
+pub fn merge_span(lhs: Span, rhs: Span) -> Span {
+    match (lhs, rhs) {
+        (Some(lhs), Some(rhs)) => Some(Range {
+            start: lhs.start.min(rhs.start),
+            end: lhs.end.max(rhs.end),
+        }),
+        (Some(lhs), None) => Some(lhs),
+        (None, Some(rhs)) => Some(rhs),
+        (None, None) => None,
     }
 }
 

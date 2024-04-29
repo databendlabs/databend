@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::SecondsFormat;
-use databend_common_base::base::tokio::sync::RwLock;
+use dashmap::DashMap;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_txn::TxnManagerRef;
 use log::warn;
@@ -42,7 +41,7 @@ use crate::servers::http::v1::query::http_query::ServerInfo;
 use crate::servers::http::v1::query::HttpQueryRequest;
 use crate::sessions::Session;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub(crate) enum RemoveReason {
     Timeout,
     Canceled,
@@ -55,47 +54,34 @@ impl Display for RemoveReason {
     }
 }
 
-pub(crate) struct SizeLimitedIndexMap<K, V> {
-    insert_order: VecDeque<K>,
-    reasons: HashMap<K, V>,
-    cap: usize,
+pub struct LimitedQueue<T> {
+    deque: VecDeque<T>,
+    max_size: usize,
 }
 
-impl<K: Clone + Eq + Hash, V> SizeLimitedIndexMap<K, V> {
-    fn new(cap: usize) -> Self {
-        Self {
-            insert_order: VecDeque::new(),
-            reasons: HashMap::new(),
-            cap,
+impl<T> LimitedQueue<T> {
+    fn new(max_size: usize) -> Self {
+        LimitedQueue {
+            deque: VecDeque::new(),
+            max_size,
         }
     }
 
-    fn insert(&mut self, key: K, value: V) {
-        if self.get(&key).is_some() {
-            return;
+    fn push(&mut self, item: T) -> Option<T> {
+        self.deque.push_back(item);
+        if self.deque.len() > self.max_size {
+            self.deque.pop_front()
+        } else {
+            None
         }
-        if self.insert_order.len() + 1 >= self.cap {
-            let key = self.insert_order.pop_front().unwrap();
-            self.reasons.remove(&key);
-        }
-        self.insert_order.push_back(key.clone());
-        self.reasons.insert(key, value);
-    }
-
-    fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq,
-    {
-        self.reasons.get(key)
     }
 }
 
 pub struct HttpQueryManager {
     pub(crate) server_info: ServerInfo,
     #[allow(clippy::type_complexity)]
-    pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
-    pub(crate) removed_queries: Arc<RwLock<SizeLimitedIndexMap<String, RemoveReason>>>,
+    pub(crate) queries: Arc<DashMap<String, Arc<HttpQuery>>>,
+    pub(crate) removed_queries: Arc<parking_lot::Mutex<LimitedQueue<String>>>,
     #[allow(clippy::type_complexity)]
     pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, task::JoinHandle<()>)>>>,
     pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
@@ -109,9 +95,9 @@ impl HttpQueryManager {
                 id: cfg.query.node_id.clone(),
                 start_time: chrono::Local::now().to_rfc3339_opts(SecondsFormat::Nanos, false),
             },
-            queries: Arc::new(RwLock::new(HashMap::new())),
+            queries: Arc::new(DashMap::new()),
             sessions: Mutex::new(ExpiringMap::default()),
-            removed_queries: Arc::new(RwLock::new(SizeLimitedIndexMap::new(1000))),
+            removed_queries: Arc::new(parking_lot::Mutex::new(LimitedQueue::new(1000))),
             txn_managers: Arc::new(Mutex::new(HashMap::new())),
         }));
 
@@ -133,37 +119,13 @@ impl HttpQueryManager {
         Ok(query)
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn get_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
-        let queries = self.queries.read().await;
-        queries.get(query_id).map(|q| q.to_owned())
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn try_get_query(
-        self: &Arc<Self>,
-        query_id: &str,
-    ) -> std::result::Result<Arc<HttpQuery>, Option<RemoveReason>> {
-        if let Some(q) = self.get_query(query_id).await {
-            Ok(q)
-        } else {
-            Err(self.try_get_query_tombstone(query_id).await)
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn try_get_query_tombstone(
-        self: &Arc<Self>,
-        query_id: &str,
-    ) -> Option<RemoveReason> {
-        let queries = self.removed_queries.read().await;
-        queries.get(query_id).cloned()
+    pub(crate) fn get_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
+        self.queries.get(query_id).map(|q| q.to_owned())
     }
 
     #[async_backtrace::framed]
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
-        let mut queries = self.queries.write().await;
-        queries.insert(query_id.to_string(), query.clone());
+        self.queries.insert(query_id.to_string(), query.clone());
 
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
@@ -188,18 +150,17 @@ impl HttpQueryManager {
                             "http query {} timeout after {} s",
                             &query_id_clone, query_result_timeout_secs
                         );
-                        match self_clone
-                            .remove_query(&query_id_clone, RemoveReason::Timeout)
-                            .await
-                        {
-                            Ok(_) => {
+                        match self_clone.remove_query(&query_id_clone, RemoveReason::Timeout) {
+                            Some(_) => {
                                 warn!("{msg}");
                                 if let Some(query) = http_query_weak.upgrade() {
-                                    query.kill(&msg).await;
+                                    if query.check_removed().is_none() {
+                                        query.kill(ErrorCode::AbortedQuery(&msg)).await;
+                                    }
                                 }
                             }
-                            Err(_) => {
-                                warn!("{msg}, but already removed");
+                            None => {
+                                warn!("{msg}, but already evict, too many queries?");
                             }
                         };
                         break;
@@ -215,28 +176,27 @@ impl HttpQueryManager {
         });
     }
 
-    // not remove it until timeout or cancelled by user, even if query execution is aborted
     #[async_backtrace::framed]
-    pub(crate) async fn remove_query(
+    pub(crate) fn remove_query(
         self: &Arc<Self>,
         query_id: &str,
         reason: RemoveReason,
-    ) -> std::result::Result<Arc<HttpQuery>, Option<RemoveReason>> {
-        {
-            let mut removed = self.removed_queries.write().await;
-            if let Some(r) = removed.get(query_id) {
-                return Err(Some(r.clone()));
+    ) -> Option<Arc<HttpQuery>> {
+        // deref at once to avoid holding DashMap shard guard for too long.
+        let query = self.queries.get(query_id).map(|q| q.clone());
+        query.map(|q| {
+            let not_removed_yet = !q.mark_removed(reason);
+            let to_evict = not_removed_yet
+                .then(|| {
+                    let mut queue = self.removed_queries.lock();
+                    queue.push(q.id.to_string())
+                })
+                .flatten();
+            if let Some(qid) = to_evict {
+                self.queries.remove(&qid);
             }
-            removed.insert(query_id.to_string(), reason);
-        }
-        let mut queries = self.queries.write().await;
-        let q = queries.remove(query_id);
-        if let Some(q) = &q {
-            q.mark_removed().await;
-            Ok(q.clone())
-        } else {
-            Err(None)
-        }
+            q.clone()
+        })
     }
 
     #[async_backtrace::framed]

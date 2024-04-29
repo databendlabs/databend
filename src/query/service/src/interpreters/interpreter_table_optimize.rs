@@ -17,8 +17,10 @@ use std::time::SystemTime;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactTarget;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -79,14 +81,14 @@ impl Interpreter for OptimizeTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
         // check mutability
         table.check_mutable()?;
 
         match self.plan.action.clone() {
-            OptimizeTableAction::CompactBlocks => {
-                self.build_pipeline(catalog, table, CompactTarget::Blocks, false)
+            OptimizeTableAction::CompactBlocks(limit) => {
+                self.build_pipeline(catalog, table, CompactTarget::Blocks(limit), false)
                     .await
             }
             OptimizeTableAction::CompactSegments => {
@@ -98,7 +100,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 Ok(PipelineBuildResult::create())
             }
             OptimizeTableAction::All => {
-                self.build_pipeline(catalog, table, CompactTarget::Blocks, true)
+                self.build_pipeline(catalog, table, CompactTarget::Blocks(None), true)
                     .await
             }
         }
@@ -114,7 +116,7 @@ impl OptimizeTableInterpreter {
         is_distributed: bool,
         need_lock: bool,
     ) -> Result<PhysicalPlan> {
-        let merge_meta = parts.is_lazy;
+        let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
@@ -167,15 +169,21 @@ impl OptimizeTableInterpreter {
             )));
         }
 
-        if matches!(target, CompactTarget::Segments) {
-            table
-                .compact_segments(self.ctx.clone(), table_lock, self.plan.limit)
-                .await?;
-            return Ok(PipelineBuildResult::create());
-        }
+        let compaction_limits = match target {
+            CompactTarget::Segments => {
+                table
+                    .compact_segments(self.ctx.clone(), table_lock, self.plan.limit)
+                    .await?;
+                return Ok(PipelineBuildResult::create());
+            }
+            CompactTarget::Blocks(num_block_limit) => {
+                let segment_limit = self.plan.limit;
+                CompactionLimits::limits(segment_limit, num_block_limit)
+            }
+        };
 
         let res = table
-            .compact_blocks(self.ctx.clone(), self.plan.limit)
+            .compact_blocks(self.ctx.clone(), compaction_limits)
             .await?;
 
         let catalog_info = catalog.info();
@@ -209,8 +217,7 @@ impl OptimizeTableInterpreter {
             if !compact_pipeline.is_empty() {
                 compact_pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
-                let query_id = self.ctx.get_id();
-                let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+                let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
                 let executor =
                     PipelineCompleteExecutor::try_create(compact_pipeline, executor_settings)?;
 
@@ -221,7 +228,7 @@ impl OptimizeTableInterpreter {
 
                 // refresh table.
                 table = catalog
-                    .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+                    .get_table(&tenant, &self.plan.database, &self.plan.table)
                     .await?;
             }
 
@@ -296,7 +303,7 @@ async fn purge(
     // currently, context caches the table, we have to "refresh"
     // the table by using the catalog API directly
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
+        .get_table(&ctx.get_tenant(), &plan.database, &plan.table)
         .await?;
 
     let keep_latest = true;

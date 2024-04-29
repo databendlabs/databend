@@ -22,26 +22,7 @@ use derive_visitor::DriveMut;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum StreamPoint {
-    AtStream {
-        database: Option<Identifier>,
-        name: Identifier,
-    },
-}
-
-impl Display for StreamPoint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StreamPoint::AtStream { database, name } => {
-                write!(f, " AT (STREAM => ")?;
-                write_dot_separated_list(f, database.iter().chain(Some(name)))?;
-                write!(f, ")")
-            }
-        }
-    }
-}
+use crate::ast::TimeTravelPoint;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateStreamStmt {
@@ -52,7 +33,7 @@ pub struct CreateStreamStmt {
     pub stream: Identifier,
     pub table_database: Option<Identifier>,
     pub table: Identifier,
-    pub stream_point: Option<StreamPoint>,
+    pub travel_point: Option<TimeTravelPoint>,
     #[drive(skip)]
     pub append_only: bool,
     #[drive(skip)]
@@ -78,8 +59,8 @@ impl Display for CreateStreamStmt {
         )?;
         write!(f, " ON TABLE ")?;
         write_dot_separated_list(f, self.table_database.iter().chain(Some(&self.table)))?;
-        if let Some(stream_point) = &self.stream_point {
-            write!(f, "{}", stream_point)?;
+        if let Some(travel_point) = &self.travel_point {
+            write!(f, " AT {}", travel_point)?;
         }
         if !self.append_only {
             write!(f, " APPEND_ONLY = false")?;

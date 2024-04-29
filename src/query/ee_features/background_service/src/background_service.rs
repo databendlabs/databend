@@ -18,6 +18,7 @@ use arrow_array::RecordBatch;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::tenant::Tenant;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {
@@ -25,7 +26,7 @@ pub trait BackgroundServiceHandler: Sync + Send {
 
     async fn execute_scheduled_job(
         &self,
-        tenant: String,
+        tenant: Tenant,
         user: UserIdentity,
         name: String,
     ) -> Result<()>;
@@ -53,7 +54,7 @@ impl BackgroundServiceHandlerWrapper {
     #[async_backtrace::framed]
     pub async fn execute_scheduled_job(
         &self,
-        tenant: String,
+        tenant: Tenant,
         user: UserIdentity,
         name: String,
     ) -> Result<()> {

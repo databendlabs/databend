@@ -347,8 +347,7 @@ async fn test_schedule_with_one_tasks() -> Result<()> {
 
     let executor = create_executor_with_simple_pipeline(ctx, 1).await?;
 
-    let mut context =
-        ExecutorWorkerContext::create(1, WorkersCondvar::create(1), Arc::new("".to_string()));
+    let mut context = ExecutorWorkerContext::create(1, WorkersCondvar::create(1));
 
     let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
     assert_eq!(init_queue.sync_queue.len(), 1);
@@ -371,8 +370,7 @@ async fn test_schedule_with_two_tasks() -> Result<()> {
 
     let executor = create_executor_with_simple_pipeline(ctx, 2).await?;
 
-    let mut context =
-        ExecutorWorkerContext::create(1, WorkersCondvar::create(1), Arc::new("".to_string()));
+    let mut context = ExecutorWorkerContext::create(1, WorkersCondvar::create(1));
 
     let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
     assert_eq!(init_queue.sync_queue.len(), 2);
@@ -386,6 +384,70 @@ async fn test_schedule_with_two_tasks() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_schedule_point_simple() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let graph = create_simple_pipeline(ctx)?;
+    let points = graph.get_points();
+    assert_eq!(points, (3 << 32) | 1);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (2 << 32) | 1);
+    assert!(res);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (1 << 32) | 1);
+    assert!(res);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, 1);
+    assert!(res);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (3 << 32) | 2);
+    assert!(!res);
+
+    let res = graph.can_perform_task(1, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (3 << 32) | 2);
+    assert!(!res);
+
+    let res = graph.can_perform_task(2, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (2 << 32) | 2);
+    assert!(res);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_schedule_point_complex() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let graph = create_simple_pipeline(ctx)?;
+
+    let res = graph.can_perform_task(2, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (2 << 32) | 2);
+    assert!(res);
+
+    for _ in 0..5 {
+        let _ = graph.can_perform_task(2, 3);
+    }
+
+    let res = graph.can_perform_task(3, 3);
+    let points = graph.get_points();
+    assert_eq!(points, (2 << 32) | 3);
+    assert!(res);
+
+    Ok(())
+}
+
 fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     let (_rx, sink_pipe) = create_sink_pipe(1)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
@@ -394,7 +456,7 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
 }
 
 fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -406,7 +468,7 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<Running
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
 }
 
 fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -422,7 +484,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
 }
 
 fn create_source_pipe(
@@ -497,7 +559,9 @@ async fn create_executor_with_simple_pipeline(
     let settings = ExecutorSettings {
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
-        enable_new_executor: false,
+        enable_queries_executor: false,
+        max_threads: 8,
+        executor_node_id: "".to_string(),
     };
     QueryPipelineExecutor::create(pipeline, settings)
 }

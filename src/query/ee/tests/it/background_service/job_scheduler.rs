@@ -28,6 +28,7 @@ use databend_common_meta_app::background::BackgroundJobInfo;
 use databend_common_meta_app::background::BackgroundJobParams;
 use databend_common_meta_app::background::BackgroundJobStatus;
 use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::tenant::Tenant;
 use databend_enterprise_query::background_service::Job;
 use databend_enterprise_query::background_service::JobScheduler;
 
@@ -64,10 +65,7 @@ impl Job for TestJob {
     }
 
     fn get_name(&self) -> BackgroundJobIdent {
-        BackgroundJobIdent {
-            tenant: "test".to_string(),
-            name: "test".to_string(),
-        }
+        BackgroundJobIdent::new(Tenant::new_literal("test"), "test")
     }
 
     async fn update_job_status(&mut self, _status: BackgroundJobStatus) -> Result<()> {

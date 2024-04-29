@@ -22,6 +22,7 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PayloadFlushState;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
@@ -136,7 +137,6 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::HashTable(payload) => {
                         self.input_data = Some(SerializeAggregateStream::create(
@@ -209,6 +209,7 @@ pub struct SerializeAggregateStream<Method: HashMethodBounds> {
     pub payload: Pin<Box<SerializePayload<Method, usize>>>,
     // old hashtable' iter
     iter: Option<<Method::HashTable<usize> as HashtableLike>::Iterator<'static>>,
+    flush_state: Option<PayloadFlushState>,
     end_iter: bool,
 }
 
@@ -231,10 +232,18 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                 None
             };
 
+            let flush_state =
+                if let SerializePayload::AggregatePayload(_) = payload.as_ref().get_ref() {
+                    Some(PayloadFlushState::default())
+                } else {
+                    None
+                };
+
             SerializeAggregateStream::<Method> {
                 iter,
                 payload,
                 end_iter: false,
+                flush_state,
                 method: method.clone(),
                 params: params.clone(),
             }
@@ -276,9 +285,10 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                     .method
                     .keys_column_builder(max_block_rows, max_block_bytes);
 
+                let mut bytes = 0;
+
                 #[allow(clippy::while_let_on_iterator)]
                 while let Some(group_entity) = self.iter.as_mut().and_then(|iter| iter.next()) {
-                    let mut bytes = 0;
                     let place = Into::<StateAddr>::into(*group_entity.get());
 
                     for (idx, func) in funcs.iter().enumerate() {
@@ -290,7 +300,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
 
                     group_key_builder.append_value(group_entity.key());
 
-                    if bytes >= 8 * 1024 * 1024 {
+                    if bytes + group_key_builder.bytes_size() >= 8 * 1024 * 1024 {
                         return self.finish(state_builders, group_key_builder);
                     }
                 }
@@ -299,13 +309,19 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                 self.finish(state_builders, group_key_builder)
             }
             SerializePayload::AggregatePayload(p) => {
-                let data_block = p.payload.aggregate_flush_all()?;
+                let state = self.flush_state.as_mut().unwrap();
+                let block = p.payload.aggregate_flush(state)?;
 
-                self.end_iter = true;
+                if block.is_none() {
+                    self.end_iter = true;
+                }
 
-                Ok(Some(data_block.add_meta(Some(
-                    AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count),
-                ))?))
+                match block {
+                    Some(block) => Ok(Some(block.add_meta(Some(
+                        AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count),
+                    ))?)),
+                    None => Ok(None),
+                }
             }
         }
     }

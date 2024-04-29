@@ -1,0 +1,61 @@
+statement ok
+drop table if exists t_min_max_any
+
+statement ok
+create table t_min_max_any(a int null, b int null, c int, h tuple(a int, b string))
+
+statement ok
+insert into t_min_max_any values (null, null, 1, (1460608685,NULL)), (1, 1, 1, (1460608685,NULL)), (2, 3, 2, (-698945516,'0DGdV')), (3, 2, 2, null), (null, 3, 3, (-468605495,'2s3RO')), (null, 4, 3, (460198171,'qcCz9'))
+
+query I
+select min(a) from t_min_max_any
+----
+1
+
+query I
+select max(b) from t_min_max_any
+----
+4
+
+query I
+select any(a) from t_min_max_any
+----
+1
+
+query III
+select any(a), max(b), min(c) from t_min_max_any
+----
+1 4 1
+
+query T
+select min(a) from t_min_max_any where c = 3
+----
+NULL
+
+query IIII
+select any(b), min(b), max(b), c from t_min_max_any group by c order by c
+----
+1 1 1 1
+3 2 3 2
+3 3 4 3
+
+#  group by test with all NULL rows in one group.
+
+query TTTI
+select any(a), min(a), max(a), c from t_min_max_any group by c order by c
+----
+1 1 1 1
+2 2 3 2
+NULL NULL NULL 3
+
+
+query TT
+select c, min(h), max(h) from t_min_max_any group by c order by c
+----
+1 (1460608685,NULL) (1460608685,NULL)
+2 (-698945516,'0DGdV') (-698945516,'0DGdV')
+3 (-468605495,'2s3RO') (460198171,'qcCz9')
+
+
+statement ok
+drop table t_min_max_any

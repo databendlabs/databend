@@ -632,7 +632,8 @@ impl AggregationContext {
                 || // coincide overlap
                 (max == key_max && min == key_min)
         } else {
-            false
+            // if column range index does not exist, assume overlapped
+            true
         }
     }
 
@@ -948,6 +949,56 @@ mod tests {
         );
 
         assert!(!overlap);
+
+        // case 3: (column rang index not exist)
+        //
+        // - min/max of input block
+        //
+        //  'xx_id' : [11, 12]
+        //  'xx_type' : ["b", "b"]
+        //  'xx_time' : [100, 100]
+        //
+        // - the range index of columns are (after tweaks)
+        //
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+        //
+        // - expected : overlap == true
+        //
+        //   range index of column 'xx_id' does not exist (explicitly removed)
+        //   the result should be overlapped
+
+        let input_column_min_max = [
+            // for xx_id column, NOT overlaps
+            (
+                Scalar::Number(NumberScalar::UInt64(11)),
+                Scalar::Number(NumberScalar::UInt64(12)),
+            ),
+            // for xx_type column, overlaps
+            (
+                Scalar::String("b".to_string()),
+                Scalar::String("b".to_string()),
+            ),
+            // for xx_time column, overlaps
+            (
+                Scalar::Number(NumberScalar::UInt32(100)),
+                Scalar::Number(NumberScalar::UInt32(100)),
+            ),
+        ];
+
+        let column_range_indexes = {
+            let mut cloned = column_range_indexes;
+            cloned.remove(&0); // remove range index of col xx_id
+            cloned
+        };
+
+        let overlap = super::AggregationContext::check_overlap(
+            &on_conflict_fields,
+            &column_range_indexes,
+            &input_column_min_max,
+        );
+
+        assert!(overlap);
 
         Ok(())
     }

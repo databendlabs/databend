@@ -25,26 +25,31 @@ use crate::parser::Backtrace;
 /// Input tokens slice with a backtrace that records all errors including
 /// the optional branch.
 #[derive(Debug, Clone, Copy)]
-pub struct Input<'a>(pub &'a [Token<'a>], pub Dialect, pub &'a Backtrace);
+pub struct Input<'a> {
+    pub tokens: &'a [Token<'a>],
+    pub dialect: Dialect,
+    pub mode: ParseMode,
+    pub backtrace: &'a Backtrace,
+}
 
 impl<'a> std::ops::Deref for Input<'a> {
     type Target = [Token<'a>];
 
     fn deref(&self) -> &Self::Target {
-        self.0
+        self.tokens
     }
 }
 
 impl<'a> nom::InputLength for Input<'a> {
     fn input_len(&self) -> usize {
-        self.0.input_len()
+        self.tokens.input_len()
     }
 }
 
 impl<'a> nom::Offset for Input<'a> {
     fn offset(&self, second: &Self) -> usize {
-        let fst = self.0.as_ptr();
-        let snd = second.0.as_ptr();
+        let fst = self.tokens.as_ptr();
+        let snd = second.tokens.as_ptr();
 
         (snd as usize - fst as usize) / std::mem::size_of::<Token>()
     }
@@ -52,19 +57,28 @@ impl<'a> nom::Offset for Input<'a> {
 
 impl<'a> nom::Slice<Range<usize>> for Input<'a> {
     fn slice(&self, range: Range<usize>) -> Self {
-        Input(&self.0[range], self.1, self.2)
+        Input {
+            tokens: &self.tokens[range],
+            ..*self
+        }
     }
 }
 
 impl<'a> nom::Slice<RangeTo<usize>> for Input<'a> {
     fn slice(&self, range: RangeTo<usize>) -> Self {
-        Input(&self.0[range], self.1, self.2)
+        Input {
+            tokens: &self.tokens[range],
+            ..*self
+        }
     }
 }
 
 impl<'a> nom::Slice<RangeFrom<usize>> for Input<'a> {
     fn slice(&self, range: RangeFrom<usize>) -> Self {
-        Input(&self.0[range], self.1, self.2)
+        Input {
+            tokens: &self.tokens[range],
+            ..*self
+        }
     }
 }
 
@@ -78,6 +92,13 @@ impl<'a> nom::Slice<RangeFull> for Input<'a> {
 pub struct WithSpan<'a, T> {
     pub(crate) span: Input<'a>,
     pub(crate) elem: T,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumAsInner)]
+pub enum ParseMode {
+    #[default]
+    Default,
+    Template,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumAsInner)]
@@ -121,6 +142,13 @@ impl Dialect {
             Dialect::MySQL => false,
             Dialect::Hive => true,
             Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => false,
+        }
+    }
+
+    pub fn default_ident_quote(&self) -> char {
+        match self {
+            Dialect::MySQL | Dialect::Hive => '`',
+            Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => '"',
         }
     }
 }

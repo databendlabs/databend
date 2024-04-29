@@ -19,9 +19,9 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::GetShareGrantObjectReq;
 use databend_common_meta_app::share::ShareGrantObjectName;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -55,10 +55,7 @@ impl Interpreter for DescShareInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = GetShareGrantObjectReq {
-            share_name: ShareNameIdent {
-                tenant: self.ctx.get_tenant().to_string(),
-                share_name: self.plan.share.clone(),
-            },
+            share_name: ShareNameIdent::new(self.ctx.get_tenant(), &self.plan.share),
         };
         let resp = meta_api.get_share_grant_objects(req).await?;
         if resp.objects.is_empty() {

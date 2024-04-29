@@ -5,51 +5,120 @@ statement ok
 drop table if exists t2
 
 statement ok
-create table t1 (a int)
+create table t1(a int, b int)
 
 statement ok
-create table t2(b int)
+create table t2(a int, b int)
 
 statement ok
-insert into t1 values(1), (2), (3), (8);
+insert into t1 values(1, 2), (2, 3), (3, 4), (8, 9);
 
 statement ok
-insert into t2 values(2), (3);
+insert into t2 values(2, 3), (3, 4);
 
 query T
-explain delete from t1 where a in (select b from t2);
+explain delete from t1 where a in (select a from t2);
 ----
-DeletePlan:
-EvalScalar
-├── scalars: [t1._row_id (#2) AS (#0)]
-└── Filter
-    ├── filters: [3 (#3)]
-    └── Join(RightMark)
-        ├── build keys: [CAST(subquery_1 (#1) AS Int32 NULL)]
-        ├── probe keys: [t1.a (#0)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── EvalScalar
-            ├── scalars: [t2.b (#1) AS (#1)]
-            └── Scan
-                ├── table: default.t2
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+DeletePlan (subquery):
+Filter
+├── output columns: [t1._row_id (#4)]
+├── filters: [is_true(5 (#5))]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: [t1._row_id (#4), marker (#5)]
+    ├── join type: RIGHT MARK
+    ├── build keys: [subquery_2 (#2)]
+    ├── probe keys: [t1.a (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t2
+    │   ├── output columns: [a (#2)]
+    │   ├── read rows: 2
+    │   ├── read size: < 1 KiB
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── output columns: [a (#0), _row_id (#4)]
+        ├── read rows: 4
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
 
 
 query T
 explain delete from t1 where a > 2;
 ----
-DeletePlan:
+DeletePlan (selection):
 Filter
-├── filters: [gt(t1.a (#0), 2)]
-└── Scan
-    ├── table: default.t1
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [is_true(t1.a (#0) > 2)]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
+
+query T
+explain delete from t1 where a in (select a from t2) and b > 2;
+----
+DeletePlan (subquery):
+Filter
+├── output columns: [t1._row_id (#4)]
+├── filters: [is_true(5 (#5))]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: [t1._row_id (#4), marker (#5)]
+    ├── join type: RIGHT MARK
+    ├── build keys: [subquery_2 (#2)]
+    ├── probe keys: [t1.a (#0)]
     ├── filters: []
-    ├── order by: []
-    └── limit: NONE
+    ├── estimated rows: 0.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t2
+    │   ├── output columns: [a (#2)]
+    │   ├── read rows: 2
+    │   ├── read size: < 1 KiB
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── output columns: [a (#0), _row_id (#4)]
+        ├── read rows: 4
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
+DeletePlan (selection):
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [is_true(t1.b (#1) > 2)]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00

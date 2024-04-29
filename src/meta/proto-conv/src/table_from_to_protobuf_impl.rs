@@ -24,6 +24,8 @@ use chrono::Utc;
 use databend_common_expression as ex;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
 
 use crate::reader_check_msg;
@@ -95,8 +97,13 @@ impl FromToProto for mt::TableNameIdent {
     fn from_pb(p: pb::TableNameIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
+        let non_empty = NonEmptyString::new(p.tenant.clone())
+            .map_err(|_e| Incompatible::new("tenant is empty"))?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let v = Self {
-            tenant: p.tenant,
+            tenant,
             db_name: p.db_name,
             table_name: p.table_name,
         };
@@ -107,7 +114,7 @@ impl FromToProto for mt::TableNameIdent {
         let p = pb::TableNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
+            tenant: self.tenant.tenant_name().to_string(),
             db_name: self.db_name.clone(),
             table_name: self.table_name.clone(),
         };
@@ -338,6 +345,9 @@ impl FromToProto for mt::TableIndex {
         let v = Self {
             name: p.name,
             column_ids: p.column_ids,
+            sync_creation: p.sync_creation,
+            version: p.version.clone(),
+            options: p.options.clone(),
         };
         Ok(v)
     }
@@ -348,6 +358,9 @@ impl FromToProto for mt::TableIndex {
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
             column_ids: self.column_ids.clone(),
+            sync_creation: self.sync_creation,
+            version: self.version.clone(),
+            options: self.options.clone(),
         };
         Ok(p)
     }

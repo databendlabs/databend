@@ -128,6 +128,18 @@ message TableIndex {
 
   string name = 1;
   repeated uint32 column_ids = 2;
+
+  // if true, index will create after data written to databend,
+  // no need execute refresh index manually.
+  bool sync_creation = 3;
+
+  // if the index columns or options change,
+  // the index data needs to be regenerated,
+  // version is used to identify each change.
+  string version = 4;
+
+  // index options specify the index configs, like tokenizer.
+  map<string, string> options = 5;
 }
 
 // Save table name id list history.

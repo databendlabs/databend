@@ -110,6 +110,7 @@ message CsvFileFormatParams {
   optional string empty_field_as = 10;
   optional string binary_format = 11;
   bool output_header = 12;
+  optional string geometry_format = 13;
 }
 
 message TsvFileFormatParams {

@@ -17,7 +17,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_formats::output_format::OutputFormat;
 use databend_common_formats::ClickhouseFormatType;
 use databend_common_formats::FileFormatOptionsExt;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 
 mod field_decoder;
@@ -31,6 +31,6 @@ fn get_output_format_clickhouse(
     schema: TableSchemaRef,
 ) -> Result<Box<dyn OutputFormat>> {
     let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-    let settings = Settings::create(NonEmptyString::new("default").unwrap());
+    let settings = Settings::create(Tenant::new_literal("default"));
     FileFormatOptionsExt::get_output_format_from_clickhouse_format(format, schema, &settings)
 }

@@ -13,32 +13,22 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_catalog::catalog::StorageDescription;
-use databend_common_catalog::plan::block_id_from_location;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
-use databend_common_catalog::plan::StreamTablePart;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::ColumnId;
-use databend_common_expression::FromData;
-use databend_common_expression::RemoteExpr;
-use databend_common_expression::Scalar;
 use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
-use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
@@ -47,12 +37,7 @@ use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
-use databend_common_storages_fuse::io::SegmentsIO;
-use databend_common_storages_fuse::io::SnapshotsIO;
-use databend_common_storages_fuse::operations::collect_incremental_blocks;
-use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
@@ -143,18 +128,17 @@ impl StreamTable {
 
         if table.get_table_info().ident.table_id != self.table_id {
             return Err(ErrorCode::IllegalStream(format!(
-                "Table id mismatch, expect {}, got {}",
-                self.table_id,
-                table.get_table_info().ident.table_id
+                "Base table '{}'.'{}' dropped, cannot read from stream {}",
+                self.table_database, self.table_name, self.stream_info.desc,
             )));
         }
 
-        if !table.change_tracking_enabled() {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled for table '{}.{}'",
-                self.table_database, self.table_name
-            )));
-        }
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        fuse_table.check_changes_valid(
+            &self.table_database,
+            &self.table_name,
+            self.table_version,
+        )?;
 
         Ok(table)
     }
@@ -189,99 +173,14 @@ impl StreamTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let start = Instant::now();
         let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-        let fuse_segment_io =
-            SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), self.schema());
-
-        let latest_snapshot = fuse_table.snapshot_loc().await?;
-        let (_, del_blocks, add_blocks) = collect_incremental_blocks(
-            ctx.clone(),
-            fuse_segment_io,
-            fuse_table.get_operator(),
-            &latest_snapshot,
-            &self.snapshot_location,
-        )
-        .await?;
-
         let change_type = push_downs.as_ref().map_or(ChangeType::Append, |v| {
             v.change_type.clone().unwrap_or(ChangeType::Append)
         });
-        let mut push_downs = push_downs;
-        let (blocks, base_block_ids_scalar) = match change_type {
-            ChangeType::Append => {
-                let mut base_block_ids = Vec::with_capacity(del_blocks.len());
-                for base_block in del_blocks {
-                    let block_id = block_id_from_location(&base_block.location.0)?;
-                    base_block_ids.push(block_id);
-                }
-                let base_block_ids_scalar =
-                    Scalar::Array(Decimal128Type::from_data(base_block_ids));
-                push_downs = replace_push_downs(push_downs, &base_block_ids_scalar)?;
-                (add_blocks, Some(base_block_ids_scalar))
-            }
-            ChangeType::Insert => (add_blocks, None),
-            ChangeType::Delete => (del_blocks, None),
-        };
-
-        let summary = blocks.len();
-        if summary == 0 {
-            return Ok((PartStatistics::default(), Partitions::default()));
-        }
-
-        let table_schema = fuse_table.schema_with_stream();
-        let (cluster_keys, cluster_key_meta) =
-            if !fuse_table.is_native() || fuse_table.cluster_key_meta().is_none() {
-                (vec![], None)
-            } else {
-                (
-                    fuse_table.cluster_keys(ctx.clone()),
-                    fuse_table.cluster_key_meta(),
-                )
-            };
-        let bloom_index_cols = fuse_table.bloom_index_cols();
-        let mut pruner = FusePruner::create_with_pages(
-            &ctx,
-            fuse_table.get_operator(),
-            table_schema.clone(),
-            &push_downs,
-            cluster_key_meta,
-            cluster_keys,
-            bloom_index_cols,
-        )?;
-
-        let block_metas = pruner.stream_pruning(blocks).await?;
-        let pruning_stats = pruner.pruning_stats();
-
-        log::info!(
-            "prune snapshot block end, final block numbers:{}, cost:{}",
-            block_metas.len(),
-            start.elapsed().as_secs()
-        );
-
-        let block_metas = block_metas
-            .into_iter()
-            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
-            .collect::<Vec<_>>();
-
-        let (stats, parts) = fuse_table.read_partitions_with_metas(
-            ctx.clone(),
-            table_schema,
-            push_downs,
-            &block_metas,
-            summary,
-            pruning_stats,
-        )?;
-        if let Some(base_block_ids_scalar) = base_block_ids_scalar {
-            let wrapper = Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![
-                StreamTablePart::create(parts, base_block_ids_scalar),
-            ]);
-            Ok((stats, wrapper))
-        } else {
-            Ok((stats, parts))
-        }
+        fuse_table
+            .do_read_changes_partitions(ctx, push_downs, change_type, &self.snapshot_location)
+            .await
     }
 
     #[minitrace::trace]
@@ -332,44 +231,6 @@ impl Table for StreamTable {
         ]
     }
 
-    #[async_backtrace::framed]
-    async fn get_stream_mode(&self, ctx: Arc<dyn TableContext>) -> Result<StreamMode> {
-        match self.mode {
-            StreamMode::AppendOnly => Ok(StreamMode::AppendOnly),
-            StreamMode::Standard => {
-                if self.snapshot_location.is_none() {
-                    return Ok(StreamMode::AppendOnly);
-                }
-
-                let table = self.source_table(ctx).await?;
-                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-                let latest_snapshot = fuse_table.read_table_snapshot().await?;
-                if latest_snapshot.is_none() {
-                    return Ok(StreamMode::Standard);
-                }
-                let latest_snapshot = latest_snapshot.unwrap();
-                let latest_segments: HashSet<&Location> =
-                    HashSet::from_iter(&latest_snapshot.segments);
-
-                let (base_snapshot, _) = SnapshotsIO::read_snapshot(
-                    self.snapshot_location.clone().unwrap(),
-                    fuse_table.get_operator(),
-                )
-                .await?;
-                let base_segments = HashSet::from_iter(&base_snapshot.segments);
-
-                // If the base segments are a subset of the latest segments,
-                // then the stream is treated as append only.
-                if base_segments.is_subset(&latest_segments) {
-                    Ok(StreamMode::AppendOnly)
-                } else {
-                    Ok(StreamMode::Standard)
-                }
-            }
-        }
-    }
-
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
@@ -405,77 +266,9 @@ impl Table for StreamTable {
         let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let change_type = change_type.unwrap_or(ChangeType::Append);
-
-        let base_summary = if let Some(snapshot_location) = &self.snapshot_location {
-            let (base_snapshot, _) =
-                SnapshotsIO::read_snapshot(snapshot_location.clone(), fuse_table.get_operator())
-                    .await?;
-            base_snapshot.summary.clone()
-        } else {
-            return fuse_table.table_statistics(ctx, None).await;
-        };
-
-        let latest_summary = if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-            snapshot.summary.clone()
-        } else {
-            return Ok(None);
-        };
-
-        let num_rows = latest_summary.row_count.abs_diff(base_summary.row_count);
-        let data_size = latest_summary
-            .uncompressed_byte_size
-            .abs_diff(base_summary.uncompressed_byte_size);
-        let data_size_compressed = latest_summary
-            .compressed_byte_size
-            .abs_diff(base_summary.compressed_byte_size);
-        let index_size = latest_summary.index_size.abs_diff(base_summary.index_size);
-        let number_of_blocks = latest_summary
-            .block_count
-            .abs_diff(base_summary.block_count);
-        let max_stats = || {
-            Some(TableStatistics {
-                num_rows: Some(num_rows),
-                data_size: Some(data_size),
-                data_size_compressed: Some(data_size_compressed),
-                index_size: Some(index_size),
-                number_of_blocks: Some(number_of_blocks),
-                number_of_segments: None,
-            })
-        };
-        // The following statistics are predicted, which may have a large bias;
-        // mainly used to determine the join order
-        let min_stats = || {
-            Some(TableStatistics {
-                num_rows: Some(num_rows / 2),
-                data_size: Some(data_size / 2),
-                data_size_compressed: Some(data_size_compressed / 2),
-                index_size: Some(index_size / 2),
-                number_of_blocks: Some(number_of_blocks / 2),
-                number_of_segments: None,
-            })
-        };
-
-        match change_type {
-            ChangeType::Append => Ok(max_stats()),
-            ChangeType::Insert => {
-                // If the number of rows is greater than the base,
-                // it means that the insertion is more than the deletion.
-                if latest_summary.row_count > base_summary.row_count {
-                    Ok(max_stats())
-                } else {
-                    Ok(min_stats())
-                }
-            }
-            ChangeType::Delete => {
-                // If the number of rows is less than the base,
-                // it means that the deletion is more than the insertion.
-                if latest_summary.row_count < base_summary.row_count {
-                    Ok(max_stats())
-                } else {
-                    Ok(min_stats())
-                }
-            }
-        }
+        fuse_table
+            .changes_table_statistics(ctx, &self.snapshot_location, change_type)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -486,48 +279,23 @@ impl Table for StreamTable {
         let table = self.source_table(ctx.clone()).await?;
         table.column_statistics_provider(ctx).await
     }
-}
 
-fn replace_push_downs(
-    push_downs: Option<PushDownInfo>,
-    base_block_ids: &Scalar,
-) -> Result<Option<PushDownInfo>> {
-    fn visit_expr_column(expr: &mut RemoteExpr<String>, base_block_ids: &Scalar) -> Result<()> {
-        match expr {
-            RemoteExpr::ColumnRef {
-                span,
-                id,
-                data_type,
-                ..
-            } => {
-                if id == BASE_BLOCK_IDS_COL_NAME {
-                    *expr = RemoteExpr::Constant {
-                        span: *span,
-                        scalar: base_block_ids.clone(),
-                        data_type: data_type.clone(),
-                    };
-                }
-            }
-            RemoteExpr::Cast { expr, .. } => {
-                visit_expr_column(expr, base_block_ids)?;
-            }
-            RemoteExpr::FunctionCall { args, .. } => {
-                for arg in args.iter_mut() {
-                    visit_expr_column(arg, base_block_ids)?;
-                }
-            }
-            _ => (),
-        }
-        Ok(())
-    }
-
-    if let Some(mut push_downs) = push_downs {
-        if let Some(filters) = &mut push_downs.filters {
-            visit_expr_column(&mut filters.filter, base_block_ids)?;
-            visit_expr_column(&mut filters.inverted_filter, base_block_ids)?;
-        }
-        Ok(Some(push_downs))
-    } else {
-        Ok(None)
+    #[async_backtrace::framed]
+    async fn generage_changes_query(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<String> {
+        let table = self.source_table(ctx).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        fuse_table
+            .get_changes_query(
+                &self.mode,
+                &self.snapshot_location,
+                format!("{}.{}", database_name, table_name),
+                self.offset(),
+            )
+            .await
     }
 }

@@ -14,17 +14,18 @@
 
 use std::sync::Arc;
 
+use chrono_tz::Tz::UTC;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
-use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
 use databend_common_cloud_control::pb::TaskRun;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
@@ -34,6 +35,8 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -41,6 +44,9 @@ use databend_common_sql::plans::task_run_schema;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_filter;
+use crate::util::find_gt_filter;
+use crate::util::find_lt_filter;
 
 pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock> {
     let mut name: Vec<String> = Vec::with_capacity(task_runs.len());
@@ -122,7 +128,7 @@ impl AsyncSystemTable for TaskHistoryTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let config = GlobalConfig::instance();
         if config.query.cloud_control_grpc_server_address.is_none() {
@@ -133,30 +139,73 @@ impl AsyncSystemTable for TaskHistoryTable {
 
         let tenant = ctx.get_tenant();
         let query_id = ctx.get_id();
-        let user = ctx.get_current_user()?.identity().to_string();
+        let user = ctx.get_current_user()?.identity().display().to_string();
         let available_roles = ctx.get_available_roles().await?;
+        // TODO: limit push_down does NOT work during tests,we need to fix it later.
+        let result_limit = push_downs
+            .as_ref()
+            .map(|v| v.limit.map(|i| i as i32))
+            .unwrap_or(None);
+        let mut task_name = None;
+        let mut scheduled_time_start = None;
+        let mut scheduled_time_end = None;
+        if let Some(push_downs) = push_downs {
+            if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                find_eq_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "name" {
+                        if let Scalar::String(s) = scalar {
+                            task_name = Some(s.clone());
+                        }
+                    }
+                });
+                find_lt_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "scheduled_time" {
+                        if let Scalar::Timestamp(s) = scalar {
+                            scheduled_time_end = Some(s.to_timestamp(UTC).to_rfc3339());
+                        }
+                    }
+                });
+                find_gt_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "scheduled_time" {
+                        if let Scalar::Timestamp(s) = scalar {
+                            scheduled_time_start = Some(s.to_timestamp(UTC).to_rfc3339());
+                        }
+                    }
+                });
+            }
+        }
         let req = ShowTaskRunsRequest {
-            tenant_id: tenant.to_string(),
-            scheduled_time_start: "".to_string(),
-            scheduled_time_end: "".to_string(),
-            task_name: "".to_string(),
-            result_limit: 10000, // TODO: use plan.limit pushdown
+            tenant_id: tenant.tenant_name().to_string(),
+            scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
+            scheduled_time_end: scheduled_time_end.unwrap_or("".to_string()),
+            task_name: task_name.unwrap_or("".to_string()),
+            result_limit: result_limit.unwrap_or(0), // 0 means default
             error_only: false,
             owners: available_roles
                 .into_iter()
                 .map(|x| x.identity().to_string())
                 .collect(),
+            next_page_token: None,
+            page_size: None,
+            previous_page_token: None,
             task_ids: vec![],
         };
 
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
-        let config =
-            build_client_config(tenant.to_string(), user, query_id, cloud_api.get_timeout());
-        let req = make_request(req, config);
+        let config = build_client_config(
+            tenant.tenant_name().to_string(),
+            user,
+            query_id,
+            cloud_api.get_timeout(),
+        );
 
-        let resp = task_client.show_task_runs(req).await?;
-        let trs = resp.task_runs;
+        let resp = task_client.show_task_runs_full(config, req).await?;
+        let trs = resp
+            .into_iter()
+            .flat_map(|r| r.task_runs)
+            .collect::<Vec<_>>();
 
         parse_task_runs_to_datablock(trs)
     }

@@ -14,6 +14,7 @@
 
 //! This mod wraps openraft types that have generics parameter with concrete types.
 
+use openraft::impls::OneshotResponder;
 use openraft::RaftTypeConfig;
 use openraft::TokioRuntime;
 
@@ -36,6 +37,7 @@ impl RaftTypeConfig for TypeConfig {
     type Entry = openraft::entry::Entry<TypeConfig>;
     type SnapshotData = SnapshotData;
     type AsyncRuntime = TokioRuntime;
+    type Responder = OneshotResponder<TypeConfig>;
 }
 
 pub type CommittedLeaderId = openraft::CommittedLeaderId<NodeId>;

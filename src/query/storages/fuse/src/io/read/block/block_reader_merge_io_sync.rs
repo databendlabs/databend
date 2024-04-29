@@ -28,7 +28,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use opendal::Operator;
 
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
@@ -83,7 +83,7 @@ impl BlockReader {
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(||ErrorCode::Internal(format!(
+            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(|| ErrorCode::Internal(format!(
                 "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
                 column_range, path, merged_ranges
             )))?;
@@ -103,7 +103,7 @@ impl BlockReader {
         part: &PartInfoPtr,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<MergeIOReadResult> {
-        let part = FusePartInfo::from_part(part)?;
+        let part = FuseBlockPartInfo::from_part(part)?;
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
 
         let mut ranges = vec![];

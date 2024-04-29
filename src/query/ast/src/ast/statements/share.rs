@@ -24,6 +24,7 @@ use derive_visitor::DriveMut;
 use itertools::Itertools;
 
 use super::UriLocation;
+use crate::ast::write_comma_separated_string_map;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -52,9 +53,7 @@ impl Display for CreateShareEndpointStmt {
         write!(f, "{}", self.endpoint)?;
         write!(f, " URL={}", self.url)?;
         write!(f, " TENANT={} ARGS=(", self.tenant)?;
-        for (k, v) in self.args.iter() {
-            write!(f, "{}={},", k, v)?;
-        }
+        write_comma_separated_string_map(f, &self.args)?;
         write!(f, ")")?;
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT = '{comment}'")?;

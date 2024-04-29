@@ -30,7 +30,6 @@ use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleEliminateSort;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
-use crate::optimizer::rule::rewrite::RuleNormalizeAggregate;
 use crate::optimizer::rule::rewrite::RulePushDownFilterProjectSet;
 use crate::optimizer::rule::rewrite::RulePushDownFilterScan;
 use crate::optimizer::rule::rewrite::RulePushDownFilterSort;
@@ -55,18 +54,12 @@ pub struct RuleFactory;
 pub const MAX_PUSH_DOWN_LIMIT: usize = 10000;
 
 impl RuleFactory {
-    pub fn create_rule(
-        id: RuleID,
-        metadata: MetadataRef,
-        after_join_reorder: bool,
-    ) -> Result<RulePtr> {
+    pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
         match id {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
-            RuleID::PushDownFilterJoin => {
-                Ok(Box::new(RulePushDownFilterJoin::new(after_join_reorder)))
-            }
+            RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
@@ -88,7 +81,6 @@ impl RuleFactory {
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
-            RuleID::NormalizeAggregate => Ok(Box::new(RuleNormalizeAggregate::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),

@@ -43,7 +43,7 @@ pub struct GetLVTReply {
     pub time: Option<DateTime<Utc>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct LeastVisibleTimeKey {
     pub table_id: u64,
 }

@@ -40,7 +40,7 @@ fn rand_block_for_all_types(num_rows: usize) -> DataBlock {
     let types = get_all_test_data_types();
     let mut columns = Vec::with_capacity(types.len());
     for data_type in types.iter() {
-        columns.push(Column::random(data_type, num_rows));
+        columns.push(Column::random(data_type, num_rows, None));
     }
 
     let block = DataBlock::new_from_columns(columns);
@@ -53,7 +53,7 @@ fn rand_block_for_simple_types(num_rows: usize) -> DataBlock {
     let types = get_simple_types();
     let mut columns = Vec::with_capacity(types.len());
     for data_type in types.iter() {
-        columns.push(Column::random(data_type, num_rows));
+        columns.push(Column::random(data_type, num_rows, None));
     }
 
     let block = DataBlock::new_from_columns(columns);

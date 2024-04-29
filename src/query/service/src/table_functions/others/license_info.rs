@@ -218,11 +218,15 @@ impl AsyncSource for LicenseInfoSource {
         // sync global changes on distributed node cluster.
         settings.load_changes().await?;
         let license = unsafe {
-            settings
-                .get_enterprise_license()
-                .map_err_to_code(ErrorCode::LicenseKeyInvalid, || {
-                    format!("failed to get license for {}", self.ctx.get_tenant())
-                })?
+            settings.get_enterprise_license().map_err_to_code(
+                ErrorCode::LicenseKeyInvalid,
+                || {
+                    format!(
+                        "failed to get license for {}",
+                        self.ctx.get_tenant().display()
+                    )
+                },
+            )?
         };
 
         get_license_manager()
@@ -233,7 +237,10 @@ impl AsyncSource for LicenseInfoSource {
             .manager
             .parse_license(license.as_str())
             .map_err_to_code(ErrorCode::LicenseKeyInvalid, || {
-                format!("current license invalid for {}", self.ctx.get_tenant())
+                format!(
+                    "current license invalid for {}",
+                    self.ctx.get_tenant().display()
+                )
             })?;
         Ok(Some(self.to_block(&info)?))
     }

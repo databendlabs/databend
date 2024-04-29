@@ -30,7 +30,6 @@ use crate::ast::SelectTarget;
 use crate::ast::SetExpr;
 use crate::ast::SetOperator;
 use crate::ast::TableReference;
-use crate::ast::TimeTravelPoint;
 use crate::ast::WindowDefinition;
 use crate::ast::With;
 use crate::ast::CTE;
@@ -319,8 +318,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             database,
             table,
             alias,
-            travel_point,
-            since_point,
+            temporal,
             pivot,
             unpivot,
         } => if let Some(catalog) = catalog {
@@ -344,17 +342,8 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
-            RcDoc::text(format!(" AT (SNAPSHOT => {sid})"))
-        } else if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
-            RcDoc::text(format!(" AT (TIMESTAMP => {ts})"))
-        } else {
-            RcDoc::nil()
-        })
-        .append(if let Some(TimeTravelPoint::Snapshot(sid)) = since_point {
-            RcDoc::text(format!(" SINCE (SNAPSHOT => {sid})"))
-        } else if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {
-            RcDoc::text(format!(" SINCE (TIMESTAMP => {ts})"))
+        .append(if let Some(temporal) = temporal {
+            RcDoc::text(format!(" {temporal}"))
         } else {
             RcDoc::nil()
         })

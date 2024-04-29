@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourceInfo;
@@ -29,7 +28,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockThresholds;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -38,7 +36,6 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use opendal::Operator;
-use parking_lot::Mutex;
 
 use crate::one_file_partition::OneFilePartition;
 use crate::read::row_based::RowBasedReadPipelineBuilder;
@@ -50,7 +47,6 @@ pub struct StageTable {
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
-    block_compact_threshold: Mutex<Option<BlockThresholds>>,
 }
 
 impl StageTable {
@@ -69,7 +65,6 @@ impl StageTable {
         Ok(Arc::new(Self {
             table_info,
             table_info_placeholder,
-            block_compact_threshold: Default::default(),
         }))
     }
 
@@ -81,24 +76,23 @@ impl StageTable {
     #[async_backtrace::framed]
     pub async fn list_files(
         stage_info: &StageTableInfo,
+        thread_num: usize,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
-        stage_info.list_files(max_files).await
-    }
-
-    pub fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
-        let guard = self.block_compact_threshold.lock();
-        guard.deref().unwrap_or_default()
+        stage_info.list_files(thread_num, max_files).await
     }
 
     pub async fn read_partitions_simple(
         &self,
+        ctx: Arc<dyn TableContext>,
         stage_table_info: &StageTableInfo,
     ) -> Result<(PartStatistics, Partitions)> {
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
+
         let files = if let Some(files) = &stage_table_info.files_to_copy {
             files.clone()
         } else {
-            StageTable::list_files(stage_table_info, None).await?
+            StageTable::list_files(stage_table_info, thread_num, None).await?
         };
         let size = files.iter().map(|f| f.size as usize).sum();
         // assuming all fields are empty
@@ -127,7 +121,7 @@ impl StageTable {
 
         Ok((
             statistics,
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
+            Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
     }
 }
@@ -160,8 +154,10 @@ impl Table for StageTable {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
-            FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
-                self.read_partitions_simple(stage_table_info).await
+            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_)
+                if settings.get_enable_new_copy_for_text_formats()? == 1 =>
+            {
+                self.read_partitions_simple(ctx, stage_table_info).await
             }
             _ => self.read_partition_old(&ctx).await,
         }
@@ -189,8 +185,10 @@ impl Table for StageTable {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
             }
-            FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
-                let compact_threshold = self.get_block_compact_thresholds_with_default();
+            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_)
+                if settings.get_enable_new_copy_for_text_formats()? == 1 =>
+            {
+                let compact_threshold = ctx.get_read_block_thresholds();
                 RowBasedReadPipelineBuilder {
                     stage_table_info,
                     compact_threshold,
@@ -212,19 +210,9 @@ impl Table for StageTable {
 
     // Truncate the stage file.
     #[async_backtrace::framed]
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",
         ))
-    }
-
-    fn get_block_thresholds(&self) -> BlockThresholds {
-        let guard = self.block_compact_threshold.lock();
-        (*guard).expect("must success")
-    }
-
-    fn set_block_thresholds(&self, thresholds: BlockThresholds) {
-        let mut guard = self.block_compact_threshold.lock();
-        (*guard) = Some(thresholds)
     }
 }

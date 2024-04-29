@@ -39,7 +39,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 
 pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
     func_ctx: FunctionContext,
@@ -148,7 +148,7 @@ impl SyncSource for ReadNativeDataSource<true> {
                     return Ok(Some(DataBlock::empty()));
                 }
                 if let Some(index_reader) = self.index_reader.as_ref() {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                     let loc =
                         TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                             &fuse_part.location,
@@ -165,7 +165,7 @@ impl SyncSource for ReadNativeDataSource<true> {
                 }
 
                 if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                     let loc =
                         TableMetaLocationGenerator::gen_virtual_block_location(&fuse_part.location);
 
@@ -262,13 +262,13 @@ impl Processor for ReadNativeDataSource<false> {
                 let ctx = self.partitions.ctx.clone();
                 chunks.push(async move {
                     let handler = databend_common_base::runtime::spawn(async move {
-                        let fuse_part = FusePartInfo::from_part(&part)?;
+                        let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                         if let Some(index_reader) = index_reader.as_ref() {
                             let loc =
-                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            &fuse_part.location,
-                            index_reader.index_id(),
-                        );
+                                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                                    &fuse_part.location,
+                                    index_reader.index_id(),
+                                );
                             if let Some(data) = index_reader.read_native_data(&loc).await {
                                 // Read from aggregating index.
                                 return Ok::<_, ErrorCode>(NativeDataSource::AggIndex(data));

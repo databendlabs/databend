@@ -94,37 +94,40 @@ impl CopyIntoLocationInterpreter {
         path: &str,
         query: &Plan,
     ) -> Result<PipelineBuildResult> {
-        let (select_interpreter, data_schema) = self.build_query(query).await?;
-        let plan = select_interpreter.build_physical_plan().await?;
-        let mut build_res = select_interpreter.build_pipeline(plan).await?;
-        let table_schema = infer_table_schema(&data_schema)?;
-        let stage_table_info = StageTableInfo {
-            schema: table_schema,
-            stage_info: stage.clone(),
-            files_info: StageFilesInfo {
-                path: path.to_string(),
-                files: None,
-                pattern: None,
-                start_after: None,
-            },
-            files_to_copy: None,
-            duplicated_files_detected: vec![],
-            is_select: false,
-            default_values: None,
-        };
-        let to_table = StageTable::try_create(stage_table_info)?;
-        PipelineBuilder::build_append2table_with_commit_pipeline(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            to_table,
-            data_schema,
-            None,
-            vec![],
+        let query_interpreter = self.build_query(query).await?;
+        let query_physical_plan = query_interpreter.build_physical_plan().await?;
+        let query_result_schema = query_interpreter.get_result_schema();
+        let table_schema = infer_table_schema(&query_result_schema)?;
+        let projected_query_physical_plan = PhysicalPlan::Project(Project::from_columns_binding(
+            0,
+            Box::new(query_physical_plan),
+            query_interpreter.get_result_columns(),
             false,
-            AppendMode::Normal,
-            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-        )?;
-        Ok(build_res)
+        )?);
+
+        let mut physical_plan = PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
+            plan_id: 0,
+            input: Box::new(projected_query_physical_plan),
+            input_schema: query_result_schema,
+            to_stage_info: StageTableInfo {
+                schema: table_schema,
+                stage_info: stage.clone(),
+                files_info: StageFilesInfo {
+                    path: path.to_string(),
+                    files: None,
+                    pattern: None,
+                    start_after: None,
+                },
+                files_to_copy: None,
+                duplicated_files_detected: vec![],
+                is_select: false,
+                default_values: None,
+            },
+        }));
+
+        let mut next_plan_id = 0;
+        physical_plan.adjust_plan_id(&mut next_plan_id);
+        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await
     }
 }
 

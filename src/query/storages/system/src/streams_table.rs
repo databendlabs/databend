@@ -65,9 +65,10 @@ impl AsyncSystemTable for StreamsTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
+
         let catalog_mgr = CatalogManager::instance();
         let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
-            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
+            .list_catalogs(&tenant, ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
@@ -108,7 +109,7 @@ impl AsyncSystemTable for StreamsTable {
                         }
                     });
                     for db in db_name {
-                        if let Ok(database) = ctl.get_database(tenant.as_str(), db.as_str()).await {
+                        if let Ok(database) = ctl.get_database(&tenant, db.as_str()).await {
                             dbs.push(database);
                         }
                     }
@@ -116,7 +117,7 @@ impl AsyncSystemTable for StreamsTable {
             }
 
             if dbs.is_empty() {
-                dbs = ctl.list_databases(tenant.as_str()).await?;
+                dbs = ctl.list_databases(&tenant).await?;
             }
             let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
@@ -133,7 +134,7 @@ impl AsyncSystemTable for StreamsTable {
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let name: &str = Box::leak(name);
-                let tables = match ctl.list_tables(tenant.as_str(), name).await {
+                let tables = match ctl.list_tables(&tenant, name).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // Swallow the errors related with sharing. Listing tables in a shared database

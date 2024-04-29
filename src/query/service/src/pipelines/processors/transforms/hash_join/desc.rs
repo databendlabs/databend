@@ -36,7 +36,7 @@ pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
     pub(crate) join_type: JoinType,
-    pub(crate) original_join_type: Option<JoinType>,
+    pub(crate) single_to_inner: Option<JoinType>,
     /// when we have non-equal conditions for hash join,
     /// for example `a = b and c = d and e > f`, we will use `and_filters`
     /// to wrap `e > f` as a other_predicate to do next step's check.
@@ -88,7 +88,7 @@ impl HashJoinDesc {
             from_correlated_subquery: join.from_correlated_subquery,
             probe_keys_rt,
             broadcast: join.broadcast,
-            original_join_type: join.original_join_type.clone(),
+            single_to_inner: join.single_to_inner.clone(),
             enable_bloom_runtime_filter: join.enable_bloom_runtime_filter,
         })
     }

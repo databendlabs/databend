@@ -19,14 +19,14 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -38,6 +38,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -50,6 +52,10 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -74,6 +80,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -86,6 +93,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use dyn_clone::DynClone;
 
@@ -117,10 +125,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Database.
 
     // Get the database by name.
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>>;
+    async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>>;
 
     // Get all the databases.
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>>;
+    async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
@@ -167,7 +175,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Vec<VirtualColumnMeta>>;
 
     #[async_backtrace::framed]
-    async fn exists_database(&self, tenant: &str, db_name: &str) -> Result<bool> {
+    async fn exists_database(&self, tenant: &Tenant, db_name: &str) -> Result<bool> {
         match self.get_database(tenant, db_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -196,8 +204,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // List the tables name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
+        tenant: &Tenant,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<String>>;
+    ) -> databend_common_exception::Result<Vec<Option<String>>>;
 
     // Mget the db name by meta id.
     async fn get_db_name_by_id(&self, db_ids: MetaId) -> databend_common_exception::Result<String>;
@@ -205,20 +214,24 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
         &self,
+        tenant: &Tenant,
         db_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<String>>;
+    ) -> databend_common_exception::Result<Vec<Option<String>>>;
 
     // Get one table by db and table name.
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
-    async fn list_tables_history(&self, tenant: &str, db_name: &str)
-    -> Result<Vec<Arc<dyn Table>>>;
+    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+    async fn list_tables_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>>;
 
     async fn get_drop_table_infos(
         &self,
@@ -239,11 +252,15 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply>;
 
+    async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        unimplemented!("TODO")
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;
 
     // Check a db.table is exists or not.
     #[async_backtrace::framed]
-    async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
+    async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
         match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -258,7 +275,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn upsert_table_option(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
@@ -284,11 +301,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply>;
 
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
-
     async fn get_table_copied_file_info(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply>;
@@ -347,4 +362,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
         unimplemented!()
     }
+
+    async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply>;
+    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply>;
+
+    async fn get_sequence_next_value(
+        &self,
+        req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply>;
+
+    async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;
 }

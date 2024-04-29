@@ -25,8 +25,8 @@ use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::input_formats::InputContext;
-use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_settings::Settings;
 use databend_common_storage::init_stage_operator;
@@ -55,8 +55,8 @@ impl RowBasedReadPipelineBuilder<'_> {
         let batch_size = settings.get_input_read_buffer_size()? as usize;
         pipeline.add_source(
             |output| {
-                let reader = BytesReader::try_create(ctx.clone(), operator.clone(), batch_size)?;
-                AsyncSourcer::create(ctx.clone(), output, reader)
+                let reader = BytesReader::try_create(ctx.clone(), operator.clone(), batch_size, 1)?;
+                PrefetchAsyncSourcer::create(ctx.clone(), output, reader)
             },
             num_threads,
         )?;
@@ -94,8 +94,9 @@ impl RowBasedReadPipelineBuilder<'_> {
         let settings = ctx.get_settings();
         ctx.set_partitions(plan.parts.clone())?;
 
-        let threads = std::cmp::min(settings.get_max_threads()? as usize, plan.parts.len());
-        self.build_read_stage_source(ctx.clone(), pipeline, &settings, threads)?;
+        let max_threads = settings.get_max_threads()? as usize;
+        let num_sources = std::cmp::min(max_threads, plan.parts.len());
+        self.build_read_stage_source(ctx.clone(), pipeline, &settings, num_sources)?;
 
         let format =
             create_row_based_file_format(&self.stage_table_info.stage_info.file_format_params);
@@ -137,7 +138,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         })?;
 
         // todo(youngsofun): no need to resize if it is unlikely to be unbalanced
-        pipeline.try_resize(threads)?;
+        pipeline.try_resize(max_threads)?;
 
         pipeline.add_transform(|input, output| {
             let transformer = BlockBuilder::create(load_ctx.clone(), &format)?;

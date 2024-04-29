@@ -70,17 +70,16 @@ instance_type=$(curl -H "X-aws-ec2-metadata-token: $token" http://169.254.169.25
 echo "Instance type: ${instance_type}"
 
 # Load data
-if [ "${BENCHMARK_DATASET}" == "internal" ]; then
+echo "Loading data..."
+load_start=$(date +%s)
+if [[ -f "${BENCHMARK_DATASET}/load.sh" ]]; then
     bash "${BENCHMARK_DATASET}"/load.sh
-    load_time=0
 else
-    echo "Loading data..."
-    load_start=$(date +%s)
     bendsql <"${BENCHMARK_DATASET}/load.sql"
-    load_end=$(date +%s)
-    load_time=$(python3 -c "print($load_end - $load_start)")
-    echo "Data loaded in ${load_time}s."
 fi
+load_end=$(date +%s)
+load_time=$(python3 -c "print($load_end - $load_start)")
+echo "Data loaded in ${load_time}s."
 
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql -o tsv)
 
@@ -99,7 +98,7 @@ function run_query() {
     local query=$3
 
     local q_time
-    q_time=$(echo "$query" | bendsql --time=server)
+    q_time=$(bendsql --time=server <"$query")
     if [[ -n $q_time ]]; then
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
         yq -i ".result[${query_num}] += [${q_time}]" -o json result.json
@@ -110,8 +109,10 @@ function run_query() {
 
 TRIES=3
 QUERY_NUM=0
-while read -r query; do
-    echo "Running Q${QUERY_NUM}: ${query}"
+for query in "${BENCHMARK_DATASET}"/queries/*.sql; do
+    echo
+    echo "==> Running Q${QUERY_NUM}: ${query}"
+    cat "$query"
     sync
     echo 3 | sudo tee /proc/sys/vm/drop_caches
     yq -i ".result += [[]]" -o json result.json
@@ -119,4 +120,4 @@ while read -r query; do
         run_query "$QUERY_NUM" "$i" "$query"
     done
     QUERY_NUM=$((QUERY_NUM + 1))
-done <"${BENCHMARK_DATASET}/queries.sql"
+done

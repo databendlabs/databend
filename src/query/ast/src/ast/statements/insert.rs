@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -20,16 +19,19 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_comma_separated_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
+use crate::ast::FileFormatOptions;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::ast::With;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct InsertStmt {
     pub hints: Option<Hint>,
+    // With clause, common table expression
+    pub with: Option<With>,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -41,6 +43,9 @@ pub struct InsertStmt {
 
 impl Display for InsertStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if let Some(cte) = &self.with {
+            write!(f, "WITH {} ", cte)?;
+        }
         write!(f, "INSERT ")?;
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;
@@ -77,8 +82,7 @@ pub enum InsertSource {
         start: usize,
     },
     StreamingV2 {
-        #[drive(skip)]
-        settings: BTreeMap<String, String>,
+        settings: FileFormatOptions,
         #[drive(skip)]
         on_error_mode: Option<String>,
         #[drive(skip)]
@@ -111,9 +115,7 @@ impl Display for InsertSource {
                 on_error_mode,
                 start: _,
             } => {
-                write!(f, " FILE_FORMAT = (")?;
-                write_comma_separated_map(f, settings)?;
-                write!(f, " )")?;
+                write!(f, " FILE_FORMAT = ({})", settings)?;
                 write!(
                     f,
                     " ON_ERROR = '{}'",

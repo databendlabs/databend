@@ -84,7 +84,7 @@ impl Binder {
         for order in order_by {
             match &order.expr {
                 Expr::Literal {
-                    lit: Literal::UInt64(index),
+                    value: Literal::UInt64(index),
                     ..
                 } => {
                     let index = *index as usize;

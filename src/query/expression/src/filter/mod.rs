@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod filter_executor;
+mod like;
 mod select;
 mod select_expr;
 mod select_expr_permutation;
@@ -21,8 +22,11 @@ mod select_value;
 mod selector;
 
 pub use filter_executor::FilterExecutor;
-pub use select_expr::build_select_expr;
+pub use like::gerenate_like_pattern;
+pub use like::is_like_pattern_escape;
+pub use like::LikePattern;
 pub use select_expr::SelectExpr;
+pub use select_expr::SelectExprBuilder;
 pub use select_op::SelectOp;
 pub use selector::SelectStrategy;
 pub use selector::Selector;

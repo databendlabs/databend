@@ -102,13 +102,13 @@ impl BackgroundScheduledConfig {
 }
 
 /// Config for background config
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct InnerBackgroundConfig {
     pub enable: bool,
     pub compaction: InnerBackgroundCompactionConfig,
 }
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct InnerBackgroundCompactionConfig {
     pub enable: bool,
     pub target_tables: Option<Vec<String>>,

@@ -27,16 +27,17 @@ use databend_common_base::runtime;
 use databend_common_meta_api::serialize_struct;
 use databend_common_meta_api::txn_op_put;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -177,7 +178,7 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
 }
 
 async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
-    let tenant = || format!("tenant-{}-{}", prefix, client_num);
+    let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
 
@@ -190,10 +191,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
     let res = client
         .create_database(CreateDatabaseReq {
             create_option: CreateOption::Create,
-            name_ident: DatabaseNameIdent {
-                tenant: tenant(),
-                db_name: db_name(),
-            },
+            name_ident: DatabaseNameIdent::new(tenant(), db_name()),
             meta: Default::default(),
         })
         .await;
@@ -209,13 +207,14 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             create_option: CreateOption::CreateIfNotExists,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
+            as_dropped: false,
         })
         .await;
 
     print_res(i, "create_table", &res);
 
     let res = client
-        .get_table(GetTableReq::new(tenant(), db_name(), table_name()))
+        .get_table(GetTableReq::new(&tenant(), db_name(), table_name()))
         .await;
 
     print_res(i, "get_table", &res);
@@ -249,6 +248,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             create_option: CreateOption::CreateIfNotExists,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
+            as_dropped: false,
         })
         .await;
 
@@ -256,12 +256,12 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 }
 
 async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
-    let tenant = || format!("tenant-{}-{}", prefix, client_num);
+    let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
 
     let res = client
-        .get_table(GetTableReq::new(tenant(), db_name(), table_name()))
+        .get_table(GetTableReq::new(&tenant(), db_name(), table_name()))
         .await;
 
     print_res(i, "get_table", &res);

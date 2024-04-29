@@ -25,7 +25,7 @@ use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::PhysicalPlan;
 use crate::IndexType;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
@@ -63,7 +63,7 @@ impl AggregatePartial {
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            for (idx, data_type) in group_types.iter().enumerate() {
+            for (idx, data_type) in self.group_by.iter().zip(group_types.iter()) {
                 fields.push(DataField::new(&idx.to_string(), data_type.clone()));
             }
             return Ok(DataSchemaRefExt::create(fields));

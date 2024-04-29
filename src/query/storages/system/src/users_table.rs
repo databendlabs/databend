@@ -18,6 +18,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
@@ -65,6 +66,10 @@ impl AsyncSystemTable for UsersTable {
             .map(|x| x.option.default_role().cloned().unwrap_or_default())
             .collect();
         let mut is_configureds: Vec<String> = vec!["NO".to_string(); users.len()];
+        let mut disableds: Vec<bool> = users
+            .iter()
+            .map(|x| x.option.disabled().cloned().unwrap_or_default())
+            .collect();
 
         let configured_users = UserApiProvider::instance().get_configured_users();
         for (name, auth_info) in configured_users {
@@ -73,6 +78,7 @@ impl AsyncSystemTable for UsersTable {
             auth_types.push(auth_info.get_type().to_str().to_string());
             default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
             is_configureds.push("YES".to_string());
+            disableds.push(false);
         }
 
         // please note that do NOT display the auth_string field in the result, because there're risks of
@@ -83,6 +89,7 @@ impl AsyncSystemTable for UsersTable {
             StringType::from_data(auth_types),
             StringType::from_data(default_roles),
             StringType::from_data(is_configureds),
+            BooleanType::from_data(disableds),
         ]))
     }
 }
@@ -97,6 +104,7 @@ impl UsersTable {
             TableField::new("auth_type", TableDataType::String),
             TableField::new("default_role", TableDataType::String),
             TableField::new("is_configured", TableDataType::String),
+            TableField::new("disabled", TableDataType::Boolean),
         ]);
 
         let table_info = TableInfo {

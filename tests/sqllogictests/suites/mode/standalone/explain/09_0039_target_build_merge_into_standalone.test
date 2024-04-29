@@ -50,6 +50,9 @@ insert into source_optimization values(5,'b5','c5'),(6,'b6','c6');
 statement error 4001
 merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
 
+statement ok
+set join_spilling_memory_ratio = 0;
+
 ### 2.2 make sure the plan is expected
 query T
 explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
@@ -57,24 +60,37 @@ explain merge into target_build_optimization as t1 using source_optimization as 
 MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
-├── target_build_optimization: false
+├── target_build_optimization: true
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
-├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#3), t1.b (#4)]
-    ├── probe keys: [t2.a (#0), t2.b (#1)]
-    ├── other filters: []
-    ├── Scan
-    │   ├── table: default.source_optimization
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Scan
-        ├── table: default.target_build_optimization
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+HashJoin
+├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.a (#3), t1.b (#4), t1.c (#5), t1._row_id (#6)]
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#3), t1.b (#4)]
+├── probe keys: [t2.a (#0), t2.b (#1)]
+├── filters: []
+├── estimated rows: 12.00
+├── TableScan(Build)
+│   ├── table: default.default.target_build_optimization
+│   ├── output columns: [a (#3), b (#4), c (#5), _row_id (#6)]
+│   ├── read rows: 8
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 0
+│   ├── partitions scanned: 4
+│   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 8.00
+└── TableScan(Probe)
+    ├── table: default.default.source_optimization
+    ├── output columns: [a (#0), b (#1), c (#2)]
+    ├── read rows: 12
+    ├── read size: < 1 KiB
+    ├── partitions total: 0
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 12.00
 
 ### 3. test with conjunct and without conjunct
 statement ok
@@ -119,24 +135,37 @@ explain merge into target_build_optimization as t1 using source_optimization as 
 MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
-├── target_build_optimization: false
+├── target_build_optimization: true
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
-├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#3), t1.b (#4)]
-    ├── probe keys: [t2.a (#0), t2.b (#1)]
-    ├── other filters: []
-    ├── Scan
-    │   ├── table: default.source_optimization
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Scan
-        ├── table: default.target_build_optimization
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+HashJoin
+├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.a (#3), t1.b (#4), t1.c (#5), t1._row_id (#6)]
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#3), t1.b (#4)]
+├── probe keys: [t2.a (#0), t2.b (#1)]
+├── filters: []
+├── estimated rows: 10.00
+├── TableScan(Build)
+│   ├── table: default.default.target_build_optimization
+│   ├── output columns: [a (#3), b (#4), c (#5), _row_id (#6)]
+│   ├── read rows: 8
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 0
+│   ├── partitions scanned: 4
+│   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 8.00
+└── TableScan(Probe)
+    ├── table: default.default.source_optimization
+    ├── output columns: [a (#0), b (#1), c (#2)]
+    ├── read rows: 10
+    ├── read size: < 1 KiB
+    ├── partitions total: 6
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 ## test without conjunct
 query TT
@@ -159,6 +188,9 @@ select * from target_build_optimization order by a,b,c;
 10 b10 c_10
 11 b11 c_11
 12 b12 c_12
+
+statement ok
+set join_spilling_memory_ratio = 60;
 
 ### test with conjunct
 #### we need to make sure the blocks count and layout, so we should truncate and insert again.
@@ -198,21 +230,34 @@ target_table: default.default.target_build_optimization
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
-├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#3)]
-    ├── probe keys: [t2.a (#0)]
-    ├── other filters: [gt(t1.b (#4), t2.b (#1))]
-    ├── Scan
-    │   ├── table: default.source_optimization
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Scan
-        ├── table: default.target_build_optimization
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+HashJoin
+├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.a (#3), t1.b (#4), t1.c (#5), t1._row_id (#6)]
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#3)]
+├── probe keys: [t2.a (#0)]
+├── filters: [t1.b (#4) > t2.b (#1)]
+├── estimated rows: 10.00
+├── TableScan(Build)
+│   ├── table: default.default.target_build_optimization
+│   ├── output columns: [a (#3), b (#4), c (#5), _row_id (#6)]
+│   ├── read rows: 8
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 4
+│   ├── partitions scanned: 4
+│   ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 8.00
+└── TableScan(Probe)
+    ├── table: default.default.source_optimization
+    ├── output columns: [a (#0), b (#1), c (#2)]
+    ├── read rows: 10
+    ├── read size: < 1 KiB
+    ├── partitions total: 6
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 statement ok
 update source_optimization set a = 2,b = 'b2' where a = 3 and b = 'b3';
@@ -281,21 +326,33 @@ target_table: default.default.target_build_optimization
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
-├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#3)]
-    ├── probe keys: [t2.a (#0)]
-    ├── other filters: [gt(t1.b (#4), t2.b (#1))]
-    ├── Scan
-    │   ├── table: default.source_optimization
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Scan
-        ├── table: default.target_build_optimization
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
+HashJoin
+├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2), t1.a (#3), t1.b (#4), t1.c (#5), t1._row_id (#6)]
+├── join type: LEFT OUTER
+├── build keys: [t1.a (#3)]
+├── probe keys: [t2.a (#0)]
+├── filters: [t1.b (#4) > t2.b (#1)]
+├── estimated rows: 10.00
+├── TableScan(Build)
+│   ├── table: default.default.target_build_optimization
+│   ├── output columns: [a (#3), b (#4), c (#5), _row_id (#6)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.source_optimization
+    ├── output columns: [a (#0), b (#1), c (#2)]
+    ├── read rows: 10
+    ├── read size: < 1 KiB
+    ├── partitions total: 0
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10.00
 
 query TT
 merge into target_build_optimization as t1 using source_optimization as t2 on t1.a > t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
@@ -318,4 +375,3 @@ select * from target_build_optimization order by a,b,c;
 
 statement ok
 set enable_experimental_merge_into = 0;
-

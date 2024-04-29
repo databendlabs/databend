@@ -96,7 +96,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             expr,
             trim_where,
         } => visitor.visit_trim(*span, expr, trim_where),
-        Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
+        Expr::Literal { span, value } => visitor.visit_literal(*span, value),
         Expr::CountAll { span, window } => visitor.visit_count_all(*span, window),
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
@@ -149,6 +149,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             unit,
         } => visitor.visit_date_sub(*span, unit, interval, date),
         Expr::DateTrunc { span, unit, date } => visitor.visit_date_trunc(*span, unit, date),
+        Expr::Hole { .. } => {}
     }
 }
 
@@ -255,7 +256,7 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
             database,
             table,
             alias,
-            travel_point,
+            temporal,
             ..
         } => {
             if let Some(catalog) = catalog {
@@ -272,8 +273,8 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
                 visitor.visit_identifier(&alias.name);
             }
 
-            if let Some(travel_point) = travel_point {
-                visitor.visit_time_travel_point(travel_point);
+            if let Some(temporal) = temporal {
+                visitor.visit_temporal_clause(temporal);
             }
         }
         TableReference::Subquery {
@@ -305,16 +306,36 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
     }
 }
 
+pub fn walk_temporal_clause<'a, V: Visitor<'a>>(visitor: &mut V, clause: &'a TemporalClause) {
+    match clause {
+        TemporalClause::TimeTravel(point) => visitor.visit_time_travel_point(point),
+        TemporalClause::Changes(ChangesInterval {
+            at_point,
+            end_point,
+            ..
+        }) => {
+            visitor.visit_time_travel_point(at_point);
+            if let Some(end_point) = end_point {
+                visitor.visit_time_travel_point(end_point);
+            }
+        }
+    }
+}
+
 pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a TimeTravelPoint) {
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
-    }
-}
+        TimeTravelPoint::Offset(expr) => visitor.visit_expr(expr),
+        TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        } => {
+            if let Some(catalog) = catalog {
+                visitor.visit_identifier(catalog);
+            }
 
-pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamPoint) {
-    match point {
-        StreamPoint::AtStream { database, name } => {
             if let Some(database) = database {
                 visitor.visit_identifier(database);
             }
@@ -451,6 +472,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::ShowViews(stmt) => visitor.visit_show_views(stmt),
+        Statement::DescribeView(stmt) => visitor.visit_describe_view(stmt),
         Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
         Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
         Statement::ShowStreams(stmt) => visitor.visit_show_streams(stmt),
@@ -565,5 +588,10 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Begin => {}
         Statement::Commit => {}
         Statement::Abort => {}
+        Statement::InsertMultiTable(_) => {}
+        Statement::ExecuteImmediate(_) => {}
+        Statement::CreateSequence(stmt) => visitor.visit_create_sequence(stmt),
+        Statement::DropSequence(stmt) => visitor.visit_drop_sequence(stmt),
+        Statement::CreateDynamicTable(stmt) => visitor.visit_create_dynamic_table(stmt),
     }
 }

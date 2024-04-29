@@ -751,3 +751,23 @@ select (select sum(a) from t1 where t1.a >= t2.a group by t1.a) from t1 as t2;
 
 statement ok
 drop table t1;
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t (i int);
+
+statement ok
+insert into t values(1), (2), (3), (null);
+
+query T
+select i, exists(select * from t where i > 10) from t;
+----
+1 0
+2 0
+3 0
+NULL 0
+
+statement ok
+drop table if exists t;

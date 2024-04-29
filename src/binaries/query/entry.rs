@@ -28,11 +28,11 @@ use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
 use databend_enterprise_background_service::get_background_service_handler;
-use databend_query::api::HttpService;
-use databend_query::api::RpcService;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::local;
-use databend_query::metrics::MetricService;
+use databend_query::servers::admin::AdminService;
+use databend_query::servers::flight::FlightService;
+use databend_query::servers::metrics::MetricService;
 use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
@@ -107,7 +107,7 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
             traces_sample_rate,
             ..Default::default()
         })));
-        sentry::configure_scope(|scope| scope.set_tag("tenant", tenant));
+        sentry::configure_scope(|scope| scope.set_tag("tenant", tenant.tenant_name()));
         sentry::configure_scope(|scope| scope.set_tag("cluster_id", cluster_id));
         sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }
@@ -194,7 +194,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     // Admin HTTP API service.
     {
         let address = conf.query.admin_api_address.clone();
-        let mut srv = HttpService::create(conf);
+        let mut srv = AdminService::create(conf);
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service("AdminHTTP", srv);
         info!("Listening for Admin HTTP API: {}", listening);
@@ -215,7 +215,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     // RPC API service.
     {
         let address = conf.query.flight_api_address.clone();
-        let mut srv = RpcService::create(conf.clone())?;
+        let mut srv = FlightService::create(conf.clone())?;
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service("RPCService", srv);
         info!("Listening for RPC API (interserver): {}", listening);

@@ -62,23 +62,40 @@ target_table: default.default.t1
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
-├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
-└── Join(Right)
-    ├── build keys: []
-    ├── probe keys: []
-    ├── other filters: [lt(t1.a (#1), t2.a (#0))]
-    ├── Exchange(Merge)
-    │   └── Scan
-    │       ├── table: default.t1
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── Exchange(Merge)
-        └── Scan
-            ├── table: default.t2
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
+HashJoin
+├── output columns: [t1.a (#1), t1._row_id (#2), t2.a (#0)]
+├── join type: RIGHT OUTER
+├── build keys: []
+├── probe keys: []
+├── filters: [t1.a (#1) < t2.a (#0)]
+├── estimated rows: 15.00
+├── Exchange(Build)
+│   ├── output columns: [t2.a (#0)]
+│   ├── exchange type: Merge
+│   └── TableScan
+│       ├── table: default.default.t2
+│       ├── output columns: [a (#0)]
+│       ├── read rows: 1
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 1.00
+└── Exchange(Probe)
+    ├── output columns: [t1.a (#1), t1._row_id (#2)]
+    ├── exchange type: Merge
+    └── TableScan
+        ├── table: default.default.t1
+        ├── output columns: [a (#1), _row_id (#2)]
+        ├── read rows: 15
+        ├── read size: < 1 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 15.00
 
 query TT
 merge into t1 using t2 on t1.a < t2.a when matched then update * when not matched then insert *;
@@ -115,6 +132,9 @@ statement ok
 create table t1(a int);
 
 statement ok
+drop stage if exists ss;
+
+statement ok
 create stage ss FILE_FORMAT = (TYPE = CSV);
 
 statement ok
@@ -141,28 +161,39 @@ target_table: default.default.t1
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
-├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
-└── Exchange(Merge)
-    └── Join(Right)
-        ├── build keys: [t2.a (#0)]
-        ├── probe keys: [t1.a (#1)]
-        ├── other filters: []
-        ├── Exchange(Hash)
-        │   ├── Exchange(Hash): keys: [t1.a (#1)]
-        │   └── Scan
-        │       ├── table: default.t1
-        │       ├── filters: []
-        │       ├── order by: []
-        │       └── limit: NONE
-        └── Exchange(Hash)
-            ├── Exchange(Hash): keys: [t2.a (#0)]
-            └── EvalScalar
-                ├── scalars: [stage._$1 (#0) AS (#0)]
-                └── Scan
-                    ├── table: system.stage
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+└── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
+HashJoin
+├── output columns: [t1.a (#1), t1._row_id (#2), stage._$1 (#0)]
+├── join type: RIGHT OUTER
+├── build keys: [CAST(t2.a (#0) AS Int64 NULL)]
+├── probe keys: [CAST(t1.a (#1) AS Int64 NULL)]
+├── filters: []
+├── estimated rows: 0.00
+├── Exchange(Build)
+│   ├── output columns: [stage._$1 (#0)]
+│   ├── exchange type: Merge
+│   └── TableScan
+│       ├── table: default.system.stage
+│       ├── output columns: [_$1 (#0)]
+│       ├── read rows: 6
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 0.00
+└── Exchange(Probe)
+    ├── output columns: [t1.a (#1), t1._row_id (#2)]
+    ├── exchange type: Merge
+    └── TableScan
+        ├── table: default.default.t1
+        ├── output columns: [a (#1), _row_id (#2)]
+        ├── read rows: 2
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 2.00
 
 query TT
 merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;

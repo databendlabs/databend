@@ -29,7 +29,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
-use databend_common_sql::Planner;
 use databend_common_users::CertifiedInfo;
 use databend_common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -45,9 +44,9 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 
+use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::writers::ProgressReporter;
@@ -273,7 +272,7 @@ impl InteractiveWorkerBase {
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         UserApiProvider::instance()
-            .update_user_login_result(ctx.get_tenant(), identity, authed)
+            .update_user_login_result(ctx.get_tenant(), identity, authed, &user_info)
             .await?;
         if authed {
             self.session.set_authed_user(user_info, None).await?;
@@ -356,38 +355,28 @@ impl InteractiveWorkerBase {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
 
-                let entry = QueryEntry::create(&context)?;
+                // Use interpreter_plan_sql, we can write the query log if an error occurs.
+                let (plan, extras) = interpreter_plan_sql(context.clone(), query).await?;
+
+                let entry = QueryEntry::create(&context, &plan, &extras)?;
                 let _guard = QueriesQueueManager::instance().acquire(entry).await?;
-                let mut planner = Planner::new(context.clone());
-                let (plan, extras) = planner.plan_sql(query).await?;
 
-                context.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
-                let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
-
+                let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
                 let has_result_set = plan.has_result_set();
 
-                match interpreter {
-                    Ok(interpreter) => {
-                        let (blocks, extra_info) =
-                            Self::exec_query(interpreter.clone(), &context).await?;
-                        let schema = plan.schema();
-                        let format = context.get_format_settings()?;
-                        Ok((
-                            QueryResult::create(
-                                blocks,
-                                extra_info,
-                                has_result_set,
-                                schema,
-                                query.to_string(),
-                            ),
-                            Some(format),
-                        ))
-                    }
-                    Err(e) => {
-                        InterpreterQueryLog::fail_to_start(context, e.clone());
-                        Err(e)
-                    }
-                }
+                let (blocks, extra_info) = Self::exec_query(interpreter.clone(), &context).await?;
+                let schema = plan.schema();
+                let format = context.get_format_settings()?;
+                Ok((
+                    QueryResult::create(
+                        blocks,
+                        extra_info,
+                        has_result_set,
+                        schema,
+                        query.to_string(),
+                    ),
+                    Some(format),
+                ))
             }
         }
     }

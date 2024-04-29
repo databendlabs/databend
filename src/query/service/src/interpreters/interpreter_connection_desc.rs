@@ -55,7 +55,7 @@ impl Interpreter for DescConnectionInterpreter {
         let user_mgr = UserApiProvider::instance();
 
         let mut connection = user_mgr
-            .get_connection(tenant.as_str(), self.plan.name.as_str())
+            .get_connection(&tenant, self.plan.name.as_str())
             .await?;
 
         let names = vec![connection.name.clone()];

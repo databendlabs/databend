@@ -34,7 +34,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::operations::mutation::ClusterStatsGenType;
-use crate::operations::mutation::CompactPartInfo;
+use crate::operations::mutation::CompactBlockPartInfo;
 use crate::operations::mutation::SerializeBlock;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::operations::BlockMetaIndex;
@@ -187,14 +187,14 @@ impl Processor for CompactSource {
 
                 // block read tasks.
                 let mut task_futures = Vec::new();
-                let part = CompactPartInfo::from_part(&part)?;
+                let part = CompactBlockPartInfo::from_part(&part)?;
                 match part {
-                    CompactPartInfo::CompactExtraInfo(extra) => {
+                    CompactBlockPartInfo::CompactExtraInfo(extra) => {
                         let meta = Box::new(SerializeDataMeta::CompactExtras(extra.clone()));
                         let block = DataBlock::empty_with_meta(meta);
                         self.state = State::Output(self.ctx.get_partition(), block);
                     }
-                    CompactPartInfo::CompactTaskInfo(task) => {
+                    CompactBlockPartInfo::CompactTaskInfo(task) => {
                         for block in &task.blocks {
                             let settings = ReadSettings::from_ctx(&self.ctx)?;
                             // read block in parallel.

@@ -51,8 +51,13 @@ impl StageTableInfo {
     }
 
     #[async_backtrace::framed]
-    pub async fn list_files(&self, max_files: Option<usize>) -> Result<Vec<StageFileInfo>> {
-        let infos = list_stage_files(&self.stage_info, &self.files_info, max_files).await?;
+    pub async fn list_files(
+        &self,
+        thread_num: usize,
+        max_files: Option<usize>,
+    ) -> Result<Vec<StageFileInfo>> {
+        let infos =
+            list_stage_files(&self.stage_info, &self.files_info, thread_num, max_files).await?;
         Ok(infos)
     }
 }
@@ -60,11 +65,12 @@ impl StageTableInfo {
 pub async fn list_stage_files(
     stage_info: &StageInfo,
     files_info: &StageFilesInfo,
+    thread_num: usize,
     max_files: Option<usize>,
 ) -> Result<Vec<StageFileInfo>> {
     let op = init_stage_operator(stage_info)?;
     let infos = files_info
-        .list(&op, false, max_files)
+        .list(&op, thread_num, max_files)
         .await?
         .into_iter()
         .collect::<Vec<_>>();

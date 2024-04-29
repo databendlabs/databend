@@ -21,10 +21,11 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::DataOperator;
 use futures::StreamExt;
 use opendal::EntryMode;
@@ -47,10 +48,7 @@ impl IcebergDatabase {
     pub fn create(ctl_name: &str, db_name: &str, db_root: DataOperator) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
-            name_ident: DatabaseNameIdent {
-                db_name: db_name.to_string(),
-                ..Default::default()
-            },
+            name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), db_name),
             meta: DatabaseMeta {
                 engine: "iceberg".to_string(),
                 created_on: chrono::Utc::now(),
@@ -69,7 +67,7 @@ impl IcebergDatabase {
 #[async_trait]
 impl Database for IcebergDatabase {
     fn name(&self) -> &str {
-        &self.info.name_ident.db_name
+        self.info.name_ident.database_name()
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {
@@ -93,7 +91,7 @@ impl Database for IcebergDatabase {
 
         let tbl = IcebergTable::try_create_from_iceberg_catalog(
             &self.ctl_name,
-            &self.info.name_ident.db_name,
+            self.info.name_ident.database_name(),
             table_name,
             tbl_root,
         )

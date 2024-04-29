@@ -37,7 +37,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
-use parking_lot::RwLock;
 
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
@@ -56,7 +55,6 @@ use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
-use crate::Metadata;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -99,12 +97,13 @@ impl Binder {
         let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
         let merge_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
 
-        let mut plan = self
+        let plan = self
             .bind_merge_into_with_join_type(
                 bind_context,
                 stmt,
                 match merge_type {
                     MergeIntoType::MatechedOnly => Inner,
+                    MergeIntoType::InsertOnly => RightAnti,
                     _ => RightOuter,
                 },
                 matched_clauses.clone(),
@@ -113,27 +112,10 @@ impl Binder {
             )
             .await?;
 
-        // optimize insert-only
-        if let MergeIntoType::InsertOnly = merge_type {
-            let insert_only = insert_only(&plan);
-            if !insert_only {
-                return Err(ErrorCode::SemanticError(
-                    "for unmatched clause, then condition and exprs can only have source fields",
-                ));
-            }
-            // init bind_context and metadata
-            *bind_context = BindContext::new();
-            self.metadata = Arc::new(RwLock::new(Metadata::default()));
-            plan = self
-                .bind_merge_into_with_join_type(
-                    bind_context,
-                    stmt,
-                    RightAnti,
-                    matched_clauses,
-                    unmatched_clauses,
-                    MergeIntoType::InsertOnly,
-                )
-                .await?;
+        if merge_type == MergeIntoType::InsertOnly && !insert_only(&plan) {
+            return Err(ErrorCode::SemanticError(
+                "for unmatched clause, then condition and exprs can only have source fields",
+            ));
         }
 
         Ok(Plan::MergeInto(Box::new(plan)))
@@ -210,8 +192,7 @@ impl Binder {
             database: database.clone(),
             table: table_ident.clone(),
             alias: target_alias.clone(),
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };
@@ -256,12 +237,9 @@ impl Binder {
         let update_or_insert_columns_star =
             if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
                 // when there are "update *"/"insert *", we need to get the index of correlated columns in source.
-                let default_target_table_schema = table.schema().remove_computed_fields();
-                let mut update_columns = HashMap::with_capacity(
-                    default_target_table_schema
-                        .remove_computed_fields()
-                        .num_fields(),
-                );
+                let default_target_table_schema = table_schema.remove_computed_fields();
+                let mut update_columns =
+                    HashMap::with_capacity(default_target_table_schema.num_fields());
                 let source_output_columns = &source_context.columns;
                 // we use Vec as the value, because there could be duplicate names
                 let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
@@ -346,8 +324,12 @@ impl Binder {
             true,
         )?;
 
-        target_expr =
-            SExpr::add_internal_column_index(&target_expr, table_index, column_binding.index);
+        target_expr = SExpr::add_internal_column_index(
+            &target_expr,
+            table_index,
+            column_binding.index,
+            &None,
+        );
 
         self.metadata
             .write()

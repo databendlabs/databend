@@ -41,3 +41,20 @@ SELECT name, value, default, level from system.settings where name in ('sql_dial
 ----
 sql_dialect PostgreSQL PostgreSQL DEFAULT
 timezone UTC UTC DEFAULT
+
+statement ok
+set DATA_RETENTION_TIME_IN_DAYS=20;
+
+query TTTTTTT
+show settings like 'DATA_RETENTION_TIME_IN_DAYS';
+----
+data_retention_time_in_days 20 1 [0, 90] SESSION Sets the data retention time in days. UInt64
+
+statement ok
+unset data_retention_time_in_days;
+
+query TTTTTTT
+show settings like 'DATA_RETENTION_TIME_IN_DAYS';
+----
+data_retention_time_in_days 1 1 [0, 90] DEFAULT Sets the data retention time in days. UInt64
+

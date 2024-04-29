@@ -27,6 +27,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncMpscSink;
 use databend_common_pipeline_sinks::AsyncMpscSinker;
 use databend_common_storage::DataOperator;
+use tokio::time::Instant;
 
 use super::writer::ResultCacheWriter;
 use crate::common::gen_result_cache_dir;
@@ -42,6 +43,13 @@ pub struct WriteResultCacheSink {
     meta_mgr: ResultCacheMetaManager,
     meta_key: String,
     cache_writer: ResultCacheWriter,
+
+    // The time when the sink is created.
+    create_time: Instant,
+
+    // A flag indicates at least one block has been consumed.
+    consumed_one_block: bool,
+    terminated: bool,
 }
 
 #[async_trait::async_trait]
@@ -51,10 +59,24 @@ impl AsyncMpscSink for WriteResultCacheSink {
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, block: DataBlock) -> Result<bool> {
+        if self.terminated {
+            return Ok(true);
+        }
+
+        if !self.consumed_one_block {
+            if self.cache_writer.not_over_time(&self.create_time) {
+                // Skip the cache writing if the query execution time is less than the min_execute_secs.
+                self.terminated = true;
+                return Ok(true);
+            }
+            self.consumed_one_block = true;
+        }
+
         if !self.cache_writer.over_limit() {
             self.cache_writer.append_block(block);
             Ok(false)
         } else {
+            self.terminated = true;
             // Finish the cache writing pipeline.
             Ok(true)
         }
@@ -62,7 +84,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        if self.cache_writer.over_limit() {
+        if self.terminated {
             return Ok(());
         }
 
@@ -103,17 +125,18 @@ impl WriteResultCacheSink {
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let max_bytes = settings.get_query_result_cache_max_bytes()?;
+        let min_execute_secs = settings.get_query_result_cache_min_execute_secs()?;
         let ttl = settings.get_query_result_cache_ttl_secs()?;
         let tenant = ctx.get_tenant();
         let sql = ctx.get_query_str();
         let partitions_shas = ctx.get_partitions_shas();
 
-        let meta_key = gen_result_cache_meta_key(tenant.as_str(), key);
+        let meta_key = gen_result_cache_meta_key(tenant.tenant_name(), key);
         let location = gen_result_cache_dir(key);
 
         let operator = DataOperator::instance().operator();
         let cache_writer =
-            ResultCacheWriter::create(schema, location, operator, max_bytes, ctx.clone());
+            ResultCacheWriter::create(schema, location, operator, max_bytes, min_execute_secs);
 
         Ok(ProcessorPtr::create(Box::new(AsyncMpscSinker::create(
             inputs,
@@ -124,6 +147,9 @@ impl WriteResultCacheSink {
                 meta_mgr: ResultCacheMetaManager::create(kv_store, ttl),
                 meta_key,
                 cache_writer,
+                create_time: Instant::now(),
+                consumed_one_block: false,
+                terminated: false,
             },
         ))))
     }

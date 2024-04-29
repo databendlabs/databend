@@ -14,10 +14,12 @@
 
 mod copy;
 mod data_mask;
+pub mod dynamic_table;
 pub mod expr;
 pub mod query;
 pub mod quote;
 pub mod script;
+mod sequence;
 mod share;
 mod stage;
 pub mod statement;
@@ -27,6 +29,7 @@ pub mod unescape;
 mod input;
 pub use input::Dialect;
 pub use input::Input;
+pub use input::ParseMode;
 
 mod common;
 pub use common::match_text;

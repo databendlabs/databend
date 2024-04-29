@@ -14,11 +14,11 @@ query T
 explain SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno
 ----
 Sort
-├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER (PARTITION BY depname ORDER BY empno) (#4)]
+├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER ( PARTITION BY depname ORDER BY empno ) (#4)]
 ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── Window
-    ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER (PARTITION BY depname ORDER BY empno) (#4)]
+    ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER ( PARTITION BY depname ORDER BY empno ) (#4)]
     ├── aggregate function: [sum(salary)]
     ├── partition by: [depname]
     ├── order by: [empno]
@@ -27,7 +27,7 @@ Sort
         ├── table: default.test_explain_window.empsalary
         ├── output columns: [depname (#0), empno (#1), salary (#2)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -35,6 +35,10 @@ Sort
 
 statement ok
 set max_threads=4;
+
+# Disable sort spilling
+statement ok
+set sort_spilling_memory_ratio = 0;
 
 query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
@@ -52,6 +56,30 @@ CompoundBlockOperator(Project) × 1 processor
                     DeserializeDataTransform × 1 processor
                       SyncReadParquetDataSource × 1 processor
 
+
+# Enable sort spilling
+statement ok
+set sort_spilling_memory_ratio = 60;
+
+query T
+explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
+----
+CompoundBlockOperator(Project) × 1 processor
+  Merge (TransformSortSpill × 4 processors) to (CompoundBlockOperator(Project) × 1)
+    TransformSortSpill × 4 processors
+      TransformSortMerge × 4 processors
+        SortPartialTransform × 4 processors
+          Merge (Transform Window × 1 processor) to (SortPartialTransform × 4)
+            Transform Window × 1 processor
+              Merge (TransformSortSpill × 4 processors) to (Transform Window × 1)
+                TransformSortSpill × 4 processors
+                  TransformSortMerge × 4 processors
+                    SortPartialTransform × 4 processors
+                      Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
+                        DeserializeDataTransform × 1 processor
+                          SyncReadParquetDataSource × 1 processor
+
+
 statement ok
 DROP TABLE IF EXISTS Test
 
@@ -67,7 +95,7 @@ Filter
 ├── filters: [t2.rank (#4) = 1]
 ├── estimated rows: 0.00
 └── Window
-    ├── output columns: [test.k (#0), test.v (#1), rank() OVER (PARTITION BY k ORDER BY v DESC) (#4)]
+    ├── output columns: [test.k (#0), test.v (#1), rank() OVER ( PARTITION BY k ORDER BY v DESC ) (#4)]
     ├── aggregate function: [rank]
     ├── partition by: [k]
     ├── order by: [v]
@@ -83,7 +111,7 @@ Filter
         │       ├── table: default.test_explain_window.test
         │       ├── output columns: [k (#0), v (#1)]
         │       ├── read rows: 0
-        │       ├── read bytes: 0
+        │       ├── read size: 0
         │       ├── partitions total: 0
         │       ├── partitions scanned: 0
         │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
@@ -96,7 +124,7 @@ Filter
                 ├── table: default.test_explain_window.test
                 ├── output columns: [k (#2), v (#3)]
                 ├── read rows: 0
-                ├── read bytes: 0
+                ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
@@ -111,7 +139,7 @@ Filter
 ├── filters: [t2.rank (#4) = 1, is_true(t2.k (#0) = 12)]
 ├── estimated rows: 0.00
 └── Window
-    ├── output columns: [test.k (#0), test.v (#1), rank() OVER (PARTITION BY v ORDER BY v DESC) (#4)]
+    ├── output columns: [test.k (#0), test.v (#1), rank() OVER ( PARTITION BY v ORDER BY v DESC ) (#4)]
     ├── aggregate function: [rank]
     ├── partition by: [v]
     ├── order by: [v]
@@ -123,7 +151,7 @@ Filter
         │   ├── table: default.test_explain_window.test
         │   ├── output columns: [k (#0), v (#1)]
         │   ├── read rows: 0
-        │   ├── read bytes: 0
+        │   ├── read size: 0
         │   ├── partitions total: 0
         │   ├── partitions scanned: 0
         │   ├── push downs: [filters: [], limit: NONE]
@@ -132,7 +160,7 @@ Filter
             ├── table: default.test_explain_window.test
             ├── output columns: [k (#2), v (#3)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -147,7 +175,7 @@ Filter
 ├── filters: [t2.rank (#4) = 1, is_true(t2.k (#0) = 12)]
 ├── estimated rows: 0.00
 └── Window
-    ├── output columns: [test.k (#0), test.v (#1), rank() OVER (ORDER BY v DESC) (#4)]
+    ├── output columns: [test.k (#0), test.v (#1), rank() OVER ( ORDER BY v DESC ) (#4)]
     ├── aggregate function: [rank]
     ├── partition by: []
     ├── order by: [v]
@@ -159,7 +187,7 @@ Filter
         │   ├── table: default.test_explain_window.test
         │   ├── output columns: [k (#0), v (#1)]
         │   ├── read rows: 0
-        │   ├── read bytes: 0
+        │   ├── read size: 0
         │   ├── partitions total: 0
         │   ├── partitions scanned: 0
         │   ├── push downs: [filters: [], limit: NONE]
@@ -168,7 +196,7 @@ Filter
             ├── table: default.test_explain_window.test
             ├── output columns: [k (#2), v (#3)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
@@ -184,24 +212,24 @@ query T
 explain select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3;
 ----
 Filter
-├── output columns: [max(a) OVER (PARTITION BY a) (#1)]
-├── filters: [is_true(max(a) OVER (PARTITION BY a) (#1) > 3)]
+├── output columns: [max(a) OVER ( PARTITION BY a ) (#1)]
+├── filters: [is_true(max(a) OVER ( PARTITION BY a ) (#1) > 3)]
 ├── estimated rows: 0.00
 └── Window
-  ├── output columns: [t.a (#0), max(a) OVER (PARTITION BY a) (#1)]
-  ├── aggregate function: [max(a)]
-  ├── partition by: [a]
-  ├── order by: []
-  ├── frame: [Range: Preceding(None) ~ Following(None)]
-  └── TableScan
-    ├── table: default.test_explain_window.t
-    ├── output columns: [a (#0)]
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 0.00
+    ├── output columns: [t.a (#0), max(a) OVER ( PARTITION BY a ) (#1)]
+    ├── aggregate function: [max(a)]
+    ├── partition by: [a]
+    ├── order by: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── TableScan
+        ├── table: default.test_explain_window.t
+        ├── output columns: [a (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
 
 ## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
 statement ok
@@ -220,7 +248,7 @@ query T
 explain select b, row_number() over (order by b) from tbpush where b > 3;
 ----
 Window
-├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
+├── output columns: [tbpush.b (#0), row_number() OVER ( ORDER BY b ) (#1)]
 ├── aggregate function: [row_number]
 ├── partition by: []
 ├── order by: [b]
@@ -230,14 +258,14 @@ Window
     ├── filters: [is_true(tbpush.b (#0) > 3)]
     ├── estimated rows: 0.00
     └── TableScan
-      ├── table: default.test_explain_window.tbpush
-      ├── output columns: [b (#0)]
-      ├── read rows: 0
-      ├── read bytes: 0
-      ├── partitions total: 0
-      ├── partitions scanned: 0
-      ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
-      └── estimated rows: 0.00
+        ├── table: default.test_explain_window.tbpush
+        ├── output columns: [b (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
+        └── estimated rows: 0.00
 
 query T
 explain select * from vwpush where b > 3;
@@ -256,7 +284,7 @@ Filter
         ├── table: default.test_explain_window.tbpush
         ├── output columns: [b (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -266,11 +294,11 @@ query T
 explain select * from (select b, row_number() over (order by b) from tbpush) where b > 3;
 ----
 Filter
-├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
+├── output columns: [tbpush.b (#0), row_number() OVER ( ORDER BY b ) (#1)]
 ├── filters: [is_true(tbpush.b (#0) > 3)]
 ├── estimated rows: 0.00
 └── Window
-    ├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
+    ├── output columns: [tbpush.b (#0), row_number() OVER ( ORDER BY b ) (#1)]
     ├── aggregate function: [row_number]
     ├── partition by: []
     ├── order by: [b]
@@ -279,7 +307,7 @@ Filter
         ├── table: default.test_explain_window.tbpush
         ├── output columns: [b (#0)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
@@ -291,6 +319,11 @@ drop table if exists t
 
 statement ok
 create table t (a int, b int, c string, d int, e int, f string)
+
+
+# Disable sort spilling
+statement ok
+set sort_spilling_memory_ratio = 0;
 
 # range frame (can not push down limit)
 query T
@@ -305,6 +338,30 @@ CompoundBlockOperator(Project) × 1 processor
             Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
               DeserializeDataTransform × 1 processor
                 SyncReadParquetDataSource × 1 processor
+
+# Enable sort spilling
+statement ok
+set sort_spilling_memory_ratio = 60;
+
+# range frame (can not push down limit)
+query T
+explain pipeline select a, sum(a) over (partition by a order by a desc) from t limit 3
+----
+CompoundBlockOperator(Project) × 1 processor
+  LimitTransform × 1 processor
+   Transform Window × 1 processor
+     Merge (TransformSortSpill × 4 processors) to (Transform Window × 1)
+       TransformSortSpill × 4 processors
+         TransformSortMerge × 4 processors
+           SortPartialTransform × 4 processors
+             Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
+               DeserializeDataTransform × 1 processor
+                 SyncReadParquetDataSource × 1 processor
+
+
+# Disable sort spilling
+statement ok
+set sort_spilling_memory_ratio = 0;
 
 # range frame with ranking function (can push down limit)
 query T
@@ -394,20 +451,20 @@ query T
 explain select *, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t where a > 1 order by b limit 3
 ----
 RowFetch
-├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6), t.c (#2), t.d (#3), t.e (#4), t.f (#5)]
+├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER ( PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW ) (#6), t.c (#2), t.d (#3), t.e (#4), t.f (#5)]
 ├── columns to fetch: [c, d, e, f]
 ├── estimated rows: 0.00
 └── Limit
-    ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
+    ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER ( PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW ) (#6)]
     ├── limit: 3
     ├── offset: 0
     ├── estimated rows: 0.00
     └── Sort
-        ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
+        ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER ( PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW ) (#6)]
         ├── sort keys: [b ASC NULLS LAST]
         ├── estimated rows: 0.00
         └── Window
-            ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
+            ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER ( PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW ) (#6)]
             ├── aggregate function: [sum(a)]
             ├── partition by: [a]
             ├── order by: [a]
@@ -420,7 +477,7 @@ RowFetch
                     ├── table: default.test_explain_window.t
                     ├── output columns: [a (#0), b (#1), _row_id (#7)]
                     ├── read rows: 0
-                    ├── read bytes: 0
+                    ├── read size: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]

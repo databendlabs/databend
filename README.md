@@ -73,6 +73,10 @@
 
 - **Version Control**: Provides Git-like version control for data, allowing querying, cloning, and reverting at any point.
 
+- **Schemaless**:  [VARIANT data type](https://docs.databend.com/sql/sql-reference/data-types/data-type-variant) enabling schemaless data storage and flexible data modeling.
+
+-  **Flexible Indexing**: [Virtual Column](https://docs.databend.com/guides/performance/virtual-column), [Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index), and [Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index), for faster data retrieval.
+
 - **Community-Driven**: Join a welcoming community for a user-friendly cloud analytics experience.
 
 ## 📐 Architecture

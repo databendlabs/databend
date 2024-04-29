@@ -15,6 +15,7 @@
 use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
 
 use crate::settings::Settings;
@@ -285,6 +286,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
 
+    pub fn get_inlist_to_join_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
+    }
+
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
@@ -295,6 +300,10 @@ impl Settings {
 
     pub fn get_enforce_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
+    }
+
+    pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
@@ -340,6 +349,10 @@ impl Settings {
 
     pub fn get_query_result_cache_max_bytes(&self) -> Result<usize> {
         Ok(self.try_get_u64("query_result_cache_max_bytes")? as usize)
+    }
+
+    pub fn get_query_result_cache_min_execute_secs(&self) -> Result<usize> {
+        Ok(self.try_get_u64("query_result_cache_min_execute_secs")? as usize)
     }
 
     pub fn get_http_handler_result_timeout_secs(&self) -> Result<u64> {
@@ -479,22 +492,6 @@ impl Settings {
         self.try_set_u64("use_parquet2", u64::from(val))
     }
 
-    pub fn get_fuse_write_use_parquet2(&self) -> Result<bool> {
-        Ok(self.try_get_u64("fuse_write_use_parquet2")? == 1)
-    }
-
-    pub fn set_fuse_write_use_parquet2(&self, val: bool) -> Result<()> {
-        self.try_set_u64("fuse_write_use_parquet2", u64::from(val))
-    }
-
-    pub fn get_fuse_read_use_parquet2(&self) -> Result<bool> {
-        Ok(self.try_get_u64("fuse_read_use_parquet2")? != 0)
-    }
-
-    pub fn set_fuse_read_use_parquet2(&self, val: bool) -> Result<()> {
-        self.try_set_u64("fuse_read_use_parquet2", u64::from(val))
-    }
-
     pub fn get_enable_replace_into_partitioning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_replace_into_partitioning")? != 0)
     }
@@ -596,6 +593,10 @@ impl Settings {
         )
     }
 
+    pub fn get_parse_datetime_ignore_remainder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("parse_datetime_ignore_remainder")? != 0)
+    }
+
     pub fn get_disable_variant_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_variant_check")? != 0)
     }
@@ -634,5 +635,14 @@ impl Settings {
 
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {
         self.try_get_u64("statement_queued_timeout_in_seconds")
+    }
+
+    pub fn get_geometry_output_format(&self) -> Result<GeometryDataType> {
+        let v = self.try_get_string("geometry_output_format")?;
+        v.parse()
+    }
+
+    pub fn get_script_max_steps(&self) -> Result<u64> {
+        self.try_get_u64("script_max_steps")
     }
 }

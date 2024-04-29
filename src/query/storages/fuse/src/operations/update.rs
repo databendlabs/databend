@@ -38,7 +38,6 @@ use crate::operations::mutation::MutationSource;
 use crate::FuseTable;
 
 impl FuseTable {
-    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn fast_update(
         &self,

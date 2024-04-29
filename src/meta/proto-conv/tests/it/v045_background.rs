@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use databend_common_meta_app::background::BackgroundJobIdent;
+use databend_common_meta_app::background::task_creator::BackgroundTaskCreator;
 use databend_common_meta_app::background::BackgroundJobParams;
 use databend_common_meta_app::background::BackgroundJobState;
 use databend_common_meta_app::background::BackgroundJobStatus;
@@ -107,7 +107,7 @@ fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
         }),
         vacuum_stats: Some(VacuumStats {}),
         manual_trigger: None,
-        creator: Some(BackgroundJobIdent {
+        creator: Some(BackgroundTaskCreator {
             tenant: "test1".to_string(),
             name: "compactor_job".to_string(),
         }),

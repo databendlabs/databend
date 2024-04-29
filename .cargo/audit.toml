@@ -30,5 +30,11 @@ ignore = [
     "RUSTSEC-2021-0145",
     # borsh
     # Parsing borsh messages with ZST which are not-copy/clone is unsound
-    "RUSTSEC-2023-0033"
+    "RUSTSEC-2023-0033",
+    # yaml-rust is unmaintained.
+    "RUSTSEC-2024-0320",
+    # Degradation of service in h2 servers with CONTINUATION Flood(Wait for tonic to fix)
+    "RUSTSEC-2024-0332",
+    # `rustls::ConnectionCommon::complete_io` could fall into an infinite loop based on network input
+    "RUSTSEC-2024-0336"
 ]

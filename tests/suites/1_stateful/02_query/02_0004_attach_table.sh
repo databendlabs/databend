@@ -13,7 +13,7 @@ stmt "drop table if exists table_to2;"
 stmt "create table table_from(a int) 's3://testbucket/admin/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');"
 
 ## used self-defined connection
-stmt "drop connection if exists my_conn ;"
+stmt "drop connection if exists my_conn;"
 stmt "create connection my_conn storage_type = 's3' access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}'"
 
 table_inserts=(

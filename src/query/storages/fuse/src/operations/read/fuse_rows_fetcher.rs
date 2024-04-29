@@ -101,8 +101,6 @@ pub fn build_row_fetcher_pipeline(
             })
         }
         FuseStorageFormat::Parquet => {
-            let buffer_size: usize =
-                ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
             let read_settings = ReadSettings::from_ctx(&ctx)?;
             pipeline.add_transform(|input, output| {
                 Ok(if block_reader.support_blocking_api() {
@@ -115,7 +113,6 @@ pub fn build_row_fetcher_pipeline(
                             projection.clone(),
                             block_reader.clone(),
                             read_settings,
-                            buffer_size,
                             max_threads,
                         ),
                     )
@@ -129,7 +126,6 @@ pub fn build_row_fetcher_pipeline(
                             projection.clone(),
                             block_reader.clone(),
                             read_settings,
-                            buffer_size,
                             max_threads,
                         ),
                     )

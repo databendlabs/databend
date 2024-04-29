@@ -37,7 +37,6 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::StreamMode;
 
 use crate::lock::Lock;
 use crate::plan::DataSourceInfo;
@@ -129,14 +128,6 @@ pub trait Table: Sync + Send {
             fields,
             ..self.schema().as_ref().clone()
         })
-    }
-
-    async fn get_stream_mode(&self, ctx: Arc<dyn TableContext>) -> Result<StreamMode> {
-        let _ = ctx;
-        Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Stream mode is not supported for the '{}' engine.",
-            self.engine()
-        )))
     }
 
     /// Whether the table engine supports prewhere optimization.
@@ -255,8 +246,8 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let _ = ctx;
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        let (_, _) = (ctx, pipeline);
         Ok(())
     }
 
@@ -265,11 +256,17 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
-        limit: Option<usize>,
+        num_snapshot_limit: Option<usize>,
         keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _, _) = (ctx, instant, limit, keep_last_snapshot, dry_run);
+        let (_, _, _, _, _) = (
+            ctx,
+            instant,
+            num_snapshot_limit,
+            keep_last_snapshot,
+            dry_run,
+        );
 
         Ok(None)
     }
@@ -295,16 +292,27 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn navigate_since_to(
-        &self,
-        since_point: &Option<NavigationPoint>,
-        to_point: &Option<NavigationPoint>,
-    ) -> Result<Arc<dyn Table>> {
-        let _ = since_point;
-        let _ = to_point;
+    async fn navigate_to(&self, navigation: &TimeNavigation) -> Result<Arc<dyn Table>> {
+        let _ = navigation;
 
         Err(ErrorCode::Unimplemented(format!(
             "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn generage_changes_query(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<String> {
+        let (_, _, _) = (ctx, database_name, table_name);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -316,10 +324,6 @@ pub trait Table: Sync + Send {
             min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
             max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
         }
-    }
-
-    fn set_block_thresholds(&self, _thresholds: BlockThresholds) {
-        unimplemented!()
     }
 
     #[async_backtrace::framed]
@@ -342,9 +346,9 @@ pub trait Table: Sync + Send {
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        limit: Option<usize>,
+        limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        let (_, _) = (ctx, limit);
+        let (_, _) = (ctx, limits);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'compact_blocks' operation is not supported for the table '{}'. Table engine: '{}'.",
@@ -434,9 +438,21 @@ pub trait TableExt: Table {
 impl<T: ?Sized> TableExt for T where T: Table {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub enum TimeNavigation {
+    TimeTravel(NavigationPoint),
+    Changes {
+        append_only: bool,
+        desc: String,
+        at: NavigationPoint,
+        end: Option<NavigationPoint>,
+    },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),
+    StreamInfo(TableInfo),
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -449,26 +465,6 @@ pub struct TableStatistics {
     pub number_of_segments: Option<u64>,
 }
 
-fn merge(a: Option<u64>, b: Option<u64>) -> Option<u64> {
-    match (a, b) {
-        (Some(a), Some(b)) if a > b => Some(a - b),
-        _ => None,
-    }
-}
-
-impl TableStatistics {
-    pub fn increment_since_from(&self, other: &TableStatistics) -> Self {
-        TableStatistics {
-            num_rows: merge(self.num_rows, other.num_rows),
-            data_size: merge(self.data_size, other.data_size),
-            data_size_compressed: merge(self.data_size_compressed, other.data_size_compressed),
-            index_size: None,
-            number_of_blocks: merge(self.number_of_blocks, other.number_of_blocks),
-            number_of_segments: None,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ColumnStatistics {
     pub min: Scalar,
@@ -478,7 +474,9 @@ pub struct ColumnStatistics {
 }
 
 pub enum CompactTarget {
-    Blocks,
+    // compact blocks, with optional limit on the number of blocks to be compacted
+    Blocks(Option<usize>),
+    // compact segments
     Segments,
 }
 
@@ -542,5 +540,37 @@ impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
 
     fn num_rows(&self) -> Option<u64> {
         Some(self.num_rows)
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CompactionLimits {
+    pub segment_limit: Option<usize>,
+    pub block_limit: Option<usize>,
+}
+
+impl CompactionLimits {
+    pub fn limits(segment_limit: Option<usize>, block_limit: Option<usize>) -> Self {
+        // As n fragmented blocks scattered across at most n segments,
+        // when no segment_limit provided, we set it to the same value of block_limit
+        let adjusted_segment_limit = segment_limit.or(block_limit);
+        CompactionLimits {
+            segment_limit: adjusted_segment_limit,
+            block_limit,
+        }
+    }
+    pub fn limit_by_num_segments(v: Option<usize>) -> Self {
+        CompactionLimits {
+            segment_limit: v,
+            block_limit: None,
+        }
+    }
+
+    pub fn limit_by_num_blocks(v: Option<usize>) -> Self {
+        let segment_limit = v;
+        CompactionLimits {
+            segment_limit,
+            block_limit: v,
+        }
     }
 }

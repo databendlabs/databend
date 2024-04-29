@@ -30,32 +30,6 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
-impl FromToProto for mt::CatalogNameIdent {
-    type PB = pb::CatalogNameIdent;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::CatalogNameIdent) -> Result<Self, Incompatible> {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        let v = Self {
-            tenant: p.tenant,
-            catalog_name: p.catalog_name,
-        };
-        Ok(v)
-    }
-
-    fn to_pb(&self) -> Result<pb::CatalogNameIdent, Incompatible> {
-        let p = pb::CatalogNameIdent {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
-            catalog_name: self.catalog_name.clone(),
-        };
-        Ok(p)
-    }
-}
-
 impl FromToProto for mt::CatalogMeta {
     type PB = pb::CatalogMeta;
 

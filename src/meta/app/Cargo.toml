@@ -24,7 +24,6 @@ anyerror = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cron = "0.12.0"
-derive_more = { workspace = true }
 enumflags2 = { workspace = true }
 hex = "0.4.3"
 itertools = { workspace = true }

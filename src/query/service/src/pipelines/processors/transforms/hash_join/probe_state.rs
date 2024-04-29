@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_expression::filter::build_select_expr;
 use databend_common_expression::filter::FilterExecutor;
+use databend_common_expression::filter::SelectExprBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -109,7 +109,7 @@ impl ProbeState {
             JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
         ) && let Some(predicate) = other_predicate
         {
-            let (select_expr, has_or) = build_select_expr(&predicate).into();
+            let (select_expr, has_or) = SelectExprBuilder::new().build(&predicate).into();
             let filter_executor = FilterExecutor::new(
                 select_expr,
                 func_ctx.clone(),

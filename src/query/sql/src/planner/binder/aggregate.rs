@@ -574,7 +574,7 @@ impl Binder {
             if finder.scalars().is_empty() {
                 groups.push(Expr::Literal {
                     span: None,
-                    lit: Literal::UInt64(idx as u64 + 1),
+                    value: Literal::UInt64(idx as u64 + 1),
                 });
             }
         }
@@ -599,7 +599,7 @@ impl Binder {
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
-                lit: Literal::UInt64(index),
+                value: Literal::UInt64(index),
                 ..
             } = expr
             {

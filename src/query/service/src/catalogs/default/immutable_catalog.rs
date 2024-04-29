@@ -22,14 +22,14 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -41,6 +41,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -50,6 +52,10 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -73,6 +79,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -84,6 +91,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 
 use crate::catalogs::InMemoryMetas;
@@ -143,7 +151,7 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         match db_name {
             "system" => Ok(self.sys_db.clone()),
             "information_schema" => Ok(self.info_schema_db.clone()),
@@ -155,7 +163,7 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
     }
 
@@ -204,12 +212,13 @@ impl Catalog for ImmutableCatalog {
 
     async fn mget_table_names_by_ids(
         &self,
+        _tenant: &Tenant,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<String>> {
+    ) -> databend_common_exception::Result<Vec<Option<String>>> {
         let mut table_name = Vec::with_capacity(table_ids.len());
         for id in table_ids {
             if let Some(table) = self.sys_db_meta.get_by_id(id) {
-                table_name.push(table.name().to_string());
+                table_name.push(Some(table.name().to_string()));
             }
         }
         Ok(table_name)
@@ -228,13 +237,17 @@ impl Catalog for ImmutableCatalog {
         }
     }
 
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(
+        &self,
+        _tenant: &Tenant,
+        db_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
         let mut res = Vec::new();
         for id in db_ids {
             if self.sys_db.get_db_info().ident.db_id == *id {
-                res.push("system".to_string());
+                res.push(Some("system".to_string()));
             } else if self.info_schema_db.get_db_info().ident.db_id == *id {
-                res.push("information_schema".to_string());
+                res.push(Some("information_schema".to_string()));
             }
         }
         Ok(res)
@@ -243,7 +256,7 @@ impl Catalog for ImmutableCatalog {
     #[async_backtrace::framed]
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -253,14 +266,14 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables(&self, _tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         self.sys_db_meta.get_all_tables(db_name)
     }
 
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         self.list_tables(tenant, db_name).await
@@ -287,6 +300,12 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
+    async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot undrop table by id in system database",
+        ))
+    }
+
     #[async_backtrace::framed]
     async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         Err(ErrorCode::Unimplemented(
@@ -310,16 +329,9 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot count tables in system database",
-        ))
-    }
-
-    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -344,7 +356,7 @@ impl Catalog for ImmutableCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -483,6 +495,25 @@ impl Catalog for ImmutableCatalog {
         &self,
         _req: ListVirtualColumnsReq,
     ) -> Result<Vec<VirtualColumnMeta>> {
+        unimplemented!()
+    }
+
+    async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        unimplemented!()
+    }
+
+    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+        unimplemented!()
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        _req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        unimplemented!()
+    }
+
+    async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
     }
 }

@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_license::license::Feature::VirtualColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_sql::plans::CreateVirtualColumnPlan;
 use databend_enterprise_virtual_column::get_virtual_column_handler;
 
@@ -73,10 +73,7 @@ impl Interpreter for CreateVirtualColumnInterpreter {
 
         let create_virtual_column_req = CreateVirtualColumnReq {
             create_option: self.plan.create_option,
-            name_ident: VirtualColumnNameIdent {
-                tenant: tenant.to_string(),
-                table_id,
-            },
+            name_ident: VirtualColumnIdent::new(tenant, table_id),
             virtual_columns: self.plan.virtual_columns.clone(),
         };
 

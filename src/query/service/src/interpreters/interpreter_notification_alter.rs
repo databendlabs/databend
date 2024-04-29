@@ -47,7 +47,7 @@ impl AlterNotificationInterpreter {
         match plan.options {
             AlterNotificationOptions::Set(set_options) => {
                 let req = AlterNotificationRequest {
-                    tenant_id: self.ctx.get_tenant().to_string(),
+                    tenant_id: self.ctx.get_tenant().tenant_name().to_string(),
                     name: plan.name,
                     operation_type: "SET".to_string(),
                     enabled: set_options.enabled,

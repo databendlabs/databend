@@ -37,9 +37,16 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
     match err {
         None => (log_type, 0, "".to_string(), "".to_string()),
         Some(e) => {
-            if e.code() == ErrorCode::AbortedQuery("").code() {
+            if e.code() == ErrorCode::ABORTED_QUERY {
                 (
                     LogType::Aborted,
+                    e.code().into(),
+                    e.to_string(),
+                    e.backtrace_str(),
+                )
+            } else if e.code() == ErrorCode::ABORTED_QUERY {
+                (
+                    LogType::Closed,
                     e.code().into(),
                     e.to_string(),
                     e.backtrace_str(),
@@ -93,6 +100,7 @@ impl InterpreterQueryLog {
         let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
         let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
+        let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -121,7 +129,7 @@ impl InterpreterQueryLog {
 
         // Client.
         let client_address = match ctx.get_client_address() {
-            Some(addr) => format!("{:?}", addr),
+            Some(addr) => addr,
             None => "".to_string(),
         };
         let user_agent = ctx.get_ua();
@@ -150,7 +158,7 @@ impl InterpreterQueryLog {
             log_type,
             log_type_name,
             handler_type,
-            tenant_id: tenant_id.to_string(),
+            tenant_id: tenant_id.tenant_name().to_string(),
             cluster_id,
             node_id,
             sql_user,
@@ -163,6 +171,7 @@ impl InterpreterQueryLog {
             event_time,
             query_start_time,
             query_duration_ms: 0,
+            query_queued_duration_ms,
             current_database,
             databases: "".to_string(),
             tables: "".to_string(),
@@ -217,7 +226,11 @@ impl InterpreterQueryLog {
         ctx.set_finish_time(now);
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
-        let tenant_id = GlobalConfig::instance().query.tenant_id.to_string();
+        let tenant_id = GlobalConfig::instance()
+            .query
+            .tenant_id
+            .tenant_name()
+            .to_string();
         let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
         let node_id = ctx.get_cluster().local_id.clone();
         let user = ctx.get_current_user()?;
@@ -235,6 +248,7 @@ impl InterpreterQueryLog {
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
         let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
         let query_duration_ms = ctx.get_query_duration_ms();
+        let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
         let data_metrics = ctx.get_data_metrics();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
@@ -272,7 +286,7 @@ impl InterpreterQueryLog {
 
         // Client.
         let client_address = match ctx.get_client_address() {
-            Some(addr) => format!("{:?}", addr),
+            Some(addr) => addr,
             None => "".to_string(),
         };
         let user_agent = ctx.get_ua();
@@ -320,6 +334,7 @@ impl InterpreterQueryLog {
             event_time,
             query_start_time,
             query_duration_ms,
+            query_queued_duration_ms,
             databases: "".to_string(),
             tables: "".to_string(),
             columns: "".to_string(),

@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::parquet::metadata::SchemaDescriptor;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -29,8 +28,7 @@ use databend_storages_common_table_meta::meta::Compression;
 use super::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::ReadSettings;
-use crate::io::UncompressedBuffer;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 
@@ -43,10 +41,6 @@ pub enum DeserializedArray<'a> {
 pub struct FieldDeserializationContext<'a> {
     pub(crate) column_metas: &'a HashMap<ColumnId, ColumnMeta>,
     pub(crate) column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
-    pub(crate) num_rows: usize,
-    pub(crate) compression: &'a Compression,
-    pub(crate) uncompressed_buffer: &'a Option<Arc<UncompressedBuffer>>,
-    pub(crate) parquet_schema_descriptor: &'a Option<SchemaDescriptor>,
 }
 
 impl BlockReader {
@@ -57,7 +51,7 @@ impl BlockReader {
         chunks: HashMap<ColumnId, DataItem>,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
-        let part = FusePartInfo::from_part(&part)?;
+        let part = FuseBlockPartInfo::from_part(&part)?;
 
         self.deserialize_chunks(
             &part.location,
@@ -80,19 +74,15 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         match storage_format {
             FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
-                block_path,
                 num_rows,
-                compression,
                 column_metas,
                 column_chunks,
-            ),
-            FuseStorageFormat::Native => self.deserialize_native_chunks(
-                block_path,
-                num_rows,
                 compression,
-                column_metas,
-                column_chunks,
+                block_path,
             ),
+            FuseStorageFormat::Native => {
+                self.deserialize_native_chunks(block_path, num_rows, column_metas, column_chunks)
+            }
         }
     }
 
@@ -124,21 +114,18 @@ impl BlockReader {
         let num_rows = meta.row_count as usize;
 
         match storage_format {
-            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks_with_buffer(
-                &meta.location.0,
+            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
                 num_rows,
-                &meta.compression,
                 &meta.col_metas,
                 column_chunks,
-                None,
+                &meta.compression,
+                &meta.location.0,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
                 &meta.location.0,
                 num_rows,
-                &meta.compression,
                 &meta.col_metas,
                 column_chunks,
-                None,
             ),
         }
     }

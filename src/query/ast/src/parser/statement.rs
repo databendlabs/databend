@@ -16,26 +16,30 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use databend_common_meta_app::principal::AuthType;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
+use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
+use nom::combinator::not;
 use nom::combinator::value;
 use nom::Slice;
 
+use super::sequence::sequence;
 use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::copy::copy_into;
 use crate::parser::copy::copy_into_table;
 use crate::parser::data_mask::data_mask_policy;
+use crate::parser::dynamic_table::dynamic_table;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
@@ -110,14 +114,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #task_warehouse_option
-            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
-            ~ (AFTER ~ #comma_separated_list0(literal_string))?
-            ~ (WHEN ~ #expr )?
-            ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ #warehouse_option
+            ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
+            ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
+            ~ ( WHEN ~ #expr )?
+            ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
-            ~ (#set_table_option)?
+            ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
         |(
@@ -143,13 +147,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 warehouse_opts,
                 schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
-                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                comments: comment_opt.map(|(_, _, comment)| comment),
                 after: match after_tasks {
                     Some((_, tasks)) => tasks,
                     None => Vec::new(),
                 },
                 error_integration: error_integration.map(|(_, _, name)| name.to_string()),
-                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
+                when_condition: when_conditions.map(|(_, cond)| cond),
                 sql,
                 session_parameters: session_opts,
             })
@@ -245,30 +249,31 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let delete = map(
         rule! {
-            DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias
-            ~ ( WHERE ~ ^#expr )?
+            #with? ~ DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias ~ ( WHERE ~ ^#expr )?
         },
-        |(_, hints, _, table, opt_selection)| {
+        |(with, _, hints, _, table, opt_selection)| {
             Statement::Delete(DeleteStmt {
                 hints,
                 table,
                 selection: opt_selection.map(|(_, selection)| selection),
+                with,
             })
         },
     );
 
     let update = map(
         rule! {
-            UPDATE ~ #hint? ~ #table_reference_only
+            #with? ~ UPDATE ~ #hint? ~ #table_reference_only
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, hints, table, _, update_list, opt_selection)| {
+        |(with, _, hints, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
                 hints,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),
+                with,
             })
         },
     );
@@ -918,6 +923,37 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let show_views = map(
+        rule! {
+            SHOW ~ FULL? ~ VIEWS ~ HISTORY? ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
+        },
+        |(_, opt_full, _, opt_history, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowViews(ShowViewsStmt {
+                catalog,
+                database,
+                full: opt_full.is_some(),
+                limit,
+                with_history: opt_history.is_some(),
+            })
+        },
+    );
+    let describe_view = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ VIEW ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, view))| {
+            Statement::DescribeView(DescribeViewStmt {
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
 
     let create_index = map_res(
         rule! {
@@ -976,6 +1012,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #ident
             ~ ON ~ #dot_separated_idents_1_to_3
             ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+            ~ ( #table_option )?
         },
         |(
             _,
@@ -990,6 +1027,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             columns,
             _,
+            opt_index_options,
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
@@ -1001,6 +1039,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 table,
                 columns,
                 sync_creation: opt_async.is_none(),
+                index_options: opt_index_options.unwrap_or_default(),
             }))
         },
     );
@@ -1113,7 +1152,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let show_virtual_columns = map(
         rule! {
-            SHOW ~ VIRTUAL ~ COLUMNS ~ (( FROM | IN ) ~ #ident)? ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW ~ VIRTUAL ~ COLUMNS ~ ( ( FROM | IN ) ~ #ident )? ~ ( ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2 )? ~ #show_limit?
         },
         |(_, _, _, opt_table, opt_db, limit)| {
             let table = opt_table.map(|(_, table)| table);
@@ -1625,8 +1664,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
-        |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
-            let file_format_options = FileFormatOptionsAst { options };
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, file_format_options)| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateFileFormat {
@@ -1915,11 +1953,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_notification = map(
         rule! {
-            CREATE ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ NOTIFICATION ~ INTEGRATION
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #ident
             ~ ENABLED ~ "=" ~ #literal_bool
-            ~ (#notification_webhook_clause)?
+            ~ #notification_webhook_clause?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -1943,7 +1982,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 notification_type: notification_type.to_string(),
                 enabled,
                 webhook_opts: webhook,
-                comments: comment.map(|v| v.2).unwrap_or_default(),
+                comments: comment.map(|(_, _, comments)| comments),
             })
         },
     );
@@ -1991,6 +2030,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let commit = value(Statement::Commit, rule! { COMMIT });
     let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 
+    let execute_immediate = map(
+        rule! {
+            EXECUTE ~ IMMEDIATE ~ #code_string
+        },
+        |(_, _, script)| Statement::ExecuteImmediate(ExecuteImmediateStmt { script }),
+    );
+
     alt((
         // query, explain,show
         rule!(
@@ -2032,7 +2078,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
-            #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
+            | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
+            | #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
@@ -2049,6 +2097,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
+            | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
@@ -2067,12 +2116,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
         ),
-        // view,stream,index
+        // view,index
         rule!(
             #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
-            | #stream_table
+            | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
@@ -2086,6 +2135,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
+            | #sequence
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -2111,24 +2161,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
-        ),
-        rule!(
-            #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
+            | #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
             | #show_file_formats: "`SHOW FILE FORMATS`"
             | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
-        ),
-        rule!( #copy_into ),
-        rule!(
-            #call: "`CALL <procedure_name>(<parameter>, ...)`"
-        ),
-        rule!(
-            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            | #copy_into
+            | #call: "`CALL <procedure_name>(<parameter>, ...)`"
+            | #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
             | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
-        ),
-        rule!(
-            #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
+            | #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
         ),
         // data mask
         rule!(
@@ -2158,7 +2200,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ),
         rule!(
             #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
-  [ { WAREHOUSE = <string> }
+  [ { WAREHOUSE = <string> } ]
   [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
   [ AFTER <string>, <string>...]
   [ WHEN boolean_expr ]
@@ -2172,6 +2214,11 @@ AS
          | #show_tasks : "`SHOW TASKS [<show_limit>]`"
          | #desc_task : "`DESC | DESCRIBE TASK <name>`"
          | #execute_task: "`EXECUTE TASK <name>`"
+        ),
+        // stream, dynamic tables.
+        rule!(
+            #stream_table
+            | #dynamic_table
         ),
         rule!(
             #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
@@ -2193,9 +2240,10 @@ AS
         ),
         rule!(
             #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
-        | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
-        | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
-        | #show_connections: "`SHOW CONNECTIONS`"
+            | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
+            | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
+            | #show_connections: "`SHOW CONNECTIONS`"
+            | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
         ),
     ))(i)
 }
@@ -2235,14 +2283,24 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
         };
         map(
             rule! {
-                INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                #with? ~ INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
                 ~ #dot_separated_idents_1_to_3
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
             },
-            |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
+            |(
+                with,
+                _,
+                opt_hints,
+                overwrite,
+                _,
+                (catalog, database, table),
+                opt_columns,
+                source,
+            )| {
                 Statement::Insert(InsertStmt {
                     hints: opt_hints,
+                    with,
                     catalog,
                     database,
                     table,
@@ -2255,6 +2313,93 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
             },
         )(i)
     }
+}
+
+pub fn conditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        map(
+            rule! {
+                INSERT ~ OVERWRITE? ~ (FIRST | ALL) ~ (#when_clause)+ ~ (#else_clause)? ~ #query
+            },
+            |(_, overwrite, kind, when_clauses, opt_else, source)| {
+                Statement::InsertMultiTable(InsertMultiTableStmt {
+                    overwrite: overwrite.is_some(),
+                    is_first: matches!(kind.kind, FIRST),
+                    when_clauses,
+                    else_clause: opt_else,
+                    into_clauses: vec![],
+                    source,
+                })
+            },
+        )(i)
+    }
+}
+
+pub fn unconditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        map(
+            rule! {
+                INSERT ~ OVERWRITE? ~ ALL ~ (#into_clause)+ ~ #query
+            },
+            |(_, overwrite, _, into_clauses, source)| {
+                Statement::InsertMultiTable(InsertMultiTableStmt {
+                    overwrite: overwrite.is_some(),
+                    is_first: false,
+                    when_clauses: vec![],
+                    else_clause: None,
+                    into_clauses,
+                    source,
+                })
+            },
+        )(i)
+    }
+}
+
+fn when_clause(i: Input) -> IResult<WhenClause> {
+    map(
+        rule! {
+            WHEN ~ ^#expr ~ THEN ~ (#into_clause)+
+        },
+        |(_, expr, _, into_clauses)| WhenClause {
+            condition: expr,
+            into_clauses,
+        },
+    )(i)
+}
+
+fn into_clause(i: Input) -> IResult<IntoClause> {
+    let source_expr = alt((
+        map(rule! {DEFAULT}, |_| SourceExpr::Default),
+        map(rule! { #expr }, SourceExpr::Expr),
+    ));
+    map(
+        rule! {
+            INTO
+            ~ #dot_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ (VALUES ~ "(" ~ #comma_separated_list1(source_expr) ~ ")" )?
+        },
+        |(_, (catalog, database, table), opt_target_columns, opt_source_columns)| IntoClause {
+            catalog,
+            database,
+            table,
+            target_columns: opt_target_columns
+                .map(|(_, columns, _)| columns)
+                .unwrap_or_default(),
+            source_columns: opt_source_columns
+                .map(|(_, _, columns, _)| columns)
+                .unwrap_or_default(),
+        },
+    )(i)
+}
+
+fn else_clause(i: Input) -> IResult<ElseClause> {
+    map(
+        rule! {
+            ELSE ~ (#into_clause)+
+        },
+        |(_, into_clauses)| ElseClause { into_clauses },
+    )(i)
 }
 
 pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
@@ -2459,10 +2604,26 @@ pub fn hint(i: Input) -> IResult<Hint> {
     rule!(#hint|#invalid_hint)(i)
 }
 
+pub fn top_n(i: Input) -> IResult<u64> {
+    map(
+        rule! {
+            TOP
+            ~ ^#error_hint(
+                not(literal_u64),
+                "expecting a literal number after keyword `TOP`, if you were referring to a column with name `top`, \
+                        please quote it like `\"top\"`"
+            )
+            ~ ^#literal_u64
+            : "TOP <limit>"
+        },
+        |(_, _, n)| n,
+    )(i)
+}
+
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     // It's safe to unwrap because input must contain EOI.
-    let first_token = i.0.first().unwrap();
-    let last_token = i.0.last().unwrap();
+    let first_token = i.tokens.first().unwrap();
+    let last_token = i.tokens.last().unwrap();
     Ok((
         i.slice((i.len() - 1)..),
         (
@@ -3038,6 +3199,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             new_column,
         },
     );
+    let modify_table_comment = map(
+        rule! {
+            COMMENT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, new_comment)| AlterTableAction::ModifyTableComment { new_comment },
+    );
     let add_column = map(
         rule! {
             ADD ~ COLUMN? ~ #column_def ~ ( #add_column_option )?
@@ -3090,7 +3257,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         rule! {
             FLASHBACK ~ TO ~ #travel_point
         },
-        |(_, _, point)| AlterTableAction::RevertTo { point },
+        |(_, _, point)| AlterTableAction::FlashbackTo { point },
     );
 
     let set_table_options = map(
@@ -3105,6 +3272,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_table_cluster_key
         | #rename_table
         | #rename_column
+        | #modify_table_comment
         | #add_column
         | #drop_column
         | #modify_column
@@ -3330,10 +3498,7 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         rule! {
              MODIFY ~ WHEN ~ #expr
         },
-        |(_, _, expr)| {
-            let when = expr.to_string();
-            AlterTaskOptions::ModifyWhen(when)
-        },
+        |(_, _, expr)| AlterTaskOptions::ModifyWhen(expr),
     );
     let add_after = map(
         rule! {
@@ -3351,11 +3516,11 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     let set = map(
         rule! {
              SET
-             ~ ( WAREHOUSE  ~ "=" ~  #literal_string )?
-             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
-             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
-             ~ ( COMMENT ~ "=" ~ #literal_string )?
-             ~ ( ERROR_INTEGRATION  ~ "=" ~ #literal_string )?
+             ~ ( WAREHOUSE  ~ ^"=" ~ ^#literal_string )?
+             ~ ( SCHEDULE ~ ^"=" ~ ^#task_schedule_option )?
+             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ ^"=" ~ ^#literal_u64 )?
+             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+             ~ ( ERROR_INTEGRATION  ~ ^"=" ~ ^#literal_string )?
              ~ #set_table_option?
         },
         |(
@@ -3424,10 +3589,10 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
     )(i)
 }
 
-pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
+pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
-            (WAREHOUSE  ~ "=" ~  #literal_string)?
+            (WAREHOUSE  ~ "=" ~ #literal_string)?
         },
         |warehouse_opt| {
             let warehouse = match warehouse_opt {
@@ -3526,19 +3691,17 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 }
 
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
-    map(
+    let option = map(
         rule! {
-           ( #ident ~ "=" ~ #option_to_string ) ~ ("," ~ #ident ~ "=" ~ #option_to_string )*
+           #ident ~ "=" ~ #option_to_string
         },
-        |(key, _, value, opts)| {
-            let mut options = BTreeMap::from_iter(
-                opts.iter()
-                    .map(|(_, k, _, v)| (k.name.to_lowercase(), v.clone())),
-            );
-            options.insert(key.name.to_lowercase(), value);
-            options
-        },
-    )(i)
+        |(k, _, v)| (k, v),
+    );
+    map(comma_separated_list1(option), |opts| {
+        opts.into_iter()
+            .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
+            .collect()
+    })(i)
 }
 
 fn option_to_string(i: Input) -> IResult<String> {
@@ -3581,15 +3744,16 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map(
+    let share_from = map_res(
         rule! {
             FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
         |(_, _, tenant, _, share_name)| {
-            CreateDatabaseOption::FromShare(ShareNameIdent {
-                tenant: tenant.to_string(),
-                share_name: share_name.to_string(),
-            })
+            Tenant::new_or_err(tenant.to_string(), func_name!())
+                .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
+                .map(|tenant| {
+                    CreateDatabaseOption::FromShare(ShareNameIdent::new(tenant, share_name))
+                })
         },
     );
 
@@ -3615,7 +3779,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     );
     let default_role_option = map(
         rule! {
-            "DEFAULT_ROLE" ~ ^"=" ~ ^#role_name
+            DEFAULT_ROLE ~ ^"=" ~ ^#role_name
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );
@@ -3630,6 +3794,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
             UNSET ~ NETWORK ~ ^POLICY
         },
         |(_, _, _)| UserOptionItem::UnsetNetworkPolicy,
+    );
+    let set_disabled_option = map(
+        rule! {
+            DISABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, disabled)| UserOptionItem::Disabled(disabled),
     );
     let set_password_policy = map(
         rule! {
@@ -3652,6 +3822,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #unset_network_policy
         | #set_password_policy
         | #unset_password_policy
+        | #set_disabled_option
     )(i)
 }
 
@@ -3710,7 +3881,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             #dot_separated_idents_1_to_3 ~ #alias_name?
         }),
         |(span, ((catalog, database, table), alias))| TableReference::Table {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             catalog,
             database,
             table,
@@ -3718,8 +3889,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 name: v,
                 columns: vec![],
             }),
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         },
@@ -3732,13 +3902,12 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             #dot_separated_idents_1_to_3
         }),
         |(span, (catalog, database, table))| TableReference::Table {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             catalog,
             database,
             table,
             alias: None,
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         },
@@ -3833,17 +4002,17 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
 pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
     map(
         rule! {
-             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 ) ?
+             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 )?
              ~ ( COMMENT ~ Eq ~ ^#literal_string)?
         },
         |(
@@ -3881,18 +4050,18 @@ pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
 pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
     map(
         rule! {
-             PASSWORD_MIN_LENGTH ?
-             ~ PASSWORD_MAX_LENGTH ?
-             ~ PASSWORD_MIN_UPPER_CASE_CHARS ?
-             ~ PASSWORD_MIN_LOWER_CASE_CHARS ?
-             ~ PASSWORD_MIN_NUMERIC_CHARS ?
-             ~ PASSWORD_MIN_SPECIAL_CHARS ?
-             ~ PASSWORD_MIN_AGE_DAYS ?
-             ~ PASSWORD_MAX_AGE_DAYS ?
-             ~ PASSWORD_MAX_RETRIES ?
-             ~ PASSWORD_LOCKOUT_TIME_MINS ?
-             ~ PASSWORD_HISTORY ?
-             ~ COMMENT ?
+             PASSWORD_MIN_LENGTH?
+             ~ PASSWORD_MAX_LENGTH?
+             ~ PASSWORD_MIN_UPPER_CASE_CHARS?
+             ~ PASSWORD_MIN_LOWER_CASE_CHARS?
+             ~ PASSWORD_MIN_NUMERIC_CHARS?
+             ~ PASSWORD_MIN_SPECIAL_CHARS?
+             ~ PASSWORD_MIN_AGE_DAYS?
+             ~ PASSWORD_MAX_AGE_DAYS?
+             ~ PASSWORD_MAX_RETRIES?
+             ~ PASSWORD_LOCKOUT_TIME_MINS?
+             ~ PASSWORD_HISTORY?
+             ~ COMMENT?
         },
         |(
             opt_min_length,
@@ -3952,9 +4121,9 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             VERBOSE | LOGICAL | OPTIMIZED
         },
         |opt| match &opt.kind {
-            VERBOSE => ExplainOption::Verbose(true),
-            LOGICAL => ExplainOption::Logical(true),
-            OPTIMIZED => ExplainOption::Optimized(true),
+            VERBOSE => ExplainOption::Verbose,
+            LOGICAL => ExplainOption::Logical,
+            OPTIMIZED => ExplainOption::Optimized,
             _ => unreachable!(),
         },
     )(i)

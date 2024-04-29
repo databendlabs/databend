@@ -60,9 +60,7 @@ impl AsyncSystemTable for LocksTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let ctls = catalog_mgr
-            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
-            .await?;
+        let ctls = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
 
         let mut lock_table_id = Vec::new();
         let mut lock_revision = Vec::new();
@@ -94,14 +92,13 @@ impl AsyncSystemTable for LocksTable {
             }
 
             let req = if table_ids.is_empty() {
-                ListLocksReq::create()
+                ListLocksReq::create(&tenant)
             } else {
-                ListLocksReq::create_with_table_ids(table_ids)
+                ListLocksReq::create_with_table_ids(&tenant, table_ids)
             };
-
             let lock_infos = ctl.list_locks(req).await?;
             for info in lock_infos {
-                lock_table_id.push(info.key.get_table_id());
+                lock_table_id.push(info.table_id);
                 lock_revision.push(info.revision);
                 lock_type.push(info.meta.lock_type.to_string().clone());
                 if info.meta.acquired_on.is_some() {

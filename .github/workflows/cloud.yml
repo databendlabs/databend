@@ -18,7 +18,7 @@ env:
 
 jobs:
   info:
-    if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-local')
+    if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-load') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-local')
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
@@ -37,6 +37,8 @@ jobs:
             echo "target=all" >> $GITHUB_OUTPUT
           elif ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark-cloud') }}; then
             echo "target=cloud" >> $GITHUB_OUTPUT
+          elif ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark-load') }}; then
+            echo "target=load" >> $GITHUB_OUTPUT
           elif ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark-local') }}; then
             echo "target=local" >> $GITHUB_OUTPUT
           fi

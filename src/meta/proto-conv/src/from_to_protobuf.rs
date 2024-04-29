@@ -49,6 +49,14 @@ pub struct Incompatible {
     pub reason: String,
 }
 
+impl Incompatible {
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+        }
+    }
+}
+
 impl<T> FromToProto for Arc<T>
 where T: FromToProto
 {

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -24,13 +25,23 @@ use itertools::Itertools;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::ChunkAppendData;
+use crate::executor::physical_plans::ChunkCastSchema;
+use crate::executor::physical_plans::ChunkCommitInsert;
+use crate::executor::physical_plans::ChunkEvalScalar;
+use crate::executor::physical_plans::ChunkFillAndReorder;
+use crate::executor::physical_plans::ChunkFilter;
+use crate::executor::physical_plans::ChunkMerge;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
+use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
+use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
+use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
@@ -52,6 +63,7 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -59,7 +71,7 @@ use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, EnumAsInner)]
 pub enum PhysicalPlan {
     /// Query
     TableScan(TableScan),
@@ -95,6 +107,7 @@ pub enum PhysicalPlan {
 
     /// Copy into table
     CopyIntoTable(Box<CopyIntoTable>),
+    CopyIntoLocation(Box<CopyIntoLocation>),
 
     /// Replace
     ReplaceAsyncSourcer(ReplaceAsyncSourcer),
@@ -119,6 +132,17 @@ pub enum PhysicalPlan {
 
     /// Update
     UpdateSource(Box<UpdateSource>),
+
+    /// Multi table insert
+    Duplicate(Box<Duplicate>),
+    Shuffle(Box<Shuffle>),
+    ChunkFilter(Box<ChunkFilter>),
+    ChunkEvalScalar(Box<ChunkEvalScalar>),
+    ChunkCastSchema(Box<ChunkCastSchema>),
+    ChunkFillAndReorder(Box<ChunkFillAndReorder>),
+    ChunkAppendData(Box<ChunkAppendData>),
+    ChunkMerge(Box<ChunkMerge>),
+    ChunkCommitInsert(Box<ChunkCommitInsert>),
 }
 
 impl PhysicalPlan {
@@ -242,6 +266,15 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTable(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
+                match &mut plan.source {
+                    CopyIntoTableSource::Query(input) => input.adjust_plan_id(next_id),
+                    CopyIntoTableSource::Stage(input) => input.adjust_plan_id(next_id),
+                };
+            }
+            PhysicalPlan::CopyIntoLocation(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::DeleteSource(plan) => {
                 plan.plan_id = *next_id;
@@ -303,6 +336,51 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
+            PhysicalPlan::Duplicate(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Shuffle(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkFilter(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkEvalScalar(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkCastSchema(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkFillAndReorder(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkAppendData(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkMerge(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkCommitInsert(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
         }
     }
 
@@ -339,6 +417,7 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
+            PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
             PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
             PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
             PhysicalPlan::ReplaceInto(v) => v.plan_id,
@@ -346,6 +425,15 @@ impl PhysicalPlan {
             PhysicalPlan::ReclusterSource(v) => v.plan_id,
             PhysicalPlan::ReclusterSink(v) => v.plan_id,
             PhysicalPlan::UpdateSource(v) => v.plan_id,
+            PhysicalPlan::Duplicate(v) => v.plan_id,
+            PhysicalPlan::Shuffle(v) => v.plan_id,
+            PhysicalPlan::ChunkFilter(v) => v.plan_id,
+            PhysicalPlan::ChunkEvalScalar(v) => v.plan_id,
+            PhysicalPlan::ChunkCastSchema(v) => v.plan_id,
+            PhysicalPlan::ChunkFillAndReorder(v) => v.plan_id,
+            PhysicalPlan::ChunkAppendData(v) => v.plan_id,
+            PhysicalPlan::ChunkMerge(v) => v.plan_id,
+            PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
         }
     }
 
@@ -370,6 +458,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
+            PhysicalPlan::CopyIntoLocation(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
@@ -388,12 +477,26 @@ impl PhysicalPlan {
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
             | PhysicalPlan::UpdateSource(_) => Ok(DataSchemaRef::default()),
+            PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
+            PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
+            PhysicalPlan::ChunkFilter(plan) => plan.input.output_schema(),
+            PhysicalPlan::ChunkEvalScalar(_) => todo!(),
+            PhysicalPlan::ChunkCastSchema(_) => todo!(),
+            PhysicalPlan::ChunkFillAndReorder(_) => todo!(),
+            PhysicalPlan::ChunkAppendData(_) => todo!(),
+            PhysicalPlan::ChunkMerge(_) => todo!(),
+            PhysicalPlan::ChunkCommitInsert(_) => todo!(),
         }
     }
 
     pub fn name(&self) -> String {
         match self {
-            PhysicalPlan::TableScan(_) => "TableScan".to_string(),
+            PhysicalPlan::TableScan(v) => match &v.source.source_info {
+                DataSourceInfo::TableSource(_) => "TableScan".to_string(),
+                DataSourceInfo::StageSource(_) => "StageScan".to_string(),
+                DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
+                DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
+            },
             PhysicalPlan::Filter(_) => "Filter".to_string(),
             PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
@@ -416,6 +519,7 @@ impl PhysicalPlan {
             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
+            PhysicalPlan::CopyIntoLocation(_) => "CopyIntoLocation".to_string(),
             PhysicalPlan::ReplaceAsyncSourcer(_) => "ReplaceAsyncSourcer".to_string(),
             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
@@ -430,6 +534,15 @@ impl PhysicalPlan {
             PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
             PhysicalPlan::UpdateSource(_) => "UpdateSource".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
+            PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
+            PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
+            PhysicalPlan::ChunkFilter(_) => "ChunkFilter".to_string(),
+            PhysicalPlan::ChunkEvalScalar(_) => "ChunkProject".to_string(),
+            PhysicalPlan::ChunkCastSchema(_) => "ChunkCastSchema".to_string(),
+            PhysicalPlan::ChunkFillAndReorder(_) => "ChunkFillAndReorder".to_string(),
+            PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".to_string(),
+            PhysicalPlan::ChunkMerge(_) => "ChunkMerge".to_string(),
+            PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".to_string(),
         }
     }
 
@@ -488,6 +601,18 @@ impl PhysicalPlan {
             ),
             PhysicalPlan::ReclusterSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Shuffle(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkFilter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkEvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkCastSchema(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkFillAndReorder(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
+            PhysicalPlan::ChunkAppendData(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkMerge(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkCommitInsert(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -507,6 +632,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
@@ -530,7 +656,16 @@ impl PhysicalPlan {
             | PhysicalPlan::CteScan(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_) => None,
+            | PhysicalPlan::UpdateSource(_)
+            | PhysicalPlan::Duplicate(_)
+            | PhysicalPlan::Shuffle(_)
+            | PhysicalPlan::ChunkFilter(_)
+            | PhysicalPlan::ChunkEvalScalar(_)
+            | PhysicalPlan::ChunkCastSchema(_)
+            | PhysicalPlan::ChunkFillAndReorder(_)
+            | PhysicalPlan::ChunkAppendData(_)
+            | PhysicalPlan::ChunkMerge(_)
+            | PhysicalPlan::ChunkCommitInsert(_) => None,
         }
     }
 
@@ -714,7 +849,7 @@ impl PhysicalPlan {
                         v.output_schema()?.num_fields(),
                         std::cmp::max(
                             v.output_schema()?.num_fields(),
-                            v.source.source_info.schema().num_fields()
+                            v.source.source_info.schema().num_fields(),
                         )
                     ),
                     v.name_mapping.keys().cloned().collect(),

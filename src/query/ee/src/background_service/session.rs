@@ -39,7 +39,7 @@ pub fn get_background_service_user(conf: &InnerConfig) -> UserInfo {
     let mut user = UserInfo::new_no_auth(
         format!(
             "{}-{}-background-svc",
-            conf.query.tenant_id.clone(),
+            conf.query.tenant_id.tenant_name(),
             conf.query.cluster_id.clone()
         )
         .as_str(),

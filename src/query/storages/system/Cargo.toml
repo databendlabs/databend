@@ -23,7 +23,6 @@ databend-common-functions = { path = "../../functions" }
 databend-common-meta-api = { path = "../../../meta/api" }
 databend-common-meta-app = { path = "../../../meta/app" }
 databend-common-meta-types = { path = "../../../meta/types" }
-databend-common-metrics = { path = "../../../common/metrics" }
 databend-common-pipeline-core = { path = "../../pipeline/core" }
 databend-common-pipeline-sources = { path = "../../pipeline/sources" }
 databend-common-sql = { path = "../../sql" }
@@ -40,6 +39,7 @@ jsonb = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
@@ -54,7 +54,6 @@ snailquote = "0.3.1"
 tikv-jemalloc-ctl = { workspace = true }
 
 typetag = { workspace = true }
-walkdir = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { path = "../../../common/building" }

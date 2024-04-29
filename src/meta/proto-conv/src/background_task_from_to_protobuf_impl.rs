@@ -59,7 +59,7 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
                 .manual_trigger
                 .and_then(|t| ManualTriggerParams::from_pb(t).ok()),
             creator: match p.creator {
-                Some(c) => Some(mt::background::BackgroundJobIdent::from_pb(c)?),
+                Some(c) => Some(mt::background::task_creator::BackgroundTaskCreator::from_pb(c)?),
                 None => None,
             },
             created_at: DateTime::<Utc>::from_pb(p.created_at)?,
@@ -151,30 +151,6 @@ impl FromToProto for mt::background::VacuumStats {
         let p = pb::VacuumStats {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-        };
-        Ok(p)
-    }
-}
-
-impl FromToProto for mt::background::BackgroundTaskIdent {
-    type PB = pb::BackgroundTaskIdent;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(Self {
-            tenant: p.tenant.to_string(),
-            task_id: p.task_id,
-        })
-    }
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::BackgroundTaskIdent {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
-            task_id: self.task_id.clone(),
         };
         Ok(p)
     }

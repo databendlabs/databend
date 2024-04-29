@@ -17,6 +17,7 @@ ColumnRef {
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
     },
@@ -32,7 +33,7 @@ Literal {
     span: Some(
         0..16,
     ),
-    lit: String(
+    value: String(
         "I'm who I'm.",
     ),
 }
@@ -47,7 +48,7 @@ Literal {
     span: Some(
         0..24,
     ),
-    lit: String(
+    value: String(
         "Ǿ \n \t S ª",
     ),
 }
@@ -70,13 +71,14 @@ FunctionCall {
             ),
             name: "char",
             quote: None,
+            is_hole: false,
         },
         args: [
             Literal {
                 span: Some(
                     5..9,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     208,
                 ),
             },
@@ -84,7 +86,7 @@ FunctionCall {
                 span: Some(
                     11..15,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     191,
                 ),
             },
@@ -92,7 +94,7 @@ FunctionCall {
                 span: Some(
                     17..21,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     209,
                 ),
             },
@@ -118,7 +120,7 @@ Array {
             span: Some(
                 1..3,
             ),
-            lit: UInt64(
+            value: UInt64(
                 42,
             ),
         },
@@ -126,7 +128,7 @@ Array {
             span: Some(
                 5..8,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 35,
                 precision: 76,
                 scale: 1,
@@ -136,7 +138,7 @@ Array {
             span: Some(
                 10..12,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 4,
                 precision: 76,
                 scale: 0,
@@ -146,7 +148,7 @@ Array {
             span: Some(
                 14..18,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 1,
                 precision: 76,
                 scale: 3,
@@ -156,7 +158,7 @@ Array {
             span: Some(
                 20..23,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 500,
                 precision: 76,
                 scale: 0,
@@ -166,7 +168,7 @@ Array {
             span: Some(
                 25..33,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 1925,
                 precision: 76,
                 scale: 6,
@@ -176,7 +178,7 @@ Array {
             span: Some(
                 35..41,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 3800000,
                 precision: 76,
                 scale: 0,
@@ -186,7 +188,7 @@ Array {
             span: Some(
                 43..49,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 1,
                 precision: 76,
                 scale: 1,
@@ -196,7 +198,7 @@ Array {
             span: Some(
                 51..56,
             ),
-            lit: UInt64(
+            value: UInt64(
                 4095,
             ),
         },
@@ -204,7 +206,7 @@ Array {
             span: Some(
                 58..69,
             ),
-            lit: UInt64(
+            value: UInt64(
                 3740122863,
             ),
         },
@@ -221,7 +223,7 @@ Literal {
     span: Some(
         0..30,
     ),
-    lit: Decimal256 {
+    value: Decimal256 {
         value: 123456789012345678901234567890,
         precision: 76,
         scale: 0,
@@ -238,7 +240,7 @@ Literal {
     span: Some(
         0..10,
     ),
-    lit: String(
+    value: String(
         "ab123c",
     ),
 }
@@ -253,7 +255,7 @@ Literal {
     span: Some(
         0..33,
     ),
-    lit: Decimal256 {
+    value: Decimal256 {
         value: 94522879687365475552814062743484560,
         precision: 76,
         scale: 0,
@@ -270,7 +272,7 @@ Literal {
     span: Some(
         0..17,
     ),
-    lit: Float64(
+    value: Float64(
         inf,
     ),
 }
@@ -285,7 +287,7 @@ Literal {
     span: Some(
         0..11,
     ),
-    lit: UInt64(
+    value: UInt64(
         100100000,
     ),
 }
@@ -300,7 +302,7 @@ Literal {
     span: Some(
         0..10,
     ),
-    lit: UInt64(
+    value: UInt64(
         11220000,
     ),
 }
@@ -315,7 +317,7 @@ Literal {
     span: Some(
         0..2,
     ),
-    lit: Decimal256 {
+    value: Decimal256 {
         value: 1,
         precision: 76,
         scale: 1,
@@ -326,7 +328,7 @@ Literal {
 ---------- Input ----------
 -1
 ---------- Output ---------
-(- 1)
+- 1
 ---------- AST ------------
 UnaryOp {
     span: Some(
@@ -337,7 +339,7 @@ UnaryOp {
         span: Some(
             1..2,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -353,7 +355,7 @@ Literal {
     span: Some(
         1..2,
     ),
-    lit: UInt64(
+    value: UInt64(
         1,
     ),
 }
@@ -373,7 +375,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -395,7 +397,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -403,7 +405,7 @@ Tuple {
             span: Some(
                 3..4,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -425,7 +427,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -433,7 +435,7 @@ Tuple {
             span: Some(
                 3..4,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -455,7 +457,7 @@ Array {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -477,7 +479,7 @@ Array {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -504,7 +506,7 @@ Array {
                     span: Some(
                         2..3,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -533,7 +535,7 @@ Array {
                     span: Some(
                         2..3,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -548,7 +550,7 @@ Array {
                     span: Some(
                         6..7,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -594,7 +596,7 @@ MapAccess {
                                         span: Some(
                                             3..4,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -602,7 +604,7 @@ MapAccess {
                                         span: Some(
                                             5..6,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -610,7 +612,7 @@ MapAccess {
                                         span: Some(
                                             7..8,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             3,
                                         ),
                                     },
@@ -625,7 +627,7 @@ MapAccess {
                                         span: Some(
                                             11..12,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             4,
                                         ),
                                     },
@@ -633,7 +635,7 @@ MapAccess {
                                         span: Some(
                                             13..14,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             5,
                                         ),
                                     },
@@ -641,7 +643,7 @@ MapAccess {
                                         span: Some(
                                             15..16,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             6,
                                         ),
                                     },
@@ -663,7 +665,7 @@ MapAccess {
                                         span: Some(
                                             21..22,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             7,
                                         ),
                                     },
@@ -671,7 +673,7 @@ MapAccess {
                                         span: Some(
                                             23..24,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             8,
                                         ),
                                     },
@@ -679,7 +681,7 @@ MapAccess {
                                         span: Some(
                                             25..26,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             9,
                                         ),
                                     },
@@ -694,7 +696,7 @@ MapAccess {
                     span: Some(
                         30..31,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         0,
                     ),
                 },
@@ -705,7 +707,7 @@ MapAccess {
                 span: Some(
                     33..34,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -716,7 +718,7 @@ MapAccess {
             span: Some(
                 36..37,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -727,7 +729,7 @@ MapAccess {
 ---------- Input ----------
 ((1 = 1) or 1)
 ---------- Output ---------
-((1 = 1) OR 1)
+1 = 1 OR 1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -743,7 +745,7 @@ BinaryOp {
             span: Some(
                 2..3,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -751,7 +753,7 @@ BinaryOp {
             span: Some(
                 6..7,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -760,7 +762,7 @@ BinaryOp {
         span: Some(
             12..13,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -770,7 +772,7 @@ BinaryOp {
 ---------- Input ----------
 typeof(1 + 2)
 ---------- Output ---------
-typeof((1 + 2))
+typeof(1 + 2)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -784,6 +786,7 @@ FunctionCall {
             ),
             name: "typeof",
             quote: None,
+            is_hole: false,
         },
         args: [
             BinaryOp {
@@ -795,7 +798,7 @@ FunctionCall {
                     span: Some(
                         7..8,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -803,7 +806,7 @@ FunctionCall {
                     span: Some(
                         11..12,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -819,7 +822,7 @@ FunctionCall {
 ---------- Input ----------
 - - + + - 1 + + - 2
 ---------- Output ---------
-((- (- (+ (+ (- 1))))) + (+ (- 2)))
+- - + + - 1 + + - 2
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -855,7 +858,7 @@ BinaryOp {
                             span: Some(
                                 10..11,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -878,7 +881,7 @@ BinaryOp {
                 span: Some(
                     18..19,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     2,
                 ),
             },
@@ -890,7 +893,7 @@ BinaryOp {
 ---------- Input ----------
 0XFF + 0xff + 0xa + x'ffff'
 ---------- Output ---------
-(((255 + 255) + 10) + 65535)
+255 + 255 + 10 + 65535
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -911,7 +914,7 @@ BinaryOp {
                 span: Some(
                     0..4,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     255,
                 ),
             },
@@ -919,7 +922,7 @@ BinaryOp {
                 span: Some(
                     7..11,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     255,
                 ),
             },
@@ -928,7 +931,7 @@ BinaryOp {
             span: Some(
                 14..17,
             ),
-            lit: UInt64(
+            value: UInt64(
                 10,
             ),
         },
@@ -937,7 +940,7 @@ BinaryOp {
         span: Some(
             20..27,
         ),
-        lit: UInt64(
+        value: UInt64(
             65535,
         ),
     },
@@ -947,7 +950,7 @@ BinaryOp {
 ---------- Input ----------
 1 - -(- - -1)
 ---------- Output ---------
-(1 - (- (- (- (- 1)))))
+1 - - - - - 1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -958,7 +961,7 @@ BinaryOp {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -986,7 +989,7 @@ BinaryOp {
                         span: Some(
                             11..12,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1000,7 +1003,7 @@ BinaryOp {
 ---------- Input ----------
 1 + a * c.d
 ---------- Output ---------
-(1 + (a * c.d))
+1 + a * c.d
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -1011,7 +1014,7 @@ BinaryOp {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -1034,6 +1037,7 @@ BinaryOp {
                         ),
                         name: "a",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -1051,6 +1055,7 @@ BinaryOp {
                         ),
                         name: "c",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
                 column: Name(
@@ -1060,6 +1065,7 @@ BinaryOp {
                         ),
                         name: "d",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -1071,7 +1077,7 @@ BinaryOp {
 ---------- Input ----------
 number % 2
 ---------- Output ---------
-(number % 2)
+number % 2
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -1092,6 +1098,7 @@ BinaryOp {
                     ),
                     name: "number",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1100,7 +1107,7 @@ BinaryOp {
         span: Some(
             9..10,
         ),
-        lit: UInt64(
+        value: UInt64(
             2,
         ),
     },
@@ -1136,6 +1143,7 @@ MapAccess {
                         quote: Some(
                             '"',
                         ),
+                        is_hole: false,
                     },
                 ),
             },
@@ -1147,6 +1155,7 @@ MapAccess {
                 ),
                 name: "k1",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -1157,6 +1166,7 @@ MapAccess {
             ),
             name: "k2",
             quote: None,
+            is_hole: false,
         },
     },
 }
@@ -1195,6 +1205,7 @@ MapAccess {
                             quote: Some(
                                 '"',
                             ),
+                            is_hole: false,
                         },
                     ),
                 },
@@ -1206,6 +1217,7 @@ MapAccess {
                     ),
                     name: "k1",
                     quote: None,
+                    is_hole: false,
                 },
             },
         },
@@ -1216,6 +1228,7 @@ MapAccess {
                 ),
                 name: "k2",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -1248,6 +1261,7 @@ MapAccess {
                     ),
                     name: "t",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1276,7 +1290,7 @@ MapAccess {
                 span: Some(
                     1..5,
                 ),
-                lit: Null,
+                value: Null,
             },
         ],
     },
@@ -1309,6 +1323,7 @@ Between {
                     ),
                     name: "col1",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1317,7 +1332,7 @@ Between {
         span: Some(
             17..18,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -1325,7 +1340,7 @@ Between {
         span: Some(
             23..24,
         ),
-        lit: UInt64(
+        value: UInt64(
             2,
         ),
     },
@@ -1350,6 +1365,7 @@ FunctionCall {
             ),
             name: "sum",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -1366,6 +1382,7 @@ FunctionCall {
                             ),
                             name: "col1",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -1397,6 +1414,7 @@ FunctionCall {
             quote: Some(
                 '"',
             ),
+            is_hole: false,
         },
         args: [],
         params: [],
@@ -1423,6 +1441,7 @@ FunctionCall {
             ),
             name: "random",
             quote: None,
+            is_hole: false,
         },
         args: [],
         params: [],
@@ -1449,6 +1468,7 @@ FunctionCall {
             ),
             name: "covar_samp",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -1465,6 +1485,7 @@ FunctionCall {
                             ),
                             name: "number",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -1483,6 +1504,7 @@ FunctionCall {
                             ),
                             name: "number",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -1518,6 +1540,7 @@ Cast {
                     ),
                     name: "col1",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1550,6 +1573,7 @@ TryCast {
                     ),
                     name: "col1",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1581,6 +1605,7 @@ TryCast {
                     ),
                     name: "col1",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1610,7 +1635,7 @@ Trim {
         span: Some(
             24..29,
         ),
-        lit: String(
+        value: String(
             "def",
         ),
     },
@@ -1621,7 +1646,7 @@ Trim {
                 span: Some(
                     13..18,
                 ),
-                lit: String(
+                value: String(
                     "abc",
                 ),
             },
@@ -1654,6 +1679,7 @@ Extract {
                     ),
                     name: "d",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1685,6 +1711,7 @@ DatePart {
                     ),
                     name: "d",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1705,7 +1732,7 @@ Position {
         span: Some(
             9..12,
         ),
-        lit: String(
+        value: String(
             "a",
         ),
     },
@@ -1723,6 +1750,7 @@ Position {
                     ),
                     name: "str",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1753,6 +1781,7 @@ Substring {
                     ),
                     name: "a",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1771,6 +1800,7 @@ Substring {
                     ),
                     name: "b",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1790,6 +1820,7 @@ Substring {
                         ),
                         name: "c",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -1821,6 +1852,7 @@ Substring {
                     ),
                     name: "a",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1839,6 +1871,7 @@ Substring {
                     ),
                     name: "b",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1858,6 +1891,7 @@ Substring {
                         ),
                         name: "c",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -1889,6 +1923,7 @@ Cast {
                     ),
                     name: "col1",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -1929,6 +1964,7 @@ MapAccess {
                             ),
                             name: "arr",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -1938,7 +1974,7 @@ MapAccess {
                     span: Some(
                         5..6,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         0,
                     ),
                 },
@@ -1951,6 +1987,7 @@ MapAccess {
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -1961,6 +1998,7 @@ MapAccess {
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
     },
 }
@@ -1993,6 +2031,7 @@ MapAccess {
                         ),
                         name: "arr",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -2002,7 +2041,7 @@ MapAccess {
                 span: Some(
                     4..5,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     4,
                 ),
             },
@@ -2025,6 +2064,7 @@ MapAccess {
                         quote: Some(
                             '"',
                         ),
+                        is_hole: false,
                     },
                 ),
             },
@@ -2036,7 +2076,7 @@ MapAccess {
 ---------- Input ----------
 a rlike '^11'
 ---------- Output ---------
-(a RLIKE '^11')
+a RLIKE '^11'
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2057,6 +2097,7 @@ BinaryOp {
                     ),
                     name: "a",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -2065,7 +2106,7 @@ BinaryOp {
         span: Some(
             8..13,
         ),
-        lit: String(
+        value: String(
             "^11",
         ),
     },
@@ -2089,7 +2130,7 @@ InList {
             span: Some(
                 0..8,
             ),
-            lit: String(
+            value: String(
                 "中文",
             ),
         },
@@ -2101,7 +2142,7 @@ InList {
             span: Some(
                 23..26,
             ),
-            lit: String(
+            value: String(
                 "a",
             ),
         },
@@ -2109,7 +2150,7 @@ InList {
             span: Some(
                 28..31,
             ),
-            lit: String(
+            value: String(
                 "b",
             ),
         },
@@ -2121,7 +2162,7 @@ InList {
 ---------- Input ----------
 G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)
 ---------- Output ---------
-(G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND ((1 + col3) DIV sum(col4)))
+G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND (1 + col3) DIV sum(col4)
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2144,6 +2185,7 @@ BinaryOp {
                         ),
                         name: "G",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
                 table: Some(
@@ -2153,6 +2195,7 @@ BinaryOp {
                         ),
                         name: "E",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
                 column: Name(
@@ -2162,6 +2205,7 @@ BinaryOp {
                         ),
                         name: "B",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -2186,6 +2230,7 @@ BinaryOp {
                         ),
                         name: "col1",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -2204,6 +2249,7 @@ BinaryOp {
                         ),
                         name: "col2",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -2222,7 +2268,7 @@ BinaryOp {
                     span: Some(
                         49..50,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -2240,6 +2286,7 @@ BinaryOp {
                                 ),
                                 name: "col3",
                                 quote: None,
+                                is_hole: false,
                             },
                         ),
                     },
@@ -2257,6 +2304,7 @@ BinaryOp {
                         ),
                         name: "sum",
                         quote: None,
+                        is_hole: false,
                     },
                     args: [
                         ColumnRef {
@@ -2273,6 +2321,7 @@ BinaryOp {
                                         ),
                                         name: "col4",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -2292,7 +2341,7 @@ BinaryOp {
 ---------- Input ----------
 sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
 ---------- Output ---------
-(sum(CASE WHEN (n2.n_name = 'GERMANY') THEN ol_amount ELSE 0 END) / CASE WHEN (sum(ol_amount) = 0) THEN 1 ELSE sum(ol_amount) END)
+sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2311,6 +2360,7 @@ BinaryOp {
                 ),
                 name: "sum",
                 quote: None,
+                is_hole: false,
             },
             args: [
                 Case {
@@ -2337,6 +2387,7 @@ BinaryOp {
                                             ),
                                             name: "n2",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                     column: Name(
@@ -2346,6 +2397,7 @@ BinaryOp {
                                             ),
                                             name: "n_name",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -2354,7 +2406,7 @@ BinaryOp {
                                 span: Some(
                                     26..35,
                                 ),
-                                lit: String(
+                                value: String(
                                     "GERMANY",
                                 ),
                             },
@@ -2375,6 +2427,7 @@ BinaryOp {
                                         ),
                                         name: "ol_amount",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -2385,7 +2438,7 @@ BinaryOp {
                             span: Some(
                                 56..57,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -2420,6 +2473,7 @@ BinaryOp {
                             ),
                             name: "sum",
                             quote: None,
+                            is_hole: false,
                         },
                         args: [
                             ColumnRef {
@@ -2436,6 +2490,7 @@ BinaryOp {
                                             ),
                                             name: "ol_amount",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -2450,7 +2505,7 @@ BinaryOp {
                     span: Some(
                         92..93,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         0,
                     ),
                 },
@@ -2461,7 +2516,7 @@ BinaryOp {
                 span: Some(
                     99..100,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -2479,6 +2534,7 @@ BinaryOp {
                         ),
                         name: "sum",
                         quote: None,
+                        is_hole: false,
                     },
                     args: [
                         ColumnRef {
@@ -2495,6 +2551,7 @@ BinaryOp {
                                         ),
                                         name: "ol_amount",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -2519,7 +2576,7 @@ AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
 AND l_shipmode IN ('AIR', 'AIR REG')
 AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- Output ---------
-((((((((p_partkey = l_partkey) AND (p_brand = 'Brand#12')) AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')) AND (l_quantity >= CAST(1 AS Int16))) AND (l_quantity <= CAST((1 + 10) AS Int16))) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16)) AND l_shipmode IN('AIR', 'AIR REG')) AND (l_shipinstruct = 'DELIVER IN PERSON'))
+p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS Int16) AND l_quantity <= CAST(1 + 10 AS Int16) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2575,6 +2632,7 @@ BinaryOp {
                                                 ),
                                                 name: "p_partkey",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -2593,6 +2651,7 @@ BinaryOp {
                                                 ),
                                                 name: "l_partkey",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -2617,6 +2676,7 @@ BinaryOp {
                                                 ),
                                                 name: "p_brand",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -2625,7 +2685,7 @@ BinaryOp {
                                     span: Some(
                                         36..46,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "Brand#12",
                                     ),
                                 },
@@ -2649,6 +2709,7 @@ BinaryOp {
                                             ),
                                             name: "p_container",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -2658,7 +2719,7 @@ BinaryOp {
                                     span: Some(
                                         67..76,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "SM CASE",
                                     ),
                                 },
@@ -2666,7 +2727,7 @@ BinaryOp {
                                     span: Some(
                                         78..86,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "SM BOX",
                                     ),
                                 },
@@ -2674,7 +2735,7 @@ BinaryOp {
                                     span: Some(
                                         88..97,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "SM PACK",
                                     ),
                                 },
@@ -2682,7 +2743,7 @@ BinaryOp {
                                     span: Some(
                                         99..107,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "SM PKG",
                                     ),
                                 },
@@ -2709,6 +2770,7 @@ BinaryOp {
                                         ),
                                         name: "l_quantity",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -2721,7 +2783,7 @@ BinaryOp {
                                 span: Some(
                                     133..134,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -2749,6 +2811,7 @@ BinaryOp {
                                     ),
                                     name: "l_quantity",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2766,7 +2829,7 @@ BinaryOp {
                                 span: Some(
                                     172..173,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -2774,7 +2837,7 @@ BinaryOp {
                                 span: Some(
                                     176..178,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     10,
                                 ),
                             },
@@ -2802,6 +2865,7 @@ BinaryOp {
                                 ),
                                 name: "p_size",
                                 quote: None,
+                                is_hole: false,
                             },
                         ),
                     },
@@ -2814,7 +2878,7 @@ BinaryOp {
                         span: Some(
                             217..218,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -2829,7 +2893,7 @@ BinaryOp {
                         span: Some(
                             242..243,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             5,
                         ),
                     },
@@ -2857,6 +2921,7 @@ BinaryOp {
                             ),
                             name: "l_shipmode",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -2866,7 +2931,7 @@ BinaryOp {
                     span: Some(
                         276..281,
                     ),
-                    lit: String(
+                    value: String(
                         "AIR",
                     ),
                 },
@@ -2874,7 +2939,7 @@ BinaryOp {
                     span: Some(
                         283..292,
                     ),
-                    lit: String(
+                    value: String(
                         "AIR REG",
                     ),
                 },
@@ -2901,6 +2966,7 @@ BinaryOp {
                         ),
                         name: "l_shipinstruct",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
             },
@@ -2909,7 +2975,7 @@ BinaryOp {
             span: Some(
                 315..334,
             ),
-            lit: String(
+            value: String(
                 "DELIVER IN PERSON",
             ),
         },
@@ -2934,13 +3000,14 @@ FunctionCall {
             ),
             name: "nullif",
             quote: None,
+            is_hole: false,
         },
         args: [
             Literal {
                 span: Some(
                     7..8,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -2948,7 +3015,7 @@ FunctionCall {
                 span: Some(
                     10..11,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -2977,6 +3044,7 @@ FunctionCall {
             ),
             name: "nullif",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -2993,6 +3061,7 @@ FunctionCall {
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3011,6 +3080,7 @@ FunctionCall {
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3040,13 +3110,14 @@ FunctionCall {
             ),
             name: "coalesce",
             quote: None,
+            is_hole: false,
         },
         args: [
             Literal {
                 span: Some(
                     9..10,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3054,7 +3125,7 @@ FunctionCall {
                 span: Some(
                     12..13,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     2,
                 ),
             },
@@ -3062,7 +3133,7 @@ FunctionCall {
                 span: Some(
                     15..16,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     3,
                 ),
             },
@@ -3091,6 +3162,7 @@ FunctionCall {
             ),
             name: "coalesce",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -3107,6 +3179,7 @@ FunctionCall {
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3125,6 +3198,7 @@ FunctionCall {
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3143,6 +3217,7 @@ FunctionCall {
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3172,13 +3247,14 @@ FunctionCall {
             ),
             name: "ifnull",
             quote: None,
+            is_hole: false,
         },
         args: [
             Literal {
                 span: Some(
                     7..8,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3186,7 +3262,7 @@ FunctionCall {
                 span: Some(
                     10..11,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3215,6 +3291,7 @@ FunctionCall {
             ),
             name: "ifnull",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -3231,6 +3308,7 @@ FunctionCall {
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3249,6 +3327,7 @@ FunctionCall {
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3274,7 +3353,7 @@ IsDistinctFrom {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -3282,7 +3361,7 @@ IsDistinctFrom {
         span: Some(
             19..20,
         ),
-        lit: UInt64(
+        value: UInt64(
             2,
         ),
     },
@@ -3313,6 +3392,7 @@ IsDistinctFrom {
                     ),
                     name: "a",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -3331,6 +3411,7 @@ IsDistinctFrom {
                     ),
                     name: "b",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -3352,7 +3433,7 @@ IsDistinctFrom {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -3360,7 +3441,7 @@ IsDistinctFrom {
         span: Some(
             23..27,
         ),
-        lit: Null,
+        value: Null,
     },
     not: true,
 }
@@ -3384,7 +3465,7 @@ Map {
                 span: Some(
                     6..7,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3397,7 +3478,7 @@ Map {
                 span: Some(
                     13..14,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     2,
                 ),
             },
@@ -3409,7 +3490,7 @@ Map {
 ---------- Input ----------
 ROW_NUMBER() OVER (ORDER BY salary DESC)
 ---------- Output ---------
-ROW_NUMBER() OVER (ORDER BY salary DESC)
+ROW_NUMBER() OVER ( ORDER BY salary DESC )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3423,6 +3504,7 @@ FunctionCall {
             ),
             name: "ROW_NUMBER",
             quote: None,
+            is_hole: false,
         },
         args: [],
         params: [],
@@ -3447,6 +3529,7 @@ FunctionCall {
                                             ),
                                             name: "salary",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -3469,7 +3552,7 @@ FunctionCall {
 ---------- Input ----------
 SUM(salary) OVER ()
 ---------- Output ---------
-SUM(salary) OVER ()
+SUM(salary) OVER ( )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3483,6 +3566,7 @@ FunctionCall {
             ),
             name: "SUM",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -3499,6 +3583,7 @@ FunctionCall {
                             ),
                             name: "salary",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3523,7 +3608,7 @@ FunctionCall {
 ---------- Input ----------
 AVG(salary) OVER (PARTITION BY department)
 ---------- Output ---------
-AVG(salary) OVER (PARTITION BY department)
+AVG(salary) OVER ( PARTITION BY department )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3537,6 +3622,7 @@ FunctionCall {
             ),
             name: "AVG",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -3553,6 +3639,7 @@ FunctionCall {
                             ),
                             name: "salary",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3578,6 +3665,7 @@ FunctionCall {
                                         ),
                                         name: "department",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -3596,7 +3684,7 @@ FunctionCall {
 ---------- Input ----------
 SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
 ---------- Output ---------
-SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+SUM(salary) OVER ( PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3610,6 +3698,7 @@ FunctionCall {
             ),
             name: "SUM",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -3626,6 +3715,7 @@ FunctionCall {
                             ),
                             name: "salary",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3651,6 +3741,7 @@ FunctionCall {
                                         ),
                                         name: "department",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -3672,6 +3763,7 @@ FunctionCall {
                                             ),
                                             name: "salary",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -3702,7 +3794,7 @@ FunctionCall {
 ---------- Input ----------
 AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
 ---------- Output ---------
-AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
+AVG(salary) OVER ( PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3716,6 +3808,7 @@ FunctionCall {
             ),
             name: "AVG",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -3732,6 +3825,7 @@ FunctionCall {
                             ),
                             name: "salary",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -3757,6 +3851,7 @@ FunctionCall {
                                         ),
                                         name: "department",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -3778,6 +3873,7 @@ FunctionCall {
                                             ),
                                             name: "hire_date",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -3795,7 +3891,7 @@ FunctionCall {
                                         span: Some(
                                             74..75,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -3815,7 +3911,7 @@ FunctionCall {
 ---------- Input ----------
 COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
 ---------- Output ---------
-COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
+COUNT() OVER ( ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3829,6 +3925,7 @@ FunctionCall {
             ),
             name: "COUNT",
             quote: None,
+            is_hole: false,
         },
         args: [],
         params: [],
@@ -3853,6 +3950,7 @@ FunctionCall {
                                             ),
                                             name: "hire_date",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -3874,7 +3972,7 @@ FunctionCall {
                                             span: Some(
                                                 56..59,
                                             ),
-                                            lit: String(
+                                            value: String(
                                                 "7",
                                             ),
                                         },
@@ -3896,7 +3994,7 @@ FunctionCall {
 ---------- Input ----------
 COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)
 ---------- Output ---------
-COUNT() OVER (ORDER BY hire_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+COUNT() OVER ( ORDER BY hire_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3910,6 +4008,7 @@ FunctionCall {
             ),
             name: "COUNT",
             quote: None,
+            is_hole: false,
         },
         args: [],
         params: [],
@@ -3934,6 +4033,7 @@ FunctionCall {
                                             ),
                                             name: "hire_date",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -3962,7 +4062,7 @@ FunctionCall {
 ---------- Input ----------
 COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)
 ---------- Output ---------
-COUNT() OVER (ORDER BY hire_date ROWS BETWEEN CURRENT ROW AND CURRENT ROW)
+COUNT() OVER ( ORDER BY hire_date ROWS BETWEEN CURRENT ROW AND CURRENT ROW )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3976,6 +4076,7 @@ FunctionCall {
             ),
             name: "COUNT",
             quote: None,
+            is_hole: false,
         },
         args: [],
         params: [],
@@ -4000,6 +4101,7 @@ FunctionCall {
                                             ),
                                             name: "hire_date",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -4026,7 +4128,7 @@ FunctionCall {
 ---------- Input ----------
 COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)
 ---------- Output ---------
-COUNT() OVER (ORDER BY hire_date ROWS BETWEEN 3 PRECEDING AND CURRENT ROW)
+COUNT() OVER ( ORDER BY hire_date ROWS BETWEEN 3 PRECEDING AND CURRENT ROW )
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4040,6 +4142,7 @@ FunctionCall {
             ),
             name: "COUNT",
             quote: None,
+            is_hole: false,
         },
         args: [],
         params: [],
@@ -4064,6 +4167,7 @@ FunctionCall {
                                             ),
                                             name: "hire_date",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -4081,7 +4185,7 @@ FunctionCall {
                                         span: Some(
                                             38..39,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             3,
                                         ),
                                     },
@@ -4101,7 +4205,7 @@ FunctionCall {
 ---------- Input ----------
 ARRAY_APPLY([1,2,3], x -> x + 1)
 ---------- Output ---------
-ARRAY_APPLY([1, 2, 3], x -> (x + 1))
+ARRAY_APPLY([1, 2, 3], x -> x + 1)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4115,6 +4219,7 @@ FunctionCall {
             ),
             name: "ARRAY_APPLY",
             quote: None,
+            is_hole: false,
         },
         args: [
             Array {
@@ -4126,7 +4231,7 @@ FunctionCall {
                         span: Some(
                             13..14,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -4134,7 +4239,7 @@ FunctionCall {
                         span: Some(
                             15..16,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -4142,7 +4247,7 @@ FunctionCall {
                         span: Some(
                             17..18,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -4160,6 +4265,7 @@ FunctionCall {
                         ),
                         name: "x",
                         quote: None,
+                        is_hole: false,
                     },
                 ],
                 expr: BinaryOp {
@@ -4181,6 +4287,7 @@ FunctionCall {
                                     ),
                                     name: "x",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -4189,7 +4296,7 @@ FunctionCall {
                         span: Some(
                             30..31,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -4203,7 +4310,7 @@ FunctionCall {
 ---------- Input ----------
 ARRAY_FILTER(col, y -> y % 2 = 0)
 ---------- Output ---------
-ARRAY_FILTER(col, y -> ((y % 2) = 0))
+ARRAY_FILTER(col, y -> y % 2 = 0)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4217,6 +4324,7 @@ FunctionCall {
             ),
             name: "ARRAY_FILTER",
             quote: None,
+            is_hole: false,
         },
         args: [
             ColumnRef {
@@ -4233,6 +4341,7 @@ FunctionCall {
                             ),
                             name: "col",
                             quote: None,
+                            is_hole: false,
                         },
                     ),
                 },
@@ -4249,6 +4358,7 @@ FunctionCall {
                         ),
                         name: "y",
                         quote: None,
+                        is_hole: false,
                     },
                 ],
                 expr: BinaryOp {
@@ -4275,6 +4385,7 @@ FunctionCall {
                                         ),
                                         name: "y",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -4283,7 +4394,7 @@ FunctionCall {
                             span: Some(
                                 27..28,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 2,
                             ),
                         },
@@ -4292,7 +4403,7 @@ FunctionCall {
                         span: Some(
                             31..32,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             0,
                         ),
                     },
@@ -4320,9 +4431,12 @@ Tuple {
             func: FunctionCall {
                 distinct: false,
                 name: Identifier {
-                    span: None,
+                    span: Some(
+                        1..18,
+                    ),
                     name: "current_timestamp",
                     quote: None,
+                    is_hole: false,
                 },
                 args: [],
                 params: [],
@@ -4342,6 +4456,7 @@ Tuple {
                     ),
                     name: "current_timestamp",
                     quote: None,
+                    is_hole: false,
                 },
                 args: [],
                 params: [],
@@ -4361,6 +4476,7 @@ Tuple {
                     ),
                     name: "now",
                     quote: None,
+                    is_hole: false,
                 },
                 args: [],
                 params: [],
@@ -4375,7 +4491,7 @@ Tuple {
 ---------- Input ----------
 ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)
 ---------- Output ---------
-ARRAY_REDUCE([1, 2, 3], (acc, t) -> (acc + t))
+ARRAY_REDUCE([1, 2, 3], (acc, t) -> acc + t)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4389,6 +4505,7 @@ FunctionCall {
             ),
             name: "ARRAY_REDUCE",
             quote: None,
+            is_hole: false,
         },
         args: [
             Array {
@@ -4400,7 +4517,7 @@ FunctionCall {
                         span: Some(
                             14..15,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -4408,7 +4525,7 @@ FunctionCall {
                         span: Some(
                             16..17,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -4416,7 +4533,7 @@ FunctionCall {
                         span: Some(
                             18..19,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -4434,6 +4551,7 @@ FunctionCall {
                         ),
                         name: "acc",
                         quote: None,
+                        is_hole: false,
                     },
                     Identifier {
                         span: Some(
@@ -4441,6 +4559,7 @@ FunctionCall {
                         ),
                         name: "t",
                         quote: None,
+                        is_hole: false,
                     },
                 ],
                 expr: BinaryOp {
@@ -4462,6 +4581,7 @@ FunctionCall {
                                     ),
                                     name: "acc",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -4480,6 +4600,7 @@ FunctionCall {
                                     ),
                                     name: "t",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },

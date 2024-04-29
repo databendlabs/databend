@@ -24,11 +24,9 @@ select $1 from @unload (file_format => 'csv')
 
 query error 1065.*Query from CSV file lacks column positions\. Specify as \$1, \$2, etc\.
 select * from @unload (file_format => 'csv')
-----
 
 query error 1065.*select \* from file only support Parquet format
 select *, $1 from @unload (file_format => 'csv')
-----
 
 statement ok
 remove @unload

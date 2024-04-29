@@ -12,59 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant::Tenant;
+use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
-/// The identifier of a role.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RoleIdent {
-    tenant: Tenant,
-    role_name: String,
-}
+pub type RoleIdent = TIdent<Resource>;
+
+/// Share name as value.
+pub type RoleIdentRaw = TIdentRaw<Resource>;
+
+pub use kvapi_impl::Resource;
 
 impl RoleIdent {
-    pub fn new(tenant: Tenant, role_name: impl ToString) -> RoleIdent {
-        RoleIdent {
-            tenant,
-            role_name: role_name.to_string(),
-        }
-    }
-
     pub fn role_name(&self) -> &str {
-        &self.role_name
+        self.name()
     }
 }
 
-mod kvapi_key_impl {
+impl RoleIdentRaw {
+    pub fn role_name(&self) -> &str {
+        self.name()
+    }
+}
+
+mod kvapi_impl {
+
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::role_ident::RoleIdent;
     use crate::principal::RoleInfo;
-    use crate::tenant::Tenant;
-    use crate::KeyWithTenant;
+    use crate::tenant_key::resource::TenantResource;
 
-    impl kvapi::Key for RoleIdent {
+    pub struct Resource;
+    impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_roles";
+        const TYPE: &'static str = "RoleIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = RoleInfo;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant.name())
-                .push_str(&self.role_name)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-            let tenant = p.next_str()?;
-            let role_name = p.next_str()?;
-            p.done()?;
-
-            Ok(RoleIdent::new(Tenant::new(tenant), role_name))
-        }
     }
 
     impl kvapi::Value for RoleInfo {
@@ -73,31 +55,26 @@ mod kvapi_key_impl {
         }
     }
 
-    impl KeyWithTenant for RoleIdent {
-        fn tenant(&self) -> &Tenant {
-            &self.tenant
-        }
-    }
+    // // Use these error types to replace usage of ErrorCode if possible.
+    // impl From<ExistError<Resource>> for ErrorCode {
+    // impl From<UnknownError<Resource>> for ErrorCode {
 }
 
 #[cfg(test)]
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::principal::role_ident::RoleIdent;
+    use super::RoleIdent;
     use crate::tenant::Tenant;
-    use crate::KeyWithTenant;
 
     #[test]
-    fn test_role_ident_tenant_prefix() {
-        let r = RoleIdent::new(Tenant::new("tenant"), "role");
-        assert_eq!("__fd_roles/tenant/", r.tenant_prefix());
-    }
+    fn test_ident() {
+        let tenant = Tenant::new_literal("test");
+        let ident = RoleIdent::new(tenant, "test1");
 
-    #[test]
-    fn test_role_ident_key() {
-        let r = RoleIdent::new(Tenant::new("tenant"), "role");
-        assert_eq!("__fd_roles/tenant/role", r.to_string_key());
-        assert_eq!(Ok(r), RoleIdent::from_str_key("__fd_roles/tenant/role"));
+        let key = ident.to_string_key();
+        assert_eq!(key, "__fd_roles/test/test1");
+
+        assert_eq!(ident, RoleIdent::from_str_key(&key).unwrap());
     }
 }

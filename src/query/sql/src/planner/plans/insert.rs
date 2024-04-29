@@ -19,14 +19,15 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_meta_types::MetaId;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_sources::input_formats::InputContext;
+use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::Plan;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, EnumAsInner)]
 pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
     // From outside streaming source with 'FORMAT <format_name>;
@@ -55,10 +56,13 @@ pub struct Insert {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub table_id: MetaId,
     pub schema: TableSchemaRef,
     pub overwrite: bool,
     pub source: InsertInputSource,
+    // if a table with fixed table id, and version should be used,
+    // it should be provided as some `table_info`.
+    // otherwise, the table being inserted will be resolved by using `catalog`.`database`.`table`
+    pub table_info: Option<TableInfo>,
 }
 
 impl PartialEq for Insert {
@@ -71,7 +75,7 @@ impl PartialEq for Insert {
 }
 
 impl Insert {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn dest_schema(&self) -> DataSchemaRef {
         Arc::new(self.schema.clone().into())
     }
 

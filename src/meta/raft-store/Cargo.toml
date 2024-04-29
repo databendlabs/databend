@@ -15,6 +15,7 @@ test = true
 io-uring = ["databend-common-meta-sled-store/io-uring"]
 
 [dependencies]
+databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-grpc = { path = "../../common/grpc" }
 databend-common-meta-api = { path = "../api" }

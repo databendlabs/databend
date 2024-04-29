@@ -14,6 +14,9 @@
 
 use std::io::Write;
 
+use chrono::format::parse_and_remainder;
+use chrono::format::Parsed;
+use chrono::format::StrftimeItems;
 use chrono::prelude::*;
 use chrono::Datelike;
 use chrono::Days;
@@ -168,13 +171,66 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
             |timestamp, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
-                } else {
-                    // date need has timezone info.
-                    if let Ok(res) = DateTime::parse_from_str(timestamp, format) {
-                        output.push(res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros());
-                    } else {
+                    return;
+                }
+                // Parse with extra checks for timezone
+                // %Z	ACST	Local time zone name. Skips all non-whitespace characters during parsing. Identical to %:z when formatting. 6
+                // %z	+0930	Offset from the local time to UTC (with UTC being +0000).
+                // %:z	+09:30	Same as %z but with a colon.
+                // %::z	+09:30:00	Offset from the local time to UTC with seconds.
+                // %:::z	+09	Offset from the local time to UTC without minutes.
+                // %#z	+09	Parsing only: Same as %z but allows minutes to be missing or present.
+                let timezone_strftime = ["%Z", "%z", "%:z", "%::z", "%:::z", "%#z"];
+                let parse_tz = timezone_strftime
+                    .iter()
+                    .any(|&pattern| format.contains(pattern));
+                let res = if ctx.func_ctx.parse_datetime_ignore_remainder {
+                    let mut parsed = Parsed::new();
+                    if parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format))
+                        .is_err()
+                    {
                         output.push_null();
+                        return;
                     }
+                    // Additional checks and adjustments for parsed timestamp
+                    if parsed.month.is_none() {
+                        parsed.month = Some(1);
+                    }
+                    if parsed.day.is_none() {
+                        parsed.day = Some(1);
+                    }
+                    if parsed.hour_div_12.is_none() && parsed.hour_mod_12.is_none() {
+                        parsed.hour_div_12 = Some(0);
+                        parsed.hour_mod_12 = Some(0);
+                    }
+                    if parsed.minute.is_none() {
+                        parsed.minute = Some(0);
+                    }
+                    if parsed.second.is_none() {
+                        parsed.second = Some(0);
+                    }
+                    // Convert parsed timestamp to datetime or naive datetime based on parse_tz
+                    if parse_tz {
+                        parsed.offset.get_or_insert(0);
+                        parsed
+                            .to_datetime()
+                            .map(|res| res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros())
+                    } else {
+                        parsed
+                            .to_naive_datetime_with_offset(0)
+                            .map(|res| res.timestamp_micros())
+                    }
+                } else if parse_tz {
+                    DateTime::parse_from_str(timestamp, format)
+                        .map(|res| res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros())
+                } else {
+                    NaiveDateTime::parse_from_str(timestamp, format)
+                        .map(|res| res.timestamp_micros())
+                };
+                if let Ok(res) = res {
+                    output.push(res);
+                } else {
+                    output.push_null()
                 }
             },
         ),

@@ -91,6 +91,12 @@ impl PartitionedPayload {
         }
     }
 
+    pub fn mark_min_cardinality(&mut self) {
+        for payload in self.payloads.iter_mut() {
+            payload.mark_min_cardinality();
+        }
+    }
+
     pub fn append_rows(
         &mut self,
         state: &mut ProbeState,
@@ -161,12 +167,17 @@ impl PartitionedPayload {
             state.clear();
 
             for payload in other.payloads.into_iter() {
-                self.combine_single(payload, state)
+                self.combine_single(payload, state, None)
             }
         }
     }
 
-    pub fn combine_single(&mut self, mut other: Payload, state: &mut PayloadFlushState) {
+    pub fn combine_single(
+        &mut self,
+        mut other: Payload,
+        state: &mut PayloadFlushState,
+        only_bucket: Option<usize>,
+    ) {
         if other.len() == 0 {
             return;
         }
@@ -179,7 +190,9 @@ impl PartitionedPayload {
             // flush for other's each page to correct partition
             while self.gather_flush(&other, state) {
                 // copy rows
-                for partition in 0..self.partition_count as usize {
+                for partition in (0..self.partition_count as usize)
+                    .filter(|x| only_bucket.is_none() || only_bucket == Some(*x))
+                {
                     let payload = &mut self.payloads[partition];
                     let count = state.probe_state.partition_count[partition];
 
@@ -248,16 +261,6 @@ impl PartitionedPayload {
     #[allow(dead_code)]
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
-    }
-
-    pub fn include_arena(&self, other: &Arc<Bump>) -> bool {
-        for arena in self.arenas.iter() {
-            if Arc::ptr_eq(arena, other) {
-                return true;
-            }
-        }
-
-        false
     }
 }
 

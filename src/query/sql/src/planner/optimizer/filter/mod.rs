@@ -19,5 +19,6 @@ mod pull_up_filter;
 
 pub use deduplicate_join_condition::DeduplicateJoinConditionOptimizer;
 pub use infer_filter::InferFilterOptimizer;
+pub use infer_filter::JoinProperty;
 pub use normalize_disjunctive_filter::NormalizeDisjunctiveFilterOptimizer;
 pub use pull_up_filter::PullUpFilterOptimizer;

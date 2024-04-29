@@ -30,7 +30,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use log::debug;
 
 use crate::binder::Binder;
@@ -148,7 +149,7 @@ impl Binder {
                 };
 
                 Ok(Plan::RenameDatabase(Box::new(RenameDatabasePlan {
-                    tenant: tenant.to_string(),
+                    tenant,
                     entities: vec![entry],
                 })))
             }
@@ -175,7 +176,7 @@ impl Binder {
 
         Ok(Plan::DropDatabase(Box::new(DropDatabasePlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
         })))
@@ -196,7 +197,7 @@ impl Binder {
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
         Ok(Plan::UndropDatabase(Box::new(UndropDatabasePlan {
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
         })))
@@ -260,7 +261,7 @@ impl Binder {
             engine: engine.to_string(),
             engine_options,
             options,
-            from_share: from_share.clone(),
+            from_share: from_share.as_ref().map(ShareNameIdentRaw::from),
             ..Default::default()
         })
     }

@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateViewPlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub view_name: String,
@@ -27,7 +29,7 @@ pub struct CreateViewPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterViewPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub view_name: String,
@@ -38,8 +40,22 @@ pub struct AlterViewPlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropViewPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub view_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DescribeViewPlan {
+    pub catalog: String,
+    pub database: String,
+    pub view_name: String,
+    pub schema: DataSchemaRef,
+}
+
+impl DescribeViewPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
 }

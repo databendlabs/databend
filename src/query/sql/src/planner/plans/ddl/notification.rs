@@ -25,6 +25,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::tenant::Tenant;
 
 pub fn notification_schema() -> DataSchemaRef {
     Arc::new(DataSchema::new(vec![
@@ -66,12 +67,12 @@ impl Display for NotificationType {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateNotificationPlan {
     pub if_not_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
     pub notification_type: NotificationType,
     pub enabled: bool,
     pub webhook_opts: Option<NotificationWebhookOptions>,
-    pub comments: String,
+    pub comments: Option<String>,
 }
 
 impl CreateNotificationPlan {
@@ -84,7 +85,7 @@ impl CreateNotificationPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AlterNotificationPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
     pub options: AlterNotificationOptions,
 }
@@ -99,7 +100,7 @@ impl AlterNotificationPlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropNotificationPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
 }
 
@@ -111,7 +112,7 @@ impl DropNotificationPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DescNotificationPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
 }
 

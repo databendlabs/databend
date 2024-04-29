@@ -19,8 +19,8 @@
 4
 <<<<
 >>>> show create table test_delta;
-test_delta	CREATE TABLE `test_delta` (
-  `id` INT NULL
+test_delta	CREATE TABLE test_delta (
+  id INT NULL
 ) ENGINE=DELTA CONNECTION_NAME='s3_conn' LOCATION='s3://testbucket/admin/data/delta/simple/'
 <<<<
 >>>> drop table test_delta;

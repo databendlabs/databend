@@ -14,12 +14,15 @@
 
 use std::path::Path;
 
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::number::F32;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -27,6 +30,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -36,6 +40,8 @@ use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
 use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
 use databend_common_expression::BLOCK_NAME_COLUMN_ID;
 use databend_common_expression::ROW_ID_COLUMN_ID;
+use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_expression::SEGMENT_NAME_COLUMN_ID;
 use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
@@ -99,6 +105,8 @@ pub struct InternalColumnMeta {
     pub offsets: Option<Vec<usize>>,
     pub base_block_ids: Option<Scalar>,
     pub inner: Option<BlockMetaInfoPtr>,
+    // The search matched rows and optional scores in the block.
+    pub matched_rows: Option<Vec<(usize, Option<F32>)>>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]
@@ -130,6 +138,10 @@ pub enum InternalColumnType {
     // stream columns
     BaseRowId,
     BaseBlockIds,
+
+    // search columns
+    SearchMatched,
+    SearchScore,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -163,6 +175,8 @@ impl InternalColumn {
                     scale: 0,
                 })),
             )),
+            InternalColumnType::SearchMatched => TableDataType::Boolean,
+            InternalColumnType::SearchScore => TableDataType::Number(NumberDataType::Float32),
         }
     }
 
@@ -183,6 +197,8 @@ impl InternalColumn {
             InternalColumnType::SnapshotName => SNAPSHOT_NAME_COLUMN_ID,
             InternalColumnType::BaseRowId => BASE_ROW_ID_COLUMN_ID,
             InternalColumnType::BaseBlockIds => BASE_BLOCK_IDS_COLUMN_ID,
+            InternalColumnType::SearchMatched => SEARCH_MATCHED_COLUMN_ID,
+            InternalColumnType::SearchScore => SEARCH_SCORE_COLUMN_ID,
         }
     }
 
@@ -279,6 +295,35 @@ impl InternalColumn {
                         },
                     )))),
                     Value::Scalar(meta.base_block_ids.clone().unwrap()),
+                )
+            }
+            InternalColumnType::SearchMatched => {
+                assert!(meta.matched_rows.is_some());
+                let matched_rows = meta.matched_rows.as_ref().unwrap();
+
+                let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
+                for (idx, _) in matched_rows.iter() {
+                    bitmap.set(*idx, true);
+                }
+                BlockEntry::new(
+                    DataType::Boolean,
+                    Value::Column(Column::Boolean(bitmap.into())),
+                )
+            }
+            InternalColumnType::SearchScore => {
+                assert!(meta.matched_rows.is_some());
+                let matched_rows = meta.matched_rows.as_ref().unwrap();
+
+                let mut scores = vec![F32::from(0_f32); num_rows];
+                for (idx, score) in matched_rows.iter() {
+                    if let Some(val) = scores.get_mut(*idx) {
+                        assert!(score.is_some());
+                        *val = F32::from(*score.unwrap());
+                    }
+                }
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::Float32),
+                    Value::Column(Float32Type::from_data(scores)),
                 )
             }
         }

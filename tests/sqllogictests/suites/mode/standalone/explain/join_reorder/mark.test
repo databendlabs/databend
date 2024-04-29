@@ -12,7 +12,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1000
-│   ├── read bytes: 8000
+│   ├── read size: 7.81 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -21,7 +21,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 10000
-    ├── read bytes: 80000
+    ├── read size: 78.12 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -41,7 +41,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#0)]
 │   ├── read rows: 1000
-│   ├── read bytes: 8000
+│   ├── read size: 7.81 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -50,7 +50,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#1)]
     ├── read rows: 10000
-    ├── read bytes: 80000
+    ├── read size: 78.12 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -81,76 +81,76 @@ FROM
     t2;
 ----
 EvalScalar
-├── output columns: [(select if(exists (select 1 from t1 where (t1.a = t2.c)), '1', '0')) (#6)]
+├── output columns: [(select if(exists (select 1 from t1 where t1.a = t2.c), '1', '0')) (#6)]
 ├── expressions: [scalar_subquery_5 (#5)]
 ├── estimated rows: 4.00
 └── HashJoin
-    ├── output columns: [if(exists (select 1 from t1 where (t1.a = t2.c)), '1', '0') (#5)]
+    ├── output columns: [if(exists (select 1 from t1 where t1.a = t2.c), '1', '0') (#5)]
     ├── join type: LEFT SINGLE
     ├── build keys: [c (#8)]
     ├── probe keys: [c (#0)]
     ├── filters: []
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [c (#8), if(exists (select 1 from t1 where (t1.a = t2.c)), '1', '0') (#5)]
+    │   ├── output columns: [c (#8), if(exists (select 1 from t1 where t1.a = t2.c), '1', '0') (#5)]
     │   ├── expressions: [if(7 (#7), '1', '0')]
-    │   ├── estimated rows: 0.00
+    │   ├── estimated rows: 4.00
     │   └── HashJoin
     │       ├── output columns: [c (#8), marker (#7)]
-    │       ├── join type: LEFT MARK
-    │       ├── build keys: [c (#8)]
-    │       ├── probe keys: [a (#2)]
+    │       ├── join type: RIGHT MARK
+    │       ├── build keys: [a (#2)]
+    │       ├── probe keys: [c (#8)]
     │       ├── filters: []
-    │       ├── estimated rows: 0.00
-    │       ├── HashJoin(Build)
-    │       │   ├── output columns: [c (#8)]
-    │       │   ├── join type: CROSS
-    │       │   ├── build keys: []
-    │       │   ├── probe keys: []
-    │       │   ├── filters: []
-    │       │   ├── estimated rows: 0.00
-    │       │   ├── AggregateFinal(Build)
-    │       │   │   ├── output columns: [c (#8)]
-    │       │   │   ├── group by: [c]
-    │       │   │   ├── aggregate functions: []
-    │       │   │   ├── estimated rows: 0.00
-    │       │   │   └── AggregatePartial
-    │       │   │       ├── group by: [c]
-    │       │   │       ├── aggregate functions: []
-    │       │   │       ├── estimated rows: 0.00
-    │       │   │       └── TableScan
-    │       │   │           ├── table: default.default.t2
-    │       │   │           ├── output columns: [c (#8)]
-    │       │   │           ├── read rows: 4
-    │       │   │           ├── read bytes: 48
-    │       │   │           ├── partitions total: 1
-    │       │   │           ├── partitions scanned: 1
-    │       │   │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       │   │           ├── push downs: [filters: [], limit: NONE]
-    │       │   │           └── estimated rows: 0.00
-    │       │   └── DummyTableScan(Probe)
-    │       └── Filter(Probe)
-    │           ├── output columns: [t1.a (#2)]
-    │           ├── filters: [is_true(a (#2) = a (#2))]
-    │           ├── estimated rows: 0.60
-    │           └── TableScan
-    │               ├── table: default.default.t1
-    │               ├── output columns: [a (#2)]
-    │               ├── read rows: 3
-    │               ├── read bytes: 44
-    │               ├── partitions total: 1
-    │               ├── partitions scanned: 1
-    │               ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │               ├── push downs: [filters: [is_true(t1.a (#2) = t1.a (#2))], limit: NONE]
-    │               └── estimated rows: 3.00
+    │       ├── estimated rows: 4.00
+    │       ├── Filter(Build)
+    │       │   ├── output columns: [t1.a (#2)]
+    │       │   ├── filters: [is_true(a (#2) = a (#2))]
+    │       │   ├── estimated rows: 0.60
+    │       │   └── TableScan
+    │       │       ├── table: default.default.t1
+    │       │       ├── output columns: [a (#2)]
+    │       │       ├── read rows: 3
+    │       │       ├── read size: < 1 KiB
+    │       │       ├── partitions total: 1
+    │       │       ├── partitions scanned: 1
+    │       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │       │       ├── push downs: [filters: [is_true(t1.a (#2) = t1.a (#2))], limit: NONE]
+    │       │       └── estimated rows: 3.00
+    │       └── HashJoin(Probe)
+    │           ├── output columns: [c (#8)]
+    │           ├── join type: CROSS
+    │           ├── build keys: []
+    │           ├── probe keys: []
+    │           ├── filters: []
+    │           ├── estimated rows: 4.00
+    │           ├── DummyTableScan(Build)
+    │           └── AggregateFinal(Probe)
+    │               ├── output columns: [c (#8)]
+    │               ├── group by: [c]
+    │               ├── aggregate functions: []
+    │               ├── estimated rows: 4.00
+    │               └── AggregatePartial
+    │                   ├── group by: [c]
+    │                   ├── aggregate functions: []
+    │                   ├── estimated rows: 4.00
+    │                   └── TableScan
+    │                       ├── table: default.default.t2
+    │                       ├── output columns: [c (#8)]
+    │                       ├── read rows: 4
+    │                       ├── read size: < 1 KiB
+    │                       ├── partitions total: 1
+    │                       ├── partitions scanned: 1
+    │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │                       ├── push downs: [filters: [], limit: NONE]
+    │                       └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.t2
         ├── output columns: [c (#0)]
         ├── read rows: 4
-        ├── read bytes: 48
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 

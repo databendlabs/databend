@@ -571,6 +571,7 @@ pub mod network_metrics {
     #[derive(Debug)]
     struct NetworkMetrics {
         rpc_delay_seconds: Histogram,
+        rpc_delay_ms: Histogram,
         sent_bytes: Counter,
         recv_bytes: Counter,
         req_inflights: Gauge,
@@ -587,6 +588,13 @@ pub mod network_metrics {
                     ]
                     .into_iter(),
                 ),
+                rpc_delay_ms: Histogram::new(
+                    vec![
+                        1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0,
+                        5000.0, 10000.0, 30000.0, 60000.0,
+                    ]
+                    .into_iter(),
+                ),
                 sent_bytes: Counter::default(),
                 recv_bytes: Counter::default(),
                 req_inflights: Gauge::default(),
@@ -599,6 +607,11 @@ pub mod network_metrics {
                 key!("rpc_delay_seconds"),
                 "rpc delay seconds",
                 metrics.rpc_delay_seconds.clone(),
+            );
+            registry.register(
+                key!("rpc_delay_ms"),
+                "rpc delay milliseconds",
+                metrics.rpc_delay_ms.clone(),
             );
             registry.register(key!("sent_bytes"), "sent bytes", metrics.sent_bytes.clone());
             registry.register(key!("recv_bytes"), "recv bytes", metrics.recv_bytes.clone());
@@ -620,8 +633,9 @@ pub mod network_metrics {
 
     static NETWORK_METRICS: LazyLock<NetworkMetrics> = LazyLock::new(NetworkMetrics::init);
 
-    pub fn sample_rpc_delay_seconds(d: Duration) {
+    pub fn sample_rpc_delay(d: Duration) {
         NETWORK_METRICS.rpc_delay_seconds.observe(d.as_secs_f64());
+        NETWORK_METRICS.rpc_delay_ms.observe(d.as_millis() as f64);
     }
 
     pub fn incr_sent_bytes(bytes: u64) {
@@ -660,7 +674,7 @@ impl count::Count for RequestInFlight {
             self.start = Some(Instant::now());
         } else if n < 0 {
             if let Some(s) = self.start {
-                network_metrics::sample_rpc_delay_seconds(s.elapsed())
+                network_metrics::sample_rpc_delay(s.elapsed())
             }
         }
     }

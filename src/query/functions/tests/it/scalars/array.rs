@@ -156,6 +156,10 @@ fn test_contains(file: &mut impl Write) {
     let columns = [
         ("int8_col", Int8Type::from_data(vec![1i8, 2, 7, 8])),
         (
+            "string_col",
+            StringType::from_data(vec![r#"1"#, r#"2"#, r#"5"#, r#"1234"#]),
+        ),
+        (
             "nullable_col",
             Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
                 true, true, false, false,
@@ -164,6 +168,20 @@ fn test_contains(file: &mut impl Write) {
     ];
 
     run_ast(file, "int8_col not in (1, 2, 3, 4, 5, null)", &columns);
+    run_ast(
+        file,
+        "contains(['5000', '6000', '7000'], string_col)",
+        &columns,
+    );
+
+    run_ast(file, "contains(['1', '5'], string_col)", &columns);
+
+    run_ast(
+        file,
+        "contains(['15000', '6000', '7000'], string_col)",
+        &columns,
+    );
+
     run_ast(file, "contains([1,2,null], nullable_col)", &columns);
     run_ast(
         file,

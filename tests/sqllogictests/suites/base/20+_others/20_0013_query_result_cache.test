@@ -46,6 +46,9 @@ select block_count as c from fuse_snapshot('db20_13','t1') order by c;
 statement ok
 SET enable_query_result_cache = 1;
 
+statement ok
+SET query_result_cache_min_execute_secs = 0;
+
 # Write cache
 
 query I
@@ -202,6 +205,10 @@ statement ok
 SET enable_query_result_cache = 1;
 
 statement ok
+SET query_result_cache_min_execute_secs = 0;
+
+
+statement ok
 SET query_result_cache_allow_inconsistent = 1;
 
 query I
@@ -291,6 +298,9 @@ insert into a values( 1 ), ( 2 )
 
 statement ok
 SET enable_query_result_cache = 1;
+
+statement ok
+SET query_result_cache_min_execute_secs = 0;
 
 query I
 select 3, a as price from a union all select a, b from ab order by price

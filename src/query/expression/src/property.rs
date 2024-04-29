@@ -409,6 +409,7 @@ pub trait SimpleDomainCmp {
     fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType>;
     fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType>;
     fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_contains(&self, other: &Self) -> FunctionDomain<BooleanType>;
 }
 
 const ALL_TRUE_DOMAIN: BooleanDomain = BooleanDomain {
@@ -477,6 +478,14 @@ impl<T: Ord + PartialOrd> SimpleDomainCmp for SimpleDomain<T> {
             FunctionDomain::Full
         }
     }
+
+    fn domain_contains(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min > other.max || self.max < other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
 }
 
 impl SimpleDomainCmp for StringDomain {
@@ -508,6 +517,11 @@ impl SimpleDomainCmp for StringDomain {
     fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType> {
         let (d1, d2) = unify_string(self, other);
         d1.domain_lte(&d2)
+    }
+
+    fn domain_contains(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = unify_string(self, other);
+        d1.domain_contains(&d2)
     }
 }
 

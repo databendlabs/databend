@@ -48,7 +48,6 @@ impl Binder {
             &[],
             false,
         )?;
-        let variable = variable.name.clone();
 
         let (scalar, _) = *type_checker.resolve(value).await?;
         let scalar = wrap_cast(&scalar, &DataType::String);
@@ -61,7 +60,7 @@ impl Binder {
                 let value = scalar.into_string().unwrap();
                 let vars = vec![VarValue {
                     is_global,
-                    variable,
+                    variable: variable.name.to_lowercase(),
                     value,
                 }];
                 Ok(Plan::SetVariable(Box::new(SettingPlan { vars })))
@@ -76,17 +75,16 @@ impl Binder {
         _bind_context: &BindContext,
         stmt: &UnSetStmt,
     ) -> Result<Plan> {
-        match stmt.clone().source {
+        match &stmt.source {
             UnSetSource::Var { variable } => {
-                let variable = variable.name;
-                let vars = vec![variable];
+                let vars = vec![variable.name.to_lowercase()];
                 Ok(Plan::UnSetVariable(Box::new(UnSettingPlan { vars })))
             }
             UnSetSource::Vars { variables } => {
-                let mut vars: Vec<String> = vec![];
-                for var in variables {
-                    vars.push(var.name.clone());
-                }
+                let vars: Vec<String> = variables
+                    .iter()
+                    .map(|var| var.name.to_lowercase())
+                    .collect();
                 Ok(Plan::UnSetVariable(Box::new(UnSettingPlan { vars })))
             }
         }

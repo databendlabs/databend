@@ -19,12 +19,9 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
-use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
-use databend_common_management::FileFormatApi;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
-use databend_common_management::PasswordPolicyApi;
 use databend_common_management::PasswordPolicyMgr;
 use databend_common_management::QuotaApi;
 use databend_common_management::QuotaMgr;
@@ -38,13 +35,13 @@ use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyString;
 
 use crate::idm_config::IDMConfig;
 use crate::BUILTIN_ROLE_PUBLIC;
@@ -60,7 +57,7 @@ impl UserApiProvider {
     pub async fn init(
         conf: RpcClientConf,
         idm_config: IDMConfig,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf, idm_config, tenant).await?);
@@ -77,7 +74,7 @@ impl UserApiProvider {
     pub async fn try_create(
         conf: RpcClientConf,
         idm_config: IDMConfig,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
         let user_mgr = UserApiProvider {
@@ -107,7 +104,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn try_create_simple(
         conf: RpcClientConf,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
         Self::try_create(conf, IDMConfig::default(), tenant).await
     }
@@ -116,52 +113,46 @@ impl UserApiProvider {
         GlobalInstance::get()
     }
 
-    pub fn udf_api(&self, tenant: &NonEmptyString) -> UdfMgr {
-        UdfMgr::create(self.client.clone(), tenant.as_non_empty_str())
+    pub fn udf_api(&self, tenant: &Tenant) -> UdfMgr {
+        UdfMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn user_api(&self, tenant: &NonEmptyString) -> Arc<impl UserApi> {
-        let user_mgr = UserMgr::create(self.client.clone(), tenant.as_non_empty_str());
+    pub fn user_api(&self, tenant: &Tenant) -> Arc<impl UserApi> {
+        let user_mgr = UserMgr::create(self.client.clone(), tenant);
         Arc::new(user_mgr)
     }
 
-    pub fn role_api(&self, tenant: &NonEmptyString) -> Arc<impl RoleApi> {
-        let role_mgr = RoleMgr::create(self.client.clone(), tenant.as_non_empty_str());
+    pub fn role_api(&self, tenant: &Tenant) -> Arc<impl RoleApi> {
+        let role_mgr = RoleMgr::create(self.client.clone(), tenant);
         Arc::new(role_mgr)
     }
 
-    pub fn stage_api(&self, tenant: &NonEmptyString) -> Arc<dyn StageApi> {
+    pub fn stage_api(&self, tenant: &Tenant) -> Arc<dyn StageApi> {
         Arc::new(StageMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
-        Ok(Arc::new(FileFormatMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn file_format_api(&self, tenant: &Tenant) -> FileFormatMgr {
+        FileFormatMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn get_connection_api_client(&self, tenant: &str) -> Result<Arc<dyn ConnectionApi>> {
-        Ok(Arc::new(ConnectionMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn connection_api(&self, tenant: &Tenant) -> ConnectionMgr {
+        ConnectionMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn tenant_quota_api(&self, tenant: &NonEmptyString) -> Arc<dyn QuotaApi> {
+    pub fn tenant_quota_api(&self, tenant: &Tenant) -> Arc<dyn QuotaApi> {
         Arc::new(QuotaMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn setting_api(&self, tenant: &NonEmptyString) -> Arc<dyn SettingApi> {
+    pub fn setting_api(&self, tenant: &Tenant) -> Arc<dyn SettingApi> {
         Arc::new(SettingMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn network_policy_api(&self, tenant: &NonEmptyString) -> NetworkPolicyMgr {
+    pub fn network_policy_api(&self, tenant: &Tenant) -> NetworkPolicyMgr {
         NetworkPolicyMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn password_policy_api(&self, tenant: &NonEmptyString) -> Arc<impl PasswordPolicyApi> {
-        Arc::new(PasswordPolicyMgr::create(self.client.clone(), tenant))
+    pub fn password_policy_api(&self, tenant: &Tenant) -> PasswordPolicyMgr {
+        PasswordPolicyMgr::create(self.client.clone(), tenant)
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {

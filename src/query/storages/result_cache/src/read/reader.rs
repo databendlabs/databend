@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::io::parquet::read::infer_schema;
-use databend_common_arrow::arrow::io::parquet::read::{self as pread};
-use databend_common_arrow::parquet::read::read_metadata;
+use bytes::Bytes;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -26,6 +23,9 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_store::MetaStore;
 use databend_common_storage::DataOperator;
 use opendal::Operator;
+use parquet_rs::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet_rs::arrow::parquet_to_arrow_schema;
+use parquet_rs::file::footer::parse_metadata;
 
 use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;
@@ -52,7 +52,7 @@ impl ResultCacheReader {
         tolerate_inconsistent: bool,
     ) -> Self {
         let tenant = ctx.get_tenant();
-        let meta_key = gen_result_cache_meta_key(tenant.as_str(), key);
+        let meta_key = gen_result_cache_meta_key(tenant.tenant_name(), key);
         let partitions_shas = ctx.get_partitions_shas();
 
         Self {
@@ -109,18 +109,14 @@ impl ResultCacheReader {
     #[async_backtrace::framed]
     async fn read_result_from_cache(&self, location: &str) -> Result<Vec<DataBlock>> {
         let data = self.operator.read(location).await?;
-        let mut reader = Cursor::new(data);
-        let meta = read_metadata(&mut reader)?;
-        let arrow_schema = infer_schema(&meta)?;
-        let schema = DataSchema::try_from(&arrow_schema).unwrap();
-
-        // Read the parquet file into one block.
-        let chunks_iter =
-            pread::FileReader::new(reader, meta.row_groups, arrow_schema, None, None, None);
+        let chunk_reader = Bytes::from(data);
+        let reader = ParquetRecordBatchReader::try_new(chunk_reader, usize::MAX)?;
         let mut blocks = Vec::with_capacity(1);
 
-        for chunk in chunks_iter {
-            let block = DataBlock::from_arrow_chunk(&chunk?, &schema)?;
+        for record_batch in reader {
+            let record_batch = record_batch?;
+            let schema = DataSchema::try_from(record_batch.schema().as_ref())?;
+            let (block, _) = DataBlock::from_record_batch(&schema, &record_batch)?;
             blocks.push(block);
         }
 
@@ -133,11 +129,14 @@ impl ResultCacheReader {
         location: &str,
     ) -> Result<(TableSchema, Vec<u8>)> {
         let data = operator.read(location).await?;
-        let mut reader = Cursor::new(data.clone());
-        let meta = read_metadata(&mut reader)?;
-        let arrow_schema = infer_schema(&meta)?;
+        let chunk_reader = Bytes::from(data);
+        let meta = parse_metadata(&chunk_reader)?;
+        let arrow_schema = parquet_to_arrow_schema(
+            meta.file_metadata().schema_descr(),
+            meta.file_metadata().key_value_metadata(),
+        )?;
         let table_schema = TableSchema::try_from(&arrow_schema).unwrap();
 
-        Ok((table_schema, data))
+        Ok((table_schema, chunk_reader.into()))
     }
 }

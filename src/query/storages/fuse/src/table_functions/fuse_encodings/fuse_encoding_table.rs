@@ -170,7 +170,7 @@ impl AsyncSource for FuseEncodingSource {
             .ctx
             .get_catalog(CATALOG_DEFAULT)
             .await?
-            .get_database(tenant_id.as_str(), self.arg_database_name.as_str())
+            .get_database(&tenant_id, self.arg_database_name.as_str())
             .await?
             .list_tables()
             .await?;

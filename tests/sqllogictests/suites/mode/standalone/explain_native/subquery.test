@@ -3,13 +3,13 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), scalar_subquery_4 (#4), 0))]
+├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(true, TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0))]
 ├── estimated rows: 0.20
 └── HashJoin
     ├── output columns: [t.number (#0), COUNT(*) (#4)]
-    ├── join type: LEFT SINGLE
+    ├── join type: INNER
     ├── build keys: [number (#2)]
-    ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
+    ├── probe keys: [number (#0)]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── AggregateFinal(Build)
@@ -32,7 +32,7 @@ Filter
     │           │   ├── table: default.system.numbers
     │           │   ├── output columns: []
     │           │   ├── read rows: 1
-    │           │   ├── read bytes: 8
+    │           │   ├── read size: < 1 KiB
     │           │   ├── partitions total: 1
     │           │   ├── partitions scanned: 1
     │           │   ├── push downs: [filters: [], limit: NONE]
@@ -41,7 +41,7 @@ Filter
     │               ├── table: default.system.numbers
     │               ├── output columns: [number (#2)]
     │               ├── read rows: 1
-    │               ├── read bytes: 8
+    │               ├── read size: < 1 KiB
     │               ├── partitions total: 1
     │               ├── partitions scanned: 1
     │               ├── push downs: [filters: [], limit: NONE]
@@ -57,7 +57,7 @@ Filter
         │   ├── table: default.system.numbers
         │   ├── output columns: []
         │   ├── read rows: 1
-        │   ├── read bytes: 8
+        │   ├── read size: < 1 KiB
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
         │   ├── push downs: [filters: [], limit: NONE]
@@ -66,7 +66,7 @@ Filter
             ├── table: default.system.numbers
             ├── output columns: [number (#0)]
             ├── read rows: 1
-            ├── read bytes: 8
+            ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
@@ -90,7 +90,7 @@ Filter
     │   ├── table: default.system.numbers
     │   ├── output columns: [number (#1)]
     │   ├── read rows: 1
-    │   ├── read bytes: 8
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── push downs: [filters: [], limit: NONE]
@@ -99,7 +99,7 @@ Filter
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 1
-        ├── read bytes: 8
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
@@ -141,7 +141,7 @@ HashJoin
 │                       ├── table: default.system.numbers
 │                       ├── output columns: [number (#1)]
 │                       ├── read rows: 1
-│                       ├── read bytes: 8
+│                       ├── read size: < 1 KiB
 │                       ├── partitions total: 1
 │                       ├── partitions scanned: 1
 │                       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
@@ -150,7 +150,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 1
-    ├── read bytes: 8
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -193,7 +193,7 @@ HashJoin
 │                       ├── table: default.system.numbers
 │                       ├── output columns: [number (#1)]
 │                       ├── read rows: 1
-│                       ├── read bytes: 8
+│                       ├── read size: < 1 KiB
 │                       ├── partitions total: 1
 │                       ├── partitions scanned: 1
 │                       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
@@ -202,7 +202,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 2
-    ├── read bytes: 16
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -222,7 +222,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
-│   ├── read bytes: 8
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -231,7 +231,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 1
-    ├── read bytes: 8
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -251,7 +251,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
-│   ├── read bytes: 8
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -260,7 +260,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 1
-    ├── read bytes: 8
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -280,7 +280,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
-│   ├── read bytes: 8
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -289,7 +289,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 1
-    ├── read bytes: 8
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -307,16 +307,16 @@ HashJoin
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
-│   ├── filters: [numbers.number (#1) = 0]
+│   ├── filters: [numbers.number (#1) < 10, numbers.number (#1) = 0]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 1
-│       ├── read bytes: 8
+│       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+│       ├── push downs: [filters: [and_filters(and_filters(numbers.number (#1) = 0, numbers.number (#1) < 10), numbers.number (#1) = 0)], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
     ├── output columns: [t.number (#0)]
@@ -326,7 +326,7 @@ HashJoin
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 1
-        ├── read bytes: 8
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [numbers.number (#0) < 10], limit: NONE]
@@ -346,7 +346,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
-│   ├── read bytes: 8
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -355,7 +355,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 1
-    ├── read bytes: 8
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -375,7 +375,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
-│   ├── read bytes: 8
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -384,7 +384,7 @@ HashJoin
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
     ├── read rows: 1
-    ├── read bytes: 8
+    ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
@@ -393,64 +393,60 @@ HashJoin
 query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
-Filter
+HashJoin
 ├── output columns: [t.number (#0)]
-├── filters: [is_true(try_to_boolean(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0)))]
+├── join type: INNER
+├── build keys: [number (#2)]
+├── probe keys: [number (#0)]
+├── filters: []
 ├── estimated rows: 0.20
-└── HashJoin
-    ├── output columns: [t.number (#0), (count(*) = 1) (#4)]
-    ├── join type: LEFT SINGLE
-    ├── build keys: [number (#2)]
-    ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
+├── Filter(Build)
+│   ├── output columns: [numbers.number (#2)]
+│   ├── filters: [is_true(try_to_boolean(if(true, TRY_CAST(COUNT(*) (#3) = 1 AS UInt64 NULL), 0)))]
+│   ├── estimated rows: 0.20
+│   └── AggregateFinal
+│       ├── output columns: [COUNT(*) (#3), numbers.number (#2)]
+│       ├── group by: [number]
+│       ├── aggregate functions: [count()]
+│       ├── estimated rows: 1.00
+│       └── AggregatePartial
+│           ├── group by: [number]
+│           ├── aggregate functions: [count()]
+│           ├── estimated rows: 1.00
+│           └── TableScan
+│               ├── table: default.system.numbers
+│               ├── output columns: [number (#2)]
+│               ├── read rows: 1
+│               ├── read size: < 1 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── push downs: [filters: [], limit: NONE]
+│               └── estimated rows: 1.00
+└── HashJoin(Probe)
+    ├── output columns: [t.number (#0)]
+    ├── join type: INNER
+    ├── build keys: [t1.number (#1)]
+    ├── probe keys: [t.number (#0)]
     ├── filters: []
     ├── estimated rows: 1.00
-    ├── EvalScalar(Build)
-    │   ├── output columns: [numbers.number (#2), (count(*) = 1) (#4)]
-    │   ├── expressions: [COUNT(*) (#3) = 1]
-    │   ├── estimated rows: 1.00
-    │   └── AggregateFinal
-    │       ├── output columns: [COUNT(*) (#3), numbers.number (#2)]
-    │       ├── group by: [number]
-    │       ├── aggregate functions: [count()]
-    │       ├── estimated rows: 1.00
-    │       └── AggregatePartial
-    │           ├── group by: [number]
-    │           ├── aggregate functions: [count()]
-    │           ├── estimated rows: 1.00
-    │           └── TableScan
-    │               ├── table: default.system.numbers
-    │               ├── output columns: [number (#2)]
-    │               ├── read rows: 1
-    │               ├── read bytes: 8
-    │               ├── partitions total: 1
-    │               ├── partitions scanned: 1
-    │               ├── push downs: [filters: [], limit: NONE]
-    │               └── estimated rows: 1.00
-    └── HashJoin(Probe)
-        ├── output columns: [t.number (#0)]
-        ├── join type: INNER
-        ├── build keys: [t1.number (#1)]
-        ├── probe keys: [t.number (#0)]
-        ├── filters: []
-        ├── estimated rows: 1.00
-        ├── TableScan(Build)
-        │   ├── table: default.system.numbers
-        │   ├── output columns: [number (#1)]
-        │   ├── read rows: 1
-        │   ├── read bytes: 8
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 1.00
-        └── TableScan(Probe)
-            ├── table: default.system.numbers
-            ├── output columns: [number (#0)]
-            ├── read rows: 1
-            ├── read bytes: 8
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 1.00
+    ├── TableScan(Build)
+    │   ├── table: default.system.numbers
+    │   ├── output columns: [number (#1)]
+    │   ├── read rows: 1
+    │   ├── read size: < 1 KiB
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 1.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── output columns: [number (#0)]
+        ├── read rows: 1
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1.00
 
 query T
 explain select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
@@ -466,7 +462,7 @@ HashJoin
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#2)]
 │   ├── read rows: 1
-│   ├── read bytes: 8
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── push downs: [filters: [], limit: NONE]
@@ -482,7 +478,7 @@ HashJoin
     │   ├── table: default.system.numbers
     │   ├── output columns: [number (#1)]
     │   ├── read rows: 1
-    │   ├── read bytes: 8
+    │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── push downs: [filters: [], limit: NONE]
@@ -491,8 +487,73 @@ HashJoin
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
         ├── read rows: 1
-        ├── read bytes: 8
+        ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 1.00
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t (i int);
+
+statement ok
+insert into t values(1), (2), (3), (null);
+
+query T
+explain select i, exists(select * from t where i > 10) from t;
+----
+EvalScalar
+├── output columns: [t.i (#0), exists (select * from t where i > 10) (#2)]
+├── expressions: [exists_scalar (#4)]
+├── estimated rows: 4.00
+└── HashJoin
+    ├── output columns: [t.i (#0), _exists_scalar_subquery (#4)]
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
+    ├── filters: []
+    ├── estimated rows: 4.00
+    ├── EvalScalar(Build)
+    │   ├── output columns: [_exists_scalar_subquery (#4)]
+    │   ├── expressions: [count(*) (#3) = 1]
+    │   ├── estimated rows: 1.00
+    │   └── AggregateFinal
+    │       ├── output columns: [count(*) (#3)]
+    │       ├── group by: []
+    │       ├── aggregate functions: [count()]
+    │       ├── estimated rows: 1.00
+    │       └── AggregatePartial
+    │           ├── group by: []
+    │           ├── aggregate functions: [count()]
+    │           ├── estimated rows: 1.00
+    │           └── Limit
+    │               ├── output columns: []
+    │               ├── limit: 1
+    │               ├── offset: 0
+    │               ├── estimated rows: 0.00
+    │               └── TableScan
+    │                   ├── table: default.default.t
+    │                   ├── output columns: []
+    │                   ├── read rows: 0
+    │                   ├── read size: 0
+    │                   ├── partitions total: 1
+    │                   ├── partitions scanned: 0
+    │                   ├── pruning stats: [segments: <range pruning: 1 to 0>]
+    │                   ├── push downs: [filters: [is_true(t.i (#1) > 10)], limit: 1]
+    │                   └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t
+        ├── output columns: [i (#0)]
+        ├── read rows: 4
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 4.00
+
+statement ok
+drop table if exists t;

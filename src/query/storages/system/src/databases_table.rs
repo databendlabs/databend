@@ -56,9 +56,10 @@ impl AsyncSystemTable for DatabasesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
+
         let catalogs = CatalogManager::instance();
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
-            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
+            .list_catalogs(&tenant, ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
@@ -73,7 +74,7 @@ impl AsyncSystemTable for DatabasesTable {
         let visibility_checker = ctx.get_visibility_checker().await?;
 
         for (ctl_name, catalog) in catalogs.into_iter() {
-            let databases = catalog.list_databases(tenant.as_str()).await?;
+            let databases = catalog.list_databases(&tenant).await?;
             let final_dbs = databases
                 .into_iter()
                 .filter(|db| {

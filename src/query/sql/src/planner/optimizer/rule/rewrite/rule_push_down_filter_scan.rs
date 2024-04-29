@@ -53,7 +53,7 @@ impl RulePushDownFilterScan {
             id: RuleID::PushDownFilterScan,
             // Filter
             //  \
-            //   LogicalGet
+            //   Scan
             matchers: vec![Matcher::MatchOp {
                 op_type: RelOp::Filter,
                 children: vec![Matcher::MatchOp {

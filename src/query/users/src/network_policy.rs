@@ -15,10 +15,11 @@
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::crud::CrudError;
 use databend_common_meta_app::principal::NetworkPolicy;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 
 use crate::UserApiProvider;
 
@@ -27,19 +28,20 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_network_policy(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         network_policy: NetworkPolicy,
         create_option: &CreateOption,
     ) -> Result<()> {
         let client = self.network_policy_api(tenant);
-        client.add(network_policy, create_option).await
+        client.add(network_policy, create_option).await?;
+        Ok(())
     }
 
     // Update network policy.
     #[async_backtrace::framed]
     pub async fn update_network_policy(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         name: &str,
         allowed_ip_list: Option<Vec<String>>,
         blocked_ip_list: Option<Vec<String>>,
@@ -49,13 +51,21 @@ impl UserApiProvider {
         let client = self.network_policy_api(tenant);
         let seq_network_policy = match client.get(name, MatchSeq::GE(0)).await {
             Ok(seq_network_policy) => seq_network_policy,
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_NETWORK_POLICY {
-                    return Ok(None);
-                } else {
-                    return Err(e.add_message_back(" (while alter network policy)"));
+            Err(e) => match e {
+                CrudError::ApiError(meta_err) => {
+                    return Err(
+                        ErrorCode::from(meta_err).add_message_back(" (while alter network policy)")
+                    );
                 }
-            }
+                CrudError::Business(unknown) => {
+                    if if_exists {
+                        return Ok(None);
+                    } else {
+                        return Err(ErrorCode::from(unknown)
+                            .add_message_back(" (while alter network policy)"));
+                    }
+                }
+            },
         };
 
         let seq = seq_network_policy.seq;
@@ -73,7 +83,10 @@ impl UserApiProvider {
 
         match client.update(network_policy, MatchSeq::Exact(seq)).await {
             Ok(res) => Ok(Some(res)),
-            Err(e) => Err(e.add_message_back(" (while alter network policy).")),
+            Err(e) => {
+                let e = ErrorCode::from(e);
+                Err(e.add_message_back(" (while alter network policy)."))
+            }
         }
     }
 
@@ -81,7 +94,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_network_policy(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         name: &str,
         if_exists: bool,
     ) -> Result<()> {
@@ -100,19 +113,27 @@ impl UserApiProvider {
         let client = self.network_policy_api(tenant);
         match client.remove(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_NETWORK_POLICY {
-                    Ok(())
-                } else {
-                    Err(e.add_message_back(" (while drop network policy)"))
+            Err(e) => match e {
+                CrudError::ApiError(meta_err) => {
+                    return Err(
+                        ErrorCode::from(meta_err).add_message_back(" (while drop network policy)")
+                    );
                 }
-            }
+                CrudError::Business(unknown) => {
+                    if if_exists {
+                        return Ok(());
+                    } else {
+                        return Err(ErrorCode::from(unknown)
+                            .add_message_back(" (while drop network policy)"));
+                    }
+                }
+            },
         }
     }
 
     // Check whether a network policy is exist.
     #[async_backtrace::framed]
-    pub async fn exists_network_policy(&self, tenant: &NonEmptyString, name: &str) -> Result<bool> {
+    pub async fn exists_network_policy(&self, tenant: &Tenant, name: &str) -> Result<bool> {
         match self.get_network_policy(tenant, name).await {
             Ok(_) => Ok(true),
             Err(e) => {
@@ -127,11 +148,7 @@ impl UserApiProvider {
 
     // Get a network_policy by tenant.
     #[async_backtrace::framed]
-    pub async fn get_network_policy(
-        &self,
-        tenant: &NonEmptyString,
-        name: &str,
-    ) -> Result<NetworkPolicy> {
+    pub async fn get_network_policy(&self, tenant: &Tenant, name: &str) -> Result<NetworkPolicy> {
         let client = self.network_policy_api(tenant);
         let network_policy = client.get(name, MatchSeq::GE(0)).await?.data;
         Ok(network_policy)
@@ -139,10 +156,7 @@ impl UserApiProvider {
 
     // Get all network policies by tenant.
     #[async_backtrace::framed]
-    pub async fn get_network_policies(
-        &self,
-        tenant: &NonEmptyString,
-    ) -> Result<Vec<NetworkPolicy>> {
+    pub async fn get_network_policies(&self, tenant: &Tenant) -> Result<Vec<NetworkPolicy>> {
         let client = self.network_policy_api(tenant);
         let network_policies = client.list().await.map_err(|e| {
             let e = ErrorCode::from(e);

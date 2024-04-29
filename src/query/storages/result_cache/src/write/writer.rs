@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
+use tokio::time::Instant;
 use uuid::Uuid;
 
 pub(super) struct ResultCacheWriter {
@@ -29,11 +27,11 @@ pub(super) struct ResultCacheWriter {
 
     current_bytes: usize,
     max_bytes: usize,
+    min_execute_secs: usize,
     num_rows: usize,
 
     schema: TableSchemaRef,
     blocks: Vec<DataBlock>,
-    _ctx: Arc<dyn TableContext>,
 }
 
 impl ResultCacheWriter {
@@ -42,17 +40,17 @@ impl ResultCacheWriter {
         location: String,
         operator: Operator,
         max_bytes: usize,
-        ctx: Arc<dyn TableContext>,
+        min_execute_secs: usize,
     ) -> Self {
         ResultCacheWriter {
             location,
             operator,
             current_bytes: 0,
             max_bytes,
+            min_execute_secs,
             num_rows: 0,
             schema,
             blocks: vec![],
-            _ctx: ctx,
         }
     }
 
@@ -66,6 +64,10 @@ impl ResultCacheWriter {
         self.current_bytes > self.max_bytes
     }
 
+    pub fn not_over_time(&self, instant: &Instant) -> bool {
+        instant.elapsed().as_secs() < self.min_execute_secs as u64
+    }
+
     /// Write the result cache to the storage and return the location.
     #[async_backtrace::framed]
     pub async fn write_to_storage(&self) -> Result<String> {
@@ -75,7 +77,6 @@ impl ResultCacheWriter {
             self.blocks.clone(),
             &mut buf,
             TableCompression::None,
-            true,
         )?;
 
         let file_location = format!("{}/{}.parquet", self.location, Uuid::new_v4().as_simple());

@@ -168,7 +168,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         Ok((
             PartStatistics::default(),
             // Make the table in distributed.
-            Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
+            Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
                 SystemTablePart,
             ))]),
         ))
@@ -216,7 +216,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         let log_queue = SystemLogQueue::<Event>::instance()?;
         let mut write_guard = log_queue.data.write();
 

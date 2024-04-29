@@ -18,22 +18,11 @@ package databend_proto;
 
 import "config.proto";
 
-message CatalogNameIdent {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  // The user this db belongs to
-  string tenant = 1;
-
-  // Catalog name
-  string catalog_name = 2;
-}
-
 message CatalogMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  // catalog options
+  // Catalog options
   CatalogOption option = 2;
 
   // The time catalog created.

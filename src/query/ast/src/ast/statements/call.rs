@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_string_list;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CallStmt {
@@ -31,7 +31,7 @@ pub struct CallStmt {
 impl Display for CallStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CALL {}(", self.name)?;
-        write_comma_separated_list(f, self.args.clone())?;
+        write_comma_separated_string_list(f, self.args.clone())?;
         write!(f, ")")?;
         Ok(())
     }

@@ -73,6 +73,7 @@ use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
+use crate::UdfRewriter;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -93,6 +94,10 @@ impl<'a> Binder {
                     .await
             }
             CopyIntoTableSource::Query(query) => {
+                if let Some(with) = &stmt.with {
+                    self.add_cte(with, bind_context)?;
+                }
+
                 let mut max_column_position = MaxColumnPosition::new();
                 query.drive(&mut max_column_position);
                 self.metadata
@@ -198,6 +203,7 @@ impl<'a> Binder {
                         database: None,
                         table: None,
                         column: AstColumnID::Name(Identifier::from_name(
+                            None,
                             dest_field.name().to_string(),
                         )),
                     },
@@ -289,6 +295,8 @@ impl<'a> Binder {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
 
+        let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
+
         let (stage_info, files_info) = self.bind_attachment(attachment).await?;
 
         // list the files to be copied in binding phase
@@ -298,7 +306,7 @@ impl<'a> Binder {
         // currently, they do NOT enforce the deduplication detection rules,
         // as the vanilla Copy-Into does.
         // thus, we do not care about the "duplicated_files_detected", just set it to empty vector.
-        let files_to_copy = list_stage_files(&stage_info, &files_info, None).await?;
+        let files_to_copy = list_stage_files(&stage_info, &files_info, thread_num, None).await?;
         let duplicated_files_detected = vec![];
 
         let stage_schema = infer_table_schema(&data_schema)?;
@@ -369,10 +377,10 @@ impl<'a> Binder {
             .await?;
 
         for item in select_list.items.iter() {
-            if !self.check_allowed_scalar_expr_with_subquery(&item.scalar)? {
+            if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
                 return Err(ErrorCode::SemanticError(
-                    "copy into table source can't contain window|aggregate|udf|join functions"
+                    "copy into table source can't contain window|aggregate|join functions"
                         .to_string(),
                 ));
             };
@@ -391,11 +399,19 @@ impl<'a> Binder {
             )));
         }
 
-        let s_expr =
+        let mut s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
+
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = plan
@@ -406,10 +422,10 @@ impl<'a> Binder {
         if disable_variant_check {
             let hints = Hint {
                 hints_list: vec![HintItem {
-                    name: Identifier::from_name("disable_variant_check"),
+                    name: Identifier::from_name(None, "disable_variant_check"),
                     expr: Expr::Literal {
                         span: None,
-                        lit: Literal::UInt64(1),
+                        value: Literal::UInt64(1),
                     },
                 }],
             };

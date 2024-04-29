@@ -57,7 +57,7 @@ impl AlterTaskInterpreter {
             .to_string();
         let mut req = AlterTaskRequest {
             task_name: plan.task_name,
-            tenant_id: plan.tenant,
+            tenant_id: plan.tenant.tenant_name().to_string(),
             owner,
             alter_task_type: 0,
             if_exist: plan.if_exists,
@@ -132,7 +132,7 @@ impl AlterTaskInterpreter {
             }
             AlterTaskOptions::ModifyWhen(sql) => {
                 req.alter_task_type = AlterTaskType::ModifyWhen as i32;
-                req.when_condition = Some(sql);
+                req.when_condition = Some(sql.to_string());
             }
         }
         req

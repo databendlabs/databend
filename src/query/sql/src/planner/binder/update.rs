@@ -48,8 +48,13 @@ impl Binder {
             table,
             update_list,
             selection,
+            with,
             ..
         } = stmt;
+
+        if let Some(with) = &with {
+            self.add_cte(with, bind_context)?;
+        }
 
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,

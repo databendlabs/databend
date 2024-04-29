@@ -254,7 +254,7 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
             ErrorCode::InvalidArgument(format!("Expect {}, but got {}", T::data_type(), origin_ty))
                 .set_span(span)
         }),
-        _ => Err(ErrorCode::InvalidArgument("Need constant number.").set_span(span)),
+        _ => Err(ErrorCode::InvalidArgument("Need constant number").set_span(span)),
     }
 }
 

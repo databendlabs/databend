@@ -18,11 +18,13 @@ use databend_common_catalog::table::TableExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
+use databend_common_storages_fuse::FuseTable;
 
-use crate::api::Packet;
-use crate::api::TruncateTablePacket;
 use crate::interpreters::Interpreter;
+use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::flight::v1::packets::Packet;
+use crate::servers::flight::v1::packets::TruncateTablePacket;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -78,6 +80,15 @@ impl Interpreter for TruncateTableInterpreter {
         // check mutability
         table.check_mutable()?;
 
+        // Add table lock.
+        let maybe_fuse_table = FuseTable::try_from_table(table.as_ref()).is_ok();
+        let lock_guard = if maybe_fuse_table {
+            let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
+            table_lock.try_lock(self.ctx.clone()).await?
+        } else {
+            None
+        };
+
         if self.proxy_to_cluster && table.broadcast_truncate_to_cluster() {
             let settings = self.ctx.get_settings();
             let timeout = settings.get_flight_client_timeout()?;
@@ -96,7 +107,11 @@ impl Interpreter for TruncateTableInterpreter {
             }
         }
 
-        table.truncate(self.ctx.clone()).await?;
-        Ok(PipelineBuildResult::create())
+        let mut build_res = PipelineBuildResult::create();
+        build_res.main_pipeline.add_lock_guard(lock_guard);
+        table
+            .truncate(self.ctx.clone(), &mut build_res.main_pipeline)
+            .await?;
+        Ok(build_res)
     }
 }

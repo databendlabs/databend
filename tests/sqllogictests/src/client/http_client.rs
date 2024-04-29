@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::time::Duration;
 use std::time::Instant;
 
 use reqwest::header::HeaderMap;
@@ -35,7 +36,7 @@ pub struct HttpClient {
 #[derive(serde::Deserialize)]
 struct QueryResponse {
     session: Option<HttpSessionConf>,
-    data: serde_json::Value,
+    data: Option<serde_json::Value>,
     next_uri: Option<String>,
 
     error: Option<serde_json::Value>,
@@ -65,7 +66,12 @@ impl HttpClient {
             HeaderValue::from_str("application/json").unwrap(),
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
-        let client = ClientBuilder::new().default_headers(header).build()?;
+        let client = ClientBuilder::new()
+            .default_headers(header)
+            // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
+            .http2_keep_alive_timeout(Duration::from_secs(15))
+            .pool_max_idle_per_host(0)
+            .build()?;
         Ok(Self {
             client,
             session: None,
@@ -78,12 +84,20 @@ impl HttpClient {
 
         let url = "http://127.0.0.1:8000/v1/query".to_string();
         let mut parsed_rows = vec![];
-        let mut response =
-            self.handle_response(self.post_query(sql, &url).await?, &mut parsed_rows)?;
-        while let Some(next_uri) = response.next_uri {
+        let mut response = self.post_query(sql, &url).await?;
+        self.handle_response(&response, &mut parsed_rows)?;
+        while let Some(next_uri) = &response.next_uri {
             let url = format!("http://127.0.0.1:8000{next_uri}");
-            response =
-                self.handle_response(self.poll_query_result(&url).await?, &mut parsed_rows)?;
+            let new_response = self.poll_query_result(&url).await?;
+            if new_response.next_uri.is_some() {
+                self.handle_response(&new_response, &mut parsed_rows)?;
+                response = new_response;
+            } else {
+                break;
+            }
+        }
+        if let Some(error) = response.error {
+            return Err(format_error(error).into());
         }
         // Todo: add types to compare
         let mut types = vec![];
@@ -106,18 +120,16 @@ impl HttpClient {
 
     fn handle_response(
         &mut self,
-        response: QueryResponse,
+        response: &QueryResponse,
         parsed_rows: &mut Vec<Vec<String>>,
-    ) -> Result<QueryResponse> {
+    ) -> Result<()> {
         if response.session.is_some() {
             self.session = response.session.clone();
         }
-        if let Some(error) = response.error {
-            Err(format_error(error).into())
-        } else {
-            parsed_rows.append(&mut parser_rows(&response.data)?);
-            Ok(response)
+        if let Some(data) = &response.data {
+            parsed_rows.append(&mut parser_rows(data)?);
         }
+        Ok(())
     }
 
     // Send request and get response by json format
@@ -133,9 +145,15 @@ impl HttpClient {
             .json(&query)
             .basic_auth("root", Some(""))
             .send()
-            .await?
+            .await
+            .inspect_err(|e| {
+                println!("fail to send to {}: {:?}", url, e);
+            })?
             .json::<QueryResponse>()
-            .await?)
+            .await
+            .inspect_err(|e| {
+                println!("fail to decode json when call {}: {:?}", url, e);
+            })?)
     }
 
     async fn poll_query_result(&self, url: &str) -> Result<QueryResponse> {
@@ -144,8 +162,14 @@ impl HttpClient {
             .get(url)
             .basic_auth("root", Some(""))
             .send()
-            .await?
+            .await
+            .inspect_err(|e| {
+                println!("fail to send to {}: {:?}", url, e);
+            })?
             .json::<QueryResponse>()
-            .await?)
+            .await
+            .inspect_err(|e| {
+                println!("fail to decode json when call {}: {:?}", url, e);
+            })?)
     }
 }

@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::share;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_protos::pb;
 
 use crate::reader_check_msg;
@@ -28,32 +28,6 @@ use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
-
-impl FromToProto for mt::DatabaseNameIdent {
-    type PB = pb::DatabaseNameIdent;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::DatabaseNameIdent) -> Result<Self, Incompatible> {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        let v = Self {
-            tenant: p.tenant,
-            db_name: p.db_name,
-        };
-        Ok(v)
-    }
-
-    fn to_pb(&self) -> Result<pb::DatabaseNameIdent, Incompatible> {
-        let p = pb::DatabaseNameIdent {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
-            db_name: self.db_name.clone(),
-        };
-        Ok(p)
-    }
-}
 
 impl FromToProto for mt::DatabaseMeta {
     type PB = pb::DatabaseMeta;
@@ -76,7 +50,7 @@ impl FromToProto for mt::DatabaseMeta {
             comment: p.comment,
             shared_by: BTreeSet::from_iter(p.shared_by),
             from_share: match p.from_share {
-                Some(from_share) => Some(share::ShareNameIdent::from_pb(from_share)?),
+                Some(from_share) => Some(ShareNameIdentRaw::from_pb(from_share)?),
                 None => None,
             },
         };

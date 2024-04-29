@@ -55,10 +55,10 @@ impl CreateTaskInterpreter {
             .to_string();
         let mut req = CreateTaskRequest {
             task_name: plan.task_name,
-            tenant_id: plan.tenant,
+            tenant_id: plan.tenant.tenant_name().to_string(),
             query_text: "".to_string(),
             owner,
-            comment: Some(plan.comment),
+            comment: plan.comment,
             schedule_options: plan.schedule_opts.map(make_schedule_options),
             warehouse_options: Some(make_warehouse_options(plan.warehouse_opts)),
             error_integration: plan.error_integration,

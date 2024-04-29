@@ -1,0 +1,449 @@
+control sortmode rowsort
+
+statement ok
+use default
+
+statement ok
+drop table if exists t1 all
+
+statement ok
+create table t1(a integer, b integer, c integer, d integer, e integer)
+
+statement ok
+insert into t1(e,c,b,d,a) values(103,102,100,101,104)
+
+statement ok
+insert into t1(a,c,d,e,b) values(107,106,108,109,105)
+
+statement ok
+insert into t1(e,d,b,a,c) values(110,114,112,111,113)
+
+statement ok
+insert into t1(d,c,e,a,b) values(116,119,117,115,118)
+
+query III
+with t2(tt) as (select a from t1), t3 as (select * from t1), t4 as (select a from t1 where a > 105) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 107 order by t2.tt, t3.a, t4.a
+----
+111 104 107
+111 104 111
+111 104 115
+111 107 107
+111 107 111
+111 107 115
+111 111 107
+111 111 111
+111 111 115
+111 115 107
+111 115 111
+111 115 115
+115 104 107
+115 104 111
+115 104 115
+115 107 107
+115 107 111
+115 107 115
+115 111 107
+115 111 111
+115 111 115
+115 115 107
+115 115 111
+115 115 115
+
+query I
+with t2(tt) as (select a from t1) select t2.tt from t2  where t2.tt > 105 order by t2.tt
+----
+107
+111
+115
+
+query I
+with t2 as (select a from t1) select t2.a from t2  where t2.a > 107 order by t2.a
+----
+111
+115
+
+query II
+with t2(tt) as (select a from t1) SELECT t1.a, t1.b FROM t1 WHERE EXISTS(SELECT * FROM t2 WHERE t2.tt=t1.a) order by t1.a, t1.b
+----
+104 100
+107 105
+111 112
+115 118
+
+statement ok
+DROP TABLE IF EXISTS test1
+
+statement ok
+CREATE TABLE test1(i int, j int)
+
+statement ok
+INSERT INTO test1 VALUES (1, 2), (3, 4)
+
+query I
+WITH test1 AS (SELECT * FROM numbers(5)) SELECT * FROM test1
+----
+0
+1
+2
+3
+4
+
+query II
+WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM test1
+----
+2 3
+4 5
+
+query II
+WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM (SELECT * FROM test1)
+----
+2 3
+4 5
+
+query III
+SELECT * FROM (WITH t1 AS (SELECT i FROM test1) SELECT * FROM t1) l INNER JOIN test1 r on l.i = r.i order by l.i, r.j
+----
+1 1 2
+3 3 4
+
+statement ok
+DROP TABLE IF EXISTS test1
+
+query I
+WITH test1 AS (SELECT number-1 as n FROM numbers(42))
+SELECT max(n+1)+1 z FROM test1
+----
+42
+
+query I
+WITH test1 AS (SELECT number-1 as n FROM numbers(4442) order by n limit 100) SELECT max(n) FROM test1 where n=422
+----
+NULL
+
+query I
+WITH test1 AS (SELECT number-1 as n FROM numbers(4442) order by n limit 100) SELECT max(n) FROM test1 where n=42
+----
+42
+
+statement ok
+drop table if exists with_test
+
+statement ok
+create table with_test(n int64 null)
+
+statement ok
+insert into with_test select number - 1 from numbers(10000)
+
+query I
+WITH test1 AS (SELECT  n FROM with_test order by n limit 100)
+SELECT max(n) FROM test1 where n=422
+----
+NULL
+
+query I
+WITH test1 AS (SELECT n FROM with_test order by n limit 100)
+SELECT max(n) FROM test1 where n=42
+----
+42
+
+query I
+WITH test1 AS (SELECT n FROM with_test where n = 42  order by n limit 100)
+SELECT max(n) FROM test1 where n=42
+----
+42
+
+query I
+WITH test1 AS (SELECT n FROM with_test where n = 42 or 1=1 order by n limit 100)
+SELECT max(n) FROM test1 where n=42
+----
+42
+
+query I
+WITH test1 AS (SELECT n, null b FROM with_test where 1=1 and n = 42 order by n)
+SELECT max(n) FROM test1 where n=45
+----
+NULL
+
+query I
+WITH test1 AS (SELECT n, null b, n+1 m FROM with_test where 1=0 or n = 42 order by n limit 4)
+SELECT max(n) m FROM test1 where test1.m=43 having max(n)=42
+----
+42
+
+query I
+with
+    test1 as (select n, null b, n+1 m from with_test where  n = 42 order by n limit 4),
+    test2 as (select n + 1 as x, n - 1 as y from test1),
+    test3 as (select x * y as z from test2)
+select z + 1 as q from test3
+----
+1764
+
+statement ok
+drop table with_test
+
+query I
+WITH
+x AS (SELECT number AS a FROM numbers(10)),
+y AS (SELECT number AS a FROM numbers(5))
+SELECT * FROM x WHERE a in (SELECT a FROM y)
+ORDER BY a
+----
+0
+1
+2
+3
+4
+
+query I
+WITH
+x AS (SELECT number AS a FROM numbers(10)),
+y AS (SELECT number AS a FROM numbers(5))
+SELECT x.a FROM x left JOIN y ON x.a = y.a
+ORDER BY a
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+query I
+WITH
+x AS (SELECT number AS a FROM numbers(10)),
+y AS (SELECT number AS a FROM numbers(5))
+SELECT * FROM x JOIN y USING (a)
+ORDER BY x.a
+----
+0
+1
+2
+3
+4
+
+query I
+WITH
+x AS (SELECT number AS a FROM numbers(10)),
+y AS (SELECT number AS a FROM numbers(5)),
+z AS (SELECT * FROM x WHERE a % 2),
+w AS (SELECT * FROM y WHERE a > 0)
+SELECT * FROM x JOIN y USING (a) WHERE x.a in (SELECT * FROM z)
+ORDER BY x.a
+----
+1
+3
+
+query I
+WITH
+x AS (SELECT number AS a FROM numbers(10)),
+y AS (SELECT number AS a FROM numbers(5)),
+z AS (SELECT * FROM x WHERE a % 2),
+w AS (SELECT * FROM y WHERE a > 0)
+SELECT x.a FROM x JOIN y USING (a) WHERE x.a in (SELECT * FROM z)
+HAVING x.a <= (SELECT max(a) FROM w)
+ORDER BY x.a
+----
+1
+3
+
+statement ok
+drop table if exists cte1
+
+statement ok
+CREATE TABLE cte1(a Int64)
+
+statement ok
+drop table if exists cte2
+
+statement ok
+CREATE TABLE cte2(a Int64)
+
+statement ok
+INSERT INTO cte1 SELECT * FROM numbers(10000)
+
+statement ok
+INSERT INTO cte2 SELECT * FROM numbers(5000)
+
+query I
+WITH
+x AS (SELECT * FROM cte1),
+y AS (SELECT * FROM cte2),
+z AS (SELECT * FROM x WHERE a % 2 = 1),
+w AS (SELECT * FROM y WHERE a > 333)
+SELECT max(x.a)
+FROM x JOIN y USING (a)
+WHERE x.a in (SELECT * FROM z) AND x.a <= (SELECT max(a) FROM w)
+----
+4999
+
+query I
+WITH
+x AS (SELECT * FROM cte1),
+y AS (SELECT * FROM cte2),
+z AS (SELECT * FROM x WHERE a % 3 = 1),
+w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+SELECT count(x.a)
+FROM x left JOIN y USING (a)
+WHERE x.a in (SELECT * FROM z) AND x.a <= (SELECT max(a) FROM w)
+----
+333
+
+query I
+WITH
+x AS (SELECT * FROM cte1),
+y AS (SELECT * FROM cte2),
+z AS (SELECT * FROM x WHERE a % 3 = 1),
+w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+SELECT count(x.a)
+FROM x left JOIN y USING (a)
+WHERE x.a in (SELECT * FROM z)
+----
+3333
+
+query I
+WITH
+x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
+y AS (SELECT * FROM cte2),
+z AS (SELECT * FROM x WHERE a % 3 = 1),
+w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+SELECT count(*)
+FROM x left JOIN y USING (a)
+WHERE x.a in (SELECT * FROM z)
+----
+2000
+
+query III
+WITH
+x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
+y AS (SELECT * FROM cte2),
+z AS (SELECT * FROM x WHERE a % 3 = 1),
+w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+SELECT max(a), min(a), count(*)
+FROM x
+WHERE a in (SELECT * FROM z) AND a <100
+----
+97 1 33
+
+query III
+WITH
+x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
+y AS (SELECT * FROM cte2),
+z AS (SELECT * FROM x WHERE a % 3 = 1),
+w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+SELECT max(a), min(a), count(*) FROM x
+WHERE  a <100
+----
+99 -3299 3399
+
+query III
+WITH
+x AS (SELECT a-4000 a FROM cte1 t WHERE t.a >700),
+y AS (SELECT x.a a FROM x left JOIN cte1 USING (a)),
+z AS (SELECT * FROM x WHERE a % 3 = 1),
+w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+SELECT max(a), min(a), count(*)
+FROM y
+WHERE a <100
+----
+99 -3299 3399
+
+statement ok
+DROP TABLE cte1
+
+statement ok
+DROP TABLE cte2
+
+query I
+with it as ( select * from numbers(1) ) select i.number from it as i
+----
+0
+
+query II
+select * from  (WITH source AS (select 1 as e) SELECT * FROM source) A,   (WITH source AS (select 2 as e) SELECT * FROM source) B
+----
+1 2
+
+query II
+with v as (select * from numbers(2)) select * from v t1, (select * from v where number = 0) t2 where t1.number = 1 and t2.number = 1
+----
+
+# ISSUE 11974
+statement ok
+drop table if exists t_11974
+
+statement ok
+CREATE TABLE `t_11974` (`user_id` INT, `item_id` INT, `category_id` INT, `behavior_type` VARCHAR, `ts` TIMESTAMP, `day` DATE)
+
+query IIIIIIII
+with cte as(
+select user_id,
+       to_date('2017-12-04') - max(day) as R,
+       dense_rank() over(order by (to_date('2017-12-04') - max(day))) as R_rank,
+       count(1) as F,
+       dense_rank() over(order by count(1) desc) as F_rank
+from t_11974
+where behavior_type = 'buy'
+group by user_id)
+select user_id, R, R_rank, R_score, F, F_rank, F_score,  R_score + F_score AS score
+from(
+select *,
+       case ntile(5) over(order by R_rank) when 1 then 5
+                                           when 2 then 4
+                                           when 3 then 3
+                                           when 4 then 2
+                                           when 5 then 1
+       end as R_score,
+       case ntile(5) over(order by F_rank) when 1 then 5
+                                           when 2 then 4
+                                           when 3 then 3
+                                           when 4 then 2
+                                           when 5 then 1
+       end as F_score
+from cte
+) as a
+order by score desc
+limit 20
+----
+
+statement ok
+drop table t_11974
+
+# This query will use lazy materialization.
+query III
+with cte as (select a, a + 1 as X, b + 1 as Y from t1 order by a limit 3) select X,Y,a from (select * from cte order by Y limit 2) order by X limit 1;
+----
+105 101 104
+
+query IT rowsort
+with t(a) as (values(1,'a'),(2,'b'),(null,'c')) select a, col1 from t
+----
+1 a
+2 b
+NULL c
+
+query II rowsort
+with t(a,b) as (values(1,1),(2,null),(null,5)) select * from t
+----
+1 1
+2 NULL
+NULL 5
+
+statement ok
+create table test (a int, b string);
+
+statement ok
+insert into test values (1, 'a'), (2, 'b');
+
+query TT rowsort
+WITH tTqmc(cC0, cC1) AS (SELECT a AS cC0, b AS cC1 FROM test) SELECT tTqmc.cC1 FROM tTqmc;
+----
+a
+b
+
+statement ok
+drop table test

@@ -1,18 +1,20 @@
-query T
+statement ok
 show grants for role 'role1';
-----
-GRANT SELECT ON 'default'.'default'.* TO ROLE `role1`
-GRANT OWNERSHIP ON 'default'.'default'.'t' TO ROLE `role1`
 
 statement ok
-grant ownership on default.t to role 'role2'
+grant ownership on udf a to role 'role2'
 
-query T
+statement ok
 show grants for role 'role1';
-----
-GRANT SELECT ON 'default'.'default'.* TO ROLE `role1`
 
-query T
+statement ok
 show grants for role 'role2';
-----
-GRANT OWNERSHIP ON 'default'.'default'.'t' TO ROLE `role2`
+
+statement ok
+drop role role1;
+
+statement ok
+drop role role2;
+
+statement ok
+show roles;

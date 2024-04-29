@@ -48,6 +48,8 @@ impl ParquetRSTable {
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
+
         // Unwrap safety: no other thread will hold this lock.
         let parquet_metas = self.parquet_metas.try_lock().unwrap();
         let file_locations = if parquet_metas.is_empty() {
@@ -58,7 +60,7 @@ impl ParquetRSTable {
                     .collect::<Vec<_>>(),
                 None => self
                     .files_info
-                    .list(&self.operator, false, None)
+                    .list(&self.operator, thread_num, None)
                     .await?
                     .into_iter()
                     .map(|f| (f.path, f.size))
@@ -285,7 +287,7 @@ async fn prune_metas_in_parallel(
     if files.is_empty() {
         return Ok((
             PartStatistics::default_exact(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
+            Partitions::create(PartitionsShuffleKind::Mod, vec![]),
         ));
     }
 
@@ -455,5 +457,5 @@ fn create_partitions(mut parts: Vec<ParquetRSRowGroupPart>, topk: &Option<TopK>)
         .map(|p| Arc::new(Box::new(ParquetPart::ParquetRSRowGroup(p)) as Box<dyn PartInfo>))
         .collect();
 
-    Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts)
+    Partitions::create(PartitionsShuffleKind::Mod, parts)
 }

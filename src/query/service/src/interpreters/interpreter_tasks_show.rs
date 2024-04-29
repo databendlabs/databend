@@ -49,7 +49,7 @@ impl ShowTasksInterpreter {
             .get_all_available_roles()
             .await?;
         let req = ShowTasksRequest {
-            tenant_id: plan.tenant,
+            tenant_id: plan.tenant.tenant_name().to_string(),
             name_like: "".to_string(),
             result_limit: 10000, // TODO: use plan.limit pushdown
             owners: available_roles

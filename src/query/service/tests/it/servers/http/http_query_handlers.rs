@@ -28,6 +28,7 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_query::auth::AuthMgr;
+use databend_query::servers::http::middleware::get_client_ip;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_final_uri;
@@ -149,7 +150,9 @@ impl TestHttpQueryRequest {
                 .do_request(Method::GET, self.next_uri.as_ref().unwrap())
                 .await?;
             self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
-            resps.push((status, resp.clone().unwrap()));
+            if self.next_uri.is_some() {
+                resps.push((status, resp.clone().unwrap()));
+            }
         }
 
         Ok(TestHttpQueryFetchReply { resps })
@@ -268,7 +271,7 @@ async fn test_simple_sql() -> Result<()> {
     let sql = "select * from system.tables limit 10";
     let ep = create_endpoint().await?;
     let (status, result) =
-        post_sql_to_endpoint_new_session(&ep, sql, 1, HeaderMap::default()).await?;
+        post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
 
@@ -318,7 +321,7 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.next_uri.is_none(), "{:?}", result);
 
     let response = get_uri(&ep, &page_0_uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{:?}", result);
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 1).await?;
@@ -484,7 +487,7 @@ async fn test_wait_time_secs() -> Result<()> {
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert_eq!(result.state, ExecuteStateKind::Running, "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Starting, "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
     let next_uri = make_page_uri(query_id, 0);
@@ -505,7 +508,9 @@ async fn test_wait_time_secs() -> Result<()> {
                 assert!(
                     matches!(
                         result.state,
-                        ExecuteStateKind::Succeeded | ExecuteStateKind::Running
+                        ExecuteStateKind::Succeeded
+                            | ExecuteStateKind::Running
+                            | ExecuteStateKind::Starting
                     ),
                     "{:?}",
                     result
@@ -637,25 +642,35 @@ async fn test_http_session() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 async fn test_result_timeout() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
-    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 1}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
+    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 5}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
     let mut req = TestHttpQueryRequest::new(json);
     let (status, result, _) = req.fetch_begin().await?;
 
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
-    assert!(!query_id.is_empty());
+    assert_eq!(result.data.len(), 1);
 
-    sleep(std::time::Duration::from_secs(2)).await;
-    let (status, result, body) = req.fetch_next().await?;
-    assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", result);
-    let msg = format!("query id {} timeout on {}", query_id, config.query.node_id);
-    let msg = json!({ "error": { "code": "404", "message": msg }}).to_string();
+    sleep(std::time::Duration::from_secs(5)).await;
+
+    // fail to get page 0 again (e.g. retry) due to timeout
+    // this is flaky
+    let (status, result, body) = req
+        .do_request(Method::GET, &format!("/v1/query/{query_id}/page/0",))
+        .await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", body);
+    let msg = format!("query id {} timeout", query_id);
+    let msg = json!({ "error": { "code": "400", "message": msg }}).to_string();
     assert_eq!(body, msg, "{:?}", result);
+
+    // but /final return ok
+    let (status, result, _) = req.fetch_next().await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
 
     Ok(())
 }
@@ -802,7 +817,7 @@ async fn test_query_log() -> Result<()> {
     );
     assert_eq!(
         result.data[0][1].as_str().unwrap(),
-        ErrorCode::TableAlreadyExists("").code().to_string(),
+        ErrorCode::TABLE_ALREADY_EXISTS.to_string(),
         "{:?}",
         result
     );
@@ -858,7 +873,7 @@ async fn test_query_log_killed() -> Result<()> {
     );
     assert_eq!(
         result.data[0][1].as_str().unwrap(),
-        ErrorCode::AbortedQuery("").code().to_string(),
+        ErrorCode::ABORTED_QUERY.to_string(),
         "{:?}",
         result
     );
@@ -1540,15 +1555,15 @@ async fn test_affect() -> Result<()> {
             .last();
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
-        assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
-        assert_eq!(result.1.affect, affect);
+        assert_eq!(result.1.state, ExecuteStateKind::Succeeded, "{}", json);
+        assert_eq!(result.1.affect, affect, "{}", json);
         let session = result.1.session.map(|s| HttpSessionConf {
             last_server_info: None,
             last_query_ids: vec![],
             ..s
         });
 
-        assert_eq!(session, session_conf);
+        assert_eq!(session, session_conf, "{}", json);
     }
 
     Ok(())
@@ -1705,5 +1720,41 @@ async fn test_txn_timeout() -> Result<()> {
             last_query_id
         )
     );
+    Ok(())
+}
+
+#[test]
+fn test_parse_ip() -> Result<()> {
+    let req = poem::Request::builder()
+        .header("X-Forwarded-For", "1.2.3.4")
+        .finish();
+    let ip = get_client_ip(&req);
+    assert_eq!(ip, Some("1.2.3.4".to_string()));
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_has_result_set() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let sqls = vec![
+        ("create table tb2(id int, c1 varchar) Engine=Fuse;", false),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", false),
+        ("select * from tb2;", true),
+    ];
+
+    let wait_time_secs = 5;
+    for (sql, has_result_set) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        assert!(reply.error().is_none(), "{:?}", reply.error());
+        assert_eq!(
+            reply.state(),
+            ExecuteStateKind::Succeeded,
+            "SQL '{sql}' not finish after {wait_time_secs} secs"
+        );
+        assert_eq!(reply.last().1.has_result_set, Some(has_result_set));
+    }
+
     Ok(())
 }

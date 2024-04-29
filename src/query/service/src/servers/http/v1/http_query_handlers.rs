@@ -117,15 +117,22 @@ pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
     pub node_id: String,
-    pub session: Option<HttpSessionConf>,
-    pub schema: Vec<QueryResponseField>,
-    pub data: Vec<Vec<JsonValue>>,
+
     pub state: ExecuteStateKind,
+    pub session: Option<HttpSessionConf>,
     // only sql query error
     pub error: Option<QueryError>,
-    pub stats: QueryStats,
-    pub affect: Option<QueryAffect>,
     pub warnings: Vec<String>,
+
+    // about results
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_result_set: Option<bool>,
+    pub schema: Vec<QueryResponseField>,
+    pub data: Vec<Vec<JsonValue>>,
+    pub affect: Option<QueryAffect>,
+
+    pub stats: QueryStats,
+
     pub stats_uri: Option<String>,
     // just call it after client not use it anymore, not care about the server-side behavior
     pub final_uri: Option<String>,
@@ -144,7 +151,7 @@ impl QueryResponse {
             (JsonBlock::empty(), None)
         } else {
             match state.state {
-                ExecuteStateKind::Running => match r.data {
+                ExecuteStateKind::Running | ExecuteStateKind::Starting => match r.data {
                     None => (JsonBlock::empty(), Some(make_state_uri(&id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
@@ -195,6 +202,7 @@ impl QueryResponse {
             final_uri: Some(make_final_uri(&id)),
             kill_uri: Some(make_kill_uri(&id)),
             error: r.state.error.as_ref().map(QueryError::from_error_code),
+            has_result_set: r.state.has_result_set,
         })
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
@@ -202,41 +210,44 @@ impl QueryResponse {
     }
 }
 
+/// final is not ACKed by client, so client should not depend on the final response,
+///
+/// for server:
+/// 1. when response with `next_uri` =  `.../final`, all states should already be delivered to the client the latest in this response.
+/// 2. `/final` SHOULD response with nothing but `next_uri` = `null`, BUT to tolerant old clients, we still keep some fields.
+///
+/// for clients:
+/// 1. check `next_uri` before refer to other fields of the response.
+///
+/// the client in sql logic tests should follow this.
+
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let trace_id = query_id_to_trace_id(&query_id);
-    let root = Span::root(
-        full_name!(),
-        SpanContext::new(trace_id, SpanId(rand::random())),
-    )
-    .with_properties(|| ctx.to_minitrace_properties());
+    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        info!("{}: final http query", query_id);
+        info!(
+            "{}: got /v1/query/{}/final request, this query is going to be finally completed.",
+            query_id, query_id
+        );
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager
-            .remove_query(&query_id, RemoveReason::Finished)
-            .await
-        {
-            Ok(query) => {
+        match http_query_manager.remove_query(&query_id, RemoveReason::Finished) {
+            Some(query) => {
                 let mut response = query.get_response_state_only().await;
-                if response.state.state == ExecuteStateKind::Running {
-                    return Err(PoemError::from_string(
-                        format!("query {} is still running, can not final it", query_id),
-                        StatusCode::BAD_REQUEST,
-                    ));
+                if query.check_removed().is_none() && !response.state.state.is_stopped() {
+                    query.kill(ErrorCode::ClosedQuery("closed by client")).await;
+                    response = query.get_response_state_only().await;
                 }
+                // it is safe to set these 2 fields to None, because client now check for null/None first.
+                response.session = None;
+                response.state.affect = None;
                 Ok(QueryResponse::from_internal(query_id, response, true))
             }
-            Err(reason) => Err(query_id_not_found_or_removed(
-                &query_id,
-                &ctx.node_id,
-                reason,
-            )),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -249,31 +260,25 @@ async fn query_cancel_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let trace_id = query_id_to_trace_id(&query_id);
-    let root = Span::root(
-        full_name!(),
-        SpanContext::new(trace_id, SpanId(rand::random())),
-    )
-    .with_properties(|| ctx.to_minitrace_properties());
+    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        info!("{}: http query is killed", query_id);
+        info!(
+            "{}: got /v1/query/{}/kill request, cancel the query",
+            query_id, query_id
+        );
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.try_get_query(&query_id).await {
-            Ok(query) => {
-                query.kill("http query cancel by handler").await;
-                http_query_manager
-                    .remove_query(&query_id, RemoveReason::Canceled)
-                    .await
-                    .ok();
+        match http_query_manager.remove_query(&query_id, RemoveReason::Canceled) {
+            Some(query) => {
+                if query.check_removed().is_none() {
+                    query
+                        .kill(ErrorCode::AbortedQuery("canceled by client"))
+                        .await;
+                }
                 Ok(StatusCode::OK)
             }
-            Err(reason) => Err(query_id_not_found_or_removed(
-                &query_id,
-                &ctx.node_id,
-                reason,
-            )),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -285,25 +290,20 @@ async fn query_state_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let trace_id = query_id_to_trace_id(&query_id);
-    let root = Span::root(
-        full_name!(),
-        SpanContext::new(trace_id, SpanId(rand::random())),
-    )
-    .with_properties(|| ctx.to_minitrace_properties());
+    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.try_get_query(&query_id).await {
-            Ok(query) => {
-                let response = query.get_response_state_only().await;
-                Ok(QueryResponse::from_internal(query_id, response, false))
+        match http_query_manager.get_query(&query_id) {
+            Some(query) => {
+                if let Some(reason) = query.check_removed() {
+                    Err(query_id_removed(&query_id, reason))
+                } else {
+                    let response = query.get_response_state_only().await;
+                    Ok(QueryResponse::from_internal(query_id, response, false))
+                }
             }
-            Err(reason) => Err(query_id_not_found_or_removed(
-                &query_id,
-                &ctx.node_id,
-                reason,
-            )),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -315,30 +315,25 @@ async fn query_page_handler(
     ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
-    let trace_id = query_id_to_trace_id(&query_id);
-    let root = Span::root(
-        full_name!(),
-        SpanContext::new(trace_id, SpanId(rand::random())),
-    )
-    .with_properties(|| ctx.to_minitrace_properties());
+    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.try_get_query(&query_id).await {
-            Ok(query) => {
-                query.update_expire_time(true).await;
-                let resp = query.get_response_page(page_no).await.map_err(|err| {
-                    poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
-                })?;
-                query.update_expire_time(false).await;
-                Ok(QueryResponse::from_internal(query_id, resp, false))
+        match http_query_manager.get_query(&query_id) {
+            Some(query) => {
+                if let Some(reason) = query.check_removed() {
+                    Err(query_id_removed(&query_id, reason))
+                } else {
+                    query.update_expire_time(true).await;
+                    let resp = query.get_response_page(page_no).await.map_err(|err| {
+                        poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                    })?;
+                    query.update_expire_time(false).await;
+                    Ok(QueryResponse::from_internal(query_id, resp, false))
+                }
             }
-            Err(reason) => Err(query_id_not_found_or_removed(
-                &query_id,
-                &ctx.node_id,
-                reason,
-            )),
+            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
     .in_span(root)
@@ -351,9 +346,7 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    let trace_id = query_id_to_trace_id(&ctx.query_id);
-    let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()))
-        .with_properties(|| ctx.to_minitrace_properties());
+    let root = get_http_tracing_span(full_name!(), ctx, &ctx.query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
@@ -368,22 +361,22 @@ pub(crate) async fn query_handler(
         match query {
             Ok(query) => {
                 query.update_expire_time(true).await;
+                // tmp workaround to tolerant old clients
                 let resp = query
                     .get_response_page(0)
                     .await
                     .map_err(|err| err.display_with_sql(&sql))
                     .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
-                if matches!(resp.state.state,ExecuteStateKind::Failed) {
+                if matches!(resp.state.state, ExecuteStateKind::Failed) {
                     ctx.set_fail();
                 }
                 let (rows, next_page) = match &resp.data {
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
                 };
-                info!(
-                    "http query initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                    &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
-                );
+                info!( "http query initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
+                        &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
+                    );
                 query.update_expire_time(false).await;
                 Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
             }
@@ -421,17 +414,15 @@ pub fn query_route() -> Route {
     route
 }
 
-fn query_id_not_found_or_removed(
-    query_id: &str,
-    node_id: &str,
-    reason: Option<RemoveReason>,
-) -> PoemError {
-    let error = match reason {
-        Some(reason) => reason.to_string(),
-        None => "not found".to_string(),
-    };
+fn query_id_removed(query_id: &str, remove_reason: RemoveReason) -> PoemError {
     PoemError::from_string(
-        format!("query id {query_id} {error} on {node_id}"),
+        format!("query id {query_id} {}", remove_reason),
+        StatusCode::BAD_REQUEST,
+    )
+}
+fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
+    PoemError::from_string(
+        format!("query id {query_id} not found on {node_id}"),
         StatusCode::NOT_FOUND,
     )
 }
@@ -477,4 +468,25 @@ impl Drop for SlowRequestLogTracker {
             }
         })
     }
+}
+
+// get_http_tracing_span always return a valid span for tracing
+// it will try to decode w3 traceparent and if empty or failed, it will create a new root span and throw a warning
+fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &str) -> Span {
+    if let Some(parent) = ctx.trace_parent.as_ref() {
+        let trace = parent.as_str();
+        match SpanContext::decode_w3c_traceparent(trace) {
+            Some(span_context) => {
+                return Span::root(name, span_context)
+                    .with_properties(|| ctx.to_minitrace_properties());
+            }
+            None => {
+                warn!("failed to decode trace parent: {}", trace);
+            }
+        }
+    }
+
+    let trace_id = query_id_to_trace_id(query_id);
+    Span::root(name, SpanContext::new(trace_id, SpanId(rand::random())))
+        .with_properties(|| ctx.to_minitrace_properties())
 }

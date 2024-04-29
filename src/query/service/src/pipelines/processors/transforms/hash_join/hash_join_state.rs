@@ -35,7 +35,6 @@ use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use ethnum::U256;
 use parking_lot::RwLock;
 
@@ -130,8 +129,8 @@ impl HashJoinState {
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
         probe_to_build: &[(usize, (bool, bool))],
-        merge_into_target_table_index: IndexType,
         merge_into_is_distributed: bool,
+        enable_merge_into_optimization: bool,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -161,10 +160,12 @@ impl HashJoinState {
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
             enable_spill,
-            merge_into_state: MergeIntoState::try_create_merge_into_state(
-                merge_into_target_table_index,
-                merge_into_is_distributed,
-            ),
+            merge_into_state: match enable_merge_into_optimization {
+                false => None,
+                true => Some(MergeIntoState::create_merge_into_state(
+                    merge_into_is_distributed,
+                )),
+            },
         }))
     }
 

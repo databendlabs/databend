@@ -28,6 +28,8 @@ use databend_storages_common_cache::InMemoryItemCacheHolder;
 use databend_storages_common_cache::NamedCache;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_index::InvertedIndexFile;
+use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -53,6 +55,10 @@ pub type BloomIndexFilterCache =
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 
 pub type InvertedIndexInfoCache = NamedCache<InMemoryItemCacheHolder<IndexInfo>>;
+pub type InvertedIndexMetaCache = NamedCache<InMemoryItemCacheHolder<InvertedIndexMeta>>;
+pub type InvertedIndexFileCache = NamedCache<
+    InMemoryItemCacheHolder<InvertedIndexFile, DefaultHashBuilder, InvertedIndexFileMeter>,
+>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
@@ -140,6 +146,15 @@ impl CachedObject<FileMetaData> for FileMetaData {
     }
 }
 
+impl CachedObject<InvertedIndexFile, DefaultHashBuilder, InvertedIndexFileMeter>
+    for InvertedIndexFile
+{
+    type Cache = InvertedIndexFileCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_inverted_index_file_cache()
+    }
+}
+
 pub struct ColumnArrayMeter;
 
 impl<K, V> Meter<K, Arc<(V, usize)>> for ColumnArrayMeter {
@@ -167,5 +182,15 @@ impl Meter<String, Arc<Xor8Filter>> for BloomIndexFilterMeter {
 
     fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<Xor8Filter>) -> Self::Measure {
         std::mem::size_of::<Xor8Filter>() + value.filter.finger_prints.len()
+    }
+}
+
+pub struct InvertedIndexFileMeter;
+
+impl Meter<String, Arc<InvertedIndexFile>> for InvertedIndexFileMeter {
+    type Measure = usize;
+
+    fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<InvertedIndexFile>) -> Self::Measure {
+        std::mem::size_of::<InvertedIndexFile>() + value.data.len()
     }
 }

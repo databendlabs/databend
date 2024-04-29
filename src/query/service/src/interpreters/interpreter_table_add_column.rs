@@ -73,7 +73,7 @@ impl Interpreter for AddTableColumnInterpreter {
             .ctx
             .get_catalog(catalog_name)
             .await?
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await
             .ok();
 
@@ -135,7 +135,7 @@ impl Interpreter for AddTableColumnInterpreter {
 
             if let Some(share_table_info) = res.share_table_info {
                 save_share_table_info(
-                    self.ctx.get_tenant().as_str(),
+                    self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_data_operator()?.operator(),
                     share_table_info,
                 )
@@ -153,7 +153,10 @@ pub(crate) async fn generate_new_snapshot(
 ) -> Result<()> {
     if let Ok(fuse_table) = FuseTable::try_from_table(table) {
         if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-            let mut new_snapshot = TableSnapshot::from_previous(snapshot.as_ref());
+            let mut new_snapshot = TableSnapshot::from_previous(
+                snapshot.as_ref(),
+                Some(fuse_table.get_table_info().ident.seq),
+            );
 
             // replace schema
             new_snapshot.schema = new_table_meta.schema.as_ref().clone();

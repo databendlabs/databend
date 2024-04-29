@@ -197,11 +197,12 @@ impl AsyncSource for ListStagesSource {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",
                     stage_info.stage_name.clone(),
-                    &self.ctx.get_current_user()?.identity(),
+                    &self.ctx.get_current_user()?.identity().display(),
                 )));
             }
         }
         let op = StageTable::get_op(&stage_info)?;
+        let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
 
         let files_info = StageFilesInfo {
             path,
@@ -210,7 +211,7 @@ impl AsyncSource for ListStagesSource {
             start_after: self.args_parsed.files_info.start_after.clone(),
         };
 
-        let files = files_info.list(&op, false, None).await?;
+        let files = files_info.list(&op, thread_num, None).await?;
 
         let names: Vec<String> = files.iter().map(|file| file.path.to_string()).collect();
 
@@ -229,7 +230,7 @@ impl AsyncSource for ListStagesSource {
             .collect();
         let creators: Vec<Option<String>> = files
             .iter()
-            .map(|file| file.creator.as_ref().map(|c| c.to_string()))
+            .map(|file| file.creator.as_ref().map(|c| c.display().to_string()))
             .collect();
 
         let block = DataBlock::new_from_columns(vec![

@@ -25,7 +25,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
@@ -33,7 +33,7 @@ use pretty_assertions::assert_eq;
 async fn test_user_manager() -> Result<()> {
     let conf = RpcClientConf::default();
     let tenant_name = "test";
-    let tenant = NonEmptyString::new(tenant_name.to_string()).unwrap();
+    let tenant = Tenant::new_literal(tenant_name);
 
     let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let username = "test-user1";
@@ -90,7 +90,7 @@ async fn test_user_manager() -> Result<()> {
     // drop.
     {
         user_mgr
-            .drop_user(tenant.clone(), UserIdentity::new(username, hostname), false)
+            .drop_user(&tenant, UserIdentity::new(username, hostname), false)
             .await?;
         let users = user_mgr.get_users(&tenant).await?;
         assert_eq!(0, users.len());
@@ -99,7 +99,7 @@ async fn test_user_manager() -> Result<()> {
     // repeat drop same user not with if exist.
     {
         let res = user_mgr
-            .drop_user(tenant.clone(), UserIdentity::new(username, hostname), false)
+            .drop_user(&tenant, UserIdentity::new(username, hostname), false)
             .await;
         assert!(res.is_err());
     }
@@ -107,7 +107,7 @@ async fn test_user_manager() -> Result<()> {
     // repeat drop same user with if exist.
     {
         let res = user_mgr
-            .drop_user(tenant.clone(), UserIdentity::new(username, hostname), true)
+            .drop_user(&tenant, UserIdentity::new(username, hostname), true)
             .await;
         assert!(res.is_ok());
     }
@@ -124,26 +124,21 @@ async fn test_user_manager() -> Result<()> {
         let mut add_priv = UserPrivilegeSet::empty();
         add_priv.set_privilege(UserPrivilegeType::Set);
         user_mgr
-            .grant_privileges_to_user(
-                tenant.clone(),
-                user_info.identity(),
-                GrantObject::Global,
-                add_priv,
-            )
+            .grant_privileges_to_user(&tenant, user_info.identity(), GrantObject::Global, add_priv)
             .await?;
         let new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert!(
             new_user
                 .grants
-                .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Set])
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Set)
         );
         assert!(
             !new_user
                 .grants
-                .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Create])
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
         );
         user_mgr
-            .drop_user(tenant.clone(), new_user.identity(), true)
+            .drop_user(&tenant, new_user.identity(), true)
             .await?;
     }
 
@@ -155,7 +150,7 @@ async fn test_user_manager() -> Result<()> {
             .await?;
         user_mgr
             .grant_privileges_to_user(
-                tenant.clone(),
+                &tenant,
                 user_info.identity(),
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
@@ -175,7 +170,7 @@ async fn test_user_manager() -> Result<()> {
         let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(user_info.grants.entries().len(), 0);
         user_mgr
-            .drop_user(tenant.clone(), user_info.identity(), true)
+            .drop_user(&tenant, user_info.identity(), true)
             .await?;
     }
 

@@ -71,14 +71,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 if_exists: true,
                 catalog: None,
                 database: None,
-                table: Identifier::from_name(table_name),
+                table: Identifier::from_name(None, table_name),
                 all: false,
             };
             let create_table = CreateTableStmt {
                 create_option: CreateOption::CreateIfNotExists,
                 catalog: None,
                 database: None,
-                table: Identifier::from_name(table_name),
+                table: Identifier::from_name(None, table_name),
                 source: Some(source),
                 engine: Some(Engine::Fuse),
                 uri_location: None,
@@ -168,7 +168,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     pub(crate) fn gen_new_column(&mut self) -> ColumnDefinition {
         let name = self.gen_random_name();
-        let new_column_name = Identifier::from_name(format!("cc{}", name));
+        let new_column_name = Identifier::from_name(None, format!("cc{}", name));
         let data_type = self.gen_data_type_name(None);
         ColumnDefinition {
             name: new_column_name,
@@ -193,7 +193,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 None
             };
             let column_def = ColumnDefinition {
-                name: Identifier::from_name(name),
+                name: Identifier::from_name(None, name),
                 data_type,
                 expr: default_expr,
                 comment: None,
@@ -208,7 +208,7 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
     match type_name {
         TypeName::Boolean => Expr::Literal {
             span: None,
-            lit: Literal::Boolean(false),
+            value: Literal::Boolean(false),
         },
         TypeName::UInt8
         | TypeName::UInt16
@@ -219,15 +219,15 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
         | TypeName::Int32
         | TypeName::Int64 => Expr::Literal {
             span: None,
-            lit: Literal::UInt64(0),
+            value: Literal::UInt64(0),
         },
         TypeName::Float32 | TypeName::Float64 => Expr::Literal {
             span: None,
-            lit: Literal::Float64(0.0),
+            value: Literal::Float64(0.0),
         },
         TypeName::Decimal { precision, scale } => Expr::Literal {
             span: None,
-            lit: Literal::Decimal256 {
+            value: Literal::Decimal256 {
                 value: 0.into(),
                 precision: *precision,
                 scale: *scale,
@@ -235,19 +235,19 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
         },
         TypeName::Date => Expr::Literal {
             span: None,
-            lit: Literal::String("1970-01-01".to_string()),
+            value: Literal::String("1970-01-01".to_string()),
         },
         TypeName::Timestamp => Expr::Literal {
             span: None,
-            lit: Literal::String("1970-01-01 00:00:00".to_string()),
+            value: Literal::String("1970-01-01 00:00:00".to_string()),
         },
         TypeName::Binary => Expr::Literal {
             span: None,
-            lit: Literal::String("".to_string()),
+            value: Literal::String("".to_string()),
         },
         TypeName::String => Expr::Literal {
             span: None,
-            lit: Literal::String("".to_string()),
+            value: Literal::String("".to_string()),
         },
         TypeName::Array(_) => Expr::Array {
             span: None,
@@ -259,7 +259,7 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
         },
         TypeName::Bitmap => Expr::Literal {
             span: None,
-            lit: Literal::UInt64(0),
+            value: Literal::UInt64(0),
         },
         TypeName::Tuple { fields_type, .. } => Expr::Tuple {
             span: None,
@@ -267,15 +267,15 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
         },
         TypeName::Variant => Expr::Literal {
             span: None,
-            lit: Literal::String("null".to_string()),
+            value: Literal::String("null".to_string()),
         },
         TypeName::Geometry => Expr::Literal {
             span: None,
-            lit: Literal::String("POINT(0 0)".to_string()),
+            value: Literal::String("POINT(0 0)".to_string()),
         },
         TypeName::Nullable(_) => Expr::Literal {
             span: None,
-            lit: Literal::Null,
+            value: Literal::Null,
         },
         TypeName::NotNull(box ty) => gen_default_expr(ty),
     }

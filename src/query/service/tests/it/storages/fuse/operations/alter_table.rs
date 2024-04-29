@@ -60,7 +60,7 @@ async fn check_segment_column_ids(
     // get the latest tbl
     let table = catalog
         .get_table(
-            fixture.default_tenant().as_str(),
+            &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             fixture.default_table_name().as_str(),
         )
@@ -205,7 +205,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         .get_catalog(&catalog_name)
         .await?
         .get_table(
-            fixture.default_tenant().as_str(),
+            &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             fixture.default_table_name().as_str(),
         )

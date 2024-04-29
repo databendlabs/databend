@@ -54,6 +54,8 @@ impl Interpreter for RemoveUserStageInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "remove_user_stage_execute");
 
+        let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
+
         let plan = self.plan.clone();
         let op = StageTable::get_op(&self.plan.stage)?;
         let pattern = if plan.pattern.is_empty() {
@@ -68,7 +70,7 @@ impl Interpreter for RemoveUserStageInterpreter {
             start_after: None,
         };
         let files: Vec<String> = files_info
-            .list(&op, false, None)
+            .list(&op, thread_num, None)
             .await?
             .into_iter()
             .map(|file_with_meta| file_with_meta.path)

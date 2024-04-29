@@ -15,6 +15,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dashmap::DashMap;
 use databend_common_base::base::tokio;
@@ -39,6 +40,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -49,14 +51,14 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -68,6 +70,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -77,6 +81,10 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -111,8 +119,8 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -121,6 +129,7 @@ use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
+use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -134,6 +143,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -260,6 +270,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
+                None,
                 &None,
                 None,
                 table.schema().as_ref().clone(),
@@ -479,9 +490,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: QueryKind, _query: String) {
-        todo!()
-    }
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn get_query_str(&self) -> String {
         todo!()
@@ -549,7 +558,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_tenant(&self) -> NonEmptyString {
+    fn get_tenant(&self) -> Tenant {
         self.ctx.get_tenant()
     }
 
@@ -566,7 +575,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        Settings::create(NonEmptyString::new("fake_settings").unwrap())
+        Settings::create(Tenant::new_literal("fake_settings"))
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
@@ -676,11 +685,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_need_compact_after_write(&self, _enable: bool) {
+    fn set_compaction_num_block_hint(&self, _enable: u64) {
         todo!()
     }
 
-    fn get_need_compact_after_write(&self) -> bool {
+    fn get_compaction_num_block_hint(&self) -> u64 {
         todo!()
     }
 
@@ -705,6 +714,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+        todo!()
+    }
+
+    fn update_multi_table_insert_status(&self, _table_id: u64, _num_rows: u64) {
+        todo!()
+    }
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
         todo!()
     }
 
@@ -750,6 +767,22 @@ impl TableContext for CtxDelegation {
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        todo!()
+    }
+
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        todo!()
+    }
+
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -768,11 +801,11 @@ impl Catalog for FakedCatalog {
         self.cat.info()
     }
 
-    async fn get_database(&self, _tenant: &str, _db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {
         todo!()
     }
 
-    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         todo!()
     }
 
@@ -805,8 +838,12 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_table_names_by_ids(&self, table_id: &[MetaId]) -> Result<Vec<String>> {
-        self.cat.mget_table_names_by_ids(table_id).await
+    async fn mget_table_names_by_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
+        self.cat.mget_table_names_by_ids(tenant, table_id).await
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
@@ -814,26 +851,30 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
-        self.cat.mget_database_names_by_ids(db_ids).await
+    async fn mget_database_names_by_ids(
+        &self,
+        tenant: &Tenant,
+        db_ids: &[MetaId],
+    ) -> Result<Vec<Option<String>>> {
+        self.cat.mget_database_names_by_ids(tenant, db_ids).await
     }
 
     async fn get_table(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }
 
-    async fn list_tables(&self, _tenant: &str, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 
     async fn list_tables_history(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
@@ -857,7 +898,7 @@ impl Catalog for FakedCatalog {
 
     async fn upsert_table_option(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -893,13 +934,9 @@ impl Catalog for FakedCatalog {
         unimplemented!()
     }
 
-    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
-        todo!()
-    }
-
     async fn get_table_copied_file_info(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -1005,6 +1042,24 @@ impl Catalog for FakedCatalog {
     }
 
     async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
+        unimplemented!()
+    }
+
+    async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        unimplemented!()
+    }
+    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+        unimplemented!()
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        _req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        unimplemented!()
+    }
+
+    async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
     }
 }

@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_request_count;
 use databend_common_metrics::http::metrics_incr_http_response_panics_count;
 use databend_common_metrics::http::metrics_incr_http_slow_request_count;
@@ -32,6 +33,11 @@ use http::HeaderMap;
 use http::HeaderValue;
 use log::error;
 use log::warn;
+use minitrace::func_name;
+use opentelemetry::baggage::BaggageExt;
+use opentelemetry::propagation::TextMapPropagator;
+use opentelemetry_http::HeaderExtractor;
+use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
@@ -55,6 +61,8 @@ const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE-LABEL";
 const USER_AGENT: &str = "User-Agent";
 const QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 
+const TRACE_PARENT: &str = "traceparent";
+
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
@@ -66,17 +74,28 @@ impl HTTPSessionMiddleware {
     }
 }
 
+fn extract_baggage_from_headers(headers: &HeaderMap) -> Option<Vec<(String, String)>> {
+    headers.get("baggage")?;
+    let propagator = BaggagePropagator::new();
+    let extractor = HeaderExtractor(headers);
+    let result: Vec<(String, String)> = {
+        let context = propagator.extract(&extractor);
+        let baggage = context.baggage();
+        baggage
+            .iter()
+            .map(|(key, (value, _metadata))| (key.to_string(), value.to_string()))
+            .collect()
+    };
+    Some(result)
+}
+
 fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
     let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if std_auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
-    let client_ip = match req.remote_addr().0 {
-        Addr::SocketAddr(addr) => Some(addr.ip().to_string()),
-        Addr::Custom(..) => Some("127.0.0.1".to_string()),
-        _ => None,
-    };
+    let client_ip = get_client_ip(req);
     if std_auth_headers.is_empty() {
         if matches!(kind, HttpHandlerKind::Clickhouse) {
             auth_clickhouse_name_password(req, client_ip)
@@ -88,6 +107,33 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
     } else {
         auth_by_header(&std_auth_headers, client_ip)
     }
+}
+
+/// this function tries to get the client IP address from the headers. if the ip in header
+/// not found, fallback to the remote address, which might be local proxy's ip address.
+/// please note that when it comes with network policy, we need make sure the incoming
+/// traffic comes from a trustworthy proxy instance.
+pub fn get_client_ip(req: &Request) -> Option<String> {
+    let headers = ["X-Real-IP", "X-Forwarded-For", "CF-Connecting-IP"];
+    for &header in headers.iter() {
+        if let Some(value) = req.headers().get(header) {
+            if let Ok(mut ip_str) = value.to_str() {
+                if header == "X-Forwarded-For" {
+                    ip_str = ip_str.split(',').next().unwrap_or("");
+                }
+                return Some(ip_str.to_string());
+            }
+        }
+    }
+
+    // fallback to the connection's remote address, take care
+    let client_ip = match req.remote_addr().0 {
+        Addr::SocketAddr(addr) => Some(addr.ip().to_string()),
+        Addr::Custom(..) => Some("127.0.0.1".to_string()),
+        _ => None,
+    };
+
+    client_ip
 }
 
 fn auth_by_header(
@@ -180,7 +226,8 @@ impl<E> HTTPSessionEndpoint<E> {
         let ctx = session.create_query_context().await?;
         if let Some(tenant_id) = req.headers().get("X-DATABEND-TENANT") {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
-            session.set_current_tenant(tenant_id);
+            let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
+            session.set_current_tenant(tenant);
         }
         let node_id = ctx.get_cluster().local_id.clone();
 
@@ -204,14 +251,23 @@ impl<E> HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
+        let trace_parent = req
+            .headers()
+            .get(TRACE_PARENT)
+            .map(|id| id.to_str().unwrap().to_string());
+        let baggage = extract_baggage_from_headers(req.headers());
+        let client_host = get_client_ip(req);
         Ok(HttpQueryContext::new(
             session,
             query_id,
             node_id,
             deduplicate_label,
             user_agent,
+            trace_parent,
+            baggage,
             req.method().to_string(),
             req.uri().to_string(),
+            client_host,
         ))
     }
 }

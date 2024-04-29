@@ -28,7 +28,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
@@ -46,7 +46,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -64,7 +64,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -82,7 +82,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
@@ -100,7 +100,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
@@ -118,7 +118,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -136,7 +136,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
@@ -154,7 +154,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
@@ -172,7 +172,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
@@ -190,7 +190,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -208,7 +208,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
@@ -226,7 +226,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
@@ -245,7 +245,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -263,7 +263,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 2], limit: NONE]
@@ -281,7 +281,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) <> 1], limit: NONE]
@@ -299,7 +299,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) <> 2)], limit: NONE]
@@ -317,7 +317,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) < 1], limit: NONE]
@@ -335,7 +335,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) < 2)], limit: NONE]
@@ -353,7 +353,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) <= 1)], limit: NONE]
@@ -371,7 +371,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) <= 2)], limit: NONE]
@@ -389,7 +389,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) > 1], limit: NONE]
@@ -407,7 +407,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) > 0)], limit: NONE]
@@ -425,7 +425,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) >= 1)], limit: NONE]
@@ -443,7 +443,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) >= 0)], limit: NONE]
@@ -461,7 +461,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -479,7 +479,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 2], limit: NONE]
@@ -497,7 +497,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) < 5], limit: NONE]
@@ -515,7 +515,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) < 5, t1.a (#0) <> 2)], limit: NONE]
@@ -533,7 +533,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) < 5], limit: NONE]
@@ -551,7 +551,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
@@ -569,7 +569,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) < 5, t1.a (#0) > 2)], limit: NONE]
@@ -587,7 +587,7 @@ Filter
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [and_filters(t1.a (#0) <= 100, t1.a (#0) > 10)], limit: NONE]
@@ -612,7 +612,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [t2.a (#2) > 10], limit: NONE]
@@ -625,7 +625,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [t1.a (#0) > 10], limit: NONE]
@@ -657,7 +657,7 @@ HashJoin
 │   │       ├── table: default.default.t3
 │   │       ├── output columns: [a (#4), b (#5)]
 │   │       ├── read rows: 0
-│   │       ├── read bytes: 0
+│   │       ├── read size: 0
 │   │       ├── partitions total: 0
 │   │       ├── partitions scanned: 0
 │   │       ├── push downs: [filters: [and_filters(t3.a (#4) > 5, t3.a (#4) < 10)], limit: NONE]
@@ -670,7 +670,7 @@ HashJoin
 │           ├── table: default.default.t2
 │           ├── output columns: [a (#2), b (#3)]
 │           ├── read rows: 0
-│           ├── read bytes: 0
+│           ├── read size: 0
 │           ├── partitions total: 0
 │           ├── partitions scanned: 0
 │           ├── push downs: [filters: [and_filters(t2.a (#2) > 5, t2.a (#2) < 10)], limit: NONE]
@@ -683,7 +683,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [and_filters(t1.a (#0) > 5, t1.a (#0) < 10)], limit: NONE]
@@ -707,7 +707,7 @@ MergeJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [t2.a (#2) > 10], limit: NONE]
@@ -720,7 +720,7 @@ MergeJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [t1.a (#0) > 5], limit: NONE]
@@ -740,7 +740,7 @@ MergeJoin
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
-│   ├── read bytes: 0
+│   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
@@ -753,7 +753,7 @@ MergeJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [t1.a (#0) > 10], limit: NONE]
@@ -778,7 +778,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [false], limit: NONE]
@@ -791,7 +791,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
-        ├── read bytes: 0
+        ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [false], limit: NONE]
@@ -816,7 +816,7 @@ HashJoin
 │       ├── table: default.default.t3
 │       ├── output columns: [a (#4), b (#5)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [false], limit: NONE]
@@ -836,7 +836,7 @@ HashJoin
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 0
-    │       ├── read bytes: 0
+    │       ├── read size: 0
     │       ├── partitions total: 0
     │       ├── partitions scanned: 0
     │       ├── push downs: [filters: [false], limit: NONE]
@@ -849,7 +849,7 @@ HashJoin
             ├── table: default.default.t1
             ├── output columns: [a (#0), b (#1)]
             ├── read rows: 0
-            ├── read bytes: 0
+            ├── read size: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [false], limit: NONE]
@@ -877,7 +877,7 @@ HashJoin
 │   │   ├── table: default.default.t3
 │   │   ├── output columns: [a (#4), b (#5)]
 │   │   ├── read rows: 0
-│   │   ├── read bytes: 0
+│   │   ├── read size: 0
 │   │   ├── partitions total: 0
 │   │   ├── partitions scanned: 0
 │   │   ├── push downs: [filters: [], limit: NONE]
@@ -886,7 +886,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
-│       ├── read bytes: 0
+│       ├── read size: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [], limit: NONE]
@@ -895,7 +895,7 @@ HashJoin
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
-    ├── read bytes: 0
+    ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]

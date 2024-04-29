@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::base::format_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
@@ -30,6 +31,7 @@ use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::ConstantTableScan;
+use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DistributedInsertSelect;
@@ -72,23 +74,37 @@ impl PhysicalPlan {
     pub fn format_join(&self, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
         match self {
             PhysicalPlan::TableScan(plan) => {
-                if plan.table_index == DUMMY_TABLE_INDEX {
+                if plan.table_index == Some(DUMMY_TABLE_INDEX) {
                     return Ok(FormatTreeNode::with_children(
                         format!("Scan: dummy, rows: {}", plan.source.statistics.read_rows),
                         vec![],
                     ));
                 }
-                let table = metadata.read().table(plan.table_index).clone();
-                let table_name =
-                    format!("{}.{}.{}", table.catalog(), table.database(), table.name());
 
-                Ok(FormatTreeNode::with_children(
-                    format!(
-                        "Scan: {} (#{}) (read rows: {})",
-                        table_name, plan.table_index, plan.source.statistics.read_rows
-                    ),
-                    vec![],
-                ))
+                match plan.table_index {
+                    None => Ok(FormatTreeNode::with_children(
+                        format!(
+                            "Scan: {}.{} (read rows: {})",
+                            plan.source.catalog_info.name_ident.catalog_name,
+                            plan.source.source_info.desc(),
+                            plan.source.statistics.read_rows
+                        ),
+                        vec![],
+                    )),
+                    Some(table_index) => {
+                        let table = metadata.read().table(table_index).clone();
+                        let table_name =
+                            format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+                        Ok(FormatTreeNode::with_children(
+                            format!(
+                                "Scan: {} (#{}) (read rows: {})",
+                                table_name, table_index, plan.source.statistics.read_rows
+                            ),
+                            vec![],
+                        ))
+                    }
+                }
             }
             PhysicalPlan::HashJoin(plan) => {
                 let build_child = plan.build.format_join(metadata)?;
@@ -126,7 +142,7 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("RangeJoin: {}", plan.join_type,),
+                    format!("RangeJoin: {}", plan.join_type),
                     children,
                 ))
             }
@@ -215,6 +231,7 @@ fn to_format_tree(
         PhysicalPlan::Udf(plan) => udf_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
         PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
+        PhysicalPlan::CopyIntoLocation(plan) => copy_into_location(plan),
         PhysicalPlan::ReplaceAsyncSourcer(_) => {
             Ok(FormatTreeNode::new("ReplaceAsyncSourcer".to_string()))
         }
@@ -235,6 +252,19 @@ fn to_format_tree(
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
+        PhysicalPlan::Duplicate(_) => Ok(FormatTreeNode::new("Duplicate".to_string())),
+        PhysicalPlan::Shuffle(_) => Ok(FormatTreeNode::new("Shuffle".to_string())),
+        PhysicalPlan::ChunkFilter(_) => Ok(FormatTreeNode::new("ChunkFilter".to_string())),
+        PhysicalPlan::ChunkEvalScalar(_) => Ok(FormatTreeNode::new("ChunkEvalScalar".to_string())),
+        PhysicalPlan::ChunkCastSchema(_) => Ok(FormatTreeNode::new("ChunkCastSchema".to_string())),
+        PhysicalPlan::ChunkFillAndReorder(_) => {
+            Ok(FormatTreeNode::new("ChunkFillAndReorder".to_string()))
+        }
+        PhysicalPlan::ChunkAppendData(_) => Ok(FormatTreeNode::new("ChunkAppendData".to_string())),
+        PhysicalPlan::ChunkMerge(_) => Ok(FormatTreeNode::new("ChunkMerge".to_string())),
+        PhysicalPlan::ChunkCommitInsert(_) => {
+            Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
+        }
     }
 }
 
@@ -264,16 +294,30 @@ fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
     )))
 }
 
+fn copy_into_location(_: &CopyIntoLocation) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new("CopyIntoLocation".to_string()))
+}
+
 fn table_scan_to_format_tree(
     plan: &TableScan,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    if plan.table_index == DUMMY_TABLE_INDEX {
+    if plan.table_index == Some(DUMMY_TABLE_INDEX) {
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
     }
-    let table = metadata.table(plan.table_index).clone();
-    let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+    let table_name = match plan.table_index {
+        None => format!(
+            "{}.{}",
+            plan.source.catalog_info.name_ident.catalog_name,
+            plan.source.source_info.desc()
+        ),
+        Some(table_index) => {
+            let table = metadata.table(table_index).clone();
+            format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+        }
+    };
     let filters = plan
         .source
         .push_downs
@@ -983,23 +1027,75 @@ fn union_all_to_format_tree(
 }
 
 fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
+    let read_size = format_byte_size(info.read_bytes);
     let mut items = vec![
         FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
-        FormatTreeNode::new(format!("read bytes: {}", info.read_bytes)),
+        FormatTreeNode::new(format!("read size: {}", read_size)),
         FormatTreeNode::new(format!("partitions total: {}", info.partitions_total)),
         FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
     ];
 
-    if info.pruning_stats.segments_range_pruning_before > 0 {
-        items.push(FormatTreeNode::new(format!(
-            "pruning stats: [segments: <range pruning: {} to {}>, blocks: <range pruning: {} to {}, bloom pruning: {} to {}>]",
-            info.pruning_stats.segments_range_pruning_before,
-            info.pruning_stats.segments_range_pruning_after,
+    // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
+    let mut blocks_pruning_description = String::new();
+
+    // range pruning status.
+    if info.pruning_stats.blocks_range_pruning_before > 0 {
+        blocks_pruning_description += &format!(
+            "range pruning: {} to {}",
             info.pruning_stats.blocks_range_pruning_before,
-            info.pruning_stats.blocks_range_pruning_after,
+            info.pruning_stats.blocks_range_pruning_after
+        );
+    }
+
+    // bloom pruning status.
+    if info.pruning_stats.blocks_bloom_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "bloom pruning: {} to {}",
             info.pruning_stats.blocks_bloom_pruning_before,
-            info.pruning_stats.blocks_bloom_pruning_after,
-        )))
+            info.pruning_stats.blocks_bloom_pruning_after
+        );
+    }
+
+    // inverted index pruning status.
+    if info.pruning_stats.blocks_inverted_index_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "inverted pruning: {} to {}",
+            info.pruning_stats.blocks_inverted_index_pruning_before,
+            info.pruning_stats.blocks_inverted_index_pruning_after
+        );
+    }
+
+    // Combine segment pruning and blocks pruning descriptions if any
+    if info.pruning_stats.segments_range_pruning_before > 0
+        || !blocks_pruning_description.is_empty()
+    {
+        let mut pruning_description = String::new();
+
+        if info.pruning_stats.segments_range_pruning_before > 0 {
+            pruning_description += &format!(
+                "segments: <range pruning: {} to {}>",
+                info.pruning_stats.segments_range_pruning_before,
+                info.pruning_stats.segments_range_pruning_after
+            );
+        }
+
+        if !blocks_pruning_description.is_empty() {
+            if !pruning_description.is_empty() {
+                pruning_description += ", ";
+            }
+            pruning_description += &format!("blocks: <{}>", blocks_pruning_description);
+        }
+
+        items.push(FormatTreeNode::new(format!(
+            "pruning stats: [{}]",
+            pruning_description
+        )));
     }
 
     items

@@ -16,6 +16,7 @@ pub use databend_common_pipeline_core::processors::*;
 pub(crate) mod transforms;
 
 pub use transforms::DeduplicateRowNumber;
+pub use transforms::HashJoinBuildState;
 pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
 pub use transforms::TransformAddStreamColumns;

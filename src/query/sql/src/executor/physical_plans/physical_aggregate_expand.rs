@@ -25,7 +25,7 @@ use crate::plans::GroupingSets;
 use crate::IndexType;
 
 /// Add dummy data before `GROUPING SETS`.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateExpand {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,

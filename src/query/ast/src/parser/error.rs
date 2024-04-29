@@ -89,7 +89,7 @@ impl<'a> nom::error::ParseError<Input<'a>> for Error<'a> {
             span: transform_span(&i[..1]).unwrap(),
             errors: vec![],
             contexts: vec![],
-            backtrace: i.2,
+            backtrace: i.backtrace,
         }
     }
 
@@ -118,39 +118,39 @@ impl<'a> nom::error::ContextError<Input<'a>> for Error<'a> {
     fn add_context(input: Input<'a>, ctx: &'static str, mut other: Self) -> Self {
         other
             .contexts
-            .push((transform_span(&input.0[..1]).unwrap(), ctx));
+            .push((transform_span(&input.tokens[..1]).unwrap(), ctx));
         other
     }
 }
 
 impl<'a> Error<'a> {
     pub fn from_error_kind(input: Input<'a>, kind: ErrorKind) -> Self {
-        let mut inner = input.2.inner.borrow_mut();
+        let mut inner = input.backtrace.inner.borrow_mut();
         if let Some(ref mut inner) = *inner {
-            match input.0[0].span.start.cmp(&inner.span.start) {
+            match input.tokens[0].span.start.cmp(&inner.span.start) {
                 Ordering::Equal => {
                     inner.errors.push(kind);
                 }
                 Ordering::Less => (),
                 Ordering::Greater => {
                     *inner = BacktraceInner {
-                        span: transform_span(&input.0[..1]).unwrap(),
+                        span: transform_span(&input.tokens[..1]).unwrap(),
                         errors: vec![kind],
                     };
                 }
             }
         } else {
             *inner = Some(BacktraceInner {
-                span: transform_span(&input.0[..1]).unwrap(),
+                span: transform_span(&input.tokens[..1]).unwrap(),
                 errors: vec![kind],
             })
         }
 
         Error {
-            span: transform_span(&input.0[..1]).unwrap(),
+            span: transform_span(&input.tokens[..1]).unwrap(),
             errors: vec![kind],
             contexts: vec![],
-            backtrace: input.2,
+            backtrace: input.backtrace,
         }
     }
 }
@@ -223,7 +223,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
         });
 
         let mut msg = if span_text.is_empty() {
-            "unexpected end of line".to_string()
+            "unexpected end of input".to_string()
         } else {
             format!("unexpected `{span_text}`")
         };

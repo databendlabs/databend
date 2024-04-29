@@ -195,7 +195,7 @@ impl AsyncSource for GPT2SQLSource {
         template.push("### Postgres SQL tables, with their properties:".to_string());
         template.push("#".to_string());
 
-        for table in catalog.list_tables(tenant.as_str(), &database).await? {
+        for table in catalog.list_tables(&tenant, &database).await? {
             let fields = if matches!(table.engine(), VIEW_ENGINE | STREAM_ENGINE) {
                 continue;
             } else {

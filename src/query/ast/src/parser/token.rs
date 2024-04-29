@@ -157,6 +157,9 @@ pub enum TokenKind {
     #[regex(r#"@([^\s`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]
     AtString,
 
+    #[token("TOP", ignore(ascii_case))]
+    TOP,
+
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
     PGLiteralHex,
     #[regex(r"0[xX][a-fA-F0-9]+")]
@@ -414,6 +417,8 @@ pub enum TokenKind {
     CATALOGS,
     #[token("CENTURY", ignore(ascii_case))]
     CENTURY,
+    #[token("CHANGES", ignore(ascii_case))]
+    CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
     #[token("COMMENT", ignore(ascii_case))]
@@ -484,6 +489,8 @@ pub enum TokenKind {
     DECADE,
     #[token("DECIMAL", ignore(ascii_case))]
     DECIMAL,
+    #[token("DECLARE", ignore(ascii_case))]
+    DECLARE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]
@@ -518,10 +525,14 @@ pub enum TokenKind {
     DOY,
     #[token("DOWNLOAD", ignore(ascii_case))]
     DOWNLOAD,
+    #[token("DOWNSTREAM", ignore(ascii_case))]
+    DOWNSTREAM,
     #[token("DROP", ignore(ascii_case))]
     DROP,
     #[token("DRY", ignore(ascii_case))]
     DRY,
+    #[token("DYNAMIC", ignore(ascii_case))]
+    DYNAMIC,
     #[token("EXCEPT", ignore(ascii_case))]
     EXCEPT,
     #[token("EXCLUDE", ignore(ascii_case))]
@@ -640,12 +651,20 @@ pub enum TokenKind {
     INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]
     IDENTIFIED,
+    #[token("IDENTIFIER", ignore(ascii_case))]
+    IDENTIFIER,
     #[token("IF", ignore(ascii_case))]
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INCREMENTAL", ignore(ascii_case))]
+    INCREMENTAL,
     #[token("INDEX", ignore(ascii_case))]
     INDEX,
+    #[token("INFORMATION", ignore(ascii_case))]
+    INFORMATION,
+    #[token("INITIALIZE", ignore(ascii_case))]
+    INITIALIZE,
     #[token("INNER", ignore(ascii_case))]
     INNER,
     #[token("INSERT", ignore(ascii_case))]
@@ -668,6 +687,8 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("IMMEDIATE", ignore(ascii_case))]
+    IMMEDIATE,
     #[token("IS", ignore(ascii_case))]
     IS,
     #[token("ISODOW", ignore(ascii_case))]
@@ -751,6 +772,8 @@ pub enum TokenKind {
     NATURAL,
     #[token("NETWORK", ignore(ascii_case))]
     NETWORK,
+    #[token("DISABLED", ignore(ascii_case))]
+    DISABLED,
     #[token("NDJSON", ignore(ascii_case))]
     NDJSON,
     #[token("NO_PASSWORD", ignore(ascii_case))]
@@ -761,6 +784,8 @@ pub enum TokenKind {
     NOT,
     #[token("NOTENANTSETTING", ignore(ascii_case))]
     NOTENANTSETTING,
+    #[token("DEFAULT_ROLE", ignore(ascii_case))]
+    DEFAULT_ROLE,
     #[token("NULL", ignore(ascii_case))]
     NULL,
     #[token("NULLABLE", ignore(ascii_case))]
@@ -773,6 +798,10 @@ pub enum TokenKind {
     OFFSET,
     #[token("ON", ignore(ascii_case))]
     ON,
+    #[token("ON_CREATE", ignore(ascii_case))]
+    ON_CREATE,
+    #[token("ON_SCHEDULE", ignore(ascii_case))]
+    ON_SCHEDULE,
     #[token("OPTIMIZE", ignore(ascii_case))]
     OPTIMIZE,
     #[token("OPTIONS", ignore(ascii_case))]
@@ -915,6 +944,8 @@ pub enum TokenKind {
     RUN,
     #[token("GRANTS", ignore(ascii_case))]
     GRANTS,
+    #[token("REFRESH_MODE", ignore(ascii_case))]
+    REFRESH_MODE,
     #[token("RIGHT", ignore(ascii_case))]
     RIGHT,
     #[token("RLIKE", ignore(ascii_case))]
@@ -983,6 +1014,8 @@ pub enum TokenKind {
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
     UPLOAD,
+    #[token("SEQUENCE", ignore(ascii_case))]
+    SEQUENCE,
     #[token("SHARE", ignore(ascii_case))]
     SHARE,
     #[token("SHARES", ignore(ascii_case))]
@@ -1017,6 +1050,8 @@ pub enum TokenKind {
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
     TABLES,
+    #[token("TARGET_LAG", ignore(ascii_case))]
+    TARGET_LAG,
     #[token("TEXT", ignore(ascii_case))]
     TEXT,
     #[token("LONGTEXT", ignore(ascii_case))]
@@ -1111,6 +1146,8 @@ pub enum TokenKind {
     VERBOSE,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
+    #[token("VIEWS", ignore(ascii_case))]
+    VIEWS,
     #[token("VIRTUAL", ignore(ascii_case))]
     VIRTUAL,
     #[token("WHEN", ignore(ascii_case))]
@@ -1367,6 +1404,7 @@ impl TokenKind {
             | TokenKind::ROLLUP
             // | TokenKind::IFNULL
             | TokenKind::IN
+            | TokenKind::IDENTIFIER
             // | TokenKind::INITIALLY
             // | TokenKind::INOUT
             | TokenKind::INT
@@ -1503,7 +1541,7 @@ impl TokenKind {
             // | TokenKind::DEFERRABLE
             | TokenKind::DESC
             | TokenKind::DISTINCT
-            // | TokenKind::DO
+            | TokenKind::DO
             | TokenKind::ELSE
             | TokenKind::END
             | TokenKind::FALSE
@@ -1513,6 +1551,7 @@ impl TokenKind {
             | TokenKind::FULL
             // | TokenKind::ILIKE
             | TokenKind::IN
+            | TokenKind::IDENTIFIER
             // | TokenKind::INITIALLY
             | TokenKind::INNER
             | TokenKind::IS
@@ -1528,7 +1567,6 @@ impl TokenKind {
             | TokenKind::NULL
             // | TokenKind::ONLY
             | TokenKind::OR
-            // | TokenKind::OUTER
             // | TokenKind::PLACING
             // | TokenKind::PRIMARY
             // | TokenKind::REFERENCES
@@ -1541,7 +1579,6 @@ impl TokenKind {
             | TokenKind::SOME
             | TokenKind::SEMI
             // | TokenKind::SYMMETRIC
-            // | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
@@ -1561,7 +1598,7 @@ impl TokenKind {
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FROM
-            // | TokenKind::GRANT
+            | TokenKind::GRANT
             | TokenKind::GROUP
             | TokenKind::HAVING
             | TokenKind::INTERSECT
