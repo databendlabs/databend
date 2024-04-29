@@ -129,7 +129,7 @@ impl AsyncSystemTable for TasksTable {
 
         let tenant = ctx.get_tenant();
         let query_id = ctx.get_id();
-        let user = ctx.get_current_user()?.identity().to_string();
+        let user = ctx.get_current_user()?.identity().display().to_string();
         let available_roles = ctx.get_available_roles().await?;
         let req = ShowTasksRequest {
             tenant_id: tenant.tenant_name().to_string(),

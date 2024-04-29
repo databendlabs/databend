@@ -315,6 +315,24 @@ impl HashJoinBuildState {
                     .build_num_rows
             };
 
+            // If the build side is empty and there is no spilled data, perform fast path for hash join.
+            if build_num_rows == 0
+                && !matches!(
+                    self.hash_join_state.hash_join_desc.join_type,
+                    JoinType::LeftMark | JoinType::RightMark
+                )
+                && self.spilled_partition_set.read().is_empty()
+            {
+                self.hash_join_state
+                    .fast_return
+                    .store(true, Ordering::Relaxed);
+                self.hash_join_state
+                    .build_done_watcher
+                    .send(self.send_val.load(Ordering::Acquire))
+                    .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
+                return Ok(());
+            }
+
             let build_chunks = unsafe {
                 (*self.hash_join_state.build_state.get())
                     .generation_state
@@ -333,24 +351,6 @@ impl HashJoinBuildState {
 
             // Divide the finalize phase into multiple tasks.
             self.generate_finalize_task()?;
-
-            // Fast path for hash join
-            if build_num_rows == 0
-                && !matches!(
-                    self.hash_join_state.hash_join_desc.join_type,
-                    JoinType::LeftMark | JoinType::RightMark
-                )
-                && self.ctx.get_settings().get_join_spilling_memory_ratio()? == 0
-            {
-                self.hash_join_state
-                    .fast_return
-                    .store(true, Ordering::Relaxed);
-                self.hash_join_state
-                    .build_done_watcher
-                    .send(self.send_val.load(Ordering::Acquire))
-                    .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
-                return Ok(());
-            }
 
             // Create a fixed size hash table.
             let hashjoin_hashtable = match self.method.clone() {

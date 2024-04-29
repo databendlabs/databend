@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use databend_common_meta_app::principal::UserInfo;
@@ -74,11 +73,11 @@ pub async fn queries_queue_handler() -> poem::Result<impl IntoResponse> {
 
 fn user_identity(user: &Option<UserInfo>) -> String {
     user.as_ref()
-        .map(|u| u.identity().to_string())
+        .map(|u| u.identity().display().to_string())
         .unwrap_or("".to_string())
 }
 
-fn client_address(address: &Option<SocketAddr>) -> String {
+fn client_address(address: &Option<String>) -> String {
     address
         .as_ref()
         .map(|addr| addr.to_string())

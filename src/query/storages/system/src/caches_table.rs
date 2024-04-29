@@ -63,7 +63,8 @@ impl SyncSystemTable for CachesTable {
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
         let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache();
         let inverted_index_info_cache = cache_manager.get_inverted_index_info_cache();
-        let inverted_index_filter_cache = cache_manager.get_inverted_index_filter_cache();
+        let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
+        let inverted_index_file_cache = cache_manager.get_inverted_index_file_cache();
         let prune_partitions_cache = cache_manager.get_prune_partitions_cache();
         let file_meta_data_cache = cache_manager.get_file_meta_data_cache();
         let table_data_cache = cache_manager.get_table_data_cache();
@@ -110,11 +111,18 @@ impl SyncSystemTable for CachesTable {
             size.push(inverted_index_info_cache.size());
         }
 
-        if let Some(inverted_index_filter_cache) = inverted_index_filter_cache {
+        if let Some(inverted_index_meta_cache) = inverted_index_meta_cache {
             nodes.push(local_node.clone());
-            names.push("inverted_index_filter_cache".to_string());
-            num_items.push(inverted_index_filter_cache.len() as u64);
-            size.push(inverted_index_filter_cache.size());
+            names.push("inverted_index_meta_cache".to_string());
+            num_items.push(inverted_index_meta_cache.len() as u64);
+            size.push(inverted_index_meta_cache.size());
+        }
+
+        if let Some(inverted_index_file_cache) = inverted_index_file_cache {
+            nodes.push(local_node.clone());
+            names.push("inverted_index_file_cache".to_string());
+            num_items.push(inverted_index_file_cache.len() as u64);
+            size.push(inverted_index_file_cache.size());
         }
 
         if let Some(prune_partitions_cache) = prune_partitions_cache {

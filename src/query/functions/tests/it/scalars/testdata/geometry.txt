@@ -70,6 +70,87 @@ output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)
 output         : 'LINESTRING(0.75 0.75,-10 20)'
 
 
+ast            : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
+raw expr       : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
+checked expr   : st_endpoint<Geometry>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"))
+optimized expr : "POINT(4 4)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(4 4)'
+
+
+ast            : st_dimension(to_geometry('POINT(-122.35 37.55)'))
+raw expr       : st_dimension(to_geometry('POINT(-122.35 37.55)'))
+checked expr   : st_dimension<Geometry>(to_geometry<String>("POINT(-122.35 37.55)"))
+optimized expr : 0_i32
+output type    : Int32 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : st_dimension(to_geometry('MULTIPOINT((-122.35 37.55),(0 -90))'))
+raw expr       : st_dimension(to_geometry('MULTIPOINT((-122.35 37.55),(0 -90))'))
+checked expr   : st_dimension<Geometry>(to_geometry<String>("MULTIPOINT((-122.35 37.55),(0 -90))"))
+optimized expr : 0_i32
+output type    : Int32 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : st_dimension(to_geometry('LINESTRING(-124.2 42,-120.01 41.99)'))
+raw expr       : st_dimension(to_geometry('LINESTRING(-124.2 42,-120.01 41.99)'))
+checked expr   : st_dimension<Geometry>(to_geometry<String>("LINESTRING(-124.2 42,-120.01 41.99)"))
+optimized expr : 1_i32
+output type    : Int32 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : st_dimension(to_geometry('LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)'))
+raw expr       : st_dimension(to_geometry('LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)'))
+checked expr   : st_dimension<Geometry>(to_geometry<String>("LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)"))
+optimized expr : 1_i32
+output type    : Int32 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : st_dimension(to_geometry('MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))'))
+raw expr       : st_dimension(to_geometry('MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))'))
+checked expr   : st_dimension<Geometry>(to_geometry<String>("MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))"))
+optimized expr : 1_i32
+output type    : Int32 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : st_dimension(to_geometry('POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))'))
+raw expr       : st_dimension(to_geometry('POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))'))
+checked expr   : st_dimension<Geometry>(to_geometry<String>("POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))"))
+optimized expr : 2_i32
+output type    : Int32 NULL
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : st_dimension(to_geometry('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))'))
+raw expr       : st_dimension(to_geometry('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))'))
+checked expr   : st_dimension<Geometry>(to_geometry<String>("MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))"))
+optimized expr : 2_i32
+output type    : Int32 NULL
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : st_dimension(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))'))
+raw expr       : st_dimension(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))'))
+checked expr   : st_dimension<Geometry>(to_geometry<String>("GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))"))
+optimized expr : 2_i32
+output type    : Int32 NULL
+output domain  : {2..=2}
+output         : 2
+
+
 ast            : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
 raw expr       : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
 checked expr   : st_geohash<Geometry>(to_geometry<String, Int32>("POINT(-122.306100 37.554162)", to_int32<UInt16>(4326_u16)))

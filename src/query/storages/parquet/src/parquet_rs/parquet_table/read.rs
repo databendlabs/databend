@@ -38,14 +38,14 @@ impl ParquetRSTable {
     ) -> Result<()> {
         let table_schema: TableSchemaRef = self.table_info.schema();
         // If there is a `ParquetFilesPart`, we should create pruner for it.
-        // `ParquetFilesPart`s are always staying at the end of `parts`.
-        let has_files_part = matches!(
-            plan.parts
-                .partitions
-                .last()
-                .map(|p| p.as_any().downcast_ref::<ParquetPart>().unwrap()),
-            Some(ParquetPart::ParquetFiles(_)),
-        );
+        // Although `ParquetFilesPart`s are always staying at the end of `parts` when `do_read_partitions`,
+        // but parts are reshuffled when `redistribute_source_fragment`, so let us check all of them.
+        let has_files_part = plan.parts.partitions.iter().any(|p| {
+            matches!(
+                p.as_any().downcast_ref::<ParquetPart>().unwrap(),
+                ParquetPart::ParquetFiles(_)
+            )
+        });
         let pruner = if has_files_part {
             Some(ParquetRSPruner::try_create(
                 ctx.get_function_context()?,
