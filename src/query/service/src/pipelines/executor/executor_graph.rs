@@ -455,7 +455,7 @@ impl ExecutingGraph {
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
     pub fn can_perform_task(&self, global_epoch: u32) -> bool {
-        let max_points = self.points.load(Ordering::SeqCst);
+        let max_points = self.max_points.load(Ordering::SeqCst);
         let mut expected_value = 0;
         let mut desired_value = 0;
         loop {

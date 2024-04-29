@@ -29,7 +29,7 @@ impl Binder {
         let priority_num: u8 = match &priority {
             Priority::HIGH => 5,
             Priority::MEDIUM => 3,
-            Priority::LOW => 1,
+            Priority::LOW => 2,
         };
 
         let plan = Box::new(SetPriorityPlan {

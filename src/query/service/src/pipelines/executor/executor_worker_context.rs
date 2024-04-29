@@ -44,15 +44,14 @@ pub enum ExecutorTask {
     AsyncCompleted(CompletedAsyncTask),
 }
 
-impl ExecutorTask{
+impl ExecutorTask {
     pub fn get_graph(&self) -> Option<Arc<RunningGraph>> {
-            match self {
-                ExecutorTask::None => None,
-                ExecutorTask::Sync(p) => Some(p.graph.clone()),
-                ExecutorTask::Async(p) => Some(p.graph.clone()),
-                ExecutorTask::AsyncCompleted(p) => Some(p.graph.clone()),
-            }
-
+        match self {
+            ExecutorTask::None => None,
+            ExecutorTask::Sync(p) => Some(p.graph.clone()),
+            ExecutorTask::Async(p) => Some(p.graph.clone()),
+            ExecutorTask::AsyncCompleted(p) => Some(p.graph.clone()),
+        }
     }
 }
 

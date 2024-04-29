@@ -102,9 +102,13 @@ impl QueriesExecutorTasksQueue {
                 .current_tasks
                 .pop_task(context.get_worker_id());
 
-            if let Some(graph) =  task.get_graph(){
-                if !graph.can_perform_task(executor.epoch.load(Ordering::SeqCst)){
-                    workers_tasks.next_tasks.push_task(context.get_worker_id(), task);
+            // the tasks in the current_tasks may be swapped from next_tasks.
+            // so we need to check the points again, it can ensure every task cost a point.
+            if let Some(graph) = task.get_graph() {
+                if !graph.can_perform_task(executor.epoch.load(Ordering::SeqCst)) {
+                    workers_tasks
+                        .next_tasks
+                        .push_task(context.get_worker_id(), task);
                     continue;
                 }
             }
