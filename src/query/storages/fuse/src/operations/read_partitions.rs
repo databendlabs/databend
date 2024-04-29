@@ -27,15 +27,18 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::{ColumnId, Scalar};
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
+use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_table_meta::meta::{BlockMeta, Location};
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;
@@ -43,6 +46,7 @@ use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
 
+use crate::fuse_part::BloomIndexDescriptor;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
@@ -430,7 +434,6 @@ impl FuseTable {
     }
 
     fn all_columns_part(
-        &self,
         schema: Option<&TableSchemaRef>,
         block_meta_index: &Option<BlockMetaIndex>,
         top_k: &Option<(TopK, Scalar)>,
@@ -468,6 +471,12 @@ impl FuseTable {
                 .unwrap_or((default.clone(), default.clone()))
         });
 
+        // let bloom_desc = BloomIndexDescriptor {
+        //    bloom_index_location: meta.bloom_filter_index_location.clone(),
+        //    bloom_index_size: meta.block_size,
+        //    bloom_index_cols: bloom_index_cols.clone(),
+        //};
+
         FuseBlockPartInfo::create(
             location,
             rows_count,
@@ -477,9 +486,7 @@ impl FuseTable {
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
-            meta.bloom_filter_index_location.clone(),
-            meta.bloom_filter_index_size,
-            self.bloom_index_cols.clone(),
+            None, // TODO
         )
     }
 
@@ -519,6 +526,13 @@ impl FuseTable {
         // TODO
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
+
+        // let bloom_desc = BloomIndexDescriptor {
+        //    bloom_index_location: meta.bloom_filter_index_location.clone(),
+        //    bloom_index_size: meta.block_size,
+        //    bloom_index_cols: bloom_index_cols.clone(),
+        //};
+        let bloom_desc = None;
         FuseBlockPartInfo::create(
             location,
             rows_count,
@@ -528,6 +542,7 @@ impl FuseTable {
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
+            bloom_desc,
         )
     }
 }

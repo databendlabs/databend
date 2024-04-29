@@ -49,6 +49,7 @@ impl AggIndexReader {
                     None,
                     None,
                     None,
+                    None,
                 );
                 let res = self
                     .reader
@@ -96,6 +97,7 @@ impl AggIndexReader {
                     columns_meta,
                     None,
                     self.compression.into(),
+                    None,
                     None,
                     None,
                     None,

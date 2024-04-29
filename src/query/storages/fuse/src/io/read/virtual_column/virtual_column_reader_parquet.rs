@@ -91,6 +91,7 @@ impl VirtualColumnReader {
                 None,
                 None,
                 None,
+                None,
             );
 
             let merge_io_result =
@@ -130,6 +131,7 @@ impl VirtualColumnReader {
                 columns_meta,
                 None,
                 self.compression.into(),
+                None,
                 None,
                 None,
                 None,

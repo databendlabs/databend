@@ -115,23 +115,25 @@ pub async fn runtime_bloom_filter_pruner(
     let part = FuseBlockPartInfo::from_part(part)?;
 
     let block_meta: BlockMeta;
-    let index_location = part.bloom_filter_index_location.clone();
-    let index_size = part.bloom_filter_index_size;
-    let column_ids = part.columns_meta.keys().cloned().collect::<Vec<_>>();
+    if let Some(bloom_desc) = &part.bloom_index_descriptor {
+        let index_location = bloom_desc.bloom_index_location.clone();
+        let index_size = bloom_desc.bloom_index_size;
+        let column_ids = part.columns_meta.keys().cloned().collect::<Vec<_>>();
 
-    for filter_expr in filters {
-        if let Some(bloom_pruner) = BloomPrunerCreator::create(
-            func_ctx.clone(),
-            &table_schema,
-            dal.clone(),
-            Some(filter_expr),
-            bloom_index_cols.clone(),
-        )? {
-            let should_keep = bloom_pruner
-                .should_keep(&index_location, index_size, column_ids.clone())
-                .await;
-            if !should_keep {
-                return Ok(true);
+        for filter_expr in filters {
+            if let Some(bloom_pruner) = BloomPrunerCreator::create(
+                func_ctx.clone(),
+                &table_schema,
+                dal.clone(),
+                Some(filter_expr),
+                bloom_index_cols.clone(),
+            )? {
+                let should_keep = bloom_pruner
+                    .should_keep(&index_location, index_size, column_ids.clone())
+                    .await;
+                if !should_keep {
+                    return Ok(true);
+                }
             }
         }
     }

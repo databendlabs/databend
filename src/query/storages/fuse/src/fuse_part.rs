@@ -29,12 +29,19 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
 
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+pub struct BloomIndexDescriptor {
+    pub bloom_index_location: Option<Location>,
+    pub bloom_index_size: u64,
+    pub bloom_index_cols: BloomIndexColumns,
+}
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct FuseBlockPartInfo {
@@ -49,9 +56,7 @@ pub struct FuseBlockPartInfo {
     pub sort_min_max: Option<(Scalar, Scalar)>,
     pub block_meta_index: Option<BlockMetaIndex>,
 
-    pub bloom_index_location: Option<Location>,
-    pub bloom_index_size: u64,
-    pub bloom_index_column_ids: Vec<ColumnId>,
+    pub bloom_index_descriptor: Option<BloomIndexDescriptor>,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -88,9 +93,7 @@ impl FuseBlockPartInfo {
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
         create_on: Option<DateTime<Utc>>,
-        bloom_index_location: Option<Location>,
-        bloom_index_size: u64,
-        bloom_index_column_ids: Vec<ColumnId>,
+        bloom_index_descriptor: Option<BloomIndexDescriptor>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FuseBlockPartInfo {
             location,
@@ -101,9 +104,7 @@ impl FuseBlockPartInfo {
             sort_min_max,
             block_meta_index,
             columns_stat,
-            bloom_index_location,
-            bloom_index_size,
-            bloom_index_column_ids,
+            bloom_index_descriptor,
         }))
     }
 

@@ -32,7 +32,7 @@ use databend_common_settings::Settings;
 use crate::normalize_identifier;
 use crate::planner::semantic::NameResolutionContext;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub enum BloomIndexColumns {
     /// Default, all columns that support bloom index.
     All,
