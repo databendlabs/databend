@@ -11,6 +11,9 @@ statement ok
 CREATE TRANSIENT TABLE IF NOT EXISTS t09_0016(a int)
 
 statement ok
+set transient_data_retention_time_in_minutes = 0;
+
+statement ok
 INSERT INTO t09_0016 VALUES(1)
 
 statement ok
@@ -27,7 +30,7 @@ select * from t09_0016 order by a
 3
 
 query B
-select count(*)=1 from fuse_snapshot('db1', 't09_0016')
+select count(*) from fuse_snapshot('db1', 't09_0016')
 ----
 1
 

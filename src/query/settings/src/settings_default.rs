@@ -159,6 +159,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
+                ("transient_data_retention_time_in_minutes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(60),
+                    desc: "Sets the transient data retention time in minutes.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..= 24 * 60)),
+                }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
                     desc: "Sets the maximum number of concurrent I/O requests.",

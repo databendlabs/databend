@@ -718,7 +718,11 @@ impl Table for FuseTable {
         keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        match self.navigate_for_purge(&ctx, instant).await {
+        let by_pass_retention_check_for_nav_by_time_point = false;
+        match self
+            .navigate_for_purge(&ctx, instant, by_pass_retention_check_for_nav_by_time_point)
+            .await
+        {
             Ok((table, files)) => {
                 table
                     .do_purge(&ctx, files, num_snapshot_limit, keep_last_snapshot, dry_run)

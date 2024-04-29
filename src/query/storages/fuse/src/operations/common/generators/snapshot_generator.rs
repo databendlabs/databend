@@ -23,7 +23,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::operations::common::ConflictResolveContext;
 
 #[async_trait::async_trait]
-pub trait SnapshotGenerator {
+pub trait SnapshotGenerator: Sync {
     /// Convert to `Any`, to enable dynamic casting.
     fn as_any(&self) -> &dyn Any;
 

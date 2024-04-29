@@ -199,9 +199,8 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
+        by_pass_retention_check_for_nav_by_time_point: bool,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention =
-            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {
@@ -211,22 +210,32 @@ impl FuseTable {
         };
 
         assert!(root_snapshot.timestamp.is_some());
-        let mut time_point = root_snapshot.timestamp.unwrap() - retention;
+        let retention =
+            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+        let min_time_point = root_snapshot.timestamp.unwrap() - retention;
 
         let (location, files) = match instant {
             Some(NavigationPoint::TimePoint(point)) => {
-                time_point = std::cmp::min(point, time_point);
-                self.list_by_time_point(time_point).await
+                let nav_time_point = if by_pass_retention_check_for_nav_by_time_point {
+                    point
+                } else {
+                    std::cmp::max(point, min_time_point)
+                };
+                self.list_by_time_point(nav_time_point).await
             }
             Some(NavigationPoint::SnapshotID(snapshot_id)) => {
-                self.list_by_snapshot_id(snapshot_id.as_str(), time_point)
+                self.list_by_snapshot_id(snapshot_id.as_str(), min_time_point)
                     .await
             }
-            Some(NavigationPoint::StreamInfo(info)) => self.list_by_stream(info, time_point).await,
-            None => self.list_by_time_point(time_point).await,
+            Some(NavigationPoint::StreamInfo(info)) => {
+                self.list_by_stream(info, min_time_point).await
+            }
+            None => self.list_by_time_point(min_time_point).await,
         }?;
 
-        let table = self.navigate_to_time_point(location, time_point).await?;
+        let table = self
+            .navigate_to_time_point(location, min_time_point)
+            .await?;
 
         Ok((table, files))
     }
