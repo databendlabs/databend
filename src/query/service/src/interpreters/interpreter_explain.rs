@@ -542,6 +542,18 @@ impl ExplainInterpreter {
             result.extend(input);
         }
 
+        if result.is_empty() {
+            let table_name = format!(
+                "{}.{}.{}",
+                delete.catalog_name, delete.database_name, delete.table_name
+            );
+            let children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+            let formatted_plan = FormatTreeNode::with_children("DeletePlan:".to_string(), children)
+                .format_pretty()?;
+            let line_split_result: Vec<&str> = formatted_plan.lines().collect();
+            let formatted_plan = StringType::from_data(line_split_result);
+            result.push(DataBlock::new_from_columns(vec![formatted_plan]));
+        }
         Ok(vec![DataBlock::concat(&result)?])
     }
 
@@ -673,7 +685,7 @@ impl ExplainInterpreter {
                 .format_pretty()?;
             }
             InsertInputSource::StreamingWithFormat(_, _, _) => {
-                // used in clickhouse handler only;
+                // used in clickhouse handler only; will discard soon
                 formatted_plan = FormatTreeNode::with_children(
                     "InsertPlan (StreamingWithFormat):".to_string(),
                     children,
