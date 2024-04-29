@@ -412,6 +412,17 @@ SELECT ST_DIMENSION(g) FROM t1;
 2
 2
 
+query T
+SELECT TO_STRING(ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 2))
+----
+POINT(2 2)
+
+query T
+SELECT TO_STRING(ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), -2))
+----
+POINT(3 3)
+
+
 statement ok
 SET enable_geo_create_table=0
 
