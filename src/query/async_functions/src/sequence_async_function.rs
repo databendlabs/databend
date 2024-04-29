@@ -60,9 +60,10 @@ impl AsyncFunction for SequenceAsyncFunction {
         arguments: &[&Expr],
     ) -> Result<AsyncFunctionCall> {
         if arguments.len() != 1 {
-            return Err(ErrorCode::SemanticError(
-                "nextval function need one argument".to_string(),
-            ));
+            return Err(ErrorCode::SemanticError(format!(
+                "nextval function need one argument but got {}",
+                arguments.len()
+            )));
         }
         let sequence_name = if let Expr::ColumnRef { column, .. } = arguments[0] {
             if let ColumnID::Name(name) = &column.column {
