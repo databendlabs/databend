@@ -2983,7 +2983,6 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-functions",
  "databend-common-meta-app",
  "educe",
 ]
