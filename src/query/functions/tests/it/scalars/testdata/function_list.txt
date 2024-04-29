@@ -3516,6 +3516,8 @@ Functions overloads:
 1 st_aswkb(Geometry NULL) :: Binary NULL
 0 st_aswkt(Geometry) :: String
 1 st_aswkt(Geometry NULL) :: String NULL
+0 st_dimension(Geometry) :: Int32 NULL
+1 st_dimension(Geometry NULL) :: Int32 NULL
 0 st_geohash(Geometry) :: String
 1 st_geohash(Geometry NULL) :: String NULL
 2 st_geohash(Geometry, Int32) :: String
