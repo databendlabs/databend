@@ -62,6 +62,7 @@ use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::sm::BlockingConfig;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineSubscriber;
+use crate::utils::prefix_right_bound;
 
 /// A wrapper that implements KVApi **readonly** methods for the state machine.
 pub struct SMV002KVApi<'a> {
@@ -290,7 +291,11 @@ impl SMV002 {
     pub async fn list_kv(&self, prefix: &str) -> Result<ResultStream<(String, SeqV)>, io::Error> {
         let p = prefix.to_string();
 
-        let strm = self.levels.str_map().range(p.clone()..).await?;
+        let strm = if let Some(right) = prefix_right_bound(&p) {
+            self.levels.str_map().range(p.clone()..right).await?
+        } else {
+            self.levels.str_map().range(p.clone()..).await?
+        };
 
         let strm = strm
             // Return only keys with the expected prefix
