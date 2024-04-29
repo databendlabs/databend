@@ -1703,16 +1703,17 @@ Filter
 query T
 explain insert into t2 select * from t1;
 ----
-Insert
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1), c (#2)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [], limit: NONE]
-└── estimated rows: 0.00
+InsertPlan (subquery):
+├── table: default.default.t2
+├── inserted columns: [t2.a (#0),t2.b (#1),t2.c (#2)]
+├── overwrite: false
+└── EvalScalar
+    ├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t1.c (#2) AS (#2)]
+    └── Scan
+        ├── table: default.t1
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
 
 
 statement ok

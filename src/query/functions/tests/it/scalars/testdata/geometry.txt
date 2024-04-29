@@ -330,6 +330,24 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 1)
+raw expr       : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 1)
+checked expr   : st_pointn<Geometry, Int32>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"), to_int32<UInt8>(1_u8))
+optimized expr : "POINT(1 1)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(1 1)'
+
+
+ast            : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), -2)
+raw expr       : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), minus(2))
+checked expr   : st_pointn<Geometry, Int32>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"), to_int32<Int16>(minus<UInt8>(2_u8)))
+optimized expr : "POINT(3 3)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(3 3)'
+
+
 ast            : to_geometry('POINT(1820.12 890.56)')
 raw expr       : to_geometry('POINT(1820.12 890.56)')
 checked expr   : to_geometry<String>("POINT(1820.12 890.56)")

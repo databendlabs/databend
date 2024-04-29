@@ -25,6 +25,7 @@ use tantivy::Index;
 use tantivy::Score;
 
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
+use crate::io::read::inverted_index::inverted_index_loader::InvertedIndexFileReader;
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
@@ -106,5 +107,10 @@ impl InvertedIndexReader {
         }
 
         Ok(Some(matched_rows))
+    }
+
+    // delegation of [InvertedIndexFileReader::cache_key_of_index_columns]
+    pub fn cache_key_of_index_columns(index_path: &str) -> Vec<String> {
+        InvertedIndexFileReader::cache_key_of_index_columns(index_path)
     }
 }

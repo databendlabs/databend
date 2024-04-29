@@ -17,6 +17,13 @@ statement ok
 insert into t2 values(2, 3), (3, 4);
 
 query T
+explain delete from t1
+----
+DeletePlan:
+└── table: default.default.t1
+
+
+query T
 explain delete from t1 where a in (select a from t2);
 ----
 DeletePlan (subquery):
