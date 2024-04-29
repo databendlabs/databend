@@ -5,7 +5,7 @@ udf/wasm/test10-udf-wasm-gcd/test10-udf-wasm-gcd.tar.gz 8932 NULL
 udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst 666082 NULL
 
 statement ok
-CREATE FUNCTION wasm_gcd (INT, INT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_gcd(int4,int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+CREATE OR REPLACE FUNCTION wasm_gcd (INT, INT) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_gcd(int4,int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
 
 query F
 select number, wasm_gcd(number * 3, number * 6) from numbers(5) where number > 0 order by 1;
@@ -15,8 +15,13 @@ select number, wasm_gcd(number * 3, number * 6) from numbers(5) where number > 0
 3	9
 4	12
 
+query F
+select  sum(wasm_gcd(number * 3, number * 6)) from numbers(5) where number > 0;
+----
+30
+
 statement ok
-CREATE FUNCTION wasm_lcm (INT, INT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_lcm(int4,int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+CREATE OR REPLACE FUNCTION wasm_lcm (INT, INT) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_lcm(int4,int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
 
 query F
 select number, wasm_lcm(number * 3, number * 6) from numbers(5) where number > 0 order by 1;
@@ -27,7 +32,7 @@ select number, wasm_lcm(number * 3, number * 6) from numbers(5) where number > 0
 4 24
 
 statement ok
-CREATE FUNCTION wasm_factorial (INT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_factorial(int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+CREATE OR REPLACE FUNCTION wasm_factorial (INT) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_factorial(int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
 
 query F
 select number, wasm_factorial(number) from numbers(5) where number > 0 order by 1;
@@ -38,7 +43,7 @@ select number, wasm_factorial(number) from numbers(5) where number > 0 order by 
 4 24
 
 statement ok
-CREATE FUNCTION wasm_fibonacci (INT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_fibonacci(int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+CREATE OR REPLACE FUNCTION wasm_fibonacci (INT) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_fibonacci(int4)->int4' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
 
 query F
 select number, wasm_fibonacci(number) from numbers(5) where number > 0 order by 1;
@@ -49,7 +54,7 @@ select number, wasm_fibonacci(number) from numbers(5) where number > 0 order by 
 4 3
 
 statement ok
-CREATE FUNCTION wasm_is_prime (INT) RETURNS BOOLEAN LANGUAGE wasm HANDLER = 'wasm_is_prime(int4)->boolean' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
+CREATE OR REPLACE FUNCTION wasm_is_prime (INT) RETURNS BOOLEAN LANGUAGE wasm HANDLER = 'wasm_is_prime(int4)->boolean' AS $$@data/udf/wasm/test10-udf-wasm-gcd/test10_udf_wasm_gcd.wasm.zst$$
 
 query F
 select number, wasm_is_prime(number) from numbers(5) where number > 0 order by 1;

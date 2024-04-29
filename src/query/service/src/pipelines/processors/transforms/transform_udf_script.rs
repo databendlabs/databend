@@ -37,7 +37,7 @@ use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
-enum ScriptRuntime {
+pub enum ScriptRuntime {
     JavaScript(Arc<RwLock<arrow_udf_js::Runtime>>),
     WebAssembly(Arc<RwLock<arrow_udf_wasm::Runtime>>),
 }
@@ -136,10 +136,10 @@ impl TransformUdfScript {
     pub fn try_create(
         _func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
+        script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
-        let script_runtimes = Self::init_runtime(&funcs)?;
         Ok(Transformer::create(input, output, Self {
             funcs,
             script_runtimes,
@@ -189,11 +189,12 @@ impl TransformUdfScript {
         Ok(runtime_key)
     }
 
-    fn init_runtime(
+    pub fn init_runtime(
         funcs: &[UdfFunctionDesc],
     ) -> Result<BTreeMap<String, Arc<ScriptRuntime>>, ErrorCode> {
         let mut script_runtimes: BTreeMap<String, Arc<ScriptRuntime>> = BTreeMap::new();
 
+        let start = std::time::Instant::now();
         for func in funcs {
             let (lang, code_opt) = match &func.udf_type {
                 UDFType::Script((lang, _, _code)) => (lang, None),
@@ -222,6 +223,7 @@ impl TransformUdfScript {
             }
         }
 
+        log::info!("Init UDF runtimes took: {:?}", start.elapsed());
         Ok(script_runtimes)
     }
 
@@ -313,8 +315,13 @@ impl TransformUdfScript {
             result_block.get_by_offset(0).clone()
         };
 
+        if col.data_type != func.data_type.as_ref().clone() {
+            return Err(ErrorCode::UDFDataError(format!(
+                "Function '{}' returned column with data type {:?} but expected {:?}",
+                func.name, col.data_type, func.data_type
+            )));
+        }
         data_block.add_column(col);
-
         Ok(())
     }
 }
