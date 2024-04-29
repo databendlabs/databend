@@ -169,14 +169,14 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_inverted_index_info_location(&self) -> String {
+        let prefix = self.inverted_index_info_prefix();
         let uuid = Uuid::new_v4().simple().to_string();
-        format!(
-            "{}/{}/{}_v{}.mpk",
-            &self.prefix,
-            FUSE_TBL_INVERTED_INDEX_INFO_PREFIX,
-            uuid,
-            IndexInfo::VERSION,
-        )
+        format!("{}{}_v{}.mpk", prefix, uuid, IndexInfo::VERSION,)
+    }
+
+    // inverted index info path, trailing slash "/" included.
+    pub fn inverted_index_info_prefix(&self) -> String {
+        format!("{}/{}/", &self.prefix, FUSE_TBL_INVERTED_INDEX_INFO_PREFIX)
     }
 
     pub fn gen_inverted_index_location_from_block_location(
