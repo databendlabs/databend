@@ -14,9 +14,6 @@ from native_client import prompt
 
 log = None
 
-# client1 send long query, client mydb fetch the long query and kill it.
-# Use to mock in MySQL Client press Ctrl C to intercept a long query.
-
 mydb = mysql.connector.connect(
     host="127.0.0.1", user="root", passwd="root", port="3307"
 )
@@ -36,12 +33,13 @@ with NativeClient(name="client1>") as client1:
     )
     res = mycursor.fetchone()
 
-    adjust_priority_query = "set priority high" + str(res[0]) + ";"
+    adjust_priority_query = "set priority high '" + str(res[0]) + "';"
     mycursor.execute(adjust_priority_query)
     time.sleep(0.2)
 
-    kill_query = "kill query " + str(res[0]) + ";"
+    kill_query = "kill query '" + str(res[0]) + "';"
     mycursor.execute(kill_query)
     time.sleep(0.1)
 
     client1.expect(prompt)
+
