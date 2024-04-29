@@ -30,6 +30,7 @@ fn test_geometry() {
     test_st_aswkb(file);
     test_st_asewkt(file);
     test_st_aswkt(file);
+    test_st_endpoint(file);
     test_st_dimension(file);
     test_st_geohash(file);
     test_st_asgeojson(file);
@@ -150,6 +151,14 @@ fn test_st_asgeojson(file: &mut impl Write) {
     run_ast(
         file,
         "st_asgeojson(st_geometryfromwkt('SRID=4326;LINESTRING(389866 5819003, 390000 5830000)'))",
+        &[],
+    );
+}
+
+fn test_st_endpoint(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))",
         &[],
     );
 }
