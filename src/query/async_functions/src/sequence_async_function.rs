@@ -29,10 +29,8 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
 
-use crate::plans::AsyncFunctionCall;
-use crate::plans::ConstantExpr;
 use crate::AsyncFunction;
-use crate::ScalarExpr;
+use crate::AsyncFunctionCall;
 
 pub struct SequenceAsyncFunction {
     func_name: String,
@@ -59,14 +57,14 @@ impl AsyncFunction for SequenceAsyncFunction {
         span: Span,
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
-        arguments: &[Expr],
-    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
+        arguments: &[&Expr],
+    ) -> Result<AsyncFunctionCall> {
         if arguments.len() != 1 {
             return Err(ErrorCode::SemanticError(
                 "nextval function need one argument".to_string(),
             ));
         }
-        let sequence_name = if let Expr::ColumnRef { column, .. } = &arguments[0] {
+        let sequence_name = if let Expr::ColumnRef { column, .. } = arguments[0] {
             if let ColumnID::Name(name) = &column.column {
                 name.name.clone()
             } else {
@@ -81,7 +79,7 @@ impl AsyncFunction for SequenceAsyncFunction {
         };
 
         let req = GetSequenceReq {
-            ident: SequenceIdent::new(tenant, sequence_name.clone()),
+            ident: SequenceIdent::new(tenant.clone(), sequence_name.clone()),
         };
 
         let _ = catalog.get_sequence(req).await?;
@@ -92,30 +90,25 @@ impl AsyncFunction for SequenceAsyncFunction {
             display_name: format!("nextval({})", sequence_name),
             return_type: Box::new(self.return_type.clone()),
             arguments: vec![sequence_name],
+            tenant,
         };
 
-        Ok(Some(Box::new((
-            table_func.into(),
-            self.return_type.clone(),
-        ))))
+        Ok(table_func)
     }
 
     async fn generate(
         &self,
-        tenant: Tenant,
         catalog: Arc<dyn Catalog>,
         async_func: &AsyncFunctionCall,
-    ) -> Result<ScalarExpr> {
+    ) -> Result<Scalar> {
+        let tenant = &async_func.tenant;
         let req = GetSequenceNextValueReq {
             ident: SequenceIdent::new(tenant, async_func.arguments[0].clone()),
             count: 1,
         };
 
         let reply = catalog.get_sequence_next_value(req).await?;
-        let expr = ConstantExpr {
-            span: async_func.span,
-            value: Scalar::Number(NumberScalar::UInt64(reply.start)),
-        };
-        Ok(ScalarExpr::ConstantExpr(expr))
+
+        Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
     }
 }

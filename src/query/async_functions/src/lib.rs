@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod async_function_mgr;
-mod sequence_async_function;
-pub use async_function_mgr::AsyncFunction;
+pub mod async_function;
+pub mod async_function_mgr;
+pub mod sequence_async_function;
+
+pub use async_function::AsyncFunction;
+pub use async_function::AsyncFunctionCall;
 pub use async_function_mgr::AsyncFunctionManager;

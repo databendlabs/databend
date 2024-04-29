@@ -16,6 +16,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use databend_common_ast::ast::BinaryOperator;
+use databend_common_async_functions::AsyncFunctionCall;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Range;
 use databend_common_exception::Result;
@@ -668,17 +669,6 @@ pub struct UDFLambdaCall {
     pub span: Span,
     pub func_name: String,
     pub scalar: Box<ScalarExpr>,
-}
-
-#[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
-pub struct AsyncFunctionCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-    pub span: Span,
-    pub func_name: String,
-    pub display_name: String,
-    pub return_type: Box<DataType>,
-    pub arguments: Vec<String>,
 }
 
 pub trait Visitor<'a>: Sized {

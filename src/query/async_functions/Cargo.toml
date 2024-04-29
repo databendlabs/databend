@@ -1,0 +1,26 @@
+[package]
+name = "databend-common-async-functions"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+databend-common-ast = { path = "../ast" }
+databend-common-base = { path = "../../common/base" }
+databend-common-catalog = { path = "../catalog" }
+databend-common-exception = { path = "../../common/exception" }
+databend-common-expression = { path = "../expression" }
+databend-common-functions = { path = "../functions" }
+databend-common-meta-app = { path = "../../meta/app" }
+
+# Crates.io dependencies
+async-trait = { workspace = true }
+educe = "0.4"
+
+[dev-dependencies]

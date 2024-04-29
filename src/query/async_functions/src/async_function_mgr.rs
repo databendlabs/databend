@@ -21,32 +21,12 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
-use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
 use databend_common_meta_app::tenant::Tenant;
 
-use super::sequence_async_function::SequenceAsyncFunction;
-use crate::plans::AsyncFunctionCall;
-use crate::ScalarExpr;
-
-#[async_trait::async_trait]
-pub trait AsyncFunction: Sync + Send {
-    fn func_name(&self) -> String;
-
-    async fn generate(
-        &self,
-        tenant: Tenant,
-        catalog: Arc<dyn Catalog>,
-        async_func: &AsyncFunctionCall,
-    ) -> Result<ScalarExpr>;
-
-    async fn resolve(
-        &self,
-        span: Span,
-        tenant: Tenant,
-        catalog: Arc<dyn Catalog>,
-        arguments: &[Expr],
-    ) -> Result<Option<Box<(ScalarExpr, DataType)>>>;
-}
+use crate::sequence_async_function::SequenceAsyncFunction;
+use crate::AsyncFunction;
+use crate::AsyncFunctionCall;
 
 pub struct AsyncFunctionManager {
     functions: HashMap<String, Arc<dyn AsyncFunction>>,
@@ -73,12 +53,11 @@ impl AsyncFunctionManager {
 
     pub async fn generate(
         &self,
-        tenant: Tenant,
         catalog: Arc<dyn Catalog>,
         async_func: &AsyncFunctionCall,
-    ) -> Result<ScalarExpr> {
+    ) -> Result<Scalar> {
         if let Some(func) = self.functions.get(&async_func.func_name) {
-            func.generate(tenant, catalog, async_func).await
+            func.generate(catalog, async_func).await
         } else {
             Err(ErrorCode::SemanticError(format!(
                 "cannot find function {}",
@@ -93,12 +72,15 @@ impl AsyncFunctionManager {
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
         func_name: &str,
-        arguments: &[Expr],
-    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
+        arguments: &[&Expr],
+    ) -> Result<AsyncFunctionCall> {
         if let Some(func) = self.functions.get(func_name) {
             func.resolve(span, tenant, catalog, arguments).await
         } else {
-            Ok(None)
+            Err(ErrorCode::SemanticError(format!(
+                "cannot find function {}",
+                func_name
+            )))
         }
     }
 }

@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_async_functions::AsyncFunctionCall;
 use databend_common_exception::Result;
 
 use crate::optimizer::SExpr;
 use crate::plans::AsyncFunction;
-use crate::plans::AsyncFunctionCall;
 use crate::plans::RelOperator;
 use crate::IndexType;
 use crate::ScalarExpr;

@@ -34,6 +34,7 @@ enable_queries_executor = []
 # Workspace dependencies
 databend-common-arrow = { path = "../../common/arrow" }
 databend-common-ast = { path = "../ast" }
+databend-common-async-functions = { path = "../async_functions" }
 databend-common-base = { path = "../../common/base" }
 databend-common-cache = { path = "../../common/cache" }
 databend-common-catalog = { path = "../catalog" }

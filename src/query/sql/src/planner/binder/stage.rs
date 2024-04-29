@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_async_functions::AsyncFunctionManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,7 +34,7 @@ use indexmap::IndexMap;
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
-use crate::AsyncFunctionManager;
+use crate::plans::ConstantExpr;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -69,7 +70,6 @@ impl BindContext {
 
         let mut map_exprs = Vec::with_capacity(exprs.len());
         let catalog = ctx.get_default_catalog()?;
-        let tenant = ctx.get_tenant();
         for (i, expr) in exprs.iter().enumerate() {
             // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
             if let AExpr::ColumnRef { column, .. } = expr {
@@ -81,10 +81,15 @@ impl BindContext {
             }
 
             let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
-            if let ScalarExpr::AsyncFunctionCall(async_function_call) = &scalar {
-                scalar = AsyncFunctionManager::instance()
-                    .generate(tenant.clone(), catalog.clone(), async_function_call)
+            if let ScalarExpr::AsyncFunctionCall(async_func) = &scalar {
+                let value = AsyncFunctionManager::instance()
+                    .generate(catalog.clone(), async_func)
                     .await?;
+                let expr = ConstantExpr {
+                    span: async_func.span,
+                    value,
+                };
+                scalar = ScalarExpr::ConstantExpr(expr);
             }
             let target_type = schema.field(i).data_type();
             if data_type != *target_type {

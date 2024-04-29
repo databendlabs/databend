@@ -46,6 +46,7 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_async_functions::AsyncFunctionManager;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -84,6 +85,7 @@ use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
+use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
@@ -104,7 +106,6 @@ use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
-use crate::async_function::AsyncFunctionManager;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
 use crate::binder::wrap_cast;
@@ -749,10 +750,6 @@ impl<'a> TypeChecker<'a> {
                 {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
                         return Ok(udf);
-                    } else if let Some(async_function) =
-                        self.resolve_async_function(*span, func_name, args).await?
-                    {
-                        return Ok(async_function);
                     } else {
                         // Function not found, try to find and suggest similar function name.
                         let all_funcs = BUILTIN_FUNCTIONS
@@ -925,6 +922,8 @@ impl<'a> TypeChecker<'a> {
                         }
                         _ => unreachable!(),
                     }
+                } else if ASYNC_FUNCTIONS.contains(&func_name) {
+                    self.resolve_async_function(*span, func_name, &args).await?
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -3702,13 +3701,16 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func_name: &str,
-        arguments: &[Expr],
-    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
+        arguments: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let catalog = self.ctx.get_default_catalog()?;
         let tenant = self.ctx.get_tenant();
-        AsyncFunctionManager::instance()
+        let async_func = AsyncFunctionManager::instance()
             .resolve(span, tenant, catalog, func_name, arguments)
-            .await
+            .await?;
+
+        let data_type = async_func.return_type.as_ref().clone();
+        Ok(Box::new((async_func.into(), data_type)))
     }
 
     #[async_recursion::async_recursion]
