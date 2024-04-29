@@ -13,19 +13,20 @@ CREATE TABLE tmp(a int, b uint64, c int);
 query T
 explain INSERT INTO tmp select 10,nextval(seq),20 from numbers(3);
 ----
-EvalScalar                                                                    
-├── output columns: [nextval(seq) (#2), 10 (#1), nextval(seq) (#2), 20 (#3)] 
-├── expressions: [10, nextval(seq), 20]                                     
-├── estimated rows: 0.00                                                   
-└── AsyncFunction                                                         
- ├── output columns: [nextval(seq) (#2)]                                 
- ├── estimated rows: 0.00                                               
- └── TableScan                                                         
-     ├── table: default.system.numbers                                
-     ├── output columns: []                                          
-     ├── read rows: 3                                               
-     ├── read size: < 1 KiB                                        
-     ├── partitions total: 1                                      
-     ├── partitions scanned: 1                                   
-     ├── push downs: [filters: [], limit: NONE]                 
-     └── estimated rows: 3.00                                  
+Insert
+EvalScalar
+├── output columns: [nextval(seq) (#2), 10 (#1), nextval(seq) (#2), 20 (#3)]
+├── expressions: [10, nextval(seq), 20]
+├── estimated rows: 0.00
+└── AsyncFunction
+   ├── output columns: [nextval(seq) (#2)]
+   ├── estimated rows: 0.00
+   └── TableScan
+       ├── table: default.system.numbers
+       ├── output columns: []
+       ├── read rows: 3
+       ├── read size: < 1 KiB
+       ├── partitions total: 1
+       ├── partitions scanned: 1
+       ├── push downs: [filters: [], limit: NONE]
+       └── estimated rows: 3.00                             
