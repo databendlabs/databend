@@ -69,6 +69,7 @@ output type    : String
 output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)"}
 output         : 'LINESTRING(0.75 0.75,-10 20)'
 
+
 ast            : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
 raw expr       : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
 checked expr   : st_endpoint<Geometry>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"))
@@ -76,6 +77,7 @@ optimized expr : "POINT(4 4)"
 output type    : Geometry
 output domain  : Undefined
 output         : 'POINT(4 4)'
+
 
 ast            : st_dimension(to_geometry('POINT(-122.35 37.55)'))
 raw expr       : st_dimension(to_geometry('POINT(-122.35 37.55)'))
