@@ -136,7 +136,14 @@ impl StageFilesInfo {
             Ok(res)
         } else {
             let pattern = self.get_pattern()?;
-            StageFilesInfo::list_files_with_pattern(operator, &self.path, pattern, self.start_after.as_deref(), max_files).await
+            StageFilesInfo::list_files_with_pattern(
+                operator,
+                &self.path,
+                pattern,
+                self.start_after.as_deref(),
+                max_files,
+            )
+            .await
         }
     }
 
@@ -215,8 +222,7 @@ impl StageFilesInfo {
         let mut fut = operator
             .lister_with(path)
             .recursive(true)
-            .metakey(StageFileInfo::meta_query())
-            ;
+            .metakey(StageFileInfo::meta_query());
 
         if let Some(start_after) = start_after {
             fut = fut.start_after(start_after)

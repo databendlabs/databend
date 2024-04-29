@@ -22,6 +22,9 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_sql::executor::physical_plans::CopyIntoLocation;
+use databend_common_sql::executor::physical_plans::Project;
+use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storages_stage::StageTable;
 use log::debug;
@@ -31,6 +34,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyIntoLocationPlan;
@@ -48,7 +52,7 @@ impl CopyIntoLocationInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn build_query(&self, query: &Plan) -> Result<(SelectInterpreter, DataSchemaRef)> {
+    async fn build_query(&self, query: &Plan) -> Result<SelectInterpreter> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -69,21 +73,7 @@ impl CopyIntoLocationInterpreter {
             false,
         )?;
 
-        // Building data schema from bind_context columns
-        // TODO(leiyskey): Extract the following logic as new API of BindContext.
-        let fields = bind_context
-            .columns
-            .iter()
-            .map(|column_binding| {
-                DataField::new(
-                    &column_binding.column_name,
-                    *column_binding.data_type.clone(),
-                )
-            })
-            .collect();
-        let data_schema = DataSchemaRefExt::create(fields);
-
-        Ok((select_interpreter, data_schema))
+        Ok(select_interpreter)
     }
 
     /// Build a pipeline for local copy into stage.
