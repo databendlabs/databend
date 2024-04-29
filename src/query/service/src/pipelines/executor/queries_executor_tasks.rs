@@ -97,10 +97,18 @@ impl QueriesExecutorTasksQueue {
         executor: &Arc<QueriesPipelineExecutor>,
     ) {
         let mut workers_tasks = self.workers_tasks.lock();
-        if !workers_tasks.current_tasks.is_empty() {
+        while !workers_tasks.current_tasks.is_empty() {
             let task = workers_tasks
                 .current_tasks
                 .pop_task(context.get_worker_id());
+
+            if let Some(graph) =  task.get_graph(){
+                if !graph.can_perform_task(executor.epoch.load(Ordering::SeqCst)){
+                    workers_tasks.next_tasks.push_task(context.get_worker_id(), task);
+                    continue;
+                }
+            }
+
             context.set_task(task);
 
             let workers_condvar = context.get_workers_condvar();

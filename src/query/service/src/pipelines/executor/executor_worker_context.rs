@@ -44,6 +44,18 @@ pub enum ExecutorTask {
     AsyncCompleted(CompletedAsyncTask),
 }
 
+impl ExecutorTask{
+    pub fn get_graph(&self) -> Option<Arc<RunningGraph>> {
+            match self {
+                ExecutorTask::None => None,
+                ExecutorTask::Sync(p) => Some(p.graph.clone()),
+                ExecutorTask::Async(p) => Some(p.graph.clone()),
+                ExecutorTask::AsyncCompleted(p) => Some(p.graph.clone()),
+            }
+
+    }
+}
+
 pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
