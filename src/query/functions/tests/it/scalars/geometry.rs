@@ -30,6 +30,7 @@ fn test_geometry() {
     test_st_aswkb(file);
     test_st_asewkt(file);
     test_st_aswkt(file);
+    test_st_endpoint(file);
     test_st_dimension(file);
     test_st_geohash(file);
     test_st_asgeojson(file);
@@ -38,6 +39,7 @@ fn test_geometry() {
     test_st_makeline(file);
     test_st_makepoint(file);
     test_st_makepolygon(file);
+    test_st_pointn(file);
     test_to_geometry(file);
     test_to_string(file);
     test_try_to_geometry(file);
@@ -154,6 +156,14 @@ fn test_st_asgeojson(file: &mut impl Write) {
     );
 }
 
+fn test_st_endpoint(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))",
+        &[],
+    );
+}
+
 fn test_st_geomfromgeohash(file: &mut impl Write) {
     run_ast(file, "st_geomfromgeohash('9q60y60rhs')", &[]);
     run_ast(file, "st_geomfromgeohash(a)", &[(
@@ -216,6 +226,19 @@ fn test_st_makepolygon(file: &mut impl Write) {
             "LINESTRING(10.1 5.2, 15.2 7.3, 20.2 8.3, 10.9 7.7, 10.1 5.2)",
         ]),
     )]);
+}
+
+fn test_st_pointn(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 1)",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), -2)",
+        &[],
+    );
 }
 
 fn test_to_geometry(file: &mut impl Write) {

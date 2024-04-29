@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod api;
+mod dir_name;
 mod helper;
 mod item;
 mod key;
@@ -25,13 +26,15 @@ mod test_suite;
 mod value;
 mod value_with_name;
 
+pub(crate) mod testing;
+
 pub use api::ApiBuilder;
 pub use api::AsKVApi;
 pub use api::KVApi;
 pub use api::KVStream;
+pub use dir_name::DirName;
 pub use item::Item;
 pub use item::NonEmptyItem;
-pub use key::DirName;
 pub use key::Key;
 pub use key::KeyError;
 pub use key_builder::KeyBuilder;

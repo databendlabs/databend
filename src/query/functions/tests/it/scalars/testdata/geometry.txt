@@ -70,6 +70,15 @@ output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)
 output         : 'LINESTRING(0.75 0.75,-10 20)'
 
 
+ast            : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
+raw expr       : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
+checked expr   : st_endpoint<Geometry>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"))
+optimized expr : "POINT(4 4)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(4 4)'
+
+
 ast            : st_dimension(to_geometry('POINT(-122.35 37.55)'))
 raw expr       : st_dimension(to_geometry('POINT(-122.35 37.55)'))
 checked expr   : st_dimension<Geometry>(to_geometry<String>("POINT(-122.35 37.55)"))
@@ -319,6 +328,24 @@ evaluation (internal):
 | a      | StringColumn { data: 0x4c494e45535452494e4728302e3020302e302c20312e3020302e302c20312e3020322e302c20302e3020322e302c20302e3020302e30294c494e45535452494e472831302e3120352e322c2031352e3220372e332c2032302e3220382e332c2031302e3920372e372c2031302e3120352e3229, offsets: [0, 55, 115] }                                                                                                                                               |
 | Output | BinaryColumn { data: 0x0103000000010000000500000000000000000000000000000000000000000000000000f03f0000000000000000000000000000f03f00000000000000400000000000000000000000000000004000000000000000000000000000000000010300000001000000050000003333333333332440cdcccccccccc14406666666666662e403333333333331d4033333333333334409a99999999992040cdcccccccccc2540cdcccccccccc1e403333333333332440cdcccccccccc1440, offsets: [0, 93, 186] } |
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 1)
+raw expr       : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 1)
+checked expr   : st_pointn<Geometry, Int32>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"), to_int32<UInt8>(1_u8))
+optimized expr : "POINT(1 1)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(1 1)'
+
+
+ast            : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), -2)
+raw expr       : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), minus(2))
+checked expr   : st_pointn<Geometry, Int32>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"), to_int32<Int16>(minus<UInt8>(2_u8)))
+optimized expr : "POINT(3 3)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(3 3)'
 
 
 ast            : to_geometry('POINT(1820.12 890.56)')
