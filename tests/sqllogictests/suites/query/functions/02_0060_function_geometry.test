@@ -381,6 +381,14 @@ SELECT ST_GEOHASH(TO_GEOMETRY('POINT(-122.306100 37.554162)', 4326), 10)
 9q9j8ue2v7
 
 statement ok
+SET geometry_output_format='WKT'
+
+query T
+SELECT TO_STRING(ST_ENDPOINT(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)')));
+----
+POINT(4 4)
+
+statement ok
 CREATE OR REPLACE TABLE t1 (g GEOMETRY)
 
 statement ok
