@@ -244,6 +244,7 @@ impl Processor for ReadParquetDataSource<false> {
             );
             let mut fuse_part_infos = Vec::with_capacity(parts.len());
             for part in parts.into_iter() {
+                eprintln!("applying range filter");
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
                     &part,
@@ -253,6 +254,7 @@ impl Processor for ReadParquetDataSource<false> {
                     continue;
                 }
 
+                eprintln!("applying bloom filter");
                 if runtime_bloom_filter_pruner(
                     self.table_schema.clone(),
                     &part,

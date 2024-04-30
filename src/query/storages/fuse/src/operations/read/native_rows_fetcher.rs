@@ -229,6 +229,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 &column_nodes,
                 None,
                 &self.projection,
+                None, // TODO bloom filer desc
             );
             self.part_map.insert(prefix, (part_info, page_size));
         }

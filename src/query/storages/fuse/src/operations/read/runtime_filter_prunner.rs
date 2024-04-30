@@ -92,10 +92,10 @@ pub fn runtime_filter_pruner(
 
     if pruned {
         info!(
-            "Pruned partition with {:?} rows by runtime filter",
+            "Pruned partition  with {:?} rows by runtime range filter",
             part.nums_rows
         );
-        Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::RuntimeRangeFilterPrunedParts, 1);
     }
 
     Ok(pruned)
@@ -109,6 +109,8 @@ pub async fn runtime_bloom_filter_pruner(
     dal: &Operator,
 ) -> Result<bool> {
     let part = FuseBlockPartInfo::from_part(part)?;
+
+    let mut pruned = false;
 
     if let Some(bloom_desc) = &part.bloom_index_descriptor {
         let index_location = bloom_desc.bloom_index_location.clone();
@@ -124,17 +126,31 @@ pub async fn runtime_bloom_filter_pruner(
                 Some(filter_expr),
                 bloom_index_cols.clone(),
             )? {
+                eprintln!("got bloom pruner");
                 let should_keep = bloom_pruner
                     .should_keep(&index_location, index_size, column_ids.clone())
                     .await;
                 if !should_keep {
-                    return Ok(true);
+                    pruned = true;
+                    break;
                 }
+            } else {
+                eprintln!("not suitable bloom pruner found")
             }
         }
+    } else {
+        eprintln!("not bloom_index_descriptor found");
     }
 
-    Ok(false)
+    if pruned {
+        info!(
+            "Pruned partition  with {:?} rows by runtime bloom filter",
+            part.nums_rows
+        );
+        Profile::record_usize_profile(ProfileStatisticsName::RuntimeBloomFilterPrunedParts, 1);
+    }
+
+    Ok(pruned)
 }
 
 pub(crate) fn update_bitmap_with_bloom_filter(

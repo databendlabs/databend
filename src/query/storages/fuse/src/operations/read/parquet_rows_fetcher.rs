@@ -209,6 +209,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
                 &column_nodes,
                 None,
                 &self.projection,
+                None,
             );
 
             self.part_map.insert(prefix, part_info);

@@ -155,7 +155,8 @@ impl BlockReader {
     }
 
     pub fn support_blocking_api(&self) -> bool {
-        self.operator.info().native_capability().blocking
+        // self.operator.info().native_capability().blocking
+        false
     }
 
     // Build non duplicate leaf_indices to avoid repeated read column from parquet

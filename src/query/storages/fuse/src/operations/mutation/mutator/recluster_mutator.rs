@@ -253,8 +253,14 @@ impl ReclusterMutator {
         total_bytes: usize,
         level: i32,
     ) {
-        let (stats, parts) =
-            FuseTable::to_partitions(Some(&self.schema), block_metas, column_nodes, None, None);
+        let (stats, parts) = FuseTable::to_partitions(
+            Some(&self.schema),
+            block_metas,
+            column_nodes,
+            None,
+            None,
+            None,
+        );
         let task = ReclusterTask {
             parts,
             stats,
