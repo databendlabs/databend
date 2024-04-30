@@ -109,10 +109,10 @@ impl SnapshotGenerator for MutationGenerator {
 
                     if matches!(self.mutation_kind, MutationKind::Compact) {
                         // for compaction, a basic but very important verification:
-                        // the number of rows should not be changed
+                        // the number of rows should be the same
                         assert_eq!(
-                            new_snapshot.summary.row_count,
-                            self.base_snapshot.summary.row_count
+                            ctx.merged_statistics.row_count,
+                            ctx.removed_statistics.row_count
                         );
                     }
 
