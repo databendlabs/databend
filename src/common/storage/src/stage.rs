@@ -24,7 +24,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use futures::stream;
 use futures::Stream;
 use futures::StreamExt;
@@ -157,7 +156,8 @@ impl StageFilesInfo {
                 operator,
                 &self.path,
                 pattern,
-                max_files.unwrap_or(COPY_MAX_FILES_PER_COMMIT),
+                // TODO(youngsofun): after select-from-stage and list-stage use list_stream, we will force caller to provide max_files here.
+                max_files.unwrap_or(usize::MAX),
             )
             .await
         }
