@@ -37,10 +37,12 @@ futures = { workspace = true }
 futures-async-stream = { workspace = true }
 futures-util = { workspace = true }
 hostname = "0.3.1"
+itertools = { workspace = true }
 log = { workspace = true }
 maplit = "1.0.2"
 minitrace = { workspace = true }
 num = "0.4.0"
+ordq = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
