@@ -142,6 +142,8 @@ static BLOCK_INDEX_WRITE_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_index_write_bytes"));
 static BLOCK_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_block_index_write_milliseconds"));
+static BLOCK_INDEX_READ_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_index_read_bytes"));
 static BLOCK_INVERTED_INDEX_WRITE_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_inverted_index_write_nums"));
 static BLOCK_INVERTED_INDEX_WRITE_BYTES: LazyLock<Counter> =
@@ -149,8 +151,15 @@ static BLOCK_INVERTED_INDEX_WRITE_BYTES: LazyLock<Counter> =
 static BLOCK_INVERTED_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_in_milliseconds("fuse_block_inverted_index_write_milliseconds")
 });
-static BLOCK_INDEX_READ_BYTES: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("fuse_block_index_read_bytes"));
+static BLOCK_INVERTED_INDEX_GENERATE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_generate_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_READ_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_read_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_search_milliseconds")
+});
 static COMPACT_BLOCK_READ_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_compact_block_read_nums"));
 static COMPACT_BLOCK_READ_BYTES: LazyLock<Counter> =
@@ -513,6 +522,18 @@ pub fn metrics_inc_block_inverted_index_write_bytes(c: u64) {
 
 pub fn metrics_inc_block_inverted_index_write_milliseconds(c: u64) {
     BLOCK_INVERTED_INDEX_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_generate_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_GENERATE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_read_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_READ_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_search_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS.observe(c as f64);
 }
 
 pub fn metrics_inc_block_index_read_bytes(c: u64) {

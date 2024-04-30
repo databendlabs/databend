@@ -14,6 +14,7 @@
 
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
@@ -21,6 +22,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
 use databend_storages_common_cache::CacheKey;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
@@ -135,6 +137,7 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     field_nums: usize,
     index_path: &'a str,
 ) -> Result<InvertedIndexDirectory> {
+    let start = Instant::now();
     // load inverted index meta, contains the offsets of each files.
     let inverted_index_meta = load_inverted_index_meta(dal.clone(), index_path).await?;
 
@@ -158,6 +161,11 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     let files: Vec<_> = try_join_all(futs).await?.into_iter().collect();
     // use those files to create inverted index directory
     let directory = InvertedIndexDirectory::try_create(field_nums, files)?;
+
+    // Perf.
+    {
+        metrics_inc_block_inverted_index_read_milliseconds(start.elapsed().as_millis() as u64);
+    }
 
     Ok(directory)
 }

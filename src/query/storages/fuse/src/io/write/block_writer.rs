@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::Utc;
 use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
@@ -31,6 +32,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -208,6 +210,7 @@ impl InvertedIndexState {
         block_location: &Location,
         inverted_index_builder: &InvertedIndexBuilder,
     ) -> Result<Self> {
+        let start = Instant::now();
         let mut writer = InvertedIndexWriter::try_create(
             Arc::new(inverted_index_builder.schema.clone()),
             &inverted_index_builder.options,
@@ -215,6 +218,13 @@ impl InvertedIndexState {
         writer.add_block(source_schema, block)?;
         let data = writer.finalize()?;
         let size = data.len() as u64;
+
+        // Perf.
+        {
+            metrics_inc_block_inverted_index_generate_milliseconds(
+                start.elapsed().as_millis() as u64
+            );
+        }
 
         let inverted_index_location =
             TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
