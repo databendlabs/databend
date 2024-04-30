@@ -75,8 +75,10 @@ impl Interpreter for RemoveUserStageInterpreter {
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
         let file_op = Files::create(table_ctx, op);
 
+        const REMOVE_BATCH: usize = 1000;
         let mut chunks = files.chunks(REMOVE_BATCH);
-        const REMOVE_BATCH: usize = 4000;
+
+        // s3 can remove at most 1k files in one request
         while let Some(chunk) = chunks.next().await {
             let chunk: Result<Vec<StageFileInfo>> = chunk.into_iter().collect();
             let chunk = chunk?.into_iter().map(|x| x.path).collect::<Vec<_>>();
