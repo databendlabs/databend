@@ -48,19 +48,6 @@ pub fn check<Index: ColumnIndex>(
             scalar: scalar.clone(),
             data_type: scalar.as_ref().infer_data_type(),
         }),
-        RawExpr::AsyncFunctionCall {
-            span,
-            func_name,
-            arguments,
-            return_type,
-            display_name,
-        } => Ok(Expr::AsyncFunctionCall {
-            span: *span,
-            func_name: func_name.clone(),
-            arguments: arguments.clone(),
-            return_type: return_type.clone(),
-            display_name: display_name.clone(),
-        }),
         RawExpr::ColumnRef {
             span,
             id,

@@ -841,11 +841,7 @@ impl PhysicalPlan {
                 .iter()
                 .map(|(l, r)| format!("#{} <- #{}", l, r))
                 .join(", "),
-            PhysicalPlan::AsyncFunction(async_func) => format!(
-                "{}({})",
-                async_func.func_name,
-                async_func.arguments.iter().cloned().join(",")
-            ),
+            PhysicalPlan::AsyncFunction(async_func) => async_func.display_name.to_string(),
             _ => String::new(),
         })
     }

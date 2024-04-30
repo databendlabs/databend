@@ -142,7 +142,7 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
             count_expressions(inner_expr, counter);
         }
         // ignore constant and column ref
-        Expr::Constant { .. } | Expr::ColumnRef { .. } | Expr::AsyncFunctionCall { .. } => {}
+        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
     }
 }
 
@@ -167,6 +167,6 @@ fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<String, E
             }
         }
         // ignore constant and column ref
-        Expr::Constant { .. } | Expr::ColumnRef { .. } | Expr::AsyncFunctionCall { .. } => {}
+        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
     }
 }

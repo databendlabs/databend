@@ -19,9 +19,12 @@ use databend_common_exception::Result;
 
 use crate::optimizer::SExpr;
 use crate::plans::AsyncFunction;
+use crate::plans::BoundColumnRef;
 use crate::plans::RelOperator;
+use crate::ColumnBindingBuilder;
 use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Visibility;
 
 pub struct AsyncFunctionRewriter {
     async_functions: Vec<(IndexType, AsyncFunctionCall)>,
@@ -42,6 +45,19 @@ impl AsyncFunctionRewriter {
                 for item in &mut plan.items {
                     if let ScalarExpr::AsyncFunctionCall(async_func) = &item.scalar {
                         self.async_functions.push((item.index, async_func.clone()));
+                        // Generate a ColumnBinding for each async function
+                        let column = ColumnBindingBuilder::new(
+                            async_func.display_name.clone(),
+                            item.index,
+                            async_func.return_type.clone(),
+                            Visibility::Visible,
+                        )
+                        .build();
+
+                        item.scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: async_func.span,
+                            column,
+                        });
                     }
                 }
 
@@ -49,23 +65,26 @@ impl AsyncFunctionRewriter {
                     Ok(s_expr)
                 } else {
                     let expr = self.create_async_function_expr(s_expr.children[0].clone());
-                    Ok(SExpr::create_unary(s_expr.plan.clone(), Arc::new(expr)))
+                    Ok(SExpr::create_unary(Arc::new(plan.into()), expr))
                 }
             }
             _ => Ok(s_expr),
         }
     }
 
-    fn create_async_function_expr(&mut self, child_expr: Arc<SExpr>) -> SExpr {
-        let (index, func) = &self.async_functions[0];
+    fn create_async_function_expr(&mut self, mut child_expr: Arc<SExpr>) -> Arc<SExpr> {
+        for (index, func) in &self.async_functions {
+            let async_func = AsyncFunction {
+                func_name: func.func_name.clone(),
+                arguments: func.arguments.clone(),
+                display_name: func.display_name.clone(),
+                return_type: func.return_type.as_ref().clone(),
+                index: *index,
+            };
 
-        let async_func = AsyncFunction {
-            func_name: func.func_name.clone(),
-            arguments: func.arguments.clone(),
-            display_name: func.display_name.clone(),
-            return_type: func.return_type.as_ref().clone(),
-            index: *index,
-        };
-        SExpr::create_unary(Arc::new(async_func.into()), child_expr.clone())
+            child_expr = Arc::new(SExpr::create_unary(Arc::new(async_func.into()), child_expr))
+        }
+
+        child_expr
     }
 }

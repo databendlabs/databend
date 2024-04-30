@@ -71,13 +71,6 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         lambda_display: String,
         return_type: DataType,
     },
-    AsyncFunctionCall {
-        span: Span,
-        func_name: String,
-        display_name: String,
-        return_type: Box<DataType>,
-        arguments: Vec<String>,
-    },
 }
 
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
@@ -125,14 +118,6 @@ pub enum Expr<Index: ColumnIndex = usize> {
         lambda_expr: RemoteExpr,
         lambda_display: String,
         return_type: DataType,
-    },
-    AsyncFunctionCall {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-        span: Span,
-        func_name: String,
-        display_name: String,
-        return_type: Box<DataType>,
-        arguments: Vec<String>,
     },
 }
 
@@ -182,14 +167,6 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         lambda_display: String,
         return_type: DataType,
     },
-    AsyncFunctionCall {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-        span: Span,
-        func_name: String,
-        display_name: String,
-        return_type: Box<DataType>,
-        arguments: Vec<String>,
-    },
 }
 
 impl<Index: ColumnIndex> RawExpr<Index> {
@@ -205,7 +182,6 @@ impl<Index: ColumnIndex> RawExpr<Index> {
                 RawExpr::LambdaFunctionCall { args, .. } => {
                     args.iter().for_each(|expr| walk(expr, buf))
                 }
-                RawExpr::AsyncFunctionCall { .. } => {}
             }
         }
 
@@ -222,19 +198,6 @@ impl<Index: ColumnIndex> RawExpr<Index> {
             RawExpr::Constant { span, scalar } => RawExpr::Constant {
                 span: *span,
                 scalar: scalar.clone(),
-            },
-            RawExpr::AsyncFunctionCall {
-                span,
-                func_name,
-                arguments,
-                return_type,
-                display_name,
-            } => RawExpr::AsyncFunctionCall {
-                span: *span,
-                func_name: func_name.clone(),
-                arguments: arguments.clone(),
-                return_type: return_type.clone(),
-                display_name: display_name.clone(),
             },
             RawExpr::ColumnRef {
                 span,
@@ -296,7 +259,6 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Cast { span, .. } => *span,
             Expr::FunctionCall { span, .. } => *span,
             Expr::LambdaFunctionCall { span, .. } => *span,
-            Expr::AsyncFunctionCall { span, .. } => *span,
         }
     }
 
@@ -313,7 +275,6 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Cast { dest_type, .. } => dest_type,
             Expr::FunctionCall { return_type, .. } => return_type,
             Expr::LambdaFunctionCall { return_type, .. } => return_type,
-            Expr::AsyncFunctionCall { return_type, .. } => return_type,
         }
     }
 
@@ -329,7 +290,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                 Expr::LambdaFunctionCall { args, .. } => {
                     args.iter().for_each(|expr| walk(expr, buf))
                 }
-                Expr::AsyncFunctionCall { .. } => {}
             }
         }
 
@@ -403,19 +363,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                 lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
-            },
-            Expr::AsyncFunctionCall {
-                span,
-                func_name,
-                arguments,
-                return_type,
-                display_name,
-            } => Expr::AsyncFunctionCall {
-                span: *span,
-                func_name: func_name.clone(),
-                arguments: arguments.clone(),
-                return_type: return_type.clone(),
-                display_name: display_name.clone(),
             },
         }
     }
@@ -499,19 +446,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
-            Expr::AsyncFunctionCall {
-                span,
-                func_name,
-                arguments,
-                return_type,
-                display_name,
-            } => Expr::AsyncFunctionCall {
-                span: *span,
-                func_name: func_name.clone(),
-                arguments: arguments.clone(),
-                return_type: return_type.clone(),
-                display_name: display_name.clone(),
-            },
         }
     }
 
@@ -577,25 +511,12 @@ impl<Index: ColumnIndex> Expr<Index> {
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
-            Expr::AsyncFunctionCall {
-                span,
-                func_name,
-                arguments,
-                return_type,
-                display_name,
-            } => RemoteExpr::AsyncFunctionCall {
-                span: *span,
-                func_name: func_name.clone(),
-                arguments: arguments.clone(),
-                return_type: return_type.clone(),
-                display_name: display_name.clone(),
-            },
         }
     }
 
     pub fn is_deterministic(&self, registry: &FunctionRegistry) -> bool {
         match self {
-            Expr::Constant { .. } | Expr::ColumnRef { .. } | Expr::AsyncFunctionCall { .. } => true,
+            Expr::Constant { .. } | Expr::ColumnRef { .. } => true,
             Expr::Cast { expr, .. } => expr.is_deterministic(registry),
             Expr::FunctionCall { function, args, .. } => {
                 !registry
@@ -676,19 +597,6 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 lambda_expr: *lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
-            },
-            RemoteExpr::AsyncFunctionCall {
-                span,
-                func_name,
-                arguments,
-                return_type,
-                display_name,
-            } => Expr::AsyncFunctionCall {
-                span: *span,
-                func_name: func_name.clone(),
-                arguments: arguments.clone(),
-                return_type: return_type.clone(),
-                display_name: display_name.clone(),
             },
         }
     }

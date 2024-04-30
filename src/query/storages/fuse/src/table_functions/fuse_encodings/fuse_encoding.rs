@@ -363,18 +363,5 @@ pub fn as_expr(
                 return_type: return_type.clone(),
             }
         }
-        RemoteExpr::AsyncFunctionCall {
-            span,
-            func_name,
-            arguments,
-            return_type,
-            display_name,
-        } => Expr::AsyncFunctionCall {
-            span: *span,
-            func_name: func_name.clone(),
-            arguments: arguments.clone(),
-            return_type: return_type.clone(),
-            display_name: display_name.clone(),
-        },
     }
 }

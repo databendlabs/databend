@@ -127,7 +127,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".fmt(f)?,
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".fmt(f)?,
             PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".fmt(f)?,
-            PhysicalPlan::AsyncFunction(async_func) => write!(f, "{}", async_func)?,
+            PhysicalPlan::AsyncFunction(_) => "AsyncFunction".fmt(f)?,
         }
 
         for node in self.node.children() {
@@ -547,6 +547,6 @@ impl Display for Udf {
 
 impl Display for AsyncFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AsyncFunction: [{}]", self.display_name)
+        write!(f, "AsyncFunction: {}", self.display_name)
     }
 }
