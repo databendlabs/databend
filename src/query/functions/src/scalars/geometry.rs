@@ -865,6 +865,33 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
+        "st_srid",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<Int32Type>>(
+            |geometry, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match read_ewkb_srid(&mut io::Cursor::new(&geometry)) {
+                    Ok(srid) => {
+                        output.push(srid.unwrap_or(4326));
+                    }
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        output.push(0);
+                    }
+                };
+            },
+        ),
+    );
+
     registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
         "to_string",
         |_, _| FunctionDomain::MayThrow,
