@@ -23,12 +23,14 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_common_meta_app::schema::TableMeta;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -155,10 +157,42 @@ impl BloomIndexState {
 
 #[derive(Clone)]
 pub struct InvertedIndexBuilder {
-    pub name: String,
-    pub version: String,
-    pub schema: DataSchema,
-    pub options: BTreeMap<String, String>,
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) schema: DataSchema,
+    pub(crate) options: BTreeMap<String, String>,
+}
+
+pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedIndexBuilder> {
+    let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
+    for index in table_meta.indexes.values() {
+        if !index.sync_creation {
+            continue;
+        }
+        let mut index_fields = Vec::with_capacity(index.column_ids.len());
+        for column_id in &index.column_ids {
+            for field in &table_meta.schema.fields {
+                if field.column_id() == *column_id {
+                    index_fields.push(DataField::from(field));
+                    break;
+                }
+            }
+        }
+        // ignore invalid index
+        if index_fields.len() != index.column_ids.len() {
+            continue;
+        }
+        let index_schema = DataSchema::new(index_fields);
+
+        let inverted_index_builder = InvertedIndexBuilder {
+            name: index.name.clone(),
+            version: index.version.clone(),
+            schema: index_schema,
+            options: index.options.clone(),
+        };
+        inverted_index_builders.push(inverted_index_builder);
+    }
+    inverted_index_builders
 }
 
 pub struct InvertedIndexState {

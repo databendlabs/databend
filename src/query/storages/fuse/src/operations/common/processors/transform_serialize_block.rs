@@ -38,6 +38,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_index::BloomIndex;
 use opendal::Operator;
 
+use crate::io::create_inverted_index_builders;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
@@ -130,35 +131,7 @@ impl TransformSerializeBlock {
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
 
-        let table_meta = &table.table_info.meta;
-        let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
-        for index in table_meta.indexes.values() {
-            if !index.sync_creation {
-                continue;
-            }
-            let mut index_fields = Vec::with_capacity(index.column_ids.len());
-            for column_id in &index.column_ids {
-                for field in &table_meta.schema.fields {
-                    if field.column_id() == *column_id {
-                        index_fields.push(DataField::from(field));
-                        break;
-                    }
-                }
-            }
-            // ignore invalid index
-            if index_fields.len() != index.column_ids.len() {
-                continue;
-            }
-            let index_schema = DataSchema::new(index_fields);
-
-            let inverted_index_builder = InvertedIndexBuilder {
-                name: index.name.clone(),
-                version: index.version.clone(),
-                schema: index_schema,
-                options: index.options.clone(),
-            };
-            inverted_index_builders.push(inverted_index_builder);
-        }
+        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
         let block_builder = BlockBuilder {
             ctx,
