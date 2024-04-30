@@ -212,7 +212,6 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         locations,
         None,
         None,
-        None,
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments_v3[0].1.summary, None);

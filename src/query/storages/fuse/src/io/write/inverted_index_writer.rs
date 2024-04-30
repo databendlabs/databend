@@ -21,10 +21,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use opendal::Operator;
 use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
@@ -50,20 +50,19 @@ use tantivy::SegmentComponent;
 use tantivy_jieba::JiebaTokenizer;
 
 use crate::index::build_tantivy_footer;
-use crate::io::write_data;
 
 pub struct InvertedIndexWriter {
-    schema: DataSchema,
+    schema: DataSchemaRef,
     index_writer: IndexWriter,
     operations: Vec<UserOperation>,
 }
 
 impl InvertedIndexWriter {
     pub fn try_create(
-        schema: DataSchema,
+        schema: DataSchemaRef,
         index_options: &BTreeMap<String, String>,
     ) -> Result<InvertedIndexWriter> {
-        let (index_schema, _) = create_index_schema(&schema, index_options)?;
+        let (index_schema, _) = create_index_schema(schema.clone(), index_options)?;
 
         let index_settings = IndexSettings {
             sort_by_field: None,
@@ -88,35 +87,19 @@ impl InvertedIndexWriter {
         })
     }
 
-    pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
-        if block.num_columns() != self.schema.num_fields() {
-            return Err(ErrorCode::TableSchemaMismatch(format!(
-                "Data schema mismatched. Data columns length: {}, schema fields length: {}",
-                block.num_columns(),
-                self.schema.num_fields()
-            )));
-        }
-        for (column, field) in block.columns().iter().zip(self.schema.fields().iter()) {
-            if &column.data_type != field.data_type() {
-                return Err(ErrorCode::TableSchemaMismatch(format!(
-                    "Data schema mismatched (col name: {}). Data column type is {:?}, but schema field type is {:?}",
-                    field.name(),
-                    column.data_type,
-                    field.data_type()
-                )));
-            }
-        }
-
-        let mut types = Vec::with_capacity(self.schema.num_fields());
+    pub fn add_block(&mut self, source_schema: &TableSchemaRef, block: &DataBlock) -> Result<()> {
+        let mut field_indexes = Vec::with_capacity(self.schema.num_fields());
         for field in self.schema.fields() {
             let ty = field.data_type().remove_nullable();
-            types.push(ty);
+            let field_index = source_schema.index_of(field.name().as_str())?;
+            field_indexes.push((field_index, ty))
         }
+
         for i in 0..block.num_rows() {
             let mut doc = TantivyDocument::new();
-            for (j, typ) in types.iter().enumerate() {
+            for (j, (field_index, ty)) in field_indexes.iter().enumerate() {
                 let field = Field::from_field_id(j as u32);
-                let column = block.get_by_offset(j);
+                let column = block.get_by_offset(*field_index);
                 match unsafe { column.value.index_unchecked(i) } {
                     ScalarRef::String(text) => doc.add_text(field, text),
                     ScalarRef::Variant(jsonb_val) => {
@@ -132,7 +115,7 @@ impl InvertedIndexWriter {
                         }
                     }
                     _ => {
-                        if typ == &DataType::Variant {
+                        if ty == &DataType::Variant {
                             doc.add_object(field, BTreeMap::new());
                         } else {
                             doc.add_text(field, "");
@@ -147,16 +130,15 @@ impl InvertedIndexWriter {
     }
 
     #[async_backtrace::framed]
-    pub async fn finalize(mut self, operator: &Operator, index_location: String) -> Result<()> {
+    pub fn finalize(mut self) -> Result<Vec<u8>> {
         let _ = self.index_writer.run(self.operations);
         let _ = self.index_writer.commit()?;
         let index = self.index_writer.index();
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        Self::write_index(&mut buffer, index).await?;
-        write_data(buffer, operator, &index_location).await?;
+        Self::write_index(&mut buffer, index)?;
 
-        Ok(())
+        Ok(buffer)
     }
 
     // The tantivy index data consists of eight files.
@@ -224,7 +206,7 @@ impl InvertedIndexWriter {
     // We merge the data from these files into one file and
     // record the offset to read each part of the data.
     #[async_backtrace::framed]
-    async fn write_index<W: Write>(mut writer: &mut W, index: &Index) -> Result<()> {
+    fn write_index<W: Write>(mut writer: &mut W, index: &Index) -> Result<()> {
         let directory = index.directory();
 
         let managed_filepath = Path::new(".managed.json");
@@ -443,7 +425,7 @@ pub(crate) fn create_tokenizer_manager(
 }
 
 pub(crate) fn create_index_schema(
-    schema: &DataSchema,
+    schema: DataSchemaRef,
     index_options: &BTreeMap<String, String>,
 ) -> Result<(Schema, Vec<Field>)> {
     let tokenizer_name = index_options

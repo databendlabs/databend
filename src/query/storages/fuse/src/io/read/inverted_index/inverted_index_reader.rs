@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Instant;
+
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
 use databend_storages_common_index::InvertedIndexDirectory;
 use opendal::Operator;
 use tantivy::collector::DocSetCollector;
@@ -68,6 +71,7 @@ impl InvertedIndexReader {
         query: &str,
         row_count: u64,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
+        let start = Instant::now();
         let mut index = Index::open(self.directory)?;
         index.set_tokenizers(self.tokenizer_manager);
         let reader = index.reader()?;
@@ -80,33 +84,39 @@ impl InvertedIndexReader {
         }
         let query = query_parser.parse_query(query)?;
 
-        let mut matched_rows = Vec::new();
-        if self.has_score {
+        let matched_rows = if self.has_score {
             let collector = TopDocs::with_limit(row_count as usize);
             let docs = searcher.search(&query, &collector)?;
 
-            if docs.is_empty() {
-                return Ok(None);
-            }
+            let mut matched_rows = Vec::with_capacity(docs.len());
             for (score, doc_addr) in docs {
                 let doc_id = doc_addr.doc_id as usize;
                 let score = F32::from(score);
                 matched_rows.push((doc_id, Some(score)));
             }
+            matched_rows
         } else {
             let collector = DocSetCollector;
             let docs = searcher.search(&query, &collector)?;
 
-            if docs.is_empty() {
-                return Ok(None);
-            }
+            let mut matched_rows = Vec::with_capacity(docs.len());
             for doc_addr in docs {
                 let doc_id = doc_addr.doc_id as usize;
                 matched_rows.push((doc_id, None));
             }
+            matched_rows
+        };
+
+        // Perf.
+        {
+            metrics_inc_block_inverted_index_search_milliseconds(start.elapsed().as_millis() as u64);
         }
 
-        Ok(Some(matched_rows))
+        if !matched_rows.is_empty() {
+            Ok(Some(matched_rows))
+        } else {
+            Ok(None)
+        }
     }
 
     // delegation of [InvertedIndexFileReader::cache_key_of_index_columns]

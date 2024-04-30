@@ -31,7 +31,6 @@ databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
 databend-common-sharing = { path = "../../sharing" }
 databend-common-sql = { path = "../../sql" }
 databend-common-storage = { path = "../../../common/storage" }
-databend-common-storages-share = { path = "../share" }
 jsonb = { workspace = true }
 
 databend-storages-common-blocks = { path = "../common/blocks" }

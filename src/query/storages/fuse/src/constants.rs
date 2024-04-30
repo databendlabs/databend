@@ -28,7 +28,6 @@ pub const FUSE_TBL_LAST_SNAPSHOT_HINT: &str = "last_snapshot_location_hint";
 pub const FUSE_TBL_VIRTUAL_BLOCK_PREFIX: &str = "_vb";
 pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
-pub const FUSE_TBL_INVERTED_INDEX_INFO_PREFIX: &str = "_i_ii";
 
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 pub const DEFAULT_ROW_PER_PAGE: usize = 131072;
