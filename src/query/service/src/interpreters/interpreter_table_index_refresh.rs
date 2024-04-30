@@ -57,7 +57,6 @@ impl Interpreter for RefreshTableIndexInterpreter {
             .manager
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
 
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let table = self
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
@@ -108,12 +107,11 @@ impl Interpreter for RefreshTableIndexInterpreter {
         if let Some(lock_guard) = lock_guard {
             build_res.main_pipeline.add_lock_guard(lock_guard);
         }
+
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table
             .do_refresh_inverted_index(
                 self.ctx.clone(),
-                catalog.clone(),
-                table.clone(),
                 index_name,
                 index_version,
                 &index.options,

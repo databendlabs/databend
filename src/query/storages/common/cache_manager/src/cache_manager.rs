@@ -35,7 +35,6 @@ use crate::caches::ColumnArrayCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::FileMetaDataCache;
 use crate::caches::InvertedIndexFileCache;
-use crate::caches::InvertedIndexInfoCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
@@ -54,7 +53,6 @@ pub struct CacheManager {
     segment_info_cache: Option<CompactSegmentInfoCache>,
     bloom_index_filter_cache: Option<BloomIndexFilterCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
-    inverted_index_info_cache: Option<InvertedIndexInfoCache>,
     inverted_index_meta_cache: Option<InvertedIndexMetaCache>,
     inverted_index_file_cache: Option<InvertedIndexFileCache>,
     prune_partitions_cache: Option<PrunePartitionsCache>,
@@ -123,7 +121,6 @@ impl CacheManager {
                 segment_info_cache: None,
                 bloom_index_filter_cache: None,
                 bloom_index_meta_cache: None,
-                inverted_index_info_cache: None,
                 inverted_index_meta_cache: None,
                 inverted_index_file_cache: None,
                 prune_partitions_cache: None,
@@ -151,12 +148,8 @@ impl CacheManager {
                 config.table_bloom_index_meta_count,
                 "bloom_index_file_meta_data",
             );
-            let inverted_index_info_cache = Self::new_item_cache(
-                config.inverted_index_info_count,
-                "inverted_index_file_info_data",
-            );
             let inverted_index_meta_cache = Self::new_item_cache(
-                config.inverted_index_info_count,
+                config.inverted_index_meta_count,
                 "inverted_index_file_meta_data",
             );
 
@@ -181,7 +174,6 @@ impl CacheManager {
                 segment_info_cache,
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
-                inverted_index_info_cache,
                 inverted_index_meta_cache,
                 inverted_index_file_cache,
                 prune_partitions_cache,
@@ -217,10 +209,6 @@ impl CacheManager {
 
     pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
         self.bloom_index_meta_cache.clone()
-    }
-
-    pub fn get_inverted_index_info_cache(&self) -> Option<InvertedIndexInfoCache> {
-        self.inverted_index_info_cache.clone()
     }
 
     pub fn get_inverted_index_meta_cache(&self) -> Option<InvertedIndexMetaCache> {

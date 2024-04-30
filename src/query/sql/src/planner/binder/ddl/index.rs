@@ -388,7 +388,7 @@ impl Binder {
                         && field.data_type.remove_nullable() != TableDataType::Variant
                     {
                         return Err(ErrorCode::UnsupportedIndex(format!(
-                            "Inverted index currently only support String and variant type, but the type of column {} is {}",
+                            "Inverted index currently only support String and Variant type, but the type of column {} is {}",
                             column, field.data_type
                         )));
                     }

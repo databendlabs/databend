@@ -278,7 +278,6 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 new_segments,
                 None,
                 None,
-                None,
             );
 
             let faked_catalog = FakedCatalog {
