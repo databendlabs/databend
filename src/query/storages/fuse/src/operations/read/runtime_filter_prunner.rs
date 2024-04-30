@@ -35,9 +35,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
-use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::statistics_to_domain;
-use databend_storages_common_table_meta::meta::BlockMeta;
 use log::info;
 use opendal::Operator;
 use xorf::BinaryFuse16;
@@ -56,7 +54,6 @@ pub fn runtime_filter_pruner(
         return Ok(false);
     }
     let part = FuseBlockPartInfo::from_part(part)?;
-    eprintln!("filters {:#?}", filters);
     let pruned = filters.iter().any(|filter| {
         let column_refs = filter.column_refs();
         // Currently only support filter with one column(probe key).
@@ -109,16 +106,15 @@ pub async fn runtime_bloom_filter_pruner(
     part: &PartInfoPtr,
     filters: &[Expr<String>],
     func_ctx: &FunctionContext,
-    dal: Operator,
-    bloom_index_cols: BloomIndexColumns,
+    dal: &Operator,
 ) -> Result<bool> {
     let part = FuseBlockPartInfo::from_part(part)?;
 
-    let block_meta: BlockMeta;
     if let Some(bloom_desc) = &part.bloom_index_descriptor {
         let index_location = bloom_desc.bloom_index_location.clone();
         let index_size = bloom_desc.bloom_index_size;
         let column_ids = part.columns_meta.keys().cloned().collect::<Vec<_>>();
+        let bloom_index_cols = bloom_desc.bloom_index_cols.clone();
 
         for filter_expr in filters {
             if let Some(bloom_pruner) = BloomPrunerCreator::create(
