@@ -348,6 +348,42 @@ output domain  : Undefined
 output         : 'POINT(3 3)'
 
 
+ast            : st_srid(to_geometry('POINT(-122.306100 37.554162)', 1234))
+raw expr       : st_srid(to_geometry('POINT(-122.306100 37.554162)', 1234))
+checked expr   : st_srid<Geometry>(to_geometry<String, Int32>("POINT(-122.306100 37.554162)", to_int32<UInt16>(1234_u16)))
+optimized expr : 1234_i32
+output type    : Int32 NULL
+output domain  : {1234..=1234}
+output         : 1234
+
+
+ast            : st_srid(st_makegeompoint(37.5, 45.5))
+raw expr       : st_srid(st_makegeompoint(37.5, 45.5))
+checked expr   : st_srid<Geometry>(st_makegeompoint<Float64, Float64>(to_float64<Decimal(3, 1)>(37.5_d128(3,1)), to_float64<Decimal(3, 1)>(45.5_d128(3,1))))
+optimized expr : 4326_i32
+output type    : Int32 NULL
+output domain  : {4326..=4326}
+output         : 4326
+
+
+ast            : st_srid(st_makegeompoint(NULL, NULL))
+raw expr       : st_srid(st_makegeompoint(NULL, NULL))
+checked expr   : st_srid<Geometry NULL>(st_makegeompoint<Float64 NULL, Float64 NULL>(CAST(NULL AS Float64 NULL), CAST(NULL AS Float64 NULL)))
+optimized expr : NULL
+output type    : Int32 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : st_srid(NULL)
+raw expr       : st_srid(NULL)
+checked expr   : st_srid<Geometry NULL>(CAST(NULL AS Geometry NULL))
+optimized expr : NULL
+output type    : Int32 NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : to_geometry('POINT(1820.12 890.56)')
 raw expr       : to_geometry('POINT(1820.12 890.56)')
 checked expr   : to_geometry<String>("POINT(1820.12 890.56)")

@@ -40,6 +40,7 @@ fn test_geometry() {
     test_st_makepoint(file);
     test_st_makepolygon(file);
     test_st_pointn(file);
+    test_st_srid(file);
     test_to_geometry(file);
     test_to_string(file);
     test_try_to_geometry(file);
@@ -239,6 +240,17 @@ fn test_st_pointn(file: &mut impl Write) {
         "ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), -2)",
         &[],
     );
+}
+
+fn test_st_srid(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_srid(to_geometry('POINT(-122.306100 37.554162)', 1234))",
+        &[],
+    );
+    run_ast(file, "st_srid(st_makegeompoint(37.5, 45.5))", &[]);
+    run_ast(file, "st_srid(st_makegeompoint(NULL, NULL))", &[]);
+    run_ast(file, "st_srid(NULL)", &[]);
 }
 
 fn test_to_geometry(file: &mut impl Write) {
