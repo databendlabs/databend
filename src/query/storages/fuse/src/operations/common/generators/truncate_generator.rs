@@ -80,7 +80,6 @@ impl SnapshotGenerator for TruncateGenerator {
             vec![],
             cluster_key_meta,
             None,
-            None,
         );
         Ok(new_snapshot)
     }

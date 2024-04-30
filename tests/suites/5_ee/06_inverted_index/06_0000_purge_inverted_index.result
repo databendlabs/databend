@@ -1,28 +1,22 @@
 ###################
 ###1st insertion###
 ###################
-== number of snapshots (expects 3)==
-3
-== number of inverted index info files (expects 2) ==
-2
+== number of snapshots (expects 1)==
+1
 == number of invert index files (expects 2) ==
 2
 ###################
 ###2nd insertion###
 ###################
-== number of snapshots (expects 3)==
-3
-== number of inverted index info files (expects 4) ==
-4
+== number of snapshots (expects 1)==
+1
 == number of invert index files (expects 4) ==
 4
 ###################
 ###3nd insertion###
 ###################
-== number of snapshots (expects 3)==
-3
-== number of inverted index info files (expects 4) ==
-4
+== number of snapshots (expects 1)==
+1
 == number of invert index files (expects 6) ==
 6
 ###################
@@ -30,16 +24,12 @@
 ###################
 == number of snapshots (expects 1)==
 1
-== number of inverted index info files (expects 2) ==
+== number of invert index files (expects 2) ==
 2
-== number of invert index files (expects 0) ==
-0
 ###################
 ####new insertion##
 ###################
-== number of snapshots (expects 3) ==
-3
-== number of inverted index info files (expects 4) ==
+== number of snapshots (expects 1) ==
+1
+== number of invert index files (expects 4) ==
 4
-== number of invert index files (expects 2) ==
-2

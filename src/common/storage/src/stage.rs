@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::path::Path;
+use std::pin::Pin;
+use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -22,6 +24,9 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserIdentity;
+use futures::stream;
+use futures::Stream;
+use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::EntryMode;
 use opendal::Metadata;
@@ -104,6 +109,34 @@ impl StageFilesInfo {
     }
 
     #[async_backtrace::framed]
+    async fn list_files(
+        &self,
+        operator: &Operator,
+        thread_num: usize,
+        max_files: Option<usize>,
+        mut files: &[String],
+    ) -> Result<Vec<StageFileInfo>> {
+        if let Some(m) = max_files {
+            files = &files[..m]
+        }
+        let file_infos = self.stat_concurrent(operator, thread_num, files).await?;
+        let mut res = Vec::with_capacity(file_infos.len());
+
+        for file_info in file_infos {
+            match file_info {
+                Ok((path, meta)) if meta.is_dir() => {
+                    return Err(ErrorCode::BadArguments(format!("{path} is not a file")));
+                }
+                Ok((path, meta)) => res.push(StageFileInfo::new(path, &meta)),
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
     pub async fn list(
         &self,
         operator: &Operator,
@@ -111,31 +144,46 @@ impl StageFilesInfo {
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         if self.path == STDIN_FD {
-            return Ok(vec![stdin_stage_info()?]);
+            return Ok(vec![stdin_stage_info()]);
         }
 
-        let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
-            let file_infos = self
-                .stat_concurrent(operator, thread_num, max_files, files)
-                .await?;
-            let mut res = Vec::with_capacity(file_infos.len());
-
-            for file_info in file_infos {
-                match file_info {
-                    Ok((path, meta)) if meta.is_dir() => {
-                        return Err(ErrorCode::BadArguments(format!("{path} is not a file")));
-                    }
-                    Ok((path, meta)) => res.push(StageFileInfo::new(path, &meta)),
-                    Err(e) => {
-                        return Err(e);
-                    }
-                }
-            }
-            Ok(res)
+            self.list_files(operator, thread_num, max_files, files)
+                .await
         } else {
             let pattern = self.get_pattern()?;
-            StageFilesInfo::list_files_with_pattern(operator, &self.path, pattern, max_files).await
+            StageFilesInfo::list_files_with_pattern(
+                operator,
+                &self.path,
+                pattern,
+                // TODO(youngsofun): after select-from-stage and list-stage use list_stream, we will force caller to provide max_files here.
+                max_files.unwrap_or(usize::MAX),
+            )
+            .await
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn list_stream(
+        &self,
+        operator: &Operator,
+        thread_num: usize,
+        max_files: Option<usize>,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StageFileInfo>> + Send>>> {
+        if self.path == STDIN_FD {
+            return Ok(Box::pin(stream::iter(vec![Ok(stdin_stage_info())])));
+        }
+
+        if let Some(files) = &self.files {
+            let files = self
+                .list_files(operator, thread_num, max_files, files)
+                .await?;
+            let files = files.into_iter().map(Ok);
+            Ok(Box::pin(stream::iter(files)))
+        } else {
+            let pattern = self.get_pattern()?;
+            StageFilesInfo::list_files_stream_with_pattern(operator, &self.path, pattern, max_files)
+                .await
         }
     }
 
@@ -195,40 +243,73 @@ impl StageFilesInfo {
         pattern: Option<Regex>,
         max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
+        Self::list_files_stream_with_pattern(operator, path, pattern, Some(max_files))
+            .await?
+            .try_collect::<Vec<_>>()
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn list_files_stream_with_pattern(
+        operator: &Operator,
+        path: &str,
+        pattern: Option<Regex>,
+        max_files: Option<usize>,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StageFileInfo>> + Send>>> {
         if path == STDIN_FD {
-            return Ok(vec![stdin_stage_info()?]);
+            return Ok(Box::pin(stream::once(async { Ok(stdin_stage_info()) })));
         }
-        let mut files = Vec::new();
         let prefix_len = if path == "/" { 0 } else { path.len() };
         let prefix_meta = operator.stat(path).await;
-        match prefix_meta {
+        let file_exact: Option<Result<StageFileInfo>> = match prefix_meta {
             Ok(meta) if meta.is_file() => {
-                files.push(StageFileInfo::new(path.to_string(), &meta));
+                let f = StageFileInfo::new(path.to_string(), &meta);
+                if max_files == Some(1) {
+                    return Ok(Box::pin(stream::once(async { Ok(f) })));
+                }
+                Some(Ok(f))
             }
             Err(e) if e.kind() != opendal::ErrorKind::NotFound => {
                 return Err(e.into());
             }
-            _ => {}
+            _ => None,
         };
-        let mut lister = operator
+        let file_exact_stream = stream::iter(file_exact.clone().into_iter());
+
+        let lister = operator
             .lister_with(path)
             .recursive(true)
             .metakey(StageFileInfo::meta_query())
             .await?;
 
-        if files.len() == max_files {
-            return Ok(files);
-        }
-        while let Some(obj) = lister.try_next().await? {
-            let meta = obj.metadata();
-            if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
-                files.push(StageFileInfo::new(obj.path().to_string(), meta));
-                if files.len() == max_files {
-                    return Ok(files);
+        let pattern = Arc::new(pattern);
+        let files_with_prefix = lister.filter_map(move |result| {
+            let pattern = pattern.clone();
+            async move {
+                match result {
+                    Ok(entry) => {
+                        let meta = entry.metadata();
+                        if check_file(&entry.path()[prefix_len..], meta.mode(), &pattern) {
+                            Some(Ok(StageFileInfo::new(entry.path().to_string(), meta)))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(e) => Some(Err(ErrorCode::from(e))),
                 }
             }
+        });
+        if let Some(max_files) = max_files {
+            if file_exact.is_some() {
+                Ok(Box::pin(
+                    file_exact_stream.chain(files_with_prefix.take(max_files - 1)),
+                ))
+            } else {
+                Ok(Box::pin(files_with_prefix.take(max_files)))
+            }
+        } else {
+            Ok(Box::pin(file_exact_stream.chain(files_with_prefix)))
         }
-        Ok(files)
     }
 
     /// Stat files concurrently.
@@ -237,10 +318,9 @@ impl StageFilesInfo {
         &self,
         operator: &Operator,
         thread_num: usize,
-        max_files: usize,
         files: &[String],
     ) -> Result<Vec<Result<(String, Metadata)>>> {
-        if max_files == 1 {
+        if files.len() == 1 {
             let Some(file) = files.first() else {
                 return Ok(vec![]);
             };
@@ -254,7 +334,7 @@ impl StageFilesInfo {
         }
 
         // This clone is required to make sure we are not referring to `file: &String` in the closure
-        let tasks = files.iter().take(max_files).cloned().map(|file| {
+        let tasks = files.iter().cloned().map(|file| {
             let full_path = Path::new(&self.path)
                 .join(file)
                 .to_string_lossy()
@@ -292,7 +372,7 @@ fn blocking_list_files_with_pattern(
     max_files: usize,
 ) -> Result<Vec<StageFileInfo>> {
     if path == STDIN_FD {
-        return Ok(vec![stdin_stage_info()?]);
+        return Ok(vec![stdin_stage_info()]);
     }
     let operator = operator.blocking();
     let mut files = Vec::new();
@@ -330,8 +410,8 @@ fn blocking_list_files_with_pattern(
 
 pub const STDIN_FD: &str = "/dev/fd/0";
 
-fn stdin_stage_info() -> Result<StageFileInfo> {
-    Ok(StageFileInfo {
+fn stdin_stage_info() -> StageFileInfo {
+    StageFileInfo {
         path: STDIN_FD.to_string(),
         size: u64::MAX,
         md5: None,
@@ -339,5 +419,5 @@ fn stdin_stage_info() -> Result<StageFileInfo> {
         etag: None,
         status: StageFileStatus::NeedCopy,
         creator: None,
-    })
+    }
 }

@@ -28,8 +28,6 @@ use databend_storages_common_cache_manager::CompactSegmentInfoMeter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::IndexInfo;
-use databend_storages_common_table_meta::meta::IndexInfoVersion;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
@@ -57,7 +55,6 @@ pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
     DefaultHashBuilder,
     CompactSegmentInfoMeter,
 >;
-pub type InvertedIndexInfoReader = InMemoryItemCacheReader<IndexInfo, LoaderWrapper<Operator>>;
 pub type InvertedIndexMetaReader =
     InMemoryItemCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 
@@ -88,13 +85,6 @@ impl MetaReaders {
     pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
         BloomIndexMetaReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn inverted_index_info_reader(dal: Operator) -> InvertedIndexInfoReader {
-        InvertedIndexInfoReader::new(
-            CacheManager::instance().get_inverted_index_info_cache(),
             LoaderWrapper(dal),
         )
     }
@@ -157,17 +147,6 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
             })?;
 
         BloomIndexMeta::try_from(meta)
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<IndexInfo> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<IndexInfo> {
-        let version = IndexInfoVersion::try_from(params.ver)?;
-        let LoaderWrapper(operator) = &self;
-        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        version.read(reader).await
     }
 }
 

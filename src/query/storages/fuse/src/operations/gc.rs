@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::hash::BuildHasher;
-use std::hash::RandomState;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -33,7 +32,6 @@ use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -96,8 +94,6 @@ impl FuseTable {
         }
 
         let root_snapshot_info = root_snapshot_info_opt.unwrap();
-
-        let inverted_index_infos = &root_snapshot_info.inverted_indexes;
 
         if root_snapshot_info.snapshot_lite.timestamp.is_none() {
             return Err(ErrorCode::StorageOther(format!(
@@ -295,13 +291,6 @@ impl FuseTable {
             .await?;
         }
 
-        // 4. purge inverted index info
-
-        if let Some(inverted_index_infos) = inverted_index_infos {
-            self.purge_inverted_index_info_files(ctx, inverted_index_infos, counter)
-                .await?;
-        }
-
         Ok(None)
     }
 
@@ -351,7 +340,6 @@ impl FuseTable {
         Ok(Some(RootSnapshotInfo {
             snapshot_location,
             referenced_locations,
-            inverted_indexes: root_snapshot.inverted_indexes.clone(),
             snapshot_lite,
         }))
     }
@@ -763,59 +751,11 @@ impl FuseTable {
         );
         SnapshotsIO::list_files(self.get_operator(), &prefix, None).await
     }
-
-    async fn purge_inverted_index_info_files(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        inverted_index_infos: &BTreeMap<String, Location>,
-        counter: &mut PurgeCounter,
-    ) -> Result<()> {
-        // 1. list all the inverted index information files
-        let index_info_path_prefix = self.meta_location_generator.inverted_index_info_prefix();
-
-        let status = format!(
-            "gc: listing inverted index info files, time used so far {:?}",
-            counter.start.elapsed(),
-        );
-        ctx.set_status_info(&status);
-
-        let index_infos_files =
-            SnapshotsIO::list_files(self.get_operator(), &index_info_path_prefix, None).await?;
-
-        let candidate_index_infos_files: HashSet<&String, RandomState> =
-            HashSet::from_iter(index_infos_files.iter());
-
-        // 2. collect all the inverted index information files referenced (in-used)
-        let snapshot_info_files: HashSet<&String, RandomState> =
-            HashSet::from_iter(inverted_index_infos.values().map(|(path, _)| path));
-
-        // 3. collect the difference, those are the files no longer referenced and should be purged
-        let files_to_purge: HashSet<String, _> = candidate_index_infos_files
-            .difference(&snapshot_info_files)
-            .map(|v| (**v).to_owned())
-            .collect();
-
-        // 4. purge them all (and their caches)
-        let inverted_index_info_files_count = files_to_purge.len();
-        if inverted_index_info_files_count > 0 {
-            counter.inverted_index_infos += inverted_index_info_files_count;
-            let status = format!(
-                "gc: purging inverted index info files {}, time used so far {:?}",
-                inverted_index_info_files_count,
-                counter.start.elapsed(),
-            );
-            ctx.set_status_info(&status);
-            self.try_purge_location_files_and_cache::<IndexInfo, _, _>(ctx.clone(), files_to_purge)
-                .await?
-        }
-        Ok(())
-    }
 }
 
 struct RootSnapshotInfo {
     snapshot_location: String,
     referenced_locations: LocationTuple,
-    inverted_indexes: Option<BTreeMap<String, Location>>,
     snapshot_lite: Arc<SnapshotLiteExtended>,
 }
 
@@ -850,7 +790,6 @@ struct PurgeCounter {
     blocks: usize,
     agg_indexes: usize,
     inverted_indexes: usize,
-    inverted_index_infos: usize,
     blooms: usize,
     segments: usize,
     table_statistics: usize,
@@ -864,7 +803,6 @@ impl PurgeCounter {
             blocks: 0,
             agg_indexes: 0,
             inverted_indexes: 0,
-            inverted_index_infos: 0,
             blooms: 0,
             segments: 0,
             table_statistics: 0,

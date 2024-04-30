@@ -25,6 +25,7 @@ use databend_storages_common_table_meta::meta::Location;
 
 use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
+use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -89,6 +90,8 @@ impl FuseTable {
         let bloom_columns_map = self
             .bloom_index_cols()
             .bloom_index_fields(new_schema.clone(), BloomIndex::supported_type)?;
+        let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
+
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),
             meta_locations: self.meta_location_generator().clone(),
@@ -96,6 +99,7 @@ impl FuseTable {
             write_settings: self.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            inverted_index_builders,
         };
         let aggregator = MatchedAggregator::create(
             ctx,

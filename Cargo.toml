@@ -142,7 +142,6 @@ byteorder = "1.4.3"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
-dashmap = "5.4.0"
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
@@ -157,9 +156,7 @@ match-template = "0.0.1"
 metrics = "0.20.1"
 minitrace = { version = "0.6", features = ["enable"] }
 mysql_async = { version = "0.33", default-features = false, features = ["rustls-tls"] }
-once_cell = "1.15.0"
 ordered-float = { version = "4.1.0", default-features = false }
-parking_lot = "0.12.1"
 poem = { version = "~1.3.57", features = ["rustls", "multipart", "compression"] }
 prometheus-client = "0.22"
 rand = { version = "0.8.5", features = ["small_rng"] }
@@ -181,6 +178,12 @@ typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 derive-visitor = "0.3.0"
+
+# Synchronization
+dashmap = "5.4.0"
+once_cell = "1.15.0"
+ordq = "0.2.0"
+parking_lot = "0.12.1"
 
 # Future and async
 futures = "0.3.24"

@@ -14,6 +14,7 @@
 
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
@@ -21,6 +22,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
 use databend_storages_common_cache::CacheKey;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
@@ -29,8 +31,6 @@ use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_cache_manager::InvertedIndexFileMeter;
 use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_index::InvertedIndexMeta;
-use databend_storages_common_table_meta::meta::IndexInfo;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
 use opendal::Operator;
@@ -51,28 +51,6 @@ const INDEX_COLUMN_NAMES: [&str; 8] = [
     "meta.json",
     ".managed.json",
 ];
-
-/// Loads inverted index info data
-/// read data from cache, or populate cache items if possible
-#[minitrace::trace]
-pub async fn load_inverted_index_info(
-    dal: Operator,
-    index_info_loc: Option<&Location>,
-) -> Result<Option<Arc<IndexInfo>>> {
-    match index_info_loc {
-        Some((index_info_loc, ver)) => {
-            let reader = MetaReaders::inverted_index_info_reader(dal);
-            let params = LoadParams {
-                location: index_info_loc.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: true,
-            };
-            Ok(Some(reader.read(&params).await?))
-        }
-        None => Ok(None),
-    }
-}
 
 #[async_trait::async_trait]
 trait InRuntime
@@ -159,6 +137,7 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     field_nums: usize,
     index_path: &'a str,
 ) -> Result<InvertedIndexDirectory> {
+    let start = Instant::now();
     // load inverted index meta, contains the offsets of each files.
     let inverted_index_meta = load_inverted_index_meta(dal.clone(), index_path).await?;
 
@@ -182,6 +161,11 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     let files: Vec<_> = try_join_all(futs).await?.into_iter().collect();
     // use those files to create inverted index directory
     let directory = InvertedIndexDirectory::try_create(field_nums, files)?;
+
+    // Perf.
+    {
+        metrics_inc_block_inverted_index_read_milliseconds(start.elapsed().as_millis() as u64);
+    }
 
     Ok(directory)
 }
