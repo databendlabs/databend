@@ -277,8 +277,10 @@ fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
         let mut columns_layout = Vec::with_capacity(columns.len());
 
         for column in columns.into_iter() {
-            let column = column.value.as_column().unwrap();
-            let column_data = serialize_column(column);
+            let column = column
+                .value
+                .convert_to_full_column(&column.data_type, data_block.num_rows());
+            let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
@@ -398,8 +400,10 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
         let mut columns_layout = Vec::with_capacity(columns.len());
 
         for column in columns.into_iter() {
-            let column = column.value.as_column().unwrap();
-            let column_data = serialize_column(column);
+            let column = column
+                .value
+                .convert_to_full_column(&column.data_type, data_block.num_rows());
+            let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);

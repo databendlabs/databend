@@ -322,6 +322,7 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
         }
 
         let data_block = payload.group_by_flush_all()?;
+        let num_rows = data_block.num_rows();
         rows += data_block.num_rows();
 
         let old_write_size = write_size;
@@ -330,8 +331,10 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
         let mut columns_layout = Vec::with_capacity(columns.len());
 
         for column in columns.into_iter() {
-            let column = column.value.as_column().unwrap();
-            let column_data = serialize_column(column);
+            let column = column
+                .value
+                .convert_to_full_column(&column.data_type, num_rows);
+            let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
@@ -440,6 +443,7 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
         }
 
         let data_block = serialize_group_by(method, inner_table)?;
+        let num_rows = data_block.num_rows();
         rows += 0;
 
         let old_write_size = write_size;
@@ -448,8 +452,10 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
         let mut columns_layout = Vec::with_capacity(columns.len());
 
         for column in columns.into_iter() {
-            let column = column.value.as_column().unwrap();
-            let column_data = serialize_column(column);
+            let column = column
+                .value
+                .convert_to_full_column(&column.data_type, num_rows);
+            let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);

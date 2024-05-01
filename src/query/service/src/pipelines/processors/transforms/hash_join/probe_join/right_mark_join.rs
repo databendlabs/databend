@@ -118,10 +118,16 @@ impl HashJoinProbeState {
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
         let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+        let num_rows = input.num_rows();
         let cols = input
             .columns()
             .iter()
-            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
+            .map(|c| {
+                (
+                    c.value.convert_to_full_column(&c.data_type, num_rows),
+                    c.data_type.clone(),
+                )
+            })
             .collect::<Vec<_>>();
         let markers = probe_state.markers.as_mut().unwrap();
         self.hash_join_state

@@ -115,9 +115,12 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             if is_agg_index_block {
                 // Aggregation states are in the back of the block.
                 let agg_index = block.num_columns() - self.funcs.len() + idx;
-                let agg_state = block.get_by_offset(agg_index).value.as_column().unwrap();
+                let entry = block.get_by_offset(agg_index);
+                let agg_state = entry
+                    .value
+                    .convert_to_full_column(&entry.data_type, block.num_rows());
 
-                func.batch_merge_single(place, agg_state)?;
+                func.batch_merge_single(place, &agg_state)?;
             } else {
                 func.accumulate(place, &arg_columns, None, block.num_rows())?;
             }
