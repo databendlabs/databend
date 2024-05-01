@@ -41,7 +41,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::runtime_bloom_filter_pruner;
-use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
+use crate::operations::read::runtime_filter_prunner::runtime_range_filter_pruner;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     func_ctx: FunctionContext,
@@ -128,7 +128,7 @@ impl SyncSource for ReadParquetDataSource<true> {
                         .ctx
                         .get_min_max_runtime_filter_with_id(self.table_index),
                 );
-                if runtime_filter_pruner(
+                if runtime_range_filter_pruner(
                     self.table_schema.clone(),
                     &part,
                     &filters,
@@ -244,7 +244,7 @@ impl Processor for ReadParquetDataSource<false> {
             );
             let mut fuse_part_infos = Vec::with_capacity(parts.len());
             for part in parts.into_iter() {
-                if runtime_filter_pruner(
+                if runtime_range_filter_pruner(
                     self.table_schema.clone(),
                     &part,
                     &filters,

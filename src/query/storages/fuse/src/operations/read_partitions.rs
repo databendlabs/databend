@@ -551,6 +551,7 @@ impl FuseTable {
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
 
+        // duplicated code (TODO)
         let bloom_desc = bloom_index_cols.map(|v| BloomIndexDescriptor {
             bloom_index_location: meta.bloom_filter_index_location.clone(),
             bloom_index_size: meta.bloom_filter_index_size,

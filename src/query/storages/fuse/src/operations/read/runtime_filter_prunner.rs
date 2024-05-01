@@ -44,7 +44,7 @@ use xorf::Filter;
 use crate::pruning::BloomPrunerCreator;
 use crate::FuseBlockPartInfo;
 
-pub fn runtime_filter_pruner(
+pub fn runtime_range_filter_pruner(
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,
     filters: &[Expr<String>],
@@ -92,7 +92,7 @@ pub fn runtime_filter_pruner(
 
     if pruned {
         info!(
-            "Pruned partition  with {:?} rows by runtime range filter",
+            "Pruned partition with {:?} rows by runtime range filter",
             part.nums_rows
         );
         Profile::record_usize_profile(ProfileStatisticsName::RuntimeRangeFilterPrunedParts, 1);
@@ -139,7 +139,7 @@ pub async fn runtime_bloom_filter_pruner(
 
     if pruned {
         info!(
-            "Pruned partition  with {:?} rows by runtime bloom filter",
+            "Pruned partition with {:?} rows by runtime bloom filter",
             part.nums_rows
         );
         Profile::record_usize_profile(ProfileStatisticsName::RuntimeBloomFilterPrunedParts, 1);
