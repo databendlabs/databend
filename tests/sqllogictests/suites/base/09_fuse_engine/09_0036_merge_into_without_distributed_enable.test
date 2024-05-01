@@ -378,7 +378,7 @@ select * from target_table order by a,b,c;
 3 a3 b3
 
 ## NULL test, for join, if join_expr result is
-## NULL, it will be treated as not macthed.
+## NULL, it will be treated as not matched.
 statement ok
 truncate table t1;
 
