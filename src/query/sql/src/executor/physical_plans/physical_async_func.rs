@@ -55,10 +55,12 @@ impl PhysicalPlanBuilder {
         let child = s_expr.child(0)?;
         let input = self.build(child, required.clone()).await?;
 
-        let fields: Vec<DataField> = vec![DataField::new(
+        let input_schema = input.output_schema()?;
+        let mut fields = input_schema.fields().clone();
+        fields.push(DataField::new(
             &async_func.index.to_string(),
             async_func.return_type.clone(),
-        )];
+        ));
         let schema = DataSchemaRefExt::create(fields);
 
         Ok(PhysicalPlan::AsyncFunction(AsyncFunction {

@@ -16,11 +16,10 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::ScalarRef;
+use databend_common_expression::FromData;
 use databend_common_expression::Value;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
@@ -72,16 +71,11 @@ impl AsyncTransform for TransformSequenceNextval {
             count,
         };
         let resp = catalog.get_sequence_next_value(req).await?;
-        let mut start = resp.start;
-        let mut builder = ColumnBuilder::with_capacity(&self.return_type, data_block.num_rows());
-        for _ in 0..count {
-            let scalar = ScalarRef::Number(NumberScalar::UInt64(start));
-            builder.push(scalar);
-            start += 1;
-        }
+        let range = resp.start..resp.start + count;
+        let value = UInt64Type::from_data(range.collect::<Vec<u64>>());
         let entry = BlockEntry {
             data_type: self.return_type.clone(),
-            value: Value::Column(builder.build()),
+            value: Value::Column(value),
         };
 
         data_block.add_column(entry);
