@@ -38,7 +38,8 @@ use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
-use crate::operations::read::runtime_filter_prunner::{runtime_bloom_filter_pruner, runtime_range_filter_pruner};
+use crate::operations::read::runtime_filter_prunner::runtime_bloom_filter_pruner;
+use crate::operations::read::runtime_filter_prunner::runtime_range_filter_pruner;
 use crate::FuseBlockPartInfo;
 
 pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
