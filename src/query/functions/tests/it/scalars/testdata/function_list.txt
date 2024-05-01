@@ -3550,6 +3550,12 @@ Functions overloads:
 1 st_pointn(Geometry NULL, Int32 NULL) :: Geometry NULL
 0 st_srid(Geometry) :: Int32 NULL
 1 st_srid(Geometry NULL) :: Int32 NULL
+0 st_startpoint(Geometry) :: Geometry
+1 st_startpoint(Geometry NULL) :: Geometry NULL
+0 st_x(Geometry) :: Float64 NULL
+1 st_x(Geometry NULL) :: Float64 NULL
+0 st_y(Geometry) :: Float64 NULL
+1 st_y(Geometry NULL) :: Float64 NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64
