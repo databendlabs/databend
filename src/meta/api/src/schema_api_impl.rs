@@ -226,6 +226,7 @@ use crate::get_share_table_info;
 use crate::get_u64_value;
 use crate::is_db_need_to_be_remove;
 use crate::kv_app_error::KVAppError;
+use crate::kv_pb_api::KVPbApi;
 use crate::list_keys;
 use crate::list_u64_value;
 use crate::remove_db_from_share;
@@ -2235,25 +2236,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
-    ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError> {
+    ) -> Result<Option<SeqV<TableMeta>>, MetaError> {
         debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
 
-        let tbid = TableId { table_id };
+        let id = TableId { table_id };
 
-        let (tb_meta_seq, table_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-
-        debug!(ident :% =(&tbid); "get_table_by_id");
-
-        if tb_meta_seq == 0 || table_meta.is_none() {
-            return Err(KVAppError::AppError(AppError::UnknownTableId(
-                UnknownTableId::new(table_id, "get_table_by_id"),
-            )));
-        }
-
-        Ok((
-            TableIdent::new(table_id, tb_meta_seq),
-            Arc::new(table_meta.unwrap()),
-        ))
+        let seq_table_meta = self.get_pb(&id).await?;
+        Ok(seq_table_meta)
     }
 
     #[logcall::logcall("debug")]

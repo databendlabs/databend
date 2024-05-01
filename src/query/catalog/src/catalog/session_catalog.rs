@@ -72,7 +72,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -94,6 +93,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use databend_storages_common_txn::TxnManagerRef;
 use databend_storages_common_txn::TxnState;
 
@@ -225,13 +225,13 @@ impl Catalog for SessionCatalog {
     }
 
     // Get the table meta by meta id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         let state = self.txn_mgr.lock().state();
         match state {
             TxnState::Active => {
                 let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
                 if let Some(t) = mutated_table {
-                    Ok((t.ident, Arc::new(t.meta.clone())))
+                    Ok(Some(SeqV::new(t.ident.seq, t.meta.clone())))
                 } else {
                     self.inner.get_table_meta_by_id(table_id).await
                 }

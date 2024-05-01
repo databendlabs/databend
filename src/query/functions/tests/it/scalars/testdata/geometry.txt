@@ -384,6 +384,69 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : st_startpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
+raw expr       : st_startpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
+checked expr   : st_startpoint<Geometry>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"))
+optimized expr : "POINT(1 1)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'POINT(1 1)'
+
+
+ast            : st_x(st_makegeompoint(37.5, 45.5))
+raw expr       : st_x(st_makegeompoint(37.5, 45.5))
+checked expr   : st_x<Geometry>(st_makegeompoint<Float64, Float64>(to_float64<Decimal(3, 1)>(37.5_d128(3,1)), to_float64<Decimal(3, 1)>(45.5_d128(3,1))))
+optimized expr : 37.5_f64
+output type    : Float64 NULL
+output domain  : {37.5..=37.5}
+output         : 37.5
+
+
+ast            : st_x(st_makegeompoint(NULL, NULL))
+raw expr       : st_x(st_makegeompoint(NULL, NULL))
+checked expr   : st_x<Geometry NULL>(st_makegeompoint<Float64 NULL, Float64 NULL>(CAST(NULL AS Float64 NULL), CAST(NULL AS Float64 NULL)))
+optimized expr : NULL
+output type    : Float64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : st_x(NULL)
+raw expr       : st_x(NULL)
+checked expr   : st_x<Geometry NULL>(CAST(NULL AS Geometry NULL))
+optimized expr : NULL
+output type    : Float64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : st_y(st_makegeompoint(37.5, 45.5))
+raw expr       : st_y(st_makegeompoint(37.5, 45.5))
+checked expr   : st_y<Geometry>(st_makegeompoint<Float64, Float64>(to_float64<Decimal(3, 1)>(37.5_d128(3,1)), to_float64<Decimal(3, 1)>(45.5_d128(3,1))))
+optimized expr : 45.5_f64
+output type    : Float64 NULL
+output domain  : {45.5..=45.5}
+output         : 45.5
+
+
+ast            : st_y(st_makegeompoint(NULL, NULL))
+raw expr       : st_y(st_makegeompoint(NULL, NULL))
+checked expr   : st_y<Geometry NULL>(st_makegeompoint<Float64 NULL, Float64 NULL>(CAST(NULL AS Float64 NULL), CAST(NULL AS Float64 NULL)))
+optimized expr : NULL
+output type    : Float64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : st_y(NULL)
+raw expr       : st_y(NULL)
+checked expr   : st_y<Geometry NULL>(CAST(NULL AS Geometry NULL))
+optimized expr : NULL
+output type    : Float64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : to_geometry('POINT(1820.12 890.56)')
 raw expr       : to_geometry('POINT(1820.12 890.56)')
 checked expr   : to_geometry<String>("POINT(1820.12 890.56)")
