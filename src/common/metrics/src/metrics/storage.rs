@@ -416,12 +416,12 @@ pub fn metrics_inc_merge_into_split_milliseconds(c: u64) {
     MERGE_INTO_SPLIT_MILLISECONDS.observe(c as f64);
 }
 
-// after merge_source_split, record the time of not macthed clauses (processor_merge_into_not_matched)
+// after merge_source_split, record the time of not matched clauses (processor_merge_into_not_matched)
 pub fn merge_into_not_matched_operation_milliseconds(c: u64) {
     MERGE_INTO_NOT_MATCHED_OPERATION_MILLISECONDS.observe(c as f64);
 }
 
-// after merge_source_split, record the time of macthed clauses (processor_merge_into_matched_and_split)
+// after merge_source_split, record the time of matched clauses (processor_merge_into_matched_and_split)
 pub fn merge_into_matched_operation_milliseconds(c: u64) {
     MERGE_INTO_MATCHED_OPERATION_MILLISECONDS.observe(c as f64);
 }

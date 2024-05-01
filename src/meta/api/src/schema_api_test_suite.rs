@@ -5029,20 +5029,16 @@ impl SchemaApiTestSuite {
                     .await
                     .unwrap();
 
-                let (table_id, table_meta) = mt.get_table_by_id(table.ident.table_id).await?;
-
+                let seqv = mt.get_table_by_id(table.ident.table_id).await?.unwrap();
+                let table_meta = seqv.data;
                 assert_eq!(table_meta.options.get("opt‐1"), Some(&"val-1".into()));
-                assert_eq!(table_id.table_id, table.ident.table_id);
             }
 
             info!("--- get_table_by_id with not exists table_id");
             {
-                let got = mt.get_table_by_id(1024).await;
+                let got = mt.get_table_by_id(1024).await?;
 
-                let err = got.unwrap_err();
-                let err = ErrorCode::from(err);
-
-                assert_eq!(ErrorCode::UNKNOWN_TABLE_ID, err.code());
+                assert!(got.is_none());
             }
         }
         Ok(())
@@ -5910,7 +5906,8 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- check table index");
-            let (_, table_meta) = mt.get_table_by_id(table_id).await?;
+            let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+            let table_meta = seqv.data;
             assert_eq!(table_meta.indexes.len(), 2);
 
             let index1 = table_meta.indexes.get(&index_name_1);
@@ -5953,7 +5950,8 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- check table index after drop");
-            let (_, table_meta) = mt.get_table_by_id(table_id).await?;
+            let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+            let table_meta = seqv.data;
             assert_eq!(table_meta.indexes.len(), 1);
 
             let index1 = table_meta.indexes.get(&index_name_1);

@@ -73,7 +73,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -95,6 +94,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use dyn_clone::DynClone;
 
 use crate::database::Database;
@@ -195,8 +195,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
-    // Get the table meta by meta id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
+    /// Get the table meta by table id.
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>>;
 
     // Get the table name by meta id.
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String>;
