@@ -494,14 +494,11 @@ impl FuseTable {
                 .unwrap_or((default.clone(), default.clone()))
         });
 
-        let bloom_desc = {
-            // TODO none if BloomIndexColumns::None
-            bloom_index_cols.map(|v| BloomIndexDescriptor {
-                bloom_index_location: meta.bloom_filter_index_location.clone(),
-                bloom_index_size: meta.block_size,
-                bloom_index_cols: v,
-            })
-        };
+        let bloom_desc = bloom_index_cols.map(|v| BloomIndexDescriptor {
+            bloom_index_location: meta.bloom_filter_index_location.clone(),
+            bloom_index_size: meta.bloom_filter_index_size,
+            bloom_index_cols: v,
+        });
 
         FuseBlockPartInfo::create(
             location,
@@ -556,7 +553,7 @@ impl FuseTable {
 
         let bloom_desc = bloom_index_cols.map(|v| BloomIndexDescriptor {
             bloom_index_location: meta.bloom_filter_index_location.clone(),
-            bloom_index_size: meta.block_size,
+            bloom_index_size: meta.bloom_filter_index_size,
             bloom_index_cols: v,
         });
         FuseBlockPartInfo::create(

@@ -77,9 +77,6 @@ impl BloomPrunerCreator {
             let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
             let point_query_cols = BloomIndex::find_eq_columns(expr, bloom_column_fields)?;
 
-            eprintln!("is point_query empty? {}", point_query_cols.is_empty());
-            eprintln!("expr ? {}", expr);
-
             if !point_query_cols.is_empty() {
                 // convert to filter column names
                 let mut filter_fields = Vec::with_capacity(point_query_cols.len());

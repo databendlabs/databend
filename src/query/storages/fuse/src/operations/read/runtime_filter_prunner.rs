@@ -126,7 +126,6 @@ pub async fn runtime_bloom_filter_pruner(
                 Some(filter_expr),
                 bloom_index_cols.clone(),
             )? {
-                eprintln!("got bloom pruner");
                 let should_keep = bloom_pruner
                     .should_keep(&index_location, index_size, column_ids.clone())
                     .await;
@@ -134,12 +133,8 @@ pub async fn runtime_bloom_filter_pruner(
                     pruned = true;
                     break;
                 }
-            } else {
-                eprintln!("not suitable bloom pruner found")
             }
         }
-    } else {
-        eprintln!("not bloom_index_descriptor found");
     }
 
     if pruned {
