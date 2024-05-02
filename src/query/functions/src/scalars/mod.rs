@@ -29,13 +29,13 @@ mod geo_h3;
 mod geometry;
 mod hash;
 mod map;
+mod map_ops;
 mod math;
 mod other;
 mod string;
 mod string_multi_args;
 mod tuple;
 mod variant;
-mod variant_map_ops;
 mod vector;
 
 pub use comparison::ALL_COMP_FUNC_NAMES;
@@ -62,5 +62,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     vector::register(registry);
     bitmap::register(registry);
     geometry::register(registry);
-    variant_map_ops::register(registry);
+    map_ops::register(registry);
 }

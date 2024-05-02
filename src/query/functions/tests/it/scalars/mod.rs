@@ -45,6 +45,7 @@ mod geo_h3;
 mod geometry;
 mod hash;
 mod map;
+mod map_ops;
 mod math;
 mod misc;
 mod other;
@@ -53,7 +54,6 @@ mod regexp;
 mod string;
 mod tuple;
 mod variant;
-mod variant_map_ops;
 mod vector;
 
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
