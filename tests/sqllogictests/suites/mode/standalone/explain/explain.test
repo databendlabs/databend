@@ -1811,4 +1811,3 @@ TableScan
 ├── partitions scanned: 152587890626
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 10000000000000000.00
-

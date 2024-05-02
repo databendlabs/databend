@@ -66,23 +66,18 @@ impl Binder {
         bind_context: &mut BindContext,
         join: &databend_common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
-        let left_column_bindings_start_index = bind_context.columns.len();
-        let (left_child, _) = self.bind_table_reference(bind_context, &join.left).await?;
+        let (left_child, mut left_context) = self.bind_table_reference(bind_context, &join.left).await?;
+        let left_column_bindings = left_context.columns.clone();
+        let (right_child, right_context) = self.bind_table_reference(&mut left_context, &join.right).await?;
+        let right_column_bindings = right_context.columns.clone();
 
-        let right_column_bindings_start_index = bind_context.columns.len();
-        let (right_child, _) = self.bind_table_reference(bind_context, &join.right).await?;
-
-        let left_column_bindings = bind_context.columns
-            [left_column_bindings_start_index..right_column_bindings_start_index]
-            .to_vec();
-        let right_column_bindings =
-            bind_context.columns[right_column_bindings_start_index..].to_vec();
+        let mut bind_context = bind_context.replace();
 
         self.check_table_name_and_condition(&left_column_bindings, &right_column_bindings, join)?;
 
         let join_conditions = self
             .generate_join_condition(
-                bind_context,
+                &mut bind_context,
                 join,
                 &left_column_bindings,
                 &right_column_bindings,
@@ -115,9 +110,11 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         self.check_table_name_and_condition(left_column_bindings, right_column_bindings, join)?;
 
+        let mut bind_context = bind_context.replace();
+
         let join_conditions = self
             .generate_join_condition(
-                bind_context,
+                &mut bind_context,
                 join,
                 left_column_bindings,
                 right_column_bindings,
