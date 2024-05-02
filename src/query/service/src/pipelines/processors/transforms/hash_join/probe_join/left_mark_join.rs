@@ -48,10 +48,7 @@ impl HashJoinProbeState {
         let max_block_size = probe_state.max_block_size;
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-        let probe_column = input.get_by_offset(0);
-        let probe_column = probe_column
-            .value
-            .convert_to_full_column(&probe_column.data_type, input.num_rows());
+        let probe_column = input.get_by_offset(0).to_column(input.num_rows());
         // Check if there is any null in the probe column.
         if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
             let mut has_null = self
@@ -151,10 +148,7 @@ impl HashJoinProbeState {
         let max_block_size = probe_state.max_block_size;
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-        let probe_column = input.get_by_offset(0);
-        let probe_column = probe_column
-            .value
-            .convert_to_full_column(&probe_column.data_type, input.num_rows());
+        let probe_column = input.get_by_offset(0).to_column(input.num_rows());
         // Check if there is any null in the probe column.
         if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
             let mut has_null = self

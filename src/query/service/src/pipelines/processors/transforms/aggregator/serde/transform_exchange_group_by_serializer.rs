@@ -331,9 +331,7 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
         let mut columns_layout = Vec::with_capacity(columns.len());
 
         for column in columns.into_iter() {
-            let column = column
-                .value
-                .convert_to_full_column(&column.data_type, num_rows);
+            let column = column.to_column(num_rows);
             let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
@@ -452,9 +450,7 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
         let mut columns_layout = Vec::with_capacity(columns.len());
 
         for column in columns.into_iter() {
-            let column = column
-                .value
-                .convert_to_full_column(&column.data_type, num_rows);
+            let column = column.to_column(num_rows);
             let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);

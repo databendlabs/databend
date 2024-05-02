@@ -234,10 +234,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             let agg_index = block.num_columns() - aggregate_functions.len() + index;
             let function = &aggregate_functions[index];
             let offset = offsets_aggregate_states[index];
-            let entry = block.get_by_offset(agg_index);
-            let agg_state = entry
-                .value
-                .convert_to_full_column(&entry.data_type, num_rows);
+            let agg_state = block.get_by_offset(agg_index).to_column(num_rows);
 
             function.batch_merge(places, offset, &agg_state)?;
         }
