@@ -33,23 +33,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::io::BufWriter;
 use std::io::Cursor;
 use std::io::Read;
-use std::io::Seek;
-use std::io::SeekFrom;
 use std::io::Write;
 use std::marker::PhantomData;
-use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use std::result;
 use std::sync::Arc;
 
+use crc32fast::Hasher;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::meta::testify_version;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::warn;
 use tantivy::directory::error::DeleteError;
@@ -64,6 +64,175 @@ use tantivy::directory::WatchCallback;
 use tantivy::directory::WatchHandle;
 use tantivy::directory::WritePtr;
 use tantivy::Directory;
+use tantivy_common::BinarySerializable;
+use tantivy_common::VInt;
+
+// tantivy version is used to generate the footer data
+
+// Index major version.
+const INDEX_MAJOR_VERSION: u32 = 0;
+// Index minor version.
+const INDEX_MINOR_VERSION: u32 = 22;
+// Index patch version.
+const INDEX_PATCH_VERSION: u32 = 0;
+// Index format version.
+const INDEX_FORMAT_VERSION: u32 = 6;
+
+// The magic byte of the footer to identify corruption
+// or an old version of the footer.
+const FOOTER_MAGIC_NUMBER: u32 = 1337;
+
+type CrcHashU32 = u32;
+
+/// Structure version for the index.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Version {
+    major: u32,
+    minor: u32,
+    patch: u32,
+    index_format_version: u32,
+}
+
+/// A Footer is appended every part of data, like tantivy file.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+struct Footer {
+    version: Version,
+    crc: CrcHashU32,
+}
+
+impl Footer {
+    fn new(crc: CrcHashU32) -> Self {
+        let version = Version {
+            major: INDEX_MAJOR_VERSION,
+            minor: INDEX_MINOR_VERSION,
+            patch: INDEX_PATCH_VERSION,
+            index_format_version: INDEX_FORMAT_VERSION,
+        };
+        Footer { version, crc }
+    }
+
+    fn append_footer<W: std::io::Write>(&self, write: &mut W) -> Result<()> {
+        let footer_payload_len = write.write(serde_json::to_string(&self)?.as_ref())?;
+        BinarySerializable::serialize(&(footer_payload_len as u32), write)?;
+        BinarySerializable::serialize(&FOOTER_MAGIC_NUMBER, write)?;
+        Ok(())
+    }
+}
+
+// Build footer for tantivy files.
+// Footer is used to check whether the data is valid when open a file.
+pub fn build_tantivy_footer(bytes: &[u8]) -> Result<Vec<u8>> {
+    let mut hasher = Hasher::new();
+    hasher.update(bytes);
+    let crc = hasher.finalize();
+
+    let footer = Footer::new(crc);
+    let mut buf = Vec::new();
+    footer.append_footer(&mut buf)?;
+    Ok(buf)
+}
+
+#[derive(
+    Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+struct Field(u32);
+
+impl Field {
+    /// Create a new field object for the given FieldId.
+    const fn from_field_id(field_id: u32) -> Field {
+        Field(field_id)
+    }
+
+    /// Returns a u32 identifying uniquely a field within a schema.
+    #[allow(dead_code)]
+    const fn field_id(self) -> u32 {
+        self.0
+    }
+}
+
+impl BinarySerializable for Field {
+    fn serialize<W: Write + ?Sized>(&self, writer: &mut W) -> io::Result<()> {
+        self.0.serialize(writer)
+    }
+
+    fn deserialize<R: Read>(reader: &mut R) -> io::Result<Field> {
+        u32::deserialize(reader).map(Field)
+    }
+}
+
+#[derive(Eq, PartialEq, Hash, Copy, Ord, PartialOrd, Clone, Debug)]
+struct FileAddr {
+    field: Field,
+    idx: usize,
+}
+
+impl FileAddr {
+    fn new(field: Field, idx: usize) -> FileAddr {
+        FileAddr { field, idx }
+    }
+}
+
+impl BinarySerializable for FileAddr {
+    fn serialize<W: Write + ?Sized>(&self, writer: &mut W) -> io::Result<()> {
+        self.field.serialize(writer)?;
+        VInt(self.idx as u64).serialize(writer)?;
+        Ok(())
+    }
+
+    fn deserialize<R: Read>(reader: &mut R) -> io::Result<Self> {
+        let field = Field::deserialize(reader)?;
+        let idx = VInt::deserialize(reader)?.0 as usize;
+        Ok(FileAddr { field, idx })
+    }
+}
+
+// Build empty position data to be used when there are no phrase terms in the query.
+// This can reduce data reading and speed up the query
+fn build_empty_position_data(field_nums: usize) -> Result<OwnedBytes> {
+    let offsets: Vec<_> = (0..field_nums)
+        .map(|i| {
+            let field = Field::from_field_id(i as u32);
+            let file_addr = FileAddr::new(field, 0);
+            (file_addr, 0)
+        })
+        .collect();
+
+    let mut buf = Vec::new();
+    VInt(offsets.len() as u64).serialize(&mut buf)?;
+
+    let mut prev_offset = 0;
+    for (file_addr, offset) in offsets {
+        VInt(offset - prev_offset).serialize(&mut buf)?;
+        file_addr.serialize(&mut buf)?;
+        prev_offset = offset;
+    }
+
+    let footer_len = buf.len() as u32;
+    footer_len.serialize(&mut buf)?;
+
+    let mut footer = build_tantivy_footer(&buf)?;
+    buf.append(&mut footer);
+
+    Ok(OwnedBytes::new(buf))
+}
+
+#[derive(Clone)]
+pub struct InvertedIndexMeta {
+    pub columns: Vec<(String, SingleColumnMeta)>,
+}
+
+#[derive(Clone, Debug)]
+pub struct InvertedIndexFile {
+    pub name: String,
+    pub data: OwnedBytes,
+}
+
+impl InvertedIndexFile {
+    pub fn try_create(name: String, data: Vec<u8>) -> Result<Self> {
+        let data = OwnedBytes::new(data);
+        Ok(Self { name, data })
+    }
+}
 
 /// The Writer just writes a buffer.
 struct VecWriter {
@@ -118,113 +287,72 @@ impl TerminatingWrite for VecWriter {
 // The data is read-only, write and delete operations will be ignored and return success directly.
 #[derive(Clone, Debug)]
 pub struct InvertedIndexDirectory {
-    data: OwnedBytes,
-
-    fast_fields_range: Range<usize>,
-    store_range: Range<usize>,
-    fieldnorm_range: Range<usize>,
-    position_range: Range<usize>,
-    posting_range: Range<usize>,
-    term_range: Range<usize>,
-    meta_range: Range<usize>,
-    managed_range: Range<usize>,
-
     meta_path: PathBuf,
     managed_path: PathBuf,
+
+    fast_data: OwnedBytes,
+    store_data: OwnedBytes,
+    fieldnorm_data: OwnedBytes,
+    pos_data: OwnedBytes,
+    idx_data: OwnedBytes,
+    term_data: OwnedBytes,
+    meta_data: OwnedBytes,
+    managed_data: OwnedBytes,
 }
 
 impl InvertedIndexDirectory {
-    pub fn try_create(data: Vec<u8>) -> Result<Self> {
-        if data.len() < 36 {
-            return Err(OpenReadError::IoError {
-                io_error: std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "invalid index data",
-                )
-                .into(),
-                filepath: PathBuf::from("InvertedIndexDirectory"),
+    pub fn try_create(field_nums: usize, files: Vec<Arc<InvertedIndexFile>>) -> Result<Self> {
+        let mut file_map = BTreeMap::<String, OwnedBytes>::new();
+
+        for file in files.into_iter() {
+            let file = Arc::unwrap_or_clone(file.clone());
+            if file.data.is_empty() {
+                continue;
             }
-            .into());
+            file_map.insert(file.name, file.data);
         }
 
-        let mut reader = Cursor::new(data.clone());
-        reader.seek(SeekFrom::End(-36))?;
-
-        let mut buf = vec![0u8; 4];
-        let fast_fields_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
-        let store_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
-        let field_norms_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
-        let positions_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
-        let postings_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
-        let terms_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
-        let meta_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
-        let managed_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
-
-        if data.len() < managed_offset {
-            return Err(OpenReadError::IoError {
-                io_error: std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid data")
-                    .into(),
-                filepath: PathBuf::from("CacheDirectory"),
-            }
-            .into());
-        }
-
-        let data = OwnedBytes::new(data);
-
-        let fast_fields_range = Range {
-            start: 0,
-            end: fast_fields_offset as usize,
+        let fast_data = file_map.remove("fast").unwrap();
+        let store_data = file_map.remove("store").unwrap();
+        let fieldnorm_data = file_map.remove("fieldnorm").unwrap();
+        // If there are no phrase terms in the query,
+        // we can use empty position data instead.
+        let pos_data = match file_map.remove("pos") {
+            Some(pos_data) => pos_data,
+            None => build_empty_position_data(field_nums)?,
         };
-        let store_range = Range {
-            start: fast_fields_offset as usize,
-            end: store_offset as usize,
-        };
-        let fieldnorm_range = Range {
-            start: store_offset as usize,
-            end: field_norms_offset as usize,
-        };
-        let position_range = Range {
-            start: field_norms_offset as usize,
-            end: positions_offset as usize,
-        };
-        let posting_range = Range {
-            start: positions_offset as usize,
-            end: postings_offset as usize,
-        };
-        let term_range = Range {
-            start: postings_offset as usize,
-            end: terms_offset as usize,
-        };
-        let meta_range = Range {
-            start: terms_offset as usize,
-            end: meta_offset as usize,
-        };
-        let managed_range = Range {
-            start: meta_offset as usize,
-            end: managed_offset as usize,
-        };
+        let idx_data = file_map.remove("idx").unwrap();
+        let term_data = file_map.remove("term").unwrap();
+        let meta_data = file_map.remove("meta.json").unwrap();
+        let managed_data = file_map.remove(".managed.json").unwrap();
 
         let meta_path = PathBuf::from("meta.json");
         let managed_path = PathBuf::from(".managed.json");
 
         Ok(Self {
-            data,
-            fast_fields_range,
-            store_range,
-            fieldnorm_range,
-            position_range,
-            posting_range,
-            term_range,
-            meta_range,
-            managed_range,
             meta_path,
             managed_path,
+
+            fast_data,
+            store_data,
+            fieldnorm_data,
+            pos_data,
+            idx_data,
+            term_data,
+            meta_data,
+            managed_data,
         })
     }
 
     pub fn size(&self) -> usize {
-        self.data.len()
-            + 8 * std::mem::size_of::<Range<usize>>()
+        self.fast_data.len()
+            + self.store_data.len()
+            + self.fieldnorm_data.len()
+            + self.pos_data.len()
+            + self.idx_data.len()
+            + self.term_data.len()
+            + self.meta_data.len()
+            + self.managed_data.len()
             + self.meta_path.capacity()
             + self.managed_path.capacity()
     }
@@ -238,21 +366,19 @@ impl Directory for InvertedIndexDirectory {
 
     fn open_read(&self, path: &Path) -> result::Result<FileSlice, OpenReadError> {
         if path == self.meta_path.as_path() {
-            let bytes = self.data.slice(self.meta_range.clone());
-            return Ok(FileSlice::new(Arc::new(bytes)));
+            return Ok(FileSlice::new(Arc::new(self.meta_data.clone())));
         } else if path == self.managed_path.as_path() {
-            let bytes = self.data.slice(self.managed_range.clone());
-            return Ok(FileSlice::new(Arc::new(bytes)));
+            return Ok(FileSlice::new(Arc::new(self.managed_data.clone())));
         }
 
         if let Some(ext) = path.extension() {
             let bytes = match ext.to_str() {
-                Some("term") => self.data.slice(self.term_range.clone()),
-                Some("idx") => self.data.slice(self.posting_range.clone()),
-                Some("pos") => self.data.slice(self.position_range.clone()),
-                Some("fieldnorm") => self.data.slice(self.fieldnorm_range.clone()),
-                Some("store") => self.data.slice(self.store_range.clone()),
-                Some("fast") => self.data.slice(self.fast_fields_range.clone()),
+                Some("term") => self.term_data.clone(),
+                Some("idx") => self.idx_data.clone(),
+                Some("pos") => self.pos_data.clone(),
+                Some("fieldnorm") => self.fieldnorm_data.clone(),
+                Some("store") => self.store_data.clone(),
+                Some("fast") => self.fast_data.clone(),
                 _ => {
                     return Err(OpenReadError::FileDoesNotExist(PathBuf::from(path)));
                 }
@@ -317,27 +443,21 @@ impl Directory for InvertedIndexDirectory {
     }
 }
 
-#[inline(always)]
-fn read_u32<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<u32> {
-    r.read_exact(buf)?;
-    Ok(u32::from_le_bytes(buf.try_into().unwrap()))
+impl Versioned<0> for InvertedIndexFile {}
+
+pub enum InvertedIndexFileVersion {
+    V0(PhantomData<InvertedIndexFile>),
 }
 
-impl Versioned<0> for InvertedIndexDirectory {}
-
-pub enum InvertedIndexFilterVersion {
-    V0(PhantomData<InvertedIndexDirectory>),
-}
-
-impl TryFrom<u64> for InvertedIndexFilterVersion {
+impl TryFrom<u64> for InvertedIndexFileVersion {
     type Error = ErrorCode;
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(InvertedIndexFilterVersion::V0(testify_version::<_, 0>(
+            0 => Ok(InvertedIndexFileVersion::V0(testify_version::<_, 0>(
                 PhantomData,
             ))),
             _ => Err(ErrorCode::Internal(format!(
-                "unknown inverted index filer version {value}, versions supported: 0"
+                "unknown inverted index file version {value}, versions supported: 0"
             ))),
         }
     }

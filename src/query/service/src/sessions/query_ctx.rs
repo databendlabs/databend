@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::future::Future;
-use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -252,7 +251,7 @@ impl QueryContext {
     }
 
     /// Get the client socket address.
-    pub fn get_client_address(&self) -> Option<SocketAddr> {
+    pub fn get_client_address(&self) -> Option<String> {
         self.shared.session.session_ctx.get_client_host()
     }
 

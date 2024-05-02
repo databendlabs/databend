@@ -17,6 +17,7 @@ use std::io;
 use std::io::BufWriter;
 use std::io::Seek;
 use std::io::Write;
+use std::time::Duration;
 
 use databend_common_meta_types::LogId;
 use futures::Stream;
@@ -123,8 +124,58 @@ impl<'a> WriterV002<'a> {
 
             cnt += 1;
 
+            if cnt % 10_000 == 0 {
+                info!("Snapshot Writer has written {} kilo entries", cnt / 1000)
+            }
+        }
+
+        Ok(cnt)
+    }
+
+    /// Write entries to the snapshot, without flushing.
+    ///
+    /// Returns the count of entries
+    pub fn write_entries_sync(
+        &mut self,
+        mut entries_rx: tokio::sync::mpsc::Receiver<RaftStoreEntry>,
+    ) -> Result<usize, io::Error> {
+        let mut cnt = 0;
+        let data_version = self.snapshot_store.data_version();
+
+        while let Some(ent) = entries_rx.blocking_recv() {
+            debug!(entry :? =(&ent); "write {} entry", data_version);
+
+            if let RaftStoreEntry::StateMachineMeta {
+                key: StateMachineMetaKey::LastApplied,
+                ref value,
+            } = ent
+            {
+                let last: LogId = value.clone().try_into().unwrap();
+                info!(last_applied :? =(last); "write last applied to snapshot");
+
+                assert!(
+                    self.last_applied.is_none(),
+                    "already seen a last_applied: {:?}",
+                    self.last_applied
+                );
+                self.last_applied = Some(last);
+            }
+
+            serde_json::to_writer(&mut *self, &ent)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            self.write(b"\n")
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            cnt += 1;
+
+            // Yield to give up the CPU to avoid starving other tasks.
             if cnt % 1000 == 0 {
-                info!("Snapshot Writer has written {} entries", cnt)
+                std::thread::sleep(Duration::from_millis(1));
+            }
+
+            if cnt % 10_000 == 0 {
+                info!("Snapshot Writer has written {} kilo entries", cnt / 1000)
             }
         }
 

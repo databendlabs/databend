@@ -28,6 +28,7 @@ use databend_common_expression::TableSchema;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -414,10 +415,15 @@ pub trait TableExt: Table {
         let table_info = self.get_table_info();
         let tid = table_info.ident.table_id;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
-        let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
+
+        let seqv = catalog.get_table_meta_by_id(tid).await?.ok_or_else(|| {
+            let err = UnknownTableId::new(tid, "TableExt::refresh");
+            AppError::from(err)
+        })?;
+
         let table_info = TableInfo {
-            ident,
-            meta: meta.as_ref().clone(),
+            ident: TableIdent::new(tid, seqv.seq),
+            meta: seqv.data,
             ..table_info.clone()
         };
         catalog.get_table_by_info(&table_info)
@@ -514,6 +520,9 @@ pub struct NavigationDescriptor {
 }
 
 use std::collections::HashMap;
+
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::UnknownTableId;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ParquetTableColumnStatisticsProvider {

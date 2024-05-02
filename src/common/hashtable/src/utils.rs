@@ -214,7 +214,7 @@ pub mod sse {
 // potentially leading to the target table being unsuitable for use as a build table in the future.
 //      2. Requires a significant amount of memory to be efficient and currently does not support spill operations.
 // for now we just support sql like below:
-// `merge into t using source on xxx when matched then update xxx when not macthed then insert xxx.
+// `merge into t using source on xxx when matched then update xxx when not matched then insert xxx.
 // for merge into:
 // we use MergeIntoBlockInfoIndex to maintain an index for the block info in chunks.
 
@@ -331,7 +331,7 @@ impl MergeIntoBlockInfoIndex {
             let left = self.search_idx(start as u32);
             let right = self.search_idx((end - 1) as u32);
             if left == right {
-                // macthed only one block.
+                // matched only one block.
                 if self.intervals[left].0 == (start as u32)
                     && self.intervals[right].1 == (end - 1) as u32
                 {

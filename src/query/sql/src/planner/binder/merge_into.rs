@@ -71,7 +71,7 @@ pub enum MergeIntoType {
 // for now we think right source table is small table in default.
 // 1. insert only:
 //      right anti join
-// 2. (macthed and unmatched)
+// 2. (matched and unmatched)
 //      right outer
 // 3. matched only:
 //      inner join
@@ -721,7 +721,7 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
         Ok(MergeIntoType::FullOperation)
     } else {
         Err(ErrorCode::SemanticError(
-            "we must have macthed or unmatched clause at least one",
+            "we must have matched or unmatched clause at least one",
         ))
     }
 }

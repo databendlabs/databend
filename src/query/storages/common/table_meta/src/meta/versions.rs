@@ -125,24 +125,6 @@ impl TableSnapshotStatisticsVersion {
     }
 }
 
-impl Versioned<0> for v4::IndexInfo {}
-
-pub enum IndexInfoVersion {
-    V0(PhantomData<v4::IndexInfo>),
-}
-
-impl IndexInfoVersion {
-    pub fn version(&self) -> u64 {
-        match self {
-            IndexInfoVersion::V0(a) => Self::ver(a),
-        }
-    }
-
-    fn ver<const V: u64, T: Versioned<V>>(_v: &PhantomData<T>) -> u64 {
-        V
-    }
-}
-
 /// Statically check that if T implements Versioned<U> where U equals V
 #[inline]
 pub fn testify_version<T, const V: u64>(t: PhantomData<T>) -> PhantomData<T>
@@ -202,18 +184,6 @@ mod converters {
                 ))),
                 _ => Err(ErrorCode::Internal(format!(
                     "unknown table snapshot statistics version {value}, versions supported: 0"
-                ))),
-            }
-        }
-    }
-
-    impl TryFrom<u64> for IndexInfoVersion {
-        type Error = ErrorCode;
-        fn try_from(value: u64) -> Result<Self, Self::Error> {
-            match value {
-                0 => Ok(IndexInfoVersion::V0(testify_version::<_, 0>(PhantomData))),
-                _ => Err(ErrorCode::Internal(format!(
-                    "unknown index info version {value}, versions supported: 0"
                 ))),
             }
         }

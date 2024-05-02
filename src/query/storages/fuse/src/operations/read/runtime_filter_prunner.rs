@@ -65,10 +65,6 @@ pub fn runtime_filter_pruner(
             }
             debug_assert!(column_ids.len() == 1);
             if let Some(stat) = stats.get(&column_ids[0]) {
-                if stat.min.is_null() {
-                    return false;
-                }
-                debug_assert_eq!(stat.min().as_ref().infer_data_type(), ty.remove_nullable());
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, ty);
 
@@ -81,20 +77,24 @@ pub fn runtime_filter_pruner(
                     func_ctx,
                     &BUILTIN_FUNCTIONS,
                 );
+                info!("Runtime filter after constant fold is {:?}", new_expr.sql_display());
                 return matches!(new_expr, Expr::Constant {
                     scalar: Scalar::Boolean(false),
                     ..
                 });
             }
         }
+        info!("Can't prune the partition by runtime filter, because there is no statistics for the partition");
         false
     });
 
-    info!(
-        "Pruned partition with {:?} rows by runtime filter",
-        part.nums_rows
-    );
-    Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
+    if pruned {
+        info!(
+            "Pruned partition with {:?} rows by runtime filter",
+            part.nums_rows
+        );
+        Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
+    }
 
     Ok(pruned)
 }

@@ -32,7 +32,7 @@ paste = "1.0.9"
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tantivy = "0.21.1"
+tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 

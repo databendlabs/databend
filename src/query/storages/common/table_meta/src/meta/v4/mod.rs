@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod index;
 mod segment;
 mod snapshot;
 
-pub use index::IndexInfo;
 pub use segment::CompactSegmentInfo;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
