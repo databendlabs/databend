@@ -84,6 +84,7 @@ pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
 pub use operation::MetaId;
 pub use operation::Operation;
+pub use proto_display::VecDisplay;
 pub use protobuf::txn_condition;
 pub use protobuf::txn_condition::ConditionResult;
 pub use protobuf::txn_op;
