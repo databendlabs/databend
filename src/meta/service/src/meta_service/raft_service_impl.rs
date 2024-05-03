@@ -82,18 +82,14 @@ impl RaftServiceImpl {
 
         let is_req = GrpcHelper::parse_req(request)?;
 
-        let resp = self
+        let res = self
             .receive_chunked_snapshot(is_req)
             .timed(observe_snapshot_recv_spent(&addr))
-            .await
-            .map_err(GrpcHelper::internal_err);
+            .await;
 
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), resp.is_ok());
+        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
 
-        match resp {
-            Ok(resp) => GrpcHelper::ok_response(resp),
-            Err(e) => Err(e),
-        }
+        GrpcHelper::make_grpc_result(res)
     }
 
     async fn do_install_snapshot_v1(
@@ -122,18 +118,14 @@ impl RaftServiceImpl {
             done: chunk.done,
         };
 
-        let resp = self
+        let res = self
             .receive_chunked_snapshot(install_snapshot_req)
             .timed(observe_snapshot_recv_spent(&addr))
-            .await
-            .map_err(GrpcHelper::internal_err);
+            .await;
 
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), resp.is_ok());
+        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
 
-        match resp {
-            Ok(resp) => GrpcHelper::ok_response(resp),
-            Err(e) => Err(e),
-        }
+        GrpcHelper::make_grpc_result(res)
     }
 
     /// Receive a chunk based snapshot from the leader.
@@ -227,7 +219,7 @@ impl RaftService for RaftServiceImpl {
                 .await
                 .map_err(GrpcHelper::internal_err)?;
 
-            GrpcHelper::ok_response(resp)
+            GrpcHelper::ok_response(&resp)
         }
         .in_span(root)
         .await
@@ -260,7 +252,7 @@ impl RaftService for RaftServiceImpl {
 
             let resp = raft.vote(v_req).await.map_err(GrpcHelper::internal_err)?;
 
-            GrpcHelper::ok_response(resp)
+            GrpcHelper::ok_response(&resp)
         }
         .in_span(root)
         .await
