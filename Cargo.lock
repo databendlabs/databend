@@ -10118,7 +10118,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.45.1"
-source = "git+https://github.com/apache/opendal?rev=53377ca#53377ca873c2928ce519ca57a939f89af1a76c47"
+source = "git+https://github.com/Xuanwo/opendal?rev=53377ca#53377ca873c2928ce519ca57a939f89af1a76c47"
 dependencies = [
  "anyhow",
  "async-backtrace",
