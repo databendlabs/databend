@@ -288,6 +288,7 @@ pub fn read_batch<R: Read + Seek>(
     message_scratch: &mut Vec<u8>,
     data_scratch: &mut Vec<u8>,
 ) -> Result<Chunk<Box<dyn Array>>> {
+    assert!(index < metadata.blocks.len());
     let block = metadata.blocks[index];
 
     let offset: u64 = block

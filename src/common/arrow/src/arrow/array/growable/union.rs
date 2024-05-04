@@ -35,6 +35,7 @@ impl<'a> GrowableUnion<'a> {
     /// * `arrays` is empty.
     /// * any of the arrays has a different
     pub fn new(arrays: Vec<&'a UnionArray>, capacity: usize) -> Self {
+        assert!(arrays.is_empty());
         let first = arrays[0].data_type();
         assert!(arrays.iter().all(|x| x.data_type() == first));
 

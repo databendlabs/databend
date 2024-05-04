@@ -89,7 +89,7 @@ impl UnionArray {
             .try_for_each(|(index, (data_type, child))| {
                 if data_type != child {
                     Err(Error::oos(format!(
-                        "The children DataTypes of a UnionArray must equal the children data types. 
+                        "The children DataTypes of a UnionArray must equal the children data types.
                          However, the field {index} has data type {data_type:?} but the value has data type {child:?}"
                     )))
                 } else {
@@ -244,7 +244,7 @@ impl UnionArray {
     /// # Implementation
     /// This operation is `O(F)` where `F` is the number of fields.
     /// # Panic
-    /// This function panics iff `offset + length >= self.len()`.
+    /// This function panics iff `offset + length > self.len()`.
     #[inline]
     pub fn slice(&mut self, offset: usize, length: usize) {
         assert!(
