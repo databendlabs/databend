@@ -30,7 +30,7 @@ pub enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
     RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
-    AsofJoin,
+    AsofJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
 }
 
 // Choose physical join type by join conditions
@@ -77,7 +77,10 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             ));
         }
         if join.join_type == JoinType::AsOf {
-            return Ok(PhysicalJoinType::AsofJoin);
+            return Ok(PhysicalJoinType::AsofJoin(
+                range_conditions,
+                other_conditions,
+            ));
         }
     }
 
@@ -178,7 +181,7 @@ impl PhysicalPlanBuilder {
                 )
                 .await
             }
-            PhysicalJoinType::AsofJoin => {
+            PhysicalJoinType::AsofJoin(range, other) => {
                 self.build_asof_join(
                     join,
                     s_expr,

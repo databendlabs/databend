@@ -42,6 +42,7 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::i32::MAX;
 use std::ops::Range;
 
 use borsh::BorshDeserialize;
@@ -94,6 +95,10 @@ use crate::values::Column;
 pub use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::types::timestamp::TIMESTAMP_MAX;
+use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::date::DATE_MAX;
+use crate::types::date::DATE_MIN;
 
 pub type GenericMap = [DataType];
 
@@ -240,6 +245,65 @@ impl DataType {
             DataType::Array(ty) => ty.has_nested_nullable(),
             DataType::Map(ty) => ty.has_nested_nullable(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
+        }
+    }
+
+    pub fn infinity(&self) -> Scalar {
+        match &self {
+             DataType::Timestamp => {
+                return  Scalar::Timestamp(TIMESTAMP_MAX)
+             },
+             DataType::Date => {
+                return  Scalar::Date(DATE_MAX)
+             }
+             DataType::Number(NumberDataType::Float32) =>{
+                return Scalar::Number(NumberScalar::Float32(ordered_float::OrderedFloat(f32::INFINITY)))
+             }
+             DataType::Number(NumberDataType::Int32) => {
+                return Scalar::Number(NumberScalar::Int32(MAX))
+             }
+             DataType::Number(NumberDataType::Int16) => {
+                return Scalar::Number(NumberScalar::Int16(MAX.try_into().unwrap()))
+             }
+             DataType::Number(NumberDataType::Int8) => {
+                return Scalar::Number(NumberScalar::Int8(MAX.try_into().unwrap()))
+             }
+             DataType::Number(NumberDataType::Float64) => {
+                return Scalar::Number(NumberScalar::Float64(ordered_float::OrderedFloat(f64::INFINITY)))
+             }
+             DataType::Number(NumberDataType::Int64) => {
+                return Scalar::Number(NumberScalar::Int64(MAX.into()))
+             }
+             _ => todo!()
+        }
+    }
+    pub fn ninfinity(&self) -> Scalar {
+        match &self {
+             DataType::Timestamp => {
+                return  Scalar::Timestamp(TIMESTAMP_MIN)
+             },
+             DataType::Date => {
+                return  Scalar::Date(DATE_MIN)
+             }
+             DataType::Number(NumberDataType::Float32) =>{
+                return Scalar::Number(NumberScalar::Float32(ordered_float::OrderedFloat(f32::NEG_INFINITY)))
+             }
+             DataType::Number(NumberDataType::Int32) => {
+                return Scalar::Number(NumberScalar::Int32(-MAX))
+             }
+             DataType::Number(NumberDataType::Int16) => {
+                return Scalar::Number(NumberScalar::Int16((-MAX).try_into().unwrap()))
+             }
+             DataType::Number(NumberDataType::Int8) => {
+                return Scalar::Number(NumberScalar::Int8((-MAX).try_into().unwrap()))
+             }
+             DataType::Number(NumberDataType::Float64) => {
+                return Scalar::Number(NumberScalar::Float64(ordered_float::OrderedFloat(f64::NEG_INFINITY)))
+             }
+             DataType::Number(NumberDataType::Int64) => {
+                return Scalar::Number(NumberScalar::Int64((-MAX).into()))
+             }
+             _ => todo!()
         }
     }
 
