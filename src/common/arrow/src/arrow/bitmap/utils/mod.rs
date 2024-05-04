@@ -85,7 +85,6 @@ pub unsafe fn set_bit_unchecked(data: &mut [u8], i: usize, value: bool) {
 /// This function panics iff `i / 8 >= bytes.len()`
 #[inline]
 pub fn get_bit(bytes: &[u8], i: usize) -> bool {
-    assert!(i / 8 < bytes.len());
     is_set(bytes[i / 8], i % 8)
 }
 
