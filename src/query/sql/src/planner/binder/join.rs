@@ -210,7 +210,7 @@ impl Binder {
             && non_equi_conditions.is_empty()
         {
             return Err(ErrorCode::SemanticError(
-                "unequal conditions should be empty in asof join",
+                "unequal conditions should not be empty in asof join",
             ));
         }
         self.push_down_other_conditions(

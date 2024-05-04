@@ -205,6 +205,7 @@ fn format_join(op: &Join) -> String {
         JoinType::RightMark => "RightMark".to_string(),
         JoinType::LeftSingle => "LeftSingle".to_string(),
         JoinType::RightSingle => "RightSingle".to_string(),
+        JoinType::AsOf => "Asof".to_string(),
     };
 
     format!("Join({})", join_type)

@@ -1592,6 +1592,7 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
+            | TokenKind::ASOF
             | TokenKind::BETWEEN
             | TokenKind::CREATE
             | TokenKind::ATTACH

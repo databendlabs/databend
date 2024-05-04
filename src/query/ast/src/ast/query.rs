@@ -800,6 +800,9 @@ impl Display for TableReference {
                     JoinOperator::CrossJoin => {
                         write!(f, " CROSS JOIN")?;
                     }
+                    JoinOperator::AsofJoin => {
+                        write!(f, " ASOF JOIN")?;
+                    }
                 }
                 write!(f, " {}", join.right)?;
                 match &join.condition {

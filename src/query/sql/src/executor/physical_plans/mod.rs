@@ -94,3 +94,5 @@ mod physical_udf;
 pub use physical_copy_into_location::CopyIntoLocation;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;
+mod physical_asof_join;
+pub use physical_asof_join::*;

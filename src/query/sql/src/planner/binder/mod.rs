@@ -76,3 +76,4 @@ pub use stream_column_factory::STREAM_COLUMN_FACTORY;
 pub use table::parse_result_scan_args;
 pub use values::bind_values;
 pub use window::WindowOrderByInfo;
+pub use window::WindowFunctionInfo;
