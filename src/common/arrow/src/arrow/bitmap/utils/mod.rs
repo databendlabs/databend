@@ -68,7 +68,6 @@ pub fn set(byte: u8, i: usize, value: bool) -> u8 {
 /// panics if `i >= data.len() / 8`
 #[inline]
 pub fn set_bit(data: &mut [u8], i: usize, value: bool) {
-    assert!(i < data.len() / 8);
     data[i / 8] = set(data[i / 8], i % 8, value);
 }
 
