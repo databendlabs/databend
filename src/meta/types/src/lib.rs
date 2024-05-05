@@ -147,6 +147,7 @@ pub use crate::raft_types::RaftMetrics;
 pub use crate::raft_types::RemoteError;
 pub use crate::raft_types::Snapshot;
 pub use crate::raft_types::SnapshotMeta;
+pub use crate::raft_types::SnapshotMismatch;
 pub use crate::raft_types::SnapshotResponse;
 pub use crate::raft_types::StorageError;
 pub use crate::raft_types::StorageIOError;

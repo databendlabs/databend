@@ -10153,9 +10153,9 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.9.8"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d2207f55c562d269b93ed659d15bec46e511c39ad248f829d43908bdd4b7767"
+checksum = "3f29df094119e6d79274ddec81e44189b4b9f59f1a38635920151e1264b6687c"
 dependencies = [
  "anyerror",
  "byte-unit",

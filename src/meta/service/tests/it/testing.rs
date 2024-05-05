@@ -58,7 +58,10 @@ fn setup_test() {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
         databend_common_meta_sled_store::init_temp_sled_db(t);
 
-        let guards = init_logging("meta_unittests", &Config::new_testing(), BTreeMap::new());
+        let mut config = Config::new_testing();
+        config.file.prefix_filter = "".to_string();
+
+        let guards = init_logging("meta_unittests", &config, BTreeMap::new());
         Box::leak(Box::new(guards));
     });
 }
