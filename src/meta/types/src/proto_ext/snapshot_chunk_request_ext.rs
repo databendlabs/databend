@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use crate::protobuf::SnapshotChunkRequest;
+use crate::protobuf::SnapshotChunkRequestV2;
 use crate::protobuf::SnapshotChunkV1;
 use crate::InstallSnapshotRequest;
+use crate::SnapshotMeta;
+use crate::Vote;
 
 impl SnapshotChunkRequest {
     /// Return the length of the data in the chunk.
@@ -36,6 +39,27 @@ impl SnapshotChunkRequest {
             ver: 1,
             rpc_meta,
             chunk: Some(chunk_v1),
+        }
+    }
+}
+
+impl SnapshotChunkRequestV2 {
+    /// Build the first chunk of a snapshot stream, which contains vote and snapshot meta, without data.
+    pub fn new_head(vote: Vote, snapshot_meta: SnapshotMeta) -> Self {
+        let meta = ("ndjson".to_string(), vote, snapshot_meta);
+        let rpc_meta = serde_json::to_string(&meta).unwrap();
+
+        SnapshotChunkRequestV2 {
+            rpc_meta: Some(rpc_meta),
+            chunk: vec![],
+        }
+    }
+
+    /// Build a chunk item with data.
+    pub fn new_chunk(chunk: Vec<u8>) -> Self {
+        SnapshotChunkRequestV2 {
+            rpc_meta: None,
+            chunk,
         }
     }
 }
