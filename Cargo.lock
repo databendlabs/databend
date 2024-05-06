@@ -2978,7 +2978,6 @@ name = "databend-common-async-functions"
 version = "0.1.0"
 dependencies = [
  "databend-common-ast",
- "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",

@@ -12,7 +12,6 @@ doctest = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 databend-common-ast = { path = "../ast" }
-databend-common-base = { path = "../../common/base" }
 databend-common-catalog = { path = "../catalog" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-expression = { path = "../expression" }
