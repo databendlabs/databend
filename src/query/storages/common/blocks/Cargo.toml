@@ -14,8 +14,8 @@ test = false
 [dependencies]
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-expression = { path = "../../../expression" }
-parquet_rs = { workspace = true }
-
 databend-storages-common-table-meta = { path = "../table_meta" }
+ethnum = { workspace = true }
+parquet_rs = { workspace = true }
 
 [build-dependencies]
