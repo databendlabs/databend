@@ -166,6 +166,7 @@ pub use interpreter_database_drop::DropDatabaseInterpreter;
 pub use interpreter_database_rename::RenameDatabaseInterpreter;
 pub use interpreter_database_show_create::ShowCreateDatabaseInterpreter;
 pub use interpreter_database_undrop::UndropDatabaseInterpreter;
+pub use interpreter_delete::modify_by_subquery;
 pub use interpreter_delete::DeleteInterpreter;
 pub use interpreter_execute_immediate::ExecuteImmediateInterpreter;
 pub use interpreter_explain::ExplainInterpreter;

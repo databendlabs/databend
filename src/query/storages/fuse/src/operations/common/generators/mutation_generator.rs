@@ -21,6 +21,7 @@ use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
 use uuid::Uuid;
@@ -82,16 +83,27 @@ impl SnapshotGenerator for MutationGenerator {
                     )
                 {
                     info!("resolvable conflicts detected");
+                    let replace_snapshots =
+                        matches!(self.mutation_kind, MutationKind::ReplaceBySubquery);
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
                     let new_segments = ConflictResolveContext::merge_segments(
-                        previous.segments.clone(),
+                        if replace_snapshots {
+                            vec![]
+                        } else {
+                            previous.segments.clone()
+                        },
                         ctx.appended_segments.clone(),
                         replaced,
                         removed,
                     );
+                    let dummy_stats = Statistics::default();
                     let mut new_summary = merge_statistics(
                         &ctx.merged_statistics,
-                        &previous.summary,
+                        if replace_snapshots {
+                            &dummy_stats
+                        } else {
+                            &previous.summary
+                        },
                         default_cluster_key_id,
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);

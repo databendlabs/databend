@@ -80,6 +80,7 @@ pub enum MutationKind {
     Insert,
     Compact,
     MergeInto,
+    ReplaceBySubquery,
 }
 
 impl Display for MutationKind {
@@ -92,6 +93,7 @@ impl Display for MutationKind {
             MutationKind::Replace => write!(f, "Replace"),
             MutationKind::Compact => write!(f, "Compact"),
             MutationKind::MergeInto => write!(f, "MergeInto"),
+            MutationKind::ReplaceBySubquery => write!(f, "ReplaceBySubquery"),
         }
     }
 }

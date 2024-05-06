@@ -15,17 +15,23 @@
 use core::ops::Range;
 use std::collections::HashSet;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;
 use crate::filter::Selector;
+use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::BlockEntry;
 use crate::DataBlock;
 use crate::Evaluator;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
+use crate::Value;
 
 // FilterExecutor is used to filter `DataBlock` by `SelectExpr`.
+#[derive(Clone)]
 pub struct FilterExecutor {
     select_expr: SelectExpr,
     func_ctx: FunctionContext,
@@ -74,6 +80,36 @@ impl FilterExecutor {
         let origin_count = data_block.num_rows();
         let result_count = self.select(&data_block)?;
         self.take(data_block, origin_count, result_count)
+    }
+
+    // Mark a DataBlock, return the origin DataBlock with
+    // filter columns removed and mark column as last column.
+    pub fn mark(&mut self, data_block: DataBlock, num_fields: usize) -> Result<DataBlock> {
+        let num_exprs = data_block.num_columns() - num_fields;
+        let origin_count = data_block.num_rows();
+        let mut data_block = data_block;
+        let result_count = self.select(&data_block)?;
+
+        // remove filter columns used in select_expr
+        if num_exprs > 0 {
+            data_block.pop_columns(num_exprs);
+        }
+
+        let bytes = vec![0; origin_count];
+        let mut bitmap = MutableBitmap::from_vec(bytes, origin_count);
+        let true_selection = self.true_selection.as_mut_slice();
+        unsafe {
+            for i in 0..result_count {
+                let idx = *true_selection.get_unchecked(i);
+                bitmap.set(idx as usize, true);
+            }
+        }
+
+        let bitmap: Bitmap = bitmap.into();
+        let values: Value<BooleanType> = Value::Column(bitmap);
+        data_block.add_column(BlockEntry::new(DataType::Boolean, values.upcast()));
+
+        Ok(data_block)
     }
 
     // Store the filtered indices of data_block in `true_selection` and return the number of filtered indices.

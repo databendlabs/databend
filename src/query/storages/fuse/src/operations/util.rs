@@ -24,9 +24,18 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::eval_function;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -169,4 +178,65 @@ pub async fn read_block(
             ErrorCode::Internal("unexpected, failed to read block for merge into")
                 .add_message_back(e.to_string())
         })?
+}
+
+pub fn get_and(
+    filter1: Value<BooleanType>,
+    filter2: Value<BooleanType>,
+    func_ctx: &FunctionContext,
+    rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    eval_function(
+        None,
+        "and",
+        [
+            (filter1.upcast(), DataType::Boolean),
+            (filter2.upcast(), DataType::Boolean),
+        ],
+        func_ctx,
+        rows,
+        &BUILTIN_FUNCTIONS,
+    )
+}
+
+pub fn get_not(
+    filter: Value<BooleanType>,
+    func_ctx: &FunctionContext,
+    rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    eval_function(
+        None,
+        "not",
+        [(filter.upcast(), DataType::Boolean)],
+        func_ctx,
+        rows,
+        &BUILTIN_FUNCTIONS,
+    )
+}
+
+pub fn get_or(
+    filter1: Value<BooleanType>,
+    filter2: Value<BooleanType>,
+    func_ctx: &FunctionContext,
+    rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    eval_function(
+        None,
+        "or",
+        [
+            (filter1.upcast(), DataType::Boolean),
+            (filter2.upcast(), DataType::Boolean),
+        ],
+        func_ctx,
+        rows,
+        &BUILTIN_FUNCTIONS,
+    )
+}
+
+pub fn expr2prdicate(evaluator: &Evaluator, filter: &Expr) -> Result<Value<BooleanType>> {
+    Ok(evaluator
+        .run(filter)
+        .map_err(|e| e.add_message("eval filter failed:"))?
+        .try_downcast::<BooleanType>()
+        .unwrap())
 }

@@ -50,7 +50,7 @@ pub struct UpdatePlan {
     pub selection: Option<ScalarExpr>,
     pub bind_context: Box<BindContext>,
     pub metadata: MetadataRef,
-    pub subquery_desc: Vec<SubqueryDesc>,
+    pub subquery_desc: Option<SubqueryDesc>,
 }
 
 impl UpdatePlan {

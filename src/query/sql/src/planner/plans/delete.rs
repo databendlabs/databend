@@ -21,11 +21,11 @@ use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
 pub struct SubqueryDesc {
-    // The s_expr is a plan tree after decorrelation subquery
     pub input_expr: SExpr,
-    // `_row_id`'s index
-    pub index: IndexType,
     pub outer_columns: ColumnSet,
+    pub predicate_columns: ColumnSet,
+    pub index: IndexType,
+    pub predicate: ScalarExpr,
 }
 
 #[derive(Clone, Debug)]
@@ -36,5 +36,5 @@ pub struct DeletePlan {
     pub metadata: MetadataRef,
     pub bind_context: Box<BindContext>,
     pub selection: Option<ScalarExpr>,
-    pub subquery_desc: Vec<SubqueryDesc>,
+    pub subquery_desc: Option<SubqueryDesc>,
 }
