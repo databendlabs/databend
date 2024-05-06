@@ -18,7 +18,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio::io::AsyncWriteExt;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
@@ -35,14 +34,11 @@ use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::InstallSnapshotResponse;
 use databend_common_meta_types::RaftError;
-use databend_common_meta_types::Snapshot;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
 use databend_common_metrics::count::Count;
 use futures::TryStreamExt;
-use log::debug;
-use log::info;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
@@ -53,6 +49,7 @@ use tonic::Streaming;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
+use crate::meta_service::snapshot_receiver::Receiver;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
 
@@ -168,93 +165,42 @@ impl RaftServiceImpl {
     ) -> Result<Response<RaftReply>, Status> {
         let addr = remote_addr(&request);
 
-        let _g = snapshot_recv_inflight(&addr).counter_guard();
+        let _guard = snapshot_recv_inflight(&addr).counter_guard();
 
-        let mut strm = request.into_inner();
-
-        // Extract the first chunk to get the rpc_meta.
-        let (format, req_vote, snapshot_meta) = {
-            let Some(chunk) = strm.try_next().await? else {
-                return Err(GrpcHelper::invalid_arg("empty snapshot stream"));
-            };
-
-            let Some(meta) = &chunk.rpc_meta else {
-                return Err(GrpcHelper::invalid_arg(
-                    "first SnapshotChunkRequestV2.rpc_meta is None",
-                ));
-            };
-
-            if !chunk.chunk.is_empty() {
-                return Err(GrpcHelper::invalid_arg(
-                    "first SnapshotChunkRequestV2.chunk should not contain any data",
-                ));
-            }
-
-            let rpc_mta: (String, Vote, SnapshotMeta) = GrpcHelper::parse(meta)?;
-            rpc_mta
-        };
-
-        // Snapshot format is not used for now.
-        let _ = format;
-
-        info!(
-            format :% = &format,
-            req_vote :% = &req_vote,
-            snapshot_meta :% = &snapshot_meta;
-            "Begin receiving snapshot v2 stream from: {}",
-            addr
-        );
-
-        let mut snapshot_data = self
+        let snapshot_data = self
             .meta_node
             .raft
             .begin_receiving_snapshot()
             .await
             .map_err(GrpcHelper::internal_err)?;
 
-        let mut ith = 0;
-        let mut total_len = 0;
+        let mut receiver = Receiver::new(&addr, snapshot_data);
+
+        let mut strm = request.into_inner();
+
         while let Some(chunk) = strm.try_next().await? {
-            let data_len = chunk.chunk.len() as u64;
-            total_len += data_len;
-            debug!(
-                len = data_len,
-                total_len = total_len;
-                "received {ith}-th snapshot chunk from {addr}"
-            );
+            let snapshot = receiver.receive(chunk).await?;
 
-            ith += 1;
-            if ith % 100 == 0 {
-                info!(
-                    total_len = total_len;
-                    "received {ith}-th snapshot chunk from {addr}"
-                );
+            if let Some((_format, req_vote, snapshot)) = snapshot {
+                let res = self
+                    .meta_node
+                    .raft
+                    .install_full_snapshot(req_vote, snapshot)
+                    .await
+                    .map_err(GrpcHelper::internal_err);
+
+                raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
+
+                let resp = res?;
+
+                return GrpcHelper::ok_response(&resp);
             }
-
-            raft_metrics::network::incr_recvfrom_bytes(addr.clone(), data_len);
-
-            snapshot_data.write_all(&chunk.chunk).await?;
         }
 
-        snapshot_data.shutdown().await?;
-
-        let snapshot = Snapshot {
-            meta: snapshot_meta,
-            snapshot: snapshot_data,
-        };
-
-        let res = self
-            .meta_node
-            .raft
-            .install_full_snapshot(req_vote, snapshot)
-            .await
-            .map_err(GrpcHelper::internal_err);
-
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
-
-        let resp = res?;
-
-        GrpcHelper::ok_response(&resp)
+        Err(Status::invalid_argument(format!(
+            "snapshot stream is closed without finishing: {}",
+            receiver.stat_str()
+        )))
     }
 }
 

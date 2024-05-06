@@ -206,12 +206,12 @@ async fn test_raft_service_install_snapshot_v2() -> anyhow::Result<()> {
 
     let mut client0 = tc0.raft_client().await?;
 
-    let last = log_id(10, 2, 4);
+    let last_log_id = log_id(10, 2, 4);
 
     let snapshot_meta = SnapshotMeta {
-        last_log_id: Some(last),
+        last_log_id: Some(last_log_id),
         last_membership: StoredMembership::default(),
-        snapshot_id: MetaSnapshotId::new(Some(last), 1).to_string(),
+        snapshot_id: MetaSnapshotId::new(Some(last_log_id), 1).to_string(),
     };
 
     let data = [
@@ -220,13 +220,15 @@ async fn test_raft_service_install_snapshot_v2() -> anyhow::Result<()> {
         r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}}}}}"#,
     ];
 
+    // Complete transmit
+
     let strm_data = [
-        SnapshotChunkRequestV2::new_head(Vote::new_committed(10, 2), snapshot_meta),
         SnapshotChunkRequestV2::new_chunk(data[0].to_bytes().to_vec()),
         SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
         SnapshotChunkRequestV2::new_chunk(data[1].to_bytes().to_vec()),
         SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
         SnapshotChunkRequestV2::new_chunk(data[2].to_bytes().to_vec()),
+        SnapshotChunkRequestV2::new_end_chunk(Vote::new_committed(10, 2), snapshot_meta),
     ];
 
     let resp = client0.install_snapshot_v2(stream::iter(strm_data)).await?;
@@ -239,7 +241,21 @@ async fn test_raft_service_install_snapshot_v2() -> anyhow::Result<()> {
     let meta_node = tc0.meta_node.as_ref().unwrap();
     let m = meta_node.raft.metrics().borrow().clone();
 
-    assert_eq!(Some(last), m.snapshot);
+    assert_eq!(Some(last_log_id), m.snapshot);
+
+    // Incomplete
+
+    let strm_data = [
+        SnapshotChunkRequestV2::new_chunk(data[0].to_bytes().to_vec()),
+        SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
+    ];
+
+    let err = client0
+        .install_snapshot_v2(stream::iter(strm_data))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
 
     Ok(())
 }
