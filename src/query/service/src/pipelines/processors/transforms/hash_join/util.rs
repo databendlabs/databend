@@ -312,7 +312,6 @@ fn eq_filter(
         };
 
         let min = RawExpr::Constant { span: None, scalar };
-        // Make gte and lte function
         let eq_func = RawExpr::FunctionCall {
             span: None,
             name: "eq".to_string(),
@@ -322,9 +321,9 @@ fn eq_filter(
         let expr = type_check::check(&eq_func, &BUILTIN_FUNCTIONS)?;
 
         // Fold
-        //    `Cast { expr: Constant { scalar: Number(50_u64), data_type: T }, dest_type: Nullable(T) }`
+        //    `Cast { expr: Constant { scalar: .., data_type: T }, dest_type: Nullable(T) }`
         // to
-        //    `Constant { scalar: Number(50_u64), data_type: Nullable(T) }`
+        //    `Constant { scalar: .., data_type: Nullable(T) }`
         // so that the expression can be utilized by bloom filter
         let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
         return Ok(Some(expr));

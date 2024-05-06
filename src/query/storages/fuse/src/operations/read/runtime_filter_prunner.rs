@@ -44,7 +44,7 @@ use xorf::Filter;
 use crate::pruning::BloomPrunerCreator;
 use crate::FuseBlockPartInfo;
 
-pub fn runtime_range_filter_pruner(
+pub fn runtime_range_filter_prune(
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,
     filters: &[Expr<String>],
@@ -101,7 +101,7 @@ pub fn runtime_range_filter_pruner(
     Ok(pruned)
 }
 
-pub async fn runtime_bloom_filter_pruner(
+pub async fn runtime_bloom_filter_prune(
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,
     filters: &[Expr<String>],
@@ -116,7 +116,7 @@ pub async fn runtime_bloom_filter_pruner(
         let index_location = bloom_desc.bloom_index_location.clone();
         let index_size = bloom_desc.bloom_index_size;
         let column_ids = part.columns_meta.keys().cloned().collect::<Vec<_>>();
-        let bloom_index_cols = bloom_desc.bloom_index_cols.clone();
+        let bloom_index_cols = &bloom_desc.bloom_index_cols;
 
         for filter_expr in filters {
             if let Some(bloom_pruner) = BloomPrunerCreator::create(
@@ -124,7 +124,7 @@ pub async fn runtime_bloom_filter_pruner(
                 &table_schema,
                 dal.clone(),
                 Some(filter_expr),
-                bloom_index_cols.clone(),
+                bloom_index_cols,
             )? {
                 let should_keep = bloom_pruner
                     .should_keep(&index_location, index_size, column_ids.clone())

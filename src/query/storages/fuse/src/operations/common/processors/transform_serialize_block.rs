@@ -125,7 +125,7 @@ impl TransformSerializeBlock {
 
         let bloom_columns_map = table
             .bloom_index_cols
-            .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
+            .bloom_index_fields(source_schema.as_ref(), BloomIndex::supported_type)?;
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
