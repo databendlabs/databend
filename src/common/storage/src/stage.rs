@@ -94,6 +94,8 @@ pub struct StageFilesInfo {
     pub pattern: Option<String>,
 }
 
+pub type StageFileInfoStream = Pin<Box<dyn Stream<Item = Result<StageFileInfo>> + Send>>;
+
 impl StageFilesInfo {
     fn get_pattern(&self) -> Result<Option<Regex>> {
         match &self.pattern {
@@ -169,7 +171,7 @@ impl StageFilesInfo {
         operator: &Operator,
         thread_num: usize,
         max_files: Option<usize>,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StageFileInfo>> + Send>>> {
+    ) -> Result<StageFileInfoStream> {
         if self.path == STDIN_FD {
             return Ok(Box::pin(stream::iter(vec![Ok(stdin_stage_info())])));
         }
@@ -255,7 +257,7 @@ impl StageFilesInfo {
         path: &str,
         pattern: Option<Regex>,
         max_files: Option<usize>,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StageFileInfo>> + Send>>> {
+    ) -> Result<StageFileInfoStream> {
         if path == STDIN_FD {
             return Ok(Box::pin(stream::once(async { Ok(stdin_stage_info()) })));
         }
