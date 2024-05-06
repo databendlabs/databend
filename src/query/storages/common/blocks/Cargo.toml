@@ -12,7 +12,6 @@ doctest = false
 test = false
 
 [dependencies]
-arrow-schema = { workspace = true }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-expression = { path = "../../../expression" }
 parquet_rs = { workspace = true }
