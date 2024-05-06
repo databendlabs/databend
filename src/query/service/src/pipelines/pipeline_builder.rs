@@ -212,6 +212,7 @@ impl PipelineBuilder {
             PhysicalPlan::ChunkCommitInsert(chunk_commit_insert) => {
                 self.build_chunk_commit_insert(chunk_commit_insert)
             }
+            PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
         }
     }
 }

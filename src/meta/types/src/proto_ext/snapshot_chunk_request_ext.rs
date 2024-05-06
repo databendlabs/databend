@@ -44,8 +44,8 @@ impl SnapshotChunkRequest {
 }
 
 impl SnapshotChunkRequestV2 {
-    /// Build the first chunk of a snapshot stream, which contains vote and snapshot meta, without data.
-    pub fn new_head(vote: Vote, snapshot_meta: SnapshotMeta) -> Self {
+    /// Build the last chunk of a snapshot stream, which contains vote and snapshot meta, without data.
+    pub fn new_end_chunk(vote: Vote, snapshot_meta: SnapshotMeta) -> Self {
         let meta = ("ndjson".to_string(), vote, snapshot_meta);
         let rpc_meta = serde_json::to_string(&meta).unwrap();
 

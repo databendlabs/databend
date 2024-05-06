@@ -5,4 +5,95 @@ statement ok
 CREATE SEQUENCE seq
 
 statement ok
+DROP TABLE IF EXISTS tmp;
+
+statement ok
+DROP TABLE IF EXISTS tmp1;
+
+statement ok
+DROP TABLE IF EXISTS tmp2;
+
+statement ok
+DROP TABLE IF EXISTS tmp3;
+
+statement ok
+CREATE TABLE tmp(a uint64);
+
+statement ok
+CREATE TABLE tmp1(a string);
+
+statement ok
+CREATE TABLE tmp2(a uint64);
+
+statement ok
+CREATE TABLE tmp3(a int, b uint64, c int);
+
+statement ok
+INSERT INTO tmp1 values(nextval(seq));
+
+statement ok
+INSERT INTO tmp2 select nextval(seq) from numbers(2);
+
+statement ok
+INSERT INTO tmp2 values(nextval(seq)), (1024);
+
+query I
+select * from tmp2 order by a;
+----
+2
+3
+4
+1024
+
+statement ok
+INSERT INTO tmp3 values(1,nextval(seq),3);
+
+query III
+select * from tmp3;
+----
+1 5 3
+
+statement ok
+INSERT INTO tmp3 select 10,nextval(seq),20 from numbers(3);
+
+query III
+select * from tmp3 order by b;
+----
+1 5 3
+10 6 20
+10 7 20
+10 8 20
+
+query I
+select nextval(seq);
+----
+9
+
+statement ok
+INSERT INTO tmp select nextval(seq) from numbers(1000000);
+
+query I
+select count(*) from tmp;
+----
+1000000
+
+statement ok
 DROP SEQUENCE seq
+
+statement error 1126
+DROP SEQUENCE seq
+
+statement error 3101
+INSERT INTO tmp3 values(1,nextval(seq),3);
+
+statement ok
+DROP TABLE IF EXISTS tmp;
+
+statement ok
+DROP TABLE IF EXISTS tmp1;
+
+statement ok
+DROP TABLE IF EXISTS tmp2;
+
+statement ok
+DROP TABLE IF EXISTS tmp3;

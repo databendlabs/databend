@@ -261,6 +261,19 @@ impl ScalarExpr {
                 let scalar = &udf.scalar;
                 scalar.as_raw_expr()
             }
+
+            ScalarExpr::AsyncFunctionCall(table_func) => RawExpr::ColumnRef {
+                span: None,
+                id: ColumnBindingBuilder::new(
+                    table_func.display_name.clone(),
+                    usize::MAX,
+                    Box::new(table_func.return_type.as_ref().clone()),
+                    Visibility::Visible,
+                )
+                .build(),
+                data_type: table_func.return_type.as_ref().clone(),
+                display_name: table_func.display_name.clone(),
+            },
         }
     }
 
