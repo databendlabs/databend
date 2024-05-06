@@ -71,6 +71,7 @@ impl BlockOperator {
                         let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                         let result = evaluator.run(expr)?;
                         let col = BlockEntry::new(expr.data_type().clone(), result);
+
                         input.add_column(col);
                     }
                     match projections {
