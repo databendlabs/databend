@@ -16,17 +16,22 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::table_schema_to_arrow_schema_ignore_inside_nullable;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
+use parquet_rs::arrow::arrow_to_parquet_schema;
 use parquet_rs::arrow::ArrowWriter;
 use parquet_rs::basic::Encoding;
+use parquet_rs::basic::Type as PhysicalType;
 use parquet_rs::file::properties::EnabledStatistics;
 use parquet_rs::file::properties::WriterProperties;
 use parquet_rs::file::properties::WriterPropertiesBuilder;
 use parquet_rs::format::FileMetaData;
 use parquet_rs::schema::types::ColumnPath;
+use parquet_rs::schema::types::Type;
+use parquet_rs::schema::types::TypePtr;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -47,18 +52,26 @@ pub fn blocks_to_parquet(
         .set_dictionary_enabled(false)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false);
+    let arrow_schema = Arc::new(table_schema_to_arrow_schema_ignore_inside_nullable(
+        table_schema,
+    ));
+    let parquet_schema = arrow_to_parquet_schema(&arrow_schema)?;
     if blocks.len() == 1 {
         // doesn't not cover the case of multiple blocks for now. to simplify the implementation
-        props_builder = choose_compression_scheme(props_builder, &blocks[0], table_schema, stat)?;
+        props_builder = choose_compression_scheme(
+            props_builder,
+            &blocks[0],
+            parquet_schema.root_schema().get_fields(),
+            table_schema,
+            stat,
+        )?;
     }
     let props = props_builder.build();
     let batches = blocks
         .into_iter()
         .map(|block| block.to_record_batch(table_schema))
         .collect::<Result<Vec<_>>>()?;
-    let arrow_schema = Arc::new(table_schema_to_arrow_schema_ignore_inside_nullable(
-        table_schema,
-    ));
+
     let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema, Some(props))?;
     for batch in batches {
         writer.write(&batch)?;
@@ -70,32 +83,57 @@ pub fn blocks_to_parquet(
 fn choose_compression_scheme(
     mut props: WriterPropertiesBuilder,
     block: &DataBlock,
+    parquet_fields: &[TypePtr],
     table_schema: &TableSchema,
     stat: &StatisticsOfColumns,
 ) -> Result<WriterPropertiesBuilder> {
-    // These parameters have not been finely tuned.
-    const ENABLE_DICT_THRESHOLD: f64 = 5.0;
-
-    let num_rows = block.num_rows();
-
-    for (field, _col) in table_schema.fields().iter().zip(block.columns()) {
-        if field.is_nested() {
-            // skip nested fields for now, to simplify the implementation
-            continue;
-        }
-        let col_id = field.column_id();
-        if let Some(col_stat) = stat.get(&col_id) {
-            if col_stat
-                .distinct_of_values
-                .is_some_and(|ndv| num_rows as f64 / ndv as f64 > ENABLE_DICT_THRESHOLD)
-            {
-                let col_path = ColumnPath::new(vec![field.name().clone()]);
-                props = props.set_column_dictionary_enabled(col_path.clone(), true);
-                // TODO: figure out the benefit of disable compression when encoding is effective.
-                // Currently, compression type recorded in block meta is in file level, not column level.
-                // .set_column_compression(col_path, Compression::UNCOMPRESSED);
+    for ((parquet_field, table_field), col) in parquet_fields
+        .iter()
+        .zip(table_schema.fields.iter())
+        .zip(block.columns())
+    {
+        match parquet_field.as_ref() {
+            Type::PrimitiveType {
+                basic_info: _,
+                physical_type,
+                type_length: _,
+                scale: _,
+                precision: _,
+            } => {
+                let distinct_of_values = stat
+                    .get(&table_field.column_id)
+                    .and_then(|stat| stat.distinct_of_values);
+                let num_rows = block.num_rows();
+                if can_apply_dict_encoding(physical_type, distinct_of_values, num_rows, col)? {
+                    let col_path = ColumnPath::new(vec![table_field.name().clone()]);
+                    props = props.set_column_dictionary_enabled(col_path, true);
+                }
             }
+            Type::GroupType {
+                basic_info: _,
+                fields: _,
+            } => {} // TODO: handle nested fields
         }
     }
     Ok(props)
+}
+
+fn can_apply_dict_encoding(
+    physical_type: &PhysicalType,
+    distinct_of_values: Option<u64>,
+    num_rows: usize,
+    col: &BlockEntry,
+) -> Result<bool> {
+    const LOW_CARDINALITY_THRESHOLD: f64 = 10.0;
+    const AVG_BYTES_PER_VALUE: f64 = 10.0;
+    if !matches!(physical_type, PhysicalType::BYTE_ARRAY) {
+        return Ok(false);
+    }
+    let is_low_cardinality = distinct_of_values
+        .is_some_and(|ndv| num_rows as f64 / ndv as f64 > LOW_CARDINALITY_THRESHOLD);
+    let column = col.value.convert_to_full_column(&col.data_type, num_rows);
+    let memory_size = column.memory_size();
+    let total_bytes = memory_size - num_rows * 8;
+    let avg_bytes_per_value = total_bytes as f64 / num_rows as f64;
+    Ok(is_low_cardinality && avg_bytes_per_value < AVG_BYTES_PER_VALUE)
 }
