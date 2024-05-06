@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_async_functions::AsyncFunctionManager;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
@@ -117,7 +116,6 @@ impl GlobalServices {
         .await?;
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
-        AsyncFunctionManager::init()?;
 
         DataOperator::init(&config.storage).await?;
         ShareTableConfig::init(

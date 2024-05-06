@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
-use databend_common_async_functions::AsyncFunctionManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -82,7 +81,8 @@ impl BindContext {
 
             let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
             if let ScalarExpr::AsyncFunctionCall(async_func) = &scalar {
-                let value = AsyncFunctionManager::instance()
+                let value = async_func
+                    .function
                     .generate(catalog.clone(), async_func)
                     .await?;
                 let expr = ConstantExpr {

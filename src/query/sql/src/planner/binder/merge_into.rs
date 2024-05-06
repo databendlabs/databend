@@ -491,7 +491,7 @@ impl Binder {
 
             if !self.check_allowed_scalar_expr(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "matched clause's condition can't contain subquery|window|aggregate|udf functions"
+                    "matched clause's condition can't contain subquery|window|aggregate|udf functions|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));

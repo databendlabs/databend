@@ -13,9 +13,10 @@
 // limitations under the License.
 
 pub mod async_function;
-pub mod async_function_mgr;
+// pub mod async_function_mgr;
 pub mod sequence_async_function;
 
+pub use async_function::resolve_async_function;
 pub use async_function::AsyncFunction;
 pub use async_function::AsyncFunctionCall;
-pub use async_function_mgr::AsyncFunctionManager;
+// pub use async_function_mgr::AsyncFunctionManager;

@@ -19,7 +19,6 @@ databend-common-expression = { path = "../expression" }
 databend-common-meta-app = { path = "../../meta/app" }
 
 # Crates.io dependencies
-async-trait = { workspace = true }
 educe = "0.4"
 
 [dev-dependencies]
