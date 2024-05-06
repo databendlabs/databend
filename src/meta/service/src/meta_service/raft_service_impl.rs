@@ -18,6 +18,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::tokio::io::AsyncWriteExt;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
@@ -27,22 +28,28 @@ use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
+use databend_common_meta_types::protobuf::SnapshotChunkRequestV2;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::InstallSnapshotResponse;
 use databend_common_meta_types::RaftError;
+use databend_common_meta_types::Snapshot;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
 use databend_common_metrics::count::Count;
+use futures::TryStreamExt;
+use log::debug;
+use log::info;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
+use tonic::Streaming;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
@@ -82,18 +89,14 @@ impl RaftServiceImpl {
 
         let is_req = GrpcHelper::parse_req(request)?;
 
-        let resp = self
+        let res = self
             .receive_chunked_snapshot(is_req)
             .timed(observe_snapshot_recv_spent(&addr))
-            .await
-            .map_err(GrpcHelper::internal_err);
+            .await;
 
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), resp.is_ok());
+        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
 
-        match resp {
-            Ok(resp) => GrpcHelper::ok_response(resp),
-            Err(e) => Err(e),
-        }
+        GrpcHelper::make_grpc_result(res)
     }
 
     async fn do_install_snapshot_v1(
@@ -122,18 +125,14 @@ impl RaftServiceImpl {
             done: chunk.done,
         };
 
-        let resp = self
+        let res = self
             .receive_chunked_snapshot(install_snapshot_req)
             .timed(observe_snapshot_recv_spent(&addr))
-            .await
-            .map_err(GrpcHelper::internal_err);
+            .await;
 
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), resp.is_ok());
+        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
 
-        match resp {
-            Ok(resp) => GrpcHelper::ok_response(resp),
-            Err(e) => Err(e),
-        }
+        GrpcHelper::make_grpc_result(res)
     }
 
     /// Receive a chunk based snapshot from the leader.
@@ -161,6 +160,101 @@ impl RaftServiceImpl {
         } else {
             Ok(resp)
         }
+    }
+
+    async fn do_install_snapshot_v2(
+        &self,
+        request: Request<Streaming<SnapshotChunkRequestV2>>,
+    ) -> Result<Response<RaftReply>, Status> {
+        let addr = remote_addr(&request);
+
+        let _g = snapshot_recv_inflight(&addr).counter_guard();
+
+        let mut strm = request.into_inner();
+
+        // Extract the first chunk to get the rpc_meta.
+        let (format, req_vote, snapshot_meta) = {
+            let Some(chunk) = strm.try_next().await? else {
+                return Err(GrpcHelper::invalid_arg("empty snapshot stream"));
+            };
+
+            let Some(meta) = &chunk.rpc_meta else {
+                return Err(GrpcHelper::invalid_arg(
+                    "first SnapshotChunkRequestV2.rpc_meta is None",
+                ));
+            };
+
+            if !chunk.chunk.is_empty() {
+                return Err(GrpcHelper::invalid_arg(
+                    "first SnapshotChunkRequestV2.chunk should not contain any data",
+                ));
+            }
+
+            let rpc_mta: (String, Vote, SnapshotMeta) = GrpcHelper::parse(meta)?;
+            rpc_mta
+        };
+
+        // Snapshot format is not used for now.
+        let _ = format;
+
+        info!(
+            format :% = &format,
+            req_vote :% = &req_vote,
+            snapshot_meta :% = &snapshot_meta;
+            "Begin receiving snapshot v2 stream from: {}",
+            addr
+        );
+
+        let mut snapshot_data = self
+            .meta_node
+            .raft
+            .begin_receiving_snapshot()
+            .await
+            .map_err(GrpcHelper::internal_err)?;
+
+        let mut ith = 0;
+        let mut total_len = 0;
+        while let Some(chunk) = strm.try_next().await? {
+            let data_len = chunk.chunk.len() as u64;
+            total_len += data_len;
+            debug!(
+                len = data_len,
+                total_len = total_len;
+                "received {ith}-th snapshot chunk from {addr}"
+            );
+
+            ith += 1;
+            if ith % 100 == 0 {
+                info!(
+                    total_len = total_len;
+                    "received {ith}-th snapshot chunk from {addr}"
+                );
+            }
+
+            raft_metrics::network::incr_recvfrom_bytes(addr.clone(), data_len);
+
+            snapshot_data.write_all(&chunk.chunk).await?;
+        }
+
+        snapshot_data.shutdown().await?;
+
+        let snapshot = Snapshot {
+            meta: snapshot_meta,
+            snapshot: snapshot_data,
+        };
+
+        let res = self
+            .meta_node
+            .raft
+            .install_full_snapshot(req_vote, snapshot)
+            .await
+            .map_err(GrpcHelper::internal_err);
+
+        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
+
+        let resp = res?;
+
+        GrpcHelper::ok_response(&resp)
     }
 }
 
@@ -227,7 +321,7 @@ impl RaftService for RaftServiceImpl {
                 .await
                 .map_err(GrpcHelper::internal_err)?;
 
-            GrpcHelper::ok_response(resp)
+            GrpcHelper::ok_response(&resp)
         }
         .in_span(root)
         .await
@@ -249,6 +343,14 @@ impl RaftService for RaftServiceImpl {
         self.do_install_snapshot_v1(request).in_span(root).await
     }
 
+    async fn install_snapshot_v2(
+        &self,
+        request: Request<Streaming<SnapshotChunkRequestV2>>,
+    ) -> Result<Response<RaftReply>, Status> {
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        self.do_install_snapshot_v2(request).in_span(root).await
+    }
+
     async fn vote(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
@@ -260,7 +362,7 @@ impl RaftService for RaftServiceImpl {
 
             let resp = raft.vote(v_req).await.map_err(GrpcHelper::internal_err)?;
 
-            GrpcHelper::ok_response(resp)
+            GrpcHelper::ok_response(&resp)
         }
         .in_span(root)
         .await

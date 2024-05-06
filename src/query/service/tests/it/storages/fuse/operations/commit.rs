@@ -832,10 +832,6 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_meta_by_id(table_id).await
     }
 
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        self.cat.get_table_name_by_id(table_id).await
-    }
-
     #[async_backtrace::framed]
     async fn mget_table_names_by_ids(
         &self,

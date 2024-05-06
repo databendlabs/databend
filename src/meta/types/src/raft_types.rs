@@ -77,6 +77,7 @@ pub type InstallSnapshotRequest = openraft::raft::InstallSnapshotRequest<TypeCon
 pub type InstallSnapshotResponse = openraft::raft::InstallSnapshotResponse<NodeId>;
 pub type SnapshotResponse = openraft::raft::SnapshotResponse<NodeId>;
 pub type InstallSnapshotError = openraft::error::InstallSnapshotError;
+pub type SnapshotMismatch = openraft::error::SnapshotMismatch;
 pub type VoteRequest = openraft::raft::VoteRequest<NodeId>;
 pub type VoteResponse = openraft::raft::VoteResponse<NodeId>;
 

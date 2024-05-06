@@ -240,22 +240,6 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    // Get the table name by meta id.
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::Active => {
-                let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
-                if let Some(t) = mutated_table {
-                    Ok(t.name.clone())
-                } else {
-                    self.inner.get_table_name_by_id(table_id).await
-                }
-            }
-            _ => self.inner.get_table_name_by_id(table_id).await,
-        }
-    }
-
     // Mget the dbs name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
