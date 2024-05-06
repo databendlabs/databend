@@ -173,7 +173,7 @@ statement ok
 replace into t3 on(a) delete when c = 0 select * from t4
 
 query III
-merge into t3 using t4 on t3.a = t4.a when matched and t4.a = 4 then delete when matched then update set t3.b = t4.c when not matched then insert values(t4.a, t4.c)
+merge into t3 tt using t4 on tt.a = t4.a when matched and t4.a = 4 then delete when matched then update set tt.b = t4.c when not matched then insert values(t4.a, t4.c)
 ----
 1 1 1
 

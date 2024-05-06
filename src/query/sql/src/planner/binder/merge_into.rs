@@ -365,13 +365,25 @@ impl Binder {
             columns_set = columns_set.union(&join_column_set).cloned().collect();
         }
 
+        let target_name = if let Some(target_identify) = target_alias {
+            normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
+                .name
+                .clone()
+        } else {
+            table_name.clone()
+        };
+
         let has_update = self.has_update(&matched_clauses);
         let update_row_version = if table.change_tracking_enabled() && has_update {
             Some(Self::update_row_version(
                 table.schema_with_stream(),
                 &bind_ctx.columns,
-                Some(&database_name),
-                Some(&table_name),
+                if target_alias.is_none() {
+                    Some(&database_name)
+                } else {
+                    None
+                },
+                Some(&target_name),
             )?)
         } else {
             None
@@ -399,14 +411,6 @@ impl Binder {
                 field_index_map.insert(idx, used_idx.to_string());
             }
         }
-
-        let target_name = if let Some(target_identify) = target_alias {
-            normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
-                .name
-                .clone()
-        } else {
-            table_name.clone()
-        };
 
         // bind matched clause columns and add update fields and exprs
         for clause in &matched_clauses {
