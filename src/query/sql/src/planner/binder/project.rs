@@ -104,6 +104,10 @@ impl Binder {
                 ScalarExpr::WindowFunction(win) => {
                     find_replaced_window_function(window_info, win, &item.alias).unwrap()
                 }
+                ScalarExpr::AsyncFunctionCall(async_func) => self.create_derived_column_binding(
+                    async_func.display_name.clone(),
+                    async_func.return_type.as_ref().clone(),
+                ),
                 _ => {
                     self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
                 }

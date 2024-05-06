@@ -2974,6 +2974,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-async-functions"
+version = "0.1.0"
+dependencies = [
+ "databend-common-ast",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-meta-app",
+ "educe",
+]
+
+[[package]]
 name = "databend-common-auth"
 version = "0.1.0"
 dependencies = [
@@ -3930,6 +3942,7 @@ dependencies = [
  "ctor 0.1.26",
  "dashmap",
  "databend-common-ast",
+ "databend-common-async-functions",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-compress",

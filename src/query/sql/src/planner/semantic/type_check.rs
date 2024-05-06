@@ -46,6 +46,7 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_async_functions::resolve_async_function;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -84,6 +85,7 @@ use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
+use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
@@ -920,6 +922,14 @@ impl<'a> TypeChecker<'a> {
                         }
                         _ => unreachable!(),
                     }
+                } else if ASYNC_FUNCTIONS.contains(&func_name) {
+                    let catalog = self.ctx.get_default_catalog()?;
+                    let tenant = self.ctx.get_tenant();
+                    let async_func =
+                        resolve_async_function(*span, tenant, catalog, func_name, &args).await?;
+
+                    let data_type = async_func.return_type.as_ref().clone();
+                    Box::new((async_func.into(), data_type))
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());

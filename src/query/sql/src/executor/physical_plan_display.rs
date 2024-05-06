@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::physical_plans::AsyncFunction;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -126,6 +127,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".fmt(f)?,
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".fmt(f)?,
             PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".fmt(f)?,
+            PhysicalPlan::AsyncFunction(_) => "AsyncFunction".fmt(f)?,
         }
 
         for node in self.node.children() {
@@ -540,5 +542,11 @@ impl Display for Udf {
             })
             .collect::<Vec<String>>();
         write!(f, "Udf functions: {}", scalars.join(", "))
+    }
+}
+
+impl Display for AsyncFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AsyncFunction: {}", self.display_name)
     }
 }
