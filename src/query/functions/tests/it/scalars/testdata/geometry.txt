@@ -856,3 +856,48 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : st_xmax(to_geometry('POINT(-180 0)'))
+raw expr       : st_xmax(to_geometry('POINT(-180 0)'))
+checked expr   : st_xmax<Geometry>(to_geometry<String>("POINT(-180 0)"))
+optimized expr : -180_f64
+output type    : Float64 NULL
+output domain  : {-180..=-180}
+output         : -180
+
+
+ast            : st_xmax(to_geometry('LINESTRING(-179 0, 179 0)'))
+raw expr       : st_xmax(to_geometry('LINESTRING(-179 0, 179 0)'))
+checked expr   : st_xmax<Geometry>(to_geometry<String>("LINESTRING(-179 0, 179 0)"))
+optimized expr : 179_f64
+output type    : Float64 NULL
+output domain  : {179..=179}
+output         : 179
+
+
+ast            : st_xmax(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POLYGON((40 40,20 45,45 30,40 40)))'))
+raw expr       : st_xmax(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POLYGON((40 40,20 45,45 30,40 40)))'))
+checked expr   : st_xmax<Geometry>(to_geometry<String>("GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POLYGON((40 40,20 45,45 30,40 40)))"))
+optimized expr : 45_f64
+output type    : Float64 NULL
+output domain  : {45..=45}
+output         : 45
+
+
+ast            : st_xmax(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POINT EMPTY)'))
+raw expr       : st_xmax(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POINT EMPTY)'))
+checked expr   : st_xmax<Geometry>(to_geometry<String>("GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POINT EMPTY)"))
+optimized expr : 40_f64
+output type    : Float64 NULL
+output domain  : {40..=40}
+output         : 40
+
+
+ast            : st_xmax(to_geometry('MULTILINESTRING ((10 10, 20 20, 10 40), EMPTY)'))
+raw expr       : st_xmax(to_geometry('MULTILINESTRING ((10 10, 20 20, 10 40), EMPTY)'))
+checked expr   : st_xmax<Geometry>(to_geometry<String>("MULTILINESTRING ((10 10, 20 20, 10 40), EMPTY)"))
+optimized expr : 20_f64
+output type    : Float64 NULL
+output domain  : {20..=20}
+output         : 20
+
+
