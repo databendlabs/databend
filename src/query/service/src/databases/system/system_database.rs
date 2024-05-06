@@ -47,7 +47,6 @@ use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::ProcessorProfileTable;
-use databend_common_storages_system::QueriesQueueTable;
 use databend_common_storages_system::QueryCacheTable;
 use databend_common_storages_system::QueryLogTable;
 use databend_common_storages_system::RolesTable;
@@ -60,7 +59,6 @@ use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
-use databend_common_storages_system::TracingTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::ViewsTableWithHistory;
@@ -100,9 +98,7 @@ impl SystemDatabase {
             ClustersTable::create(sys_db_meta.next_table_id()),
             DatabasesTable::create(sys_db_meta.next_table_id()),
             StreamsTable::create(sys_db_meta.next_table_id()),
-            Arc::new(TracingTable::create(sys_db_meta.next_table_id())),
             ProcessesTable::create(sys_db_meta.next_table_id()),
-            QueriesQueueTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),
             MetricsTable::create(sys_db_meta.next_table_id()),
             MallocStatsTable::create(sys_db_meta.next_table_id()),
