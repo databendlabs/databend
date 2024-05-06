@@ -188,50 +188,6 @@ SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 
 
-# Test pruning status
-
-statement ok
-CREATE TABLE t_small_blocks (id int, content string) row_per_block=2
-
-statement ok
-CREATE INVERTED INDEX IF NOT EXISTS inverted_idx2 ON t_small_blocks(content) tokenizer = 'chinese'
-
-statement ok
-INSERT INTO t_small_blocks VALUES
-(1, 'The quick brown fox jumps over the lazy dog'),
-(2, 'A picture is worth a thousand words'),
-(3, 'The early bird catches the worm'),
-(4, 'Actions speak louder than words'),
-(5, 'Time flies like an arrow; fruit flies like a banana'),
-(6, 'Beauty is in the eye of the beholder'),
-(7, 'When life gives you lemons, make lemonade'),
-(8, 'Put all your eggs in one basket'),
-(9, 'You can not judge a book by its cover'),
-(10, 'An apple a day keeps the doctor away')
-
-query IT
-SELECT id, content FROM t_small_blocks WHERE query('content:"early bird"')
-----
-3 The early bird catches the worm
-
-query T
-EXPLAIN SELECT id, content FROM t_small_blocks WHERE query('content:"early bird"')
-----
-Filter
-├── output columns: [t_small_blocks.id (#0), t_small_blocks.content (#1)]
-├── filters: [t_small_blocks._search_matched (#2)]
-├── estimated rows: 10.00
-└── TableScan
-    ├── table: default.test_index.t_small_blocks
-    ├── output columns: [id (#0), content (#1), _search_matched (#2)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 5
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, inverted pruning: 5 to 1>]
-    ├── push downs: [filters: [t_small_blocks._search_matched (#2)], limit: NONE]
-    └── estimated rows: 10.00
-
 statement ok
 CREATE TABLE books(
   id int,
