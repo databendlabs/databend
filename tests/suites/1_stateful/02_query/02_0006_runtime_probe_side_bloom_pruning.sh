@@ -3,6 +3,10 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
+
+# As currently, runtime bloom pruning (probe side) only support non-blocking block reader
+# this case must be tested with non-blocking storage type (minio / s3 etc, not local fs)
+
 echo "create or replace database rt_bloom" | $BENDSQL_CLIENT_CONNECT
 
 echo "create table rt_bloom.probe(c uint64) as select * from numbers(100000)" |  $BENDSQL_CLIENT_CONNECT
