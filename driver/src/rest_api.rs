@@ -124,7 +124,7 @@ impl Connection for RestAPIConnection {
         let mut data = data;
         let mut size = size;
 
-        if file_format_options.get("compression").is_none() {
+        if !file_format_options.contains_key("compression") {
             let mut buffer = Vec::new();
             let real_size = data.read_to_end(&mut buffer).await?;
             if real_size != size as usize && size != 0 {

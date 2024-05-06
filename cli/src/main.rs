@@ -227,7 +227,7 @@ where
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
-    let mut config = Config::load();
+    let config = Config::load();
 
     let args = Args::parse();
     let mut cmd = Args::command();
@@ -237,7 +237,7 @@ pub async fn main() -> Result<()> {
     }
 
     let mut conn_args = match args.dsn {
-        Some(dsn) => {
+        Some(ref dsn) => {
             if args.host.is_some() {
                 eprintln!("warning: --host is ignored when --dsn is set");
             }
@@ -256,51 +256,54 @@ pub async fn main() -> Result<()> {
             ConnectionArgs::from_dsn(dsn.inner())?
         }
         None => {
-            if let Some(host) = args.host {
-                config.connection.host = host;
+            let host = args.host.unwrap_or_else(|| config.connection.host.clone());
+            let mut port = config.connection.port;
+            if args.port.is_some() {
+                port = args.port;
             }
-            if let Some(port) = args.port {
-                config.connection.port = Some(port);
-            }
-            if !args.tls {
-                config
-                    .connection
-                    .args
-                    .insert("sslmode".to_string(), "disable".to_string());
-            }
+
+            let user = args.user.unwrap_or_else(|| config.connection.user.clone());
+            let password = args.password.unwrap_or_else(|| SensitiveString::from(""));
+
             ConnectionArgs {
-                host: config.connection.host.clone(),
-                port: config.connection.port,
-                user: config.connection.user.clone(),
-                password: SensitiveString::from(""),
+                host,
+                port,
+                user,
+                password,
                 database: config.connection.database.clone(),
                 flight: args.flight,
                 args: config.connection.args.clone(),
             }
         }
     };
-    // override database if specified in command line
-    if args.database.is_some() {
-        conn_args.database = args.database;
-    }
-    // override user if specified in command line
-    if let Some(user) = args.user {
-        config.connection.user = user;
-    }
-    // override password if specified in command line
-    if let Some(password) = args.password {
-        conn_args.password = password;
-    }
-    // override role if specified in command line
-    if let Some(role) = args.role {
-        config.connection.args.insert("role".to_string(), role);
-    }
-    // override args if specified in command line
-    for (k, v) in args.set {
-        config.connection.args.insert(k, v);
-    }
-    let dsn = conn_args.get_dsn()?;
 
+    // Override connection args with command line options
+    {
+        if args.database.is_some() {
+            conn_args.database.clone_from(&args.database);
+        }
+
+        // override only if args.dsn is none
+        if args.dsn.is_none() {
+            if !args.tls {
+                conn_args
+                    .args
+                    .insert("sslmode".to_string(), "disable".to_string());
+            }
+
+            // override args if specified in command line
+            for (k, v) in args.set {
+                conn_args.args.insert(k, v);
+            }
+        }
+
+        // override role if specified in command line
+        if let Some(role) = args.role {
+            conn_args.args.insert("role".to_string(), role);
+        }
+    }
+
+    let dsn = conn_args.get_dsn()?;
     let mut settings = Settings::default();
     let is_terminal = stdin().is_terminal();
     let is_repl = is_terminal && !args.non_interactive && !args.check && args.query.is_none();

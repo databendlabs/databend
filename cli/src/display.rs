@@ -35,7 +35,6 @@ use crate::{
 #[async_trait::async_trait]
 pub trait ChunkDisplay {
     async fn display(&mut self) -> Result<ServerStats>;
-    fn total_rows(&self) -> usize;
 }
 
 pub struct FormatDisplay<'a> {
@@ -341,10 +340,6 @@ impl<'a> ChunkDisplay for FormatDisplay<'a> {
         self.display_stats().await;
         let stats = self.stats.take().unwrap_or_default();
         Ok(stats)
-    }
-
-    fn total_rows(&self) -> usize {
-        self.rows
     }
 }
 

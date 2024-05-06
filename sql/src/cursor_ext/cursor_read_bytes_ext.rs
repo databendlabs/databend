@@ -18,6 +18,7 @@ use std::io::Cursor;
 use std::io::ErrorKind;
 use std::io::Result;
 
+#[allow(dead_code)]
 pub trait ReadBytesExt {
     fn peek(&mut self) -> Option<char>;
     fn peek_byte(&mut self) -> Option<u8>;
