@@ -25,10 +25,12 @@ impl PipelineBuilder {
         self.build_pipeline(&udf.input)?;
 
         if udf.script_udf {
+            let runtimes = TransformUdfScript::init_runtime(&udf.udf_funcs)?;
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(TransformUdfScript::try_create(
                     self.func_ctx.clone(),
                     udf.udf_funcs.clone(),
+                    runtimes.clone(),
                     input,
                     output,
                 )?))

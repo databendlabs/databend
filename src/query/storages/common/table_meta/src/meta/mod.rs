@@ -39,7 +39,6 @@ pub use statistics::*;
 pub(crate) use testing::*;
 pub(crate) use utils::*;
 pub use versions::testify_version;
-pub use versions::IndexInfoVersion;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
 pub use versions::TableSnapshotStatisticsVersion;

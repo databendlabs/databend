@@ -184,7 +184,7 @@ impl MetaServiceImpl {
         let forward_res = self
             .meta_node
             .handle_forwardable_request(forward_req)
-            .info_elapsed(format!("TxnRequest: {:?}", txn))
+            .info_elapsed(format!("TxnRequest: {}", txn))
             .await;
 
         let (endpoint, txn_reply) = match forward_res {

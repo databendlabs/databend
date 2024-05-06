@@ -261,6 +261,7 @@ impl DPhpy {
             RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::CteScan(_)
+            | RelOperator::AsyncFunction(_)
             | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }

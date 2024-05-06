@@ -384,9 +384,11 @@ impl Binder {
         for column in columns {
             match table_schema.field_with_name(&column.name) {
                 Ok(field) => {
-                    if field.data_type.remove_nullable() != TableDataType::String {
+                    if field.data_type.remove_nullable() != TableDataType::String
+                        && field.data_type.remove_nullable() != TableDataType::Variant
+                    {
                         return Err(ErrorCode::UnsupportedIndex(format!(
-                            "Inverted index currently only support String type, but the type of column {} is {}",
+                            "Inverted index currently only support String and Variant type, but the type of column {} is {}",
                             column, field.data_type
                         )));
                     }

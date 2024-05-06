@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
 
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
@@ -77,6 +79,13 @@ impl RulePushDownPrewhere {
                                 .index_of(column.column.column_name.as_str())
                                 .is_ok())
                     {
+                        if column.column.column_name == SEARCH_SCORE_COL_NAME
+                            || column.column.column_name == SEARCH_MATCHED_COL_NAME
+                        {
+                            return Err(ErrorCode::StorageUnsupported(
+                                "Prewhere don't support search functions".to_string(),
+                            ));
+                        }
                         self.columns.insert(column.column.index);
                         return Ok(());
                     }

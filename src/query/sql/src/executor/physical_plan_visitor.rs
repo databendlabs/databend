@@ -116,6 +116,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkAppendData(plan) => self.replace_chunk_append_data(plan),
             PhysicalPlan::ChunkMerge(plan) => self.replace_chunk_merge(plan),
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
+            PhysicalPlan::AsyncFunction(plan) => Ok(PhysicalPlan::AsyncFunction(plan.clone())),
         }
     }
 
@@ -628,6 +629,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::DeleteSource(_)
+                | PhysicalPlan::AsyncFunction(_)
                 | PhysicalPlan::UpdateSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);

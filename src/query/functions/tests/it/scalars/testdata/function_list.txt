@@ -3516,6 +3516,10 @@ Functions overloads:
 1 st_aswkb(Geometry NULL) :: Binary NULL
 0 st_aswkt(Geometry) :: String
 1 st_aswkt(Geometry NULL) :: String NULL
+0 st_dimension(Geometry) :: Int32 NULL
+1 st_dimension(Geometry NULL) :: Int32 NULL
+0 st_endpoint(Geometry) :: Geometry
+1 st_endpoint(Geometry NULL) :: Geometry NULL
 0 st_geohash(Geometry) :: String
 1 st_geohash(Geometry NULL) :: String NULL
 2 st_geohash(Geometry, Int32) :: String
@@ -3542,6 +3546,16 @@ Functions overloads:
 1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_makepolygon(Geometry) :: Geometry
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
+0 st_pointn(Geometry, Int32) :: Geometry
+1 st_pointn(Geometry NULL, Int32 NULL) :: Geometry NULL
+0 st_srid(Geometry) :: Int32 NULL
+1 st_srid(Geometry NULL) :: Int32 NULL
+0 st_startpoint(Geometry) :: Geometry
+1 st_startpoint(Geometry NULL) :: Geometry NULL
+0 st_x(Geometry) :: Float64 NULL
+1 st_x(Geometry NULL) :: Float64 NULL
+0 st_y(Geometry) :: Float64 NULL
+1 st_y(Geometry NULL) :: Float64 NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64

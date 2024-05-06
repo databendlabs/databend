@@ -12,63 +12,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::principal::StageFilePath;
 use crate::principal::StageIdent;
+use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
-/// Define the meta-service key for a file belonging to a stage.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StageFileIdent {
-    pub stage: StageIdent,
-    pub path: String,
-}
+pub type StageFileIdent = TIdent<Resource, StageFilePath>;
+pub type StageFileIdentRaw = TIdentRaw<Resource, StageFilePath>;
+
+pub use kvapi_impl::Resource;
+
+use crate::KeyWithTenant;
 
 impl StageFileIdent {
     pub fn new(stage: StageIdent, path: impl ToString) -> Self {
-        Self {
-            stage,
-            path: path.to_string(),
-        }
+        Self::new_generic(stage.tenant(), StageFilePath::new(stage.stage_name(), path))
+    }
+
+    pub fn stage_file_path(&self) -> &StageFilePath {
+        self.name()
+    }
+
+    pub fn stage_name(&self) -> &str {
+        self.stage_file_path().stage_name()
+    }
+
+    pub fn path(&self) -> &str {
+        self.stage_file_path().path()
     }
 }
 
-mod kvapi_key_impl {
+mod kvapi_impl {
+
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
-    use databend_common_meta_kvapi::kvapi::KeyParser;
 
-    use crate::principal::user_stage_file_ident::StageFileIdent;
     use crate::principal::StageFile;
-    use crate::principal::StageIdent;
-    use crate::tenant::Tenant;
-    use crate::KeyWithTenant;
+    use crate::tenant_key::resource::TenantResource;
 
-    impl kvapi::KeyCodec for StageFileIdent {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_str(self.stage.tenant_name())
-                .push_str(self.stage.name())
-                .push_str(&self.path)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let stage = StageIdent::decode_key(p)?;
-            let path = p.next_str()?;
-            Ok(StageFileIdent::new(stage, path))
-        }
-    }
-
-    impl kvapi::Key for StageFileIdent {
+    pub struct Resource;
+    impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_stage_files";
+        const TYPE: &'static str = "StageFileIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = StageFile;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.stage.to_string_key())
-        }
-    }
-
-    impl KeyWithTenant for StageFileIdent {
-        fn tenant(&self) -> &Tenant {
-            self.stage.tenant()
-        }
     }
 
     impl kvapi::Value for StageFile {
@@ -82,12 +68,12 @@ mod kvapi_key_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::principal::user_stage_file_ident::StageFileIdent;
+    use crate::principal::stage_file_ident::StageFileIdent;
     use crate::principal::StageIdent;
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_kvapi_key_for_stage_file_ident() {
+    fn test_stage_file_ident() {
         let tenant = Tenant::new_literal("tenant1");
         let stage = StageIdent::new(tenant, "stage1");
         let sfi = StageFileIdent::new(stage, "file1");
@@ -95,5 +81,10 @@ mod tests {
         let key = sfi.to_string_key();
         assert_eq!("__fd_stage_files/tenant1/stage1/file1", key,);
         assert_eq!(sfi, StageFileIdent::from_str_key(&key).unwrap());
+    }
+
+    #[test]
+    fn test_stage_file_ident_with_key_space() {
+        // TODO(xp):
     }
 }

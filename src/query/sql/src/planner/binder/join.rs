@@ -561,7 +561,9 @@ impl<'a> JoinConditionResolver<'a> {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+                ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         for scalar in scalars {

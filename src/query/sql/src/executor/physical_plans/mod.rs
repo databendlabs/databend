@@ -84,6 +84,8 @@ mod physical_sort;
 pub use physical_sort::Sort;
 mod physical_table_scan;
 pub use physical_table_scan::TableScan;
+mod physical_async_func;
+pub use physical_async_func::AsyncFunction;
 
 mod physical_union_all;
 pub use physical_union_all::UnionAll;

@@ -36,7 +36,6 @@ use poem::post;
 use poem::Endpoint;
 use poem::Route;
 
-use crate::servers::admin::v1::queries_queue::queries_queue_handler;
 use crate::servers::Server;
 
 pub struct AdminService {
@@ -56,10 +55,8 @@ impl AdminService {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
-            .at("/v1/queries_queue", get(queries_queue_handler))
             .at("/v1/config", get(super::v1::config::config_handler))
             .at("/v1/system", get(super::v1::system::system_handler))
-            .at("/v1/logs", get(super::v1::logs::logs_handler))
             .at(
                 "/v1/status",
                 get(super::v1::instance_status::instance_status_handler),

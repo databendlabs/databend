@@ -17,8 +17,6 @@ use futures::AsyncRead;
 use futures_util::AsyncReadExt;
 
 use crate::meta::load_json;
-use crate::meta::IndexInfo;
-use crate::meta::IndexInfoVersion;
 use crate::meta::TableSnapshotStatistics;
 use crate::meta::TableSnapshotStatisticsVersion;
 
@@ -43,21 +41,6 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
                 TableSnapshotStatistics::from(ts)
             }
             TableSnapshotStatisticsVersion::V2(v) => load_json(&buffer, v).await?,
-        };
-        Ok(r)
-    }
-}
-
-#[async_trait::async_trait]
-impl VersionedReader<IndexInfo> for IndexInfoVersion {
-    type TargetType = IndexInfo;
-    #[async_backtrace::framed]
-    async fn read<R>(&self, mut reader: R) -> Result<IndexInfo>
-    where R: AsyncRead + Unpin + Send {
-        let mut buffer: Vec<u8> = vec![];
-        reader.read_to_end(&mut buffer).await?;
-        let r = match self {
-            IndexInfoVersion::V0(_v) => IndexInfo::from_slice(&buffer)?,
         };
         Ok(r)
     }

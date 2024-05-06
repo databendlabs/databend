@@ -557,7 +557,6 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_inverted_indexes = prev.as_ref().and_then(|v| v.inverted_indexes.clone());
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -576,7 +575,6 @@ impl Table for FuseTable {
             segments,
             cluster_key_meta,
             prev_statistics_location,
-            prev_inverted_indexes,
         );
 
         let mut table_info = self.table_info.clone();
@@ -612,7 +610,6 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_inverted_indexes = prev.as_ref().and_then(|v| v.inverted_indexes.clone());
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
@@ -632,7 +629,6 @@ impl Table for FuseTable {
             segments,
             None,
             prev_statistics_location,
-            prev_inverted_indexes,
         );
 
         let mut table_info = self.table_info.clone();

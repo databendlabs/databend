@@ -171,7 +171,7 @@ pub fn generate_update_list(
                 let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
                 // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
-                // change into nullable, so we need to cast this. but we will do cast after all macthed clauses,please
+                // change into nullable, so we need to cast this. but we will do cast after all matched clauses,please
                 // see `cast_data_type_for_merge()`.
 
                 ScalarExpr::FunctionCall(FunctionCall {

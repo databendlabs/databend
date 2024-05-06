@@ -110,6 +110,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
         ScalarExpr::UDFLambdaCall(udf) => {
             format!("{}({})", &udf.func_name, format_scalar(&udf.scalar))
         }
+        ScalarExpr::AsyncFunctionCall(table_func) => table_func.display_name.to_string(),
     }
 }
 
@@ -146,6 +147,9 @@ pub(super) fn to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = Inde
         RelOperator::Sort(op) => sort_to_format_tree(id_humanizer, op),
         RelOperator::Limit(op) => limit_to_format_tree(id_humanizer, op),
         RelOperator::Exchange(op) => exchange_to_format_tree(id_humanizer, op),
+        RelOperator::AsyncFunction(op) => {
+            FormatTreeNode::with_children(format!("AsyncFunction: {}", op.display_name), vec![])
+        }
 
         _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),
     }
