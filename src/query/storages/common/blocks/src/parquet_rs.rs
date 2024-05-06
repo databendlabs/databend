@@ -161,10 +161,14 @@ fn can_apply_delta_binary_pack(
     if num_rows == 0 {
         return Ok(false);
     }
-    let col = col.value.convert_to_full_column(&col.data_type, num_rows);
+    let col = col
+        .value
+        .convert_to_full_column(&col.data_type, num_rows)
+        .remove_nullable();
     match col.data_type().remove_nullable() {
         DataType::Number(NumberDataType::UInt8) => {
             let mut max_delta = 0;
+            let mut min_delta = u8::MAX;
             let col = col.as_number().unwrap().as_u_int8().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -173,12 +177,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta as i64 <= MAX_DELTA)
+            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
         }
         DataType::Number(NumberDataType::UInt16) => {
             let mut max_delta = 0;
+            let mut min_delta = u16::MAX;
             let col = col.as_number().unwrap().as_u_int16().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -187,12 +195,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta as i64 <= MAX_DELTA)
+            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
         }
         DataType::Number(NumberDataType::UInt32) => {
             let mut max_delta = 0;
+            let mut min_delta = u32::MAX;
             let col = col.as_number().unwrap().as_u_int32().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -201,12 +213,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta as i64 <= MAX_DELTA)
+            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
         }
         DataType::Number(NumberDataType::UInt64) => {
             let mut max_delta = 0;
+            let mut min_delta = u64::MAX;
             let col = col.as_number().unwrap().as_u_int64().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -215,12 +231,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta as i64 <= MAX_DELTA)
+            Ok((max_delta - min_delta) <= MAX_DELTA as u64)
         }
         DataType::Number(NumberDataType::Int8) => {
             let mut max_delta = 0;
+            let mut min_delta = i8::MAX;
             let col = col.as_number().unwrap().as_int8().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -229,12 +249,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta as i64 <= MAX_DELTA)
+            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
         }
         DataType::Number(NumberDataType::Int16) => {
             let mut max_delta = 0;
+            let mut min_delta = i16::MAX;
             let col = col.as_number().unwrap().as_int16().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -243,12 +267,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta as i64 <= MAX_DELTA)
+            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
         }
         DataType::Number(NumberDataType::Int32) => {
             let mut max_delta = 0;
+            let mut min_delta = i32::MAX;
             let col = col.as_number().unwrap().as_int32().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -257,12 +285,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta as i64 <= MAX_DELTA)
+            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
         }
         DataType::Number(NumberDataType::Int64) => {
             let mut max_delta = 0;
+            let mut min_delta = i64::MAX;
             let col = col.as_number().unwrap().as_int64().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -271,12 +303,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta <= MAX_DELTA)
+            Ok((max_delta - min_delta) <= MAX_DELTA)
         }
         DataType::Decimal(DecimalDataType::Decimal128(_)) => {
             let mut max_delta = 0;
+            let mut min_delta = i128::MAX;
             let (col, _) = col.as_decimal().unwrap().as_decimal128().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -285,12 +321,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta <= MAX_DELTA as i128)
+            Ok((max_delta - min_delta) <= MAX_DELTA as i128)
         }
         DataType::Decimal(DecimalDataType::Decimal256(_)) => {
             let mut max_delta: I256 = I256::ZERO;
+            let mut min_delta = I256::MAX;
             let (col, _) = col.as_decimal().unwrap().as_decimal256().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -299,12 +339,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta <= I256::from(MAX_DELTA))
+            Ok(max_delta - min_delta <= I256::from(MAX_DELTA))
         }
         DataType::Timestamp => {
             let mut max_delta = 0;
+            let mut min_delta = i64::MAX;
             let col = col.as_timestamp().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -313,12 +357,16 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta <= MAX_DELTA)
+            Ok((max_delta - min_delta) <= MAX_DELTA)
         }
         DataType::Date => {
             let mut max_delta = 0;
+            let mut min_delta = i32::MAX;
             let col = col.as_date().unwrap();
             let mut col_iter = col.iter();
             let mut prev = *col_iter.next().unwrap();
@@ -327,9 +375,12 @@ fn can_apply_delta_binary_pack(
                 if delta > max_delta {
                     max_delta = delta;
                 }
+                if delta < min_delta {
+                    min_delta = delta;
+                }
                 prev = v;
             }
-            Ok(max_delta as i64 <= MAX_DELTA)
+            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
         }
         _ => Err(ErrorCode::Internal(format!(
             "Unsupported data type for delta binary pack: {:?}",
