@@ -239,11 +239,11 @@ async fn test_heavy_actions() -> Result<()> {
             add_to_queue: false,
         },
         Query {
-            sql: "select * from system.queries_queue", // SYSTEM
+            sql: "select * from system.one", // SYSTEM
             add_to_queue: false,
         },
         Query {
-            sql: "explain select * from system.queries_queue", // EXPLAIN SYSTEM
+            sql: "explain select * from system.one", // EXPLAIN SYSTEM
             add_to_queue: false,
         },
         Query {
