@@ -173,7 +173,7 @@ statement ok
 replace into t3 on(a) delete when c = 0 select * from t4
 
 query III
-merge into t3 tt using t4 on tt.a = t4.a when matched and t4.a = 4 then delete when matched then update set tt.b = t4.c when not matched then insert values(t4.a, t4.c)
+merge into t3 using t4 on t3.a = t4.a when matched and t4.a = 4 then delete when matched then update set t3.b = t4.c when not matched then insert values(t4.a, t4.c)
 ----
 1 1 1
 
@@ -193,6 +193,28 @@ drop table t3 all
 
 ######################
 # end of issue 14955 #
+######################
+
+###############
+# issue 15412 #
+###############
+
+statement ok
+CREATE TABLE test_select (id Int64, name STRING)
+
+statement ok
+insert into test_select values(1, 'Wu')
+
+query I
+merge into db1.test_select t1 using (select * from db1.test_select) t2 on t1.id = t2.id when matched then update set t1.id=t2.id, t1.name='{}'
+----
+1
+
+statement ok
+drop table test_select all
+
+######################
+# end of issue 15412 #
 ######################
 
 statement ok

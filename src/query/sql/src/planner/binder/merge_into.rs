@@ -366,7 +366,7 @@ impl Binder {
         }
 
         // If the table alias is not None, after the binding phase, the bound columns will have
-        // a database of 'None' and the table named as the alias. 
+        // a database of 'None' and the table named as the alias.
         // Thus, we adjust them accordingly.
         let target_name = if let Some(target_identify) = target_alias {
             normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
