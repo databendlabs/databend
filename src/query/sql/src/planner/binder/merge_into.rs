@@ -365,6 +365,9 @@ impl Binder {
             columns_set = columns_set.union(&join_column_set).cloned().collect();
         }
 
+        // If the table alias is not None, after the binding phase, the bound columns will have
+        // a database of 'None' and the table named as the alias. 
+        // Thus, we adjust them accordingly.
         let target_name = if let Some(target_identify) = target_alias {
             normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
                 .name
