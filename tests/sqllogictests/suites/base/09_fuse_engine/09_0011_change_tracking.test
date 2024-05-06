@@ -200,7 +200,7 @@ drop table t3 all
 ###############
 
 statement ok
-CREATE TABLE test_select (id Int64, name STRING)
+CREATE TABLE test_select (id Int64, name STRING) change_tracking = true
 
 statement ok
 insert into test_select values(1, 'Wu')
@@ -209,6 +209,11 @@ query I
 merge into db1.test_select t1 using (select * from db1.test_select) t2 on t1.id = t2.id when matched then update set t1.id=t2.id, t1.name='{}'
 ----
 1
+
+query ITI
+select id, name, _row_version from test_select
+----
+1 {} 1
 
 statement ok
 drop table test_select all
