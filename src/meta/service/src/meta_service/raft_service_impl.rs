@@ -27,6 +27,7 @@ use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
+use databend_common_meta_types::protobuf::SnapshotChunkRequestV2;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotError;
@@ -37,15 +38,18 @@ use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
 use databend_common_metrics::count::Count;
+use futures::TryStreamExt;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
+use tonic::Streaming;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
+use crate::meta_service::snapshot_receiver::Receiver;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
 
@@ -154,6 +158,50 @@ impl RaftServiceImpl {
             Ok(resp)
         }
     }
+
+    async fn do_install_snapshot_v2(
+        &self,
+        request: Request<Streaming<SnapshotChunkRequestV2>>,
+    ) -> Result<Response<RaftReply>, Status> {
+        let addr = remote_addr(&request);
+
+        let _guard = snapshot_recv_inflight(&addr).counter_guard();
+
+        let snapshot_data = self
+            .meta_node
+            .raft
+            .begin_receiving_snapshot()
+            .await
+            .map_err(GrpcHelper::internal_err)?;
+
+        let mut receiver = Receiver::new(&addr, snapshot_data);
+
+        let mut strm = request.into_inner();
+
+        while let Some(chunk) = strm.try_next().await? {
+            let snapshot = receiver.receive(chunk).await?;
+
+            if let Some((_format, req_vote, snapshot)) = snapshot {
+                let res = self
+                    .meta_node
+                    .raft
+                    .install_full_snapshot(req_vote, snapshot)
+                    .await
+                    .map_err(GrpcHelper::internal_err);
+
+                raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
+
+                let resp = res?;
+
+                return GrpcHelper::ok_response(&resp);
+            }
+        }
+
+        Err(Status::invalid_argument(format!(
+            "snapshot stream is closed without finishing: {}",
+            receiver.stat_str()
+        )))
+    }
 }
 
 #[async_trait::async_trait]
@@ -239,6 +287,14 @@ impl RaftService for RaftServiceImpl {
     ) -> Result<Response<RaftReply>, Status> {
         let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
         self.do_install_snapshot_v1(request).in_span(root).await
+    }
+
+    async fn install_snapshot_v2(
+        &self,
+        request: Request<Streaming<SnapshotChunkRequestV2>>,
+    ) -> Result<Response<RaftReply>, Status> {
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        self.do_install_snapshot_v2(request).in_span(root).await
     }
 
     async fn vote(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {

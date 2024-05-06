@@ -8,7 +8,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 default = []
@@ -18,6 +18,7 @@ z3-prove = ["databend-common-constraint"]
 [dependencies] # In alphabetical order
 # Workspace dependencies
 databend-common-ast = { path = "../ast" }
+databend-common-async-functions = { path = "../async_functions" }
 databend-common-base = { path = "../../common/base" }
 databend-common-catalog = { path = "../catalog" }
 databend-common-compress = { path = "../../common/compress" }

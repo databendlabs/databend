@@ -12,19 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::array::ViewType;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
+use databend_common_meta_sled_store::openraft::error::SnapshotMismatch;
+use databend_common_meta_sled_store::openraft::testing::log_id;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
+use databend_common_meta_types::protobuf::SnapshotChunkRequestV2;
 use databend_common_meta_types::Cmd;
+use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::RaftError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SnapshotMeta;
+use databend_common_meta_types::SnapshotResponse;
 use databend_common_meta_types::StoredMembership;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::Vote;
 use databend_meta::meta_service::MetaNode;
+use futures::stream;
 use log::info;
 use maplit::btreeset;
 use test_harness::test;
@@ -171,8 +179,83 @@ async fn test_raft_service_snapshot_id_mismatch() -> anyhow::Result<()> {
     r1.meta.snapshot_id = MetaSnapshotId::new(None, 2).to_string();
     r1.offset = 3;
     let req = SnapshotChunkRequest::new_v1(r1);
-    let res = client0.install_snapshot_v1(req).await;
-    println!("res: {:?}", res);
+    let resp = client0.install_snapshot_v1(req).await?;
+
+    let reply = resp.into_inner();
+
+    let err: RaftError<InstallSnapshotError> = serde_json::from_str(&reply.error)?;
+
+    assert_eq!(
+        err.api_error().unwrap(),
+        &InstallSnapshotError::SnapshotMismatch(SnapshotMismatch {
+            expect: (MetaSnapshotId::new(None, 2), 0).into(),
+            got: (MetaSnapshotId::new(None, 2), 3).into(),
+        })
+    );
+
+    Ok(())
+}
+
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
+async fn test_raft_service_install_snapshot_v2() -> anyhow::Result<()> {
+    // Transmit snapshot in one-piece in a stream via API install_snapshot_v2.
+
+    let (_nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![]).await?;
+    let tc0 = tcs.remove(0);
+
+    let mut client0 = tc0.raft_client().await?;
+
+    let last_log_id = log_id(10, 2, 4);
+
+    let snapshot_meta = SnapshotMeta {
+        last_log_id: Some(last_log_id),
+        last_membership: StoredMembership::default(),
+        snapshot_id: MetaSnapshotId::new(Some(last_log_id), 1).to_string(),
+    };
+
+    let data = [
+        r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
+        r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":10,"node_id":2},"index":4}}}}"#,
+        r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}}}}}"#,
+    ];
+
+    // Complete transmit
+
+    let strm_data = [
+        SnapshotChunkRequestV2::new_chunk(data[0].to_bytes().to_vec()),
+        SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
+        SnapshotChunkRequestV2::new_chunk(data[1].to_bytes().to_vec()),
+        SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
+        SnapshotChunkRequestV2::new_chunk(data[2].to_bytes().to_vec()),
+        SnapshotChunkRequestV2::new_end_chunk(Vote::new_committed(10, 2), snapshot_meta),
+    ];
+
+    let resp = client0.install_snapshot_v2(stream::iter(strm_data)).await?;
+    let reply = resp.into_inner();
+
+    let resp: SnapshotResponse = serde_json::from_str(&reply.data)?;
+
+    assert_eq!(resp.vote, Vote::new_committed(10, 2));
+
+    let meta_node = tc0.meta_node.as_ref().unwrap();
+    let m = meta_node.raft.metrics().borrow().clone();
+
+    assert_eq!(Some(last_log_id), m.snapshot);
+
+    // Incomplete
+
+    let strm_data = [
+        SnapshotChunkRequestV2::new_chunk(data[0].to_bytes().to_vec()),
+        SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
+    ];
+
+    let err = client0
+        .install_snapshot_v2(stream::iter(strm_data))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
 
     Ok(())
 }

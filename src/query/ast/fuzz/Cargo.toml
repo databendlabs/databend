@@ -13,7 +13,7 @@ publish = false
 name = "fuzz_parse_sql"
 path = "fuzz_targets/fuzz_parse_sql.rs"
 doctest = false
-test = false
+test = true
 
 [dependencies]
 databend-common-ast = { path = ".." }

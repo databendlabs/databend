@@ -722,6 +722,7 @@ impl<'a> Binder {
                     | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         let mut finder = Finder::new(&f);
@@ -841,7 +842,9 @@ impl<'a> Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+                ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         let mut finder = Finder::new(&f);
@@ -858,6 +861,7 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
                     | ScalarExpr::UDFCall(_)
             )
         };

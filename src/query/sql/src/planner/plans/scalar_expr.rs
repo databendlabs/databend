@@ -16,6 +16,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use databend_common_ast::ast::BinaryOperator;
+use databend_common_async_functions::AsyncFunctionCall;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Range;
 use databend_common_exception::Result;
@@ -46,6 +47,7 @@ pub enum ScalarExpr {
     SubqueryExpr(SubqueryExpr),
     UDFCall(UDFCall),
     UDFLambdaCall(UDFLambdaCall),
+    AsyncFunctionCall(AsyncFunctionCall),
 }
 
 impl ScalarExpr {
@@ -380,6 +382,25 @@ impl TryFrom<ScalarExpr> for UDFLambdaCall {
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to UDFLambdaCall",
+            ))
+        }
+    }
+}
+
+impl From<AsyncFunctionCall> for ScalarExpr {
+    fn from(v: AsyncFunctionCall) -> Self {
+        Self::AsyncFunctionCall(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for AsyncFunctionCall {
+    type Error = ErrorCode;
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::AsyncFunctionCall(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast Scalar to AsyncFunctionCall",
             ))
         }
     }
@@ -878,6 +899,7 @@ pub fn walk_expr_with_parent<'a, V: VisitorWithParent<'a>>(
         ScalarExpr::SubqueryExpr(subquery) => visitor.visit_subquery(parent, current, subquery),
         ScalarExpr::UDFCall(udf) => visitor.visit_udf_call(parent, current, udf),
         ScalarExpr::UDFLambdaCall(udf) => visitor.visit_udf_lambda_call(parent, current, udf),
+        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
     }
 }
 
@@ -893,6 +915,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
+        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
     }
 }
 
@@ -990,6 +1013,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
+        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
     }
 }
 

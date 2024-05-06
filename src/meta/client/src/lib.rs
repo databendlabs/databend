@@ -36,8 +36,6 @@ pub use grpc_client::MetaChannelManager;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
 pub use message::Streamed;
-use semver::BuildMetadata;
-use semver::Prerelease;
 use semver::Version;
 
 pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
@@ -65,48 +63,48 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///   `read_msg/write_msg` to `kv_api`
 ///
 /// - 2023-02-16: since 0.9.41:
-///   Meta client add `Compatible` layer to accept KVAppError or MetaAPIError
+///   👥 client add `Compatible` layer to accept KVAppError or MetaAPIError
 ///
 /// - 2023-02-17: since 0.9.42:
-///   Meta service only responds with MetaAPIError.
+///   🖥 server only responds with MetaAPIError.
 ///
 /// - 2023-05-07: since 1.1.32:
-///   Meta service: add: TxnDeleteRequest provides a `match_seq` field to delete a record if its `seq` matches.
+///   🖥 server: add: TxnDeleteRequest provides a `match_seq` field to delete a record if its `seq` matches.
 ///
 /// - 2023-10-11: since 1.2.153:
-///   Meta service: add: pb::SeqV.meta field to support record expiration.
+///   🖥 server: add: pb::SeqV.meta field to support record expiration.
 ///
 /// - 2023-10-17: since 1.2.163:
-///   Meta service: add: stream api: kv_read_v1().
+///   🖥 server: add: stream api: kv_read_v1().
 ///
 /// - 2023-10-20: since 1.2.176:
-///   Meta client: call stream api: kv_read_v1(), revert to 1.1.32 if server < 1.2.163
+///   👥 client: call stream api: kv_read_v1(), revert to 1.1.32 if server < 1.2.163
 ///
 /// - 2023-12-16: since 1.2.258:
-///   Meta service: add: ttl to TxnPutRequest and Upsert
+///   🖥 server: add: ttl to TxnPutRequest and Upsert
 ///
 /// - 2024-01-02: since 1.2.279:
-///   Meta client: remove `Compatible` for KVAppError and MetaAPIError, added in `2023-02-16: since 0.9.41`
+///   👥 client: remove `Compatible` for KVAppError and MetaAPIError, added in `2023-02-16: since 0.9.41`
 ///
 /// - 2024-01-07: since 1.2.287:
-///   client: remove calling RPC kv_api() with MetaGrpcReq::GetKV/MGetKV/ListKV, kv_api only accept Upsert;
-///   client: remove using MetaGrpcReq::GetKV/MGetKV/ListKV;
-///   client: remove falling back kv_read_v1(Streamed(List)) to kv_api(List), added in `2023-10-20: since 1.2.176`;
+///   👥 client: remove calling RPC kv_api() with MetaGrpcReq::GetKV/MGetKV/ListKV, kv_api only accept Upsert;
+///   👥 client: remove using MetaGrpcReq::GetKV/MGetKV/ListKV;
+///   👥 client: remove falling back kv_read_v1(Streamed(List)) to kv_api(List), added in `2023-10-20: since 1.2.176`;
 ///
 /// - 2024-01-17: since 1.2.304:
-///   server: do not use TxnPutRequest.prev_value;
-///   server: do not use TxnDeleteRequest.prev_value;
-///           Always return the previous value;
-///           field index is reserved, no compatibility changes.
+///   🖥 server: do not use TxnPutRequest.prev_value;
+///   🖥 server: do not use TxnDeleteRequest.prev_value;
+///              Always return the previous value;
+///              field index is reserved, no compatibility changes.
 ///
 /// - 2024-01-25: since 1.2.315:
-///   server: add export_v1() to let client specify export chunk size;
+///   🖥 server: add export_v1() to let client specify export chunk size;
 ///
 /// - 2024-03-01: since: 1.2.358:
-///   server: add `server_time` to `get_client_info() -> ClientInfo`,
+///   🖥 server: add `server_time` to `get_client_info() -> ClientInfo`,
 ///
-/// - 2024-03-01: since: TODO(update me when merged):
-///   client: `MetaSpec` use `ttl`, remove `expire_at`, require 1.2.258
+/// - 2024-03-04: since: 1.2.361
+///   👥 client: `MetaSpec` use `ttl`, remove `expire_at`, require 1.2.258
 ///
 /// Server feature set:
 /// ```yaml
@@ -115,21 +113,16 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///   pb_seqv_meta:         ["2023-10-11", "1.2.153", ]
 ///   kv_read_v1:           ["2023-10-17", "1.2.163", ]
 /// ```
-pub static MIN_METASRV_SEMVER: Version = Version {
-    major: 1,
-    minor: 2,
-    // The binary in the https://github.com/datafuselabs/databend/releases/tag/v1.2.258-nightly
-    // outputs version 1.2.257;
-    // ```
-    // ./databend-meta  --single
-    // Databend Metasrv
-    // Version: v1.2.257-nightly-188426e3e6-simd(1.75.0-nightly-2023-12-17T22:09:06.675156000Z)
-    // ```
-    // Skip 1.2.258 use the next 1.2.259
-    patch: 259,
-    pre: Prerelease::EMPTY,
-    build: BuildMetadata::EMPTY,
-};
+// ------------------------------
+// The binary in the https://github.com/datafuselabs/databend/releases/tag/v1.2.258-nightly
+// outputs version 1.2.257;
+// ```
+// ./databend-meta  --single
+// Databend Metasrv
+// Version: v1.2.257-nightly-188426e3e6-simd(1.75.0-nightly-2023-12-17T22:09:06.675156000Z)
+// ```
+// Skip 1.2.258 use the next 1.2.259
+pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 259);
 
 pub fn to_digit_ver(v: &Version) -> u64 {
     v.major * 1_000_000 + v.minor * 1_000 + v.patch

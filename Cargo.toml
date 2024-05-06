@@ -31,6 +31,7 @@ members = [
     "src/common/license",
     # Query
     "src/query/ast",
+    "src/query/async_functions",
     "src/query/codegen",
     "src/query/config",
     "src/query/constraint",
@@ -123,7 +124,7 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 
 # openraft for debugging
 #openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
-openraft = { version = "0.9.8", features = [
+openraft = { version = "0.9.9", features = [
     "serde",
     "tracing-log",
     "generic-snapshot-data",
