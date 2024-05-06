@@ -51,7 +51,7 @@ Filter
 ├── filters: [t1._search_matched (#2)]
 ├── estimated rows: 10.00
 └── TableScan
-    ├── table: default.default.t1
+    ├── table: default.test_inverted_index_db.t1
     ├── output columns: [id (#0), content (#1), _search_matched (#2)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -91,7 +91,7 @@ Filter
 ├── filters: [t2._search_matched (#2)]
 ├── estimated rows: 10.00
 └── TableScan
-    ├── table: default.default.t2
+    ├── table: default.test_inverted_index_db.t2
     ├── output columns: [id (#0), content (#1), _search_matched (#2)]
     ├── read rows: 2
     ├── read size: < 1 KiB
