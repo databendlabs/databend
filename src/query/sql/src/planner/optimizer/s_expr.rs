@@ -319,6 +319,7 @@ impl SExpr {
             | RelOperator::CteScan(_)
             | RelOperator::AddRowNumber(_)
             | RelOperator::MaterializedCte(_)
+            | RelOperator::AsyncFunction(_)
             | RelOperator::ConstantTableScan(_) => {}
         };
         for child in &self.children {
@@ -404,6 +405,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::CteScan(_)
         | RelOperator::AddRowNumber(_)
         | RelOperator::MaterializedCte(_)
+        | RelOperator::AsyncFunction(_)
         | RelOperator::ConstantTableScan(_) => false,
         RelOperator::Join(op) => {
             op.left_conditions.iter().any(find_subquery_in_expr)

@@ -8,7 +8,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 console = ["console-subscriber", "tracing", "tracing-subscriber"]

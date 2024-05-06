@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+use std::fmt::Formatter;
+
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::VecDisplay;
 
 pub type UpsertKVReq = UpsertKV;
 
@@ -41,6 +45,12 @@ impl MGetKVReq {
         Self {
             keys: keys.into_iter().map(|x| x.to_string()).collect(),
         }
+    }
+}
+
+impl fmt::Display for MGetKVReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", VecDisplay::new_at_most(&self.keys, 5))
     }
 }
 

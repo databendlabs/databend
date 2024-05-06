@@ -144,13 +144,44 @@ impl GrpcHelper {
         Self::parse(&raft_req.data)
     }
 
+    /// Make a gRPC response result with Ok, ApiError or internal error.
+    pub fn make_grpc_result<D, E>(
+        res: Result<D, RaftError<E>>,
+    ) -> Result<tonic::Response<RaftReply>, tonic::Status>
+    where
+        D: serde::Serialize + 'static,
+        E: serde::Serialize + Error + 'static,
+    {
+        match res {
+            Ok(resp) => GrpcHelper::ok_response(&resp),
+            Err(e) => {
+                if e.api_error().is_some() {
+                    GrpcHelper::err_response(&e)
+                } else {
+                    Err(GrpcHelper::internal_err(e))
+                }
+            }
+        }
+    }
+
     /// Create an Ok response for raft API.
-    pub fn ok_response<D>(d: D) -> Result<tonic::Response<RaftReply>, tonic::Status>
-    where D: serde::Serialize {
-        let data = serde_json::to_string(&d).expect("fail to serialize resp");
+    pub fn ok_response<D>(d: &D) -> Result<tonic::Response<RaftReply>, tonic::Status>
+    where D: serde::Serialize + 'static {
+        let data = serde_json::to_string(d).expect("fail to serialize resp");
         let reply = RaftReply {
             data,
             error: "".to_string(),
+        };
+        Ok(tonic::Response::new(reply))
+    }
+
+    /// Create an Ok response contains API error.
+    pub fn err_response<E>(e: &E) -> Result<tonic::Response<RaftReply>, tonic::Status>
+    where E: serde::Serialize + 'static {
+        let error = serde_json::to_string(e).expect("fail to serialize response error");
+        let reply = RaftReply {
+            data: "".to_string(),
+            error,
         };
         Ok(tonic::Response::new(reply))
     }

@@ -2974,6 +2974,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-async-functions"
+version = "0.1.0"
+dependencies = [
+ "databend-common-ast",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-meta-app",
+ "educe",
+]
+
+[[package]]
 name = "databend-common-auth"
 version = "0.1.0"
 dependencies = [
@@ -3933,6 +3945,7 @@ dependencies = [
  "ctor 0.1.26",
  "dashmap",
  "databend-common-ast",
+ "databend-common-async-functions",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-compress",
@@ -10121,7 +10134,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.45.1"
-source = "git+https://github.com/apache/opendal?rev=53377ca#53377ca873c2928ce519ca57a939f89af1a76c47"
+source = "git+https://github.com/Xuanwo/opendal?rev=53377ca#53377ca873c2928ce519ca57a939f89af1a76c47"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -10156,9 +10169,9 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.9.7"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bb93143b31c03885eadbd8b2d1bb63c250302113618d8c0db647ab49171736f"
+checksum = "3f29df094119e6d79274ddec81e44189b4b9f59f1a38635920151e1264b6687c"
 dependencies = [
  "anyerror",
  "byte-unit",

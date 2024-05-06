@@ -516,8 +516,7 @@ impl<Index: ColumnIndex> Expr<Index> {
 
     pub fn is_deterministic(&self, registry: &FunctionRegistry) -> bool {
         match self {
-            Expr::Constant { .. } => true,
-            Expr::ColumnRef { .. } => true,
+            Expr::Constant { .. } | Expr::ColumnRef { .. } => true,
             Expr::Cast { expr, .. } => expr.is_deterministic(registry),
             Expr::FunctionCall { function, args, .. } => {
                 !registry

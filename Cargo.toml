@@ -31,6 +31,7 @@ members = [
     "src/common/license",
     # Query
     "src/query/ast",
+    "src/query/async_functions",
     "src/query/codegen",
     "src/query/config",
     "src/query/constraint",
@@ -123,7 +124,7 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 
 # openraft for debugging
 #openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
-openraft = { version = "0.9.7", features = [
+openraft = { version = "0.9.9", features = [
     "serde",
     "tracing-log",
     "generic-snapshot-data",
@@ -280,6 +281,6 @@ z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 geozero = { git = "https://github.com/georust/geozero", rev = "1d78b36" }
 # Hot fix for cos, remove this during opendal 0.46 upgrade.
-opendal = { git = "https://github.com/apache/opendal", rev = "53377ca" }
+opendal = { git = "https://github.com/Xuanwo/opendal", rev = "53377ca" }
 reqsign = { git = "https://github.com/Xuanwo/reqsign", rev = "122dc12" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }

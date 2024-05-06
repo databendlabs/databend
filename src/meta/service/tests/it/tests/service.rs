@@ -219,7 +219,7 @@ impl MetaSrvTestContext {
         let addr = self.config.raft_config.raft_api_addr().await?;
 
         // retry 3 times until server starts listening.
-        for _ in 0..4 {
+        for _ in 0..3 {
             let client = RaftServiceClient::connect(format!("http://{}", addr)).await;
             match client {
                 Ok(x) => return Ok(x),
