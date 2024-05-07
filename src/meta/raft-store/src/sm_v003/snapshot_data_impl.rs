@@ -12,26 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(try_blocks)]
-#![feature(coroutines)]
-#![feature(lazy_cell)]
-#![allow(clippy::uninlined_format_args)]
+use std::io::Error;
 
-pub mod api;
-pub mod configs;
-pub mod export;
-pub mod message;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod raft_client;
-pub(crate) mod request_handling;
-pub mod store;
-pub mod version;
-pub mod watcher;
+use databend_common_meta_types::SnapshotData;
+use openraft::SnapshotId;
 
-pub trait Opened {
-    /// Return true if it is opened from a previous persistent state.
-    /// Otherwise it is just created.
-    fn is_opened(&self) -> bool;
+use crate::config::RaftConfig;
+use crate::sm_v003::open_snapshot::OpenSnapshot;
+
+impl OpenSnapshot for SnapshotData {
+    fn open_snapshot(
+        path: impl ToString,
+        snapshot_id: SnapshotId,
+        _raft_config: &RaftConfig,
+    ) -> Result<Self, Error> {
+        let _ = snapshot_id;
+        SnapshotData::open(path.to_string())
+    }
 }

@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::KVMeta;
 use futures_util::StreamExt;
 use log::warn;
@@ -28,17 +29,9 @@ use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MarkedOf;
 use crate::leveled_store::map_api::Transition;
-use crate::leveled_store::sys_data::SysData;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
-
-impl MapKey for String {
-    type V = Vec<u8>;
-}
-impl MapKey for ExpireKey {
-    type V = String;
-}
 
 /// A single level of state machine data.
 ///

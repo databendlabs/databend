@@ -12,26 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(try_blocks)]
-#![feature(coroutines)]
-#![feature(lazy_cell)]
-#![allow(clippy::uninlined_format_args)]
+/// Represents a unique identifier for a level.
+///
+/// The magnitude of the index indicates the relative freshness of the level.
+#[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LevelIndex {
+    /// The internal sequence number of the level.
+    internal_seq: u64,
 
-pub mod api;
-pub mod configs;
-pub mod export;
-pub mod message;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod raft_client;
-pub(crate) mod request_handling;
-pub mod store;
-pub mod version;
-pub mod watcher;
+    /// A unique number within the process.
+    uniq: u64,
+}
 
-pub trait Opened {
-    /// Return true if it is opened from a previous persistent state.
-    /// Otherwise it is just created.
-    fn is_opened(&self) -> bool;
+impl LevelIndex {
+    pub fn new(internal_seq: u64, uniq: u64) -> Self {
+        Self { internal_seq, uniq }
+    }
 }
