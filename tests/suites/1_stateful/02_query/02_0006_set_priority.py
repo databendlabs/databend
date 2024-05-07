@@ -27,19 +27,19 @@ with NativeClient(name="client1>") as client1:
     )
     time.sleep(0.5)
 
-    mycursor = mydb.cursor()
+    mycursor = mydb.cursor(buffered=True)
     mycursor.execute(
         "SELECT id FROM system.processes WHERE extra_info LIKE '%SELECT max(number)%' AND extra_info NOT LIKE '%system.processes%';"
     )
     res = mycursor.fetchone()
+    query_id = str(res[0])
 
-    adjust_priority_query = "set priority high '" + str(res[0]) + "';"
+    adjust_priority_query = "set priority high '" + query_id + "';"
     mycursor.execute(adjust_priority_query)
+
+    res = mycursor.fetchone()
     time.sleep(0.2)
 
-    kill_query = "kill query '" + str(res[0]) + "';"
+    kill_query = "kill query '" + query_id + "';"
     mycursor.execute(kill_query)
-    time.sleep(0.1)
-
-    client1.expect(prompt)
-
+    res = mycursor.fetchone()

@@ -14,29 +14,84 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SetPriorityPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::flight::v1::packets::Packet;
+use crate::servers::flight::v1::packets::SetPriorityPacket;
 use crate::sessions::QueryContext;
 
 pub struct SetPriorityInterpreter {
     ctx: Arc<QueryContext>,
     plan: SetPriorityPlan,
+    proxy_to_cluster: bool,
 }
 
 impl SetPriorityInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: SetPriorityPlan) -> Result<Self> {
-        Ok(SetPriorityInterpreter { ctx, plan })
+        Ok(SetPriorityInterpreter {
+            ctx,
+            plan,
+            proxy_to_cluster: true,
+        })
+    }
+
+    pub fn from_flight(ctx: Arc<QueryContext>, packet: SetPriorityPacket) -> Result<Self> {
+        Ok(SetPriorityInterpreter {
+            ctx,
+            plan: SetPriorityPlan {
+                id: packet.id,
+                priority: packet.priority,
+            },
+            proxy_to_cluster: false,
+        })
+    }
+
+    #[async_backtrace::framed]
+    async fn set_cluster_priority(&self) -> Result<PipelineBuildResult> {
+        let settings = self.ctx.get_settings();
+        let timeout = settings.get_flight_client_timeout()?;
+        let conf = GlobalConfig::instance();
+        let cluster = self.ctx.get_cluster();
+        for node_info in &cluster.nodes {
+            if node_info.id != cluster.local_id {
+                let set_priority_packet = SetPriorityPacket::create(
+                    self.plan.id.clone(),
+                    self.plan.priority,
+                    node_info.clone(),
+                );
+
+                match set_priority_packet.commit(conf.as_ref(), timeout).await {
+                    Ok(_) => {
+                        return Ok(PipelineBuildResult::create());
+                    }
+                    Err(cause) => match cause.code() == ErrorCode::UNKNOWN_SESSION {
+                        true => {
+                            continue;
+                        }
+                        false => {
+                            return Err(cause);
+                        }
+                    },
+                }
+            }
+        }
+        Err(ErrorCode::UnknownSession(format!(
+            "Not found session id {}",
+            self.plan.id
+        )))
     }
 }
 
 #[async_trait::async_trait]
 impl Interpreter for SetPriorityInterpreter {
     fn name(&self) -> &str {
-        "AdjustPriorityInterpreter"
+        "SetPriorityInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -48,14 +103,17 @@ impl Interpreter for SetPriorityInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let id = &self.plan.id;
         match self.ctx.get_session_by_id(id) {
-            Some(adjust_session) => {
-                adjust_session.set_query_priority(self.plan.priority);
+            None => match self.proxy_to_cluster {
+                true => self.set_cluster_priority().await,
+                false => Err(ErrorCode::UnknownSession(format!(
+                    "Not found session id {}",
+                    id
+                ))),
+            },
+            Some(set_session) => {
+                set_session.set_query_priority(self.plan.priority);
                 Ok(PipelineBuildResult::create())
             }
-            None => Err(ErrorCode::UnknownSession(format!(
-                "Not found session id {}",
-                id
-            ))),
         }
     }
 }

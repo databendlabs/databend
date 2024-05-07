@@ -20,6 +20,7 @@ mod packet_executor;
 mod packet_fragment;
 mod packet_kill_query;
 mod packet_publisher;
+mod packet_set_priority;
 mod packet_truncate_table;
 
 pub use packet::Packet;
@@ -32,4 +33,5 @@ pub use packet_fragment::FragmentPlanPacket;
 pub use packet_kill_query::KillQueryPacket;
 pub use packet_publisher::ConnectionInfo;
 pub use packet_publisher::InitNodesChannelPacket;
+pub use packet_set_priority::SetPriorityPacket;
 pub use packet_truncate_table::TruncateTablePacket;

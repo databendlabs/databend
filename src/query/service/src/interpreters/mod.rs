@@ -197,6 +197,7 @@ pub use interpreter_role_set_secondary::SetSecondaryRolesInterpreter;
 pub use interpreter_select::SelectInterpreter;
 pub use interpreter_sequence_create::CreateSequenceInterpreter;
 pub use interpreter_sequence_drop::DropSequenceInterpreter;
+pub use interpreter_set_priority::SetPriorityInterpreter;
 pub use interpreter_setting::SettingInterpreter;
 pub use interpreter_share_alter_tenants::AlterShareTenantsInterpreter;
 pub use interpreter_share_create::CreateShareInterpreter;
