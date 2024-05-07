@@ -47,7 +47,7 @@ impl PipelineBuilder {
             is_active
         };
         // set on_finished callback.
-        main_pipeline.set_on_finished(move |may_error| {
+        main_pipeline.set_on_finished(move |(_profiles, may_error)| {
             match may_error {
                 Ok(_) => {
                     GlobalIORuntime::instance().block_on(async move {
