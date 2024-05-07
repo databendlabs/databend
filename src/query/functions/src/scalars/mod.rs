@@ -29,7 +29,6 @@ mod geo_h3;
 mod geometry;
 mod hash;
 mod map;
-mod map_ops;
 mod math;
 mod other;
 mod string;
@@ -62,5 +61,4 @@ pub fn register(registry: &mut FunctionRegistry) {
     vector::register(registry);
     bitmap::register(registry);
     geometry::register(registry);
-    map_ops::register(registry);
 }
