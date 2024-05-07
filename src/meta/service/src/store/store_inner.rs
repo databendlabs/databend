@@ -478,28 +478,21 @@ impl StoreInner {
             yield s;
         };
 
-        // Export logs that has smaller or equal leader id as `vote`
-        {
-            let tree_name = &log.inner.name;
+        drop(raft_state);
 
-            let log_kvs = log.inner.export()?;
+        // Dump logs that has smaller or equal leader id as `vote`
+        let log_tree_name = log.inner.name.clone();
+        let log_kvs = log.inner.export()?;
 
-            for kv in log_kvs.iter() {
-                let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
+        drop(log);
 
-                let tree_kv = (tree_name, kv_entry);
-                let line = serde_json::to_string(&tree_kv).map_err(invalid_data)?;
-                yield line;
-            }
-        }
+        // Dump snapshot of state machine
 
-        // Export snapshot of state machine
-        {
-            // NOTE:
-            // The name in form of "state_machine/[0-9]+" had been used by the sled tree based sm.
-            // Do not change it for keeping compatibility.
-            let tree_name = "state_machine/0";
-
+        // NOTE:
+        // The name in form of "state_machine/[0-9]+" had been used by the sled tree based sm.
+        // Do not change it for keeping compatibility.
+        let sm_tree_name = "state_machine/0";
+        let f = {
             let snapshot = current_snapshot.clone();
             if let Some(s) = snapshot {
                 let meta = s.meta;
@@ -510,17 +503,33 @@ impl StoreInner {
                     .load_snapshot(&meta.snapshot_id)
                     .await
                     .map_err(invalid_data)?;
-                let bf = BufReader::new(f);
-                let mut lines = AsyncBufReadExt::lines(bf);
+                Some(f)
+            } else {
+                None
+            }
+        };
 
-                while let Some(l) = lines.next_line().await? {
-                    let ent: RaftStoreEntry = serde_json::from_str(&l).map_err(invalid_data)?;
+        drop(current_snapshot);
 
-                    let named_entry = (tree_name, ent);
+        for kv in log_kvs.iter() {
+            let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
 
-                    let line = serde_json::to_string(&named_entry).map_err(invalid_data)?;
-                    yield line;
-                }
+            let tree_kv = (&log_tree_name, kv_entry);
+            let line = serde_json::to_string(&tree_kv).map_err(invalid_data)?;
+            yield line;
+        }
+
+        if let Some(f) = f {
+            let bf = BufReader::new(f);
+            let mut lines = AsyncBufReadExt::lines(bf);
+
+            while let Some(l) = lines.next_line().await? {
+                let ent: RaftStoreEntry = serde_json::from_str(&l).map_err(invalid_data)?;
+
+                let named_entry = (sm_tree_name, ent);
+
+                let line = serde_json::to_string(&named_entry).map_err(invalid_data)?;
+                yield line;
             }
         }
     }
