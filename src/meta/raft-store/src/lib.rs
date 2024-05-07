@@ -16,6 +16,7 @@
 #![feature(coroutines)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(lazy_cell)]
+#![feature(try_blocks)]
 #![allow(clippy::diverging_sub_expression)]
 
 pub mod applier;
@@ -26,6 +27,7 @@ pub mod log;
 pub(crate) mod marked;
 pub mod ondisk;
 pub mod sm_v002;
+pub mod snapshot_config;
 pub mod state;
 pub mod state_machine;
 pub mod utils;

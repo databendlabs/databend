@@ -15,14 +15,14 @@
 use std::fmt::Debug;
 use std::future;
 use std::io;
-use std::iter::repeat_with;
-use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::snapshot_db::DB;
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Entry;
@@ -31,7 +31,6 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
-use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::StorageIOError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
@@ -39,27 +38,21 @@ use databend_common_meta_types::UpsertKV;
 use futures::Stream;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
-use itertools::Itertools;
 use log::debug;
 use log::info;
 use log::warn;
 use openraft::RaftLogId;
-use tokio::sync::RwLock;
 
 use crate::applier::Applier;
-use crate::key_spaces::SMEntry;
+use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::map_api::IOResultStream;
 use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiExt;
 use crate::leveled_store::map_api::MapApiRO;
-use crate::leveled_store::map_api::ResultStream;
-use crate::leveled_store::sys_data::SysData;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::marked::Marked;
-use crate::sm_v002::sm_v002;
-use crate::sm_v002::Importer;
-use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::sm::BlockingConfig;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineSubscriber;
@@ -138,115 +131,34 @@ impl SMV002 {
         SMV002KVApi { sm: self }
     }
 
-    /// Install and replace state machine with the content of a snapshot
-    ///
-    /// After install, the state machine has only one level of data.
-    pub async fn install_snapshot(
-        state_machine: Arc<RwLock<Self>>,
-        data: Box<SnapshotData>,
-    ) -> Result<(), io::Error> {
-        //
-        let data_size = data.data_size().await?;
-        info!("snapshot data len: {}", data_size);
-
-        let mut importer = sm_v002::SMV002::new_importer();
-
-        let f = data.into_std().await;
-
-        let h = databend_common_base::runtime::spawn_blocking(move || {
-            // Create a worker pool to deserialize the entries.
-
-            let queue_depth = 1024;
-            let n_workers = 16;
-            let (tx, rx) = ordq::new(queue_depth, repeat_with(|| Deserializer).take(n_workers));
-
-            // Spawn a thread to import the deserialized entries.
-
-            let import_th = databend_common_base::runtime::Thread::spawn(move || {
-                while let Some(res) = rx.recv() {
-                    let entries: Result<Vec<SMEntry>, io::Error> =
-                        res.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-                    let entries = entries?;
-
-                    for ent in entries {
-                        importer.import(ent)?;
-                    }
-                }
-
-                let level_data = importer.commit();
-                Ok::<_, io::Error>(level_data)
-            });
-
-            // Feed input strings to the worker pool.
-            {
-                let mut br = io::BufReader::with_capacity(16 * 1024 * 1024, f);
-                let lines = io::BufRead::lines(&mut br);
-                for c in &lines.into_iter().chunks(1024) {
-                    let chunk = c.collect::<Result<Vec<_>, _>>()?;
-                    tx.send(chunk)
-                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-                }
-
-                // drop `tx` to notify the worker threads to exit.
-                tx.close()
-            }
-
-            let level_data = import_th
-                .join()
-                .map_err(|_e| io::Error::new(io::ErrorKind::Other, "import thread failure"))??;
-
-            Ok::<_, io::Error>(level_data)
-        });
-
-        let level_data = h
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))??;
-
-        let new_last_applied = *level_data.last_applied_ref();
-
-        {
-            let mut sm = state_machine.write().await;
-
-            // When rebuilding the state machine, last_applied is empty,
-            // and it should always install the snapshot.
-            //
-            // And the snapshot may contain data when its last_applied is None,
-            // when importing data with metactl:
-            // The snapshot is empty but contains Nodes data that are manually added.
-            //
-            // See: `databend_metactl::snapshot`
-            if &new_last_applied <= sm.sys_data_ref().last_applied_ref()
-                && sm.sys_data_ref().last_applied_ref().is_some()
-            {
-                info!(
-                    "no need to install: snapshot({:?}) <= sm({:?})",
-                    new_last_applied,
-                    sm.sys_data_ref().last_applied_ref()
-                );
-                return Ok(());
-            }
-
-            let mut levels = LeveledMap::new(level_data);
-            // Push all data down to frozen level, create a new empty writable level.
-            // So that the top writable level is small enough.
-            // Writable level can not return a static stream for `range()`. It has to copy all data in the range.
-            // See the MapApiRO::range() implementation for Level.
-            levels.freeze_writable();
-
-            sm.replace(levels);
-        }
+    /// Install and replace state machine with the content of a snapshot.
+    pub async fn install_snapshot_v003(&mut self, db: DB) -> Result<(), io::Error> {
+        let data_size = db.inner().file_size();
+        let sys_data = db.sys_data().clone();
 
         info!(
-            "installed state machine from snapshot, last_applied: {:?}",
-            new_last_applied,
+            "SMV003::install_snapshot: data_size: {}; sys_data: {:?}",
+            data_size, sys_data
         );
 
+        if self.sys_data_ref().last_applied_ref() >= sys_data.last_applied_ref() {
+            info!(
+                "SMV003 try to install a smaller snapshot({:?}), ignored, my last applied: {:?}",
+                sys_data.last_applied_ref(),
+                self.sys_data_ref().last_applied_ref()
+            );
+            return Ok(());
+        }
+
+        self.levels.clear();
+        let levels = self.levels_mut();
+        *levels.sys_data_mut() = sys_data;
+        *levels.persisted_mut() = Some(db);
         Ok(())
     }
 
-    pub fn new_importer() -> Importer {
-        Importer::default()
+    pub fn get_snapshot(&self) -> Option<DB> {
+        self.levels.persisted().cloned()
     }
 
     /// Return a Arc of the blocking config. It is only used for testing.
@@ -294,7 +206,7 @@ impl SMV002 {
     /// List kv entries by prefix.
     ///
     /// If a value is expired, it is not returned.
-    pub async fn list_kv(&self, prefix: &str) -> Result<ResultStream<(String, SeqV)>, io::Error> {
+    pub async fn list_kv(&self, prefix: &str) -> Result<IOResultStream<(String, SeqV)>, io::Error> {
         let p = prefix.to_string();
 
         let strm = if let Some(right) = prefix_right_bound(&p) {
@@ -372,19 +284,32 @@ impl SMV002 {
         self.levels.writable_mut().sys_data_mut()
     }
 
+    pub fn into_levels(self) -> LeveledMap {
+        self.levels
+    }
+
+    pub fn levels(&self) -> &LeveledMap {
+        &self.levels
+    }
+
+    pub fn levels_mut(&mut self) -> &mut LeveledMap {
+        &mut self.levels
+    }
+
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
         self.subscriber = Some(subscriber);
     }
 
-    /// Creates a snapshot view that contains the latest state.
-    ///
-    /// Internally, the state machine creates a new empty writable level and makes all current states immutable.
-    ///
-    /// This operation is fast because it does not copy any data.
-    pub fn full_snapshot_view(&mut self) -> SnapshotViewV002 {
-        let frozen = self.levels.freeze_writable();
+    pub fn freeze_writable(&mut self) {
+        self.levels.freeze_writable();
+    }
 
-        SnapshotViewV002::new(frozen.clone())
+    pub fn try_acquire_compactor(&mut self) -> Option<Compactor> {
+        self.levels.try_acquire_compactor()
+    }
+
+    pub async fn acquire_compactor(&mut self) -> Compactor {
+        self.levels.acquire_compactor().await
     }
 
     /// Replace all of the state machine data with the given one.
@@ -405,21 +330,6 @@ impl SMV002 {
         // The installed data may not cleaned up all expired keys, if it is built with an older state machine.
         // So we need to reset the cursor then the next time applying a log it will cleanup all expired.
         self.expire_cursor = ExpireKey::new(0, 0);
-    }
-
-    /// Keep the top(writable) level, replace all the frozen levels.
-    ///
-    /// This is called after compacting some of the frozen levels.
-    pub fn replace_frozen(&mut self, snapshot: &SnapshotViewV002) {
-        assert!(
-            Arc::ptr_eq(
-                self.levels.immutable_levels_ref().newest().unwrap().inner(),
-                snapshot.original_ref().newest().unwrap().inner()
-            ),
-            "the frozen must not change"
-        );
-
-        self.levels.replace_immutable_levels(snapshot.compacted());
     }
 
     /// It returns 2 entries: the previous one and the new one after upsert.
@@ -486,33 +396,16 @@ impl SMV002 {
 
         if let Some(exp_ms) = removed.get_expire_at_ms() {
             self.levels
-                .set(ExpireKey::new(exp_ms, removed.internal_seq().seq()), None)
+                .set(ExpireKey::new(exp_ms, removed.order_key().seq()), None)
                 .await?;
         }
 
         if let Some(exp_ms) = added.get_expire_at_ms() {
-            let k = ExpireKey::new(exp_ms, added.internal_seq().seq());
+            let k = ExpireKey::new(exp_ms, added.order_key().seq());
             let v = key.to_string();
             self.levels.set(k, Some((v, None))).await?;
         }
 
         Ok(())
-    }
-}
-
-struct Deserializer;
-
-impl ordq::Work for Deserializer {
-    type I = Vec<String>;
-    type O = Result<Vec<SMEntry>, io::Error>;
-
-    fn run(&mut self, strings: Self::I) -> Self::O {
-        let mut res = Vec::with_capacity(strings.len());
-        for s in strings {
-            let ent: SMEntry = serde_json::from_str(&s)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            res.push(ent);
-        }
-        Ok(res)
     }
 }

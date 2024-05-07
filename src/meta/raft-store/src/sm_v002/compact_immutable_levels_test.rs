@@ -23,9 +23,7 @@ use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 
-use crate::key_spaces::SMEntry;
-use crate::leveled_store::immutable::Immutable;
-use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::leveled_map::compactor_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApi;
@@ -33,24 +31,24 @@ use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
-use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::ExpireKey;
 
 #[tokio::test]
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
-    let mut l = build_3_levels().await?;
+    let mut lm = build_3_levels().await?;
 
-    let frozen = l.freeze_writable().clone();
+    let mut immutable_levels = lm.freeze_writable().clone();
 
-    let mut snapshot = SnapshotViewV002::new(frozen);
+    {
+        let mut compacting_data = CompactingData::new(&mut immutable_levels, None);
+        compacting_data.compact_immutable_in_place().await?;
+    }
 
-    snapshot.compact_mem_levels().await?;
+    let compacted = immutable_levels;
 
-    let top_level = snapshot.compacted();
+    let d = compacted.newest().unwrap().as_ref();
 
-    let d = top_level.newest().unwrap().as_ref();
-
-    assert_eq!(top_level.iter_immutable_levels().count(), 1);
+    assert_eq!(compacted.iter_immutable_levels().count(), 1);
     assert_eq!(
         d.last_membership_ref(),
         &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()))
@@ -84,11 +82,12 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 async fn test_compact_expire_index() -> anyhow::Result<()> {
     let mut sm = build_sm_with_expire().await?;
 
-    let mut snapshot = sm.full_snapshot_view();
-
-    snapshot.compact_mem_levels().await?;
-
-    let compacted = snapshot.compacted();
+    let compacted = {
+        sm.freeze_writable();
+        let mut compactor = sm.acquire_compactor().await;
+        compactor.compact_immutable_in_place().await?;
+        compactor.immutable_levels().clone()
+    };
 
     let d = compacted.newest().unwrap().as_ref();
 
@@ -135,20 +134,19 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_export_3_level() -> anyhow::Result<()> {
-    let mut l = build_3_levels().await?;
+async fn test_compact_3_level() -> anyhow::Result<()> {
+    let mut lm = build_3_levels().await?;
 
-    let frozen = l.freeze_writable().clone();
+    lm.freeze_writable();
 
-    let snapshot = SnapshotViewV002::new(frozen);
-    let got = snapshot
-        .export()
-        .await?
+    let mut compactor = lm.acquire_compactor().await;
+
+    let (_sys_data, strm) = compactor.compact().await?;
+
+    let got = strm
         .map_ok(|x| serde_json::to_string(&x).unwrap())
         .try_collect::<Vec<_>>()
         .await?;
-
-    // TODO(1): add tree name: ["state_machine/0",{"Sequences":{"key":"generic-kv","value":159}}]
 
     assert_eq!(got, vec![
         r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
@@ -167,15 +165,17 @@ async fn test_export_3_level() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
     let mut sm = build_sm_with_expire().await?;
+    sm.freeze_writable();
 
-    let snapshot = sm.full_snapshot_view();
+    let mut compactor = sm.acquire_compactor().await;
 
-    let got = snapshot
-        .export()
-        .await?
+    let (sys_data, strm) = compactor.compact().await?;
+    let got = strm
         .map_ok(|x| serde_json::to_string(&x).unwrap())
         .try_collect::<Vec<_>>()
         .await?;
+
+    assert_eq!("", serde_json::to_string(&sys_data).unwrap());
 
     assert_eq!(got, vec![
         r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
@@ -192,57 +192,14 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_import() -> anyhow::Result<()> {
-    let exported = vec![
-        r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":3,"node_id":3},"index":3}}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}}}}}"#,
-        r#"{"Sequences":{"key":"generic-kv","value":9}}"#,
-        r#"{"Nodes":{"key":3,"value":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}}}"#,
-        r#"{"GenericKV":{"key":"a","value":{"seq":7,"meta":{"expire_at":15},"data":[97,49]}}}"#,
-        r#"{"GenericKV":{"key":"b","value":{"seq":3,"meta":{"expire_at":5},"data":[98,48]}}}"#,
-        r#"{"GenericKV":{"key":"c","value":{"seq":5,"meta":{"expire_at":20},"data":[99,48]}}}"#,
-        r#"{"Expire":{"key":{"time_ms":5000,"seq":3},"value":{"seq":3,"key":"b"}}}"#,
-        r#"{"Expire":{"key":{"time_ms":15000,"seq":7},"value":{"seq":7,"key":"a"}}}"#,
-        r#"{"Expire":{"key":{"time_ms":20000,"seq":5},"value":{"seq":5,"key":"c"}}}"#,
-    ];
-    let data = exported
-        .iter()
-        .map(|x| serde_json::from_str::<SMEntry>(x).unwrap());
-
-    let d = {
-        let mut importer = SMV002::new_importer();
-
-        for ent in data {
-            importer.import(ent)?;
-        }
-
-        importer.commit()
-    };
-
-    let snapshot = SnapshotViewV002::new(ImmutableLevels::new([Immutable::new_from_level(d)]));
-
-    let got = snapshot
-        .export()
-        .await?
-        .map_ok(|x| serde_json::to_string(&x).unwrap())
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    assert_eq!(got, exported);
-
-    Ok(())
-}
-
 /// Create multi levels store:
 ///
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
-/// l0 | a  b    c    d
+/// l0 | a  b    c    d              // db
 async fn build_3_levels() -> anyhow::Result<LeveledMap> {
-    let mut l = LeveledMap::default();
-    let sd = l.writable_mut().sys_data_mut();
+    let mut lm = LeveledMap::default();
+    let sd = lm.writable_mut().sys_data_mut();
 
     *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(1, 1, 1)), Membership::new(vec![], ()));
@@ -250,13 +207,13 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
-    l.str_map_mut().set(s("a"), Some((b("a0"), None))).await?;
-    l.str_map_mut().set(s("b"), Some((b("b0"), None))).await?;
-    l.str_map_mut().set(s("c"), Some((b("c0"), None))).await?;
-    l.str_map_mut().set(s("d"), Some((b("d0"), None))).await?;
+    lm.str_map_mut().set(s("a"), Some((b("a0"), None))).await?;
+    lm.str_map_mut().set(s("b"), Some((b("b0"), None))).await?;
+    lm.str_map_mut().set(s("c"), Some((b("c0"), None))).await?;
+    lm.str_map_mut().set(s("d"), Some((b("d0"), None))).await?;
 
-    l.freeze_writable();
-    let sd = l.writable_mut().sys_data_mut();
+    lm.freeze_writable();
+    let sd = lm.writable_mut().sys_data_mut();
 
     *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(2, 2, 2)), Membership::new(vec![], ()));
@@ -264,12 +221,12 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
-    l.str_map_mut().set(s("b"), None).await?;
-    l.str_map_mut().set(s("c"), Some((b("c1"), None))).await?;
-    l.str_map_mut().set(s("e"), Some((b("e1"), None))).await?;
+    lm.str_map_mut().set(s("b"), None).await?;
+    lm.str_map_mut().set(s("c"), Some((b("c1"), None))).await?;
+    lm.str_map_mut().set(s("e"), Some((b("e1"), None))).await?;
 
-    l.freeze_writable();
-    let sd = l.writable_mut().sys_data_mut();
+    lm.freeze_writable();
+    let sd = lm.writable_mut().sys_data_mut();
 
     *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()));
@@ -277,10 +234,10 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
-    l.str_map_mut().set(s("c"), None).await?;
-    l.str_map_mut().set(s("d"), Some((b("d2"), None))).await?;
+    lm.str_map_mut().set(s("c"), None).await?;
+    lm.str_map_mut().set(s("d"), Some((b("d2"), None))).await?;
 
-    Ok(l)
+    Ok(lm)
 }
 
 /// The subscript is internal_seq:

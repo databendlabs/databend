@@ -13,33 +13,76 @@
 // limitations under the License.
 
 use std::fmt::Display;
-use std::fs;
 use std::io;
-use std::io::BufWriter;
-use std::io::Seek;
-use std::io::Write;
+use std::ops::Deref;
+use std::sync::Arc;
 
-use databend_common_meta_types::SnapshotData;
-use databend_common_meta_types::TempSnapshotData;
+use databend_common_meta_types::snapshot_db::DB;
+use databend_common_meta_types::sys_data::SysData;
 use log::debug;
 use log::info;
+use openraft::SnapshotId;
+use rotbl::v001::Rotbl;
+use rotbl::v001::SeqMarked;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use crate::key_spaces::SMEntry;
-use crate::ondisk::DataVersion;
-use crate::ondisk::DATA_VERSION;
-use crate::sm_v002::SnapshotStat;
-use crate::sm_v002::WriteEntry;
+use crate::leveled_store::db_builder::DBBuilder;
+use crate::sm_v002::open_snapshot::OpenSnapshot;
 use crate::snapshot_config::SnapshotConfig;
 
-/// Write json lines snapshot data to [`SnapshotStoreV002`].
-pub struct WriterV002 {
-    /// The temp path to write to, which will be renamed to the final path.
-    /// So that the readers could only see a complete snapshot.
-    temp_path: String,
+/// A typed temporary snapshot data.
+pub struct TempSnapshotDataV003 {
+    path: String,
+    snapshot_config: SnapshotConfig,
+    inner: Arc<Rotbl>,
+}
 
-    inner: BufWriter<fs::File>,
+impl Deref for TempSnapshotDataV003 {
+    type Target = Arc<Rotbl>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl TempSnapshotDataV003 {
+    pub fn new(path: impl ToString, snapshot_config: SnapshotConfig, r: Arc<Rotbl>) -> Self {
+        Self {
+            path: path.to_string(),
+            snapshot_config,
+            inner: r,
+        }
+    }
+
+    pub fn move_to_final_path(self, snapshot_id: SnapshotId) -> Result<DB, io::Error> {
+        let final_path = self
+            .snapshot_config
+            .move_to_final_path(&self.path, snapshot_id.clone())?;
+
+        let db = DB::open_snapshot(final_path, snapshot_id, self.snapshot_config.raft_config())?;
+        Ok(db)
+    }
+
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+}
+
+/// A write entry sent to snapshot writer.
+///
+/// A `Finish` entry indicates the end of the data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WriteEntry<D, F = ()> {
+    Data(D),
+    Finish(F),
+}
+
+/// Write kv pair snapshot data to [`SnapshotStoreV002`].
+pub struct WriterV003 {
+    db_builder: DBBuilder,
+
+    snapshot_config: SnapshotConfig,
 
     /// Number of entries written.
     pub(crate) cnt: u64,
@@ -49,53 +92,24 @@ pub struct WriterV002 {
 
     /// The time when the writer starts to write entries.
     start_time: std::time::Instant,
-
-    /// The version of the on disk data.
-    data_version: DataVersion,
 }
 
-impl WriterV002 {
-    /// Create a writer from a temp snapshot data [`TempSnapshotData`].
-    pub async fn new_from_temp_snapshot_data(
-        temp_snapshot_data: TempSnapshotData,
-    ) -> Result<Self, io::Error> {
-        let ss_data = temp_snapshot_data.into_inner();
-        let path = ss_data.path().to_string();
-        let f = ss_data.into_std().await;
-
-        let buffered_file = BufWriter::with_capacity(16 * 1024 * 1024, f);
-
-        let writer = WriterV002 {
-            temp_path: path,
-            inner: buffered_file,
-            cnt: 0,
-            next_progress_cnt: 1000,
-            start_time: std::time::Instant::now(),
-            data_version: DATA_VERSION,
-        };
-
-        Ok(writer)
-    }
-
+impl WriterV003 {
     /// Create a singleton writer for the snapshot.
     pub fn new(snapshot_config: &SnapshotConfig) -> Result<Self, io::Error> {
         let temp_path = snapshot_config.snapshot_temp_path();
 
-        let f = fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .read(true)
-            .open(&temp_path)?;
+        let db_builder = DBBuilder::new(
+            temp_path.clone(),
+            snapshot_config.raft_config().to_rotbl_config(),
+        )?;
 
-        let buffered_file = BufWriter::with_capacity(16 * 1024 * 1024, f);
-
-        let writer = WriterV002 {
-            temp_path,
-            inner: buffered_file,
+        let writer = WriterV003 {
+            db_builder,
+            snapshot_config: snapshot_config.clone(),
             cnt: 0,
             next_progress_cnt: 1000,
             start_time: std::time::Instant::now(),
-            data_version: snapshot_config.data_version(),
         };
 
         Ok(writer)
@@ -140,29 +154,26 @@ impl WriterV002 {
     /// Write entries to the snapshot, without flushing.
     ///
     /// Returns the count of entries
-    pub fn write_entries_sync(
+    pub fn write_kv(
         mut self,
-        mut entries_rx: tokio::sync::mpsc::Receiver<WriteEntry<SMEntry>>,
-    ) -> Result<Self, io::Error> {
-        let data_version = self.data_version;
+        mut kv_rx: mpsc::Receiver<WriteEntry<(String, SeqMarked), SysData>>,
+    ) -> Result<TempSnapshotDataV003, io::Error> {
+        while let Some(ent) = kv_rx.blocking_recv() {
+            debug!(entry :? =(&ent); "write kv");
 
-        while let Some(ent) = entries_rx.blocking_recv() {
-            debug!(entry :? =(&ent); "write {} entry", data_version);
-
-            let ent = match ent {
+            let (k, v) = match ent {
                 WriteEntry::Data(ent) => ent,
-                WriteEntry::Finish(_) => {
-                    info!("received Commit, written {} entries, quit", self.cnt);
-                    return Ok(self);
+                WriteEntry::Finish(sys_data) => {
+                    info!(
+                        "received Commit, written {} entries, flush with: {:?}",
+                        self.cnt, sys_data
+                    );
+                    let temp_snapshot_data = self.flush(sys_data)?;
+                    return Ok(temp_snapshot_data);
                 }
             };
 
-            serde_json::to_writer(&mut self.inner, &ent)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-            self.inner
-                .write(b"\n")
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            self.db_builder.append_kv(k, v)?;
 
             self.count();
         }
@@ -178,34 +189,30 @@ impl WriterV002 {
     /// Returns a **temp** [`SnapshotData`] and the file size written.
     ///
     /// This method consumes the writer, thus the writer will not be used after commit.
-    pub fn flush(mut self) -> Result<(TempSnapshotData, u64), io::Error> {
-        self.inner.flush()?;
-        let mut f = self.inner.into_inner()?;
-        f.sync_all()?;
-
-        let file_size = f.seek(io::SeekFrom::End(0))?;
-
-        let snapshot_data = SnapshotData::new(&self.temp_path, f, true);
-        let t = TempSnapshotData::new(snapshot_data);
-        Ok((t, file_size))
+    pub fn flush(self, sys_data: SysData) -> Result<TempSnapshotDataV003, io::Error> {
+        let path = self.db_builder.path().to_string();
+        let r = self.db_builder.flush(sys_data)?;
+        let t = TempSnapshotDataV003::new(path, self.snapshot_config, Arc::new(r));
+        Ok(t)
     }
 
-    /// Spawn a thread to receive snapshot data [`SMEntry`] and write them to a snapshot file.
+    /// Spawn a thread to receive snapshot data `(String, SeqMarked)`
+    /// and write them to a temp snapshot file.
     ///
     /// It returns a sender to send entries and a handle to wait for the thread to finish.
     /// Internally it calls tokio::spawn_blocking.
     ///
     /// When a [`WritenEntry::Finish`] is received, the thread will flush the data to disk and return
-    /// a [`TempSnapshotData`] and a [`SnapshotStat`].
+    /// a [`TempSnapshotDataV003`] and a [`SnapshotStat`].
     ///
-    /// [`TempSnapshotData`] is a temporary snapshot data that will be renamed to the final path by the caller.
+    /// [`TempSnapshotDataV003`] is a temporary snapshot data that will be renamed to the final path by the caller.
     #[allow(clippy::type_complexity)]
     pub fn spawn_writer_thread(
         self,
         context: impl Display + Send + Sync + 'static,
     ) -> (
-        mpsc::Sender<WriteEntry<SMEntry>>,
-        JoinHandle<Result<(TempSnapshotData, SnapshotStat), io::Error>>,
+        mpsc::Sender<WriteEntry<(String, SeqMarked), SysData>>,
+        JoinHandle<Result<TempSnapshotDataV003, io::Error>>,
     ) {
         let (tx, rx) = mpsc::channel(64 * 1024);
 
@@ -215,23 +222,14 @@ impl WriterV002 {
                 |e: io::Error| io::Error::new(e.kind(), format!("{} while {}", e, context));
 
             info!("snapshot_writer_thread start writing: {}", context);
-            let writer = self.write_entries_sync(rx).map_err(with_context)?;
-
-            info!("snapshot_writer_thread committing...: {}", context);
-            let cnt = writer.cnt;
-            let (temp_snapshot_data, size) = writer.flush().map_err(with_context)?;
+            let temp_snapshot_data = self.write_kv(rx).map_err(with_context)?;
 
             info!(
                 "snapshot writer flushed: path: {}",
                 temp_snapshot_data.path()
             );
 
-            let snapshot_stat = SnapshotStat {
-                size,
-                entry_cnt: cnt,
-            };
-
-            Ok::<(TempSnapshotData, SnapshotStat), io::Error>((temp_snapshot_data, snapshot_stat))
+            Ok::<TempSnapshotDataV003, io::Error>(temp_snapshot_data)
         });
 
         (tx, join_handle)

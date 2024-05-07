@@ -19,11 +19,13 @@ use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use crate::leveled_store::level::Level;
+use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKV;
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::map_api::MarkedOf;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
@@ -35,22 +37,32 @@ use crate::state_machine::ExpireKey;
 /// [`MapApi`]: crate::sm_v002::leveled_store::map_api::MapApi
 #[derive(Debug, Clone)]
 pub struct Immutable {
+    index: LevelIndex,
     level: Arc<Level>,
 }
 
 impl Immutable {
     pub fn new(level: Arc<Level>) -> Self {
-        Self { level }
+        static UNIQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+        let uniq = UNIQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let internal_seq = level.sys_data_ref().curr_seq();
+
+        let index = LevelIndex::new(internal_seq, uniq);
+
+        Self { index, level }
     }
 
     pub fn new_from_level(level: Level) -> Self {
-        Self {
-            level: Arc::new(level),
-        }
+        Self::new(Arc::new(level))
     }
 
     pub fn inner(&self) -> &Arc<Level> {
         &self.level
+    }
+
+    pub fn level_index(&self) -> &LevelIndex {
+        &self.index
     }
 }
 
@@ -106,6 +118,7 @@ impl MapApiRO<String> for Immutable {
     where
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
+        Q: MapKeyEncode,
     {
         // get() is just delegated
         self.as_ref().str_map().get(key).await
@@ -124,6 +137,7 @@ impl MapApiRO<ExpireKey> for Immutable {
     where
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
+        Q: MapKeyEncode,
     {
         // get() is just delegated
         self.as_ref().expire_map().get(key).await

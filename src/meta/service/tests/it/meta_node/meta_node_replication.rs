@@ -19,7 +19,7 @@ use databend_common_meta_sled_store::openraft::testing::log_id;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
-use databend_common_meta_types::protobuf::SnapshotChunkRequestV2;
+use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
@@ -198,8 +198,8 @@ async fn test_raft_service_snapshot_id_mismatch() -> anyhow::Result<()> {
 
 #[test(harness = meta_service_test_harness)]
 #[minitrace::trace]
-async fn test_raft_service_install_snapshot_v2() -> anyhow::Result<()> {
-    // Transmit snapshot in one-piece in a stream via API install_snapshot_v2.
+async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
+    // Transmit snapshot in one-piece in a stream via API install_snapshot_v003.
 
     let (_nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![]).await?;
     let tc0 = tcs.remove(0);
@@ -223,15 +223,17 @@ async fn test_raft_service_install_snapshot_v2() -> anyhow::Result<()> {
     // Complete transmit
 
     let strm_data = [
-        SnapshotChunkRequestV2::new_chunk(data[0].to_bytes().to_vec()),
-        SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
-        SnapshotChunkRequestV2::new_chunk(data[1].to_bytes().to_vec()),
-        SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
-        SnapshotChunkRequestV2::new_chunk(data[2].to_bytes().to_vec()),
-        SnapshotChunkRequestV2::new_end_chunk(Vote::new_committed(10, 2), snapshot_meta),
+        SnapshotChunkRequestV003::new_chunk(data[0].to_bytes().to_vec()),
+        SnapshotChunkRequestV003::new_chunk("\n".as_bytes().to_vec()),
+        SnapshotChunkRequestV003::new_chunk(data[1].to_bytes().to_vec()),
+        SnapshotChunkRequestV003::new_chunk("\n".as_bytes().to_vec()),
+        SnapshotChunkRequestV003::new_chunk(data[2].to_bytes().to_vec()),
+        SnapshotChunkRequestV003::new_end_chunk(Vote::new_committed(10, 2), snapshot_meta),
     ];
 
-    let resp = client0.install_snapshot_v2(stream::iter(strm_data)).await?;
+    let resp = client0
+        .install_snapshot_v003(stream::iter(strm_data))
+        .await?;
     let reply = resp.into_inner();
 
     let resp: SnapshotResponse = serde_json::from_str(&reply.data)?;
@@ -246,12 +248,12 @@ async fn test_raft_service_install_snapshot_v2() -> anyhow::Result<()> {
     // Incomplete
 
     let strm_data = [
-        SnapshotChunkRequestV2::new_chunk(data[0].to_bytes().to_vec()),
-        SnapshotChunkRequestV2::new_chunk("\n".as_bytes().to_vec()),
+        SnapshotChunkRequestV003::new_chunk(data[0].to_bytes().to_vec()),
+        SnapshotChunkRequestV003::new_chunk("\n".as_bytes().to_vec()),
     ];
 
     let err = client0
-        .install_snapshot_v2(stream::iter(strm_data))
+        .install_snapshot_v003(stream::iter(strm_data))
         .await
         .unwrap_err();
 

@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
-use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
+use databend_common_meta_raft_store::sm_v002::open_snapshot::OpenSnapshot;
+use databend_common_meta_raft_store::sm_v002::SnapshotStoreV003;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
-use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::OptionalSend;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
+use databend_common_meta_sled_store::openraft::StorageIOError;
+use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Entry;
-use databend_common_meta_types::ErrorSubject;
 use databend_common_meta_types::LogId;
 use databend_common_meta_types::Snapshot;
-use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StoredMembership;
@@ -34,7 +32,6 @@ use log::error;
 use log::info;
 
 use crate::metrics::raft_metrics;
-use crate::metrics::server_metrics;
 use crate::store::RaftStore;
 
 impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
@@ -77,59 +74,39 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
     }
 
     #[minitrace::trace]
-    async fn begin_receiving_snapshot(&mut self) -> Result<Box<SnapshotData>, StorageError> {
-        server_metrics::incr_applying_snapshot(1);
-
-        let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
-
-        let temp = snapshot_store.new_temp().await.map_err(|e| {
-            StorageError::from_io_error(ErrorSubject::Snapshot(None), ErrorVerb::Write, e)
-        })?;
-
-        Ok(Box::new(temp))
+    async fn begin_receiving_snapshot(&mut self) -> Result<Box<DB>, StorageError> {
+        unreachable!("snapshot V003 does not rely this method to build a temp receiving file");
     }
 
     #[minitrace::trace]
     async fn install_snapshot(
         &mut self,
         meta: &SnapshotMeta,
-        snapshot: Box<SnapshotData>,
+        snapshot: Box<DB>,
     ) -> Result<(), StorageError> {
-        let data_size = snapshot.data_size().await.map_err(|e| {
-            StorageError::from_io_error(
-                ErrorSubject::Snapshot(Some(meta.signature())),
-                ErrorVerb::Read,
-                e,
-            )
-        })?;
+        let data_size = snapshot.file_size();
 
         info!(
             id = self.id,
             snapshot_size = data_size;
             "decoding snapshot for installation"
         );
-        server_metrics::incr_applying_snapshot(-1);
 
-        assert!(snapshot.is_temp());
+        let sig = meta.signature();
 
-        let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
+        let ss_store = SnapshotStoreV003::new(self.inner.config.clone());
+        let final_path = ss_store
+            .snapshot_config()
+            .move_to_final_path(&snapshot.path, meta.snapshot_id.clone())
+            .map_err(|e| StorageIOError::write_snapshot(Some(sig.clone()), &e))?;
 
-        let d = snapshot_store
-            .commit_received(snapshot, meta)
-            .await
-            .map_err(|e| {
-                e.with_context(format_args!(
-                    "commit received snapshot: {:?}",
-                    meta.signature()
-                ))
-            })?;
-
-        let d = Box::new(d);
+        let db = DB::open_snapshot(final_path, meta.snapshot_id.clone(), &self.inner.config)
+            .map_err(|e| StorageIOError::read_snapshot(Some(sig.clone()), &e))?;
 
         info!("snapshot meta: {:?}", meta);
 
         // Replace state machine with the new one
-        let res = self.do_install_snapshot(d).await;
+        let res = self.do_install_snapshot(db).await;
         match res {
             Ok(_) => {}
             Err(e) => {
@@ -138,39 +115,25 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
             }
         };
 
-        self.set_snapshot(Some(meta.clone())).await;
-
         Ok(())
     }
 
     #[minitrace::trace]
-    async fn get_current_snapshot(
-        &mut self,
-    ) -> Result<Option<databend_common_meta_sled_store::openraft::Snapshot<TypeConfig>>, StorageError>
-    {
+    async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, StorageError> {
         info!(id = self.id; "get snapshot start");
-        let p = self.current_snapshot.read().await;
 
-        let snap = match &*p {
-            Some(meta) => {
-                let snapshot_store =
-                    SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
+        let r = self.state_machine.read().await;
+        let db = r.levels().persisted().cloned();
 
-                let d = snapshot_store
-                    .load_snapshot(&meta.snapshot_id)
-                    .await
-                    .map_err(|e| e.with_meta("get snapshot", meta))?;
+        let snapshot = db.map(|x| Snapshot {
+            meta: x.snapshot_meta().clone(),
+            snapshot: Box::new(x),
+        });
 
-                Ok(Some(Snapshot {
-                    meta: meta.clone(),
-                    snapshot: Box::new(d),
-                }))
-            }
-            None => Ok(None),
-        };
-
-        info!("get snapshot complete");
-
-        snap
+        info!(
+            "get snapshot complete: {:?}",
+            snapshot.as_ref().map(|x| &x.meta)
+        );
+        Ok(snapshot)
     }
 }

@@ -89,6 +89,12 @@ impl SnapshotData {
         }
     }
 
+    pub fn open_temp(path: String) -> Result<Self, io::Error> {
+        let mut d = Self::open(path)?;
+        d.is_temp = true;
+        Ok(d)
+    }
+
     pub fn open(path: String) -> Result<Self, io::Error> {
         let f = std::fs::OpenOptions::new()
             .create(false)
