@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
 use std::io;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
@@ -23,16 +24,20 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use futures::AsyncRead;
+use futures::FutureExt;
 use opendal::raw::oio;
-use opendal::raw::Accessor;
+use opendal::raw::Access;
 use opendal::raw::Layer;
-use opendal::raw::LayeredAccessor;
+use opendal::raw::LayeredAccess;
+use opendal::raw::MaybeSend;
 use opendal::raw::OpList;
 use opendal::raw::OpRead;
 use opendal::raw::OpWrite;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpWrite;
+use opendal::Buffer;
 use opendal::Result;
 
 /// StorageMetrics represents the metrics of storage (all bytes metrics are compressed size).
@@ -146,10 +151,10 @@ impl StorageMetricsLayer {
     }
 }
 
-impl<A: Accessor> Layer<A> for StorageMetricsLayer {
-    type LayeredAccessor = StorageMetricsAccessor<A>;
+impl<A: Access> Layer<A> for StorageMetricsLayer {
+    type LayeredAccess = StorageMetricsAccessor<A>;
 
-    fn layer(&self, inner: A) -> Self::LayeredAccessor {
+    fn layer(&self, inner: A) -> Self::LayeredAccess {
         StorageMetricsAccessor {
             inner,
             metrics: self.metrics.clone(),
@@ -158,13 +163,13 @@ impl<A: Accessor> Layer<A> for StorageMetricsLayer {
 }
 
 #[derive(Clone, Debug)]
-pub struct StorageMetricsAccessor<A: Accessor> {
+pub struct StorageMetricsAccessor<A: Access> {
     inner: A,
     metrics: Arc<StorageMetrics>,
 }
 
 #[async_trait]
-impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
+impl<A: Access> LayeredAccess for StorageMetricsAccessor<A> {
     type Inner = A;
     type Reader = StorageMetricsWrapper<A::Reader>;
     type BlockingReader = StorageMetricsWrapper<A::BlockingReader>;
@@ -232,85 +237,55 @@ impl<R> StorageMetricsWrapper<R> {
 }
 
 impl<R: oio::Read> oio::Read for StorageMetricsWrapper<R> {
-    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize>> {
-        let start = self.last_pending.unwrap_or(Instant::now());
+    async fn read_at(&self, offset: u64, limit: usize) -> Result<Buffer> {
+        let start = Instant::now();
 
-        let result = self.inner.poll_read(cx, buf);
-
-        match result {
-            Poll::Ready(Ok(size)) => {
-                self.last_pending = None;
-                self.metrics.inc_read_bytes(size);
-                self.metrics
-                    .inc_read_bytes_cost(start.elapsed().as_millis() as u64);
-            }
-            Poll::Ready(Err(_)) => {
-                self.last_pending = None;
-            }
-            Poll::Pending => {
-                self.last_pending = Some(start);
-            }
-        }
-
-        result
-    }
-
-    fn poll_seek(&mut self, cx: &mut Context<'_>, pos: io::SeekFrom) -> Poll<Result<u64>> {
-        self.inner.poll_seek(cx, pos)
-    }
-
-    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<bytes::Bytes>>> {
-        self.inner.poll_next(cx)
+        self.inner.read_at(offset, limit).await.map(|buf| {
+            self.metrics.inc_read_bytes(buf.len());
+            self.metrics
+                .inc_read_bytes_cost(start.elapsed().as_millis() as u64);
+            buf
+        })
     }
 }
 
 impl<R: oio::BlockingRead> oio::BlockingRead for StorageMetricsWrapper<R> {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        self.inner.read(buf)
-    }
-
-    fn seek(&mut self, pos: io::SeekFrom) -> Result<u64> {
-        self.inner.seek(pos)
-    }
-
-    fn next(&mut self) -> Option<Result<Bytes>> {
-        self.inner.next()
+    fn read_at(&self, offset: u64, limit: usize) -> Result<Buffer> {
+        self.inner.read_at(offset, limit)
     }
 }
 
 impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
-    fn poll_write(&mut self, cx: &mut Context<'_>, bs: &dyn oio::WriteBuf) -> Poll<Result<usize>> {
+    async fn write(&mut self, bs: Buffer) -> Result<usize> {
         let start = Instant::now();
 
-        let result = self.inner.poll_write(cx, bs);
-        if let Poll::Ready(Ok(size)) = result {
+        self.inner.write(bs).await.map(|size| {
             self.metrics.inc_write_bytes(size);
             self.metrics
                 .inc_write_bytes_cost(start.elapsed().as_millis() as u64);
-        }
-        result
+            size
+        })
     }
 
-    fn poll_close(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner.poll_close(cx)
+    async fn close(&mut self) -> Result<()> {
+        self.inner.close().await
     }
 
-    fn poll_abort(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner.poll_abort(cx)
+    async fn abort(&mut self) -> Result<()> {
+        self.inner.abort().await
     }
 }
 
 impl<R: oio::BlockingWrite> oio::BlockingWrite for StorageMetricsWrapper<R> {
-    fn write(&mut self, bs: &dyn oio::WriteBuf) -> Result<usize> {
+    fn write(&mut self, bs: Buffer) -> Result<usize> {
         let start = Instant::now();
 
-        let result = self.inner.write(bs);
-        if let Ok(size) = result {
+        self.inner.write(bs).map(|size| {
             self.metrics.inc_write_bytes(size);
             self.metrics
                 .inc_write_bytes_cost(start.elapsed().as_millis() as u64);
-        }
-        result
+            size
+        })
     }
 
     fn close(&mut self) -> Result<()> {
