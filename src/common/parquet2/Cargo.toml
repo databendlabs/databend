@@ -1,0 +1,42 @@
+[package]
+description = "Safe implementation of parquet IO, forked from parquet2."
+edition = "2021"
+license = "Apache-2.0"
+name = "databend-common-parquet2"
+version = "0.1.0"
+
+[lib]
+bench = false
+name = "parquet2"
+
+[dependencies]
+parquet-format-safe = "0.2"
+seq-macro = { version = "0.3", default-features = false }
+streaming-decompression = "0.1"
+
+async-stream = { version = "0.3.3", optional = true }
+futures = { version = "0.3", optional = true }
+
+brotli = { version = "^3.3", optional = true }
+flate2 = { version = "^1.0", optional = true, default-features = false }
+lz4 = { version = "1.24", optional = true }
+serde = { version = "^1.0", optional = true, features = ["derive"] }
+snap = { version = "^1.1", optional = true }
+zstd = { version = "^0.12", optional = true, default-features = false }
+
+xxhash-rust = { version = "0.8", optional = true, features = ["xxh64"] }
+
+[dev-dependencies]
+criterion = "0.4"
+rand = "0.8"
+tokio = { version = "1", features = ["macros", "rt"] }
+
+[features]
+async = ["async-stream", "futures", "parquet-format-safe/async"]
+bloom_filter = ["xxhash-rust"]
+default = ["snappy", "gzip", "lz4", "zstd", "brotli", "bloom_filter"]
+full = ["snappy", "gzip", "lz4", "zstd", "brotli", "bloom_filter", "async"]
+gzip = ["flate2/rust_backend"]
+gzip_zlib_ng = ["flate2/zlib-ng"]
+serde_types = ["serde"]
+snappy = ["snap"]
