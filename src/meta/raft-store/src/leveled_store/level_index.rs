@@ -12,25 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod sm_v002;
-mod snapshot_stat;
-mod snapshot_store;
-mod snapshot_view_v002;
-mod writer_v002;
+/// Represents a unique identifier for a level.
+///
+/// The magnitude of the index indicates the relative freshness of the level.
+#[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LevelIndex {
+    /// The internal sequence number of the level.
+    internal_seq: u64,
 
-mod importer;
+    /// A unique number within the process.
+    uniq: u64,
+}
 
-#[cfg(test)]
-mod sm_v002_test;
-#[cfg(test)]
-mod snapshot_view_v002_test;
-
-pub use importer::Importer;
-pub use sm_v002::SMV002;
-pub use snapshot_stat::SnapshotStat;
-pub use snapshot_store::SnapshotStoreError;
-pub use snapshot_store::SnapshotStoreV002;
-pub use snapshot_view_v002::SnapshotViewV002;
-pub use writer_v002::WriteEntry;
-pub use writer_v002::WriterV002;
+impl LevelIndex {
+    pub fn new(internal_seq: u64, uniq: u64) -> Self {
+        Self { internal_seq, uniq }
+    }
+}
