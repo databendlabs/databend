@@ -291,7 +291,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             ));
         }
 
-        if self.all_inputs_init {
+        if self.all_inputs_init && self.max_partition_count == partition_count {
             match self.buckets_blocks.entry(bucket) {
                 Entry::Vacant(v) => {
                     v.insert(vec![data_block]);
