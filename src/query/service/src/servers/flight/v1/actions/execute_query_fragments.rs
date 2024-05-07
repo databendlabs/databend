@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod create_data_channel;
-mod create_query_fragments;
-mod execute_query_fragments;
-mod flight_actions;
-mod kill_query;
-mod new_flight_actions;
-mod truncate_table;
+use databend_common_exception::Result;
 
-pub use flight_actions::FlightAction;
-pub use flight_actions::InitNodesChannel;
-pub use flight_actions::InitQueryFragmentsPlan;
-pub use flight_actions::KillQuery;
-pub use flight_actions::TruncateTable;
-pub use new_flight_actions::flight_actions;
-pub use new_flight_actions::FlightActions;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
+
+pub async fn execute_query_fragments(id: String) -> Result<()> {
+    if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&id) {
+        DataExchangeManager::instance().on_finished_query(&id);
+        return Err(cause);
+    }
+    Ok(())
+}
