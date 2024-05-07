@@ -180,12 +180,20 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     self.initialized_all_inputs = false;
                 }
 
-                // handle the case where the last input changes the max partition
-                if index == self.inputs.len() - 1
-                    && before_max_partition_count > 0
+                // max partition count change
+                if before_max_partition_count > 0
                     && before_max_partition_count != self.max_partition_count
                 {
-                    self.initialized_all_inputs = false;
+                    // set need data for inputs which is less than the max partition
+                    for index in 0..self.inputs.len() {
+                        if !self.inputs[index].port.is_finished()
+                            && !self.inputs[index].port.has_data()
+                            && self.inputs[index].max_partition_count != self.max_partition_count
+                        {
+                            self.inputs[index].port.set_need_data();
+                            self.initialized_all_inputs = false;
+                        }
+                    }
                 }
             }
         }
@@ -292,6 +300,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         }
 
         if self.all_inputs_init {
+            if partition_count != self.max_partition_count {
+                return Err(ErrorCode::Internal(
+                    "Internal, the partition count does not equal the max partition count on TransformPartitionBucket.
+                    ",
+                ));
+            }
             match self.buckets_blocks.entry(bucket) {
                 Entry::Vacant(v) => {
                     v.insert(vec![data_block]);
