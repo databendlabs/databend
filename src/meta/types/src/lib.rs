@@ -45,6 +45,8 @@ mod proto_ext;
 pub mod cmd;
 pub mod config;
 pub mod errors;
+pub mod snapshot_db;
+pub mod sys_data;
 
 // reexport
 

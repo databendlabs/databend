@@ -62,10 +62,10 @@ fn test_empty() -> anyhow::Result<()> {
 #[test]
 fn test_internal_seq() -> anyhow::Result<()> {
     let m = Marked::new_with_meta(1, 2, None);
-    assert_eq!(m.internal_seq(), InternalSeq::normal(1));
+    assert_eq!(m.order_key(), InternalSeq::normal(1));
 
     let m: Marked<u64> = Marked::new_tombstone(1);
-    assert_eq!(m.internal_seq(), InternalSeq::tombstone(1));
+    assert_eq!(m.order_key(), InternalSeq::tombstone(1));
 
     Ok(())
 }

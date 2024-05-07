@@ -26,22 +26,26 @@ use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use anyhow::anyhow;
 use databend_common_base::base::tokio;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::key_spaces::SMEntry;
-use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::OnDisk;
-use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
-use databend_common_meta_raft_store::sm_v002::WriteEntry;
+use databend_common_meta_raft_store::sm_v003::adapter::LineConvertV002ToV003;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV002;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
+use databend_common_meta_raft_store::sm_v003::WriteEntry;
 use databend_common_meta_raft_store::state::RaftState;
+use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::CommittedLeaderId;
 use databend_common_meta_types::Endpoint;
@@ -111,6 +115,7 @@ async fn import_lines<B: BufRead + 'static>(
         }
         DataVersion::V001 => import_v001(config, it)?,
         DataVersion::V002 => import_v002(config, it).await?,
+        DataVersion::V003 => import_v003(config, it).await?,
     };
 
     Ok(max_log_id)
@@ -166,6 +171,93 @@ async fn import_v002(
     config: &Config,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
+    // v002 and v003 share the same exported data format.
+    import_v003(config, lines)
+    // let raft_config: RaftConfig = config.clone().into();
+    //
+    // let db = get_sled_db();
+    //
+    // let mut n = 0;
+    // let mut max_log_id: Option<LogId> = None;
+    // let mut trees = BTreeMap::new();
+    //
+    // let snapshot_store = SnapshotStoreV002::new(raft_config);
+    //
+    // let writer = snapshot_store.new_writer()?;
+    //
+    // let (tx, join_handle) = writer.spawn_writer_thread("import_v002");
+    //
+    // let mut last_applied = None;
+    //
+    // for line in lines {
+    //     let l = line?;
+    //     let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(&l)?;
+    //
+    //     if tree_name.starts_with("state_machine/") {
+    //         // Write to snapshot
+    //         let sm_entry: SMEntry = kv_entry.try_into().map_err(|err_str| {
+    //             anyhow::anyhow!("Failed to convert RaftStoreEntry to SMEntry: {}", err_str)
+    //         })?;
+    //
+    //         if let Some(last) = sm_entry.last_applied() {
+    //             last_applied = Some(last);
+    //         }
+    //
+    //         tx.send(WriteEntry::Data(sm_entry)).await?;
+    //     } else {
+    //         // Write to sled tree
+    //         if !trees.contains_key(&tree_name) {
+    //             let tree = db.open_tree(&tree_name)?;
+    //             trees.insert(tree_name.clone(), tree);
+    //         }
+    //
+    //         let tree = trees.get(&tree_name).unwrap();
+    //
+    //         let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
+    //
+    //         tree.insert(k, v)?;
+    //
+    //         if let RaftStoreEntry::Logs { key: _, value } = kv_entry {
+    //             max_log_id = std::cmp::max(max_log_id, Some(value.log_id));
+    //         };
+    //     }
+    //
+    //     n += 1;
+    // }
+    //
+    // for tree in trees.values() {
+    //     tree.flush()?;
+    // }
+    //
+    // tx.send(WriteEntry::Finish(())).await?;
+    //
+    // let (temp_snapshot_data, snapshot_stat) = join_handle.await??;
+    //
+    // let (snapshot_id, snapshot_data) = snapshot_store.commit_snapshot_data_gen_id(
+    //     temp_snapshot_data,
+    //     last_applied,
+    //     snapshot_stat.entry_cnt,
+    // )?;
+    //
+    // eprintln!(
+    //     "Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
+    //     n,
+    //     snapshot_id.to_string(),
+    //     snapshot_data.path(),
+    //     snapshot_stat,
+    // );
+    // Ok(max_log_id)
+}
+
+/// Import serialized lines for `DataVersion::V003`
+///
+/// While importing, the max log id is also returned.
+///
+/// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
+async fn import_v003(
+    config: &Config,
+    lines: impl IntoIterator<Item = Result<String, io::Error>>,
+) -> anyhow::Result<Option<LogId>> {
     let raft_config: RaftConfig = config.clone().into();
 
     let db = get_sled_db();
@@ -174,13 +266,15 @@ async fn import_v002(
     let mut max_log_id: Option<LogId> = None;
     let mut trees = BTreeMap::new();
 
-    let snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
+    let sys_data = Arc::new(Mutex::new(SysData::default()));
 
+    let snapshot_store = SnapshotStoreV003::new(raft_config);
     let writer = snapshot_store.new_writer()?;
+    let (tx, join_handle) = writer.spawn_writer_thread("import_v003");
 
-    let (tx, join_handle) = writer.spawn_writer_thread("import_v002");
-
-    let mut last_applied = None;
+    let mut converter = LineConvertV002ToV003 {
+        sys_data: sys_data.clone(),
+    };
 
     for line in lines {
         let l = line?;
@@ -192,11 +286,10 @@ async fn import_v002(
                 anyhow::anyhow!("Failed to convert RaftStoreEntry to SMEntry: {}", err_str)
             })?;
 
-            if let Some(last) = sm_entry.last_applied() {
-                last_applied = Some(last);
+            let kv = converter.sm_entry_to_rotbl_kv(sm_entry)?;
+            if let Some(kv) = kv {
+                tx.send(WriteEntry::Data(kv)).await?;
             }
-
-            tx.send(WriteEntry::Data(sm_entry)).await?;
         } else {
             // Write to sled tree
             if !trees.contains_key(&tree_name) {
@@ -222,22 +315,27 @@ async fn import_v002(
         tree.flush()?;
     }
 
-    tx.send(WriteEntry::Finish).await?;
+    let s = {
+        let r = sys_data.lock().unwrap();
+        r.clone()
+    };
 
-    let (temp_snapshot_data, snapshot_stat) = join_handle.await??;
+    tx.send(WriteEntry::Finish(s)).await?;
+    let temp_snapshot_data = join_handle.await??;
 
-    let (snapshot_id, snapshot_data) = snapshot_store.commit_snapshot_data_gen_id(
-        temp_snapshot_data,
-        last_applied,
-        snapshot_stat.entry_cnt,
-    )?;
+    let last_applied = {
+        let r = sys_data.lock().unwrap();
+        *r.last_applied_ref()
+    };
+    let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied);
+    let db = temp_snapshot_data.move_to_final_path(snapshot_id.to_string())?;
 
     eprintln!(
         "Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
         n,
         snapshot_id.to_string(),
-        snapshot_data.path(),
-        snapshot_stat,
+        db.path(),
+        db.stat()
     );
     Ok(max_log_id)
 }

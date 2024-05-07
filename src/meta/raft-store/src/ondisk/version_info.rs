@@ -100,6 +100,16 @@ impl VersionInfo {
             "Persistent snapshot, in-memory state-machine",
         )
     }
+
+    const fn v003() -> Self {
+        // TODO(rotbl): update these values when merged.
+        Self::new(
+            "3694e259c8e7c227fadfac5faa881cd2f2af6bbe",
+            "2024-05-31",
+            new_semver(1, 2, 53),
+            "Persistent snapshot in rotbl, rotbl backed in-memory state-machine",
+        )
+    }
 }
 
 pub static VERSION_INFOS: std::sync::LazyLock<BTreeMap<DataVersion, VersionInfo>> =
@@ -108,6 +118,7 @@ pub static VERSION_INFOS: std::sync::LazyLock<BTreeMap<DataVersion, VersionInfo>
             DataVersion::V0 => VersionInfo::v0(),
             DataVersion::V001 => VersionInfo::v001() ,
             DataVersion::V002 => VersionInfo::v002() ,
+            DataVersion::V003 => VersionInfo::v003() ,
         }
     });
 
