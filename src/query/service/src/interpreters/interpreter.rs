@@ -98,6 +98,7 @@ pub trait Interpreter: Sync + Send {
         };
 
         if build_res.main_pipeline.is_empty() {
+            log_query_finished(&ctx, None, false);
             return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
