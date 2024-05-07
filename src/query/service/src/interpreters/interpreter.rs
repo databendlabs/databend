@@ -63,12 +63,19 @@ pub trait Interpreter: Sync + Send {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-        ctx.set_status_info("building pipeline");
-        InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);
+        match self.execute_inner(ctx.clone()).await {
+            Ok(stream) => Ok(stream),
+            Err(err) => {
+                log_query_finished(&ctx, Some(err.clone()), false);
+                Err(err)
+            }
+        }
+    }
 
+    async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        ctx.set_status_info("building pipeline");
         if let Err(err) = ctx.check_aborting() {
-            log_query_finished(&ctx, Some(err.clone()), false);
             return Err(err);
         }
         if self.is_ddl() {
@@ -78,25 +85,19 @@ pub trait Interpreter: Sync + Send {
             ctx.clear_tables_cache();
         }
         if !self.is_txn_command() && ctx.txn_mgr().lock().is_fail() {
-            let error = ErrorCode::CurrentTransactionIsAborted(
+            let err = ErrorCode::CurrentTransactionIsAborted(
                 "current transaction is aborted, commands ignored until end of transaction block",
             );
-            log_query_finished(&ctx, Some(error.clone()), false);
-            return Err(error);
+            return Err(err);
         }
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
-            Err(build_error) => {
-                InterpreterMetrics::record_query_error(&ctx);
-                log_query_finished(&ctx, Some(build_error.clone()), false);
-                return Err(build_error);
+            Err(err) => {
+                return Err(err);
             }
         };
 
         if build_res.main_pipeline.is_empty() {
-            InterpreterMetrics::record_query_finished(&ctx, None);
-            log_query_finished(&ctx, None, false);
-
             return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
@@ -134,7 +135,6 @@ pub trait Interpreter: Sync + Send {
                 Err(e) => Some(e.clone()),
             };
 
-            InterpreterMetrics::record_query_finished(&query_ctx, err_opt.clone());
             log_query_finished(&query_ctx, err_opt, has_profiles);
 
             match may_error {
@@ -187,6 +187,7 @@ pub trait Interpreter: Sync + Send {
 pub type InterpreterPtr = Arc<dyn Interpreter>;
 
 fn log_query_start(ctx: &QueryContext) {
+    InterpreterMetrics::record_query_start(&ctx);
     let now = SystemTime::now();
     let session = ctx.get_current_session();
 
@@ -200,6 +201,8 @@ fn log_query_start(ctx: &QueryContext) {
 }
 
 fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
+    InterpreterMetrics::record_query_finished(&ctx, error.clone());
+
     let now = SystemTime::now();
     let session = ctx.get_current_session();
 
