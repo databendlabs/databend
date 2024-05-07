@@ -17,6 +17,8 @@ mod marked_test;
 
 mod internal_seq;
 
+mod marked_impl;
+
 use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
@@ -31,7 +33,7 @@ use crate::state_machine::ExpireValue;
 /// A deleted tombstone also have `internal_seq`, while for an application, deleted entry has seq=0.
 /// A normal entry(non-deleted) has a positive `seq` that is same as the corresponding `internal_seq`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Marked<T = Vec<u8>> {
+pub enum Marked<T = Vec<u8>> {
     TombStone {
         internal_seq: u64,
     },
@@ -94,7 +96,18 @@ impl<T> Marked<T> {
         Marked::TombStone { internal_seq: 0 }
     }
 
+    /// Return a key to determine which one of the values of the same key are the last inserted.
+    pub(crate) fn order_key(&self) -> InternalSeq {
+        match self {
+            Marked::TombStone { internal_seq: seq } => InternalSeq::tombstone(*seq),
+            Marked::Normal {
+                internal_seq: seq, ..
+            } => InternalSeq::normal(*seq),
+        }
+    }
+
     /// Get internal sequence number. Both None and Normal have sequence number.
+    #[allow(dead_code)]
     pub(crate) fn internal_seq(&self) -> InternalSeq {
         match self {
             Marked::TombStone { internal_seq: seq } => InternalSeq::tombstone(*seq),
@@ -128,22 +141,14 @@ impl<T> Marked<T> {
 
     /// Return the one with the larger sequence number.
     pub fn max(a: Self, b: Self) -> Self {
-        if a.internal_seq() > b.internal_seq() {
-            a
-        } else {
-            b
-        }
+        if a.order_key() > b.order_key() { a } else { b }
     }
 
     /// Return the one with the larger sequence number.
     // Not used, may be useful.
     #[allow(dead_code)]
     pub fn max_ref<'l>(a: &'l Self, b: &'l Self) -> &'l Self {
-        if a.internal_seq() > b.internal_seq() {
-            a
-        } else {
-            b
-        }
+        if a.order_key() > b.order_key() { a } else { b }
     }
 
     pub fn new_tombstone(internal_seq: u64) -> Self {
@@ -187,16 +192,14 @@ impl<T> Marked<T> {
 
     /// Return if the entry is neither a normal entry nor a tombstone.
     pub fn not_found(&self) -> bool {
-        matches!(self, Marked::TombStone {
-            internal_seq: 0,
-            ..
-        })
+        matches!(self, Marked::TombStone { internal_seq: 0 })
     }
 
     pub fn is_tombstone(&self) -> bool {
         matches!(self, Marked::TombStone { .. })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn is_normal(&self) -> bool {
         matches!(self, Marked::Normal { .. })
     }
