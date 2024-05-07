@@ -74,8 +74,6 @@ comfy-table = "6"
 databend-common-ast = { path = "../ast" }
 env_logger = { workspace = true }
 goldenfile = "1.4"
-once_cell = { workspace = true }
-parking_lot = { workspace = true }
 
 [[bench]]
 name = "bench"

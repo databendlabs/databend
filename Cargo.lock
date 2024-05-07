@@ -3331,7 +3331,6 @@ dependencies = [
  "num-traits",
  "once_cell",
  "ordered-float 4.2.0",
- "parking_lot 0.12.1",
  "rand 0.8.5",
  "regex",
  "roaring",
