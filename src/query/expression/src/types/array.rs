@@ -370,7 +370,12 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
     pub fn append_column(&mut self, other: &ArrayColumn<T>) {
         // the first offset of other column may not be zero
         let other_start = *other.offsets.first().unwrap() as usize;
-        let other_end = *other.offsets.last().unwrap() as usize;
+        let mut other_end = *other.offsets.last().unwrap() as usize;
+
+        if other_end == 0 {
+            other_end = T::column_len(&other.values);
+        }
+
         let other_values = T::slice_column(&other.values, other_start..other_end);
         T::append_column(&mut self.builder, &other_values);
 

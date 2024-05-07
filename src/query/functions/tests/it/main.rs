@@ -17,24 +17,13 @@
 #![feature(trait_alias)]
 #![feature(iter_collect_into)]
 #![allow(clippy::arc_with_non_send_sync)]
-
-use once_cell::sync::Lazy;
-use parking_lot::Mutex;
+use ctor::ctor;
 
 // We can generate new test files via using `env REGENERATE_GOLDENFILES=1 cargo test` and `git diff` to show differs
 mod aggregates;
 mod scalars;
 
-static TRACING_INITIALIZED: Lazy<Mutex<()>> = Lazy::new(|| {
-    // This code block is executed only once, regardless of how many times it's called
+#[ctor]
+fn ensure_tracing_initialized() {
     env_logger::init();
-    Mutex::new(())
-});
-
-pub(crate) fn ensure_tracing_initialized() {
-    // The lock is acquired here to ensure thread-safe access, but since we're only
-    // interested in initializing the tracing subscriber, which itself is thread-safe
-    // and meant to be called once, the lock is not used further.
-    let _guard = TRACING_INITIALIZED.lock();
-    // At this point, tracing_subscriber::fmt::init() has already been called once.
 }

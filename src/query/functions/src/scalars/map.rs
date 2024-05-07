@@ -15,6 +15,7 @@
 use std::hash::Hash;
 
 use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::EmptyMapType;
@@ -22,6 +23,7 @@ use databend_common_expression::types::GenericType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
@@ -155,5 +157,113 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<1>>>(
             |map, _| map.values
         ),
+    );
+
+    registry.register_2_arg_core::<NullableType<EmptyMapType>, NullableType<EmptyMapType>, EmptyMapType, _, _>(
+        "map_cat",
+        |_, _, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "map_cat",
+        |_, domain1, domain2| {
+            FunctionDomain::Domain(match (domain1, domain2) {
+                (Some((key_domain1, val_domain1)), Some((key_domain2, val_domain2))) => Some((
+                    key_domain1.merge(key_domain2),
+                    val_domain1.merge(val_domain2),
+                )),
+                (Some(domain1), None) => Some(domain1).cloned(),
+                (None, Some(domain2)) => Some(domain2).cloned(),
+                (None, None) => None,
+            })
+        },
+        vectorize_with_builder_2_arg::<
+            MapType<GenericType<0>, GenericType<1>>,
+            MapType<GenericType<0>, GenericType<1>>,
+            MapType<GenericType<0>, GenericType<1>>,
+        >(|lhs, rhs, output_map, _| {
+            let capacity = lhs.len();
+            let mut lhs_key_set: StackHashSet<u128, 16> = StackHashSet::with_capacity(capacity);
+
+            log::info!("lhs :: {:#?}", lhs);
+            lhs.iter().for_each(|(key, value)| {
+                let mut hasher = SipHasher24::new();
+                key.hash(&mut hasher);
+                let hash128 = hasher.finish128();
+                let hash_key = hash128.into();
+                let _ = lhs_key_set.set_insert(hash_key);
+                output_map.put_item((key, value))
+            });
+
+            log::info!("rhs :: {:#?}", rhs);
+
+            rhs.iter().for_each(|(key, value)| {
+                let mut hasher = SipHasher24::new();
+                key.hash(&mut hasher);
+                let hash128 = hasher.finish128();
+                let hash_key = hash128.into();
+                if lhs_key_set.contains(&hash_key) {
+                    log::warn!("detected duplicate map key, replacing it with rhs map key");
+                }
+                output_map.put_item((key, value))
+            });
+
+            log::info!("output_map :: {:#?}", output_map);
+
+            output_map.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "map_cat_impl2",
+        |_, domain1, domain2| {
+            FunctionDomain::Domain(match (domain1, domain2) {
+                (Some((key_domain1, val_domain1)), Some((key_domain2, val_domain2))) => Some((
+                    key_domain1.merge(key_domain2),
+                    val_domain1.merge(val_domain2),
+                )),
+                (Some(domain1), None) => Some(domain1).cloned(),
+                (None, Some(domain2)) => Some(domain2).cloned(),
+                (None, None) => None,
+            })
+        },
+        vectorize_with_builder_2_arg::<
+            MapType<GenericType<0>, GenericType<1>>,
+            MapType<GenericType<0>, GenericType<1>>,
+            MapType<GenericType<0>, GenericType<1>>,
+        >(|lhs, rhs, output_map, ctx| {
+            let capacity = lhs.len() + rhs.len();
+
+            let mut concatenated_map_builder = ArrayType::create_builder(capacity, ctx.generics);
+
+            let mut lhs_key_set: StackHashSet<u128, 16> = StackHashSet::with_capacity(lhs.len());
+
+            lhs.iter().for_each(|(key, value)| {
+                let mut hasher = SipHasher24::new();
+                key.hash(&mut hasher);
+                let hash128 = hasher.finish128();
+                let hash_key = hash128.into();
+                let _ = lhs_key_set.set_insert(hash_key);
+                concatenated_map_builder.put_item((key, value))
+            });
+
+            rhs.iter().for_each(|(key, value)| {
+                let mut hasher = SipHasher24::new();
+                key.hash(&mut hasher);
+                let hash128 = hasher.finish128();
+                let hash_key = hash128.into();
+                if lhs_key_set.contains(&hash_key) {
+                    log::warn!("detected duplicate map key, replacing it with rhs map key");
+                }
+                concatenated_map_builder.put_item((key, value))
+            });
+
+            let concatenated_map = ArrayType::build_column(concatenated_map_builder);
+
+            output_map.append_column(&concatenated_map);
+
+            output_map.commit_row();
+        }),
     );
 }

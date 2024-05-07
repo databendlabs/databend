@@ -54,6 +54,7 @@ ordered-float = { workspace = true, features = [
     "rand",
 ] }
 #proj = { version = "0.27.2", features = ["geo-types", "bundled_proj"] }
+log = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"
@@ -67,16 +68,14 @@ siphasher = "0.3"
 strength_reduce = "0.2.3"
 stringslice = "0.2.0"
 twox-hash = "1.6.3"
-log = { workspace = true }
 
 [dev-dependencies]
 comfy-table = "6"
 databend-common-ast = { path = "../ast" }
+env_logger = { workspace = true }
 goldenfile = "1.4"
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
-env_logger = { workspace = true }
-
 
 [[bench]]
 name = "bench"

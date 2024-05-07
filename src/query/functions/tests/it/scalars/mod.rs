@@ -45,7 +45,6 @@ mod geo_h3;
 mod geometry;
 mod hash;
 mod map;
-mod map_ops;
 mod math;
 mod misc;
 mod other;

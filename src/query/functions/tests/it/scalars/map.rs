@@ -29,6 +29,8 @@ fn test_map() {
     test_get(file);
     test_map_keys(file);
     test_map_values(file);
+    test_map_cat_ops_basic(file);
+    test_map_cat_impl2_ops_basic(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -141,6 +143,40 @@ fn test_map_values(file: &mut impl Write) {
     run_ast(
         file,
         "map_values(map([a_col, b_col, c_col], [d_col, e_col, f_col]))",
+        &columns,
+    );
+}
+
+fn test_map_cat_ops_basic(file: &mut impl Write) {
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
+        ("b_col", StringType::from_data(vec!["b_k1", "b_k2", "b_k3"])),
+        ("c_col", StringType::from_data(vec!["c_k1", "c_k2", "c_k3"])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", StringType::from_data(vec!["bbb1", "bbb2", "bbb3"])),
+        ("f_col", StringType::from_data(vec!["ccc1", "ccc2", "ccc3"])),
+    ];
+
+    run_ast(
+        file,
+        "map_cat(map([a_col, b_col], [d_col, e_col]), map([c_col], [f_col]))",
+        &columns,
+    );
+}
+
+fn test_map_cat_impl2_ops_basic(file: &mut impl Write) {
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
+        ("b_col", StringType::from_data(vec!["b_k1", "b_k2", "b_k3"])),
+        ("c_col", StringType::from_data(vec!["c_k1", "c_k2", "c_k3"])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", StringType::from_data(vec!["bbb1", "bbb2", "bbb3"])),
+        ("f_col", StringType::from_data(vec!["ccc1", "ccc2", "ccc3"])),
+    ];
+
+    run_ast(
+        file,
+        "map_cat_impl2(map([a_col, b_col], [d_col, e_col]), map([c_col], [f_col]))",
         &columns,
     );
 }
