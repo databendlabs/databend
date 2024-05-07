@@ -16,8 +16,6 @@ mod errors;
 mod forwarder;
 mod meta_node_kv_api_impl;
 
-pub(crate) mod snapshot_receiver;
-
 pub mod meta_leader;
 pub mod meta_node;
 pub mod raft_service_impl;

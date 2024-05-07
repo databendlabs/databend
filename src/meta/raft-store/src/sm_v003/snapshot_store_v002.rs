@@ -16,9 +16,8 @@ use std::fmt::Display;
 use std::fs;
 use std::io;
 use std::str::FromStr;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
+use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::ErrorSubject;
 use databend_common_meta_types::LogId;
 use databend_common_meta_types::SnapshotData;
@@ -35,7 +34,8 @@ use openraft::SnapshotId;
 
 use crate::config::RaftConfig;
 use crate::ondisk::DataVersion;
-use crate::sm_v002::WriterV002;
+use crate::sm_v003::writer_v002::WriterV002;
+use crate::snapshot_config::SnapshotConfig;
 use crate::state_machine::MetaSnapshotId;
 
 /// Errors that occur when accessing snapshot store
@@ -98,51 +98,36 @@ impl From<SnapshotStoreError> for StorageError {
     }
 }
 
+impl From<SnapshotStoreError> for MetaStorageError {
+    fn from(value: SnapshotStoreError) -> Self {
+        MetaStorageError::snapshot_error(&value.source, || {
+            format!("when {}: {}", value.verb, value.context)
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct SnapshotStoreV002 {
-    data_version: DataVersion,
-    config: RaftConfig,
+    snapshot_config: SnapshotConfig,
 }
 
 impl SnapshotStoreV002 {
-    const TEMP_PREFIX: &'static str = "0.snap";
-
-    pub fn new(data_version: DataVersion, config: RaftConfig) -> Self {
+    pub fn new(config: RaftConfig) -> Self {
         SnapshotStoreV002 {
-            data_version,
-            config,
+            snapshot_config: SnapshotConfig::new(DataVersion::V002, config),
         }
     }
 
     pub fn data_version(&self) -> DataVersion {
-        self.data_version
+        self.snapshot_config.data_version()
     }
 
-    pub fn snapshot_dir(&self) -> String {
-        format!(
-            "{}/df_meta/{}/snapshot",
-            self.config.raft_dir, self.data_version
-        )
+    pub fn snapshot_config(&self) -> &SnapshotConfig {
+        &self.snapshot_config
     }
 
-    pub fn snapshot_path(&self, snapshot_id: &SnapshotId) -> String {
-        format!("{}/{}", self.snapshot_dir(), Self::snapshot_fn(snapshot_id))
-    }
-
-    pub fn snapshot_fn(snapshot_id: &SnapshotId) -> String {
-        format!("{}.snap", snapshot_id)
-    }
-
-    pub fn snapshot_temp_path(&self) -> String {
-        // Sleep to avoid timestamp collision when this function is called twice in a short time.
-        std::thread::sleep(std::time::Duration::from_millis(2));
-
-        let ts = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-
-        format!("{}/{}-{}", self.snapshot_dir(), Self::TEMP_PREFIX, ts)
+    pub fn config(&self) -> &RaftConfig {
+        self.snapshot_config.raft_config()
     }
 
     /// Return a list of valid snapshot ids found in the snapshot directory.
@@ -165,60 +150,6 @@ impl SnapshotStoreV002 {
         Ok(Some((id, data)))
     }
 
-    /// Keep several latest snapshots and cleanup the rest.
-    pub async fn clean_old_snapshots(&self) -> Result<(), SnapshotStoreError> {
-        let dir = self.ensure_snapshot_dir()?;
-
-        info!("cleaning old snapshots in {}", dir);
-
-        let (snapshot_ids, mut invalid_files) = self.load_snapshot_ids().await?;
-
-        // The last several temp files may be in use by snapshot transmitting.
-        // And do not delete them at once.
-        {
-            let l = invalid_files.len();
-            if l > 2 {
-                invalid_files = invalid_files.into_iter().take(l - 2).collect();
-            } else {
-                invalid_files = vec![];
-            }
-        }
-
-        for invalid_file in invalid_files {
-            let path = format!("{}/{}", dir, invalid_file);
-
-            warn!("removing invalid snapshot file: {}", path);
-
-            tokio::fs::remove_file(&path).await.map_err(|e| {
-                SnapshotStoreError::write(e).with_context(format_args!("removing {}", &path))
-            })?;
-        }
-
-        // Keep the last several snapshots, remove others
-        let n = 3;
-        if snapshot_ids.len() <= n {
-            info!(
-                "no need to clean snapshots(keeps {} snapshots): {:?}",
-                n, snapshot_ids
-            );
-            return Ok(());
-        }
-
-        info!("cleaning snapshots, keep last {}: {:?}", n, snapshot_ids);
-
-        for snapshot_id in snapshot_ids.iter().take(snapshot_ids.len() - n) {
-            let path = self.snapshot_path(&snapshot_id.to_string());
-
-            info!("removing old snapshot file: {}", path);
-
-            tokio::fs::remove_file(&path).await.map_err(|e| {
-                SnapshotStoreError::write(e).with_context(format_args!("removing {}", &path))
-            })?;
-        }
-
-        Ok(())
-    }
-
     /// Return a list of valid snapshot ids and invalid file names found in the snapshot directory.
     ///
     /// The valid snapshot ids are sorted, older first.
@@ -228,7 +159,10 @@ impl SnapshotStoreV002 {
         let mut snapshot_ids = vec![];
         let mut invalid_files = vec![];
 
-        let dir = self.ensure_snapshot_dir()?;
+        let dir = self
+            .snapshot_config
+            .ensure_snapshot_dir()
+            .map_err(SnapshotStoreError::write)?;
 
         let mut read_dir = tokio::fs::read_dir(&dir)
             .await
@@ -268,16 +202,17 @@ impl SnapshotStoreV002 {
     }
 
     pub fn new_writer(&self) -> Result<WriterV002, SnapshotStoreError> {
-        self.ensure_snapshot_dir()
-            .map_err(|e| e.with_context("creating snapshot writer"))?;
+        self.snapshot_config
+            .ensure_snapshot_dir()
+            .map_err(|e| SnapshotStoreError::write(e).with_meta("creating snapshot writer", ""))?;
 
-        WriterV002::new(self)
+        WriterV002::new(&self.snapshot_config)
             .map_err(|e| SnapshotStoreError::write(e).with_context("creating snapshot writer"))
     }
 
     /// Create a temp and empty snapshot data to receive snapshot from remote.
     pub async fn new_temp(&self) -> Result<SnapshotData, io::Error> {
-        let p = self.snapshot_temp_path();
+        let p = self.snapshot_config.snapshot_temp_path();
 
         SnapshotData::new_temp(p).await
     }
@@ -304,7 +239,7 @@ impl SnapshotStoreV002 {
             warn!("snapshot_id.key_num is not set: {:?}", snapshot_id);
         }
 
-        let final_path = self.snapshot_path(&snapshot_id.to_string());
+        let final_path = self.snapshot_config.snapshot_path(&snapshot_id.to_string());
         let d = temp.commit(final_path.clone())?;
 
         info!(
@@ -321,9 +256,11 @@ impl SnapshotStoreV002 {
         &self,
         snapshot_id: &SnapshotId,
     ) -> Result<SnapshotData, SnapshotStoreError> {
-        self.ensure_snapshot_dir()?;
+        self.snapshot_config
+            .ensure_snapshot_dir()
+            .map_err(SnapshotStoreError::write)?;
 
-        let path = self.snapshot_path(snapshot_id);
+        let path = self.snapshot_config.snapshot_path(snapshot_id);
 
         let d = SnapshotData::open(path.clone()).map_err(|e| {
             error!("failed to open snapshot file({}): {}", path, e);
@@ -350,7 +287,7 @@ impl SnapshotStoreV002 {
             .await
             .map_err(|e| SnapshotStoreError::read(e).with_meta("temp.sync_all(): {}", &src))?;
 
-        let dst = self.snapshot_path(&meta.snapshot_id);
+        let dst = self.snapshot_config.snapshot_path(&meta.snapshot_id);
 
         fs::rename(&src, &dst).map_err(|e| {
             SnapshotStoreError::read(e).with_context(format_args!("rename: {} to {}", &src, &dst))
@@ -359,16 +296,6 @@ impl SnapshotStoreV002 {
         let d = self.load_snapshot(&meta.snapshot_id).await?;
 
         Ok(d)
-    }
-
-    /// Make directory for snapshot if it does not exist and return the snapshot directory.
-    fn ensure_snapshot_dir(&self) -> Result<String, SnapshotStoreError> {
-        let dir = self.snapshot_dir();
-
-        fs::create_dir_all(&dir)
-            .map_err(|e| SnapshotStoreError::write(e).with_meta("creating snapshot dir", &dir))?;
-
-        Ok(dir)
     }
 
     fn extract_snapshot_id_from_fn(filename: &str) -> Option<&str> {
@@ -384,32 +311,5 @@ impl SnapshotStoreV002 {
         let s = context.to_string();
         error!("{} while context: {}", e, s);
         SnapshotStoreError::read(e).with_context(context)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::config::RaftConfig;
-    use crate::ondisk::DATA_VERSION;
-
-    #[test]
-    fn test_temp_path_no_dup() -> anyhow::Result<()> {
-        let temp = tempfile::tempdir()?;
-        let p = temp.path();
-        let raft_config = RaftConfig {
-            raft_dir: p.to_str().unwrap().to_string(),
-            ..Default::default()
-        };
-
-        let store = super::SnapshotStoreV002::new(DATA_VERSION, raft_config);
-
-        let mut prev = None;
-        for _i in 0..10 {
-            let path = store.snapshot_temp_path();
-            assert_ne!(prev, Some(path.clone()), "dup: {}", path);
-            prev = Some(path);
-        }
-
-        Ok(())
     }
 }
