@@ -21,12 +21,12 @@ use pretty_assertions::assert_eq;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::marked::Marked;
-use crate::sm_v002::SMV002;
+use crate::sm_v003::SMV003;
 use crate::state_machine::ExpireKey;
 
 #[tokio::test]
 async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
-    let mut sm = SMV002::default();
+    let mut sm = SMV003::default();
 
     let mut a = sm.new_applier();
     let (prev, result) = a.upsert_kv(&UpsertKV::update("a", b"a0")).await?;
@@ -75,7 +75,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     // |   a/b(D) c d
     // | a a/b    c
 
-    let mut sm = SMV002::default();
+    let mut sm = SMV003::default();
     let mut a = sm.new_applier();
 
     // internal_seq = 0
@@ -137,7 +137,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_update_expire_index() -> anyhow::Result<()> {
-    let mut sm = SMV002::default();
+    let mut sm = SMV003::default();
 
     sm.update_expire_cursor(1);
     assert_eq!(sm.expire_cursor, ExpireKey::new(1, 0));
@@ -162,8 +162,8 @@ async fn test_update_expire_index() -> anyhow::Result<()> {
 /// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
-async fn build_sm_with_expire() -> anyhow::Result<SMV002> {
-    let mut sm = SMV002::default();
+async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
+    let mut sm = SMV003::default();
     let mut a = sm.new_applier();
 
     a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))

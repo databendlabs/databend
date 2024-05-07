@@ -28,18 +28,9 @@ use tokio::task::JoinHandle;
 
 use crate::key_spaces::SMEntry;
 use crate::ondisk::DataVersion;
-use crate::ondisk::DATA_VERSION;
-use crate::sm_v002::SnapshotStat;
-use crate::sm_v002::SnapshotStoreV002;
-
-/// A write entry sent to snapshot writer.
-///
-/// A `Finish` entry indicates the end of the data.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WriteEntry<T> {
-    Data(T),
-    Finish,
-}
+use crate::sm_v003::SnapshotStat;
+use crate::sm_v003::WriteEntry;
+use crate::snapshot_config::SnapshotConfig;
 
 /// Write json lines snapshot data to [`SnapshotStoreV002`].
 pub struct WriterV002 {
@@ -63,31 +54,9 @@ pub struct WriterV002 {
 }
 
 impl WriterV002 {
-    /// Create a writer from a temp snapshot data [`TempSnapshotData`].
-    pub async fn new_from_temp_snapshot_data(
-        temp_snapshot_data: TempSnapshotData,
-    ) -> Result<Self, io::Error> {
-        let ss_data = temp_snapshot_data.into_inner();
-        let path = ss_data.path().to_string();
-        let f = ss_data.into_std().await;
-
-        let buffered_file = BufWriter::with_capacity(16 * 1024 * 1024, f);
-
-        let writer = WriterV002 {
-            temp_path: path,
-            inner: buffered_file,
-            cnt: 0,
-            next_progress_cnt: 1000,
-            start_time: std::time::Instant::now(),
-            data_version: DATA_VERSION,
-        };
-
-        Ok(writer)
-    }
-
     /// Create a singleton writer for the snapshot.
-    pub fn new(snapshot_store: &SnapshotStoreV002) -> Result<Self, io::Error> {
-        let temp_path = snapshot_store.snapshot_temp_path();
+    pub fn new(snapshot_config: &SnapshotConfig) -> Result<Self, io::Error> {
+        let temp_path = snapshot_config.snapshot_temp_path();
 
         let f = fs::OpenOptions::new()
             .create_new(true)
@@ -103,7 +72,7 @@ impl WriterV002 {
             cnt: 0,
             next_progress_cnt: 1000,
             start_time: std::time::Instant::now(),
-            data_version: snapshot_store.data_version(),
+            data_version: snapshot_config.data_version(),
         };
 
         Ok(writer)
@@ -159,7 +128,7 @@ impl WriterV002 {
 
             let ent = match ent {
                 WriteEntry::Data(ent) => ent,
-                WriteEntry::Finish => {
+                WriteEntry::Finish(_) => {
                     info!("received Commit, written {} entries, quit", self.cnt);
                     return Ok(self);
                 }

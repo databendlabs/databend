@@ -16,6 +16,7 @@
 
 mod data_version;
 mod header;
+pub(crate) mod upgrade_to_v003;
 pub(crate) mod version_info;
 
 use std::collections::BTreeSet;
@@ -33,7 +34,7 @@ use openraft::AnyError;
 use crate::config::RaftConfig;
 use crate::key_spaces::DataHeader;
 use crate::log::TREE_RAFT_LOG;
-use crate::sm_v002::SnapshotStoreV002;
+use crate::sm_v003::SnapshotStoreV002;
 use crate::state::TREE_RAFT_STATE;
 
 /// The sled tree name to store the data versions.
@@ -152,8 +153,7 @@ impl OnDisk {
                     unreachable!("Upgrading to V001 is not supported since 2024-06-12, 1.2.*");
                 }
                 DataVersion::V002 => {
-                    let snapshot_store =
-                        SnapshotStoreV002::new(DataVersion::V002, self.config.clone());
+                    let snapshot_store = SnapshotStoreV002::new(self.config.clone());
 
                     let last_snapshot = snapshot_store.load_last_snapshot().await.map_err(|e| {
                         let ae = AnyError::new(&e).add_context(|| "load last snapshot");
@@ -169,6 +169,9 @@ impl OnDisk {
                         // Note that this will increase `header.version`.
                         self.finish_upgrading().await?;
                     }
+                }
+                DataVersion::V003 => {
+                    self.clean_in_progress_v002_to_v003().await?;
                 }
             }
 
@@ -195,6 +198,9 @@ impl OnDisk {
                     )
                 }
                 DataVersion::V002 => {
+                    self.upgrade_v002_to_v003().await?;
+                }
+                DataVersion::V003 => {
                     unreachable!("{} is the latest version", self.header.version)
                 }
             }
