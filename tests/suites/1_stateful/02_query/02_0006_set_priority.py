@@ -37,9 +37,7 @@ with NativeClient(name="client1>") as client1:
     adjust_priority_query = "set priority high '" + query_id + "';"
     mycursor.execute(adjust_priority_query)
 
-    res = mycursor.fetchone()
     time.sleep(0.2)
 
     kill_query = "kill query '" + query_id + "';"
     mycursor.execute(kill_query)
-    res = mycursor.fetchone()
