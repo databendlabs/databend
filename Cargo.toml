@@ -274,6 +274,15 @@ opendal = { version = "0.47.0", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
+# openraft for debugging
+# openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
+openraft = { version = "0.9.11", features = [
+    "serde",
+    "tracing-log",
+    "generic-snapshot-data",
+    "storage-v2",
+    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
+] }
 opentelemetry = { version = "0.22", features = ["trace", "logs"] }
 opentelemetry-otlp = { version = "0.15", features = [
     "trace",
@@ -302,6 +311,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "rustls-tls-native-roots",
 ] }
 reqwest-hickory-resolver = "0.1"
+rotbl = { git = "https://github.com/drmingdrmer/rotbl", tag = "v0.1.2-alpha.6", features = [] }
 semver = "1.0.14"
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
@@ -325,15 +335,6 @@ typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 xorfilter-rs = "0.5"
-# openraft for debugging
-# openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
-openraft = { version = "0.9.9", features = [
-    "serde",
-    "tracing-log",
-    "generic-snapshot-data",
-    "storage-v2",
-    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
-] }
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"

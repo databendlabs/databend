@@ -14,8 +14,11 @@
 
 //! [`MapApi`] and [`MapApiRO`] defines the behavior of a key-value map and readonly key-value map.
 
+mod map_api_ro_impl;
+
 use std::borrow::Borrow;
 use std::fmt;
+use std::fmt::Write;
 use std::io;
 use std::ops::RangeBounds;
 
@@ -29,13 +32,22 @@ use crate::leveled_store::util;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
 
+pub trait MapKeyEncode {
+    /// PREFIX is the prefix of the key used to define key space in the on-disk storage.
+    const PREFIX: &'static str;
+
+    fn encode<W: Write>(&self, w: W) -> Result<(), fmt::Error>;
+}
+
 /// MapKey defines the behavior of a key in a map.
 ///
 /// It is `Clone` to let MapApi clone a range of key.
 /// It is `Unpin` to let MapApi extract a key from pinned data, such as a stream.
 /// And it only accepts `'static` value for simplicity.
-pub(crate) trait MapKey: Clone + Ord + fmt::Debug + Send + Sync + Unpin + 'static {
+pub trait MapKey: MapKeyEncode + Clone + Ord + fmt::Debug + Send + Sync + Unpin + 'static {
     type V: MapValue;
+
+    fn decode(buf: &str) -> Result<Self, io::Error>;
 }
 
 /// MapValue defines the behavior of a value in a map.
@@ -43,7 +55,7 @@ pub(crate) trait MapKey: Clone + Ord + fmt::Debug + Send + Sync + Unpin + 'stati
 /// It is `Clone` to let MapApi return an owned value.
 /// It is `Unpin` to let MapApi extract a value from pinned data, such as a stream.
 /// And it only accepts `'static` value for simplicity.
-pub(crate) trait MapValue: Clone + Send + Sync + Unpin + 'static {}
+pub trait MapValue: Clone + Send + Sync + Unpin + 'static {}
 
 /// A Marked value type of a key type.
 pub(crate) type MarkedOf<K> = Marked<<K as MapKey>::V>;
@@ -55,10 +67,10 @@ pub(crate) type MapKV<K> = (K, MarkedOf<K>);
 pub(crate) type Transition<T> = (T, T);
 
 /// A boxed stream of io results of key-value pair.
-pub(crate) type ResultStream<T> = BoxStream<'static, Result<T, io::Error>>;
+pub(crate) type IOResultStream<T> = BoxStream<'static, Result<T, io::Error>>;
 
 /// A stream of result of key-value returned by `range()`.
-pub(crate) type KVResultStream<K> = ResultStream<MapKV<K>>;
+pub(crate) type KVResultStream<K> = IOResultStream<MapKV<K>>;
 
 // Auto implement MapValue for all types that satisfy the constraints.
 impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}
@@ -75,14 +87,15 @@ impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}
 /// There is no lifetime constraint on the trait,
 /// and it's the implementation's duty to specify a valid lifetime constraint.
 #[async_trait::async_trait]
-pub(crate) trait MapApiRO<K>: Send + Sync
+pub trait MapApiRO<K>: Send + Sync
 where K: MapKey
 {
     /// Get an entry by key.
     async fn get<Q>(&self, key: &Q) -> Result<MarkedOf<K>, io::Error>
     where
         K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized;
+        Q: Ord + Send + Sync + ?Sized,
+        Q: MapKeyEncode;
 
     /// Iterate over a range of entries by keys.
     ///
@@ -93,7 +106,7 @@ where K: MapKey
 
 /// Trait for using Self as an implementation of the MapApi.
 #[allow(dead_code)]
-pub(crate) trait AsMap {
+pub trait AsMap {
     /// Use Self as an implementation of the [`MapApiRO`] (Read-Only) interface.
     fn as_map<K: MapKey>(&self) -> &impl MapApiRO<K>
     where Self: MapApiRO<K> + Sized {
@@ -131,7 +144,7 @@ impl<T> AsMap for T {}
 
 /// Provide a read-write key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
-pub(crate) trait MapApi<K>: MapApiRO<K>
+pub trait MapApi<K>: MapApiRO<K>
 where K: MapKey
 {
     /// Set an entry and returns the old value and the new value.
@@ -196,19 +209,29 @@ impl MapApiExt {
 ///
 /// Returns the first non-tombstone entry.
 ///
-/// `db` is the bottom level db.
-pub(crate) async fn compacted_get<'d, K, Q, L>(
+/// `persisted` is a series of persisted on disk levels.
+pub(crate) async fn compacted_get<'d, K, Q, L, PL>(
     key: &Q,
     levels: impl IntoIterator<Item = &'d L>,
+    persisted: impl IntoIterator<Item = &'d PL>,
 ) -> Result<MarkedOf<K>, io::Error>
 where
     K: MapKey,
     K: Borrow<Q>,
     Q: Ord + Send + Sync + ?Sized,
+    Q: MapKeyEncode,
     L: MapApiRO<K> + 'static,
+    PL: MapApiRO<K> + 'static,
 {
     for lvl in levels {
         let got = lvl.get(key).await?;
+        if !got.not_found() {
+            return Ok(got);
+        }
+    }
+
+    for p in persisted {
+        let got = p.get(key).await?;
         if !got.not_found() {
             return Ok(got);
         }
@@ -226,16 +249,20 @@ where
 /// The `L` is the type of immutable levels.
 ///
 /// Because the top level is very likely to be a different type from the immutable levels, i.e., it is writable.
-pub(crate) async fn compacted_range<'d, K, R, L, TOP>(
+///
+/// `persisted` is a series of persisted on disk levels that have different types.
+pub(crate) async fn compacted_range<'d, K, R, L, TOP, PL>(
     range: R,
     top: Option<&'d TOP>,
     levels: impl IntoIterator<Item = &'d L>,
+    persisted: impl IntoIterator<Item = &'d PL>,
 ) -> Result<KVResultStream<K>, io::Error>
 where
     K: MapKey,
     R: RangeBounds<K> + Clone + Send + Sync + 'static,
     L: MapApiRO<K> + 'static,
     TOP: MapApiRO<K> + 'static,
+    PL: MapApiRO<K> + 'static,
 {
     let mut kmerge = KMerge::by(util::by_key_seq);
 
@@ -246,6 +273,11 @@ where
 
     for lvl in levels {
         let strm = lvl.range(range.clone()).await?;
+        kmerge = kmerge.merge(strm);
+    }
+
+    for p in persisted {
+        let strm = p.range(range.clone()).await?;
         kmerge = kmerge.merge(strm);
     }
 
@@ -277,17 +309,44 @@ mod tests {
 
         let l2 = l1.new_level();
 
-        let got = compacted_get::<String, _, _>(&s("a"), [&l0, &l1, &l2]).await?;
+        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l0, &l1, &l2], []).await?;
         assert_eq!(got, Marked::new_normal(1, b("a")));
 
-        let got = compacted_get::<String, _, _>(&s("a"), [&l2, &l1, &l0]).await?;
+        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2, &l1, &l0], []).await?;
         assert_eq!(got, Marked::new_tombstone(1));
 
-        let got = compacted_get::<String, _, _>(&s("a"), [&l1, &l0]).await?;
+        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l1, &l0], []).await?;
         assert_eq!(got, Marked::new_tombstone(1));
 
-        let got = compacted_get::<String, _, _>(&s("a"), [&l2, &l0]).await?;
+        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2, &l0], []).await?;
         assert_eq!(got, Marked::new_normal(1, b("a")));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_compacted_get_with_persisted_levels() -> anyhow::Result<()> {
+        let mut l0 = Level::default();
+        l0.set(s("a"), Some((b("a"), None))).await?;
+
+        let mut l1 = l0.new_level();
+        l1.set(s("a"), None).await?;
+
+        let l2 = l1.new_level();
+
+        let mut l3 = l2.new_level();
+        l3.set(s("a"), Some((b("A"), None))).await?;
+
+        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l0, &l1, &l2], []).await?;
+        assert_eq!(got, Marked::new_normal(1, b("a")));
+
+        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2, &l1, &l0], []).await?;
+        assert_eq!(got, Marked::new_tombstone(1));
+
+        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2], [&l3]).await?;
+        assert_eq!(got, Marked::new_normal(2, b("A")));
+
+        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2], [&l2, &l3]).await?;
+        assert_eq!(got, Marked::new_normal(2, b("A")));
         Ok(())
     }
 
@@ -313,7 +372,8 @@ mod tests {
 
         // With top level
         {
-            let got = compacted_range(s("").., Some(&l2), [&l1, &l0]).await?;
+            let got = compacted_range::<_, _, _, Level, Level>(s("").., Some(&l2), [&l1, &l0], [])
+                .await?;
             let got = got.try_collect::<Vec<_>>().await?;
             assert_eq!(got, vec![
                 //
@@ -322,7 +382,8 @@ mod tests {
                 (s("c"), Marked::new_tombstone(2)),
             ]);
 
-            let got = compacted_range(s("b").., Some(&l2), [&l1, &l0]).await?;
+            let got = compacted_range::<_, _, _, Level, Level>(s("b").., Some(&l2), [&l1, &l0], [])
+                .await?;
             let got = got.try_collect::<Vec<_>>().await?;
             assert_eq!(got, vec![
                 //
@@ -333,7 +394,8 @@ mod tests {
 
         // Without top level
         {
-            let got = compacted_range::<_, _, _, Level>(s("").., None, [&l1, &l0]).await?;
+            let got =
+                compacted_range::<_, _, _, Level, Level>(s("").., None, [&l1, &l0], []).await?;
             let got = got.try_collect::<Vec<_>>().await?;
             assert_eq!(got, vec![
                 //
@@ -342,7 +404,8 @@ mod tests {
                 (s("c"), Marked::new_tombstone(2)),
             ]);
 
-            let got = compacted_range::<_, _, _, Level>(s("b").., None, [&l1, &l0]).await?;
+            let got =
+                compacted_range::<_, _, _, Level, Level>(s("b").., None, [&l1, &l0], []).await?;
             let got = got.try_collect::<Vec<_>>().await?;
             assert_eq!(got, vec![
                 //

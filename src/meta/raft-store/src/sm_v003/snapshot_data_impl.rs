@@ -12,25 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod sm_v002;
-mod snapshot_stat;
-mod snapshot_store;
-mod snapshot_view_v002;
-mod writer_v002;
+use std::io::Error;
 
-mod importer;
+use databend_common_meta_types::SnapshotData;
+use openraft::SnapshotId;
 
-#[cfg(test)]
-mod sm_v002_test;
-#[cfg(test)]
-mod snapshot_view_v002_test;
+use crate::config::RaftConfig;
+use crate::sm_v003::open_snapshot::OpenSnapshot;
 
-pub use importer::Importer;
-pub use sm_v002::SMV002;
-pub use snapshot_stat::SnapshotStat;
-pub use snapshot_store::SnapshotStoreError;
-pub use snapshot_store::SnapshotStoreV002;
-pub use snapshot_view_v002::SnapshotViewV002;
-pub use writer_v002::WriteEntry;
-pub use writer_v002::WriterV002;
+impl OpenSnapshot for SnapshotData {
+    fn open_snapshot(
+        path: impl ToString,
+        snapshot_id: SnapshotId,
+        _raft_config: &RaftConfig,
+    ) -> Result<Self, Error> {
+        let _ = snapshot_id;
+        SnapshotData::open(path.to_string())
+    }
+}
