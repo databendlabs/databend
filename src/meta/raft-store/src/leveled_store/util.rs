@@ -15,6 +15,8 @@
 use std::fmt;
 use std::io;
 
+use rotbl::v001::SeqMarked;
+
 use crate::leveled_store::map_api::MapKey;
 use crate::marked::Marked;
 
@@ -27,8 +29,8 @@ pub(crate) fn by_key_seq<K>(r1: &KVResult<K>, r2: &KVResult<K>) -> bool
 where K: MapKey + Ord + fmt::Debug {
     match (r1, r2) {
         (Ok((k1, v1)), Ok((k2, v2))) => {
-            let iseq1 = v1.internal_seq();
-            let iseq2 = v2.internal_seq();
+            let iseq1 = v1.order_key();
+            let iseq2 = v2.order_key();
 
             // Same (key, seq) is only allowed if they are both tombstone:
             // `MapApi::set(None)` when there is already a tombstone produces
@@ -44,7 +46,7 @@ where K: MapKey + Ord + fmt::Debug {
 
             // Put entries with the same key together, smaller internal-seq first
             // Tombstone is always greater.
-            (k1, v1.internal_seq()) <= (k2, v2.internal_seq())
+            (k1, v1.order_key()) <= (k2, v2.order_key())
         }
         // If there is an error, just yield them in order.
         // It's the caller's responsibility to handle the error.
@@ -69,4 +71,42 @@ where
         // just yield them without change.
         (r1, r2) => Err((r1, r2)),
     }
+}
+
+/// Result type of a key-value pair and io Error used in a map.
+type RotblResult = Result<(String, SeqMarked), io::Error>;
+
+/// Sort by key and internal_seq.
+/// Return `true` if `a` should be placed before `b`, e.g., `a` is smaller.
+pub(crate) fn rotbl_by_key_seq(r1: &RotblResult, r2: &RotblResult) -> bool {
+    match (r1, r2) {
+        (Ok((k1, v1)), Ok((k2, v2))) => {
+            // Put entries with the same key together, newer last
+            // Tombstone is always greater if the seq is the same.
+            (k1, v1.order_key()) <= (k2, v2.order_key())
+        }
+        // If there is an error, just yield them in order.
+        // It's the caller's responsibility to handle the error.
+        _ => true,
+    }
+}
+
+/// Return a Ok(combined) to merge two consecutive values,
+/// otherwise return Err((x,y)) to not to merge.
+#[allow(clippy::type_complexity)]
+pub(crate) fn rotbl_choose_greater(
+    r1: RotblResult,
+    r2: RotblResult,
+) -> Result<RotblResult, (RotblResult, RotblResult)> {
+    match (r1, r2) {
+        (Ok((k1, v1)), Ok((k2, v2))) if k1 == k2 => Ok(Ok((k1, seq_marked_max(v1, v2)))),
+        // If there is an error,
+        // or k1 != k2
+        // just yield them without change.
+        (r1, r2) => Err((r1, r2)),
+    }
+}
+
+fn seq_marked_max(a: SeqMarked, b: SeqMarked) -> SeqMarked {
+    if a.seq() > b.seq() { a } else { b }
 }
