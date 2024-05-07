@@ -12,25 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod sm_v002;
-mod snapshot_stat;
-mod snapshot_store;
-mod snapshot_view_v002;
-mod writer_v002;
+use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_meta_raft_store::ondisk::OnDisk;
+use databend_common_meta_sled_store::get_sled_db;
 
-mod importer;
+use crate::Config;
 
-#[cfg(test)]
-mod sm_v002_test;
-#[cfg(test)]
-mod snapshot_view_v002_test;
+/// Upgrade the data in raft_dir to the latest version.
+pub async fn upgrade(config: &Config) -> anyhow::Result<()> {
+    let raft_config: RaftConfig = config.clone().into();
 
-pub use importer::Importer;
-pub use sm_v002::SMV002;
-pub use snapshot_stat::SnapshotStat;
-pub use snapshot_store::SnapshotStoreError;
-pub use snapshot_store::SnapshotStoreV002;
-pub use snapshot_view_v002::SnapshotViewV002;
-pub use writer_v002::WriteEntry;
-pub use writer_v002::WriterV002;
+    let db = get_sled_db();
+
+    let mut on_disk = OnDisk::open(&db, &raft_config).await?;
+    on_disk.log_stderr(true);
+    on_disk.upgrade().await?;
+
+    Ok(())
+}
