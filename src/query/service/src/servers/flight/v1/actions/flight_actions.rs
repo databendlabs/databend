@@ -181,7 +181,7 @@ impl TryInto<Action> for FlightAction {
             }),
             FlightAction::ExecutePartialQuery(query_id) => Ok(Action {
                 r#type: String::from("ExecutePartialQuery"),
-                body: query_id.into_bytes(),
+                body: serde_json::to_vec(&query_id).unwrap(),
             }),
             FlightAction::TruncateTable(truncate_table) => Ok(Action {
                 r#type: String::from("TruncateTable"),
