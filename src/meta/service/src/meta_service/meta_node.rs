@@ -86,7 +86,7 @@ use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
-use crate::network::Network;
+use crate::network::NetworkFactory;
 use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::RaftStore;
@@ -205,7 +205,7 @@ impl MetaNodeBuilder {
             .take()
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
 
-        let net = Network::new(sto.clone());
+        let net = NetworkFactory::new(sto.clone());
 
         let log_store = sto.clone();
         let sm_store = sto.clone();
