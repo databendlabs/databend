@@ -49,6 +49,7 @@ fn test_geometry() {
     test_try_to_geometry(file);
     test_st_geometryfromwkb(file);
     test_st_geometryfromwkt(file);
+    test_st_xmax(file);
     // test_st_transform(file);
 }
 
@@ -453,6 +454,30 @@ fn test_st_geometryfromwkt(file: &mut impl Write) {
         ),
         ("b", Int32Type::from_data(vec![32633, 4326, 3857])),
     ]);
+}
+
+fn test_st_xmax(file: &mut impl Write) {
+    run_ast(file, "st_xmax(to_geometry('POINT(-180 0)'))", &[]);
+    run_ast(
+        file,
+        "st_xmax(to_geometry('LINESTRING(-179 0, 179 0)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_xmax(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POLYGON((40 40,20 45,45 30,40 40)))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_xmax(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POINT EMPTY)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_xmax(to_geometry('MULTILINESTRING ((10 10, 20 20, 10 40), EMPTY)'))",
+        &[],
+    );
 }
 
 // fn test_st_transform(file: &mut impl Write) {
