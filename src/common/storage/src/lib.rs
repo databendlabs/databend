@@ -61,6 +61,7 @@ pub use parquet_rs::read_parquet_schema_async_rs;
 mod stage;
 pub use stage::init_stage_operator;
 pub use stage::StageFileInfo;
+pub use stage::StageFileInfoStream;
 pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
 pub use stage::STDIN_FD;
