@@ -83,7 +83,7 @@ pub struct HttpQueryRequest {
 }
 
 impl HttpQueryRequest {
-    pub(crate) fn fail_to_start_sql(&self, err: &ErrorCode) -> impl IntoResponse {
+    pub(crate) fn fail_to_start_sql(&self, err: ErrorCode) -> impl IntoResponse {
         metrics_incr_http_response_errors_count(err.name(), err.code());
         let session = self.session.as_ref().map(|s| {
             let txn_state = if matches!(s.txn_state, Some(TxnState::Active)) {

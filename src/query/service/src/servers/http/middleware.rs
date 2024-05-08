@@ -294,7 +294,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     self.ep.call(req).await
                 }
                 Err(err) => match err.code() {
-                    ErrorCode::AUTHENTICATE_FAILURE => {
+                    ErrorCode::AUTHENTICATE_FAILURE | ErrorCode::UNKNOWN_USER => {
                         warn!(
                             "http auth failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),

@@ -77,7 +77,7 @@ pub struct QueryError {
 }
 
 impl QueryError {
-    pub(crate) fn from_error_code(e: &ErrorCode) -> Self {
+    pub(crate) fn from_error_code(e: ErrorCode) -> Self {
         QueryError {
             code: e.code(),
             message: e.display_text(),
@@ -201,7 +201,7 @@ impl QueryResponse {
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
             kill_uri: Some(make_kill_uri(&id)),
-            error: r.state.error.as_ref().map(QueryError::from_error_code),
+            error: r.state.error.map(QueryError::from_error_code),
             has_result_set: r.state.has_result_set,
         })
         .with_header(HEADER_QUERY_ID, id.clone())
@@ -383,7 +383,7 @@ pub(crate) async fn query_handler(
             Err(e) => {
                 error!("{}: http query fail to start sql, error: {:?}", &ctx.query_id, e);
                 ctx.set_fail();
-                Ok(req.fail_to_start_sql(&e).into_response())
+                Ok(req.fail_to_start_sql(e).into_response())
             }
         }
     }
