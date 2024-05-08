@@ -119,7 +119,7 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
             &self.schema_desc,
             ParquetCompression::UNCOMPRESSED,
         );
-        builder.add_column_chunk(self.column_id as usize, Bytes::from(bytes));
+        builder.add_column_chunk(self.column_id as usize, bytes.to_bytes());
         let row_group = Box::new(builder.build());
         let field_levels = parquet_to_arrow_field_levels(
             self.schema_desc.as_ref(),

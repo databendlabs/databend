@@ -244,7 +244,7 @@ impl Loader<InvertedIndexFile> for InvertedIndexFileLoader {
             .range(self.offset..self.offset + self.len)
             .await?;
 
-        InvertedIndexFile::try_create(self.name.clone(), bytes)
+        InvertedIndexFile::try_create(self.name.clone(), bytes.to_vec())
     }
 
     fn cache_key(&self, _params: &LoadParams) -> CacheKey {

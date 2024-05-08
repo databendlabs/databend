@@ -154,9 +154,15 @@ impl ObjectStore for OpendalStore {
             .reader(location.as_ref())
             .await
             .map_err(|err| format_object_store_error(err, location.as_ref()))?;
+        let stream =
+            r.into_bytes_stream(0..meta.size as u64)
+                .map_err(|err| object_store::Error::Generic {
+                    store: "IoError",
+                    source: Box::new(err),
+                });
 
         Ok(GetResult {
-            payload: GetResultPayload::Stream(Box::pin(OpendalReader { inner: r })),
+            payload: GetResultPayload::Stream(Box::pin(stream)),
             range: (0..meta.size),
             meta,
         })
@@ -170,7 +176,7 @@ impl ObjectStore for OpendalStore {
             .await
             .map_err(|err| format_object_store_error(err, location.as_ref()))?;
 
-        Ok(Bytes::from(bs))
+        Ok(bs.to_bytes())
     }
 
     async fn head(&self, location: &Path) -> Result<ObjectMeta> {
@@ -355,24 +361,6 @@ async fn try_format_object_meta(res: Result<Entry, opendal::Error>) -> Result<Ob
     Ok(format_object_meta(entry.path(), meta))
 }
 
-struct OpendalReader {
-    inner: Reader,
-}
-
-impl Stream for OpendalReader {
-    type Item = Result<Bytes>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        use opendal::raw::oio::Read;
-
-        self.inner
-            .poll_next(cx)
-            .map_err(|err| object_store::Error::Generic {
-                store: "IoError",
-                source: Box::new(err),
-            })
-    }
-}
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

@@ -3546,12 +3546,16 @@ impl<'a> TypeChecker<'a> {
             ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
         })?;
 
-        let code_blob = op.read(&wasm_module_path).await.map_err(|err| {
-            ErrorCode::SemanticError(format!(
-                "Failed to read WASM module {}: {}",
-                wasm_module_path, err
-            ))
-        })?;
+        let code_blob = op
+            .read(&wasm_module_path)
+            .await
+            .map_err(|err| {
+                ErrorCode::SemanticError(format!(
+                    "Failed to read WASM module {}: {}",
+                    wasm_module_path, err
+                ))
+            })?
+            .to_vec();
 
         let compress_algo = CompressAlgorithm::from_path(&wasm_module_path);
         log::trace!(

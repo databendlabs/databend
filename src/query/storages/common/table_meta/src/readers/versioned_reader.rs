@@ -12,35 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Read;
+
 use databend_common_exception::Result;
-use futures::AsyncRead;
-use futures_util::AsyncReadExt;
 
 use crate::meta::load_json;
 use crate::meta::TableSnapshotStatistics;
 use crate::meta::TableSnapshotStatisticsVersion;
 
-#[async_trait::async_trait]
 pub trait VersionedReader<T> {
     type TargetType;
-    async fn read<R>(&self, read: R) -> Result<Self::TargetType>
-    where R: AsyncRead + Unpin + Send;
+
+    fn read<R>(&self, read: R) -> Result<Self::TargetType>
+    where R: Read + Unpin + Send;
 }
 
-#[async_trait::async_trait]
 impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion {
     type TargetType = TableSnapshotStatistics;
-    #[async_backtrace::framed]
-    async fn read<R>(&self, mut reader: R) -> Result<TableSnapshotStatistics>
-    where R: AsyncRead + Unpin + Send {
-        let mut buffer: Vec<u8> = vec![];
-        reader.read_to_end(&mut buffer).await?;
+
+    fn read<R>(&self, mut reader: R) -> Result<TableSnapshotStatistics>
+    where R: Read + Unpin + Send {
         let r = match self {
             TableSnapshotStatisticsVersion::V0(v) => {
-                let ts = load_json(&buffer, v).await?;
+                let ts = load_json(reader, v)?;
                 TableSnapshotStatistics::from(ts)
             }
-            TableSnapshotStatisticsVersion::V2(v) => load_json(&buffer, v).await?,
+            TableSnapshotStatisticsVersion::V2(v) => load_json(reader, v)?,
         };
         Ok(r)
     }

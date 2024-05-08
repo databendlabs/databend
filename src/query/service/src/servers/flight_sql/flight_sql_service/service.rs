@@ -71,7 +71,7 @@ use futures::Stream;
 use log::info;
 use prost::Message;
 use tonic::metadata::MetadataValue;
-use tonic::transport::NamedService;
+use tonic::server::NamedService;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;

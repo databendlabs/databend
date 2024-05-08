@@ -18,6 +18,7 @@ use bstr::ByteSlice;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures_util::AsyncReadExt;
+use futures_util::StreamExt;
 use log::debug;
 
 use crate::input_formats::InputContext;
@@ -37,30 +38,35 @@ impl BeyondEndReader {
         if split_info.num_file_splits > 1 && split_info.seq_in_file < split_info.num_file_splits - 1
         {
             debug!("reading beyond end of split {}", split_info);
+
             // todo(youngsofun): use the avg and max row size
             let mut res = Vec::new();
-            let batch_size = 1024;
-            let mut buf = vec![0u8; batch_size];
             let operator = self.ctx.source.get_operator()?;
             let offset = split_info.offset as u64;
             let size = split_info.size as u64;
+
+            // question(xuanwo): Why we need to add size to offset?
             let offset = offset + size;
             let limit = size as usize;
-            let mut reader = operator.reader_with(&self.path).range(offset..).await?;
+            let mut stream = operator
+                .reader(&self.path)
+                .await?
+                .into_bytes_stream(offset..);
+
             let mut num_read_total = 0;
             loop {
-                let num_read = reader.read(&mut buf[..]).await?;
-                if num_read == 0 {
+                let mut bs = stream.next().await.transpose()?.unwrap_or_default();
+                if bs.is_empty() {
                     break;
                 }
-                num_read_total += num_read;
+                num_read_total += bs.len();
 
-                if let Some(idx) = buf[..num_read].find_byte(self.record_delimiter_end) {
+                if let Some(idx) = bs.find_byte(self.record_delimiter_end) {
                     if res.is_empty() {
-                        buf.truncate(idx);
-                        return Ok(buf);
+                        bs.truncate(idx);
+                        return Ok(bs.to_vec());
                     } else {
-                        res.extend_from_slice(&buf[..idx]);
+                        res.extend_from_slice(&bs[..idx]);
                         break;
                     }
                 } else {
@@ -73,7 +79,7 @@ impl BeyondEndReader {
                             offset + size,
                         )));
                     }
-                    res.extend_from_slice(&buf[..num_read])
+                    res.extend_from_slice(&bs)
                 }
             }
             return Ok(res);

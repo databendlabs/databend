@@ -14,11 +14,14 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::future::Future;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use databend_common_auth::RefreshableToken;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
+use http::header::RANGE;
 use http::Request;
 use http::Response;
 use http::StatusCode;
@@ -26,18 +29,22 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
 use opendal::raw::new_request_build_error;
+use opendal::raw::oio;
 use opendal::raw::parse_content_length;
 use opendal::raw::parse_etag;
 use opendal::raw::parse_last_modified;
-use opendal::raw::Accessor;
+use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
+use opendal::raw::BytesRange;
 use opendal::raw::HttpClient;
+use opendal::raw::MaybeSend;
 use opendal::raw::OpRead;
 use opendal::raw::OpStat;
 use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
+use opendal::Buffer;
 use opendal::Builder;
 use opendal::Capability;
 use opendal::EntryMode;
@@ -47,7 +54,6 @@ use opendal::Metadata;
 use opendal::Operator;
 use opendal::Result;
 use opendal::Scheme;
-use reqwest::header::RANGE;
 
 use crate::SharedSigner;
 
@@ -125,9 +131,8 @@ struct SharedAccessor {
     client: HttpClient,
 }
 
-#[async_trait]
-impl Accessor for SharedAccessor {
-    type Reader = IncomingAsyncBody;
+impl Access for SharedAccessor {
+    type Reader = SharedReader;
     type BlockingReader = ();
     type Writer = ();
     type BlockingWriter = ();
@@ -139,7 +144,6 @@ impl Accessor for SharedAccessor {
         meta.set_scheme(Scheme::Custom("shared"))
             .set_native_capability(Capability {
                 read: true,
-                read_with_range: true,
 
                 stat: true,
                 ..Default::default()
@@ -150,36 +154,11 @@ impl Accessor for SharedAccessor {
 
     #[async_backtrace::framed]
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
-        let req: PresignedRequest =
-            self.signer
-                .fetch(path, Operation::Read)
-                .await
-                .map_err(|err| {
-                    Error::new(ErrorKind::Unexpected, "fetch presigned url failed").set_source(err)
-                })?;
-
-        let br = args.range();
-        let mut req: Request<AsyncBody> = req.into();
-        req.headers_mut().insert(
-            RANGE,
-            br.to_header().parse().map_err(|err| {
-                Error::new(ErrorKind::Unexpected, "header value is invalid").set_source(err)
-            })?,
-        );
-
-        let resp = self.client.send(req).await?;
-
-        if resp.status().is_success() {
-            let content_length = parse_content_length(resp.headers())
-                .unwrap()
-                .expect("content_length must be valid");
-            Ok((
-                RpRead::new().with_size(Some(content_length)),
-                resp.into_body(),
-            ))
-        } else {
-            Err(parse_error(resp).await)
-        }
+        Ok((RpRead::default(), SharedReader {
+            signer: self.signer.clone(),
+            client: self.client.clone(),
+            path: Arc::new(path.to_string()),
+        }))
     }
 
     #[async_backtrace::framed]
@@ -196,9 +175,7 @@ impl Accessor for SharedAccessor {
                     Error::new(ErrorKind::Unexpected, "fetch presigned url failed").set_source(err)
                 })?;
         let req = Request::head(req.uri());
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         let resp = self.client.send(req).await?;
         let status = resp.status();
         match status {
@@ -231,9 +208,9 @@ impl Accessor for SharedAccessor {
     }
 }
 
-pub async fn parse_error(er: Response<IncomingAsyncBody>) -> Error {
+pub async fn parse_error(er: Response<Buffer>) -> Error {
     let (part, body) = er.into_parts();
-    let message = body.bytes().await.unwrap_or_default();
+    let message = body.to_vec();
 
     let (kind, retryable) = match part.status {
         StatusCode::NOT_FOUND => (ErrorKind::NotFound, false),
@@ -252,4 +229,39 @@ pub async fn parse_error(er: Response<IncomingAsyncBody>) -> Error {
     }
 
     err
+}
+
+pub struct SharedReader {
+    signer: SharedSigner,
+    client: HttpClient,
+    path: Arc<String>,
+}
+
+impl oio::Read for SharedReader {
+    async fn read_at(&self, offset: u64, limit: usize) -> Result<Buffer> {
+        let req: PresignedRequest = self
+            .signer
+            .fetch(&self.path, Operation::Read)
+            .await
+            .map_err(|err| {
+                Error::new(ErrorKind::Unexpected, "fetch presigned url failed").set_source(err)
+            })?;
+
+        let br = BytesRange::from(offset..offset + limit as u64);
+        let mut req: Request<Buffer> = req.into();
+        req.headers_mut().insert(
+            RANGE,
+            br.to_header().parse().map_err(|err| {
+                Error::new(ErrorKind::Unexpected, "header value is invalid").set_source(err)
+            })?,
+        );
+
+        let resp = self.client.send(req).await?;
+
+        if resp.status().is_success() {
+            Ok(resp.into_body())
+        } else {
+            Err(parse_error(resp).await)
+        }
+    }
 }

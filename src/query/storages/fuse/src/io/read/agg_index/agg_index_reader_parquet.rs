@@ -30,8 +30,10 @@ impl AggIndexReader {
         read_settings: &ReadSettings,
         loc: &str,
     ) -> Option<(PartInfoPtr, MergeIOReadResult)> {
-        match self.reader.operator.blocking().reader(loc) {
-            Ok(mut reader) => {
+        let op = self.reader.operator.blocking();
+        match op.stat(loc) {
+            Ok(meta) => {
+                let mut reader = op.reader(loc).ok()?.into_std_read(0..meta.content_length());
                 let metadata = pread::read_metadata(&mut reader)
                     .inspect_err(|e| {
                         debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
@@ -73,9 +75,10 @@ impl AggIndexReader {
         read_settings: &ReadSettings,
         loc: &str,
     ) -> Option<(PartInfoPtr, MergeIOReadResult)> {
-        match self.reader.operator.reader(loc).await {
-            Ok(mut reader) => {
-                let metadata = pread::read_metadata_async(&mut reader)
+        match self.reader.operator.stat(loc).await {
+            Ok(meta) => {
+                let reader = self.reader.operator.reader(loc).await.ok()?;
+                let metadata = pread::read_metadata_async(reader, meta.content_length())
                     .await
                     .inspect_err(|e| {
                         debug!("Read aggregating index `{loc}`'s metadata failed: {e}")

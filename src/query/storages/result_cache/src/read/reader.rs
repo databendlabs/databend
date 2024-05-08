@@ -109,7 +109,8 @@ impl ResultCacheReader {
     #[async_backtrace::framed]
     async fn read_result_from_cache(&self, location: &str) -> Result<Vec<DataBlock>> {
         let data = self.operator.read(location).await?;
-        let chunk_reader = Bytes::from(data);
+        // TODO: improve this part by implement ChunkReader for opendal::Buffer.
+        let chunk_reader = data.to_bytes();
         let reader = ParquetRecordBatchReader::try_new(chunk_reader, usize::MAX)?;
         let mut blocks = Vec::with_capacity(1);
 
@@ -129,7 +130,8 @@ impl ResultCacheReader {
         location: &str,
     ) -> Result<(TableSchema, Vec<u8>)> {
         let data = operator.read(location).await?;
-        let chunk_reader = Bytes::from(data);
+        // TODO: improve this part by implement ChunkReader for opendal::Buffer.
+        let chunk_reader = data.to_bytes();
         let meta = parse_metadata(&chunk_reader)?;
         let arrow_schema = parquet_to_arrow_schema(
             meta.file_metadata().schema_descr(),

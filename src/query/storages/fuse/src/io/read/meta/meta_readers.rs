@@ -16,6 +16,7 @@ use std::io::Cursor;
 use std::io::Read;
 use std::io::SeekFrom;
 
+use bytes::Buf;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,6 +39,7 @@ use databend_storages_common_table_meta::readers::VersionedReader;
 use futures::AsyncSeek;
 use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
+use opendal::Buffer;
 use opendal::Operator;
 use opendal::Reader;
 use parquet_rs::format::FileMetaData;
@@ -107,7 +109,7 @@ impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         let version = SnapshotVersion::try_from(params.ver)?;
-        version.read(reader).await
+        version.read(reader.reader())
     }
 }
 
@@ -117,7 +119,7 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
         let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        version.read(reader).await
+        version.read(reader.reader())
     }
 }
 
@@ -128,7 +130,7 @@ impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        (version, schema.clone()).read(reader).await
+        (version, schema.clone()).read(reader.reader())
     }
 }
 
@@ -183,7 +185,7 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
             })?;
 
         let mut buf = vec![0u8; 4];
-        let mut reader = Cursor::new(data.clone());
+        let mut reader = data.reader();
         let mut offsets = Vec::with_capacity(8);
         let fast_fields_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
         let store_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
@@ -219,11 +221,11 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Reader> {
+async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
     let reader = if let Some(len) = len_hint {
-        op.reader_with(path).range(0..len).await?
+        op.read_with(path).range(0..len).await?
     } else {
-        op.reader(path).await?
+        op.read(path).await?
     };
     Ok(reader)
 }
@@ -291,7 +293,8 @@ mod thrift_file_meta_read {
             .read_with(path)
             .range(file_size - default_end_len as u64..file_size)
             .await
-            .map_err(|err| Error::OutOfSpec(err.to_string()))?;
+            .map_err(|err| Error::OutOfSpec(err.to_string()))?
+            .to_vec();
 
         // check this is indeed a parquet file
         if buffer[default_end_len - 4..] != PARQUET_MAGIC {
@@ -310,31 +313,27 @@ mod thrift_file_meta_read {
             ));
         }
 
-        let reader = if (footer_len as usize) < buffer.len() {
+        if (footer_len as usize) < buffer.len() {
             // the whole metadata is in the bytes we already read
             let remaining = buffer.len() - footer_len as usize;
-            &buffer[remaining..]
+
+            let mut prot = TCompactInputProtocol::new(&buffer[remaining..]);
+            let meta = FileMetaData::read_from_in_protocol(&mut prot)
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
+            Ok(meta)
         } else {
             // the end of file read by default is not long enough, read again including the metadata.
-            let reader = op
-                .reader_with(path)
+            let buffer = op
+                .read_with(path)
                 .range(file_size - footer_len..file_size)
                 .await
                 .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
 
-            buffer.clear();
-            buffer
-                .try_reserve(footer_len as usize)
-                .map_err(|_| ErrorCode::Internal("Failed to reserve buffer for metadata"))?;
-            reader.take(footer_len).read_to_end(&mut buffer).await?;
-
-            &buffer
-        };
-
-        let mut prot = TCompactInputProtocol::new(reader);
-        let meta = FileMetaData::read_from_in_protocol(&mut prot)
-            .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-        Ok(meta)
+            let mut prot = TCompactInputProtocol::new(buffer.reader());
+            let meta = FileMetaData::read_from_in_protocol(&mut prot)
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
+            Ok(meta)
+        }
     }
 }
 

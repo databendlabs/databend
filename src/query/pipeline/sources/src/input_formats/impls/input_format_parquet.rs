@@ -50,6 +50,7 @@ use futures::AsyncSeekExt;
 use log::debug;
 use log::info;
 use opendal::Operator;
+use opendal::Reader;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -227,9 +228,9 @@ impl RowGroupInMemory {
         index: usize,
     ) -> Result<(usize, Vec<Vec<u8>>)> {
         let mut cols = Vec::with_capacity(col_metas.len());
-        let mut reader = op.reader(&path).await?;
+        let reader = op.reader(&path).await?;
         for meta in &col_metas {
-            cols.push(read_single_column_async(&mut reader, meta).await?)
+            cols.push(read_single_column_async(reader.clone(), meta).await?)
         }
         Ok((index, cols))
     }
@@ -447,16 +448,8 @@ fn get_field_columns<'a>(
 }
 
 #[async_backtrace::framed]
-async fn read_single_column_async<R>(
-    reader: &mut R,
-    meta: &ColumnChunkMetaData,
-) -> Result<Vec<u8>>
-where
-    R: AsyncRead + AsyncSeek + Send + Unpin,
-{
+async fn read_single_column_async(reader: Reader, meta: &ColumnChunkMetaData) -> Result<Vec<u8>> {
     let (start, len) = meta.byte_range();
-    reader.seek(std::io::SeekFrom::Start(start)).await?;
-    let mut chunk = vec![0; len as usize];
-    reader.read_exact(&mut chunk).await?;
-    Ok(chunk)
+    let buf = reader.read(start..start + len).await?;
+    Ok(buf.to_vec())
 }

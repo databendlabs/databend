@@ -23,7 +23,7 @@ databend-common-storage = { path = "../../common/storage" }
 databend-common-users = { path = "../users" }
 
 async-backtrace = { workspace = true }
-http = "0.2"
+http = { workspace = true }
 log = { workspace = true }
 moka = "0.12"
 opendal = { workspace = true }

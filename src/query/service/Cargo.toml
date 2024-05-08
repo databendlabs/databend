@@ -130,7 +130,7 @@ futures-util = { workspace = true }
 h2 = "0.3.26"
 headers = "0.3.8"
 highway = "1.1"
-http = "0.2.8"
+http = { workspace = true }
 humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = { workspace = true }

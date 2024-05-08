@@ -27,6 +27,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_sources::PrefetchAsyncSource;
 use log::debug;
 use opendal::Operator;
+use opendal::Reader;
 
 use crate::one_file_partition::OneFilePartition;
 use crate::read::row_based::batch::BytesBatch;
@@ -62,16 +63,16 @@ impl BytesReader {
 
     pub async fn read_batch(&mut self) -> Result<DataBlock> {
         if let Some(state) = &mut self.file_state {
-            let end = min(self.read_batch_size + state.offset, state.file.size);
-            let mut buffer = vec![0u8; end - state.offset];
-            let n = read_full(&mut state.reader, &mut buffer[..]).await?;
-            if n == 0 {
+            let end = min(self.read_batch_size + state.offset, state.file.size) as u64;
+
+            let buffer = state.reader.read(state.offset as u64..end).await?.to_vec();
+            let n = buffer.len();
+            if (n as u64) < end - state.offset as u64 {
                 return Err(ErrorCode::BadBytes(format!(
                     "Unexpected EOF {} expect {} bytes, read only {} bytes.",
                     state.file.path, state.file.size, state.offset
                 )));
-            };
-            buffer.truncate(n);
+            }
 
             Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, n);
             self.table_ctx
@@ -131,19 +132,4 @@ impl PrefetchAsyncSource for BytesReader {
             Err(e) => Err(e),
         }
     }
-}
-
-#[async_backtrace::framed]
-pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
-    let mut buf = &mut buf[0..];
-    let mut n = 0;
-    while !buf.is_empty() {
-        let read = reader.read(buf).await?;
-        if read == 0 {
-            break;
-        }
-        n += read;
-        buf = &mut buf[read..]
-    }
-    Ok(n)
 }
