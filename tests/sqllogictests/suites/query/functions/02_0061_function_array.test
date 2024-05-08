@@ -285,6 +285,9 @@ select array_reduce(col1,(x,y)->x+y+1) from t
 12
 
 statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
 create table t1(col1 Array(Int Null) not null, col2 Array(Float Null) not null, col3 Array(Decimal (10,5)Null) not null, col4 Array(String Null) not null)
 
 statement ok
@@ -300,6 +303,46 @@ query IIII
 select length(col1), length(col2), length(col3), length(col4) from t
 ----
 4 4 1 1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+statement ok
+create table t2(col1 Array(Int Null) Null, col2 Array(String Null) Null, col3 Array(Array(String Null) NOT NULL) Null)
+
+statement ok
+insert into t2 values([1,2,3], ['a','b','c'], [['k1','k2'],['k3']]), (null, null, null), ([5,6,null], ['x',null,'y'], [['k4'],['k5']])
+
+query TT
+select array_concat(col1, [10,11]), array_concat(['x','y'], col2) from t2
+----
+[1,2,3,10,11] ['x','y','a','b','c']
+NULL NULL
+[5,6,NULL,10,11] ['x','y','x',NULL,'y']
+
+query T
+select array_flatten(col3) from t2
+----
+['k1','k2','k3']
+NULL
+['k4','k5']
+
+query TT
+select array_prepend(0, col1), array_prepend('v', col2) from t2
+----
+[0,1,2,3] ['v','a','b','c']
+[0] ['v']
+[0,5,6,NULL] ['v','x',NULL,'y']
+
+query TT
+select array_append(col1, 10), array_append(col2, 'z') from t2
+----
+[1,2,3,10] ['a','b','c','z']
+[10] ['z']
+[5,6,NULL,10] ['x',NULL,'y','z']
+
+statement ok
+USE default
 
 statement ok
 DROP DATABASE array_func_test
