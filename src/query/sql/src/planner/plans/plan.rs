@@ -487,42 +487,43 @@ impl Plan {
     }
 
     pub fn has_result_set(&self) -> bool {
+        // Please arrange the plans in alphabetical order
         matches!(
             self,
             Plan::Query { .. }
-                | Plan::Explain { .. }
-                | Plan::ExplainAst { .. }
-                | Plan::ExplainSyntax { .. }
-                | Plan::ExplainAnalyze { .. }
-                | Plan::ExistsTable(_)
-                | Plan::ShowCreateDatabase(_)
-                | Plan::ShowCreateTable(_)
-                | Plan::ShowCreateCatalog(_)
-                | Plan::ShowFileFormats(_)
-                | Plan::ShowRoles(_)
-                | Plan::DescShare(_)
-                | Plan::ShowShares(_)
-                | Plan::ShowShareEndpoint(_)
-                | Plan::ShowObjectGrantPrivileges(_)
-                | Plan::ShowGrantTenantsOfShare(_)
-                | Plan::DescribeTable(_)
-                | Plan::ShowGrants(_)
-                | Plan::Presign(_)
-                | Plan::VacuumTable(_)
-                | Plan::VacuumDropTable(_)
+                | Plan::CopyIntoLocation(_)
+                | Plan::CopyIntoTable(_)
+                | Plan::DescConnection(_)
                 | Plan::DescDatamaskPolicy(_)
                 | Plan::DescNetworkPolicy(_)
-                | Plan::ShowNetworkPolicies(_)
                 | Plan::DescPasswordPolicy(_)
-                | Plan::CopyIntoTable(_)
-                | Plan::CopyIntoLocation(_)
-                | Plan::ShowTasks(_)
+                | Plan::DescShare(_)
+                | Plan::DescribeTable(_)
                 | Plan::DescribeTask(_)
-                | Plan::DescConnection(_)
-                | Plan::ShowConnections(_)
-                | Plan::MergeInto(_)
                 | Plan::ExecuteImmediate(_)
+                | Plan::ExistsTable(_)
+                | Plan::Explain { .. }
+                | Plan::ExplainAnalyze { .. }
+                | Plan::ExplainAst { .. }
+                | Plan::ExplainSyntax { .. }
                 | Plan::InsertMultiTable(_)
+                | Plan::MergeInto(_)
+                | Plan::Presign(_)
+                | Plan::ShowConnections(_)
+                | Plan::ShowCreateCatalog(_)
+                | Plan::ShowCreateDatabase(_)
+                | Plan::ShowCreateTable(_)
+                | Plan::ShowFileFormats(_)
+                | Plan::ShowGrantTenantsOfShare(_)
+                | Plan::ShowGrants(_)
+                | Plan::ShowNetworkPolicies(_)
+                | Plan::ShowObjectGrantPrivileges(_)
+                | Plan::ShowRoles(_)
+                | Plan::ShowShareEndpoint(_)
+                | Plan::ShowShares(_)
+                | Plan::ShowTasks(_)
+                | Plan::VacuumDropTable(_)
+                | Plan::VacuumTable(_)
         )
     }
 }
