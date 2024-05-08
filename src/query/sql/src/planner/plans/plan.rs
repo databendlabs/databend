@@ -509,6 +509,7 @@ impl Plan {
                 | Plan::Presign(_)
                 | Plan::VacuumTable(_)
                 | Plan::VacuumDropTable(_)
+                | Plan::VacuumTemporaryFiles(_)
                 | Plan::DescDatamaskPolicy(_)
                 | Plan::DescNetworkPolicy(_)
                 | Plan::ShowNetworkPolicies(_)

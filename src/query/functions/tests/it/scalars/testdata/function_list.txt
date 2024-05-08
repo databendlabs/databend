@@ -115,7 +115,7 @@ Functions overloads:
 0 array() :: Array(Nothing)
 1 array FACTORY
 0 array_any FACTORY
-0 array_append(Array(T0), T0) :: Array(T0)
+0 array_append FACTORY
 0 array_approx_count_distinct FACTORY
 0 array_avg FACTORY
 0 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)
@@ -135,7 +135,7 @@ Functions overloads:
 0 array_max FACTORY
 0 array_median FACTORY
 0 array_min FACTORY
-0 array_prepend(T0, Array(T0)) :: Array(T0)
+0 array_prepend FACTORY
 0 array_remove_first(Array(Nothing)) :: Array(Nothing)
 1 array_remove_first(Array(Nothing) NULL) :: Array(Nothing) NULL
 2 array_remove_first(Array(T0)) :: Array(T0)
