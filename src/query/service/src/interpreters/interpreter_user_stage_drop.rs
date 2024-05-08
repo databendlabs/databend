@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -61,13 +60,6 @@ impl Interpreter for DropUserStageInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
-
-        // Check user stage.
-        if plan.name == "~" {
-            return Err(ErrorCode::StagePermissionDenied(
-                "user stage is not allowed to be dropped",
-            ));
-        }
 
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
         user_mgr
