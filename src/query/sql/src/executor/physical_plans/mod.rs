@@ -86,6 +86,8 @@ mod physical_table_scan;
 pub use physical_table_scan::TableScan;
 mod physical_async_func;
 pub use physical_async_func::AsyncFunction;
+mod physical_modify_by_subquery;
+pub use physical_modify_by_subquery::ModifyBySubquery;
 
 mod physical_union_all;
 pub use physical_union_all::UnionAll;

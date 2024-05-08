@@ -32,6 +32,7 @@ mod kill;
 mod limit;
 mod materialized_cte;
 mod merge_into;
+mod modify_by_subquery;
 mod udf;
 
 mod copy_into_location;
@@ -81,6 +82,9 @@ pub use merge_into::UnmatchedEvaluator;
 pub use merge_into::DELETE_NAME;
 pub use merge_into::INSERT_NAME;
 pub use merge_into::UPDATE_NAME;
+pub use modify_by_subquery::ModifyBySubquery;
+pub use modify_by_subquery::RemoteSubqueryMutation;
+pub use modify_by_subquery::SubqueryMutation;
 pub use operator::*;
 pub use plan::*;
 pub use presign::*;

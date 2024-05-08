@@ -213,6 +213,9 @@ impl PipelineBuilder {
                 self.build_chunk_commit_insert(chunk_commit_insert)
             }
             PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
+            PhysicalPlan::ModifyBySubquery(modify_by_subquery) => {
+                self.build_modify_by_subquery(modify_by_subquery)
+            }
         }
     }
 }

@@ -22,6 +22,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
+use super::physical_plans::ModifyBySubquery;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -147,6 +148,8 @@ pub enum PhysicalPlan {
 
     // async function call
     AsyncFunction(AsyncFunction),
+
+    ModifyBySubquery(ModifyBySubquery),
 }
 
 impl PhysicalPlan {
@@ -389,6 +392,10 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            PhysicalPlan::ModifyBySubquery(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
         }
     }
 
@@ -443,6 +450,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(v) => v.plan_id,
             PhysicalPlan::ChunkMerge(v) => v.plan_id,
             PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
+            PhysicalPlan::ModifyBySubquery(v) => v.plan_id,
         }
     }
 
@@ -476,6 +484,7 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoSource(plan) => plan.input.output_schema(),
             PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
             PhysicalPlan::MergeIntoAddRowNumber(plan) => plan.output_schema(),
+            PhysicalPlan::ModifyBySubquery(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
@@ -554,6 +563,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".to_string(),
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".to_string(),
             PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".to_string(),
+            PhysicalPlan::ModifyBySubquery(_) => "ModifyBySubquery".to_string(),
         }
     }
 
@@ -625,6 +635,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkMerge(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkCommitInsert(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ModifyBySubquery(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -645,6 +656,7 @@ impl PhysicalPlan {
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::ModifyBySubquery(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)

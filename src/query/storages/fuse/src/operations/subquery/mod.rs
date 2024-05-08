@@ -14,5 +14,4 @@
 
 mod transform_mutation_subquery;
 
-pub use transform_mutation_subquery::SubqueryMutation;
 pub use transform_mutation_subquery::TransformMutationSubquery;

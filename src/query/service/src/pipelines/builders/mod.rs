@@ -28,6 +28,7 @@ mod builder_insert_multi_table;
 mod builder_join;
 mod builder_limit;
 mod builder_merge_into;
+mod builder_modify_by_subquery;
 mod builder_on_finished;
 mod builder_project;
 mod builder_recluster;

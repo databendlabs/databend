@@ -45,6 +45,7 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
+use crate::executor::physical_plans::ModifyBySubquery;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -267,6 +268,9 @@ fn to_format_tree(
             Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
         }
         PhysicalPlan::AsyncFunction(plan) => async_function_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::ModifyBySubquery(plan) => {
+            modify_by_subquery_to_format_tree(plan, metadata, profs)
+        }
     }
 }
 
@@ -545,6 +549,31 @@ fn eval_scalar_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "EvalScalar".to_string(),
+        children,
+    ))
+}
+
+fn modify_by_subquery_to_format_tree(
+    plan: &ModifyBySubquery,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    append_profile_info(&mut children, profs, plan.plan_id);
+
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
+
+    Ok(FormatTreeNode::with_children(
+        "ModifyBySubquery".to_string(),
         children,
     ))
 }

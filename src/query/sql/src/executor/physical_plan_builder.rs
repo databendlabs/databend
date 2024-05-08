@@ -118,6 +118,10 @@ impl PhysicalPlanBuilder {
                 self.build_async_func(s_expr, async_func, required, stat_info)
                     .await
             }
+            RelOperator::ModifyBySubquery(modify_by_subquery) => {
+                self.build_modify_by_subquery(s_expr, modify_by_subquery, required, stat_info)
+                    .await
+            }
         }
     }
 }

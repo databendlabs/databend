@@ -28,6 +28,7 @@ use super::limit::Limit;
 use super::scan::Scan;
 use super::sort::Sort;
 use super::union_all::UnionAll;
+use super::ModifyBySubquery;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -125,6 +126,7 @@ pub enum RelOperator {
     ConstantTableScan(ConstantTableScan),
     Udf(Udf),
     AsyncFunction(AsyncFunction),
+    ModifyBySubquery(ModifyBySubquery),
 }
 
 impl Operator for RelOperator {
@@ -148,6 +150,7 @@ impl Operator for RelOperator {
             RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
+            RelOperator::ModifyBySubquery(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -171,6 +174,7 @@ impl Operator for RelOperator {
             RelOperator::ConstantTableScan(rel_op) => rel_op.arity(),
             RelOperator::Udf(rel_op) => rel_op.arity(),
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
+            RelOperator::ModifyBySubquery(rel_op) => rel_op.arity(),
         }
     }
 
@@ -194,6 +198,7 @@ impl Operator for RelOperator {
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::ModifyBySubquery(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -217,6 +222,7 @@ impl Operator for RelOperator {
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::ModifyBySubquery(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -240,6 +246,7 @@ impl Operator for RelOperator {
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::ModifyBySubquery(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
 
@@ -305,6 +312,9 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
+            RelOperator::ModifyBySubquery(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
         }
     }
 
@@ -367,6 +377,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::AsyncFunction(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::ModifyBySubquery(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
         }
@@ -686,6 +699,26 @@ impl TryFrom<RelOperator> for AsyncFunction {
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to AsyncFunction",
+            ))
+        }
+    }
+}
+
+impl From<ModifyBySubquery> for RelOperator {
+    fn from(value: ModifyBySubquery) -> Self {
+        Self::ModifyBySubquery(value)
+    }
+}
+
+impl TryFrom<RelOperator> for ModifyBySubquery {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::ModifyBySubquery(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast RelOperator to ModifyBySubquery",
             ))
         }
     }

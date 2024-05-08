@@ -47,6 +47,7 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoSource;
+use crate::executor::physical_plans::ModifyBySubquery;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -117,6 +118,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkMerge(plan) => self.replace_chunk_merge(plan),
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
             PhysicalPlan::AsyncFunction(plan) => Ok(PhysicalPlan::AsyncFunction(plan.clone())),
+            PhysicalPlan::ModifyBySubquery(plan) => self.replace_modify_by_subquery(plan),
         }
     }
 
@@ -153,6 +155,23 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             predicates: plan.predicates.clone(),
             stat_info: plan.stat_info.clone(),
+        }))
+    }
+
+    fn replace_modify_by_subquery(&mut self, plan: &ModifyBySubquery) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::ModifyBySubquery(ModifyBySubquery {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            schema: plan.schema.clone(),
+            stat_info: plan.stat_info.clone(),
+            predicate: plan.predicate.clone(),
+            snapshot: plan.snapshot.clone(),
+            table_info: plan.table_info.clone(),
+            catalog_info: plan.catalog_info.clone(),
+            typ: plan.typ.clone(),
+            filter: plan.filter.clone(),
         }))
     }
 
@@ -752,6 +771,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ChunkCommitInsert(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ModifyBySubquery(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }

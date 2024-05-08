@@ -41,9 +41,9 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::RemoteSubqueryMutation;
 use databend_common_sql::plans::SubqueryDesc;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::SubqueryMutation;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
@@ -117,14 +117,20 @@ impl Interpreter for UpdateInterpreter {
 
             let table = FuseTable::try_from_table(tbl.as_ref())?;
             let operators = self.generate_operators(table, subquery_desc)?;
+            let operators = operators
+                .iter()
+                .map(|operator| operator.clone().into())
+                .collect::<Vec<_>>();
 
             let mut build_res = modify_by_subquery(
                 tbl.clone(),
                 subquery_desc.clone(),
                 self.plan.metadata.clone(),
                 self.ctx.clone(),
-                SubqueryMutation::Update(operators.clone()),
+                RemoteSubqueryMutation::Update(operators),
                 !self.ctx.get_cluster().is_empty(),
+                table.get_table_info().clone(),
+                catalog.info(),
             )
             .await?;
             build_res.main_pipeline.add_lock_guard(lock_guard);

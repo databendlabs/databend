@@ -23,6 +23,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -44,6 +45,50 @@ pub enum BlockOperator {
 
     /// Reorganize the input [`DataBlock`] with `projection`.
     Project { projection: Vec<FieldIndex> },
+}
+
+/// `RemoteExpr` version of `BlockOperator`, which can be shared between nodes
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum RemoteBlockOperator {
+    /// Batch mode of map which merges map operators into one.
+    Map {
+        exprs: Vec<RemoteExpr>,
+        /// The index of the output columns, based on the exprs.
+        projections: Option<ColumnSet>,
+    },
+
+    /// Reorganize the input [`DataBlock`] with `projection`.
+    Project { projection: Vec<FieldIndex> },
+}
+
+impl From<BlockOperator> for RemoteBlockOperator {
+    fn from(operator: BlockOperator) -> Self {
+        match operator {
+            BlockOperator::Map { exprs, projections } => {
+                let exprs = exprs
+                    .iter()
+                    .map(|expr| expr.as_remote_expr())
+                    .collect::<Vec<_>>();
+                Self::Map { exprs, projections }
+            }
+            BlockOperator::Project { projection } => Self::Project { projection },
+        }
+    }
+}
+
+impl From<RemoteBlockOperator> for BlockOperator {
+    fn from(operator: RemoteBlockOperator) -> Self {
+        match operator {
+            RemoteBlockOperator::Map { exprs, projections } => {
+                let exprs = exprs
+                    .iter()
+                    .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                    .collect::<Vec<_>>();
+                Self::Map { exprs, projections }
+            }
+            RemoteBlockOperator::Project { projection } => Self::Project { projection },
+        }
+    }
 }
 
 impl BlockOperator {

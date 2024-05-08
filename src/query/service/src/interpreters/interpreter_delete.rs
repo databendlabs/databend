@@ -21,16 +21,10 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::DataType;
-use databend_common_expression::FilterExecutor;
-use databend_common_expression::SelectExprBuilder;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::Exchange;
@@ -42,16 +36,12 @@ use databend_common_sql::optimizer::optimize_query;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::Filter;
+use databend_common_sql::plans::ModifyBySubquery;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::RemoteSubqueryMutation;
 use databend_common_sql::plans::SubqueryDesc;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::MutationGenerator;
-use databend_common_storages_fuse::operations::SubqueryMutation;
-use databend_common_storages_fuse::operations::TableMutationAggregator;
-use databend_common_storages_fuse::operations::TransformMutationSubquery;
-use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -118,6 +108,14 @@ impl Interpreter for DeleteInterpreter {
         // check mutability
         tbl.check_mutable()?;
 
+        let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support DELETE FROM",
+                tbl.name(),
+                tbl.get_table_info().engine(),
+            ))
+        })?;
+
         if let Some(subquery_desc) = &self.plan.subquery_desc {
             let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
@@ -132,8 +130,10 @@ impl Interpreter for DeleteInterpreter {
                 subquery_desc.clone(),
                 self.plan.metadata.clone(),
                 self.ctx.clone(),
-                SubqueryMutation::Delete,
+                RemoteSubqueryMutation::Delete,
                 is_distributed,
+                fuse_table.get_table_info().clone(),
+                catalog_info.clone(),
             )
             .await?;
             build_res.main_pipeline.add_lock_guard(lock_guard);
@@ -159,14 +159,6 @@ impl Interpreter for DeleteInterpreter {
         } else {
             (None, vec![])
         };
-
-        let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
-            ErrorCode::Unimplemented(format!(
-                "table {}, engine type {}, does not support DELETE FROM",
-                tbl.name(),
-                tbl.get_table_info().engine(),
-            ))
-        })?;
 
         let mut build_res = PipelineBuildResult::create();
 
@@ -326,8 +318,10 @@ pub async fn modify_by_subquery(
     subquery_desc: SubqueryDesc,
     metadata: MetadataRef,
     ctx: Arc<QueryContext>,
-    typ: SubqueryMutation,
+    typ: RemoteSubqueryMutation,
     is_distributed: bool,
+    table_info: TableInfo,
+    catalog_info: CatalogInfo,
 ) -> Result<PipelineBuildResult> {
     let mut subquery_desc = subquery_desc;
     subquery_desc
@@ -338,13 +332,13 @@ pub async fn modify_by_subquery(
     let input_expr = &subquery_desc.input_expr;
     let outer_columns = &subquery_desc.outer_columns;
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
-        .with_enable_distributed_optimization(true)
+        .with_enable_distributed_optimization(is_distributed)
         .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
         .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
     let input_expr = optimize_query(opt_ctx, input_expr.clone()).await?;
 
     // 2: build filter executor with optimized subquery expression
-    let filter_executor = build_filter_executor(
+    let filter = build_filter_plan(
         subquery_desc.clone(),
         metadata.clone(),
         input_expr.clone(),
@@ -362,11 +356,26 @@ pub async fn modify_by_subquery(
         )));
     };
 
-    // 3: build pipelines
+    let modify_by_subquery = ModifyBySubquery {
+        filter,
+        snapshot,
+        output_columns: outer_columns.clone(),
+        subquery_desc: subquery_desc.clone(),
+        typ,
+        table_info,
+        catalog_info,
+    }
+    .into();
 
-    // 3.1: build sub query join input
+    let root = SExpr::create_binary(
+        Arc::new(modify_by_subquery),
+        Arc::new(input_expr.clone()),
+        Arc::new(input_expr.child(0)?.clone()),
+    );
+
+    // 3: build pipelines
     let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
-    let mut root = builder.build(&input_expr, outer_columns.clone()).await?;
+    let mut root = builder.build(&root, outer_columns.clone()).await?;
 
     // distribute the root source
     if is_distributed {
@@ -380,83 +389,19 @@ pub async fn modify_by_subquery(
         });
     }
 
-    let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &root).await?;
-
-    // 3.2: add TransformMutationSubquery
-    build_res.main_pipeline.add_transform(|input, output| {
-        TransformMutationSubquery::try_create(
-            ctx.get_function_context()?,
-            input,
-            output,
-            typ.clone(),
-            filter_executor.clone(),
-            table.schema().num_fields(),
-        )?
-        .into_processor()
-    })?;
-
-    // 3.3: add TransformSerializeBlock
-    let block_thresholds = table.get_block_thresholds();
-    let cluster_stats_gen = table.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, None)?;
-    build_res.main_pipeline.add_transform(|input, output| {
-        let proc = TransformSerializeBlock::try_create(
-            ctx.clone(),
-            input,
-            output,
-            table,
-            cluster_stats_gen.clone(),
-            MutationKind::Replace,
-        )?;
-        proc.into_processor()
-    })?;
-
-    // 3.4: add TransformSerializeSegment
-    build_res.main_pipeline.add_transform(|input, output| {
-        let proc =
-            TransformSerializeSegment::new(ctx.clone(), input, output, table, block_thresholds);
-        proc.into_processor()
-    })?;
-
-    // 3.5: add TableMutationAggregator
-    build_res.main_pipeline.add_transform(|input, output| {
-        let aggregator =
-            TableMutationAggregator::new(table, ctx.clone(), vec![], MutationKind::Replace);
-        Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-            input, output, aggregator,
-        )))
-    })?;
-
-    // 3.6: add CommitSink
-    let snapshot_gen = MutationGenerator::new(snapshot, MutationKind::ReplaceBySubquery);
-    let lock = None;
-    build_res.main_pipeline.add_sink(|input| {
-        databend_common_storages_fuse::operations::CommitSink::try_create(
-            table,
-            ctx.clone(),
-            None,
-            vec![],
-            snapshot_gen.clone(),
-            input,
-            None,
-            lock.clone(),
-            None,
-            None,
-        )
-    })?;
+    let build_res = build_query_pipeline_without_render_result_set(&ctx, &root).await?;
 
     Ok(build_res)
 }
 
-async fn build_filter_executor(
+async fn build_filter_plan(
     subquery: SubqueryDesc,
     metadata: MetadataRef,
     subquery_expression: SExpr,
     ctx: Arc<QueryContext>,
-) -> Result<FilterExecutor> {
+) -> Result<Box<PhysicalPlan>> {
     let predicate = &subquery.predicate;
     let outer_columns = subquery.outer_columns.clone();
-    let func_ctx = ctx.get_function_context()?;
-    let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
 
     let filter_expr = match subquery_expression.plan() {
         RelOperator::Filter(_) => subquery_expression,
@@ -473,34 +418,5 @@ async fn build_filter_executor(
     let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
     let filter = builder.build(&filter_expr, outer_columns).await?;
 
-    if let PhysicalPlan::Filter(filter) = filter {
-        let predicate = filter
-            .predicates
-            .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
-            .try_reduce(|lhs, rhs| {
-                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-            })
-            .transpose()
-            .unwrap_or_else(|| {
-                Err(ErrorCode::Internal(
-                    "Invalid empty predicate list".to_string(),
-                ))
-            })?;
-        assert_eq!(predicate.data_type(), &DataType::Boolean);
-        let mut builder = SelectExprBuilder::new();
-        let (select_expr, has_or) = builder.build(&predicate).into();
-
-        Ok(FilterExecutor::new(
-            select_expr,
-            func_ctx,
-            has_or,
-            max_block_size,
-            None,
-            &BUILTIN_FUNCTIONS,
-            true,
-        ))
-    } else {
-        unreachable!()
-    }
+    Ok(Box::new(filter))
 }

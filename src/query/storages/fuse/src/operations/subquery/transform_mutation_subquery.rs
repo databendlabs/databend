@@ -28,15 +28,9 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
-use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::plans::SubqueryMutation;
 
 use crate::operations::get_not;
-
-#[derive(Clone)]
-pub enum SubqueryMutation {
-    Delete,
-    Update(Vec<BlockOperator>),
-}
 
 pub struct TransformMutationSubquery {
     input: Arc<InputPort>,

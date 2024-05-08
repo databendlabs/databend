@@ -262,6 +262,7 @@ impl DPhpy {
             | RelOperator::ConstantTableScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AsyncFunction(_)
+            | RelOperator::ModifyBySubquery(_)
             | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }

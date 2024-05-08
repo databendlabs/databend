@@ -18,11 +18,11 @@ use std::fmt::Formatter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use super::physical_plans::AsyncFunction;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -43,6 +43,7 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoSource;
+use crate::executor::physical_plans::ModifyBySubquery;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -128,6 +129,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".fmt(f)?,
             PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".fmt(f)?,
             PhysicalPlan::AsyncFunction(_) => "AsyncFunction".fmt(f)?,
+            PhysicalPlan::ModifyBySubquery(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -548,5 +550,11 @@ impl Display for Udf {
 impl Display for AsyncFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "AsyncFunction: {}", self.display_name)
+    }
+}
+
+impl Display for ModifyBySubquery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ModifyBySubquery: {}", self.predicate)
     }
 }

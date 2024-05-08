@@ -203,6 +203,23 @@ select * from t1 order by a;
 8
 
 statement ok
+truncate table t1;
+
+statement ok
+insert into t1 values(1), (2), (3), (8);
+
+statement ok
+update t1 set a = a + 1 where 200 > (select avg(a) from t1);
+
+query I
+select * from t1 order by a;
+----
+2
+3
+4
+9
+
+statement ok
 drop table t1;
 
 statement ok
