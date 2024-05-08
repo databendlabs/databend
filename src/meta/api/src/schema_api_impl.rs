@@ -65,7 +65,7 @@ use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::CatalogIdIdent;
-use databend_common_meta_app::schema::CatalogIdToName;
+use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -3670,7 +3670,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (catalog_id) -> (tenant, catalog_name)
             let catalog_id = fetch_id(self, IdGenerator::catalog_id()).await?;
             let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
-            let id_to_name_key = CatalogIdToName { catalog_id };
+            let id_to_name_key = CatalogIdToNameIdent::new(name_key.tenant(), catalog_id);
 
             debug!(catalog_id = catalog_id, name_key :? =(name_key); "new catalog id");
 
@@ -3762,7 +3762,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (catalog_id) -> catalog_meta
             // (catalog_id) -> (tenant, catalog_name)
             let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
-            let id_to_name_key = CatalogIdToName { catalog_id };
+            let id_to_name_key = CatalogIdToNameIdent::new(name_key.tenant(), catalog_id);
 
             debug!(
                 catalog_id = catalog_id,
