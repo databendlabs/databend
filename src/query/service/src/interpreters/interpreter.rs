@@ -75,9 +75,7 @@ pub trait Interpreter: Sync + Send {
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         ctx.set_status_info("building pipeline");
-        if let Err(err) = ctx.check_aborting() {
-            return Err(err);
-        }
+        ctx.check_aborting()?;
         if self.is_ddl() {
             CommitInterpreter::try_create(ctx.clone())?
                 .execute2()
@@ -188,7 +186,7 @@ pub trait Interpreter: Sync + Send {
 pub type InterpreterPtr = Arc<dyn Interpreter>;
 
 fn log_query_start(ctx: &QueryContext) {
-    InterpreterMetrics::record_query_start(&ctx);
+    InterpreterMetrics::record_query_start(ctx);
     let now = SystemTime::now();
     let session = ctx.get_current_session();
 
@@ -202,7 +200,7 @@ fn log_query_start(ctx: &QueryContext) {
 }
 
 fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
-    InterpreterMetrics::record_query_finished(&ctx, error.clone());
+    InterpreterMetrics::record_query_finished(ctx, error.clone());
 
     let now = SystemTime::now();
     let session = ctx.get_current_session();
