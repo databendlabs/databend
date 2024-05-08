@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -104,7 +105,12 @@ pub async fn do_vacuum_temporary_files(
                 .remove_via(stream::iter(remove_temp_files_path))
                 .await?;
 
-            info!("vacuum removed {} temp files in {:?}(elapsed: {:?})", cur_removed, temporary_dir, instant.elapsed());
+            info!(
+                "vacuum removed {} temp files in {:?}(elapsed: {:?})",
+                cur_removed,
+                temporary_dir,
+                instant.elapsed()
+            );
         }
 
         if end_of_stream {
@@ -171,7 +177,12 @@ async fn vacuum_finished_query(
                 .remove_via(stream::iter(remove_temp_files_path))
                 .await?;
 
-            info!("vacuum removed {} temp files in {:?}(elapsed: {:?})", cur_removed, de.path(), instant.elapsed());
+            info!(
+                "vacuum removed {} temp files in {:?}(elapsed: {:?})",
+                cur_removed,
+                de.path(),
+                instant.elapsed()
+            );
         }
 
         if end_of_stream {
