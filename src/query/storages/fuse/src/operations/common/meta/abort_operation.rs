@@ -18,10 +18,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use opendal::Operator;
-
-use crate::io::Files;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct AbortOperation {
