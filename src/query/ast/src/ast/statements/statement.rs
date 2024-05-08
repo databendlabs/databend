@@ -587,7 +587,7 @@ impl Display for Statement {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {user}")?;
+                write!(f, " {}", user.display())?;
             }
             Statement::CreateRole {
                 if_not_exists,

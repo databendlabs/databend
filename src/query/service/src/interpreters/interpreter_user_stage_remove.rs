@@ -17,9 +17,11 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::plans::RemoveStagePlan;
+use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_fuse::io::Files;
 use databend_common_storages_stage::StageTable;
+use databend_storages_common_io::Files;
+use futures_util::StreamExt;
 use log::debug;
 use log::error;
 
@@ -68,19 +70,19 @@ impl Interpreter for RemoveUserStageInterpreter {
             files: None,
             pattern,
         };
-        let files: Vec<String> = files_info
-            .list(&op, thread_num, None)
-            .await?
-            .into_iter()
-            .map(|file_with_meta| file_with_meta.path)
-            .collect::<Vec<_>>();
+        let files = files_info.list_stream(&op, thread_num, None).await?;
 
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
         let file_op = Files::create(table_ctx, op);
 
-        const REMOVE_BATCH: usize = 4000;
-        for chunk in files.chunks(REMOVE_BATCH) {
-            if let Err(e) = file_op.remove_file_in_batch(chunk).await {
+        const REMOVE_BATCH: usize = 1000;
+        let mut chunks = files.chunks(REMOVE_BATCH);
+
+        // s3 can remove at most 1k files in one request
+        while let Some(chunk) = chunks.next().await {
+            let chunk: Result<Vec<StageFileInfo>> = chunk.into_iter().collect();
+            let chunk = chunk?.into_iter().map(|x| x.path).collect::<Vec<_>>();
+            if let Err(e) = file_op.remove_file_in_batch(&chunk).await {
                 error!("Failed to delete file: {:?}, error: {}", chunk, e);
             }
 

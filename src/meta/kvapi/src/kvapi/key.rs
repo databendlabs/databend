@@ -61,7 +61,7 @@ where Self: Sized
 
     /// Return the parent key of this key.
     ///
-    /// For example, a table name's parent is db-id.
+    /// For example, a table name's(`(database_id, table_name)`) parent is the database id.
     fn parent(&self) -> Option<String>;
 
     /// Encode structured key into a string.
@@ -75,145 +75,20 @@ where Self: Sized
         let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
         let k = Self::decode_key(&mut p)?;
         p.done()?;
+
         Ok(k)
-    }
-}
-
-/// The dir name of a key.
-///
-/// For example, the dir name of a key `a/b/c` is `a/b`.
-///
-/// Note that the dir name of `a` is still `a`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DirName<K> {
-    key: K,
-    level: usize,
-}
-
-impl<K> DirName<K> {
-    pub fn new(key: K) -> Self {
-        DirName { key, level: 1 }
-    }
-
-    pub fn new_with_level(key: K, level: usize) -> Self {
-        DirName { key, level }
-    }
-
-    pub fn with_level(&mut self, level: usize) -> &mut Self {
-        self.level = level;
-        self
-    }
-
-    pub fn key(&self) -> &K {
-        &self.key
-    }
-
-    pub fn into_key(self) -> K {
-        self.key
-    }
-}
-
-impl<K> DirName<K>
-where K: kvapi::Key
-{
-    /// Return a string with a suffix slash "/"
-    pub fn dir_name_with_slash(&self) -> String {
-        let prefix = self.to_string_key();
-        format!("{}/", prefix)
-    }
-}
-
-impl<K: Key> KeyCodec for DirName<K> {
-    /// DirName can not be encoded as a key directly
-    fn encode_key(&self, _b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-        unimplemented!()
-    }
-
-    /// DirName can not be encoded as a key directly
-    fn decode_key(_p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
-        unimplemented!()
-    }
-}
-
-impl<K: Key> Key for DirName<K> {
-    const PREFIX: &'static str = K::PREFIX;
-    type ValueType = K::ValueType;
-
-    fn parent(&self) -> Option<String> {
-        unimplemented!("DirName is not a record thus it has no parent")
-    }
-
-    fn to_string_key(&self) -> String {
-        let k = self.key.to_string_key();
-        k.rsplitn(self.level + 1, '/').last().unwrap().to_string()
-    }
-
-    fn from_str_key(s: &str) -> Result<Self, KeyError> {
-        let d = DirName::new_with_level(K::from_str_key(s)?, 0);
-        Ok(d)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
 
-    use super::DirName;
-    use crate::kvapi;
+    use crate::kvapi::testing::FooKey;
+    use crate::kvapi::DirName;
     use crate::kvapi::Key;
-    use crate::kvapi::KeyCodec;
-    use crate::kvapi::KeyError;
-    use crate::kvapi::KeyParser;
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct FooKey {
-        a: u64,
-        b: String,
-        c: u64,
-    }
-
-    impl KeyCodec for FooKey {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.a).push_str(&self.b).push_u64(self.c)
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-        where Self: Sized {
-            let a = parser.next_u64()?;
-            let b = parser.next_str()?;
-            let c = parser.next_u64()?;
-            Ok(FooKey { a, b, c })
-        }
-    }
-
-    impl Key for FooKey {
-        const PREFIX: &'static str = "pref";
-        type ValueType = Infallible;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-
-        fn to_string_key(&self) -> String {
-            format!("{}/{}/{}/{}", Self::PREFIX, self.a, self.b, self.c)
-        }
-    }
 
     #[test]
-    fn test_dir_name_from_key() {
-        let d = DirName::<FooKey>::from_str_key("pref/9/x/8").unwrap();
-        assert_eq!(
-            FooKey {
-                a: 9,
-                b: "x".to_string(),
-                c: 8,
-            },
-            d.into_key()
-        );
-    }
-
-    #[test]
-    fn test_dir_name() {
+    fn test_with_key_space() {
         let k = FooKey {
             a: 1,
             b: "b".to_string(),
@@ -223,37 +98,12 @@ mod tests {
         let dir = DirName::new(k);
         assert_eq!("pref/1/b", dir.to_string_key());
 
-        let dir = DirName::new(dir);
-        assert_eq!("pref/1", dir.to_string_key());
-
-        let dir = DirName::new(dir);
-        assert_eq!("pref", dir.to_string_key());
-
-        let dir = DirName::new(dir);
-        assert_eq!("pref", dir.to_string_key(), "root dir should be the same");
-    }
-
-    #[test]
-    fn test_dir_name_with_level() {
         let k = FooKey {
             a: 1,
             b: "b".to_string(),
             c: 2,
         };
 
-        let mut dir = DirName::new(k);
-        assert_eq!("pref/1/b", dir.to_string_key());
-
-        dir.with_level(0);
-        assert_eq!("pref/1/b/2", dir.to_string_key());
-
-        dir.with_level(2);
-        assert_eq!("pref/1", dir.to_string_key());
-
-        dir.with_level(3);
-        assert_eq!("pref", dir.to_string_key());
-
-        dir.with_level(4);
-        assert_eq!("pref", dir.to_string_key(), "root dir should be the same");
+        assert_eq!("pref/1/b/2", k.to_string_key());
     }
 }

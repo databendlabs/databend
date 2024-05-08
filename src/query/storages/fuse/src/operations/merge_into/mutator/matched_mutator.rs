@@ -167,7 +167,7 @@ impl MatchedAggregator {
                 {
                     // we can get duplicated partial unmodified blocks,this is not an error
                     // |----------------------------block----------------------------------------|
-                    // |----partial-unmodified----|-----macthed------|----partial-unmodified-----|
+                    // |----partial-unmodified----|-----matched------|----partial-unmodified-----|
                     info!(
                         "duplicated block: segment_idx: {}, block_idx: {}",
                         meta_index.segment_idx, meta_index.block_idx

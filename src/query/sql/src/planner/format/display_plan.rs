@@ -338,7 +338,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         "can_try_update_column_only: {}",
         merge_into.can_try_update_column_only
     ));
-    // add macthed clauses
+    // add matched clauses
     let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
     let taregt_schema = table_entry.table().schema_with_stream();
     for evaluator in &merge_into.matched_evaluators {
@@ -373,7 +373,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
             )));
         }
     }
-    // add unmacthed clauses
+    // add unmatched clauses
     let mut unmatched_children = Vec::with_capacity(merge_into.unmatched_evaluators.len());
     for evaluator in &merge_into.unmatched_evaluators {
         let condition_format = evaluator.condition.as_ref().map_or_else(

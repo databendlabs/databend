@@ -14,6 +14,7 @@
 
 mod add_row_number;
 mod aggregate;
+mod async_function;
 mod call;
 mod constant_table_scan;
 mod copy_into_table;
@@ -54,6 +55,7 @@ mod window;
 
 pub use add_row_number::AddRowNumber;
 pub use aggregate::*;
+pub use async_function::AsyncFunction;
 pub use call::CallPlan;
 pub use constant_table_scan::ConstantTableScan;
 pub use copy_into_location::*;

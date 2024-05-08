@@ -14,6 +14,8 @@
 
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_storages_common_txn::TxnManager;
@@ -49,11 +51,18 @@ async fn check_stream_status(
         .get_table(tenant, &db_name, &params.stream_name)
         .await?;
     let stream = StreamTable::try_from_table(tbl.as_ref())?;
-    let (base_table_ident, _) = catalog
-        .get_table_meta_by_id(stream.source_table_id())
-        .await?;
+
+    let table_id = stream.source_table_id();
+    let seqv = catalog
+        .get_table_meta_by_id(table_id)
+        .await?
+        .ok_or_else(|| {
+            let err = UnknownTableId::new(table_id, "check_stream_status");
+            AppError::from(err)
+        })?;
+
     Ok(StreamStatusResponse {
-        has_data: base_table_ident.seq != stream.offset(),
+        has_data: seqv.seq != stream.offset(),
         params: params.0,
     })
 }

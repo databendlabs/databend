@@ -416,7 +416,7 @@ async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) ->
     };
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
-    // don't support spill for now, and we need the macthed clauses' count
+    // don't support spill for now, and we need the matched clauses' count
     // is one, just support `merge into t using source when matched then
     // update xx when not matched then insert xx`.
     let flag = plan.matched_evaluators.len() == 1

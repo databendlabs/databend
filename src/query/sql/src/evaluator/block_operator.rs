@@ -33,7 +33,7 @@ use databend_common_pipeline_transforms::processors::Transformer;
 use crate::optimizer::ColumnSet;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BlockOperator {
     /// Batch mode of map which merges map operators into one.
     Map {
@@ -71,6 +71,7 @@ impl BlockOperator {
                         let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                         let result = evaluator.run(expr)?;
                         let col = BlockEntry::new(expr.data_type().clone(), result);
+
                         input.add_column(col);
                     }
                     match projections {

@@ -35,6 +35,7 @@ pub struct HttpQueryContext {
     pub opentelemetry_baggage: Option<Vec<(String, String)>>,
     pub http_method: String,
     pub uri: String,
+    pub client_host: Option<String>,
 }
 
 impl HttpQueryContext {
@@ -48,6 +49,7 @@ impl HttpQueryContext {
         open_telemetry_baggage: Option<Vec<(String, String)>>,
         http_method: String,
         uri: String,
+        client_host: Option<String>,
     ) -> Self {
         HttpQueryContext {
             session,
@@ -59,6 +61,7 @@ impl HttpQueryContext {
             opentelemetry_baggage: open_telemetry_baggage,
             http_method,
             uri,
+            client_host,
         }
     }
 

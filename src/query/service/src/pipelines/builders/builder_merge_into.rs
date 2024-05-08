@@ -171,7 +171,7 @@ impl PipelineBuilder {
             ];
             self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-            // not macthed operation
+            // not matched operation
             let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                 unmatched.clone(),
                 input_schema.clone(),
@@ -526,13 +526,13 @@ impl PipelineBuilder {
         // the complete pipeline(with matched and unmatched) below:
         // row_id port0_1
         // matched update data port0_2
-        // not macthed insert data port0_3
+        // not matched insert data port0_3
         // row_id port1_1
         // matched update data port1_2
-        // not macthed insert data port1_3
+        // not matched insert data port1_3
         // ......
         // 1.for matched only, there are no not matched ports
-        // 2.for unmatched only/insert only, there are no macthed update ports and row_id ports
+        // 2.for unmatched only/insert only, there are no matched update ports and row_id ports
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
         if !*distributed {
             // complete pipeline

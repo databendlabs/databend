@@ -24,6 +24,7 @@ use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
+use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
@@ -98,6 +99,9 @@ impl PipelineBuilder {
     pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
+            PhysicalPlan::MergeIntoSource(v) if v.merge_type != MergeIntoType::FullOperation => {
+                Ok(None)
+            }
             _ => {
                 let desc = plan.get_desc()?;
                 let plan_labels = plan.get_labels()?;
@@ -212,6 +216,7 @@ impl PipelineBuilder {
             PhysicalPlan::ChunkCommitInsert(chunk_commit_insert) => {
                 self.build_chunk_commit_insert(chunk_commit_insert)
             }
+            PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
         }
     }
 }

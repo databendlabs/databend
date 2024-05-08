@@ -13,11 +13,25 @@
 // limitations under the License.
 
 use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
 /// Define the meta-service key for a stage.
 pub type StageIdent = TIdent<Resource>;
+pub type StageIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
+
+impl StageIdent {
+    pub fn stage_name(&self) -> &str {
+        self.name()
+    }
+}
+
+impl StageIdentRaw {
+    pub fn stage_name(&self) -> &str {
+        self.name()
+    }
+}
 
 mod kvapi_impl {
 
@@ -49,7 +63,7 @@ mod tests {
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_kvapi_key_for_stage_ident() {
+    fn test_stage_ident() {
         let tenant = Tenant::new_literal("test");
         let stage = StageIdent::new(tenant, "stage");
 

@@ -101,47 +101,50 @@ pub trait Interpreter: Sync + Send {
         }
 
         let query_ctx = ctx.clone();
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            let mut has_profiles = false;
-            if let Ok(plans_profile) = may_error {
-                query_ctx.add_query_profiles(plans_profile);
+        build_res
+            .main_pipeline
+            .set_on_finished(move |(plans_profile, may_error)| {
+                let mut has_profiles = false;
+                // Standalone mode or query executed is successfully
+                if query_ctx.get_cluster().is_empty() || may_error.is_ok() {
+                    query_ctx.add_query_profiles(plans_profile);
 
-                let query_profiles = query_ctx.get_query_profiles();
+                    let query_profiles = query_ctx.get_query_profiles();
 
-                if !query_profiles.is_empty() {
-                    has_profiles = true;
-                    #[derive(serde::Serialize)]
-                    struct QueryProfiles {
-                        query_id: String,
-                        profiles: Vec<PlanProfile>,
-                        statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+                    if !query_profiles.is_empty() {
+                        has_profiles = true;
+                        #[derive(serde::Serialize)]
+                        struct QueryProfiles {
+                            query_id: String,
+                            profiles: Vec<PlanProfile>,
+                            statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+                        }
+
+                        info!(
+                            target: "databend::log::profile",
+                            "{}",
+                            serde_json::to_string(&QueryProfiles {
+                                query_id: query_ctx.get_id(),
+                                profiles: query_profiles,
+                                statistics_desc: get_statistics_desc(),
+                            })?
+                        );
                     }
-
-                    info!(
-                        target: "databend::log::profile",
-                        "{}",
-                        serde_json::to_string(&QueryProfiles {
-                            query_id: query_ctx.get_id(),
-                            profiles: query_profiles,
-                            statistics_desc: get_statistics_desc(),
-                        })?
-                    );
                 }
-            }
 
-            let err_opt = match may_error {
-                Ok(_) => None,
-                Err(e) => Some(e.clone()),
-            };
+                let err_opt = match may_error {
+                    Ok(_) => None,
+                    Err(e) => Some(e.clone()),
+                };
 
-            InterpreterMetrics::record_query_finished(&query_ctx, err_opt.clone());
-            log_query_finished(&query_ctx, err_opt, has_profiles);
+                InterpreterMetrics::record_query_finished(&query_ctx, err_opt.clone());
+                log_query_finished(&query_ctx, err_opt, has_profiles);
 
-            match may_error {
-                Ok(_) => Ok(()),
-                Err(error) => Err(error.clone()),
-            }
-        });
+                match may_error {
+                    Ok(_) => Ok(()),
+                    Err(error) => Err(error.clone()),
+                }
+            });
 
         ctx.set_status_info("executing pipeline");
 

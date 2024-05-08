@@ -50,7 +50,7 @@ use crate::operations::BlockMetaIndex;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SourceFullMatched;
 
-#[typetag::serde(name = "source_full_macthed")]
+#[typetag::serde(name = "source_full_matched")]
 impl BlockMetaInfo for SourceFullMatched {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         SourceFullMatched::downcast_ref_from(info).is_some_and(|other| self == other)
