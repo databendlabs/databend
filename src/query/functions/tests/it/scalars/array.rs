@@ -228,7 +228,12 @@ fn test_array_prepend(file: &mut impl Write) {
     run_ast(file, "array_prepend('a', ['b', NULL, NULL, 'c', 'd'])", &[]);
     run_ast(
         file,
-        "array_prepend(1, CAST([2, 3] AS Array(INT8) NULL))",
+        "array_prepend(NULL, CAST([2, 3] AS Array(INT8 NULL) NULL))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_prepend(1, CAST([2, 3] AS Array(INT8 NULL) NULL))",
         &[],
     );
     run_ast(file, "array_prepend(a, [b, c])", &[
@@ -244,7 +249,12 @@ fn test_array_append(file: &mut impl Write) {
     run_ast(file, "array_append(['b', NULL, NULL, 'c', 'd'], 'e')", &[]);
     run_ast(
         file,
-        "array_append(CAST([1, 2] AS Array(INT8) NULL), 3)",
+        "array_append(CAST([1, 2] AS Array(INT8 NULL) NULL), NULL)",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_append(CAST([1, 2] AS Array(INT8 NULL) NULL), 3)",
         &[],
     );
     run_ast(file, "array_append([b, c], a)", &[

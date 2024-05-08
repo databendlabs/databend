@@ -428,42 +428,70 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+    registry.register_2_arg_core::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, NullableType<ArrayType<GenericType<0>>>, _, _>(
         "array_prepend",
         |_, item_domain, array_domain| {
-            FunctionDomain::Domain(Some(
-                array_domain
-                    .as_ref()
-                    .map(|array_domain| item_domain.merge(array_domain))
-                    .unwrap_or(item_domain.clone())
-            ))
+            let value = array_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|inner_domain| inner_domain.merge(item_domain))
+                        .unwrap_or(item_domain.clone())
+                })
+                .map(Some)
+                .map(Box::new);
+            FunctionDomain::Domain(
+                NullableDomain {
+                    has_null: array_domain.has_null,
+                    value,
+                }
+            )
         },
-        |val, arr, _| {
-            let data_type = arr.data_type();
-            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
-            builder.push(val);
-            builder.append_column(&arr);
-            builder.build()
-        },
+        vectorize_2_arg::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, NullableType<ArrayType<GenericType<0>>>>(
+            |val, arr, _| {
+                arr.map(|arr| {
+                    let data_type = arr.data_type();
+                    let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
+                    builder.push(val);
+                    builder.append_column(&arr);
+                    builder.build()
+            })
+        })
     );
 
-    registry.register_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>, _, _>(
+    registry.register_2_arg_core::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, NullableType<ArrayType<GenericType<0>>>, _, _>(
         "array_append",
         |_, array_domain, item_domain| {
-            FunctionDomain::Domain(Some(
-                array_domain
-                    .as_ref()
-                    .map(|array_domain| item_domain.merge(array_domain))
-                    .unwrap_or(item_domain.clone())
-            ))
+            let value = array_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|inner_domain| inner_domain.merge(item_domain))
+                        .unwrap_or(item_domain.clone())
+                })
+                .map(Some)
+                .map(Box::new);
+            FunctionDomain::Domain(
+                NullableDomain {
+                    has_null: array_domain.has_null,
+                    value,
+                }
+            )
         },
-        |arr, val, _| {
-            let data_type = arr.data_type();
-            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
-            builder.append_column(&arr);
-            builder.push(val);
-            builder.build()
-        },
+        vectorize_2_arg::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, NullableType<ArrayType<GenericType<0>>>>(
+            |arr, val, _| {
+                arr.map(|arr| {
+                    let data_type = arr.data_type();
+                    let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
+                    builder.append_column(&arr);
+                    builder.push(val);
+                    builder.build()
+            })
+        })
     );
 
     fn eval_contains<T: ArgType>(
