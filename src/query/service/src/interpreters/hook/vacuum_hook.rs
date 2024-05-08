@@ -63,15 +63,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 
             Ok(())
         });
-    } else {
-        let _ = GlobalIORuntime::instance().block_on(async move {
-            let op = DataOperator::instance().operator();
-            op.create_dir(&format!("{}/", spill_prefix)).await?;
-            op.write(&format!("{}/finished", spill_prefix), vec![])
-                .await?;
-
-            Ok(())
-        });
     }
+
     Ok(())
 }
