@@ -128,11 +128,6 @@ impl InterpreterMetrics {
             }
         };
     }
-
-    pub fn record_query_error(ctx: &QueryContext) {
-        let labels = Self::common_labels(ctx);
-        QUERY_ERROR.get_or_create(&labels).inc();
-    }
 }
 
 fn convert_query_timestamp(time: SystemTime) -> u128 {

@@ -7,8 +7,6 @@ export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export RM_UUID="sed -E ""s/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/UUID/g"""
 
-echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
-
 stmt "drop database if exists db01;"
 stmt "create database db01;"
 stmt "drop database if exists dbnotexists;"
@@ -275,5 +273,3 @@ echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists db01" | $BENDSQL_CLIENT_CONNECT
-
-echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT

@@ -29,6 +29,7 @@ members = [
     "src/common/storage",
     "src/common/vector",
     "src/common/license",
+    "src/common/parquet2",
     # Query
     "src/query/ast",
     "src/query/async_functions",
@@ -54,6 +55,7 @@ members = [
     "src/query/storages/common/cache",
     "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
+    "src/query/storages/common/io",
     "src/query/storages/common/pruner",
     "src/query/storages/common/table_meta",
     "src/query/storages/delta",
@@ -272,7 +274,6 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 arrow-format = { git = "https://github.com/everpcpc/arrow-format", rev = "ad8f2dd" }
-parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "54fd72f" }
 micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" }

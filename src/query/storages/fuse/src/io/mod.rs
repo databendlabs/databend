@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod files;
 mod locations;
 pub mod read;
 mod segments;
 mod snapshots;
 mod write;
 
-pub use files::Files;
 pub use locations::TableMetaLocationGenerator;
 pub use read::AggIndexReader;
 pub use read::BlockReader;

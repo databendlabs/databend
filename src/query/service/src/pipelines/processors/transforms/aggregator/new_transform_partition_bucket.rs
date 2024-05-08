@@ -145,6 +145,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             // in singleton, the partition is 8, 32, 128.
             // We pull the first data to ensure the max partition,
             // and then pull all data that is less than the max partition
+            let mut refresh_index = 0;
             for index in 0..self.inputs.len() {
                 if self.inputs[index].port.is_finished() {
                     continue;
@@ -180,12 +181,21 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     self.initialized_all_inputs = false;
                 }
 
-                // handle the case where the last input changes the max partition
-                if index == self.inputs.len() - 1
-                    && before_max_partition_count > 0
+                // max partition count change
+                if before_max_partition_count > 0
                     && before_max_partition_count != self.max_partition_count
                 {
-                    self.initialized_all_inputs = false;
+                    // set need data for inputs which is less than the max partition
+                    for i in refresh_index..index {
+                        if !self.inputs[i].port.is_finished()
+                            && !self.inputs[i].port.has_data()
+                            && self.inputs[i].max_partition_count != self.max_partition_count
+                        {
+                            self.inputs[i].port.set_need_data();
+                            self.initialized_all_inputs = false;
+                        }
+                    }
+                    refresh_index = index;
                 }
             }
         }
@@ -292,6 +302,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         }
 
         if self.all_inputs_init {
+            if partition_count != self.max_partition_count {
+                return Err(ErrorCode::Internal(
+                    "Internal, the partition count does not equal the max partition count on TransformPartitionBucket.
+                    ",
+                ));
+            }
             match self.buckets_blocks.entry(bucket) {
                 Entry::Vacant(v) => {
                     v.insert(vec![data_block]);

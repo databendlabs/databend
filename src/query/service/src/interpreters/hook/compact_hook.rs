@@ -72,7 +72,7 @@ async fn do_hook_compact(
         return Ok(());
     }
 
-    pipeline.set_on_finished(move |err| {
+    pipeline.set_on_finished(move |(_profiles, err)| {
         let compaction_limits = match compact_target.mutation_kind {
             MutationKind::Insert => {
                 let compaction_num_block_hint = ctx.get_compaction_num_block_hint();

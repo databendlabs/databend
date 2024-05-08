@@ -24,7 +24,6 @@ SELECT sleep(2) from numbers(1);
 ----
 0
 
-onlyif mysql
 statement ok
 VACUUM TEMPORARY FILES RETAIN 2 SECONDS;
 

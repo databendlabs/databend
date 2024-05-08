@@ -15,6 +15,8 @@
 //! Schema types
 
 pub mod catalog;
+pub mod catalog_id_ident;
+pub mod catalog_id_to_name_ident;
 pub mod catalog_name_ident;
 pub mod database_id_history_ident;
 pub mod database_name_ident;
@@ -33,6 +35,8 @@ mod table;
 mod virtual_column;
 
 pub use catalog::*;
+pub use catalog_id_ident::CatalogIdIdent;
+pub use catalog_id_to_name_ident::CatalogIdToNameIdent;
 pub use catalog_name_ident::CatalogNameIdent;
 pub use create_option::CreateOption;
 pub use database::CreateDatabaseReply;
