@@ -56,7 +56,7 @@ use crate::pipelines::executor::WorkersCondvar;
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Box<dyn FnOnce(&Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
+    Box<dyn FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static>;
 
 pub struct QueryPipelineExecutor {
     threads_num: usize,
@@ -92,7 +92,7 @@ impl QueryPipelineExecutor {
 
         match RunningGraph::create(pipeline, 1, settings.query_id.clone(), None) {
             Err(cause) => {
-                let _ = on_finished_callback(&Err(cause.clone()));
+                let _ = on_finished_callback((&vec![], &Err(cause.clone())));
                 Err(cause)
             }
             Ok(running_graph) => Self::try_create(
@@ -163,7 +163,7 @@ impl QueryPipelineExecutor {
         match RunningGraph::from_pipelines(pipelines, 1, settings.query_id.clone(), None) {
             Err(cause) => {
                 if let Some(on_finished_callback) = on_finished_callback {
-                    let _ = on_finished_callback(&Err(cause.clone()));
+                    let _ = on_finished_callback((&vec![], &Err(cause.clone())));
                 }
 
                 Err(cause)
@@ -205,7 +205,7 @@ impl QueryPipelineExecutor {
         }))
     }
 
-    fn on_finished(&self, error: &Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> {
+    fn on_finished(&self, error: (&Vec<PlanProfile>, &Result<()>)) -> Result<()> {
         let mut guard = self.on_finished_callback.lock();
         if let Some(on_finished_callback) = guard.take() {
             drop(guard);
@@ -263,7 +263,7 @@ impl QueryPipelineExecutor {
                     let may_error = error.clone();
                     drop(finished_error_guard);
 
-                    self.on_finished(&Err(may_error.clone()))?;
+                    self.on_finished((&self.get_plans_profile(), &Err(may_error.clone())))?;
                     return Err(may_error);
                 }
             }
@@ -271,18 +271,18 @@ impl QueryPipelineExecutor {
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
                 let may_error = thread_res.unwrap_err();
-                self.on_finished(&Err(may_error.clone()))?;
+                self.on_finished((&self.get_plans_profile(), &Err(may_error.clone())))?;
                 return Err(may_error);
             }
         }
 
         if let Err(error) = self.graph.assert_finished_graph() {
-            self.on_finished(&Err(error.clone()))?;
+            self.on_finished((&self.get_plans_profile(), &Err(error.clone())))?;
             return Err(error);
         }
 
         // self.settings.query_id
-        self.on_finished(&Ok(self.get_plans_profile()))?;
+        self.on_finished((&self.get_plans_profile(), &Ok(())))?;
         Ok(())
     }
 
@@ -544,7 +544,7 @@ impl Drop for QueryPipelineExecutor {
 
                 if let Err(cause) = catch_unwind(move || {
                     let _guard = ThreadTracker::tracking(tracking_payload);
-                    on_finished_callback(&Err(cause))
+                    on_finished_callback((&self.get_plans_profile(), &Err(cause)))
                 })
                 .flatten()
                 {

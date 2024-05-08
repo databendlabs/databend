@@ -63,7 +63,7 @@ pub async fn hook_refresh(
         return;
     }
 
-    pipeline.set_on_finished(move |err| {
+    pipeline.set_on_finished(move |(_profiles, err)| {
         if err.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
             match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc, need_lock)) {
