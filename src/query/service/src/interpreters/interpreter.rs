@@ -14,28 +14,21 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::get_license_manager;
 use databend_common_pipeline_core::processors::PlanProfile;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
-use databend_common_storage::DataOperator;
-use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::error;
 use log::info;
 

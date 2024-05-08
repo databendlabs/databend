@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
 use futures_util::stream;
 use futures_util::TryStreamExt;
+use log::info;
 use opendal::Entry;
 use opendal::EntryMode;
 use opendal::Metakey;
@@ -51,6 +52,7 @@ pub async fn do_vacuum_temporary_files(
     let mut removed_temp_files = 0;
 
     while removed_temp_files < limit {
+        let instant = Instant::now();
         let mut end_of_stream = true;
         let mut remove_temp_files_path = Vec::with_capacity(1000);
 
@@ -97,9 +99,12 @@ pub async fn do_vacuum_temporary_files(
         }
 
         if !remove_temp_files_path.is_empty() {
+            let cur_removed = remove_temp_files_path.len();
             operator
                 .remove_via(stream::iter(remove_temp_files_path))
                 .await?;
+
+            info!("vacuum removed {} temp files in {:?}(elapsed: {:?})", cur_removed, temporary_dir, instant.elapsed());
         }
 
         if end_of_stream {
@@ -126,6 +131,8 @@ async fn vacuum_finished_query(
         .await?;
 
     while *removed_temp_files < limit {
+        let instant = Instant::now();
+
         let mut end_of_stream = true;
         let mut all_each_files_removed = true;
         let mut remove_temp_files_path = Vec::with_capacity(1001);
@@ -158,9 +165,13 @@ async fn vacuum_finished_query(
         all_files_removed &= all_each_files_removed;
 
         if !remove_temp_files_path.is_empty() {
+            let cur_removed = remove_temp_files_path.len();
+
             operator
                 .remove_via(stream::iter(remove_temp_files_path))
                 .await?;
+
+            info!("vacuum removed {} temp files in {:?}(elapsed: {:?})", cur_removed, de.path(), instant.elapsed());
         }
 
         if end_of_stream {
