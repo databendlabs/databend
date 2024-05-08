@@ -479,16 +479,13 @@ impl Plan {
             Plan::ExecuteImmediate(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
 
-            other => {
-                debug_assert!(!other.has_result_set());
-                Arc::new(DataSchema::empty())
-            }
+            _ => Arc::new(DataSchema::empty()),
         }
     }
 
     pub fn has_result_set(&self) -> bool {
         // Please arrange the plans in alphabetical order
-        matches!(
+        let has_result_set = matches!(
             self,
             Plan::Query { .. }
                 | Plan::CopyIntoLocation(_)
@@ -524,6 +521,8 @@ impl Plan {
                 | Plan::ShowTasks(_)
                 | Plan::VacuumDropTable(_)
                 | Plan::VacuumTable(_)
-        )
+        );
+        debug_assert_eq!(has_result_set, self.schema().fields.is_empty());
+        has_result_set
     }
 }
