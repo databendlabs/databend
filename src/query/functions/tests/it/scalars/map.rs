@@ -29,8 +29,13 @@ fn test_map() {
     test_get(file);
     test_map_keys(file);
     test_map_values(file);
+
+    test_map_cat_empty_maps(file);
     test_map_cat_ops_basic(file);
-    test_map_cat_impl2_ops_basic(file);
+    test_map_cat_deduplicate(file);
+    test_map_cat_different_sizes(file);
+    test_map_cat_null_values(file);
+    test_map_cat_nested_maps(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -147,6 +152,12 @@ fn test_map_values(file: &mut impl Write) {
     );
 }
 
+fn test_map_cat_empty_maps(file: &mut impl Write) {
+    run_ast(file, "map_cat({}, {})", &[]);
+    run_ast(file, "map_cat({}, {'k1': 'v1'})", &[]);
+    run_ast(file, "map_cat({'k1': 'v1'}, {})", &[]);
+}
+
 fn test_map_cat_ops_basic(file: &mut impl Write) {
     let columns = [
         ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
@@ -164,10 +175,12 @@ fn test_map_cat_ops_basic(file: &mut impl Write) {
     );
 }
 
-fn test_map_cat_impl2_ops_basic(file: &mut impl Write) {
+fn test_map_cat_deduplicate(file: &mut impl Write) {
+    run_ast(file, "map_cat({'k1':'v1','k2':'v2'}, {'k1':'abc'})", &[]);
+
     let columns = [
-        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
-        ("b_col", StringType::from_data(vec!["b_k1", "b_k2", "b_k3"])),
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "c_k3"])),
+        ("b_col", StringType::from_data(vec!["b_k1", "c_k2", "b_k3"])),
         ("c_col", StringType::from_data(vec!["c_k1", "c_k2", "c_k3"])),
         ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
         ("e_col", StringType::from_data(vec!["bbb1", "bbb2", "bbb3"])),
@@ -176,7 +189,33 @@ fn test_map_cat_impl2_ops_basic(file: &mut impl Write) {
 
     run_ast(
         file,
-        "map_cat_impl2(map([a_col, b_col], [d_col, e_col]), map([c_col], [f_col]))",
+        "map_cat(map([a_col, b_col], [d_col, e_col]), map([c_col], [f_col]))",
         &columns,
+    );
+}
+
+fn test_map_cat_different_sizes(file: &mut impl Write) {
+    run_ast(file, "map_cat({'k1': 'v1', 'k2': 'v2'}, {'k3': 'v3'})", &[]);
+    run_ast(file, "map_cat({'k1': 'v1'}, {'k2': 'v2', 'k3': 'v3'})", &[]);
+}
+
+fn test_map_cat_null_values(file: &mut impl Write) {
+    run_ast(
+        file,
+        "map_cat({'k1': 'v1', 'k2': NULL}, {'k2': 'v2', 'k3': NULL})",
+        &[],
+    );
+}
+
+fn test_map_cat_nested_maps(file: &mut impl Write) {
+    run_ast(
+        file,
+        "map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k2': {'nk3': 'nv3'}, 'k3': {'nk4': 'nv4'}})",
+        &[],
+    );
+    run_ast(
+        file,
+        "map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k1': {'nk1': 'new_nv1'}, 'k2': {'nk3': 'nv3'}})",
+        &[],
     );
 }

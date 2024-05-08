@@ -39,3 +39,101 @@ select map_values(col1), map_values(col2) from t
 
 statement ok
 DROP DATABASE map_func_test
+
+
+# Test Basic functionality of MAP_CAT
+statement ok
+DROP DATABASE IF EXISTS map_cat_func_test
+
+statement ok
+CREATE DATABASE IF NOT EXISTS map_cat_func_test
+
+statement ok
+USE map_cat_func_test
+
+statement ok
+drop table if exists map_cat_test all
+
+statement ok
+CREATE TABLE map_cat_test(s_no Int, p_prof_name Map(String, String) Not Null, p_prof_dob Map(String, String) Not Null);
+
+statement ok
+INSERT INTO map_cat_test VALUES (1, {'name_r11': 'John Smith', 'name_r12': 'Emily Johnson'}, {'dob_11': '1988-07-12', 'dob_12': '1995-03-21'}),
+(2, {'name_r21': 'Michael Brown', 'name_22': 'Sarah Davis'}, {'dob_21': '1978-08-17', 'dob_22': '1989-07-19'}),
+(3, {'name_r31': 'David Wilson', 'name_32': 'white rose'}, {'dob_31': '1998-09-02', 'dob_32': '1992-05-18'});
+
+query
+SELECT * FROM map_cat_test LIMIT 3;
+----
+1 {'name_r11':'John Smith','name_r12':'Emily Johnson'} {'dob_11':'1988-07-12','dob_12':'1995-03-21'}
+2 {'name_r21':'Michael Brown','name_22':'Sarah Davis'} {'dob_21':'1978-08-17','dob_22':'1989-07-19'}
+3 {'name_r31':'David Wilson','name_32':'white rose'} {'dob_31':'1998-09-02','dob_32':'1992-05-18'}
+
+query
+SELECT
+  s_no,
+  MAP_CAT(p_prof_name, p_prof_dob) AS concatenated_map
+FROM
+  map_cat_test;
+----
+1 {'name_r11':'John Smith','name_r12':'Emily Johnson','dob_11':'1988-07-12','dob_12':'1995-03-21'}
+2 {'name_r21':'Michael Brown','name_22':'Sarah Davis','dob_21':'1978-08-17','dob_22':'1989-07-19'}
+3 {'name_r31':'David Wilson','name_32':'white rose','dob_31':'1998-09-02','dob_32':'1992-05-18'}
+
+
+# Test empty maps
+query
+SELECT MAP_CAT({}, {})
+----
+{}
+
+query
+SELECT MAP_CAT({}, {'k1': 'v1'})
+----
+{'k1':'v1'}
+
+query
+SELECT MAP_CAT({'k1': 'v1'}, {})
+----
+{'k1':'v1'}
+
+# Test deduplication
+query
+SELECT MAP_CAT({'k1': 'v1', 'k2': 'v2'}, {'k1': 'abc'})
+----
+{'k1':'abc','k2':'v2'}
+
+# Test different map sizes
+query
+SELECT MAP_CAT({'k1': 'v1', 'k2': 'v2'}, {'k3': 'v3'})
+----
+{'k1':'v1','k2':'v2','k3':'v3'}
+
+query
+SELECT MAP_CAT({'k1': 'v1'}, {'k2': 'v2', 'k3': 'v3'})
+----
+{'k1':'v1','k2':'v2','k3':'v3'}
+
+# Test NULL values
+query
+SELECT MAP_CAT({'k1': 'v1', 'k2': NULL}, {'k2': 'v2', 'k3': NULL})
+----
+{'k1':'v1','k2':'v2','k3':NULL}
+
+# Test nested maps
+query
+SELECT MAP_CAT(
+  {'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}},
+  {'k2': {'nk3': 'nv3'}, 'k3': {'nk4': 'nv4'}}
+)
+----
+{'k1':{'nk1':'nv1'},'k2':{'nk3':'nv3'},'k3':{'nk4':'nv4'}}
+
+query
+SELECT MAP_CAT(
+  {'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}},
+  {'k3': {'nk1': 'new_nv1'}, 'k4': {'nk3': 'nv3'}}
+)
+----
+{'k1':{'nk1':'nv1'},'k2':{'nk2':'nv2'},'k3':{'nk1':'new_nv1'},'k4':{'nk3':'nv3'}}
+

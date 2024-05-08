@@ -20,6 +20,7 @@ async-trait = { workspace = true }
 clap = { workspace = true }
 env_logger = "0.10.0"
 futures-util = { workspace = true }
+log = { workspace = true }
 mysql_async = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }

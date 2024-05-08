@@ -87,42 +87,76 @@ fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<DirEntry> {
 
 pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
     let args = SqlLogicTestArgs::parse();
-    let mut files = vec![];
 
-    let dirs = match args.dir {
-        Some(ref dir) => {
-            // Find specific dir
-            let dir_entry = find_specific_dir(dir, suit);
-            match dir_entry {
-                Ok(dir_entry) => Some(dir_entry.into_path()),
-                // If didn't find specific dir, return empty vec
-                Err(_) => None,
+    let target = if let Some(ref dir) = args.dir {
+        match find_specific_dir(dir, suit.clone()) {
+            Ok(dir_entry) => dir_entry.into_path(),
+            Err(_) => {
+                log::warn!("Specific directory not found: {:?}", dir);
+                return Ok(vec![]);
             }
         }
-        None => Some(suit),
+    } else {
+        suit
     };
-    let target = match dirs {
-        Some(dir) => dir,
-        None => return Ok(vec![]),
-    };
-    for entry in WalkDir::new(target)
+
+    let skipped_dirs: Vec<&str> = args
+        .skipped_dir
+        .as_ref()
+        .map(|dirs| dirs.split(',').collect())
+        .unwrap_or_default();
+    let run_files: Vec<&str> = args
+        .file
+        .as_ref()
+        .map(|files| files.split(',').collect())
+        .unwrap_or_default();
+
+    log::info!(
+        "get_files, skipped_dirs: {:?}, run_files: {:?}",
+        skipped_dirs,
+        run_files
+    );
+
+    let files = WalkDir::new(target)
         .min_depth(0)
         .max_depth(100)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
         .filter_entry(|e| {
-            if let Some(skipped_dir) = &args.skipped_dir {
-                let dirs = skipped_dir.split(',').collect::<Vec<&str>>();
-                if dirs.contains(&e.file_name().to_str().unwrap()) {
-                    return false;
-                }
-            }
-            true
+            let should_skip = skipped_dirs.contains(&e.file_name().to_str().unwrap());
+            log::info!(
+                "get_files, skipped_dirs filter: {:?}, should_skip: {}",
+                e.path(),
+                should_skip
+            );
+            !should_skip
         })
-        .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
-    {
-        files.push(entry);
-    }
+        .filter(|e| {
+            if let Ok(entry) = e {
+                if entry.file_type().is_file() {
+                    if !run_files.is_empty() {
+                        let file_name = entry.file_name().to_str().unwrap();
+                        let should_include = run_files.iter().any(|&file| file == file_name);
+                        log::info!(
+                            "get_files, run_files filter: {:?}, should_include: {}",
+                            entry.path(),
+                            should_include
+                        );
+                        should_include
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+        .collect::<Vec<_>>();
+
+    log::info!("files: {:?}", files);
+
     Ok(files)
 }
 
