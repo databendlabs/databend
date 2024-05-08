@@ -69,7 +69,6 @@ echo 'select * from @hello' | $TEST_USER_CONNECT
 echo "select * from d_0002.t" | $TEST_USER_CONNECT
 
 ## cleanup
-echo "=== cleanup ==="
 echo "drop database d_0002;" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage hello;" | $TEST_TRANSFER_USER_CONNECT
 echo "drop stage if exists noexistshello;" | $TEST_TRANSFER_USER_CONNECT

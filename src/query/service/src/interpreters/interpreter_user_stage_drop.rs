@@ -62,13 +62,6 @@ impl Interpreter for DropUserStageInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
 
-        // Check user stage.
-        if plan.name == "~" {
-            return Err(ErrorCode::StagePermissionDenied(
-                "user stage is not allowed to be dropped",
-            ));
-        }
-
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
         user_mgr
             .drop_stage(&tenant, &plan.name, plan.if_exists)
