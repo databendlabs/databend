@@ -14,21 +14,28 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::get_license_manager;
 use databend_common_pipeline_core::processors::PlanProfile;
+use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
+use databend_common_storage::DataOperator;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::error;
 use log::info;
 
@@ -130,6 +137,49 @@ pub trait Interpreter: Sync + Send {
                             })?
                         );
                     }
+                }
+
+                let tenant = query_ctx.get_tenant();
+                let settings = query_ctx.get_settings();
+                let spill_prefix = query_spill_prefix(tenant.tenant_name(), &query_ctx.get_id());
+                let license_manager = get_license_manager();
+
+                if license_manager
+                    .manager
+                    .check_enterprise_enabled(query_ctx.get_license_key(), Vacuum)
+                    .is_ok()
+                {
+                    let handler = get_vacuum_handler();
+
+                    let _ = GlobalIORuntime::instance().block_on(async move {
+                        let vacuum_limit = match settings.get_max_vacuum_temp_files_after_query()? {
+                            0 => None,
+                            v => Some(v as usize),
+                        };
+                        let removed_files = handler
+                            .do_vacuum_temporary_files(
+                                spill_prefix.clone(),
+                                Some(Duration::from_secs(0)),
+                                vacuum_limit,
+                            )
+                            .await;
+
+                        if !matches!(removed_files, Ok(files) if Some(files) == vacuum_limit) {
+                            let op = DataOperator::instance().operator();
+                            op.write(&format!("{}/finished", spill_prefix), vec![])
+                                .await?;
+                        }
+
+                        Ok(())
+                    });
+                } else {
+                    let _ = GlobalIORuntime::instance().block_on(async move {
+                        let op = DataOperator::instance().operator();
+                        op.write(&format!("{}/finished", spill_prefix), vec![])
+                            .await?;
+
+                        Ok(())
+                    });
                 }
 
                 let err_opt = match may_error {

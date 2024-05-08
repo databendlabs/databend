@@ -68,9 +68,10 @@ impl AsyncSystemTable for TempFilesTable {
         let mut temp_files_content_length = vec![];
         let mut temp_files_last_modified = vec![];
 
-        let location_prefix = format!("{}/", query_spill_prefix(tenant.tenant_name()));
+        let location_prefix = format!("{}/", query_spill_prefix(tenant.tenant_name(), ""));
         if let Ok(lister) = operator
             .lister_with(&location_prefix)
+            .recursive(true)
             .metakey(Metakey::LastModified | Metakey::ContentLength)
             .await
         {
