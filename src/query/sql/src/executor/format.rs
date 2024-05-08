@@ -241,7 +241,6 @@ fn to_format_tree(
         }
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
         PhysicalPlan::MergeInto(_) => Ok(FormatTreeNode::new("MergeInto".to_string())),
-        PhysicalPlan::MergeIntoSource(_) => Ok(FormatTreeNode::new("MergeIntoSource".to_string())),
         PhysicalPlan::MergeIntoAddRowNumber(_) => {
             Ok(FormatTreeNode::new("MergeIntoAddRowNumber".to_string()))
         }

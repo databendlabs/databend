@@ -46,7 +46,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::MergeIntoSource;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -97,7 +96,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
             PhysicalPlan::MergeIntoAddRowNumber(plan) => self.replace_add_row_number(plan),
-            PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 self.replace_merge_into_row_id_apply(plan)
             }
@@ -486,14 +484,6 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
-    fn replace_merge_into_source(&mut self, plan: &MergeIntoSource) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoSource(MergeIntoSource {
-            input: Box::new(input),
-            ..plan.clone()
-        }))
-    }
-
     fn replace_merge_into_row_id_apply(
         &mut self,
         plan: &MergeIntoAppendNotMatched,
@@ -706,9 +696,6 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ReplaceInto(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::MergeIntoSource(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeInto(plan) => {
