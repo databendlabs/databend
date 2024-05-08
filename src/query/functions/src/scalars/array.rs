@@ -16,6 +16,8 @@ use std::hash::Hash;
 use std::ops::Range;
 use std::sync::Arc;
 
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
@@ -70,6 +72,7 @@ use siphasher::sip128::SipHasher24;
 
 use crate::aggregates::eval_aggr;
 use crate::AggregateFunctionFactory;
+use crate::BUILTIN_FUNCTIONS;
 
 const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 14] = &[
     ("array_avg", "avg"),
@@ -248,9 +251,24 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
         "array_concat",
-        |_, _, _| FunctionDomain::Full,
+        |_, domain1, domain2| {
+            FunctionDomain::Domain(
+                match (domain1, domain2) {
+                    (Some(domain1), Some(domain2)) => Some(domain1.merge(domain2)),
+                    (Some(domain1), None) => Some(domain1).cloned(),
+                    (None, Some(domain2)) => Some(domain2).cloned(),
+                    (None, None) => None,
+                }
+            )
+        },
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
-            |lhs, rhs, output, _| {
+            |lhs, rhs, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
                 output.builder.append_column(&lhs);
                 output.builder.append_column(&rhs);
                 output.commit_row()
@@ -261,15 +279,15 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry
         .register_passthrough_nullable_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>, _, _>(
             "array_flatten",
-            |_, _| FunctionDomain::Full,
+            |_, domain| FunctionDomain::Domain(domain.clone().flatten()),
             vectorize_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>(
-            |a, b| {
-                let mut builder = ColumnBuilder::with_capacity(&b.generics[0], a.len());
-                for a in a.iter() {
-                    builder.append_column(&a);
+                |arr, ctx| {
+                    let mut builder = ColumnBuilder::with_capacity(&ctx.generics[0], arr.len());
+                    for v in arr.iter() {
+                        builder.append_column(&v);
+                    }
+                    builder.build()
                 }
-                builder.build()
-            }
             ),
         );
 
@@ -278,7 +296,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             "array_to_string",
             |_, _, _| FunctionDomain::Full,
             vectorize_with_builder_2_arg::<ArrayType<StringType>, StringType, StringType>(
-                |lhs, rhs, output, _| {
+                |lhs, rhs, output, ctx| {
+                    if let Some(validity) = &ctx.validity {
+                        if !validity.get_bit(output.len()) {
+                            output.commit_row();
+                            return;
+                        }
+                    }
                     for (i, d) in lhs.iter().enumerate() {
                         if i != 0 {
                             output.put_str(rhs);
@@ -407,29 +431,183 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "array_prepend",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|val, arr, _| {
-            let data_type = arr.data_type();
-            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
-            builder.push(val);
-            builder.append_column(&arr);
-            builder.build()
-        }),
-    );
+    registry.register_function_factory("array_prepend", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        let (common_type, return_type) = match args_type[1].remove_nullable() {
+            DataType::EmptyArray => (
+                args_type[0].clone(),
+                DataType::Array(Box::new(args_type[0].clone())),
+            ),
+            DataType::Array(box inner_type) => {
+                let common_type = common_super_type(
+                    inner_type.clone(),
+                    args_type[0].clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                )?;
+                (common_type.clone(), DataType::Array(Box::new(common_type)))
+            }
+            _ => {
+                return None;
+            }
+        };
+        let args_type = vec![
+            common_type,
+            if args_type[1].is_nullable() {
+                return_type.wrap_nullable()
+            } else {
+                return_type.clone()
+            },
+        ];
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "array_prepend".to_string(),
+                args_type,
+                return_type: return_type.clone(),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, args_domain| {
+                    let array_domain = match &args_domain[1] {
+                        Domain::Nullable(nullable_domain) => nullable_domain.value.clone(),
+                        other => Some(Box::new(other.clone())),
+                    };
+                    let inner_domain = match array_domain {
+                        Some(box Domain::Array(Some(box inner_domain))) => {
+                            inner_domain.merge(&args_domain[0])
+                        }
+                        _ => args_domain[0].clone(),
+                    };
+                    FunctionDomain::Domain(Domain::Array(Some(Box::new(inner_domain))))
+                }),
+                eval: Box::new(move |args, _| {
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
 
-    registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>, _, _>(
-        "array_append",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>>(|arr, val, _| {
-            let data_type = arr.data_type();
-            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
-            builder.append_column(&arr);
-            builder.push(val);
-            builder.build()
-        }),
-    );
+                    let mut offsets = Vec::with_capacity(len.unwrap_or(1) + 1);
+                    offsets.push(0);
+                    let inner_type = return_type.as_array().unwrap();
+                    let mut builder = ColumnBuilder::with_capacity(inner_type, len.unwrap_or(1));
+
+                    for idx in 0..(len.unwrap_or(1)) {
+                        let val = match &args[0] {
+                            ValueRef::Scalar(scalar) => scalar.clone(),
+                            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                        };
+                        builder.push(val.clone());
+                        let array_col = match &args[1] {
+                            ValueRef::Scalar(scalar) => scalar.clone(),
+                            ValueRef::Column(col) => unsafe { col.index_unchecked(idx).clone() },
+                        };
+                        if let ScalarRef::Array(col) = array_col {
+                            for val in col.iter() {
+                                builder.push(val.clone());
+                            }
+                        }
+                        offsets.push(builder.len() as u64);
+                    }
+                    match len {
+                        Some(_) => Value::Column(Column::Array(Box::new(ArrayColumn {
+                            values: builder.build(),
+                            offsets: offsets.into(),
+                        }))),
+                        None => Value::Scalar(Scalar::Array(builder.build())),
+                    }
+                }),
+            },
+        }))
+    });
+
+    registry.register_function_factory("array_append", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        let (common_type, return_type) = match args_type[0].remove_nullable() {
+            DataType::EmptyArray => (
+                args_type[1].clone(),
+                DataType::Array(Box::new(args_type[1].clone())),
+            ),
+            DataType::Array(box inner_type) => {
+                let common_type = common_super_type(
+                    inner_type.clone(),
+                    args_type[1].clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                )?;
+                (common_type.clone(), DataType::Array(Box::new(common_type)))
+            }
+            _ => {
+                return None;
+            }
+        };
+        let args_type = vec![
+            if args_type[0].is_nullable() {
+                return_type.wrap_nullable()
+            } else {
+                return_type.clone()
+            },
+            common_type,
+        ];
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "array_append".to_string(),
+                args_type,
+                return_type: return_type.clone(),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, args_domain| {
+                    let array_domain = match &args_domain[0] {
+                        Domain::Nullable(nullable_domain) => nullable_domain.value.clone(),
+                        other => Some(Box::new(other.clone())),
+                    };
+                    let inner_domain = match array_domain {
+                        Some(box Domain::Array(Some(box inner_domain))) => {
+                            inner_domain.merge(&args_domain[1])
+                        }
+                        _ => args_domain[1].clone(),
+                    };
+                    FunctionDomain::Domain(Domain::Array(Some(Box::new(inner_domain))))
+                }),
+                eval: Box::new(move |args, _| {
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
+
+                    let mut offsets = Vec::with_capacity(len.unwrap_or(1) + 1);
+                    offsets.push(0);
+                    let inner_type = return_type.as_array().unwrap();
+                    let mut builder = ColumnBuilder::with_capacity(inner_type, len.unwrap_or(1));
+
+                    for idx in 0..(len.unwrap_or(1)) {
+                        let array_col = match &args[0] {
+                            ValueRef::Scalar(scalar) => scalar.clone(),
+                            ValueRef::Column(col) => unsafe { col.index_unchecked(idx).clone() },
+                        };
+                        if let ScalarRef::Array(col) = array_col {
+                            for val in col.iter() {
+                                builder.push(val.clone());
+                            }
+                        }
+                        let val = match &args[1] {
+                            ValueRef::Scalar(scalar) => scalar.clone(),
+                            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                        };
+                        builder.push(val.clone());
+                        offsets.push(builder.len() as u64);
+                    }
+                    match len {
+                        Some(_) => Value::Column(Column::Array(Box::new(ArrayColumn {
+                            values: builder.build(),
+                            offsets: offsets.into(),
+                        }))),
+                        None => Value::Scalar(Scalar::Array(builder.build())),
+                    }
+                }),
+            },
+        }))
+    });
 
     fn eval_contains<T: ArgType>(
         lhs: ValueRef<ArrayType<T>>,
@@ -494,11 +672,11 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<StringType>, StringType, BooleanType, _, _>(
         "contains",
-         |_, lhs, rhs| {
-                        lhs.as_ref().map(|lhs| {
-                            lhs.domain_contains(rhs)
-                        }).unwrap_or(FunctionDomain::Full)
-                    },
+        |_, lhs, rhs| {
+            lhs.as_ref().map(|lhs| {
+                lhs.domain_contains(rhs)
+            }).unwrap_or(FunctionDomain::Full)
+        },
         |lhs, rhs, _| {
             match lhs {
                 ValueRef::Scalar(array) => {
@@ -551,15 +729,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<TimestampType>, TimestampType, BooleanType, _, _>(
-            "contains",
-            |_, lhs, rhs| {
-                let has_true = lhs.is_some_and(|lhs| !(lhs.min > rhs.max || lhs.max < rhs.min));
-                FunctionDomain::Domain(BooleanDomain {
-                    has_false: true,
-                    has_true,
-                })
-            },
-            |lhs, rhs, _| eval_contains::<TimestampType>(lhs, rhs)
+        "contains",
+        |_, lhs, rhs| {
+            let has_true = lhs.is_some_and(|lhs| !(lhs.min > rhs.max || lhs.max < rhs.min));
+            FunctionDomain::Domain(BooleanDomain {
+                has_false: true,
+                has_true,
+            })
+        },
+        |lhs, rhs, _| eval_contains::<TimestampType>(lhs, rhs)
     );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<BooleanType>, BooleanType, BooleanType, _, _>(
@@ -657,7 +835,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
         "array_distinct",
-        |_, _| FunctionDomain::Full,
+        |_, domain| FunctionDomain::Domain(domain.clone()),
         vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
             if arr.len() > 0 {
                 let data_type = arr.data_type();

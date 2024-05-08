@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
@@ -59,8 +59,8 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
 
         let handler = get_vacuum_handler();
 
-        let temporary_files_prefix = query_spill_prefix(self.ctx.get_tenant().tenant_name());
-        let remove_files = handler
+        let temporary_files_prefix = query_spill_prefix(self.ctx.get_tenant().tenant_name(), "");
+        let removed_files = handler
             .do_vacuum_temporary_files(
                 temporary_files_prefix,
                 self.plan.retain,
@@ -69,7 +69,7 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             .await?;
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(remove_files),
+            UInt64Type::from_data(vec![removed_files as u64]),
         ])])
     }
 }

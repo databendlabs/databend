@@ -25,7 +25,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
@@ -45,14 +44,11 @@ pub struct MergeIntoSplitProcessor {
     input_data: Option<DataBlock>,
     output_data_matched_data: Option<DataBlock>,
     output_data_not_matched_data: Option<DataBlock>,
-    // if target table is a empty table we will push all datablocks into
-    // not match branch.
-    target_table_empty: bool,
     merge_into_split_mutator: MergeIntoSplitMutator,
 }
 
 impl MergeIntoSplitProcessor {
-    pub fn create(split_idx: u32, target_table_empty: bool) -> Result<Self> {
+    pub fn create(split_idx: u32) -> Result<Self> {
         let merge_into_split_mutator = MergeIntoSplitMutator::try_create(split_idx);
         let input_port = InputPort::create();
         let output_port_matched = OutputPort::create();
@@ -64,14 +60,8 @@ impl MergeIntoSplitProcessor {
             input_data: None,
             output_data_matched_data: None,
             output_data_not_matched_data: None,
-            target_table_empty,
             merge_into_split_mutator,
         })
-    }
-
-    pub fn into_pipe(self) -> Pipe {
-        let pipe_item = self.into_pipe_item();
-        Pipe::create(1, 2, vec![pipe_item])
     }
 
     pub fn into_pipe_item(self) -> PipeItem {
@@ -181,25 +171,21 @@ impl Processor for MergeIntoSplitProcessor {
                 return Ok(());
             }
 
-            if self.target_table_empty {
-                self.output_data_not_matched_data = Some(data_block)
-            } else {
-                let start = Instant::now();
-                let (matched_block, not_matched_block) = self
-                    .merge_into_split_mutator
-                    .split_data_block(&data_block)?;
-                let elapsed_time = start.elapsed().as_millis() as u64;
-                metrics_inc_merge_into_split_milliseconds(elapsed_time);
+            let start = Instant::now();
+            let (matched_block, not_matched_block) = self
+                .merge_into_split_mutator
+                .split_data_block(&data_block)?;
+            let elapsed_time = start.elapsed().as_millis() as u64;
+            metrics_inc_merge_into_split_milliseconds(elapsed_time);
 
-                if !matched_block.is_empty() {
-                    metrics_inc_merge_into_matched_rows(matched_block.num_rows() as u32);
-                    self.output_data_matched_data = Some(matched_block);
-                }
+            if !matched_block.is_empty() {
+                metrics_inc_merge_into_matched_rows(matched_block.num_rows() as u32);
+                self.output_data_matched_data = Some(matched_block);
+            }
 
-                if !not_matched_block.is_empty() {
-                    metrics_inc_merge_into_unmatched_rows(not_matched_block.num_rows() as u32);
-                    self.output_data_not_matched_data = Some(not_matched_block);
-                }
+            if !not_matched_block.is_empty() {
+                metrics_inc_merge_into_unmatched_rows(not_matched_block.num_rows() as u32);
+                self.output_data_not_matched_data = Some(not_matched_block);
             }
         }
         Ok(())

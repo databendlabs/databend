@@ -18,11 +18,12 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CatalogId;
+use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::CreateCatalogPlan;
 use databend_common_storages_fuse::TableContext;
 use log::debug;
@@ -72,7 +73,7 @@ impl Interpreter for CreateCatalogInterpreter {
         let ctl = catalog_manager
             .build_catalog(
                 &CatalogInfo {
-                    id: CatalogId::default().into(),
+                    id: CatalogIdIdent::new(Tenant::new_literal("dummy"), 0).into(),
                     name_ident: CatalogNameIdent::new(self.plan.tenant.clone(), &self.plan.catalog)
                         .into(),
                     meta: CatalogMeta {

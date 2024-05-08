@@ -95,6 +95,7 @@ databend-storages-common-blocks = { path = "../storages/common/blocks" }
 databend-storages-common-cache = { path = "../storages/common/cache" }
 databend-storages-common-cache-manager = { path = "../storages/common/cache_manager" }
 databend-storages-common-index = { path = "../storages/common/index" }
+databend-storages-common-io = { path = "../storages/common/io" }
 databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 databend-storages-common-txn = { path = "../storages/common/txn" }
 jsonb = { workspace = true }
