@@ -35,7 +35,8 @@ async fn test_spill_with_partition() -> Result<()> {
 
     let ctx = fixture.new_query_ctx().await?;
     let tenant = ctx.get_tenant();
-    let spiller_config = SpillerConfig::create(query_spill_prefix(tenant.tenant_name()));
+    let spiller_config =
+        SpillerConfig::create(query_spill_prefix(tenant.tenant_name(), &ctx.get_id()));
     let operator = DataOperator::instance().operator();
 
     let mut spiller = Spiller::create(ctx, operator, spiller_config, SpillerType::HashJoinBuild)?;
