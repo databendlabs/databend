@@ -107,6 +107,7 @@ pub struct FunctionContext {
 
     pub external_server_connect_timeout_secs: u64,
     pub external_server_request_timeout_secs: u64,
+    pub external_server_request_batch_rows: u64,
 
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
