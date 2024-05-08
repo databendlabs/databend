@@ -207,7 +207,7 @@ where F: SnapshotGenerator + Send + 'static
             .is_some_and(|gen| !matches!(gen.mode(), TruncateMode::Delete))
     }
 
-    fn do_append(&self) -> bool {
+    fn is_append_only_txn(&self) -> bool {
         self.snapshot_gen
             .as_any()
             .downcast_ref::<AppendGenerator>()
@@ -267,33 +267,50 @@ where F: SnapshotGenerator + Send + 'static
                 cluster_key_meta,
                 table_info,
             } => {
-                // Skip checking the append operation as it has no effect on change tracking.
-                if !self.do_append()
-                    && (!self.change_tracking && self.table.change_tracking_enabled())
-                {
-                    // If change tracing is disabled when the txn start, but is enabled when commit,
+                let change_tracking_enabled_during_commit = {
+                    let no_change_tracking_at_beginning = !self.change_tracking;
+                    // note that `self.table` might be refreshed if commit retried
+                    let change_tracking_enabled_now = self.table.change_tracking_enabled();
+
+                    no_change_tracking_at_beginning && change_tracking_enabled_now
+                };
+
+                if !self.is_append_only_txn() && change_tracking_enabled_during_commit {
+                    // If change tracking is not enabled when the txn start, but is enabled when committing,
                     // then the txn should be aborted.
+                    // For mutations other than append-only, stream column values (like _origin_block_id)
+                    // must be properly generated. If not, CDC will not function as expected.
                     self.state = State::AbortOperation(ErrorCode::StorageOther(
                         "commit failed because change tracking was enabled during the commit process",
                     ));
-                } else {
-                    let schema = self.table.schema().as_ref().clone();
-                    match self.snapshot_gen.generate_new_snapshot(
-                        schema,
-                        cluster_key_meta,
-                        previous,
-                        Some(table_info.ident.seq),
-                    ) {
-                        Ok(snapshot) => {
-                            self.state = State::TryCommit {
-                                data: snapshot.to_bytes()?,
-                                snapshot,
-                                table_info,
-                            };
-                        }
-                        Err(e) => {
-                            self.state = State::AbortOperation(e);
-                        }
+                    return Ok(());
+                }
+
+                // now:
+                // - either current txn IS append-only
+                //    even if this is a conflict txn T (in the meaning of table version) has been
+                // commited, which has changed the change-tracking state from disabled to enabled,
+                // merging with transaction T is still safe, since the CDC mechanism allows it.
+                // - or change-tracking state is NOT changed.
+                //    in this case, we only need standard conflict resolution.
+                // therefore, we can safely proceed.
+
+                let schema = self.table.schema().as_ref().clone();
+                match self.snapshot_gen.generate_new_snapshot(
+                    schema,
+                    cluster_key_meta,
+                    previous,
+                    Some(table_info.ident.seq),
+                ) {
+                    Ok(snapshot) => {
+                        self.state = State::TryCommit {
+                            data: snapshot.to_bytes()?,
+                            snapshot,
+                            table_info,
+                        };
+                    }
+                    Err(e) => {
+                        self.state = State::AbortOperation(e);
                     }
                 }
             }
