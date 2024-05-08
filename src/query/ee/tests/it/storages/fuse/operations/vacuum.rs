@@ -32,7 +32,6 @@ use opendal::raw::OpStat;
 use opendal::raw::RpStat;
 use opendal::EntryMode;
 use opendal::Metadata;
-use opendal::Metakey;
 use opendal::OperatorBuilder;
 
 #[tokio::test(flavor = "multi_thread")]
