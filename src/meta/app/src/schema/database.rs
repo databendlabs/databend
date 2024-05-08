@@ -42,29 +42,6 @@ pub struct DatabaseIdent {
     pub seq: u64,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
-pub struct DatabaseId {
-    pub db_id: u64,
-}
-
-impl DatabaseId {
-    pub fn new(db_id: u64) -> Self {
-        DatabaseId { db_id }
-    }
-}
-
-impl From<u64> for DatabaseId {
-    fn from(db_id: u64) -> Self {
-        DatabaseId { db_id }
-    }
-}
-
-impl Display for DatabaseId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.db_id)
-    }
-}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseIdToName {
     pub db_id: u64,
@@ -327,31 +304,9 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::database_name_ident::DatabaseNameIdentRaw;
-    use crate::schema::DatabaseId;
+    use crate::schema::DatabaseIdIdent;
     use crate::schema::DatabaseIdToName;
-    use crate::schema::DatabaseMeta;
-
-    impl kvapi::KeyCodec for DatabaseId {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.db_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = parser.next_u64()?;
-            Ok(Self { db_id })
-        }
-    }
-
-    /// "__fd_database_by_id/<db_id>"
-    impl kvapi::Key for DatabaseId {
-        const PREFIX: &'static str = "__fd_database_by_id";
-
-        type ValueType = DatabaseMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-    }
+    use crate::tenant::Tenant;
 
     impl kvapi::KeyCodec for DatabaseIdToName {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
@@ -371,13 +326,8 @@ mod kvapi_key_impl {
         type ValueType = DatabaseNameIdentRaw;
 
         fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for DatabaseMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
+            // TODO(TIdent): add real tenant
+            Some(DatabaseIdIdent::new(Tenant::new_literal("dummy"), self.db_id).to_string_key())
         }
     }
 

@@ -15,42 +15,41 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type DatabaseNameIdent = TIdent<Resource>;
-pub type DatabaseNameIdentRaw = TIdentRaw<Resource>;
+pub type DatabaseIdIdent = TIdent<Resource, u64>;
+pub type DatabaseIdIdentRaw = TIdentRaw<Resource, u64>;
 
 pub use kvapi_impl::Resource;
 
-impl DatabaseNameIdent {
-    pub fn database_name(&self) -> &str {
-        self.name()
+impl DatabaseIdIdent {
+    pub fn database_id(&self) -> u64 {
+        *self.name()
     }
 }
 
-impl DatabaseNameIdentRaw {
-    pub fn database_name(&self) -> &str {
-        self.name()
+impl DatabaseIdIdentRaw {
+    pub fn database_id(&self) -> u64 {
+        *self.name()
     }
 }
 
 mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::schema::DatabaseIdIdent;
+    use crate::schema::DatabaseMeta;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_database";
-        const TYPE: &'static str = "DatabaseNameIdent";
-        const HAS_TENANT: bool = true;
-        type ValueType = DatabaseIdIdent;
+        const PREFIX: &'static str = "__fd_database_by_id";
+        const TYPE: &'static str = "DatabaseIdIdent";
+        const HAS_TENANT: bool = false;
+        type ValueType = DatabaseMeta;
     }
 
-    impl kvapi::Value for DatabaseIdIdent {
+    impl kvapi::Value for DatabaseMeta {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+            []
         }
     }
 
@@ -63,17 +62,29 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::DatabaseNameIdent;
+    use super::DatabaseIdIdent;
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_ident() {
-        let tenant = Tenant::new_literal("test");
-        let ident = DatabaseNameIdent::new(tenant, "test1");
+    fn test_background_job_id_ident() {
+        let tenant = Tenant::new_literal("dummy");
+        let ident = DatabaseIdIdent::new(tenant, 3);
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_database/test/test1");
+        assert_eq!(key, "__fd_database_by_id/3");
 
-        assert_eq!(ident, DatabaseNameIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, DatabaseIdIdent::from_str_key(&key).unwrap());
+    }
+
+    #[test]
+    fn test_background_job_id_ident_with_key_space() {
+        // TODO(xp): implement this test
+        // let tenant = Tenant::new_literal("test");
+        // let ident = DatabaseIdIdent::new(tenant, 3);
+        //
+        // let key = ident.to_string_key();
+        // assert_eq!(key, "__fd_database_by_id/3");
+        //
+        // assert_eq!(ident, DatabaseIdIdent::from_str_key(&key).unwrap());
     }
 }

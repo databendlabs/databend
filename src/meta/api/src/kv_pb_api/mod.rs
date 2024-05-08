@@ -46,6 +46,23 @@ use crate::kv_pb_api::errors::PbApiWriteError;
 
 /// This trait provides a way to access a kv store with `kvapi::Key` type key and protobuf encoded value.
 pub trait KVPbApi: KVApi {
+    /// Update a protobuf encoded value by kvapi::Key.
+    ///
+    /// Equivalent to `update_pb(UpsertPB::update(key,value))`
+    /// but returns the transition before and after executing the operation.
+    fn update_pb<K>(
+        &self,
+        key: K,
+        value: K::ValueType,
+    ) -> impl Future<Output = Result<Change<K::ValueType>, Self::Error>> + Send
+    where
+        K: kvapi::Key + Send + 'static,
+        K::ValueType: FromToProto + Send,
+        Self::Error: From<PbApiWriteError<Self::Error>>,
+    {
+        async move { self.upsert_pb(&UpsertPB::update(key, value)).await }
+    }
+
     /// Update or insert a protobuf encoded value by kvapi::Key.
     ///
     /// The key will be converted to string and the value is encoded by `FromToProto`.

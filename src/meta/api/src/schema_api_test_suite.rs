@@ -50,8 +50,8 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
-use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
+use databend_common_meta_app::schema::DatabaseIdIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -130,13 +130,14 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
+use databend_common_proto_conv::FromToProto;
 use log::debug;
 use log::info;
 use minitrace::func_name;
 
 use crate::deserialize_struct;
 use crate::kv_app_error::KVAppError;
-use crate::serialize_struct;
+use crate::kv_pb_api::KVPbApi;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 use crate::DatamaskApi;
@@ -232,20 +233,16 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
     assert_eq!(get, expected_map);
 }
 
-async fn upsert_test_data(
+async fn upsert_test_data<K: kvapi::Key + Send>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &impl kvapi::Key,
-    value: Vec<u8>,
-) -> Result<u64, KVAppError> {
-    let res = kv_api
-        .upsert_kv(UpsertKVReq {
-            key: key.to_string_key(),
-            seq: MatchSeq::GE(0),
-            value: Operation::Update(value),
-            value_meta: None,
-        })
-        .await?;
-
+    key: K,
+    value: K::ValueType,
+) -> Result<u64, KVAppError>
+where
+    K: kvapi::Key + Send + 'static,
+    K::ValueType: FromToProto + Send,
+{
+    let res = kv_api.update_pb(key, value).await?;
     let seq_v = res.result.unwrap();
     Ok(seq_v.seq)
 }
@@ -1918,7 +1915,7 @@ impl SchemaApiTestSuite {
             {
                 let undrop_table_req = UndropTableByIdReq {
                     name_ident: create_table_req.name_ident.clone(),
-                    db_id: create_table_as_dropped_resp.db_id,
+                    db_id_ident: create_table_as_dropped_resp.database_id_ident.clone(),
                     table_id: create_table_as_dropped_resp.table_id,
                     table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
                     force_replace: true,
@@ -1937,7 +1934,7 @@ impl SchemaApiTestSuite {
                 // undrop-table-by-id with force_replace set to false should fail.
                 let undrop_table_req = UndropTableByIdReq {
                     name_ident: create_table_req.name_ident.clone(),
-                    db_id: create_table_as_dropped_resp.db_id,
+                    db_id_ident: create_table_as_dropped_resp.database_id_ident.clone(),
                     table_id: create_table_as_dropped_resp.table_id,
                     table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
                     force_replace: false,
@@ -3263,9 +3260,9 @@ impl SchemaApiTestSuite {
                 drop_on,
                 ..Default::default()
             };
-            let id_key = DatabaseId { db_id };
-            let data = serialize_struct(&drop_data)?;
-            upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
+
+            let db_id_ident = DatabaseIdIdent::new(&tenant, db_id);
+            upsert_test_data(mt.as_kv_api(), db_id_ident, drop_data).await?;
 
             let res = mt
                 .get_database_history(ListDatabaseReq {
@@ -3309,9 +3306,8 @@ impl SchemaApiTestSuite {
                 drop_on,
                 ..Default::default()
             };
-            let id_key = DatabaseId { db_id };
-            let data = serialize_struct(&drop_data)?;
-            upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
+            let id_key = DatabaseIdIdent::new(db_name.tenant(), db_id);
+            upsert_test_data(mt.as_kv_api(), id_key, drop_data).await?;
 
             if delete {
                 delete_test_data(mt.as_kv_api(), &db_name).await?;
@@ -3387,7 +3383,7 @@ impl SchemaApiTestSuite {
 
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.iter() {
-            let id_key = DatabaseId { db_id: *db_id };
+            let id_key = DatabaseIdIdent::new(&tenant, *db_id);
             let id_mapping = DatabaseIdToName { db_id: *db_id };
 
             let meta_res: Result<DatabaseMeta, KVAppError> =
@@ -3452,8 +3448,7 @@ impl SchemaApiTestSuite {
         };
 
         let id_key = TableId { table_id };
-        let data = serialize_struct(&drop_data)?;
-        upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
+        upsert_test_data(mt.as_kv_api(), id_key, drop_data.clone()).await?;
 
         if delete {
             delete_test_data(mt.as_kv_api(), &dbid_tbname).await?;
@@ -3731,9 +3726,8 @@ impl SchemaApiTestSuite {
             drop_on,
             ..Default::default()
         };
-        let id_key = DatabaseId { db_id };
-        let data = serialize_struct(&drop_data)?;
-        upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
+        let id_key = DatabaseIdIdent::new(&tenant, db_id);
+        upsert_test_data(mt.as_kv_api(), id_key, drop_data).await?;
 
         let dbid_idlist1 = DatabaseIdHistoryIdent::new(&tenant, db1_name);
         let old_id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
@@ -3772,7 +3766,7 @@ impl SchemaApiTestSuite {
 
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.id_list.iter() {
-            let id_key = DatabaseId { db_id: *db_id };
+            let id_key = DatabaseIdIdent::new(&tenant, *db_id);
             let id_mapping = DatabaseIdToName { db_id: *db_id };
 
             let meta_res: Result<DatabaseMeta, KVAppError> =
@@ -3914,9 +3908,8 @@ impl SchemaApiTestSuite {
                 drop_on: Some(created_on - Duration::days(1)),
                 ..TableMeta::default()
             };
-            let data = serialize_struct(&create_drop_table_meta)?;
 
-            upsert_test_data(mt.as_kv_api(), &tbid, data).await?;
+            upsert_test_data(mt.as_kv_api(), tbid, create_drop_table_meta).await?;
             // assert not return out of retention time data
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4070,8 +4063,7 @@ impl SchemaApiTestSuite {
                 let table_id = resp.table_id;
                 let id_key = TableId { table_id };
                 table_meta.drop_on = Some(created_on + Duration::seconds(100));
-                let data = serialize_struct(&table_meta)?;
-                upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
+                upsert_test_data(mt.as_kv_api(), id_key, table_meta).await?;
             }
 
             info!("--- create db2.tb3");
@@ -4098,9 +4090,8 @@ impl SchemaApiTestSuite {
             // change db meta to make this db drop time outof filter time
             let mut drop_db_meta = create_db_req.meta.clone();
             drop_db_meta.drop_on = Some(created_on + Duration::seconds(100));
-            let id_key = DatabaseId { db_id };
-            let data = serialize_struct(&drop_db_meta)?;
-            upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
+            let id_key = DatabaseIdIdent::new(&tenant, db_id);
+            upsert_test_data(mt.as_kv_api(), id_key, drop_db_meta).await?;
         }
 
         // third create a database not dropped, but has a table drop within filter time
@@ -4170,8 +4161,7 @@ impl SchemaApiTestSuite {
                 let table_id = resp.table_id;
                 let id_key = TableId { table_id };
                 table_meta.drop_on = Some(created_on + Duration::seconds(100));
-                let data = serialize_struct(&table_meta)?;
-                upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
+                upsert_test_data(mt.as_kv_api(), id_key, table_meta).await?;
             }
 
             info!("--- create db3.tb3");

@@ -730,7 +730,7 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use super::ShareEndpointId;
-    use crate::schema::DatabaseId;
+    use crate::schema::DatabaseIdIdent;
     use crate::schema::TableId;
     use crate::share::share_end_point_ident::ShareEndpointIdentRaw;
     use crate::share::share_name_ident::ShareNameIdentRaw;
@@ -741,6 +741,7 @@ mod kvapi_key_impl {
     use crate::share::ShareId;
     use crate::share::ShareIdToName;
     use crate::share::ShareMeta;
+    use crate::tenant::Tenant;
 
     impl kvapi::KeyCodec for ShareGrantObject {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
@@ -773,8 +774,12 @@ mod kvapi_key_impl {
         type ValueType = ObjectSharedByShareIds;
 
         fn parent(&self) -> Option<String> {
+            // TODO(TIdent): add real tenant
+
             let k = match self {
-                ShareGrantObject::Database(db_id) => DatabaseId::new(*db_id).to_string_key(),
+                ShareGrantObject::Database(db_id) => {
+                    DatabaseIdIdent::new(Tenant::new_literal("dummy"), *db_id).to_string_key()
+                }
                 ShareGrantObject::Table(table_id) => TableId::new(*table_id).to_string_key(),
             };
             Some(k)
