@@ -85,8 +85,91 @@ impl PhysicalPlanBuilder {
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
 
         debug_assert!(!range_conditions.is_empty());
-
         let mut right_column = range_conditions[0].clone();
+        let window_func = 
+        self.bind_window_func(
+            join,s_expr,&range_conditions,&mut other_conditions,&mut right_column)?;
+        let window_plan = self.build_window_plan(&window_func)?;
+        self.add_range_condition(&window_func, &window_plan, &mut range_conditions, right_column)?;
+        let mut ss_expr = s_expr.clone();
+        ss_expr.children[1] = SExpr::create_unary(
+            Arc::new(window_plan.into()),
+            Arc::new(s_expr.child(1)?.clone()),
+        ).into();
+      let left_required =  required.0.union(&left_prop.used_columns).cloned().collect();
+      let right_required =  required.1.union(&right_prop.used_columns).cloned().collect();
+      self.build_range_join(&ss_expr, left_required, right_required, range_conditions, other_conditions)
+                    .await
+    }
+
+    fn add_range_condition(
+        &mut self,
+        window_func: &WindowFunc,
+        window_plan: &Window,
+        range_conditions: &mut Vec<ScalarExpr>,
+        right_column: ScalarExpr,
+    ) ->Result<bool>{
+        let mut folded_args: Vec<ScalarExpr> = Vec::with_capacity(2);
+        let mut func_name = String::from("eq"); 
+         // Generate a ColumnBinding for each argument of aggregates
+         let column = ColumnBindingBuilder::new(
+            window_func.display_name.clone(),
+           window_plan.index,
+            Box::new(right_column.data_type()?.remove_nullable().clone()),
+            Visibility::Visible,
+        )
+        .build();
+        folded_args.push(right_column.clone());
+        folded_args.push(BoundColumnRef {
+             span: right_column.span().clone(),
+             column,
+        }.into());
+        for  condition in range_conditions.iter() {
+             if let ScalarExpr::FunctionCall(func) = condition {
+                    match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap() {
+                            ComparisonOp::GTE => {
+                                func_name = String::from("lt");  
+                            }
+                            ComparisonOp::GT => {
+                                func_name = String::from("lte");  
+                            }
+                            ComparisonOp::LT =>{
+                                func_name = String::from("gte");  
+                            }
+                            ComparisonOp::LTE => {
+                                func_name = String::from("gt");  
+                            }
+                            _ => unreachable!("must be range condition!")
+                    }
+             }
+        }
+        range_conditions.push(
+            FunctionCall {
+                span: range_conditions[0].span().clone(),
+                params: vec![],
+                arguments: folded_args,
+                func_name,
+            }
+            .into(),
+        );
+        Ok(true)
+
+    }
+
+
+    fn bind_window_func(
+        &mut self,
+        join: &Join,
+        s_expr: &SExpr,
+        range_conditions: &Vec<ScalarExpr>,
+        other_conditions: &mut Vec<ScalarExpr>,
+        right_column: &mut ScalarExpr,
+
+    ) -> Result<WindowFunc,ErrorCode> {
+
+        let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
+        let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
+
         let mut left_column = range_conditions[0].clone();
         let mut order_items: Vec<WindowOrderBy> = Vec::with_capacity(range_conditions.len());
         let mut constant_default = ConstantExpr {
@@ -97,51 +180,38 @@ impl PhysicalPlanBuilder {
              if let ScalarExpr::FunctionCall(func) = condition {
                 if func.arguments.len() == 2 {
                     for arg in func.arguments.iter() {
-                        match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap() {
-                            ComparisonOp::GT | ComparisonOp::GTE => {
-                                    if let ScalarExpr::BoundColumnRef(_) = arg {
-                                        if arg.used_columns().is_subset(&left_prop.output_columns) {
-                                                order_items.push(WindowOrderBy {
-                                                    expr: arg.clone(),
-                                                    asc: Some(true),
-                                                    nulls_first: Some(true),
-                                                });
-                                                left_column = arg.clone();
-                                                constant_default.span = left_column.span().clone();
-                                                constant_default.value = left_column.data_type()?.remove_nullable().infinity();
-                                        }
-                                        if arg.used_columns().is_subset(&right_prop.output_columns) {
-                                                right_column = arg.clone();
-                                        }
-                                    } else {
-                                      return  Err(ErrorCode::Internal(
-                                            "Cannot downcast Scalar to BoundColumnRef",
-                                        ))
-                                    }
+                        if let ScalarExpr::BoundColumnRef(_) = arg {
+                            let mut asc: Option<bool> = None;
+                            match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap() {
+                                ComparisonOp::GT | ComparisonOp::GTE => {
+                                    asc = Some(true);
                                 }
-                            ComparisonOp::LT | ComparisonOp::LTE => {
-                                    if let ScalarExpr::BoundColumnRef(_) = arg {
-                                        if arg.used_columns().is_subset(&left_prop.output_columns) {
-                                                order_items.push(WindowOrderBy {
-                                                    expr: arg.clone(),
-                                                    asc: Some(false),
-                                                    nulls_first: Some(true),
-                                                });
-                                                left_column = arg.clone();
-                                                constant_default.span = left_column.span().clone();
-                                                constant_default.value = left_column.data_type()?.remove_nullable().ninfinity();
-                                        }
-                                        if arg.used_columns().is_subset(&right_prop.output_columns) {
-                                                right_column = arg.clone();
-                                        }
-                                    } else {
-                                       return Err(ErrorCode::Internal(
-                                            "Cannot downcast Scalar to BoundColumnRef",
-                                        ))
+                                ComparisonOp::LT | ComparisonOp::LTE => {
+                                    asc = Some(false);
+                                }
+                                _ => unreachable!("must be range condition!")
+                            }
+                            if arg.used_columns().is_subset(&left_prop.output_columns) {
+                                    order_items.push(WindowOrderBy {
+                                        expr: arg.clone(),
+                                        asc,
+                                        nulls_first: Some(true),
+                                    });
+                                    left_column = arg.clone();
+                                    constant_default.span = left_column.span().clone();
+                                    constant_default.value = left_column.data_type()?.remove_nullable().infinity().unwrap();
+                                    if let Some(false) = asc {
+                                        constant_default.value = left_column.data_type()?.remove_nullable().ninfinity().unwrap();
                                     }
                             }
-                            _ => todo!()
-                        }
+                            if arg.used_columns().is_subset(&right_prop.output_columns) {
+                                    right_column = arg.clone();
+                            }
+                        }else {
+                            return  Err(ErrorCode::Internal(
+                                  "Cannot downcast Scalar to BoundColumnRef",
+                              ))
+                          }
                     }   
                 }
             }
@@ -176,7 +246,7 @@ impl PhysicalPlanBuilder {
              }
         }
         let func_type =  WindowFuncType::LagLead(LagLeadFunction {
-           is_lag: false,
+            is_lag: false,
             arg: Box::new(left_column.clone()),
             offset: 1,
             default: Some(Box::new(constant_default.into())),
@@ -198,59 +268,7 @@ impl PhysicalPlanBuilder {
                 ))),
             },
         };
-        let window_plan = self.build_window_plan(&window_func)?;
-        let mut folded_args: Vec<ScalarExpr> = Vec::with_capacity(s_expr.children.len());
-        let mut func_name = String::from("eq"); 
-         // Generate a ColumnBinding for each argument of aggregates
-         let column = ColumnBindingBuilder::new(
-            window_func.display_name.clone(),
-           window_plan.index,
-            Box::new(left_column.data_type()?.remove_nullable().clone()),
-            Visibility::Visible,
-        )
-        .build();
-        folded_args.push(right_column.clone());
-        folded_args.push(BoundColumnRef {
-             span: left_column.span().clone(),
-             column,
-        }.into());
-        for  condition in range_conditions.iter() {
-             if let ScalarExpr::FunctionCall(func) = condition {
-                    match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap() {
-                            ComparisonOp::GTE => {
-                                func_name = String::from("lt");  
-                            }
-                            ComparisonOp::GT => {
-                                func_name = String::from("lte");  
-                            }
-                            ComparisonOp::LT =>{
-                                func_name = String::from("gte");  
-                            }
-                            ComparisonOp::LTE => {
-                                func_name = String::from("gt");  
-                            }
-                            _ => todo!()
-                    }
-             }
-        }
-        let mut ss_expr = s_expr.clone();
-        ss_expr.children[1] = SExpr::create_unary(
-            Arc::new(window_plan.into()),
-            Arc::new(s_expr.child(1)?.clone()),
-        ).into();
-        range_conditions.push(
-            FunctionCall {
-                span: range_conditions[0].span().clone(),
-                params: vec![],
-                arguments: folded_args,
-                func_name,
-            }
-            .into(),
-        );
-      let left_required =  required.0.union(&left_prop.used_columns).cloned().collect();
-      let right_required =  required.1.union(&right_prop.used_columns).cloned().collect();
-        self.build_range_join(&ss_expr, left_required, right_required, range_conditions, other_conditions)
-                    .await
+        Ok(window_func)
     }
 
     fn build_window_plan(&mut self, window: &WindowFunc) -> Result<Window> {
