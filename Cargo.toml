@@ -55,6 +55,7 @@ members = [
     "src/query/storages/common/cache",
     "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
+    "src/query/storages/common/io",
     "src/query/storages/common/pruner",
     "src/query/storages/common/table_meta",
     "src/query/storages/delta",
