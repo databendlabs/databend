@@ -29,6 +29,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use futures::ready;
 use futures::Future;
+use futures::TryFutureExt;
 use opendal::raw::oio;
 use opendal::raw::Access;
 use opendal::raw::Layer;
@@ -210,8 +211,12 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
     ) -> impl Future<Output = Result<Buffer>> + MaybeSend {
         let r = self.inner.clone();
 
-        self.runtime
-            .spawn(GLOBAL_TASK, async move { r.read_at(offset, limit).await })
-            .expect("join must success")
+        let runtime = self.runtime.clone();
+        async move {
+            runtime
+                .spawn(GLOBAL_TASK, async move { r.read_at(offset, limit).await })
+                .await
+                .expect("join must success")
+        }
     }
 }

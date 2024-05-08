@@ -33,6 +33,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_storages_parquet::ParquetFileReader;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSFullReader;
 use opendal::Reader;
@@ -64,7 +65,7 @@ pub struct DeltaTableSource {
     output_schema: DataSchemaRef,
 
     // Per partition
-    stream: Option<ParquetRecordBatchStream<Reader>>,
+    stream: Option<ParquetRecordBatchStream<ParquetFileReader>>,
     partition_block_entries: Vec<BlockEntry>,
 }
 

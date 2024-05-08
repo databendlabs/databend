@@ -22,7 +22,7 @@ uuid = { workspace = true }
 
 time = { version = "0.3", features = ["serde"] }
 
-base64 = "0.21.0"
+base64 = { workspace = true }
 clap = { workspace = true }
 enumflags2 = { workspace = true }
 opendal = { workspace = true }
@@ -30,3 +30,5 @@ poem = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
+http = { workspace = true }
+bytes = { workspace = true }

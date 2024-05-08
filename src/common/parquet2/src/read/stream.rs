@@ -13,98 +13,81 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::SeekFrom;
-
-use futures::AsyncRead;
+use bytes::Buf;
 use futures::AsyncReadExt;
-use futures::AsyncSeek;
-use futures::AsyncSeekExt;
 
 use super::super::metadata::FileMetaData;
 use super::super::DEFAULT_FOOTER_READ_SIZE;
 use super::super::FOOTER_SIZE;
 use super::super::PARQUET_MAGIC;
 use super::metadata::deserialize_metadata;
-use super::metadata::metadata_len;
 use crate::error::Error;
 use crate::error::Result;
-use crate::HEADER_SIZE;
 
-async fn stream_len(
-    seek: &mut (impl AsyncSeek + std::marker::Unpin),
-) -> std::result::Result<u64, std::io::Error> {
-    let old_pos = seek.seek(SeekFrom::Current(0)).await?;
-    let len = seek.seek(SeekFrom::End(0)).await?;
-
-    // Avoid seeking a third time when we were already at the end of the
-    // stream. The branch is usually way cheaper than a seek operation.
-    if old_pos != len {
-        seek.seek(SeekFrom::Start(old_pos)).await?;
-    }
-
-    Ok(len)
-}
-
-/// Asynchronously reads the files' metadata
-pub async fn read_metadata<R: AsyncRead + AsyncSeek + Send + std::marker::Unpin>(
-    reader: &mut R,
-) -> Result<FileMetaData> {
-    let file_size = stream_len(reader).await?;
-
-    if file_size < HEADER_SIZE + FOOTER_SIZE {
-        return Err(Error::oos(
-            "A parquet file must containt a header and footer with at least 12 bytes",
-        ));
-    }
-
-    // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
-    let default_end_len = std::cmp::min(DEFAULT_FOOTER_READ_SIZE, file_size) as usize;
-    reader
-        .seek(SeekFrom::End(-(default_end_len as i64)))
-        .await?;
-
-    let mut buffer = vec![];
-    buffer.try_reserve(default_end_len)?;
-    reader
-        .take(default_end_len as u64)
-        .read_to_end(&mut buffer)
-        .await?;
+/// Decodes the footer returning the metadata length in bytes
+pub fn decode_footer(slice: &[u8]) -> Result<usize> {
+    assert_eq!(slice.len(), FOOTER_SIZE as usize, "Invalid footer size");
 
     // check this is indeed a parquet file
-    if buffer[default_end_len - 4..] != PARQUET_MAGIC {
+    if slice[4..] != PARQUET_MAGIC {
         return Err(Error::oos("Invalid Parquet file. Corrupt footer"));
     }
 
-    let metadata_len = metadata_len(&buffer, default_end_len);
-    let metadata_len: u64 = metadata_len.try_into()?;
+    // get the metadata length from the footer
+    let metadata_len = u32::from_le_bytes(slice[..4].try_into().unwrap());
+    // u32 won't be larger than usize in most cases
+    Ok(metadata_len as usize)
+}
 
-    let footer_len = FOOTER_SIZE + metadata_len;
-    if footer_len > file_size {
-        return Err(Error::oos(
-            "The footer size must be smaller or equal to the file's size",
-        ));
+/// Asynchronously reads the files' metadata
+///
+/// This implementation is based on the implementation in `parquet`: https://docs.rs/parquet/latest/src/parquet/file/footer.rs.html#69
+pub async fn read_metadata(reader: opendal::Reader, file_size: u64) -> Result<FileMetaData> {
+    if file_size < 8 {
+        return Err(Error::oos(format!(
+            "file size of {file_size} is less than footer"
+        )));
     }
 
-    let reader = if (footer_len as usize) < buffer.len() {
-        // the whole metadata is in the bytes we already read
-        let remaining = buffer.len() - footer_len as usize;
-        &buffer[remaining..]
+    // If a size hint is provided, read more than the minimum size
+    // to try and avoid a second fetch.
+    let footer_start = file_size.saturating_sub(DEFAULT_FOOTER_READ_SIZE);
+
+    let suffix = reader
+        .read(footer_start..file_size)
+        .await
+        .map_err(|err| Error::oos(err.to_string()))?;
+    let suffix_len = suffix.len();
+
+    let footer = suffix.slice(suffix_len - 8..suffix_len).to_vec();
+    let length = decode_footer(&footer)?;
+
+    if file_size < length as u64 + 8 {
+        return Err(Error::oos(format!(
+            "file size of {} is less than footer + metadata {}",
+            file_size,
+            length + 8
+        )));
+    }
+
+    // Did not fetch the entire file metadata in the initial read, need to make a second request
+    if length > suffix_len - 8 {
+        let metadata_start = file_size as usize - length - 8;
+        let meta = reader
+            .read(metadata_start as _..file_size - 8)
+            .await
+            .map_err(|err| Error::oos(err.to_string()))?;
+
+        // a highly nested but sparse struct could result in many allocations
+        let max_size = meta.len() * 2 + 1024;
+        deserialize_metadata(meta.reader(), max_size)
     } else {
-        // the end of file read by default is not long enough, read again including the metadata.
-        reader.seek(SeekFrom::End(-(footer_len as i64))).await?;
+        let metadata_start = file_size as usize - length - 8 - footer_start as usize;
 
-        buffer.clear();
-        buffer.try_reserve(footer_len as usize)?;
-        reader
-            .take(footer_len as u64)
-            .read_to_end(&mut buffer)
-            .await?;
+        let slice = suffix.slice(metadata_start as _..suffix_len - 8);
 
-        &buffer
-    };
-
-    // a highly nested but sparse struct could result in many allocations
-    let max_size = reader.len() * 2 + 1024;
-
-    deserialize_metadata(reader, max_size)
+        // a highly nested but sparse struct could result in many allocations
+        let max_size = slice.len() * 2 + 1024;
+        deserialize_metadata(slice.reader(), max_size)
+    }
 }

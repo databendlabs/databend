@@ -135,7 +135,7 @@ pub struct MetricsLayer {
 impl<A: Access> Layer<A> for MetricsLayer {
     type LayeredAccess = MetricsLayerAccessor<A>;
 
-    fn layer(&self, inner: A) -> Self::LayeredAccessor {
+    fn layer(&self, inner: A) -> Self::LayeredAccess {
         let meta = inner.info();
         let scheme = meta.scheme();
 

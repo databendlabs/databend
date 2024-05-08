@@ -3159,6 +3159,7 @@ dependencies = [
  "lz4",
  "num",
  "num-traits",
+ "opendal",
  "ordered-float 3.9.2",
  "proptest",
  "quanta 0.11.1",
@@ -3986,10 +3987,12 @@ version = "0.1.0"
 dependencies = [
  "async-stream",
  "brotli",
+ "bytes",
  "criterion",
  "flate2",
  "futures",
  "lz4",
+ "opendal",
  "parquet-format-safe",
  "rand 0.8.5",
  "seq-macro",
@@ -4179,7 +4182,7 @@ dependencies = [
  "log",
  "moka",
  "opendal",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
 ]
@@ -4277,7 +4280,7 @@ dependencies = [
  "parquet 51.0.0",
  "prometheus-client",
  "regex",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "reqwest-hickory-resolver",
  "serde",
  "thiserror",
@@ -4778,7 +4781,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "passwords",
  "pretty_assertions",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "wiremock",
@@ -5030,7 +5033,7 @@ dependencies = [
  "prometheus-client",
  "prost 0.12.3",
  "regex",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "semver",
  "serde",
  "serde_json",
@@ -5140,7 +5143,7 @@ dependencies = [
  "futures",
  "futures-util",
  "goldenfile",
- "h2",
+ "h2 0.3.26",
  "headers",
  "hex",
  "highway",
@@ -5178,7 +5181,7 @@ dependencies = [
  "prost 0.12.3",
  "rand 0.8.5",
  "regex",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "rmp-serde",
  "rustls 0.21.11",
  "rustls-pemfile 1.0.4",
@@ -5211,7 +5214,8 @@ name = "databend-sharing-endpoint"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "base64 0.21.7",
+ "base64 0.22.0",
+ "bytes",
  "chrono",
  "clap 4.5.1",
  "databend-common-base",
@@ -5221,6 +5225,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-share",
  "enumflags2",
+ "http 1.1.0",
  "opendal",
  "poem",
  "serde",
@@ -5261,7 +5266,7 @@ dependencies = [
  "mysql_async",
  "rand 0.8.5",
  "regex",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "sqllogictest",
@@ -8118,6 +8123,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "h2"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "816ec7294445779408f36fe57bc5b7fc1cf59664059096c65f905c1c61f58069"
+dependencies = [
+ "bytes",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "http 1.1.0",
+ "indexmap 2.2.5",
+ "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "h3o"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8548,7 +8572,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "h2",
+ "h2 0.3.26",
  "http 0.2.11",
  "http-body 0.4.6",
  "httparse",
@@ -8571,6 +8595,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
+ "h2 0.4.4",
  "http 1.1.0",
  "http-body 1.0.0",
  "httparse",
@@ -12389,7 +12414,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2",
+ "h2 0.3.26",
  "http 0.2.11",
  "http-body 0.4.6",
  "hyper 0.14.28",
@@ -12403,7 +12428,6 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "rustls 0.21.11",
- "rustls-native-certs 0.6.3",
  "rustls-pemfile 1.0.4",
  "serde",
  "serde_json",
@@ -12433,6 +12457,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
+ "h2 0.4.4",
  "http 1.1.0",
  "http-body 1.0.0",
  "http-body-util",
@@ -12447,6 +12472,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "rustls 0.22.2",
+ "rustls-native-certs",
  "rustls-pemfile 2.1.2",
  "rustls-pki-types",
  "serde",
@@ -12468,14 +12494,13 @@ dependencies = [
 
 [[package]]
 name = "reqwest-hickory-resolver"
-version = "0.0.2"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acc5825a66171aedfa62e562b26d906a42dce52f801aa425b8c8aff15edcda6e"
+checksum = "1a1c6019977b5e51744bff6ac8ef399d8ab52bca845623e76e8e058219e5e97e"
 dependencies = [
  "hickory-resolver",
- "hyper 0.14.28",
  "once_cell",
- "reqwest 0.11.24",
+ "reqwest 0.12.4",
 ]
 
 [[package]]
@@ -12861,18 +12886,6 @@ dependencies = [
  "rustls-webpki 0.102.2",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "rustls-native-certs"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
-dependencies = [
- "openssl-probe",
- "rustls-pemfile 1.0.4",
- "schannel",
- "security-framework",
 ]
 
 [[package]]
@@ -14748,7 +14761,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
- "h2",
+ "h2 0.3.26",
  "http 0.2.11",
  "http-body 0.4.6",
  "hyper 0.14.28",
@@ -14775,7 +14788,7 @@ dependencies = [
  "axum",
  "base64 0.21.7",
  "bytes",
- "h2",
+ "h2 0.3.26",
  "http 0.2.11",
  "http-body 0.4.6",
  "hyper 0.14.28",
@@ -14802,7 +14815,7 @@ dependencies = [
  "axum",
  "base64 0.21.7",
  "bytes",
- "h2",
+ "h2 0.3.26",
  "http 0.2.11",
  "http-body 0.4.6",
  "hyper 0.14.28",
@@ -14810,7 +14823,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost 0.12.3",
- "rustls-native-certs 0.7.0",
+ "rustls-native-certs",
  "rustls-pemfile 2.1.2",
  "rustls-pki-types",
  "tokio",

@@ -61,7 +61,7 @@ use tokio_stream;
 use tokio_stream::Stream;
 use tonic::codegen::BoxStream;
 use tonic::metadata::MetadataMap;
-use tonic::transport::NamedService;
+use tonic::server::NamedService;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;

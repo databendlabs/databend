@@ -243,19 +243,18 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         debug!("started");
         let operator = ctx.source.get_operator()?;
         let offset = split_info.offset as u64;
-        let size = split_info.size;
-        let mut batch_size = ctx.read_batch_size.min(size);
+        let size = split_info.size as u64;
+        let mut batch_size = ctx.read_batch_size.min(size as _) as u64;
 
-        let mut reader = operator
-            .reader_with(&split_info.file.path)
-            .range(offset..offset + size as u64)
-            .await?;
-        let mut total_read = 0;
+        let mut reader = operator.reader_with(&split_info.file.path).await?;
+        let mut total_read: u64 = 0;
         loop {
             batch_size = batch_size.min(size - total_read);
-            let mut batch = vec![0u8; batch_size];
-            let n = read_full(&mut reader, &mut batch[0..]).await?;
-            if n == 0 {
+            let batch = reader
+                .read(offset + total_read..offset + total_read + batch_size)
+                .await?;
+
+            if batch.is_empty() {
                 if total_read != size {
                     return Err(ErrorCode::BadBytes(format!(
                         "split {} expect {} bytes, read only {} bytes",
@@ -264,10 +263,9 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 }
                 break;
             } else {
-                total_read += n;
-                batch.truncate(n);
-                debug!("read {} bytes", n);
-                if let Err(e) = batch_tx.send(Ok(batch.into())).await {
+                total_read += batch.len() as u64;
+                debug!("read {} bytes", batch.len());
+                if let Err(e) = batch_tx.send(Ok(batch.to_vec().into())).await {
                     warn!("fail to send ReadBatch: {}", e);
                     break;
                 }
@@ -276,19 +274,4 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         debug!("finished");
         Ok(())
     }
-}
-
-#[async_backtrace::framed]
-pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
-    let mut buf = &mut buf[0..];
-    let mut n = 0;
-    while !buf.is_empty() {
-        let read = reader.read(buf).await?;
-        if read == 0 {
-            break;
-        }
-        n += read;
-        buf = &mut buf[read..]
-    }
-    Ok(n)
 }

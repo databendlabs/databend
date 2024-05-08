@@ -168,7 +168,6 @@ pub struct StorageMetricsAccessor<A: Access> {
     metrics: Arc<StorageMetrics>,
 }
 
-#[async_trait]
 impl<A: Access> LayeredAccess for StorageMetricsAccessor<A> {
     type Inner = A;
     type Reader = StorageMetricsWrapper<A::Reader>;

@@ -97,6 +97,7 @@ ordered-float = "3.7.0"
 ringbuffer = "0.14.2"
 roaring = "0.10.1"
 seq-macro = { version = "0.3", default-features = false }
+opendal = { workspace = true }
 
 bytemuck = { version = "1", features = ["derive"] }
 chrono = { workspace = true }

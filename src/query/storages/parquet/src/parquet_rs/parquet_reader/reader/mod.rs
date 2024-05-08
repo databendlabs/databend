@@ -17,5 +17,6 @@ mod full_reader;
 mod row_group_reader;
 
 pub use builder::ParquetRSReaderBuilder;
+pub use full_reader::ParquetFileReader;
 pub use full_reader::ParquetRSFullReader;
 pub use row_group_reader::ParquetRSRowGroupReader;
