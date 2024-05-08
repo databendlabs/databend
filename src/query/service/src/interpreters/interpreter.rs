@@ -39,6 +39,7 @@ use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::error;
 use log::info;
 
+use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -139,51 +140,7 @@ pub trait Interpreter: Sync + Send {
                     }
                 }
 
-                let tenant = query_ctx.get_tenant();
-                let settings = query_ctx.get_settings();
-                let spill_prefix = query_spill_prefix(tenant.tenant_name(), &query_ctx.get_id());
-                let license_manager = get_license_manager();
-
-                if license_manager
-                    .manager
-                    .check_enterprise_enabled(query_ctx.get_license_key(), Vacuum)
-                    .is_ok()
-                {
-                    let handler = get_vacuum_handler();
-
-                    let _ = GlobalIORuntime::instance().block_on(async move {
-                        let vacuum_limit = match settings.get_max_vacuum_temp_files_after_query()? {
-                            0 => None,
-                            v => Some(v as usize),
-                        };
-                        let removed_files = handler
-                            .do_vacuum_temporary_files(
-                                spill_prefix.clone(),
-                                Some(Duration::from_secs(0)),
-                                vacuum_limit,
-                            )
-                            .await;
-
-                        if !matches!(removed_files, Ok(_) if vacuum_limit.is_none())
-                            && !matches!(removed_files, Ok(res) if Some(res) != vacuum_limit) {
-                            let op = DataOperator::instance().operator();
-                            op.create_dir(&format!("{}/", spill_prefix)).await?;
-                            op.write(&format!("{}/finished", spill_prefix), vec![])
-                                .await?;
-                        }
-
-                        Ok(())
-                    });
-                } else {
-                    let _ = GlobalIORuntime::instance().block_on(async move {
-                        let op = DataOperator::instance().operator();
-                        op.create_dir(&format!("{}/", spill_prefix)).await?;
-                        op.write(&format!("{}/finished", spill_prefix), vec![])
-                            .await?;
-
-                        Ok(())
-                    });
-                }
+                hook_vacuum_temp_files(&query_ctx)?;
 
                 let err_opt = match may_error {
                     Ok(_) => None,
