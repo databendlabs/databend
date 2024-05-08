@@ -107,7 +107,10 @@ impl Rule for RuleSemiToInnerJoin {
 
 fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> Result<()> {
     match child.plan() {
-        RelOperator::EvalScalar(_) | RelOperator::Filter(_) | RelOperator::Window(_) => {
+        RelOperator::EvalScalar(_)
+        | RelOperator::Filter(_)
+        | RelOperator::Window(_)
+        | RelOperator::ModifyBySubquery(_) => {
             find_group_by_keys(child.child(0)?, group_by_keys)?;
         }
         RelOperator::Aggregate(agg) => {
@@ -130,7 +133,6 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         | RelOperator::Scan(_)
         | RelOperator::CteScan(_)
         | RelOperator::AsyncFunction(_)
-        | RelOperator::ModifyBySubquery(_)
         | RelOperator::Join(_) => {}
     }
     Ok(())

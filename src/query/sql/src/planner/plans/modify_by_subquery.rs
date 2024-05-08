@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -29,13 +30,14 @@ use super::SubqueryDesc;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::RemoteBlockOperator;
 use crate::executor::PhysicalPlan;
-use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
+use crate::optimizer::MAX_SELECTIVITY;
 use crate::ColumnSet;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -120,18 +122,31 @@ impl Operator for ModifyBySubquery {
         }))
     }
 
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Serial,
-        })
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        rel_expr.derive_physical_prop_child(0)
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        let stat_info = rel_expr.derive_cardinality_child(0)?;
+        let (input_cardinality, mut statistics) =
+            (stat_info.cardinality, stat_info.statistics.clone());
+        // Derive cardinality
+        let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
+        let selectivity = MAX_SELECTIVITY;
+        // Update other columns's statistic according to selectivity.
+        sb.update_other_statistic_by_selectivity(selectivity);
+        let cardinality = input_cardinality * selectivity;
+        // Derive column statistics
+        let column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            statistics.column_stats
+        };
         Ok(Arc::new(StatInfo {
-            cardinality: 0.0,
+            cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
-                column_stats: HashMap::new(),
+                column_stats,
             },
         }))
     }

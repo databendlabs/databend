@@ -223,6 +223,7 @@ impl DPhpy {
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
             | RelOperator::Udf(_)
+            | RelOperator::ModifyBySubquery(_)
             | RelOperator::Filter(_) => {
                 if join_child {
                     // If plan is filter, save it
@@ -262,7 +263,6 @@ impl DPhpy {
             | RelOperator::ConstantTableScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AsyncFunction(_)
-            | RelOperator::ModifyBySubquery(_)
             | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }

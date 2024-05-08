@@ -218,49 +218,31 @@ Sort
 query T
 explain select t.number from numbers(10) t where exists(select * from numbers(10))
 ----
-HashJoin
-├── output columns: [t.number (#0)]
-├── join type: CROSS
-├── build keys: []
-├── probe keys: []
-├── filters: []
-├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: []
-│   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.00
-│   └── AggregateFinal
-│       ├── output columns: [count(*) (#2)]
-│       ├── group by: []
-│       ├── aggregate functions: [count()]
-│       ├── estimated rows: 1.00
-│       └── AggregatePartial
-│           ├── group by: []
-│           ├── aggregate functions: [count()]
-│           ├── estimated rows: 1.00
-│           └── Limit
-│               ├── output columns: []
-│               ├── limit: 1
-│               ├── offset: 0
-│               ├── estimated rows: 1.00
-│               └── TableScan
-│                   ├── table: default.system.numbers
-│                   ├── output columns: []
-│                   ├── read rows: 1
-│                   ├── read size: < 1 KiB
-│                   ├── partitions total: 1
-│                   ├── partitions scanned: 1
-│                   ├── push downs: [filters: [], limit: 1]
-│                   └── estimated rows: 10.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 10
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+HashJoin                                
+├── output columns: [t.number (#0)]    
+├── join type: LEFT SEMI              
+├── build keys: []                   
+├── probe keys: []                  
+├── filters: []                    
+├── estimated rows: 10.00         
+├── TableScan(Build)             
+│   ├── table: default.system.numbers  
+│   ├── output columns: []            
+│   ├── read rows: 10                
+│   ├── read size: < 1 KiB          
+│   ├── partitions total: 1        
+│   ├── partitions scanned: 1     
+│   ├── push downs: [filters: [], limit: NONE]  
+│   └── estimated rows: 10.00                  
+└── TableScan(Probe)                          
+ ├── table: default.system.numbers           
+ ├── output columns: [number (#0)]          
+ ├── read rows: 10                         
+ ├── read size: < 1 KiB                   
+ ├── partitions total: 1                 
+ ├── partitions scanned: 1              
+ ├── push downs: [filters: [], limit: NONE]  
+ └── estimated rows: 10.00                  
 
 
 statement ok
