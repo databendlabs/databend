@@ -428,10 +428,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, NullableType<ArrayType<GenericType<0>>>, _, _>(
+    registry.register_2_arg_core::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>, _, _>(
         "array_prepend",
         |_, item_domain, array_domain| {
-            let value = array_domain
+            let domain = array_domain
                 .value
                 .as_ref()
                 .map(|box inner_domain| {
@@ -439,32 +439,25 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .as_ref()
                         .map(|inner_domain| inner_domain.merge(item_domain))
                         .unwrap_or(item_domain.clone())
-                })
-                .map(Some)
-                .map(Box::new);
-            FunctionDomain::Domain(
-                NullableDomain {
-                    has_null: array_domain.has_null,
-                    value,
-                }
-            )
+                });
+            FunctionDomain::Domain(domain)
         },
-        vectorize_2_arg::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, NullableType<ArrayType<GenericType<0>>>>(
-            |val, arr, _| {
-                arr.map(|arr| {
-                    let data_type = arr.data_type();
-                    let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
-                    builder.push(val);
-                    builder.append_column(&arr);
-                    builder.build()
-            })
+        vectorize_with_builder_2_arg::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>(
+            |val, arr, output, ctx| {
+                output.put_item(val);
+                if let Some(arr) = arr {
+                    for item in arr.iter() {
+                        output.put_item(item);
+                    }
+                }
+                output.commit_row()
         })
     );
 
-    registry.register_2_arg_core::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, NullableType<ArrayType<GenericType<0>>>, _, _>(
+    registry.register_2_arg_core::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, ArrayType<GenericType<0>>, _, _>(
         "array_append",
         |_, array_domain, item_domain| {
-            let value = array_domain
+            let domain = array_domain
                 .value
                 .as_ref()
                 .map(|box inner_domain| {
@@ -472,25 +465,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .as_ref()
                         .map(|inner_domain| inner_domain.merge(item_domain))
                         .unwrap_or(item_domain.clone())
-                })
-                .map(Some)
-                .map(Box::new);
-            FunctionDomain::Domain(
-                NullableDomain {
-                    has_null: array_domain.has_null,
-                    value,
-                }
-            )
+                });
+            FunctionDomain::Domain(domain)
         },
-        vectorize_2_arg::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, NullableType<ArrayType<GenericType<0>>>>(
-            |arr, val, _| {
-                arr.map(|arr| {
-                    let data_type = arr.data_type();
-                    let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
-                    builder.append_column(&arr);
-                    builder.push(val);
-                    builder.build()
-            })
+        vectorize_with_builder_2_arg::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, ArrayType<GenericType<0>>>(
+            |arr, val, output, ctx| {
+                if let Some(arr) = arr {
+                    for item in arr.iter() {
+                        output.put_item(item);
+                    }
+                }
+                output.put_item(val);
+                output.commit_row()
         })
     );
 
