@@ -542,13 +542,13 @@ dependencies = [
 [[package]]
 name = "arrow-format"
 version = "0.8.1"
-source = "git+https://github.com/everpcpc/arrow-format?rev=ad8f2dd#ad8f2ddc105e4d32c76cea1e71c7ff78c18076ca"
+source = "git+https://github.com/Xuanwo/arrow-format?rev=be633a0#be633a036bf64b7e34f2a0e8da5b5471dad01cb4"
 dependencies = [
  "planus",
  "prost 0.12.3",
  "prost-derive 0.12.3",
  "serde",
- "tonic 0.10.2",
+ "tonic 0.11.0",
 ]
 
 [[package]]

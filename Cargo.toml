@@ -284,7 +284,8 @@ rpath = false
 
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
-arrow-format = { git = "https://github.com/everpcpc/arrow-format", rev = "ad8f2dd" }
+# Changes to upstream: update to tonic 0.11
+arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
 micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" }
