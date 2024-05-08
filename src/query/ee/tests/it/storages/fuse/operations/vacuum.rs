@@ -148,7 +148,7 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(5)), None).await?;
     let temp_files = operator.list("test_dir/").await?;
     assert_eq!(temp_files.len(), 1, "{:?}", temp_files);
-    assert_eq!(operator.list("test_dir/").await[0].name(), "test4/", "{:?}", temp_files);
+    assert_eq!(temp_files[0].name(), "test4/", "{:?}", temp_files);
 
     tokio::time::sleep(Duration::from_secs(3)).await;
     do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(3)), None).await?;

@@ -52,7 +52,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
                 )
                 .await;
 
-            if !matches!(removed_files, Ok(_) if vacuum_limit.is_none())
+            if (removed_files.is_ok() && vacuum_limit.is_none())
                 && !matches!(removed_files, Ok(res) if Some(res) != vacuum_limit)
             {
                 let op = DataOperator::instance().operator();
