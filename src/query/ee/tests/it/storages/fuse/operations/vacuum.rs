@@ -32,6 +32,7 @@ use opendal::raw::OpStat;
 use opendal::raw::RpStat;
 use opendal::EntryMode;
 use opendal::Metadata;
+use opendal::Metakey;
 use opendal::OperatorBuilder;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -117,7 +118,10 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     operator.write("test_dir/test2", vec![1, 2]).await?;
     operator.write("test_dir/test3", vec![1, 2]).await?;
 
-    assert_eq!(3, operator.list("test_dir/").await?.len());
+    assert_eq!(
+        3,
+        operator.list_with("test_dir/").recursive(true).await?.len()
+    );
 
     tokio::time::sleep(Duration::from_secs(2)).await;
     do_vacuum_temporary_files(
@@ -129,8 +133,32 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
 
     assert_eq!(2, operator.list("test_dir/").await?.len());
 
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), None).await?;
-    assert_eq!(0, operator.list("test_dir/").await?.len());
+    operator.write("test_dir/test4/test4", vec![1, 2]).await?;
+    operator.write("test_dir/test5/test5", vec![1, 2]).await?;
+    operator
+        .write("test_dir/test5/finished", vec![1, 2])
+        .await?;
+    do_vacuum_temporary_files(
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(2)),
+        Some(2),
+    )
+    .await?;
+    assert_eq!(operator.list("test_dir/").await?.len(), 2);
+
+    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(5)), None).await?;
+    assert_eq!(operator.list("test_dir/").await?.len(), 1);
+    assert_eq!(operator.list("test_dir/").await?[0].name(), "test4/");
+
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(3)), None).await?;
+    assert!(
+        operator
+            .list_with("test_dir/")
+            .recursive(true)
+            .await?
+            .is_empty()
+    );
 
     Ok(())
 }

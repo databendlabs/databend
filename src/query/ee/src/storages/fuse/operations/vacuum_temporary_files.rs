@@ -21,6 +21,7 @@ use databend_common_storage::DataOperator;
 use futures_util::stream;
 use futures_util::TryStreamExt;
 use opendal::Entry;
+use opendal::EntryMode;
 use opendal::Metakey;
 
 #[async_backtrace::framed]
@@ -49,40 +50,48 @@ pub async fn do_vacuum_temporary_files(
     let mut removed_temp_files = 0;
 
     while removed_temp_files < limit {
-        let mut eof = true;
+        let mut end_of_stream = true;
         let mut remove_temp_files_path = Vec::with_capacity(1000);
 
         while let Some(de) = ds.try_next().await? {
             let meta = de.metadata();
 
-            match meta.is_dir() {
-                true => {
-                    if let Some(modified) = meta.last_modified() {
-                        if timestamp - modified.timestamp_millis() >= expire_time {
-                            vacuum_finished_query(&mut removed_temp_files, &de, limit).await?;
-                        }
-                    } else if operator.is_exist(&format!("{}finished", de.path())).await? {
-                        vacuum_finished_query(&mut removed_temp_files, &de, limit).await?;
-                    }
+            match meta.mode() {
+                EntryMode::DIR => {
+                    let life_mills =
+                        match operator.is_exist(&format!("{}finished", de.path())).await? {
+                            true => 0,
+                            false => expire_time,
+                        };
+
+                    vacuum_finished_query(
+                        &mut removed_temp_files,
+                        &de,
+                        limit,
+                        timestamp,
+                        life_mills,
+                    )
+                    .await?;
 
                     if removed_temp_files >= limit {
-                        eof = false;
+                        end_of_stream = false;
                         break;
                     }
                 }
-                false => {
+                EntryMode::FILE => {
                     if let Some(modified) = meta.last_modified() {
                         if timestamp - modified.timestamp_millis() >= expire_time {
                             removed_temp_files += 1;
                             remove_temp_files_path.push(de.path().to_string());
+
+                            if removed_temp_files >= limit || remove_temp_files_path.len() >= 1000 {
+                                end_of_stream = false;
+                                break;
+                            }
                         }
                     }
-
-                    if removed_temp_files >= limit || remove_temp_files_path.len() >= 1000 {
-                        eof = false;
-                        break;
-                    }
                 }
+                EntryMode::Unknown => unreachable!(),
             }
         }
 
@@ -92,7 +101,7 @@ pub async fn do_vacuum_temporary_files(
                 .await?;
         }
 
-        if eof {
+        if end_of_stream {
             break;
         }
     }
@@ -104,29 +113,48 @@ async fn vacuum_finished_query(
     removed_temp_files: &mut usize,
     de: &Entry,
     limit: usize,
+    timestamp: i64,
+    life_mills: i64,
 ) -> Result<()> {
     let operator = DataOperator::instance().operator();
 
-    let mut ds = operator.lister_with(de.path()).await?;
+    let mut all_files_removed = true;
+    let mut ds = operator
+        .lister_with(de.path())
+        .metakey(Metakey::Mode | Metakey::LastModified)
+        .await?;
+
     while *removed_temp_files < limit {
-        let mut removed_all = true;
+        let mut end_of_stream = true;
+        let mut all_each_files_removed = true;
         let mut remove_temp_files_path = Vec::with_capacity(1001);
 
         while let Some(de) = ds.try_next().await? {
-            if de.name() != "finished" {
-                *removed_temp_files += 1;
-                remove_temp_files_path.push(de.path().to_string());
+            let meta = de.metadata();
+            if meta.is_file() {
+                if de.name() == "finished" {
+                    continue;
+                }
 
-                if *removed_temp_files >= limit || remove_temp_files_path.len() >= 1000 {
-                    removed_all = false;
-                    break;
+                if let Some(modified) = meta.last_modified() {
+                    if timestamp - modified.timestamp_millis() >= life_mills {
+                        *removed_temp_files += 1;
+                        remove_temp_files_path.push(de.path().to_string());
+
+                        if *removed_temp_files >= limit || remove_temp_files_path.len() >= 1000 {
+                            end_of_stream = false;
+                            break;
+                        }
+
+                        continue;
+                    }
                 }
             }
+
+            all_each_files_removed = false;
         }
 
-        if removed_all {
-            remove_temp_files_path.push(format!("{}finished", de.path()));
-        }
+        all_files_removed &= all_each_files_removed;
 
         if !remove_temp_files_path.is_empty() {
             operator
@@ -134,9 +162,14 @@ async fn vacuum_finished_query(
                 .await?;
         }
 
-        if removed_all {
-            operator.delete(de.path()).await?;
+        if end_of_stream {
+            break;
         }
+    }
+
+    if all_files_removed {
+        operator.delete(&format!("{}finished", de.path())).await?;
+        operator.delete(de.path()).await?;
     }
 
     Ok(())
