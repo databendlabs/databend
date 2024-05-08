@@ -494,6 +494,7 @@ impl Plan {
                 | Plan::ExplainAst { .. }
                 | Plan::ExplainSyntax { .. }
                 | Plan::ExplainAnalyze { .. }
+                | Plan::ExistsTable(_)
                 | Plan::ShowCreateDatabase(_)
                 | Plan::ShowCreateTable(_)
                 | Plan::ShowCreateCatalog(_)
