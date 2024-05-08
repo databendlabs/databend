@@ -18,6 +18,7 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::schema::catalog::catalog_info::CatalogId;
 use crate::schema::CatalogNameIdent;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -112,7 +113,7 @@ pub struct CatalogInfo {
 /// Private types for `CatalogInfo`.
 mod catalog_info {
 
-    /// Same as [`crate::schema::CatalogId`], except with serde support, and can be used in a value,
+    /// Same as [`crate::schema::CatalogIdIdent`], except with serde support, and can be used in a value,
     /// while CatalogId is only used for Key.
     ///
     /// This type is sealed in a private mod so that it is pub for use but can not be created directly.
@@ -121,10 +122,10 @@ mod catalog_info {
         pub catalog_id: u64,
     }
 
-    impl From<crate::schema::CatalogId> for CatalogId {
-        fn from(value: crate::schema::CatalogId) -> Self {
+    impl From<crate::schema::CatalogIdIdent> for CatalogId {
+        fn from(value: crate::schema::CatalogIdIdent) -> Self {
             Self {
-                catalog_id: value.catalog_id,
+                catalog_id: value.catalog_id(),
             }
         }
     }
@@ -144,7 +145,7 @@ impl CatalogInfo {
     /// Create a new default catalog info.
     pub fn new_default() -> CatalogInfo {
         Self {
-            id: CatalogId { catalog_id: 0 }.into(),
+            id: CatalogId { catalog_id: 0 },
             name_ident: CatalogName {
                 // tenant for default catalog is not used.
                 tenant: "".to_string(),
@@ -162,18 +163,6 @@ impl CatalogInfo {
 pub struct CatalogMeta {
     pub catalog_option: CatalogOption,
     pub created_on: DateTime<Utc>,
-}
-
-// serde is required by `CatalogInfo.id`
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct CatalogId {
-    pub catalog_id: u64,
-}
-
-impl CatalogId {
-    pub fn new(catalog_id: u64) -> CatalogId {
-        CatalogId { catalog_id }
-    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -278,33 +267,8 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::KeyError;
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
-    use super::CatalogId;
     use super::CatalogIdToName;
-    use crate::schema::CatalogMeta;
     use crate::schema::CatalogNameIdent;
-
-    impl kvapi::KeyCodec for CatalogId {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.catalog_id)
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
-            let catalog_id = parser.next_u64()?;
-
-            Ok(Self { catalog_id })
-        }
-    }
-
-    /// "__fd_catalog_by_id/<catalog_id>"
-    impl kvapi::Key for CatalogId {
-        const PREFIX: &'static str = "__fd_catalog_by_id";
-
-        type ValueType = CatalogMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-    }
 
     impl kvapi::KeyCodec for CatalogIdToName {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
@@ -325,13 +289,8 @@ mod kvapi_key_impl {
         type ValueType = CatalogNameIdent;
 
         fn parent(&self) -> Option<String> {
-            Some(CatalogId::new(self.catalog_id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for CatalogMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
+            None
+            // Some(CatalogIdIdent::new(self.catalog_id).to_string_key())
         }
     }
 
