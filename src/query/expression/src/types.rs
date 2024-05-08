@@ -178,62 +178,68 @@ impl DataType {
         }
     }
 
-    pub fn infinity(&self) -> Scalar {
+    pub fn infinity(&self) -> Result<Scalar,String> {
         match &self {
              DataType::Timestamp => {
-                return  Scalar::Timestamp(TIMESTAMP_MAX)
+                Ok(Scalar::Timestamp(TIMESTAMP_MAX))
              },
              DataType::Date => {
-                return  Scalar::Date(DATE_MAX)
+                Ok(Scalar::Date(DATE_MAX))
              }
              DataType::Number(NumberDataType::Float32) =>{
-                return Scalar::Number(NumberScalar::Float32(ordered_float::OrderedFloat(f32::INFINITY)))
+                Ok(Scalar::Number(NumberScalar::Float32(ordered_float::OrderedFloat(f32::INFINITY))))
              }
              DataType::Number(NumberDataType::Int32) => {
-                return Scalar::Number(NumberScalar::Int32(MAX))
+                Ok(Scalar::Number(NumberScalar::Int32(MAX)))
              }
              DataType::Number(NumberDataType::Int16) => {
-                return Scalar::Number(NumberScalar::Int16(MAX.try_into().unwrap()))
+                Ok(Scalar::Number(NumberScalar::Int16(MAX.try_into().unwrap())))
              }
              DataType::Number(NumberDataType::Int8) => {
-                return Scalar::Number(NumberScalar::Int8(MAX.try_into().unwrap()))
+                Ok(Scalar::Number(NumberScalar::Int8(MAX.try_into().unwrap())))
              }
              DataType::Number(NumberDataType::Float64) => {
-                return Scalar::Number(NumberScalar::Float64(ordered_float::OrderedFloat(f64::INFINITY)))
+                Ok(Scalar::Number(NumberScalar::Float64(ordered_float::OrderedFloat(f64::INFINITY))))
              }
              DataType::Number(NumberDataType::Int64) => {
-                return Scalar::Number(NumberScalar::Int64(MAX.into()))
+                Ok(Scalar::Number(NumberScalar::Int64(MAX.into())))
              }
-             _ => todo!()
+             _ => Result::Err(format!(
+                "only support numeric types and time types, but got {:?}",
+                self
+            )),
         }
     }
-    pub fn ninfinity(&self) -> Scalar {
+    pub fn ninfinity(&self) -> Result<Scalar,String> {
         match &self {
              DataType::Timestamp => {
-                return  Scalar::Timestamp(TIMESTAMP_MIN)
+                Ok(Scalar::Timestamp(TIMESTAMP_MIN))
              },
              DataType::Date => {
-                return  Scalar::Date(DATE_MIN)
+                Ok(Scalar::Date(DATE_MIN))
              }
              DataType::Number(NumberDataType::Float32) =>{
-                return Scalar::Number(NumberScalar::Float32(ordered_float::OrderedFloat(f32::NEG_INFINITY)))
+                 Ok(Scalar::Number(NumberScalar::Float32(ordered_float::OrderedFloat(f32::NEG_INFINITY))))
              }
              DataType::Number(NumberDataType::Int32) => {
-                return Scalar::Number(NumberScalar::Int32(-MAX))
+                 Ok(Scalar::Number(NumberScalar::Int32(-MAX)))
              }
              DataType::Number(NumberDataType::Int16) => {
-                return Scalar::Number(NumberScalar::Int16((-MAX).try_into().unwrap()))
+                Ok(Scalar::Number(NumberScalar::Int16((-MAX).try_into().unwrap())))
              }
              DataType::Number(NumberDataType::Int8) => {
-                return Scalar::Number(NumberScalar::Int8((-MAX).try_into().unwrap()))
+                Ok(Scalar::Number(NumberScalar::Int8((-MAX).try_into().unwrap())))
              }
              DataType::Number(NumberDataType::Float64) => {
-                return Scalar::Number(NumberScalar::Float64(ordered_float::OrderedFloat(f64::NEG_INFINITY)))
+                Ok(Scalar::Number(NumberScalar::Float64(ordered_float::OrderedFloat(f64::NEG_INFINITY))))
              }
              DataType::Number(NumberDataType::Int64) => {
-                return Scalar::Number(NumberScalar::Int64((-MAX).into()))
+                 Ok(Scalar::Number(NumberScalar::Int64((-MAX).into())))
              }
-             _ => todo!()
+             _ => Result::Err(format!(
+                "only support numeric types and time types, but got {:?}",
+                self
+            )),
         }
     }
 
