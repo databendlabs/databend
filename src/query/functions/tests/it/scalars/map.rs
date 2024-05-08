@@ -29,6 +29,7 @@ fn test_map() {
     test_get(file);
     test_map_keys(file);
     test_map_values(file);
+    test_map_size(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -141,6 +142,35 @@ fn test_map_values(file: &mut impl Write) {
     run_ast(
         file,
         "map_values(map([a_col, b_col, c_col], [d_col, e_col, f_col]))",
+        &columns,
+    );
+}
+
+fn test_map_size(file: &mut impl Write) {
+    run_ast(file, "map_size({})", &[]);
+    run_ast(file, "map_size({'a':1,'b':2,'c':3})", &[]);
+    run_ast(file, "map_size({'a':NULL,'b':2,'c':NULL})", &[]);
+
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a", "b", "c"])),
+        ("b_col", StringType::from_data(vec!["d", "e", "f"])),
+        ("c_col", StringType::from_data(vec!["x", "y", "z"])),
+        (
+            "d_col",
+            StringType::from_data_with_validity(vec!["v1", "v2", "v3"], vec![true, true, true]),
+        ),
+        (
+            "e_col",
+            StringType::from_data_with_validity(vec!["v4", "v5", ""], vec![true, true, false]),
+        ),
+        (
+            "f_col",
+            StringType::from_data_with_validity(vec!["v6", "", "v7"], vec![true, false, true]),
+        ),
+    ];
+    run_ast(
+        file,
+        "map_size(map([a_col, b_col, c_col], [d_col, e_col, f_col]))",
         &columns,
     );
 }
