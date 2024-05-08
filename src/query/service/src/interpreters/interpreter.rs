@@ -164,8 +164,10 @@ pub trait Interpreter: Sync + Send {
                             )
                             .await;
 
-                        if !matches!(removed_files, Ok(files) if Some(files) == vacuum_limit) {
+                        if !matches!(removed_files, Ok(_) if vacuum_limit.is_none())
+                            && !matches!(removed_files, Ok(res) if Some(res) != vacuum_limit) {
                             let op = DataOperator::instance().operator();
+                            op.create_dir(&format!("{}/", spill_prefix)).await?;
                             op.write(&format!("{}/finished", spill_prefix), vec![])
                                 .await?;
                         }
@@ -175,6 +177,7 @@ pub trait Interpreter: Sync + Send {
                 } else {
                     let _ = GlobalIORuntime::instance().block_on(async move {
                         let op = DataOperator::instance().operator();
+                        op.create_dir(&format!("{}/", spill_prefix)).await?;
                         op.write(&format!("{}/finished", spill_prefix), vec![])
                             .await?;
 

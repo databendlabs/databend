@@ -41,10 +41,11 @@ pub async fn do_vacuum_temporary_files(
 
     let operator = DataOperator::instance().operator();
 
-    let meta_key = Metakey::Mode | Metakey::LastModified;
+    let temporary_dir = format!("{}/", temporary_dir);
+
     let mut ds = operator
         .lister_with(&temporary_dir)
-        .metakey(meta_key)
+        .metakey(Metakey::Mode | Metakey::LastModified)
         .await?;
 
     let mut removed_temp_files = 0;
