@@ -14,6 +14,7 @@
 
 pub(crate) mod compact_hook;
 pub(crate) mod refresh_hook;
+pub(crate) mod vacuum_hook;
 
 #[allow(clippy::module_inception)]
 mod hook;
