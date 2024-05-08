@@ -115,12 +115,14 @@ Functions overloads:
 0 array() :: Array(Nothing)
 1 array FACTORY
 0 array_any FACTORY
-0 array_append FACTORY
+0 array_append(Array(T0), T0) :: Array(T0)
+1 array_append(Array(T0) NULL, T0 NULL) :: Array(T0) NULL
 0 array_approx_count_distinct FACTORY
 0 array_avg FACTORY
-0 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)
-1 array_concat(Array(T0), Array(T0)) :: Array(T0)
-2 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
+1 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
+2 array_concat(Array(T0), Array(T0)) :: Array(T0)
+3 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_count FACTORY
 0 array_distinct(Array(Nothing)) :: Array(Nothing)
 1 array_distinct(Array(Nothing) NULL) :: Array(Nothing) NULL
@@ -135,7 +137,8 @@ Functions overloads:
 0 array_max FACTORY
 0 array_median FACTORY
 0 array_min FACTORY
-0 array_prepend FACTORY
+0 array_prepend(T0, Array(T0)) :: Array(T0)
+1 array_prepend(T0 NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_remove_first(Array(Nothing)) :: Array(Nothing)
 1 array_remove_first(Array(Nothing) NULL) :: Array(Nothing) NULL
 2 array_remove_first(Array(T0)) :: Array(T0)
@@ -1189,6 +1192,7 @@ Functions overloads:
 26 contains(Array(Boolean), Boolean) :: Boolean
 27 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
 28 contains(Array(T0), T0) :: Boolean
+29 contains(Array(T0) NULL, T0 NULL) :: Boolean NULL
 0 cos(Float64) :: Float64
 1 cos(Float64 NULL) :: Float64 NULL
 0 cosine_distance(Array(Float32), Array(Float32)) :: Float32

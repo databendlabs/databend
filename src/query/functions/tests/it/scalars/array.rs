@@ -226,6 +226,11 @@ fn test_array_prepend(file: &mut impl Write) {
     run_ast(file, "array_prepend(1, [])", &[]);
     run_ast(file, "array_prepend(1, [2, 3, NULL, 4])", &[]);
     run_ast(file, "array_prepend('a', ['b', NULL, NULL, 'c', 'd'])", &[]);
+    run_ast(
+        file,
+        "array_prepend(1, CAST([2, 3] AS Array(INT8) NULL))",
+        &[],
+    );
     run_ast(file, "array_prepend(a, [b, c])", &[
         ("a", Int16Type::from_data(vec![0i16, 1, 2])),
         ("b", Int16Type::from_data(vec![3i16, 4, 5])),
@@ -237,6 +242,11 @@ fn test_array_append(file: &mut impl Write) {
     run_ast(file, "array_append([], 1)", &[]);
     run_ast(file, "array_append([2, 3, NULL, 4], 5)", &[]);
     run_ast(file, "array_append(['b', NULL, NULL, 'c', 'd'], 'e')", &[]);
+    run_ast(
+        file,
+        "array_append(CAST([1, 2] AS Array(INT8) NULL), 3)",
+        &[],
+    );
     run_ast(file, "array_append([b, c], a)", &[
         ("a", Int16Type::from_data(vec![0i16, 1, 2])),
         ("b", Int16Type::from_data(vec![3i16, 4, 5])),
