@@ -17,8 +17,6 @@ use std::io::Seek;
 use std::io::SeekFrom;
 
 use bytes::Buf;
-use futures::AsyncReadExt;
-use futures::AsyncSeekExt;
 use opendal::Reader;
 
 use super::read_basic::read_u32;

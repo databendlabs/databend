@@ -26,7 +26,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::Pipeline;
-use futures_util::AsyncReadExt;
 use log::debug;
 use log::error;
 use log::warn;

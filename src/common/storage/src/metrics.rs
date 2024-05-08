@@ -18,7 +18,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
-use futures::FutureExt;
 use opendal::raw::oio;
 use opendal::raw::Access;
 use opendal::raw::Layer;
@@ -214,16 +213,11 @@ impl<A: Access> LayeredAccess for StorageMetricsAccessor<A> {
 pub struct StorageMetricsWrapper<R> {
     inner: R,
     metrics: Arc<StorageMetrics>,
-    last_pending: Option<Instant>,
 }
 
 impl<R> StorageMetricsWrapper<R> {
     fn new(inner: R, metrics: Arc<StorageMetrics>) -> Self {
-        Self {
-            inner,
-            metrics,
-            last_pending: None,
-        }
+        Self { inner, metrics }
     }
 }
 

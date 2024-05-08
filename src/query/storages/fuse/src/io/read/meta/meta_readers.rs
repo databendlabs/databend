@@ -36,7 +36,6 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::readers::VersionedReader;
 use futures::AsyncSeek;
-use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
 use opendal::Buffer;
 use opendal::Operator;

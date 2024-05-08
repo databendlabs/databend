@@ -15,7 +15,6 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;

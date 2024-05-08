@@ -37,7 +37,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_file;
 use serfig::parsers::Toml;
-use tokio::io::AsyncReadExt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]

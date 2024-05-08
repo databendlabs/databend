@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use bytes::Buf;
-use futures::AsyncReadExt;
 
 use super::super::metadata::FileMetaData;
 use super::super::DEFAULT_FOOTER_READ_SIZE;

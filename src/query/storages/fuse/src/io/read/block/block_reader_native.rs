@@ -18,7 +18,6 @@ use std::io::BufReader;
 use std::ops::Range;
 use std::sync::Arc;
 
-use bytes::Buf;
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::native::read::reader::infer_schema;

@@ -43,7 +43,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
 use databend_common_storage::infer_schema_with_extension;
 use databend_common_storage::StageFileInfo;
-use futures::AsyncReadExt;
 use log::debug;
 use log::info;
 use opendal::Operator;
