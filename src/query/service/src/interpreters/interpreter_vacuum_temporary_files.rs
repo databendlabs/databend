@@ -62,6 +62,7 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
         let temporary_files_prefix = query_spill_prefix(self.ctx.get_tenant().tenant_name());
         let remove_files = handler
             .do_vacuum_temporary_files(
+                self.ctx.clone(),
                 temporary_files_prefix,
                 self.plan.retain,
                 self.plan.limit.map(|x| x as usize),

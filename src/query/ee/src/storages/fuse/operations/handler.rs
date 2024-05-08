@@ -54,11 +54,12 @@ impl VacuumHandler for RealVacuumHandler {
 
     async fn do_vacuum_temporary_files(
         &self,
+        ctx: Arc<dyn TableContext>,
         temporary_dir: String,
         retain: Option<Duration>,
         vacuum_limit: Option<usize>,
     ) -> Result<Vec<String>> {
-        do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit).await
+        do_vacuum_temporary_files(ctx, temporary_dir, retain, vacuum_limit).await
     }
 }
 

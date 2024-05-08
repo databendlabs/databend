@@ -44,6 +44,7 @@ databend-enterprise-vacuum-handler = { path = "../ee_features/vacuum_handler" }
 databend-enterprise-virtual-column = { path = "../ee_features/virtual_column" }
 databend-query = { path = "../service" }
 databend-storages-common-cache = { path = "../storages/common/cache" }
+databend-storages-common-io = { path = "../storages/common/io" }
 databend-storages-common-pruner = { path = "../storages/common/pruner" }
 databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 opendal = { workspace = true }

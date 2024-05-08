@@ -44,6 +44,7 @@ pub trait VacuumHandler: Sync + Send {
 
     async fn do_vacuum_temporary_files(
         &self,
+        ctx: Arc<dyn TableContext>,
         temporary_dir: String,
         retain: Option<Duration>,
         vacuum_limit: Option<usize>,
@@ -86,12 +87,13 @@ impl VacuumHandlerWrapper {
     #[async_backtrace::framed]
     pub async fn do_vacuum_temporary_files(
         &self,
+        ctx: Arc<dyn TableContext>,
         temporary_dir: String,
         retain: Option<Duration>,
         vacuum_limit: Option<usize>,
     ) -> Result<Vec<String>> {
         self.handler
-            .do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit)
+            .do_vacuum_temporary_files(ctx, temporary_dir, retain, vacuum_limit)
             .await
     }
 }

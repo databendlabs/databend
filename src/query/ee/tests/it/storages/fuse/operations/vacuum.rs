@@ -110,7 +110,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_do_vacuum_temporary_files() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup().await?;
 
     let operator = DataOperator::instance().operator();
     operator.write("test_dir/test1", vec![1, 2]).await?;
@@ -120,7 +120,9 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     assert_eq!(3, operator.list("test_dir/").await?.len());
 
     tokio::time::sleep(Duration::from_secs(2)).await;
+    let ctx = fixture.new_query_ctx().await?;
     do_vacuum_temporary_files(
+        ctx.clone(),
         "test_dir/".to_string(),
         Some(Duration::from_secs(2)),
         Some(1),
@@ -129,7 +131,13 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
 
     assert_eq!(2, operator.list("test_dir/").await?.len());
 
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), None).await?;
+    do_vacuum_temporary_files(
+        ctx,
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(2)),
+        None,
+    )
+    .await?;
     assert_eq!(0, operator.list("test_dir/").await?.len());
 
     Ok(())
