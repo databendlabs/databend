@@ -165,17 +165,6 @@ pub struct CatalogMeta {
     pub created_on: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct CatalogIdToName {
-    pub catalog_id: u64,
-}
-
-impl Display for CatalogIdToName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.catalog_id)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogReq {
     pub if_not_exists: bool,
@@ -258,45 +247,5 @@ pub struct ListCatalogReq {
 impl ListCatalogReq {
     pub fn new(tenant: Tenant) -> ListCatalogReq {
         ListCatalogReq { tenant }
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
-    use databend_common_meta_kvapi::kvapi::KeyParser;
-
-    use super::CatalogIdToName;
-    use crate::schema::CatalogNameIdent;
-
-    impl kvapi::KeyCodec for CatalogIdToName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.catalog_id)
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
-            let catalog_id = parser.next_u64()?;
-
-            Ok(Self { catalog_id })
-        }
-    }
-
-    /// "__fd_catalog_id_to_name/<catalog_id> -> CatalogNameIdent"
-    impl kvapi::Key for CatalogIdToName {
-        const PREFIX: &'static str = "__fd_catalog_id_to_name";
-
-        type ValueType = CatalogNameIdent;
-
-        fn parent(&self) -> Option<String> {
-            None
-            // Some(CatalogIdIdent::new(self.catalog_id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for CatalogNameIdent {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
