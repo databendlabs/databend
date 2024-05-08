@@ -4138,6 +4138,7 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
+ "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.5.1",
@@ -4896,6 +4897,7 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
+ "databend-storages-common-io",
  "databend-storages-common-table-meta",
  "databend-storages-common-txn",
  "derive-visitor",
@@ -5132,6 +5134,19 @@ dependencies = [
  "tantivy-common",
  "thiserror",
  "xorfilter-rs",
+]
+
+[[package]]
+name = "databend-storages-common-io"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "log",
+ "minitrace",
+ "opendal",
 ]
 
 [[package]]

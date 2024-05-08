@@ -37,6 +37,7 @@ databend-storages-common-blocks = { path = "../common/blocks" }
 databend-storages-common-cache = { path = "../common/cache" }
 databend-storages-common-cache-manager = { path = "../common/cache_manager" }
 databend-storages-common-index = { path = "../common/index" }
+databend-storages-common-io = { path = "../common/io" }
 databend-storages-common-pruner = { path = "../common/pruner" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
 
