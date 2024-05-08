@@ -15,8 +15,6 @@
 use std::sync::LazyLock;
 
 use feature_set::FeatureSet;
-use semver::BuildMetadata;
-use semver::Prerelease;
 use semver::Version;
 
 pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
@@ -46,13 +44,7 @@ pub static METASRV_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 });
 
 /// Oldest compatible nightly meta-client version
-pub static MIN_METACLI_SEMVER: Version = Version {
-    major: 0,
-    minor: 9,
-    patch: 41,
-    pre: Prerelease::EMPTY,
-    build: BuildMetadata::EMPTY,
-};
+pub static MIN_METACLI_SEMVER: Version = Version::new(0, 9, 41);
 
 /// The min meta-server version that can be deployed together in a cluster,
 /// i.e., the network APIs are compatible.
@@ -71,14 +63,22 @@ pub static MIN_META_SEMVER: Version = Version::new(0, 9, 41);
 /// - The server depends on a sub set of the features provided by the client.
 /// - The client depends on a sub set of the features provided by the server.
 ///
-/// For example, an RPC call may look like this:
+/// For example, an RPC call may look like the following:
+///
+/// - Server provides features S1, S2, S3, and the client requires S1, S3,
+///   which is a subset of S1, S2, S3, so the call can be made.
+///
+/// - The client provides features C1, C2, C3, and the server requires C2, C3,
+///   which is a subset of C1, C2, C3, so the response can be read by client.
 ///
 /// ```text
+///                  request
 /// Client calls:  ------------> Server API provides:
 /// - S1                         - S1
 ///                              - S2
 /// - S3                         - S3
 ///
+///                       response
 /// Client can receives: <------ Server replies with:
 /// - C1
 /// - C2                         - C2
@@ -91,12 +91,16 @@ pub(crate) mod raft {
         use feature_set::Provide;
 
         /// Feature set provided by raft server.
+        ///
+        /// This is a change-log of the features that raft server provides,
+        /// and can be built into a BTreeMap of features with `FeatureSet::from_provides`
         #[rustfmt::skip]
         pub const PROVIDES: &[Action<Provide>] = &[
             add_provide(("vote",             0), "2023-02-16", (0,  9,  41)),
             add_provide(("append",           0), "2023-02-16", (0,  9,  41)),
             add_provide(("install_snapshot", 0), "2023-02-16", (0,  9,  41)),
             add_provide(("install_snapshot", 1), "2023-11-16", (1,  2, 212)),
+            add_provide(("install_snapshot", 2), "2024-05-06", (1,  2, 453)),
         ];
 
         /// The client features that raft server depends on.
@@ -113,6 +117,9 @@ pub(crate) mod raft {
         use feature_set::Require;
 
         /// The server features that raft client depends on.
+        ///
+        /// This is a change-log of the features that raft client depends on,
+        /// and can be built into a BTreeMap of features with `FeatureSet::from_required`
         #[rustfmt::skip]
         pub const REQUIRES: &[Action<Require>] = &[
             add_require( ("vote",             0), "2023-02-16", (0,  9,  41)),

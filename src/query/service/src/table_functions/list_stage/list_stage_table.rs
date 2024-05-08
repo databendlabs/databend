@@ -43,8 +43,12 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::binder::resolve_stage_location;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFileInfoStream;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storages_stage::StageTable;
+use futures_util::stream::Chunks;
+use futures_util::StreamExt;
 
 use crate::table_functions::list_stage::table_args::ListStageArgsParsed;
 
@@ -150,8 +154,13 @@ impl TableFunction for ListStageTable {
     }
 }
 
+enum State {
+    NotStarted,
+    Listing(Chunks<StageFileInfoStream>),
+    Finished,
+}
 struct ListStagesSource {
-    is_finished: bool,
+    state: State,
     ctx: Arc<dyn TableContext>,
     args_parsed: ListStageArgsParsed,
 }
@@ -163,26 +172,13 @@ impl ListStagesSource {
         args_parsed: ListStageArgsParsed,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, ListStagesSource {
-            is_finished: false,
+            state: State::NotStarted,
             ctx,
             args_parsed,
         })
     }
-}
 
-#[async_trait::async_trait]
-impl AsyncSource for ListStagesSource {
-    const NAME: &'static str = LIST_STAGE;
-
-    #[async_trait::unboxed_simple]
-    #[async_backtrace::framed]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.is_finished {
-            return Ok(None);
-        }
-
-        self.is_finished = true;
-
+    async fn do_list(&mut self) -> Result<StageFileInfoStream> {
         let (stage_info, path) =
             resolve_stage_location(self.ctx.as_ref(), &self.args_parsed.location).await?;
         let enable_experimental_rbac_check = self
@@ -197,7 +193,7 @@ impl AsyncSource for ListStagesSource {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",
                     stage_info.stage_name.clone(),
-                    &self.ctx.get_current_user()?.identity(),
+                    &self.ctx.get_current_user()?.identity().display(),
                 )));
             }
         }
@@ -209,37 +205,73 @@ impl AsyncSource for ListStagesSource {
             files: self.args_parsed.files_info.files.clone(),
             pattern: self.args_parsed.files_info.pattern.clone(),
         };
+        let files = files_info.list_stream(&op, thread_num, None).await?;
+        Ok(files)
+    }
+}
 
-        let files = files_info.list(&op, thread_num, None).await?;
+fn make_block(files: &[StageFileInfo]) -> DataBlock {
+    let names: Vec<String> = files.iter().map(|file| file.path.to_string()).collect();
 
-        let names: Vec<String> = files.iter().map(|file| file.path.to_string()).collect();
+    let sizes: Vec<u64> = files.iter().map(|file| file.size).collect();
+    let etags: Vec<Option<String>> = files
+        .iter()
+        .map(|file| file.etag.as_ref().map(|f| f.to_string()))
+        .collect();
+    let last_modifieds: Vec<String> = files
+        .iter()
+        .map(|file| {
+            file.last_modified
+                .format("%Y-%m-%d %H:%M:%S.%3f %z")
+                .to_string()
+        })
+        .collect();
+    let creators: Vec<Option<String>> = files
+        .iter()
+        .map(|file| file.creator.as_ref().map(|c| c.display().to_string()))
+        .collect();
 
-        let sizes: Vec<u64> = files.iter().map(|file| file.size).collect();
-        let etags: Vec<Option<String>> = files
-            .iter()
-            .map(|file| file.etag.as_ref().map(|f| f.to_string()))
-            .collect();
-        let last_modifieds: Vec<String> = files
-            .iter()
-            .map(|file| {
-                file.last_modified
-                    .format("%Y-%m-%d %H:%M:%S.%3f %z")
-                    .to_string()
-            })
-            .collect();
-        let creators: Vec<Option<String>> = files
-            .iter()
-            .map(|file| file.creator.as_ref().map(|c| c.to_string()))
-            .collect();
+    DataBlock::new_from_columns(vec![
+        StringType::from_data(names),
+        UInt64Type::from_data(sizes),
+        StringType::from_opt_data(etags),
+        StringType::from_data(last_modifieds),
+        StringType::from_opt_data(creators),
+    ])
+}
 
-        let block = DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            UInt64Type::from_data(sizes),
-            StringType::from_opt_data(etags),
-            StringType::from_data(last_modifieds),
-            StringType::from_opt_data(creators),
-        ]);
+#[async_trait::async_trait]
+impl AsyncSource for ListStagesSource {
+    const NAME: &'static str = LIST_STAGE;
 
-        Ok(Some(block))
+    #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        match &self.state {
+            State::Finished => {
+                return Ok(None);
+            }
+            State::NotStarted => {
+                let files = self.do_list().await?;
+                // most of the time result of list_stage will not be written to another table.
+                // 10000 is the default "page size" of http handler.
+                self.state = State::Listing(files.chunks(10000));
+            }
+            State::Listing(_) => {}
+        };
+        if let State::Listing(chunks) = &mut self.state {
+            match chunks.next().await {
+                Some(chunk) => {
+                    let chunk: Result<Vec<StageFileInfo>> = chunk.into_iter().collect();
+                    Ok(Some(make_block(&chunk?)))
+                }
+                None => {
+                    self.state = State::Finished;
+                    Ok(None)
+                }
+            }
+        } else {
+            unreachable!("state should be State::Listing")
+        }
     }
 }

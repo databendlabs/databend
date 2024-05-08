@@ -15,5 +15,4 @@
 mod inverted_index_loader;
 mod inverted_index_reader;
 
-pub use inverted_index_loader::load_inverted_index_info;
 pub use inverted_index_reader::InvertedIndexReader;

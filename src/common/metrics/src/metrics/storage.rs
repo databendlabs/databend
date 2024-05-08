@@ -144,6 +144,22 @@ static BLOCK_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_block_index_write_milliseconds"));
 static BLOCK_INDEX_READ_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_index_read_bytes"));
+static BLOCK_INVERTED_INDEX_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_inverted_index_write_nums"));
+static BLOCK_INVERTED_INDEX_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_inverted_index_write_bytes"));
+static BLOCK_INVERTED_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_write_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_GENERATE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_generate_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_READ_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_read_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_search_milliseconds")
+});
 static COMPACT_BLOCK_READ_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_compact_block_read_nums"));
 static COMPACT_BLOCK_READ_BYTES: LazyLock<Counter> =
@@ -400,12 +416,12 @@ pub fn metrics_inc_merge_into_split_milliseconds(c: u64) {
     MERGE_INTO_SPLIT_MILLISECONDS.observe(c as f64);
 }
 
-// after merge_source_split, record the time of not macthed clauses (processor_merge_into_not_matched)
+// after merge_source_split, record the time of not matched clauses (processor_merge_into_not_matched)
 pub fn merge_into_not_matched_operation_milliseconds(c: u64) {
     MERGE_INTO_NOT_MATCHED_OPERATION_MILLISECONDS.observe(c as f64);
 }
 
-// after merge_source_split, record the time of macthed clauses (processor_merge_into_matched_and_split)
+// after merge_source_split, record the time of matched clauses (processor_merge_into_matched_and_split)
 pub fn merge_into_matched_operation_milliseconds(c: u64) {
     MERGE_INTO_MATCHED_OPERATION_MILLISECONDS.observe(c as f64);
 }
@@ -494,6 +510,30 @@ pub fn metrics_inc_block_index_write_bytes(c: u64) {
 
 pub fn metrics_inc_block_index_write_milliseconds(c: u64) {
     BLOCK_INDEX_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_write_nums(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_NUMS.inc_by(c);
+}
+
+pub fn metrics_inc_block_inverted_index_write_bytes(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_BYTES.inc_by(c);
+}
+
+pub fn metrics_inc_block_inverted_index_write_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_generate_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_GENERATE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_read_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_READ_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_search_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS.observe(c as f64);
 }
 
 pub fn metrics_inc_block_index_read_bytes(c: u64) {

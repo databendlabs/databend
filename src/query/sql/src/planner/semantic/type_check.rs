@@ -46,6 +46,7 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_async_functions::resolve_async_function;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -84,6 +85,7 @@ use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
+use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
@@ -920,6 +922,14 @@ impl<'a> TypeChecker<'a> {
                         }
                         _ => unreachable!(),
                     }
+                } else if ASYNC_FUNCTIONS.contains(&func_name) {
+                    let catalog = self.ctx.get_default_catalog()?;
+                    let tenant = self.ctx.get_tenant();
+                    let async_func =
+                        resolve_async_function(*span, tenant, catalog, func_name, &args).await?;
+
+                    let data_type = async_func.return_type.as_ref().clone();
+                    Box::new((async_func.into(), data_type))
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -2234,6 +2244,12 @@ impl<'a> TypeChecker<'a> {
                 continue;
             }
             let field_names: Vec<&str> = field_str.split(':').collect();
+            // if the field is JSON type, must specify the key path in the object
+            // for example:
+            // the field `info` has the value: `{"tags":{"id":10,"env":"prod","name":"test"}}`
+            // a query can be written like this `info.tags.env:prod`
+            let field_name = field_names[0].trim();
+            let sub_field_names: Vec<&str> = field_name.split('.').collect();
             let column_expr = Expr::ColumnRef {
                 span: query_scalar.span(),
                 column: ColumnRef {
@@ -2241,7 +2257,7 @@ impl<'a> TypeChecker<'a> {
                     table: None,
                     column: ColumnID::Name(Identifier::from_name(
                         query_scalar.span(),
-                        field_names[0].trim(),
+                        sub_field_names[0].trim(),
                     )),
                 },
             };
@@ -2349,6 +2365,7 @@ impl<'a> TypeChecker<'a> {
             index_schema: index_schema.unwrap(),
             query_fields,
             query_text: query_text.to_string(),
+            has_score: false,
         };
 
         self.bind_context
@@ -2884,7 +2901,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(user) => Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        value: Literal::String(user.identity().to_string()),
+                        value: Literal::String(user.identity().display().to_string()),
                     })
                     .await,
                 ),

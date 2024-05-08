@@ -12185,6 +12185,7 @@ COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false F
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "~/mybucket/my data.csv",
@@ -12237,6 +12238,7 @@ COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = '
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "~/mybucket/data.csv",
@@ -12303,6 +12305,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter =
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12378,6 +12381,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter =
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12455,6 +12459,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'h
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12534,6 +12539,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'h
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12603,6 +12609,7 @@ COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DIS
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12657,6 +12664,7 @@ COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12719,6 +12727,7 @@ COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "my_stage",
@@ -12786,6 +12795,7 @@ COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter =
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12844,6 +12854,7 @@ COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETA
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12886,6 +12897,7 @@ COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12946,6 +12958,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'acc
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -13023,6 +13036,7 @@ COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_d
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/file.csv",
@@ -13088,6 +13102,7 @@ COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delim
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/dir/",
@@ -13153,6 +13168,7 @@ COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_d
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/file.csv",
@@ -13219,6 +13235,7 @@ COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter =
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -13292,6 +13309,7 @@ COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'R
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -18953,6 +18971,7 @@ CreatePipe(
         auto_ingest: true,
         comments: "This is test pipe 1",
         copy_stmt: CopyIntoTableStmt {
+            with: None,
             src: Location(
                 Stage(
                     "~/MyStage1",
@@ -19007,6 +19026,7 @@ CreatePipe(
         auto_ingest: false,
         comments: "",
         copy_stmt: CopyIntoTableStmt {
+            with: None,
             src: Location(
                 Stage(
                     "~/mybucket/data.csv",

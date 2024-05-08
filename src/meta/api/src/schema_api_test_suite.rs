@@ -354,7 +354,6 @@ impl SchemaApiTestSuite {
             .drop_table_without_tableid_to_name(&b.build().await)
             .await?;
 
-        suite.get_table_name_by_id(&b.build().await).await?;
         suite.get_db_name_by_id(&b.build().await).await?;
         suite.test_sequence(&b.build().await).await?;
 
@@ -5029,120 +5028,16 @@ impl SchemaApiTestSuite {
                     .await
                     .unwrap();
 
-                let (table_id, table_meta) = mt.get_table_by_id(table.ident.table_id).await?;
-
+                let seqv = mt.get_table_by_id(table.ident.table_id).await?.unwrap();
+                let table_meta = seqv.data;
                 assert_eq!(table_meta.options.get("opt‐1"), Some(&"val-1".into()));
-                assert_eq!(table_id.table_id, table.ident.table_id);
             }
 
             info!("--- get_table_by_id with not exists table_id");
             {
-                let got = mt.get_table_by_id(1024).await;
+                let got = mt.get_table_by_id(1024).await?;
 
-                let err = got.unwrap_err();
-                let err = ErrorCode::from(err);
-
-                assert_eq!(ErrorCode::UNKNOWN_TABLE_ID, err.code());
-            }
-        }
-        Ok(())
-    }
-
-    #[minitrace::trace]
-    async fn get_table_name_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant_name = "tenant1";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-
-        let db_name = "db1";
-        let tbl_name = "tb2";
-
-        let schema = || {
-            Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
-            )]))
-        };
-
-        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
-
-        let table_meta = |created_on| TableMeta {
-            schema: schema(),
-            engine: "JSON".to_string(),
-            options: options(),
-            created_on,
-            ..TableMeta::default()
-        };
-
-        info!("--- prepare db");
-        {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-
-            assert_eq!(1, res.db_id, "first database id is 1");
-        }
-
-        info!("--- create and get table");
-        {
-            let created_on = Utc::now();
-
-            let req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                table_meta: table_meta(created_on),
-                as_dropped: false,
-            };
-
-            {
-                let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                let res = mt.create_table(req.clone()).await?;
-                let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
-                assert!(res.table_id >= 1, "table id >= 1");
-                let tb_id = res.table_id;
-
-                let got = mt.get_table_name_by_id(tb_id).await?;
-
-                let want = tbl_name.to_string();
-                assert_eq!(want, got, "get created table");
-            }
-        }
-
-        info!("--- get_table_name_by_id ");
-        {
-            info!("--- get_table_name_by_id ");
-            {
-                let table = mt
-                    .get_table((tenant_name, "db1", "tb2").into())
-                    .await
-                    .unwrap();
-
-                let want = table.name.clone();
-                let got = mt.get_table_name_by_id(table.ident.table_id).await?;
-
-                assert_eq!(want, got);
-            }
-
-            info!("--- get_table_name_by_id with not exists table_id");
-            {
-                let got = mt.get_table_name_by_id(1024).await;
-
-                let err = got.unwrap_err();
-                let err = ErrorCode::from(err);
-
-                assert_eq!(ErrorCode::UNKNOWN_TABLE_ID, err.code());
+                assert!(got.is_none());
             }
         }
         Ok(())
@@ -5910,7 +5805,8 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- check table index");
-            let (_, table_meta) = mt.get_table_by_id(table_id).await?;
+            let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+            let table_meta = seqv.data;
             assert_eq!(table_meta.indexes.len(), 2);
 
             let index1 = table_meta.indexes.get(&index_name_1);
@@ -5953,7 +5849,8 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- check table index after drop");
-            let (_, table_meta) = mt.get_table_by_id(table_id).await?;
+            let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+            let table_meta = seqv.data;
             assert_eq!(table_meta.indexes.len(), 1);
 
             let index1 = table_meta.indexes.get(&index_name_1);

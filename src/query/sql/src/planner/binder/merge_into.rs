@@ -71,7 +71,7 @@ pub enum MergeIntoType {
 // for now we think right source table is small table in default.
 // 1. insert only:
 //      right anti join
-// 2. (macthed and unmatched)
+// 2. (matched and unmatched)
 //      right outer
 // 3. matched only:
 //      inner join
@@ -365,13 +365,28 @@ impl Binder {
             columns_set = columns_set.union(&join_column_set).cloned().collect();
         }
 
+        // If the table alias is not None, after the binding phase, the bound columns will have
+        // a database of 'None' and the table named as the alias.
+        // Thus, we adjust them accordingly.
+        let target_name = if let Some(target_identify) = target_alias {
+            normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
+                .name
+                .clone()
+        } else {
+            table_name.clone()
+        };
+
         let has_update = self.has_update(&matched_clauses);
         let update_row_version = if table.change_tracking_enabled() && has_update {
             Some(Self::update_row_version(
                 table.schema_with_stream(),
                 &bind_ctx.columns,
-                Some(&database_name),
-                Some(&table_name),
+                if target_alias.is_none() {
+                    Some(&database_name)
+                } else {
+                    None
+                },
+                Some(&target_name),
             )?)
         } else {
             None
@@ -399,14 +414,6 @@ impl Binder {
                 field_index_map.insert(idx, used_idx.to_string());
             }
         }
-
-        let target_name = if let Some(target_identify) = target_alias {
-            normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
-                .name
-                .clone()
-        } else {
-            table_name.clone()
-        };
 
         // bind matched clause columns and add update fields and exprs
         for clause in &matched_clauses {
@@ -491,7 +498,7 @@ impl Binder {
 
             if !self.check_allowed_scalar_expr(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "matched clause's condition can't contain subquery|window|aggregate|udf functions"
+                    "matched clause's condition can't contain subquery|window|aggregate|udf functions|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -721,7 +728,7 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
         Ok(MergeIntoType::FullOperation)
     } else {
         Err(ErrorCode::SemanticError(
-            "we must have macthed or unmatched clause at least one",
+            "we must have matched or unmatched clause at least one",
         ))
     }
 }

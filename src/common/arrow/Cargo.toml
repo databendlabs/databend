@@ -8,7 +8,7 @@ description = "Arrow implementation forked from arrow2 and native format impleme
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 default = ["arrow-default", "parquet-default"]

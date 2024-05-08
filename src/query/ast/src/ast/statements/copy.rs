@@ -40,6 +40,7 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableRef;
+use crate::ast::With;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -50,6 +51,7 @@ use crate::ast::TableRef;
 /// ```
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CopyIntoTableStmt {
+    pub with: Option<With>,
     pub src: CopyIntoTableSource,
     pub dst: TableRef,
     pub dst_columns: Option<Vec<Identifier>>,
@@ -137,6 +139,9 @@ impl CopyIntoTableStmt {
 
 impl Display for CopyIntoTableStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(cte) = &self.with {
+            write!(f, "WITH {} ", cte)?;
+        }
         write!(f, "COPY")?;
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;
@@ -189,6 +194,7 @@ impl Display for CopyIntoTableStmt {
 /// CopyIntoLocationStmt is the parsed statement of `COPY into <location>  from <table> ...`
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CopyIntoLocationStmt {
+    pub with: Option<With>,
     pub hints: Option<Hint>,
     pub src: CopyIntoLocationSource,
     pub dst: FileLocation,
@@ -204,6 +210,9 @@ pub struct CopyIntoLocationStmt {
 
 impl Display for CopyIntoLocationStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(cte) = &self.with {
+            write!(f, "WITH {} ", cte)?;
+        }
         write!(f, "COPY")?;
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;

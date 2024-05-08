@@ -36,6 +36,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_index::BloomIndex;
 use opendal::Operator;
 
+use crate::io::create_inverted_index_builders;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
@@ -126,6 +127,9 @@ impl TransformSerializeBlock {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
+
+        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
@@ -133,6 +137,7 @@ impl TransformSerializeBlock {
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            inverted_index_builders,
         };
         Ok(TransformSerializeBlock {
             state: State::Consume,
@@ -315,7 +320,8 @@ impl Processor for TransformSerializeBlock {
                 // write index data.
                 let bloom_index_state = serialized.bloom_index_state;
                 if let Some(bloom_index_state) = bloom_index_state {
-                    let index_size = bloom_index_state.data.len();
+                    let start = Instant::now();
+                    let index_size = bloom_index_state.size;
                     write_data(
                         bloom_index_state.data,
                         &self.dal,
@@ -325,9 +331,29 @@ impl Processor for TransformSerializeBlock {
                     // Perf.
                     {
                         metrics_inc_block_index_write_nums(1);
-                        metrics_inc_block_index_write_bytes(index_size as u64);
+                        metrics_inc_block_index_write_bytes(index_size);
                         metrics_inc_block_index_write_milliseconds(
                             start.elapsed().as_millis() as u64
+                        );
+                    }
+                }
+
+                // write inverted index
+                for inverted_index_state in serialized.inverted_index_states {
+                    let start = Instant::now();
+                    let index_size = inverted_index_state.size;
+                    write_data(
+                        inverted_index_state.data,
+                        &self.dal,
+                        &inverted_index_state.location.0,
+                    )
+                    .await?;
+                    // Perf.
+                    {
+                        metrics_inc_block_inverted_index_write_nums(1);
+                        metrics_inc_block_inverted_index_write_bytes(index_size);
+                        metrics_inc_block_inverted_index_write_milliseconds(
+                            start.elapsed().as_millis() as u64,
                         );
                     }
                 }

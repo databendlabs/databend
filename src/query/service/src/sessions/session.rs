@@ -175,8 +175,13 @@ impl Session {
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
     where F: FnOnce() + Send + Sync + 'static {
-        self.session_ctx.set_client_host(host);
+        self.session_ctx
+            .set_client_host(host.map(|host| host.ip().to_string()));
         self.session_ctx.set_io_shutdown_tx(io_shutdown);
+    }
+
+    pub fn set_client_host(self: &Arc<Self>, host: Option<String>) {
+        self.session_ctx.set_client_host(host);
     }
 
     pub fn set_current_database(self: &Arc<Self>, database_name: String) {

@@ -1,0 +1,22 @@
+[package]
+name = "databend-enterprise-storage-quota"
+
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+version = { workspace = true }
+
+[lib]
+doctest = false
+test = true
+
+[dependencies]
+# Workspace dependencies
+databend-common-base = { path = "../../../common/base" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-license = { path = "../../../common/license" }
+
+async-trait = { workspace = true }
+
+[build-dependencies]

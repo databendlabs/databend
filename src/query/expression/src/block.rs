@@ -73,6 +73,10 @@ impl BlockEntry {
             _ => self,
         }
     }
+
+    pub fn to_column(&self, num_rows: usize) -> Column {
+        self.value.convert_to_full_column(&self.data_type, num_rows)
+    }
 }
 
 #[typetag::serde(tag = "type")]

@@ -72,6 +72,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::plans::Visitor as _;
+use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
@@ -295,6 +296,10 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
+        // rewrite async function to async function plan
+        let mut async_func_rewriter = AsyncFunctionRewriter::new();
+        s_expr = async_func_rewriter.rewrite(&s_expr)?;
+
         // rewrite udf for interpreter udf
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
         s_expr = udf_rewriter.rewrite(&s_expr)?;
@@ -316,7 +321,7 @@ impl Binder {
                 .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
         }
         // add internal column binding into expr
-        s_expr = from_context.add_internal_column_into_expr(s_expr);
+        s_expr = from_context.add_internal_column_into_expr(s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -451,7 +456,9 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
+                ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
 

@@ -94,6 +94,7 @@ impl Interpreter for MergeIntoInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let (physical_plan, _) = self.build_physical_plan().await?;
+
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
@@ -166,12 +167,12 @@ impl MergeIntoInterpreter {
         // important flag:
         //      I. change join order: if true, target table as build side, if false, source as build side.
         //      II. distributed: this merge into is executed at a distributed stargety.
-        // 2.1 Left: there are macthed and not macthed, and change join order is true.
+        // 2.1 Left: there are matched and not matched, and change join order is true.
         // 2.2 Left Anti: change join order is true, but it's insert-only.
         // 2.3 Inner: this is matched only case.
         //      2.3.1 change join order is true, target table as build side,it's matched-only.
         //      2.3.2 change join order is false, source data as build side,it's matched-only.
-        // 2.4 Right: change join order is false, there are macthed and not macthed
+        // 2.4 Right: change join order is false, there are matched and not matched
         // 2.5 Right Anti: change join order is false, but it's insert-only.
         // distributed execution stargeties:
         // I. change join order is true, we use the `optimize_distributed_query`'s result.
@@ -256,7 +257,7 @@ impl MergeIntoInterpreter {
         }
 
         // we use `merge_into_split_idx` to specify a column from target table to spilt a block
-        // from join into macthed part and unmacthed part.
+        // from join into matched part and unmatched part.
         let mut merge_into_split_idx = DUMMY_COLUMN_INDEX;
         if matches!(merge_type, MergeIntoType::FullOperation) {
             for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
@@ -288,7 +289,7 @@ impl MergeIntoInterpreter {
         let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
-        // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
+        // merge_into_source is used to recv join's datablocks and split them into matched and not matched
         // datablocks.
         let merge_into_source = if !*distributed && extract_exchange {
             // if we doesn't support distributed merge into, we should give the exchange merge back.

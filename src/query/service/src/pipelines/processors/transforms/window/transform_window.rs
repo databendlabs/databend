@@ -574,7 +574,7 @@ impl<T: Number> TransformWindow<T> {
                     }
                     if cur != self.frame_end {
                         let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                        let col = block.get_by_offset(func.arg).value.as_column().unwrap();
+                        let col = block.get_by_offset(func.arg).to_column(block.num_rows());
                         col.index(cur.row).unwrap().to_owned()
                     } else {
                         // No such row
@@ -585,7 +585,7 @@ impl<T: Number> TransformWindow<T> {
                     let cur = self.goback_row(self.frame_end);
                     debug_assert!(self.frame_start <= cur);
                     let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                    let col = block.get_by_offset(func.arg).value.as_column().unwrap();
+                    let col = block.get_by_offset(func.arg).to_column(block.num_rows());
                     col.index(cur.row).unwrap().to_owned()
                 };
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;

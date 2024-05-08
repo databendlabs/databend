@@ -270,7 +270,7 @@ async fn generate_refresh_inverted_index_plan(
 
     let table_meta = &table.get_table_info().meta;
     for (_, index) in table_meta.indexes.iter() {
-        if !index.sync_creation {
+        if index.sync_creation {
             continue;
         }
         let plan = RefreshTableIndexPlan {
