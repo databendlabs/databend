@@ -630,6 +630,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("external_server_request_batch_rows", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(65536),
+                    desc: "Request batch rows to external server",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables parquet prewhere",
