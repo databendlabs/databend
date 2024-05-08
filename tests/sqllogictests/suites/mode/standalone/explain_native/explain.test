@@ -1078,3 +1078,38 @@ Sort
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3.00
+
+statement ok
+drop table if exists t3;
+
+statement ok
+CREATE TABLE t3(a int, b map(string, string) null);
+
+statement ok
+INSERT INTO t3 VALUES (1, {'k1':'a', 'k2':'b'}), (2, null), (3, {'k3':'z'});
+
+statement ok
+INSERT INTO t3 VALUES (4, {'k1':'a', 'k2':'m'}), (5, null), (6, {'k3':'z'});
+
+query I
+EXPLAIN SELECT * FROM t3 WHERE b['k2'] = 'm';
+----
+TableScan
+├── table: default.default.t3
+├── output columns: [a (#0), b (#1)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+├── push downs: [filters: [is_true(get(t3.b (#1), 'k2') = 'm')], limit: NONE]
+└── estimated rows: 1.20
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+drop table t3;

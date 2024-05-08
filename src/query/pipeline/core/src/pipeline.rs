@@ -77,7 +77,7 @@ impl Debug for Pipeline {
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Box<dyn FnOnce(&Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
+    Box<dyn FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static>;
 
 pub type DynTransformBuilder = Box<dyn Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>>;
 
@@ -454,15 +454,15 @@ impl Pipeline {
     }
 
     pub fn set_on_finished<
-        F: FnOnce(&Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> + Send + Sync + 'static,
+        F: FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static,
     >(
         &mut self,
         f: F,
     ) {
         if let Some(on_finished) = self.on_finished.take() {
-            self.on_finished = Some(Box::new(move |may_error| {
-                on_finished(may_error)?;
-                f(may_error)
+            self.on_finished = Some(Box::new(move |(profiles, may_error)| {
+                on_finished((profiles, may_error))?;
+                f((profiles, may_error))
             }));
 
             return;
@@ -472,15 +472,15 @@ impl Pipeline {
     }
 
     pub fn push_front_on_finished_callback<
-        F: FnOnce(&Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> + Send + Sync + 'static,
+        F: FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static,
     >(
         &mut self,
         f: F,
     ) {
         if let Some(on_finished) = self.on_finished.take() {
-            self.on_finished = Some(Box::new(move |may_error| {
-                f(may_error)?;
-                on_finished(may_error)
+            self.on_finished = Some(Box::new(move |(profiles, may_error)| {
+                f((profiles, may_error))?;
+                on_finished((profiles, may_error))
             }));
 
             return;
@@ -527,7 +527,7 @@ impl Drop for Pipeline {
                     "Pipeline illegal state: not successfully shutdown.",
                 ));
 
-                let _ = (on_finished)(&cause);
+                let _ = (on_finished)((&vec![], &cause));
             }
         })
     }
