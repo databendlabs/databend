@@ -29,7 +29,7 @@ use crate::FuseBlockPartInfo;
 impl AggIndexReader {
     pub fn sync_read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
         match self.reader.operator.blocking().stat(loc) {
-            Ok(mut meta) => {
+            Ok(meta) => {
                 let mut reader = self
                     .reader
                     .operator
@@ -83,7 +83,7 @@ impl AggIndexReader {
 
     pub async fn read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
         match self.reader.operator.stat(loc).await {
-            Ok(mut meta) => {
+            Ok(meta) => {
                 let reader = self.reader.operator.reader(loc).await.ok()?;
                 let metadata =
                     nread::reader::read_meta_async(reader, meta.content_length() as usize)

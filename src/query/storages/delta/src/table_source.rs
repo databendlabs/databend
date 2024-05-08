@@ -36,7 +36,6 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storages_parquet::ParquetFileReader;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSFullReader;
-use opendal::Reader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
 use crate::partition::DeltaPartInfo;

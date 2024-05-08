@@ -14,15 +14,11 @@
 
 /// will be replaced by crate object_store_opendal later!
 use std::ops::Range;
-use std::pin::Pin;
-use std::task::Context;
-use std::task::Poll;
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::BoxStream;
 use futures::FutureExt;
-use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use object_store::path::Path;
@@ -40,7 +36,6 @@ use opendal::Entry;
 use opendal::Metadata;
 use opendal::Metakey;
 use opendal::Operator;
-use opendal::Reader;
 use tokio::io::AsyncWrite;
 
 #[derive(Debug)]

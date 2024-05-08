@@ -30,7 +30,7 @@ pub trait VersionedReader<T> {
 impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion {
     type TargetType = TableSnapshotStatistics;
 
-    fn read<R>(&self, mut reader: R) -> Result<TableSnapshotStatistics>
+    fn read<R>(&self, reader: R) -> Result<TableSnapshotStatistics>
     where R: Read + Unpin + Send {
         let r = match self {
             TableSnapshotStatisticsVersion::V0(v) => {

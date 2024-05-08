@@ -26,7 +26,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::Pipeline;
-use futures::AsyncRead;
 use futures_util::AsyncReadExt;
 use log::debug;
 use log::error;
@@ -246,7 +245,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let size = split_info.size as u64;
         let mut batch_size = ctx.read_batch_size.min(size as _) as u64;
 
-        let mut reader = operator.reader_with(&split_info.file.path).await?;
+        let reader = operator.reader_with(&split_info.file.path).await?;
         let mut total_read: u64 = 0;
         loop {
             batch_size = batch_size.min(size - total_read);

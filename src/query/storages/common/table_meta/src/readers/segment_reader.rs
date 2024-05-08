@@ -26,7 +26,7 @@ use crate::readers::VersionedReader;
 
 impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
     type TargetType = CompactSegmentInfo;
-    fn read<R>(&self, mut reader: R) -> Result<CompactSegmentInfo>
+    fn read<R>(&self, reader: R) -> Result<CompactSegmentInfo>
     where R: Read + Unpin + Send {
         let schema = &self.1;
         match &self.0 {

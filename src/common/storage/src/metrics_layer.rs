@@ -14,29 +14,21 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::future::Future;
-use std::io;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
-use async_trait::async_trait;
-use bytes::Bytes;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_histogram_family;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::FamilyHistogram;
-use futures::AsyncRead;
 use futures::FutureExt;
 use futures::TryFutureExt;
 use opendal::raw::oio;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
-use opendal::raw::MaybeSend;
 use opendal::raw::OpBatch;
 use opendal::raw::OpCreateDir;
 use opendal::raw::OpDelete;

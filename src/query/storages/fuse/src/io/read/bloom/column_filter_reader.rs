@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;

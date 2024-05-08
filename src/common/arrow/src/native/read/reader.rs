@@ -17,14 +17,11 @@ use std::io::Seek;
 use std::io::SeekFrom;
 
 use bytes::Buf;
-use futures::AsyncRead;
 use futures::AsyncReadExt;
-use futures::AsyncSeek;
 use futures::AsyncSeekExt;
 use opendal::Reader;
 
 use super::read_basic::read_u32;
-use super::read_basic::read_u32_async;
 use super::read_basic::read_u64;
 use super::NativeReadBuf;
 use super::PageIterator;
@@ -188,7 +185,7 @@ pub async fn read_meta_async(reader: Reader, total_len: usize) -> Result<Vec<Col
     // Pre-read footer data to reduce IO.
     let pre_read_len = total_len.min(DEFAULT_FOOTER_SIZE as usize);
 
-    let mut buf = reader
+    let buf = reader
         .read(total_len as u64 - pre_read_len as u64..total_len as u64)
         .await
         .map_err(|err| Error::External("file read failed".to_string(), Box::new(err)))?;

@@ -39,10 +39,6 @@ pub use deserialize::NestedState;
 pub use deserialize::StructIterator;
 pub use file::FileReader;
 pub use file::RowGroupReader;
-#[cfg(feature = "io_parquet_async")]
-use futures::AsyncRead;
-#[cfg(feature = "io_parquet_async")]
-use futures::AsyncSeek;
 pub use parquet2::error::Error as ParquetError;
 pub use parquet2::fallible_streaming_iterator;
 pub use parquet2::metadata::ColumnChunkMetaData;

@@ -26,7 +26,7 @@ use crate::readers::VersionedReader;
 
 impl VersionedReader<TableSnapshot> for SnapshotVersion {
     type TargetType = TableSnapshot;
-    fn read<R>(&self, mut reader: R) -> Result<TableSnapshot>
+    fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: Read + Unpin + Send {
         let r = match self {
             SnapshotVersion::V4(_) => TableSnapshot::from_read(reader)?,

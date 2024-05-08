@@ -12,25 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
-use std::io;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Instant;
 
-use async_trait::async_trait;
-use bytes::Bytes;
-use futures::AsyncRead;
 use futures::FutureExt;
 use opendal::raw::oio;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
-use opendal::raw::MaybeSend;
 use opendal::raw::OpList;
 use opendal::raw::OpRead;
 use opendal::raw::OpWrite;

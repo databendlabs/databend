@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::io::Read;
 use std::io::SeekFrom;
 
@@ -41,7 +40,6 @@ use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
 use opendal::Buffer;
 use opendal::Operator;
-use opendal::Reader;
 use parquet_rs::format::FileMetaData;
 use parquet_rs::thrift::TSerializable;
 
@@ -289,7 +287,7 @@ mod thrift_file_meta_read {
         let default_end_len = std::cmp::min(DEFAULT_FOOTER_READ_SIZE, file_size) as usize;
 
         // read the end of the file
-        let mut buffer = op
+        let buffer = op
             .read_with(path)
             .range(file_size - default_end_len as u64..file_size)
             .await

@@ -14,10 +14,8 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::future::Future;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use databend_common_auth::RefreshableToken;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
@@ -37,7 +35,6 @@ use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
 use opendal::raw::BytesRange;
 use opendal::raw::HttpClient;
-use opendal::raw::MaybeSend;
 use opendal::raw::OpRead;
 use opendal::raw::OpStat;
 use opendal::raw::Operation;
@@ -153,7 +150,7 @@ impl Access for SharedAccessor {
     }
 
     #[async_backtrace::framed]
-    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
+    async fn read(&self, path: &str, _args: OpRead) -> Result<(RpRead, Self::Reader)> {
         Ok((RpRead::default(), SharedReader {
             signer: self.signer.clone(),
             client: self.client.clone(),

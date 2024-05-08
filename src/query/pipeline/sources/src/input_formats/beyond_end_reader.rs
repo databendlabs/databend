@@ -17,7 +17,6 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
 use log::debug;
 

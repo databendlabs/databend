@@ -15,7 +15,6 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::io::AsyncRead;
 use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -27,7 +26,6 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_sources::PrefetchAsyncSource;
 use log::debug;
 use opendal::Operator;
-use opendal::Reader;
 
 use crate::one_file_partition::OneFilePartition;
 use crate::read::row_based::batch::BytesBatch;

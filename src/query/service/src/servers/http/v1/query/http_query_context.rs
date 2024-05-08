@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use http::StatusCode;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;

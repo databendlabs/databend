@@ -16,7 +16,6 @@ use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::datatypes::Schema;
 use databend_common_arrow::arrow::error::Result;
 use databend_common_arrow::native::read::reader::read_meta;
-use databend_common_arrow::native::read::reader::read_meta_async;
 use databend_common_arrow::native::write::NativeWriter;
 use databend_common_arrow::native::write::WriteOptions;
 use databend_common_arrow::native::ColumnMeta;

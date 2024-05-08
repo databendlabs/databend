@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use bytes::Bytes;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
