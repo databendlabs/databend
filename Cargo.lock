@@ -5023,7 +5023,6 @@ dependencies = [
  "databend-common-exception",
  "env_logger",
  "futures-util",
- "log",
  "mysql_async",
  "rand 0.8.5",
  "regex",

@@ -50,20 +50,6 @@ select map_values(col1), map_values(col2) from t
 [] NULL
 
 statement ok
-DROP DATABASE map_func_test
-
-
-# Test Basic functionality of MAP_CAT
-statement ok
-DROP DATABASE IF EXISTS map_cat_func_test
-
-statement ok
-CREATE DATABASE IF NOT EXISTS map_cat_func_test
-
-statement ok
-USE map_cat_func_test
-
-statement ok
 drop table if exists map_cat_test all
 
 statement ok
