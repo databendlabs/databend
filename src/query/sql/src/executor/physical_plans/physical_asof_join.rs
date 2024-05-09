@@ -85,10 +85,9 @@ impl PhysicalPlanBuilder {
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
 
         debug_assert!(!range_conditions.is_empty());
-        let mut right_column = range_conditions[0].clone();
-        let window_func = 
+        let (window_func, right_column )= 
         self.bind_window_func(
-            join,s_expr,&range_conditions,&mut other_conditions,&mut right_column)?;
+            join,s_expr,&range_conditions,&mut other_conditions)?;
         let window_plan = self.build_window_plan(&window_func)?;
         self.add_range_condition(&window_func, &window_plan, &mut range_conditions, right_column)?;
         let mut ss_expr = s_expr.clone();
@@ -163,13 +162,12 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         range_conditions: &Vec<ScalarExpr>,
         other_conditions: &mut Vec<ScalarExpr>,
-        right_column: &mut ScalarExpr,
-
-    ) -> Result<WindowFunc,ErrorCode> {
+    ) -> Result<(WindowFunc, ScalarExpr),ErrorCode> {
 
         let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
 
+        let mut right_column = range_conditions[0].clone();
         let mut left_column = range_conditions[0].clone();
         let mut order_items: Vec<WindowOrderBy> = Vec::with_capacity(range_conditions.len());
         let mut constant_default = ConstantExpr {
@@ -268,7 +266,7 @@ impl PhysicalPlanBuilder {
                 ))),
             },
         };
-        Ok(window_func)
+        Ok((window_func,right_column))
     }
 
     fn build_window_plan(&mut self, window: &WindowFunc) -> Result<Window> {
