@@ -71,7 +71,6 @@ twox-hash = "1.6.3"
 [dev-dependencies]
 comfy-table = "6"
 databend-common-ast = { path = "../ast" }
-env_logger = { workspace = true }
 goldenfile = "1.4"
 
 [[bench]]

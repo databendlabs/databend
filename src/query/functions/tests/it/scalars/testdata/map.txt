@@ -340,7 +340,7 @@ evaluation (internal):
 
 ast            : map_cat({}, {})
 raw expr       : map_cat(map(array(), array()), map(array(), array()))
-checked expr   : map_cat<Map(Nothing) NULL, Map(Nothing) NULL>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(Nothing) NULL), CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(Nothing) NULL))
+checked expr   : map_cat<Map(Nothing), Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>()))
 optimized expr : {} :: Map(Nothing)
 output type    : Map(Nothing)
 output domain  : {}

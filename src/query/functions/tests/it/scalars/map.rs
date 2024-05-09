@@ -30,6 +30,10 @@ fn test_map() {
     test_map_keys(file);
     test_map_values(file);
 
+    test_map_cat(file);
+}
+
+fn test_map_cat(file: &mut impl Write) {
     test_map_cat_empty_maps(file);
     test_map_cat_ops_basic(file);
     test_map_cat_deduplicate(file);

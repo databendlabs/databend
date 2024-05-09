@@ -158,10 +158,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<NullableType<EmptyMapType>, NullableType<EmptyMapType>, EmptyMapType, _, _>(
+    registry.register_2_arg::<EmptyMapType, EmptyMapType, EmptyMapType, _, _>(
         "map_cat",
         |_, _, _| FunctionDomain::Full,
-        |_, _, _| Value::Scalar(()),
+        |_, _, _| (),
     );
 
     registry.register_passthrough_nullable_2_arg(

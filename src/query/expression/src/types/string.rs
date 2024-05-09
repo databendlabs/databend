@@ -415,36 +415,12 @@ unsafe impl<'a> TrustedLen for StringIterator<'a> {}
 
 unsafe impl<'a> std::iter::TrustedLen for StringIterator<'a> {}
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StringColumnBuilder {
     // if the StringColumnBuilder is created with `data_capacity`, need_estimated is false
     pub need_estimated: bool,
     pub data: Vec<u8>,
     pub offsets: Vec<u64>,
-}
-
-impl std::fmt::Debug for StringColumnBuilder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let data_hex = self
-            .data
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .join("");
-
-        let offsets_str = self
-            .offsets
-            .iter()
-            .map(|offset| offset.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        write!(
-            f,
-            "StringColumnBuilder {{ need_estimated: {}, data: 0x{}, offsets: [{}] }}",
-            self.need_estimated, data_hex, offsets_str
-        )
-    }
 }
 
 impl StringColumnBuilder {

@@ -17,13 +17,7 @@
 #![feature(trait_alias)]
 #![feature(iter_collect_into)]
 #![allow(clippy::arc_with_non_send_sync)]
-use ctor::ctor;
 
 // We can generate new test files via using `env REGENERATE_GOLDENFILES=1 cargo test` and `git diff` to show differs
 mod aggregates;
 mod scalars;
-
-#[ctor]
-fn ensure_tracing_initialized() {
-    env_logger::init();
-}
