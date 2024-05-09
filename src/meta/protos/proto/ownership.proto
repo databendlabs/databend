@@ -46,10 +46,15 @@ message OwnershipObject {
     string stage = 1;
   }
 
+  message OwnershipTaskObject {
+    string task = 1;
+  }
+
   oneof object {
     OwnershipDatabaseObject database = 1;
     OwnershipTableObject table = 2;
     OwnershipUdfObject udf = 3;
     OwnershipStageObject stage = 4;
+    OwnershipTaskObject task = 5;
   }
 }

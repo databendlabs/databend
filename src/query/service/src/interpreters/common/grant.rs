@@ -15,10 +15,16 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::make_request;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::DescribeTaskRequest;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_users::UserApiProvider;
 
+use crate::interpreters::common::get_task_client_config;
 use crate::sessions::QueryContext;
 
 #[async_backtrace::framed]
@@ -39,7 +45,7 @@ pub async fn validate_grant_object_exists(
                 .exists_table(&tenant, database_name, table_name)
                 .await?
             {
-                return Err(databend_common_exception::ErrorCode::UnknownTable(format!(
+                return Err(ErrorCode::UnknownTable(format!(
                     "table `{}`.`{}` not exists in catalog '{}'",
                     database_name, table_name, catalog_name,
                 )));
@@ -48,39 +54,55 @@ pub async fn validate_grant_object_exists(
         GrantObject::Database(catalog_name, database_name) => {
             let catalog = ctx.get_catalog(catalog_name).await?;
             if !catalog.exists_database(&tenant, database_name).await? {
-                return Err(databend_common_exception::ErrorCode::UnknownDatabase(
-                    format!("database {} not exists", database_name,),
-                ));
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "database {} not exists",
+                    database_name,
+                )));
             }
         }
         GrantObject::DatabaseById(catalog_name, db_id) => {
             let catalog = ctx.get_catalog(catalog_name).await?;
             if catalog.get_db_name_by_id(*db_id).await.is_err() {
-                return Err(databend_common_exception::ErrorCode::UnknownDatabaseId(
-                    format!(
-                        "database id {} not exists in catalog {}",
-                        db_id, catalog_name
-                    ),
-                ));
+                return Err(ErrorCode::UnknownDatabaseId(format!(
+                    "database id {} not exists in catalog {}",
+                    db_id, catalog_name
+                )));
             }
         }
         GrantObject::TableById(catalog_name, db_id, table_id) => {
             let catalog = ctx.get_catalog(catalog_name).await?;
 
             if catalog.get_table_meta_by_id(*table_id).await?.is_none() {
-                return Err(databend_common_exception::ErrorCode::UnknownTableId(
-                    format!(
-                        "table id `{}`.`{}` not exists in catalog '{}'",
-                        db_id, table_id, catalog_name,
-                    ),
-                ));
+                return Err(ErrorCode::UnknownTableId(format!(
+                    "table id `{}`.`{}` not exists in catalog '{}'",
+                    db_id, table_id, catalog_name,
+                )));
             }
         }
         GrantObject::UDF(udf) => {
             if !UserApiProvider::instance().exists_udf(&tenant, udf).await? {
-                return Err(databend_common_exception::ErrorCode::UnknownFunction(
-                    format!("udf {udf} not exists"),
+                return Err(ErrorCode::UnknownFunction(format!("udf {udf} not exists")));
+            }
+        }
+        GrantObject::Task(task) => {
+            let config = GlobalConfig::instance();
+            if config.query.cloud_control_grpc_server_address.is_none() {
+                return Err(ErrorCode::CloudControlNotEnabled(
+                    "cannot describe task without cloud control enabled, please set cloud_control_grpc_server_address in config",
                 ));
+            }
+            let cloud_api = CloudControlApiProvider::instance();
+            let task_client = cloud_api.get_task_client();
+            let req = DescribeTaskRequest {
+                task_name: task.to_string(),
+                tenant_id: tenant.tenant_name().to_string(),
+                if_exist: false,
+            };
+            let config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
+            let req = make_request(req, config);
+            let resp = task_client.describe_task(req).await?;
+            if resp.task.is_none() {
+                return Err(ErrorCode::UnknownTask(format!("task {task} not exists")));
             }
         }
         GrantObject::Stage(stage) => {
@@ -88,9 +110,7 @@ pub async fn validate_grant_object_exists(
                 .exists_stage(&ctx.get_tenant(), stage)
                 .await?
             {
-                return Err(databend_common_exception::ErrorCode::UnknownStage(format!(
-                    "stage {stage} not exists"
-                )));
+                return Err(ErrorCode::UnknownStage(format!("stage {stage} not exists")));
             }
         }
         GrantObject::Global => (),

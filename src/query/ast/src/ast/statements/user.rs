@@ -185,6 +185,7 @@ impl Display for AccountMgrSource {
                     }
                     AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}")?,
                     AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}")?,
+                    AccountMgrLevel::Task(task) => write!(f, " TASK {task}")?,
                 }
             }
             AccountMgrSource::ALL { level, .. } => {
@@ -208,6 +209,7 @@ impl Display for AccountMgrSource {
                     }
                     AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}")?,
                     AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}")?,
+                    AccountMgrLevel::Task(task) => write!(f, " TASK {task}")?,
                 }
             }
         }
@@ -222,6 +224,7 @@ pub enum AccountMgrLevel {
     Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
     UDF(#[drive(skip)] String),
     Stage(#[drive(skip)] String),
+    Task(#[drive(skip)] String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]

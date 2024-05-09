@@ -27,6 +27,7 @@ use enumflags2::BitFlags;
 /// It is used in `SHOW DATABASES` and `SHOW TABLES` statements.
 pub struct GrantObjectVisibilityChecker {
     granted_global_udf: bool,
+    granted_global_task: bool,
     granted_global_db_table: bool,
     granted_global_stage: bool,
     granted_global_read_stage: bool,
@@ -37,6 +38,7 @@ pub struct GrantObjectVisibilityChecker {
     extra_databases: HashSet<(String, String)>,
     extra_databases_id: HashSet<(String, u64)>,
     granted_udfs: HashSet<String>,
+    granted_tasks: HashSet<String>,
     granted_write_stages: HashSet<String>,
     granted_read_stages: HashSet<String>,
 }
@@ -44,12 +46,14 @@ pub struct GrantObjectVisibilityChecker {
 impl GrantObjectVisibilityChecker {
     pub fn new(user: &UserInfo, available_roles: &Vec<RoleInfo>) -> Self {
         let mut granted_global_udf = false;
+        let mut granted_global_task = false;
         let mut granted_global_db_table = false;
         let mut granted_global_stage = false;
         let mut granted_global_read_stage = false;
         let mut granted_databases = HashSet::new();
         let mut granted_tables = HashSet::new();
         let mut granted_udfs = HashSet::new();
+        let mut granted_tasks = HashSet::new();
         let mut granted_write_stages = HashSet::new();
         let mut granted_read_stages = HashSet::new();
         let mut extra_databases = HashSet::new();
@@ -96,6 +100,15 @@ impl GrantObjectVisibilityChecker {
                         );
 
                         check_privilege(
+                            &mut granted_global_task,
+                            ent.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_task(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
                             &mut granted_global_read_stage,
                             ent.privileges().iter(),
                             |privilege| privilege == UserPrivilegeType::Read,
@@ -133,6 +146,9 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::UDF(udf) => {
                         granted_udfs.insert(udf.to_string());
                     }
+                    GrantObject::Task(task) => {
+                        granted_tasks.insert(task.to_string());
+                    }
                     GrantObject::Stage(stage) => {
                         if ent
                             .privileges()
@@ -153,6 +169,7 @@ impl GrantObjectVisibilityChecker {
 
         Self {
             granted_global_udf,
+            granted_global_task,
             granted_global_db_table,
             granted_global_stage,
             granted_global_read_stage,
@@ -163,6 +180,7 @@ impl GrantObjectVisibilityChecker {
             extra_databases,
             extra_databases_id,
             granted_udfs,
+            granted_tasks,
             granted_write_stages,
             granted_read_stages,
         }
@@ -196,6 +214,18 @@ impl GrantObjectVisibilityChecker {
         }
 
         if self.granted_udfs.contains(udf) {
+            return true;
+        }
+        false
+    }
+
+    // TODO: Need to call this check in task_history.rs::get_full_data
+    pub fn check_task_visibility(&self, task: &str) -> bool {
+        if self.granted_global_task {
+            return true;
+        }
+
+        if self.granted_tasks.contains(task) {
             return true;
         }
         false

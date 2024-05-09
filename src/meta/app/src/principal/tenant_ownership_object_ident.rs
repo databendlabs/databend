@@ -252,6 +252,22 @@ mod tests {
             let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
             assert_eq!(role_grantee, parsed);
         }
+
+        // udf
+        {
+            let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
+                Tenant::new_literal("test"),
+                OwnershipObject::Task {
+                    name: "t1".to_string(),
+                },
+            );
+
+            let key = role_grantee.to_string_key();
+            assert_eq!("__fd_object_owners/test/task-by-name/t1", key);
+
+            let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
+            assert_eq!(role_grantee, parsed);
+        }
     }
 
     #[test]

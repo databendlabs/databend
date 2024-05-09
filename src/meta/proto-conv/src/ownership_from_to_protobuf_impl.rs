@@ -82,6 +82,9 @@ impl FromToProto for mt::principal::OwnershipObject {
             Some(pb::ownership_object::Object::Stage(
                 pb::ownership_object::OwnershipStageObject { stage },
             )) => Ok(mt::principal::OwnershipObject::Stage { name: stage }),
+            Some(pb::ownership_object::Object::Task(
+                pb::ownership_object::OwnershipTaskObject { task },
+            )) => Ok(mt::principal::OwnershipObject::Task { name: task }),
             _ => Err(Incompatible {
                 reason: "OwnershipObject cannot be None".to_string(),
             }),
@@ -113,6 +116,11 @@ impl FromToProto for mt::principal::OwnershipObject {
             mt::principal::OwnershipObject::UDF { name } => {
                 Some(pb::ownership_object::Object::Udf(
                     pb::ownership_object::OwnershipUdfObject { udf: name.clone() },
+                ))
+            }
+            mt::principal::OwnershipObject::Task { name } => {
+                Some(pb::ownership_object::Object::Task(
+                    pb::ownership_object::OwnershipTaskObject { task: name.clone() },
                 ))
             }
             mt::principal::OwnershipObject::Stage { name } => Some(

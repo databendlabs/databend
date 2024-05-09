@@ -23,7 +23,11 @@ use databend_common_cloud_control::pb::CreateTaskRequest;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::CreateTaskPlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::common::make_schedule_options;
@@ -110,6 +114,20 @@ impl Interpreter for CreateTaskInterpreter {
         let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
         task_client.create_task(req).await?;
+
+        // Grant ownership as the current role
+        if let Some(current_role) = self.ctx.get_current_role() {
+            let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+            role_api
+                .grant_ownership(
+                    &OwnershipObject::Task {
+                        name: self.plan.task_name.clone(),
+                    },
+                    &current_role.name,
+                )
+                .await?;
+            RoleCacheManager::instance().invalidate_cache(&self.plan.tenant);
+        }
         Ok(PipelineBuildResult::create())
     }
 }
