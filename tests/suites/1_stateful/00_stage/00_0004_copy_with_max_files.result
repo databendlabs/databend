@@ -1,16 +1,32 @@
---- force = false, purge = false
+--- force = false, purge = false, transform = false
 copied 2 files with 4 rows, remain 3 files
 copied 1 files with 6 rows, remain 3 files
 copied 0 files with 6 rows, remain 3 files
---- force = false, purge = true
+--- force = false, purge = true, transform = false
 copied 2 files with 4 rows, remain 1 files
 copied 1 files with 6 rows, remain 0 files
 copied 0 files with 6 rows, remain 0 files
---- force = true, purge = false
+--- force = true, purge = false, transform = false
 copied 2 files with 4 rows, remain 3 files
 copied 2 files with 8 rows, remain 3 files
 copied 2 files with 12 rows, remain 3 files
---- force = true, purge = true
+--- force = true, purge = true, transform = false
+copied 2 files with 4 rows, remain 1 files
+copied 1 files with 6 rows, remain 0 files
+copied 0 files with 6 rows, remain 0 files
+--- force = false, purge = false, transform = true
+copied 2 files with 4 rows, remain 3 files
+copied 1 files with 6 rows, remain 3 files
+copied 0 files with 6 rows, remain 3 files
+--- force = false, purge = true, transform = true
+copied 2 files with 4 rows, remain 1 files
+copied 1 files with 6 rows, remain 0 files
+copied 0 files with 6 rows, remain 0 files
+--- force = true, purge = false, transform = true
+copied 2 files with 4 rows, remain 3 files
+copied 2 files with 8 rows, remain 3 files
+copied 2 files with 12 rows, remain 3 files
+--- force = true, purge = true, transform = true
 copied 2 files with 4 rows, remain 1 files
 copied 1 files with 6 rows, remain 0 files
 copied 0 files with 6 rows, remain 0 files

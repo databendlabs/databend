@@ -32,6 +32,7 @@ use databend_common_sql::Planner;
 use log::error;
 use log::info;
 
+use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -131,6 +132,8 @@ pub trait Interpreter: Sync + Send {
                         );
                     }
                 }
+
+                hook_vacuum_temp_files(&query_ctx)?;
 
                 let err_opt = match may_error {
                     Ok(_) => None,
