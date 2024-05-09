@@ -10,10 +10,10 @@ bench = false
 name = "parquet2"
 
 [dependencies]
+bytes = { workspace = true }
 parquet-format-safe = "0.2"
 seq-macro = { version = "0.3", default-features = false }
 streaming-decompression = "0.1"
-bytes = { workspace = true }
 
 async-stream = { version = "0.3.3", optional = true }
 futures = { version = "0.3", optional = true }
