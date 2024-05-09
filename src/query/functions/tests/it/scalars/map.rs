@@ -29,6 +29,73 @@ fn test_map() {
     test_get(file);
     test_map_keys(file);
     test_map_values(file);
+    test_map_size(file);
+    test_map_cat(file);
+}
+
+fn test_map_cat(file: &mut impl Write) {
+    // Empty Inputs:: tests behavior with empty input maps
+    run_ast(file, "map_cat({}, {})", &[]);
+    run_ast(file, "map_cat({}, {'k1': 'v1'})", &[]);
+    run_ast(file, "map_cat({'k1': 'v1'}, {})", &[]);
+
+    // Basic Functionality:: evaluates core functionality
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
+        ("b_col", StringType::from_data(vec!["b_k1", "b_k2", "b_k3"])),
+        ("c_col", StringType::from_data(vec!["c_k1", "c_k2", "c_k3"])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", StringType::from_data(vec!["bbb1", "bbb2", "bbb3"])),
+        ("f_col", StringType::from_data(vec!["ccc1", "ccc2", "ccc3"])),
+    ];
+
+    run_ast(
+        file,
+        "map_cat(map([a_col, b_col], [d_col, e_col]), map([c_col], [f_col]))",
+        &columns,
+    );
+
+    run_ast(file, "map_cat({'k1':'v1','k2':'v2'}, {'k1':'abc'})", &[]);
+
+    // Duplicate Keys:: assesses handling of duplicate keys
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "c_k3"])),
+        ("b_col", StringType::from_data(vec!["b_k1", "c_k2", "b_k3"])),
+        ("c_col", StringType::from_data(vec!["c_k1", "c_k2", "c_k3"])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", StringType::from_data(vec!["bbb1", "bbb2", "bbb3"])),
+        ("f_col", StringType::from_data(vec!["ccc1", "ccc2", "ccc3"])),
+    ];
+
+    run_ast(
+        file,
+        "map_cat(map([a_col, b_col], [d_col, e_col]), map([c_col], [f_col]))",
+        &columns,
+    );
+
+    // Map Size Variation:: tests behavior with different map sizes
+    run_ast(file, "map_cat({'k1': 'v1', 'k2': 'v2'}, {'k3': 'v3'})", &[]);
+    run_ast(file, "map_cat({'k1': 'v1'}, {'k2': 'v2', 'k3': 'v3'})", &[]);
+
+    // Null Values:: validates behavior for null values
+    run_ast(
+        file,
+        "map_cat({'k1': 'v1', 'k2': NULL}, {'k2': 'v2', 'k3': NULL})",
+        &[],
+    );
+
+    // Nested Maps:: examines recursive merging capabilities
+    run_ast(
+        file,
+        "map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k2': {'nk3': 'nv3'}, 'k3': {'nk4': 'nv4'}})",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k1': {'nk1': 'new_nv1'}, 'k2': {'nk3': 'nv3'}})",
+        &[],
+    );
 }
 
 fn test_create(file: &mut impl Write) {
@@ -141,6 +208,35 @@ fn test_map_values(file: &mut impl Write) {
     run_ast(
         file,
         "map_values(map([a_col, b_col, c_col], [d_col, e_col, f_col]))",
+        &columns,
+    );
+}
+
+fn test_map_size(file: &mut impl Write) {
+    run_ast(file, "map_size({})", &[]);
+    run_ast(file, "map_size({'a':1,'b':2,'c':3})", &[]);
+    run_ast(file, "map_size({'a':NULL,'b':2,'c':NULL})", &[]);
+
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a", "b", "c"])),
+        ("b_col", StringType::from_data(vec!["d", "e", "f"])),
+        ("c_col", StringType::from_data(vec!["x", "y", "z"])),
+        (
+            "d_col",
+            StringType::from_data_with_validity(vec!["v1", "v2", "v3"], vec![true, true, true]),
+        ),
+        (
+            "e_col",
+            StringType::from_data_with_validity(vec!["v4", "v5", ""], vec![true, true, false]),
+        ),
+        (
+            "f_col",
+            StringType::from_data_with_validity(vec!["v6", "", "v7"], vec![true, false, true]),
+        ),
+    ];
+    run_ast(
+        file,
+        "map_size(map([a_col, b_col, c_col], [d_col, e_col, f_col]))",
         &columns,
     );
 }

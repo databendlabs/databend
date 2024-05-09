@@ -17,7 +17,6 @@ mod aggregator_keys_builder;
 mod aggregator_keys_iter;
 mod aggregator_polymorphic_keys;
 mod aggregator_state;
-mod aggregator_state_entity;
 mod large_number;
 
 pub use aggregator_groups_builder::*;

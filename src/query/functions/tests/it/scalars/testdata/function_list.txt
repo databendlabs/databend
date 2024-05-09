@@ -115,12 +115,13 @@ Functions overloads:
 0 array() :: Array(Nothing)
 1 array FACTORY
 0 array_any FACTORY
-0 array_append FACTORY
+0 array_append(Array(T0) NULL, T0) :: Array(T0)
 0 array_approx_count_distinct FACTORY
 0 array_avg FACTORY
-0 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)
-1 array_concat(Array(T0), Array(T0)) :: Array(T0)
-2 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
+1 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
+2 array_concat(Array(T0), Array(T0)) :: Array(T0)
+3 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_count FACTORY
 0 array_distinct(Array(Nothing)) :: Array(Nothing)
 1 array_distinct(Array(Nothing) NULL) :: Array(Nothing) NULL
@@ -135,7 +136,7 @@ Functions overloads:
 0 array_max FACTORY
 0 array_median FACTORY
 0 array_min FACTORY
-0 array_prepend FACTORY
+0 array_prepend(T0, Array(T0) NULL) :: Array(T0)
 0 array_remove_first(Array(Nothing)) :: Array(Nothing)
 1 array_remove_first(Array(Nothing) NULL) :: Array(Nothing) NULL
 2 array_remove_first(Array(T0)) :: Array(T0)
@@ -1188,7 +1189,7 @@ Functions overloads:
 25 contains(Array(Timestamp) NULL, Timestamp NULL) :: Boolean NULL
 26 contains(Array(Boolean), Boolean) :: Boolean
 27 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
-28 contains(Array(T0), T0) :: Boolean
+28 contains(Array(T0) NULL, T0) :: Boolean
 0 cos(Float64) :: Float64
 1 cos(Float64 NULL) :: Float64 NULL
 0 cosine_distance(Array(Float32), Array(Float32)) :: Float32
@@ -2435,9 +2436,16 @@ Functions overloads:
 1 map(Array(Nothing) NULL, Array(Nothing) NULL) :: Map(Nothing) NULL
 2 map(Array(T0), Array(T1)) :: Map(T0, T1)
 3 map(Array(T0) NULL, Array(T1) NULL) :: Map(T0, T1) NULL
+0 map_cat(Map(Nothing), Map(Nothing)) :: Map(Nothing)
+1 map_cat(Map(Nothing) NULL, Map(Nothing) NULL) :: Map(Nothing) NULL
+2 map_cat(Map(T0, T1), Map(T0, T1)) :: Map(T0, T1)
+3 map_cat(Map(T0, T1) NULL, Map(T0, T1) NULL) :: Map(T0, T1) NULL
 0 map_keys(Map(Nothing)) :: Array(Nothing)
 1 map_keys(Map(T0, T1)) :: Array(T0)
 2 map_keys(Map(T0, T1) NULL) :: Array(T0) NULL
+0 map_size(Map(Nothing)) :: UInt8
+1 map_size(Map(T0, T1)) :: UInt64
+2 map_size(Map(T0, T1) NULL) :: UInt64 NULL
 0 map_values(Map(Nothing)) :: Array(Nothing)
 1 map_values(Map(T0, T1)) :: Array(T1)
 2 map_values(Map(T0, T1) NULL) :: Array(T1) NULL
