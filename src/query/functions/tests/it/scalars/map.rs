@@ -34,12 +34,11 @@ fn test_map() {
 }
 
 fn test_map_cat(file: &mut impl Write) {
-
     // Empty Inputs:: tests behavior with empty input maps
     run_ast(file, "map_cat({}, {})", &[]);
     run_ast(file, "map_cat({}, {'k1': 'v1'})", &[]);
     run_ast(file, "map_cat({'k1': 'v1'}, {})", &[]);
-    
+
     // Basic Functionality:: evaluates core functionality
     let columns = [
         ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
@@ -97,7 +96,6 @@ fn test_map_cat(file: &mut impl Write) {
         "map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k1': {'nk1': 'new_nv1'}, 'k2': {'nk3': 'nv3'}})",
         &[],
     );
-
 }
 
 fn test_create(file: &mut impl Write) {
