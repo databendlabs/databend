@@ -22,7 +22,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
-use databend_common_meta_app::schema::CatalogId;
+use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -100,7 +100,7 @@ impl CatalogManager {
                 ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
             })?;
             let ctl = creator.try_create(&CatalogInfo {
-                id: CatalogId { catalog_id: 0 }.into(),
+                id: CatalogIdIdent::new(&tenant, 0).into(),
                 name_ident: CatalogNameIdent::new(tenant.clone(), name).into(),
                 meta: CatalogMeta {
                     catalog_option: CatalogOption::Hive(HiveCatalogOption {

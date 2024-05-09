@@ -2905,6 +2905,7 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz",
+ "databend-common-parquet2",
  "dyn-clone",
  "either",
  "env_logger",
@@ -2922,7 +2923,6 @@ dependencies = [
  "num",
  "num-traits",
  "ordered-float 3.9.2",
- "parquet2",
  "proptest",
  "quanta 0.11.1",
  "rand 0.8.5",
@@ -3744,6 +3744,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-parquet2"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "brotli",
+ "criterion",
+ "flate2",
+ "futures",
+ "lz4",
+ "parquet-format-safe",
+ "rand 0.8.5",
+ "seq-macro",
+ "serde",
+ "snap",
+ "streaming-decompression",
+ "tokio",
+ "xxhash-rust",
+ "zstd 0.12.4",
+]
+
+[[package]]
 name = "databend-common-pipeline-core"
 version = "0.1.0"
 dependencies = [
@@ -4117,6 +4138,7 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
+ "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.5.1",
@@ -4875,6 +4897,7 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
+ "databend-storages-common-io",
  "databend-storages-common-table-meta",
  "databend-storages-common-txn",
  "derive-visitor",
@@ -5111,6 +5134,19 @@ dependencies = [
  "tantivy-common",
  "thiserror",
  "xorfilter-rs",
+]
+
+[[package]]
+name = "databend-storages-common-io"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "log",
+ "minitrace",
+ "opendal",
 ]
 
 [[package]]
@@ -6073,6 +6109,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46303f565772937ffe1d394a4fac6f411c6013172fadde9dcdb1e147a086940e"
 dependencies = [
  "crc32fast",
+ "libz-ng-sys",
  "libz-sys",
  "miniz_oxide",
 ]
@@ -9075,6 +9112,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libz-ng-sys"
+version = "1.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6409efc61b12687963e602df8ecf70e8ddacf95bc6576bcf16e3ac6328083c5"
+dependencies = [
+ "cmake",
+ "libc",
+]
+
+[[package]]
 name = "libz-sys"
 version = "1.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10530,25 +10577,6 @@ checksum = "1131c54b167dd4e4799ce762e1ab01549ebb94d5bdd13e6ec1b467491c378e1f"
 dependencies = [
  "async-trait",
  "futures",
-]
-
-[[package]]
-name = "parquet2"
-version = "0.17.2"
-source = "git+https://github.com/jorgecarleitao/parquet2?rev=b0e6545#b0e654526ce06bcb02b3e0e1f5aa3e1a10580350"
-dependencies = [
- "async-stream",
- "brotli",
- "flate2",
- "futures",
- "lz4",
- "parquet-format-safe",
- "seq-macro",
- "serde",
- "snap",
- "streaming-decompression",
- "xxhash-rust",
- "zstd 0.12.4",
 ]
 
 [[package]]

@@ -40,7 +40,7 @@ impl FuseTable {
     //                                            |                       +---+--------------->|    MatchedSplitProcessor    |                        |                   |               |
     //                                            |                       |   |                |                             +----------+             +-------------------+               |
     //         +----------------------+           |                       +---+                +-----------------------------+          |                                                 |
-    //         |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|                                                       output_port_updated                                     |
+    //         |       MergeInto      +---------->|MergeIntoSplitProcessor|                                                       output_port_updated                                     |
     //         +----------------------+           |                       +---+                +-----------------------------+          |             +-------------------+               |
     //                                            |                       |   | NotMatched     |                             |          |             |                   |               |
     //                                            |                       +---+--------------->| MergeIntoNotMatchedProcessor+----------+------------->-ResizeProcessor(1)+-----------+   |

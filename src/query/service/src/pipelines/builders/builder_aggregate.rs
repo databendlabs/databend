@@ -171,7 +171,8 @@ impl PipelineBuilder {
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
         if self.ctx.get_cluster().is_empty() {
             let operator = DataOperator::instance().operator();
-            let location_prefix = query_spill_prefix(self.ctx.get_tenant().tenant_name());
+            let location_prefix =
+                query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(
                     match params.aggregate_functions.is_empty() {

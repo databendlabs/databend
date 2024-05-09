@@ -228,7 +228,13 @@ impl PipelineBuilder {
 
         let snapshot_gen =
             MutationGenerator::new(recluster_sink.snapshot.clone(), MutationKind::Recluster);
-        let lock = LockManager::create_table_lock(recluster_sink.table_info.clone())?;
+        let lock = if recluster_sink.need_lock {
+            Some(LockManager::create_table_lock(
+                recluster_sink.table_info.clone(),
+            )?)
+        } else {
+            None
+        };
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -238,7 +244,7 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                Some(lock.clone()),
+                lock.clone(),
                 None,
                 None,
             )

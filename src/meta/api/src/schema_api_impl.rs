@@ -64,8 +64,8 @@ use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
-use databend_common_meta_app::schema::CatalogId;
-use databend_common_meta_app::schema::CatalogIdToName;
+use databend_common_meta_app::schema::CatalogIdIdent;
+use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -3669,8 +3669,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (catalog_id) -> catalog_meta
             // (catalog_id) -> (tenant, catalog_name)
             let catalog_id = fetch_id(self, IdGenerator::catalog_id()).await?;
-            let id_key = CatalogId { catalog_id };
-            let id_to_name_key = CatalogIdToName { catalog_id };
+            let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
+            let id_to_name_key = CatalogIdToNameIdent::new(name_key.tenant(), catalog_id);
 
             debug!(catalog_id = catalog_id, name_key :? =(name_key); "new catalog id");
 
@@ -3718,7 +3718,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             get_catalog_or_err(self, name_key, "get_catalog").await?;
 
         let catalog = CatalogInfo {
-            id: CatalogId { catalog_id }.into(),
+            id: CatalogIdIdent::new(name_key.tenant(), catalog_id).into(),
             name_ident: name_key.clone().into(),
             meta: catalog_meta,
         };
@@ -3761,8 +3761,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (tenant, catalog_name) -> catalog_id
             // (catalog_id) -> catalog_meta
             // (catalog_id) -> (tenant, catalog_name)
-            let id_key = CatalogId { catalog_id };
-            let id_to_name_key = CatalogIdToName { catalog_id };
+            let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
+            let id_to_name_key = CatalogIdToNameIdent::new(name_key.tenant(), catalog_id);
 
             debug!(
                 catalog_id = catalog_id,
@@ -3811,7 +3811,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant = req.tenant;
-        let name_key = CatalogNameIdent::new(tenant, "");
+        let name_key = CatalogNameIdent::new(&tenant, "");
 
         // Pairs of catalog-name and catalog_id with seq
         let (tenant_catalog_names, catalog_ids) = list_u64_value(self, &name_key).await?;
@@ -3820,10 +3820,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut kv_keys = Vec::with_capacity(catalog_ids.len());
 
         for catalog_id in catalog_ids.iter() {
-            let k = CatalogId {
-                catalog_id: *catalog_id,
-            }
-            .to_string_key();
+            let k = CatalogIdIdent::new(&tenant, *catalog_id).to_string_key();
             kv_keys.push(k);
         }
 
@@ -3838,10 +3835,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let catalog_meta: CatalogMeta = deserialize_struct(&seq_meta.data)?;
 
                 let catalog_info = CatalogInfo {
-                    id: CatalogId {
-                        catalog_id: catalog_ids[i],
-                    }
-                    .into(),
+                    id: CatalogIdIdent::new(&tenant, catalog_ids[i]).into(),
                     name_ident: CatalogNameIdent::new(
                         name_key.tenant().clone(),
                         tenant_catalog_names[i].name(),
@@ -5167,7 +5161,7 @@ pub(crate) async fn get_catalog_or_err(
     let (catalog_id_seq, catalog_id) = get_u64_value(kv_api, name_key).await?;
     catalog_has_to_exist(catalog_id_seq, name_key, &msg)?;
 
-    let id_key = CatalogId { catalog_id };
+    let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
 
     let (catalog_meta_seq, catalog_meta) = get_pb_value(kv_api, &id_key).await?;
     catalog_has_to_exist(catalog_meta_seq, name_key, msg)?;

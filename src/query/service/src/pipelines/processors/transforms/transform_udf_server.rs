@@ -59,6 +59,7 @@ impl AsyncTransform for TransformUdfServer {
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
         let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
         let request_timeout = self.func_ctx.external_server_request_timeout_secs;
+        let request_bacth_rows = self.func_ctx.external_server_request_batch_rows;
         for func in &self.funcs {
             let server_addr = func.udf_type.as_server().unwrap();
             // construct input record_batch
@@ -91,10 +92,15 @@ impl AsyncTransform for TransformUdfServer {
                 .to_record_batch_with_dataschema(&data_schema)
                 .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
-            let mut client =
-                UDFFlightClient::connect(server_addr, connect_timeout, request_timeout).await?;
-            let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
+            let mut client = UDFFlightClient::connect(
+                server_addr,
+                connect_timeout,
+                request_timeout,
+                request_bacth_rows,
+            )
+            .await?;
 
+            let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
             let schema = DataSchema::try_from(&(*result_batch.schema()))?;
             let (result_block, result_schema) =
                 DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {

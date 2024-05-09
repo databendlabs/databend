@@ -9,8 +9,6 @@ export TEST_USER_CONNECT="bendsql --user=owner --password=password --host=${QUER
 
 export TEST_TRANSFER_USER_CONNECT="bendsql --user=owner1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
-
 ## cleanup
 echo "drop database if exists d_0002;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists '${TEST_USER_NAME}'" | $BENDSQL_CLIENT_CONNECT
@@ -72,13 +70,14 @@ echo "select * from d_0002.t" | $TEST_USER_CONNECT
 
 ## cleanup
 echo "drop database d_0002;" | $BENDSQL_CLIENT_CONNECT
-echo "drop stage hello;" | $BENDSQL_CLIENT_CONNECT
-echo "drop function a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage hello;" | $TEST_TRANSFER_USER_CONNECT
+echo "drop stage if exists noexistshello;" | $TEST_TRANSFER_USER_CONNECT
+echo "drop function a;" | $TEST_TRANSFER_USER_CONNECT
+echo "drop function if exists noexistsa;" | $TEST_TRANSFER_USER_CONNECT
 echo "drop user '${TEST_USER_NAME}'" | $BENDSQL_CLIENT_CONNECT
 echo "drop user 'owner1'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role 'r_0002_1'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role 'r_0002'" | $BENDSQL_CLIENT_CONNECT
-echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT
 
 echo "=== test ownership: show stmt ==="
 echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT

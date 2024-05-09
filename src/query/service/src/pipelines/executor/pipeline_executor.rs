@@ -44,7 +44,7 @@ use crate::pipelines::executor::RunningGraph;
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Box<dyn FnOnce(&Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
+    Box<dyn FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static>;
 
 pub struct QueryWrapper {
     graph: Arc<RunningGraph>,
@@ -206,7 +206,7 @@ impl PipelineExecutor {
                         let guard = query_wrapper.on_finished_callback.lock().take();
                         if let Some(on_finished_callback) = guard {
                             catch_unwind(move || {
-                                on_finished_callback(&Ok(self.get_plans_profile()))
+                                on_finished_callback((&self.get_plans_profile(), &Ok(())))
                             })??;
                         }
                         Ok(())
@@ -215,7 +215,9 @@ impl PipelineExecutor {
                         let guard = query_wrapper.on_finished_callback.lock().take();
                         let cause_clone = cause.clone();
                         if let Some(on_finished_callback) = guard {
-                            catch_unwind(move || on_finished_callback(&Err(cause_clone)))??;
+                            catch_unwind(move || {
+                                on_finished_callback((&self.get_plans_profile(), &Err(cause_clone)))
+                            })??;
                         }
                         Err(cause)
                     }
