@@ -443,7 +443,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             FunctionDomain::Domain(domain)
         },
         vectorize_with_builder_2_arg::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>(
-            |val, arr, output, ctx| {
+            |val, arr, output, _| {
                 output.put_item(val);
                 if let Some(arr) = arr {
                     for item in arr.iter() {
@@ -469,7 +469,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             FunctionDomain::Domain(domain)
         },
         vectorize_with_builder_2_arg::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, ArrayType<GenericType<0>>>(
-            |arr, val, output, ctx| {
+            |arr, val, output, _| {
                 if let Some(arr) = arr {
                     for item in arr.iter() {
                         output.put_item(item);
