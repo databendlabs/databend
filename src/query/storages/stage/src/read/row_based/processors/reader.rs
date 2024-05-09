@@ -46,13 +46,14 @@ impl BytesReader {
     pub fn try_create(
         table_ctx: Arc<dyn TableContext>,
         op: Operator,
-        read_batch_size: usize,
+        _read_batch_size: usize,
         prefetch_num: usize,
     ) -> Result<Self> {
         Ok(Self {
             table_ctx,
             op,
-            read_batch_size,
+            // TODO(xuanwo): bring batch size back when we figure how to play with range based read.
+            read_batch_size: 4 * 1024 * 1024,
             file_state: None,
             prefetch_num,
         })
