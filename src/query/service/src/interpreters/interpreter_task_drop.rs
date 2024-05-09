@@ -16,11 +16,16 @@ use std::sync::Arc;
 
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::DescribeTaskRequest;
 use databend_common_cloud_control::pb::DropTaskRequest;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropTaskPlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::Interpreter;
@@ -73,6 +78,26 @@ impl Interpreter for DropTaskInterpreter {
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
         let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+
+        {
+            let des_req = DescribeTaskRequest {
+                task_name: self.plan.task_name.to_string(),
+                tenant_id: self.plan.tenant.tenant_name().to_string(),
+                if_exist: false,
+            };
+            let des_req = make_request(des_req, config.clone());
+            let resp = task_client.describe_task(des_req).await?;
+            if resp.task.is_some() {
+                let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+                let owner_object = OwnershipObject::Task {
+                    name: self.plan.task_name.to_string(),
+                };
+
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(&self.plan.tenant);
+            }
+        }
+
         let req = make_request(req, config);
         task_client.drop_task(req).await?;
         Ok(PipelineBuildResult::create())

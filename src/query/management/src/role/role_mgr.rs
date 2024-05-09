@@ -504,5 +504,6 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         } => GrantObject::TableById(catalog_name.to_string(), *db_id, *table_id),
         OwnershipObject::Stage { name } => GrantObject::Stage(name.to_string()),
         OwnershipObject::UDF { name } => GrantObject::UDF(name.to_string()),
+        OwnershipObject::Task { name } => GrantObject::Task(name.to_string()),
     }
 }

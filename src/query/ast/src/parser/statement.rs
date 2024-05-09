@@ -2826,11 +2826,22 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let task_privs = map(
+        rule! {
+            #comma_separated_list1(task_priv_type) ~ ON ~ TASK ~ #ident
+        },
+        |(privileges, _, _, task_name)| AccountMgrSource::Privs {
+            privileges,
+            level: AccountMgrLevel::Task(task_name.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
+        | #task_privs : "<task_privileges> ON TASK <task_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )(i)
@@ -2850,6 +2861,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             UserPrivilegeType::CreateDatabase,
             rule! { CREATE ~ DATABASE },
         ),
+        value(UserPrivilegeType::CreateDatabase, rule! { CREATE ~ TASK }),
         value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
@@ -2865,6 +2877,13 @@ pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
     alt((
         value(UserPrivilegeType::Read, rule! { READ }),
         value(UserPrivilegeType::Write, rule! { WRITE }),
+    ))(i)
+}
+
+pub fn task_priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    alt((
+        value(UserPrivilegeType::Drop, rule! { DROP }),
+        value(UserPrivilegeType::Alter, rule! { ALTER }),
     ))(i)
 }
 
@@ -2991,10 +3010,12 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     enum Object {
         Stage,
         Udf,
+        Task,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
+        value(Object::Task, rule! { TASK }),
     ));
 
     // Object object_name
@@ -3003,13 +3024,14 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         |(object, object_name)| match object {
             Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+            Object::Task => AccountMgrLevel::Task(object_name.to_string()),
         },
     );
 
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF <object_name>"
+        | #object : "STAGE | UDF | Task <object_name>"
     )(i)
 }
 

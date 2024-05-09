@@ -174,6 +174,12 @@ impl Interpreter for ShowGrantsInterpreter {
                     privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
+                GrantObject::Task(task_name) => {
+                    object_name.push(task_name.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
                 GrantObject::Global => {
                     // grant all on *.* to a
                     object_name.push("*.*".to_string());

@@ -50,6 +50,10 @@ pub enum OwnershipObject {
     UDF {
         name: String,
     },
+
+    Task {
+        name: String,
+    },
 }
 
 impl OwnershipObject {
@@ -97,6 +101,7 @@ impl KeyCodec for OwnershipObject {
             }
             OwnershipObject::Stage { name } => b.push_raw("stage-by-name").push_str(name),
             OwnershipObject::UDF { name } => b.push_raw("udf-by-name").push_str(name),
+            OwnershipObject::Task { name } => b.push_raw("task-by-name").push_str(name),
         }
     }
 
@@ -143,9 +148,13 @@ impl KeyCodec for OwnershipObject {
                 let name = p.next_str()?;
                 Ok(OwnershipObject::UDF { name })
             }
+            "task-by-name" => {
+                let name = p.next_str()?;
+                Ok(OwnershipObject::Task { name })
+            }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),
-                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name"
+                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|task-by-name"
                     .to_string(),
                 got: q.to_string(),
             }),

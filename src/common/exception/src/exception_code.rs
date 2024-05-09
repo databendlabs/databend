@@ -370,6 +370,9 @@ build_exceptions! {
 
     // sequence
     SequenceError(3101),
+
+    // Task
+    UnknownTask(3201),
 }
 
 // Storage errors [3001, 4000].

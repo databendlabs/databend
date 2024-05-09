@@ -142,6 +142,9 @@ impl PrivilegeAccess {
             GrantObject::UDF(name) => OwnershipObject::UDF {
                 name: name.to_string(),
             },
+            GrantObject::Task(name) => OwnershipObject::Task {
+                name: name.to_string(),
+            },
             GrantObject::Global => return Ok(None),
         };
 
@@ -364,6 +367,7 @@ impl PrivilegeAccess {
             | GrantObject::Table(_, _, _)
             | GrantObject::DatabaseById(_, _)
             | GrantObject::UDF(_)
+            | GrantObject::Task(_)
             | GrantObject::Stage(_)
             | GrantObject::TableById(_, _, _) => true,
             GrantObject::Global => false,
@@ -394,6 +398,7 @@ impl PrivilegeAccess {
                     GrantObject::DatabaseById(_, _) => Err(ErrorCode::PermissionDenied("")),
                     GrantObject::Global
                     | GrantObject::UDF(_)
+                    | GrantObject::Task(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
@@ -446,6 +451,17 @@ impl PrivilegeAccess {
             self.validate_access(&GrantObject::UDF(udf.clone()), UserPrivilegeType::Usage)
                 .await?;
         }
+        Ok(())
+    }
+
+    async fn validate_task_access(
+        &self,
+        task: &str,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        self.validate_access(&GrantObject::Task(task.to_owned()), privilege)
+            .await?;
+
         Ok(())
     }
 
@@ -615,6 +631,16 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateDatabase(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase)
                     .await?;
+            }
+            Plan::CreateTask(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateTask)
+                    .await?;
+            }
+            Plan::AlterTask(plan) => {
+                self.validate_task_access(&plan.task_name, UserPrivilegeType::Alter).await?;
+            }
+            Plan::DropTask(plan) => {
+                self.validate_task_access(&plan.task_name, UserPrivilegeType::Drop).await?;
             }
             Plan::DropDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?;
@@ -1078,12 +1104,11 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropNotification(_)
             | Plan::DescNotification(_)
             | Plan::AlterNotification(_)
-            | Plan::CreateTask(_)   // TODO: need to build ownership info for task
+            //| Plan::CreateTask(_)   // TODO: need to build ownership info for task
+            //| Plan::DropTask(_)     // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
             | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
-            | Plan::DropTask(_)     // TODO: need to build ownership info for task
-            | Plan::AlterTask(_)
             | Plan::CreateSequence(_)
             | Plan::DropSequence(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
