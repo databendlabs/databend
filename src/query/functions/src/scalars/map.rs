@@ -168,6 +168,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<MapType<GenericType<0>, GenericType<1>>, NumberType<u64>, _, _>(
         "map_size",
         |_, _| FunctionDomain::Full,
-        |map, _| map.keys.len() as u64,
+        |map, _| map.len() as u64,
     );
 }
