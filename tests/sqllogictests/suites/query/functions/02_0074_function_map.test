@@ -135,3 +135,5 @@ SELECT MAP_CAT(
 ----
 {'k1':{'nk1':'nv1'},'k2':{'nk2':'nv2'},'k3':{'nk1':'new_nv1'},'k4':{'nk3':'nv3'}}
 
+statement ok
+DROP DATABASE map_func_test
