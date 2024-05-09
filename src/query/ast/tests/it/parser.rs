@@ -658,6 +658,11 @@ fn test_statement() {
                 SELECT avg(a), d FROM db.t GROUP BY d
         "#,
         // tasks
+        r#"GRANT CREATE TASK ON *.* TO role role1"#,
+        r#"GRANT ownership ON task MyTask1 TO role role1"#,
+        r#"GRANT ownership ON task MyTask1 TO role role2"#,
+        r#"GRANT drop ON task MyTask1 TO u2"#,
+        r#"GRANT alter ON task MyTask1 TO u1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
@@ -891,6 +896,11 @@ fn test_statement_error() {
         r#"drop table :a"#,
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
+        // task
+        r#"GRANT CREATE TASK ON task mytask1 TO role role1"#,
+        r#"GRANT ownership ON task MyTask1 TO u1"#,
+        r#"GRANT select ON task MyTask1 TO u2"#,
+        r#"GRANT usage ON task MyTask1 TO u1"#,
     ];
 
     for case in cases {

@@ -180,6 +180,9 @@ impl FromToProto for mt::principal::GrantObject {
             Some(pb::grant_object::Object::Stage(pb::grant_object::GrantStageObject { stage })) => {
                 Ok(mt::principal::GrantObject::Stage(stage))
             }
+            Some(pb::grant_object::Object::Task(pb::grant_object::GrantTaskObject { task })) => {
+                Ok(mt::principal::GrantObject::Task(task))
+            }
             _ => Err(Incompatible {
                 reason: "GrantObject cannot be None".to_string(),
             }),
@@ -224,6 +227,9 @@ impl FromToProto for mt::principal::GrantObject {
                 pb::grant_object::GrantStageObject {
                     stage: stage.clone(),
                 },
+            )),
+            mt::principal::GrantObject::Task(task) => Some(pb::grant_object::Object::Task(
+                pb::grant_object::GrantTaskObject { task: task.clone() },
             )),
         };
         Ok(pb::GrantObject {

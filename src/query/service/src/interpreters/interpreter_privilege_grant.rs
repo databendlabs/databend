@@ -101,6 +101,9 @@ impl GrantPrivilegeInterpreter {
             GrantObject::UDF(name) => Ok(OwnershipObject::UDF {
                 name: name.to_string(),
             }),
+            GrantObject::Task(name) => Ok(OwnershipObject::Task {
+                name: name.to_string(),
+            }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),

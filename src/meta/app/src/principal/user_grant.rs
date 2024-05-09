@@ -30,6 +30,7 @@ pub enum GrantObject {
     TableById(String, u64, u64),
     UDF(String),
     Stage(String),
+    Task(String),
 }
 
 impl GrantObject {
@@ -62,6 +63,7 @@ impl GrantObject {
             (GrantObject::Table(_, _, _), _) => false,
             (GrantObject::Stage(lstage), GrantObject::Stage(rstage)) => lstage == rstage,
             (GrantObject::UDF(udf), GrantObject::UDF(rudf)) => udf == rudf,
+            (GrantObject::Task(task), GrantObject::Task(rtask)) => task == rtask,
             _ => false,
         }
     }
@@ -82,12 +84,18 @@ impl GrantObject {
             GrantObject::Stage(_) => {
                 UserPrivilegeSet::available_privileges_on_stage(available_ownership)
             }
+            GrantObject::Task(_) => {
+                UserPrivilegeSet::available_privileges_on_task(available_ownership)
+            }
         }
     }
 
     pub fn catalog(&self) -> Option<String> {
         match self {
-            GrantObject::Global | GrantObject::Stage(_) | GrantObject::UDF(_) => None,
+            GrantObject::Global
+            | GrantObject::Stage(_)
+            | GrantObject::UDF(_)
+            | GrantObject::Task(_) => None,
             GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
             GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
         }
@@ -108,6 +116,7 @@ impl fmt::Display for GrantObject {
             }
             GrantObject::UDF(udf) => write!(f, "UDF {udf}"),
             GrantObject::Stage(stage) => write!(f, "STAGE {stage}"),
+            GrantObject::Task(task) => write!(f, "task {task}"),
         }
     }
 }
