@@ -2442,6 +2442,9 @@ Functions overloads:
 0 map_keys(Map(Nothing)) :: Array(Nothing)
 1 map_keys(Map(T0, T1)) :: Array(T0)
 2 map_keys(Map(T0, T1) NULL) :: Array(T0) NULL
+0 map_size(Map(Nothing)) :: UInt8
+1 map_size(Map(T0, T1)) :: UInt64
+2 map_size(Map(T0, T1) NULL) :: UInt64 NULL
 0 map_values(Map(Nothing)) :: Array(Nothing)
 1 map_values(Map(T0, T1)) :: Array(T1)
 2 map_values(Map(T0, T1) NULL) :: Array(T1) NULL

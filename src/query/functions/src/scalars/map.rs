@@ -24,6 +24,8 @@ use databend_common_expression::types::GenericType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
@@ -212,5 +214,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             concatenated_map_builder.commit_row();
             output_map.append_column(&concatenated_map_builder.build());
         }),
+    );
+
+    registry.register_1_arg_core::<EmptyMapType, NumberType<u8>, _, _>(
+        "map_size",
+        |_, _| FunctionDomain::Domain(SimpleDomain { min: 0, max: 0 }),
+        |_, _| Value::Scalar(0u8),
+    );
+
+    registry.register_1_arg::<MapType<GenericType<0>, GenericType<1>>, NumberType<u64>, _, _>(
+        "map_size",
+        |_, _| FunctionDomain::Full,
+        |map, _| map.len() as u64,
     );
 }
