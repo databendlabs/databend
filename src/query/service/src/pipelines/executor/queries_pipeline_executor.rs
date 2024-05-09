@@ -170,7 +170,6 @@ impl QueriesPipelineExecutor {
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
                 let task_info = context.get_task_info();
-                let is_async_completed = context.get_is_async_completed();
                 let execute_res = catch_unwind(|| context.execute_task(Some(self)));
                 match execute_res {
                     Ok(res) => {
@@ -178,7 +177,7 @@ impl QueriesPipelineExecutor {
                             Ok(Some((executed_pid, graph))) => {
                                 // Not scheduled graph if pipeline is finished.
                                 if !self.global_tasks_queue.is_finished()
-                                    && (!graph.is_should_finish() || is_async_completed)
+                                    && !graph.is_should_finish()
                                 {
                                     // We immediately schedule the processor again.
                                     let schedule_queue_res =

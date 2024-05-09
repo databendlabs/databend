@@ -109,10 +109,6 @@ impl ExecutorWorkerContext {
         }
     }
 
-    pub fn get_is_async_completed(&self) -> bool {
-        matches!(self.task, ExecutorTask::AsyncCompleted(_))
-    }
-
     /// # Safety
     pub unsafe fn execute_task(
         &mut self,
