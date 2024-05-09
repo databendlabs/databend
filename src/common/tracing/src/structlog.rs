@@ -164,8 +164,8 @@ fn build_trees(spans: &[&SpanRecord]) -> Vec<TreeNode> {
 
     let roots = raw.keys().filter(|id| !span_ids.contains(id)).cloned();
     roots
-        .flat_map(|root| build_sub_tree(root, &raw).pop())
-        .collect_vec()
+        .filter_map(|root| build_sub_tree(root, &raw).pop())
+        .collect()
 }
 
 fn build_sub_tree(parent_id: SpanId, raw: &HashMap<SpanId, Vec<&SpanRecord>>) -> Vec<TreeNode> {
