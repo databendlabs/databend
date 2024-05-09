@@ -40,6 +40,7 @@ use crate::pipelines::processors::Processor;
 pub enum ScriptRuntime {
     JavaScript(Arc<RwLock<arrow_udf_js::Runtime>>),
     WebAssembly(Arc<RwLock<arrow_udf_wasm::Runtime>>),
+    Python(Arc<RwLock<arrow_udf_python::Runtime>>),
 }
 
 impl ScriptRuntime {
@@ -51,6 +52,11 @@ impl ScriptRuntime {
                     ErrorCode::UDFDataError(format!("Cannot create js runtime: {}", err))
                 }),
             "wasm" => Self::create_wasm_runtime(code),
+            "python" => arrow_udf_python::Runtime::new()
+                .map(|runtime| ScriptRuntime::Python(Arc::new(RwLock::new(runtime))))
+                .map_err(|err| {
+                    ErrorCode::UDFDataError(format!("Cannot create python runtime: {}", err))
+                }),
             _ => Err(ErrorCode::from_string(format!(
                 "Invalid {} lang Runtime not supported",
                 lang
@@ -89,6 +95,16 @@ impl ScriptRuntime {
                     &func.func_name,
                 )
             }
+            ScriptRuntime::Python(runtime) => {
+                let mut runtime = runtime.write();
+                runtime.add_function_with_handler(
+                    &func.name,
+                    arrow_schema.field(0).data_type().clone(),
+                    arrow_udf_python::CallMode::ReturnNullOnNullInput,
+                    code,
+                    &func.func_name,
+                )
+            }
             // Ignore the execution for WASM context
             ScriptRuntime::WebAssembly(_) => Ok(()),
         }?;
@@ -107,6 +123,16 @@ impl ScriptRuntime {
                 runtime.call(&func.name, input_batch).map_err(|err| {
                     ErrorCode::UDFDataError(format!(
                         "JavaScript UDF '{}' execution failed: {}",
+                        func.name, err
+                    ))
+                })?
+            }
+
+            ScriptRuntime::Python(runtime) => {
+                let runtime = runtime.read();
+                runtime.call(&func.name, input_batch).map_err(|err| {
+                    ErrorCode::UDFDataError(format!(
+                        "Python UDF '{}' execution failed: {}",
                         func.name, err
                     ))
                 })?

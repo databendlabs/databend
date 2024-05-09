@@ -105,7 +105,7 @@ members = [
     "src/meta/service",
     # sqllogictest
     "tests/sqllogictests",
-    "src/bendpy",
+    # "src/bendpy",
     # sqlsmith
     "src/tests/sqlsmith",
 ]
@@ -217,6 +217,7 @@ parquet_rs = { package = "parquet", version = "50" }
 # Crates from risingwavelabs
 arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "a8fdfdd" }
 arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "a8fdfdd" }
+arrow-udf-python = { package = "arrow-udf-python", git = "https://github.com/datafuse-extras/arrow-udf", rev = "a8fdfdd" }
 
 # Serialization
 prost = { version = "0.12.1" }
