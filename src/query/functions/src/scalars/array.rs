@@ -662,10 +662,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     );
 
-    registry.register_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, BooleanType, _, _>(
+    registry.register_2_arg_core::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, BooleanType, _, _>(
         "contains",
         |_, _, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs.iter().contains(&rhs),
+        vectorize_2_arg::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, BooleanType>(
+            |lhs, rhs, _| {
+                lhs.map(|col| col.iter().contains(&rhs)).unwrap_or(false)
+            }
+        )
     );
 
     registry.register_passthrough_nullable_1_arg::<EmptyArrayType, UInt64Type, _, _>(
