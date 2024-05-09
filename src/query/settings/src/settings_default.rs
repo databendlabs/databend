@@ -722,7 +722,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("enable_experimental_queries_executor", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental new executor",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

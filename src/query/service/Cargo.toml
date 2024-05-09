@@ -12,7 +12,7 @@ doctest = false
 test = true
 
 [features]
-default = ["simd", "z3-prove"]
+default = ["simd", "z3-prove", "enable_queries_executor"]
 simd = ["databend-common-arrow/simd"]
 
 z3-prove = ["databend-common-sql/z3-prove"]
