@@ -54,7 +54,7 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 17] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 18] = [
     "catalogs",
     "columns",
     "databases",
@@ -64,6 +64,7 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 17] = [
     "views_with_history",
     "password_policies",
     "streams",
+    "streams_terse",
     "virtual_columns",
     "users",
     "roles",

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
@@ -45,10 +46,10 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
 
-pub type StreamsTableWithCheck = StreamsTable<true>;
-pub type StreamsTableWithoutCheck = StreamsTable<false>;
+pub type FullStreamsTable = StreamsTable<true>;
+pub type TerseStreamsTable = StreamsTable<false>;
 
-pub struct StreamsTable<const CHECK_INVALID: bool> {
+pub struct StreamsTable<const FULL: bool> {
     table_info: TableInfo,
 }
 
@@ -147,7 +148,12 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 })
                 .collect::<Vec<_>>();
 
-            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
+            let ownership = if T {
+                user_api.get_ownerships(&tenant).await.unwrap_or_default()
+            } else {
+                HashMap::new()
+            };
+
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
@@ -179,42 +185,44 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                         t_id,
                     ) && table.engine() == "STREAM"
                     {
+                        let stream_info = table.get_table_info();
+                        let stream_table = StreamTable::try_from_table(table.as_ref())?;
+
                         catalogs.push(ctl_name);
                         databases.push(name);
-
-                        let stream_info = table.get_table_info();
-                        names.push(table.name().to_string());
-                        stream_id.push(stream_info.ident.table_id);
-                        created_on.push(stream_info.meta.created_on.timestamp_micros());
-                        updated_on.push(stream_info.meta.updated_on.timestamp_micros());
-                        if ownership.is_empty() {
-                            owner.push(None);
-                        } else {
-                            owner.push(
-                                ownership
-                                    .get(&OwnershipObject::Table {
-                                        catalog_name: ctl_name.to_string(),
-                                        db_id,
-                                        table_id: t_id,
-                                    })
-                                    .map(|role| role.to_string()),
-                            );
-                        }
-                        comment.push(stream_info.meta.comment.clone());
-
-                        let stream_table = StreamTable::try_from_table(table.as_ref())?;
+                        names.push(stream_table.name().to_string());
                         table_name.push(format!(
                             "{}.{}",
                             stream_table.source_table_database(),
                             stream_table.source_table_name()
                         ));
                         mode.push(stream_table.mode().to_string());
-                        table_version.push(stream_table.offset());
-                        table_id.push(stream_table.source_table_id());
-                        snapshot_location.push(stream_table.snapshot_loc());
 
-                        let mut reason = "".to_string();
                         if T {
+                            stream_id.push(stream_info.ident.table_id);
+                            created_on.push(stream_info.meta.created_on.timestamp_micros());
+                            updated_on.push(stream_info.meta.updated_on.timestamp_micros());
+
+                            if ownership.is_empty() {
+                                owner.push(None);
+                            } else {
+                                owner.push(
+                                    ownership
+                                        .get(&OwnershipObject::Table {
+                                            catalog_name: ctl_name.to_string(),
+                                            db_id,
+                                            table_id: t_id,
+                                        })
+                                        .map(|role| role.to_string()),
+                                );
+                            }
+                            comment.push(stream_info.meta.comment.clone());
+
+                            table_version.push(stream_table.offset());
+                            table_id.push(stream_table.source_table_id());
+                            snapshot_location.push(stream_table.snapshot_loc());
+
+                            let mut reason = "".to_string();
                             match stream_table.source_table(ctx.clone()).await {
                                 Ok(source) => {
                                     let fuse_table = FuseTable::try_from_table(source.as_ref())?;
@@ -232,67 +240,83 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                                     reason = e.display_text();
                                 }
                             }
+                            invalid_reason.push(reason);
                         }
-                        invalid_reason.push(reason);
                     }
                 }
             }
         }
 
-        Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(catalogs),
-            StringType::from_data(databases),
-            StringType::from_data(names),
-            UInt64Type::from_data(stream_id),
-            TimestampType::from_data(created_on),
-            TimestampType::from_data(updated_on),
-            StringType::from_data(mode),
-            StringType::from_data(comment),
-            StringType::from_data(table_name),
-            UInt64Type::from_data(table_id),
-            UInt64Type::from_data(table_version),
-            StringType::from_opt_data(snapshot_location),
-            StringType::from_data(invalid_reason),
-            StringType::from_opt_data(owner),
-        ]))
+        if T {
+            Ok(DataBlock::new_from_columns(vec![
+                StringType::from_data(catalogs),
+                StringType::from_data(databases),
+                StringType::from_data(names),
+                UInt64Type::from_data(stream_id),
+                TimestampType::from_data(created_on),
+                TimestampType::from_data(updated_on),
+                StringType::from_data(mode),
+                StringType::from_data(comment),
+                StringType::from_data(table_name),
+                UInt64Type::from_data(table_id),
+                UInt64Type::from_data(table_version),
+                StringType::from_opt_data(snapshot_location),
+                StringType::from_data(invalid_reason),
+                StringType::from_opt_data(owner),
+            ]))
+        } else {
+            Ok(DataBlock::new_from_columns(vec![
+                StringType::from_data(catalogs),
+                StringType::from_data(databases),
+                StringType::from_data(names),
+                StringType::from_data(mode),
+                StringType::from_data(table_name),
+            ]))
+        }
     }
 }
 
 impl<const T: bool> StreamsTable<T> {
     pub fn schema() -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![
-            TableField::new("catalog", TableDataType::String),
-            TableField::new("database", TableDataType::String),
-            TableField::new("name", TableDataType::String),
-            TableField::new("stream_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("created_on", TableDataType::Timestamp),
-            TableField::new("updated_on", TableDataType::Timestamp),
-            TableField::new("mode", TableDataType::String),
-            TableField::new("comment", TableDataType::String),
-            TableField::new("table_name", TableDataType::String),
-            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new(
-                "table_version",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "snapshot_location",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-            TableField::new("invalid_reason", TableDataType::String),
-            TableField::new(
-                "owner",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-        ])
+        if T {
+            TableSchemaRefExt::create(vec![
+                TableField::new("catalog", TableDataType::String),
+                TableField::new("database", TableDataType::String),
+                TableField::new("name", TableDataType::String),
+                TableField::new("stream_id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("created_on", TableDataType::Timestamp),
+                TableField::new("updated_on", TableDataType::Timestamp),
+                TableField::new("mode", TableDataType::String),
+                TableField::new("comment", TableDataType::String),
+                TableField::new("table_name", TableDataType::String),
+                TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new(
+                    "table_version",
+                    TableDataType::Number(NumberDataType::UInt64),
+                ),
+                TableField::new(
+                    "snapshot_location",
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+                TableField::new("invalid_reason", TableDataType::String),
+                TableField::new(
+                    "owner",
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+            ])
+        } else {
+            TableSchemaRefExt::create(vec![
+                TableField::new("catalog", TableDataType::String),
+                TableField::new("database", TableDataType::String),
+                TableField::new("name", TableDataType::String),
+                TableField::new("mode", TableDataType::String),
+                TableField::new("table_name", TableDataType::String),
+            ])
+        }
     }
 
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let name = if T {
-            "streams"
-        } else {
-            "streams_without_check"
-        };
+        let name = if T { "streams" } else { "streams_terse" };
         let table_info = TableInfo {
             desc: format!("'system'.'{name}'"),
             name: name.to_owned(),
