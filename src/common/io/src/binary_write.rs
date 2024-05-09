@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bytes::BufMut;
 use databend_common_exception::Result;
 use micromarshal::Marshal;
 
@@ -81,62 +80,6 @@ where T: std::io::Write
     fn write_raw(&mut self, text: impl AsRef<[u8]>) -> Result<()> {
         let bytes = text.as_ref();
         self.write_all(bytes)?;
-        Ok(())
-    }
-}
-
-// Another trait like BinaryWrite
-// This is aimed to make BufMut to implement it
-pub trait BinaryWriteBuf {
-    fn write_scalar<V>(&mut self, v: &V) -> Result<()>
-    where V: Marshal + StatBuffer;
-
-    fn write_opt_scalar<V>(&mut self, v: &Option<V>) -> Result<()>
-    where V: Marshal + StatBuffer {
-        match v {
-            Some(v) => {
-                self.write_scalar(&1u8)?;
-                self.write_scalar(v)
-            }
-            None => self.write_scalar(&0u8),
-        }
-    }
-    fn write_string(&mut self, text: impl AsRef<str>) -> Result<()>;
-    fn write_uvarint(&mut self, v: u64) -> Result<()>;
-    fn write_binary(&mut self, text: impl AsRef<[u8]>) -> Result<()>;
-}
-
-// We must ensure there are enough buffer to write because BytesMut do not implicitly grow the buffer.
-impl<T> BinaryWriteBuf for T
-where T: BufMut
-{
-    fn write_scalar<V>(&mut self, v: &V) -> Result<()>
-    where V: Marshal + StatBuffer {
-        let mut buffer = V::buffer();
-        v.marshal(buffer.as_mut());
-
-        self.put_slice(buffer.as_ref());
-        Ok(())
-    }
-
-    fn write_string(&mut self, text: impl AsRef<str>) -> Result<()> {
-        let bytes = text.as_ref().as_bytes();
-        self.write_uvarint(bytes.len() as u64)?;
-        self.put_slice(bytes);
-        Ok(())
-    }
-
-    fn write_uvarint(&mut self, v: u64) -> Result<()> {
-        let mut scratch = [0u8; MAX_VARINT_LEN64];
-        let ln = put_uvarint(&mut scratch[..], v);
-        self.put_slice(&scratch[..ln]);
-        Ok(())
-    }
-
-    fn write_binary(&mut self, text: impl AsRef<[u8]>) -> Result<()> {
-        let bytes = text.as_ref();
-        self.write_uvarint(bytes.len() as u64)?;
-        self.put_slice(bytes);
         Ok(())
     }
 }
