@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -46,12 +45,15 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
 
-pub struct StreamsTable {
+pub type StreamsTableWithCheck = StreamsTable<true>;
+pub type StreamsTableWithoutCheck = StreamsTable<false>;
+
+pub struct StreamsTable<const CHECK_INVALID: bool> {
     table_info: TableInfo,
 }
 
 #[async_trait::async_trait]
-impl AsyncSystemTable for StreamsTable {
+impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
     const NAME: &'static str = "system.streams";
 
     fn get_table_info(&self) -> &TableInfo {
@@ -67,13 +69,13 @@ impl AsyncSystemTable for StreamsTable {
         let tenant = ctx.get_tenant();
 
         let catalog_mgr = CatalogManager::instance();
-        let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
+        let ctls = catalog_mgr
             .list_catalogs(&tenant, ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
-            .collect();
-
+            .collect::<Vec<_>>();
+        let visibility_checker = ctx.get_visibility_checker().await?;
         let user_api = UserApiProvider::instance();
 
         let mut catalogs = vec![];
@@ -91,8 +93,6 @@ impl AsyncSystemTable for StreamsTable {
         let mut table_version = vec![];
         let mut snapshot_location = vec![];
 
-        let visibility_checker = ctx.get_visibility_checker().await?;
-
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
@@ -109,15 +109,30 @@ impl AsyncSystemTable for StreamsTable {
                         }
                     });
                     for db in db_name {
-                        if let Ok(database) = ctl.get_database(&tenant, db.as_str()).await {
-                            dbs.push(database);
+                        match ctl.get_database(&tenant, db.as_str()).await {
+                            Ok(database) => dbs.push(database),
+                            Err(err) => {
+                                let msg = format!("Failed to get database: {}, {}", db, err);
+                                warn!("{}", msg);
+                                ctx.push_warning(msg);
+                            }
                         }
                     }
                 }
             }
 
             if dbs.is_empty() {
-                dbs = ctl.list_databases(&tenant).await?;
+                dbs = match ctl.list_databases(&tenant).await {
+                    Ok(dbs) => dbs,
+                    Err(err) => {
+                        let msg =
+                            format!("List databases failed on catalog {}: {}", ctl.name(), err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+
+                        vec![]
+                    }
+                }
             }
             let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
@@ -131,24 +146,26 @@ impl AsyncSystemTable for StreamsTable {
                     )
                 })
                 .collect::<Vec<_>>();
+
+            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
+                let db_id = db.get_db_info().ident.db_id;
                 let name: &str = Box::leak(name);
                 let tables = match ctl.list_tables(&tenant, name).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // Swallow the errors related with sharing. Listing tables in a shared database
-                        // is easy to get errors with invalid configs, but system.tables is better not
+                        // is easy to get errors with invalid configs, but system.streams is better not
                         // to be affected by it.
-                        if db.get_db_info().meta.from_share.is_some() {
-                            warn!("list tables failed on sharing db {}: {}", db.name(), err);
-                            continue;
-                        }
-                        return Err(err);
+                        let msg =
+                            format!("Failed to list tables in database: {}, {}", db.name(), err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+
+                        continue;
                     }
                 };
-
-                let db_id = db.get_db_info().ident.db_id;
 
                 for table in tables {
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
@@ -170,17 +187,19 @@ impl AsyncSystemTable for StreamsTable {
                         stream_id.push(stream_info.ident.table_id);
                         created_on.push(stream_info.meta.created_on.timestamp_micros());
                         updated_on.push(stream_info.meta.updated_on.timestamp_micros());
-                        owner.push(
-                            user_api
-                                .get_ownership(&tenant, &OwnershipObject::Table {
-                                    catalog_name: ctl_name.to_string(),
-                                    db_id,
-                                    table_id: t_id,
-                                })
-                                .await
-                                .ok()
-                                .and_then(|ownership| ownership.map(|o| o.role.clone())),
-                        );
+                        if ownership.is_empty() {
+                            owner.push(None);
+                        } else {
+                            owner.push(
+                                ownership
+                                    .get(&OwnershipObject::Table {
+                                        catalog_name: ctl_name.to_string(),
+                                        db_id,
+                                        table_id: t_id,
+                                    })
+                                    .map(|role| role.to_string()),
+                            );
+                        }
                         comment.push(stream_info.meta.comment.clone());
 
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
@@ -195,21 +214,23 @@ impl AsyncSystemTable for StreamsTable {
                         snapshot_location.push(stream_table.snapshot_loc());
 
                         let mut reason = "".to_string();
-                        match stream_table.source_table(ctx.clone()).await {
-                            Ok(source) => {
-                                let fuse_table = FuseTable::try_from_table(source.as_ref())?;
-                                if let Some(location) = stream_table.snapshot_loc() {
-                                    reason = SnapshotsIO::read_snapshot(
-                                        location,
-                                        fuse_table.get_operator(),
-                                    )
-                                    .await
-                                    .err()
-                                    .map_or("".to_string(), |e| e.display_text());
+                        if T {
+                            match stream_table.source_table(ctx.clone()).await {
+                                Ok(source) => {
+                                    let fuse_table = FuseTable::try_from_table(source.as_ref())?;
+                                    if let Some(location) = stream_table.snapshot_loc() {
+                                        reason = SnapshotsIO::read_snapshot(
+                                            location,
+                                            fuse_table.get_operator(),
+                                        )
+                                        .await
+                                        .err()
+                                        .map_or("".to_string(), |e| e.display_text());
+                                    }
                                 }
-                            }
-                            Err(e) => {
-                                reason = e.display_text();
+                                Err(e) => {
+                                    reason = e.display_text();
+                                }
                             }
                         }
                         invalid_reason.push(reason);
@@ -237,7 +258,7 @@ impl AsyncSystemTable for StreamsTable {
     }
 }
 
-impl StreamsTable {
+impl<const T: bool> StreamsTable<T> {
     pub fn schema() -> TableSchemaRef {
         TableSchemaRefExt::create(vec![
             TableField::new("catalog", TableDataType::String),
@@ -267,17 +288,22 @@ impl StreamsTable {
     }
 
     pub fn create(table_id: u64) -> Arc<dyn Table> {
+        let name = if T {
+            "streams"
+        } else {
+            "streams_without_check"
+        };
         let table_info = TableInfo {
-            desc: "'system'.'streams'".to_string(),
-            name: "streams".to_string(),
+            desc: format!("'system'.'{name}'"),
+            name: name.to_owned(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
-                schema: StreamsTable::schema(),
+                schema: StreamsTable::<T>::schema(),
                 engine: "SystemStreams".to_string(),
                 ..Default::default()
             },
             ..Default::default()
         };
-        AsyncOneBlockSystemTable::create(StreamsTable { table_info })
+        AsyncOneBlockSystemTable::create(StreamsTable::<T> { table_info })
     }
 }

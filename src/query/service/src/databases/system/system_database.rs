@@ -52,7 +52,8 @@ use databend_common_storages_system::QueryLogTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::SettingsTable;
 use databend_common_storages_system::StagesTable;
-use databend_common_storages_system::StreamsTable;
+use databend_common_storages_system::StreamsTableWithCheck;
+use databend_common_storages_system::StreamsTableWithoutCheck;
 use databend_common_storages_system::TableFunctionsTable;
 use databend_common_storages_system::TablesTableWithHistory;
 use databend_common_storages_system::TablesTableWithoutHistory;
@@ -97,7 +98,8 @@ impl SystemDatabase {
             TablesTableWithHistory::create(sys_db_meta.next_table_id()),
             ClustersTable::create(sys_db_meta.next_table_id()),
             DatabasesTable::create(sys_db_meta.next_table_id()),
-            StreamsTable::create(sys_db_meta.next_table_id()),
+            StreamsTableWithCheck::create(sys_db_meta.next_table_id()),
+            StreamsTableWithoutCheck::create(sys_db_meta.next_table_id()),
             ProcessesTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),
             MetricsTable::create(sys_db_meta.next_table_id()),

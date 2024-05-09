@@ -128,7 +128,11 @@ impl Binder {
 
         let database = self.check_database_exist(catalog, database).await?;
 
-        let mut select_builder = SelectBuilder::from("system.streams");
+        let mut select_builder = if *full {
+            SelectBuilder::from("system.streams")
+        } else {
+            SelectBuilder::from("system.streams_without_check")
+        };
         select_builder
             .with_column("created_on")
             .with_column("name")
