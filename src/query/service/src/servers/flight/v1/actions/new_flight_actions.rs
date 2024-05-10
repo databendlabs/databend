@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value;
 
 use crate::servers::flight::v1::actions::create_data_channel::create_data_channel;
 use crate::servers::flight::v1::actions::create_query_fragments::create_query_fragments;
@@ -35,7 +34,7 @@ pub struct FlightActions {
     #[allow(clippy::type_complexity)]
     actions: HashMap<
         String,
-        Box<dyn Fn(Value) -> BoxFuture<'static, Result<Value>> + Send + Sync + 'static>,
+        Box<dyn Fn(&[u8]) -> BoxFuture<'static, Result<Vec<u8>>> + Send + Sync + 'static>,
     >,
 }
 
@@ -48,7 +47,7 @@ impl FlightActions {
 
     pub fn action<Req, Res, Fut, F>(mut self, path: impl Into<String>, t: F) -> Self
     where
-        Req: Serialize + for<'de> Deserialize<'de>,
+        Req: Serialize + for<'de> Deserialize<'de> + Send + 'static,
         Res: Serialize + for<'de> Deserialize<'de>,
         Fut: Future<Output = Result<Res>> + Send + 'static,
         F: Fn(Req) -> Fut + Send + Sync + 'static,
@@ -58,21 +57,23 @@ impl FlightActions {
         self.actions.insert(
             path.clone(),
             Box::new(move |request| {
+                let request = serde_json::from_slice::<Req>(request).map_err(|cause| {
+                    ErrorCode::BadArguments(format!(
+                        "Cannot parse request for {}, cause: {:?}",
+                        path, cause
+                    ))
+                });
+
                 let path = path.clone();
                 let t = t.clone();
                 Box::pin(async move {
-                    let request = serde_json::from_value(request).map_err(|cause| {
-                        ErrorCode::BadArguments(format!(
-                            "Cannot parse request for {}, cause: {:?}",
-                            path, cause
-                        ))
-                    })?;
+                    let request = request?;
 
                     let future = catch_unwind(move || t(request))?;
 
                     let future = CatchUnwindFuture::create(future);
                     match future.await.flatten() {
-                        Ok(v) => serde_json::to_value(v).map_err(|cause| {
+                        Ok(v) => serde_json::to_vec(&v).map_err(|cause| {
                             ErrorCode::BadBytes(format!(
                                 "Cannot serialize response for {}, cause: {:?}",
                                 path, cause
@@ -87,7 +88,7 @@ impl FlightActions {
         self
     }
 
-    pub async fn do_action(&self, path: &str, data: &[u8]) -> Result<Value> {
+    pub async fn do_action(&self, path: &str, data: &[u8]) -> Result<Vec<u8>> {
         let req = serde_json::from_slice(data).map_err(|cause| {
             ErrorCode::BadArguments(format!(
                 "Cannot parse request for {}, cause: {:?}",

@@ -156,13 +156,10 @@ impl FlightService for DatabendQueryFlightService {
             .await
         {
             Err(cause) => Err(cause.into()),
-            Ok(res) => match serde_json::to_vec(&res) {
-                Err(_cause) => Err(Status::internal("response serialize error.")),
-                Ok(body) => Ok(RawResponse::new(
-                    Box::pin(tokio_stream::once(Ok(FlightResult { body })))
-                        as FlightStream<FlightResult>,
-                )),
-            },
+            Ok(body) => Ok(RawResponse::new(
+                Box::pin(tokio_stream::once(Ok(FlightResult { body })))
+                    as FlightStream<FlightResult>,
+            )),
         }
     }
 
