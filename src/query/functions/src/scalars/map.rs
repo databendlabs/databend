@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
@@ -28,12 +27,10 @@ use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
-use databend_common_expression::types::StringType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_hashtable::StackHashSet;
 use siphasher::sip128::Hasher128;
@@ -232,21 +229,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         |map, _| map.len() as u64,
     );
 
-    registry.register_2_arg_core::<EmptyMapType, StringType, BooleanType, _, _>(
+    registry.register_2_arg_core::<EmptyMapType, GenericType<0>, BooleanType, _, _>(
         "map_contains_key",
-        |_, _, _| {
-            FunctionDomain::Domain(BooleanDomain {
-                has_false: true,
-                has_true: false,
-            })
-        },
+        |_, _, _| FunctionDomain::Full,
         |_, _, _| Value::Scalar(false),
     );
 
     registry
-        .register_2_arg::<MapType<GenericType<0>, GenericType<1>>, StringType, BooleanType, _, _>(
+        .register_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, BooleanType, _, _>(
             "map_contains_key",
             |_, _, _| FunctionDomain::Full,
-            |map, key, _| map.iter().any(|(k, _)| k == ScalarRef::String(key)),
+            |map, key, _| {
+                map.iter()
+                    .any(|(k, _)| format!("{:?}", k) == format!("{:?}", key))
+            },
         );
 }

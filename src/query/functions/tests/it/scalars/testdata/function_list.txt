@@ -2440,6 +2440,7 @@ Functions overloads:
 1 map_cat(Map(Nothing) NULL, Map(Nothing) NULL) :: Map(Nothing) NULL
 2 map_cat(Map(T0, T1), Map(T0, T1)) :: Map(T0, T1)
 3 map_cat(Map(T0, T1) NULL, Map(T0, T1) NULL) :: Map(T0, T1) NULL
+0 map_contains_key(Map(T0, T1), T0) :: Boolean
 0 map_keys(Map(Nothing)) :: Array(Nothing)
 1 map_keys(Map(T0, T1)) :: Array(T0)
 2 map_keys(Map(T0, T1) NULL) :: Array(T0) NULL
