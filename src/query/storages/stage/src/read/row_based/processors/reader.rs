@@ -90,7 +90,6 @@ impl BytesReader {
                 }
                 state.read_offset += n;
             }
-            let is_eof = state.read_offset == state.file.size;
 
             let size = self.read_batch_size.min(state.buf.len());
             // TODO: we can use bytes instead to better reuse existing allocation.
@@ -105,6 +104,8 @@ impl BytesReader {
             debug!("read {} bytes", size);
             let offset = state.consume_offset;
             state.consume_offset += size;
+            let is_eof = state.consume_offset == state.file.size;
+
             let batch = Box::new(BytesBatch {
                 data: buffer,
                 path: state.file.path.clone(),
