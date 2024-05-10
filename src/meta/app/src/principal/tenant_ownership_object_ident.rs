@@ -253,7 +253,7 @@ mod tests {
             assert_eq!(role_grantee, parsed);
         }
 
-        // udf
+        // task
         {
             let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),

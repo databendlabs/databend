@@ -18003,6 +18003,120 @@ CreateDynamicTable(
 
 
 ---------- Input ----------
+GRANT CREATE TASK ON *.* TO role role1
+---------- Output ---------
+GRANT CREATE DATABASE ON *.* TO ROLE 'role1'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                CreateDatabase,
+            ],
+            level: Global,
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ownership ON task MyTask1 TO role role1
+---------- Output ---------
+GRANT OWNERSHIP ON TASK MyTask1 TO ROLE 'role1'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Task(
+                "MyTask1",
+            ),
+        },
+        principal: Role(
+            "role1",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT ownership ON task MyTask1 TO role role2
+---------- Output ---------
+GRANT OWNERSHIP ON TASK MyTask1 TO ROLE 'role2'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Task(
+                "MyTask1",
+            ),
+        },
+        principal: Role(
+            "role2",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT drop ON task MyTask1 TO u2
+---------- Output ---------
+GRANT DROP ON TASK MyTask1 TO USER 'u2'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Drop,
+            ],
+            level: Task(
+                "MyTask1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u2",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT alter ON task MyTask1 TO u1
+---------- Output ---------
+GRANT ALTER ON TASK MyTask1 TO USER 'u1'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Alter,
+            ],
+            level: Task(
+                "MyTask1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENTS = 'This is test task 1' database = 'target', timezone = 'America/Los Angeles' AS SELECT * FROM MyTable1
