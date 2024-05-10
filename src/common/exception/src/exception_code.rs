@@ -152,6 +152,10 @@ build_exceptions! {
     UnmatchMaskPolicyReturnType(1121),
     Timeout(1122),
     Outdated(1123),
+    // sequence
+    OutofSequenceRange(1124),
+    WrongSequenceCount(1125),
+    UnknownSequence(1126),
 
     // Data Related Errors
 
@@ -204,7 +208,7 @@ build_exceptions! {
 
     // Geometry errors.
     GeometryError(1801),
-
+    InvalidGeometryFormat(1802),
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
@@ -347,6 +351,9 @@ build_exceptions! {
     IllegalStream(2733),
     StreamVersionMismatched(2734),
 
+    // dynamic error codes.
+    IllegalDynamicTable(2740),
+
     // Variable error codes.
     UnknownVariable(2801),
     OnlySupportAsciiChars(2802),
@@ -360,6 +367,9 @@ build_exceptions! {
     // Script error codes.
     ScriptSemanticError(3001),
     ScriptExecutionError(3002),
+
+    // sequence
+    SequenceError(3101),
 }
 
 // Storage errors [3001, 4000].

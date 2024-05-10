@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
@@ -70,7 +71,7 @@ pub async fn list_stage_files(
 ) -> Result<Vec<StageFileInfo>> {
     let op = init_stage_operator(stage_info)?;
     let infos = files_info
-        .list(&op, thread_num, false, max_files)
+        .list(&op, thread_num, max_files)
         .await?
         .into_iter()
         .collect::<Vec<_>>();
@@ -81,5 +82,17 @@ impl Debug for StageTableInfo {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.stage_info)
+    }
+}
+
+impl Display for StageTableInfo {
+    // Ignore the schema.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "StageName {}", self.stage_info.stage_name)?;
+        write!(f, "StageType {}", self.stage_info.stage_type)?;
+        write!(f, "StageParam {}", self.stage_info.stage_params.storage)?;
+        write!(f, "IsTemporary {}", self.stage_info.is_temporary)?;
+        write!(f, "FileFormatParams {}", self.stage_info.file_format_params)?;
+        write!(f, "CopyOption {}", self.stage_info.copy_options)
     }
 }

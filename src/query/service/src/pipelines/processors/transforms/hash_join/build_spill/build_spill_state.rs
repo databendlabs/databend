@@ -44,7 +44,8 @@ pub struct BuildSpillState {
 impl BuildSpillState {
     pub fn create(ctx: Arc<QueryContext>, build_state: Arc<HashJoinBuildState>) -> Result<Self> {
         let tenant = ctx.get_tenant();
-        let spill_config = SpillerConfig::create(query_spill_prefix(tenant.name()));
+        let spill_config =
+            SpillerConfig::create(query_spill_prefix(tenant.tenant_name(), &ctx.get_id()));
         let operator = DataOperator::instance().operator();
         let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinBuild)?;
         Ok(Self {

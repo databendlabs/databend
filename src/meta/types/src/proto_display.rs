@@ -53,8 +53,24 @@ impl<'a, T: Display> Display for OptionDisplay<'a, T> {
     }
 }
 
-struct VecDisplay<'a, T: Display> {
+pub struct VecDisplay<'a, T: Display> {
+    at_most: Option<usize>,
     vec: &'a Vec<T>,
+}
+
+impl<'a, T> VecDisplay<'a, T>
+where T: Display
+{
+    pub fn new(vec: &'a Vec<T>) -> Self {
+        VecDisplay { at_most: None, vec }
+    }
+
+    pub fn new_at_most(vec: &'a Vec<T>, at_most: usize) -> Self {
+        VecDisplay {
+            at_most: Some(at_most),
+            vec,
+        }
+    }
 }
 
 impl<'a, T: Display> Display for VecDisplay<'a, T> {
@@ -64,6 +80,13 @@ impl<'a, T: Display> Display for VecDisplay<'a, T> {
         for (i, t) in self.vec.iter().enumerate() {
             if i > 0 {
                 write!(f, ",")?;
+            }
+
+            if let Some(at_most) = self.at_most {
+                if i >= at_most {
+                    write!(f, "...")?;
+                    break;
+                }
             }
 
             write!(f, "{}", t)?;
@@ -78,13 +101,9 @@ impl Display for TxnRequest {
         write!(
             f,
             "TxnRequest{{ if:{} then:{} else:{} }}",
-            VecDisplay {
-                vec: &self.condition
-            },
-            VecDisplay { vec: &self.if_then },
-            VecDisplay {
-                vec: &self.else_then
-            },
+            VecDisplay::new_at_most(&self.condition, 5),
+            VecDisplay::new_at_most(&self.if_then, 5),
+            VecDisplay::new_at_most(&self.else_then, 5),
         )
     }
 }
@@ -189,9 +208,7 @@ impl Display for TxnReply {
             f,
             "TxnReply{{ success: {}, responses: {}, error: {}}}",
             self.success,
-            VecDisplay {
-                vec: &self.responses
-            },
+            VecDisplay::new_at_most(&self.responses, 5),
             self.error
         )
     }
@@ -261,5 +278,31 @@ impl Display for TxnDeleteByPrefixResponse {
             "TxnDeleteByPrefixResponse prefix={},count={}",
             self.prefix, self.count
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_vec_display() {
+        assert_eq!(
+            format!("{}", super::VecDisplay::new(&vec![1, 2, 3])),
+            "[1,2,3]"
+        );
+
+        assert_eq!(
+            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3], 3)),
+            "[1,2,3]"
+        );
+
+        assert_eq!(
+            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3, 4], 3)),
+            "[1,2,3,...]"
+        );
+
+        assert_eq!(
+            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3, 4], 0)),
+            "[...]"
+        );
     }
 }

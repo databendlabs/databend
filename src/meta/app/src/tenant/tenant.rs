@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`Tenant`] is a struct that represents a tenant with runtime config in it.
+//! [`UninitTenant`] is a shadow struct without runtime config.
+
 use std::fmt::Display;
 
 use databend_common_meta_types::NonEmptyString;
@@ -56,7 +59,7 @@ impl Tenant {
         }
     }
 
-    pub fn name(&self) -> &str {
+    pub fn tenant_name(&self) -> &str {
         &self.tenant
     }
 
@@ -90,9 +93,24 @@ mod kvapi_key_impl {
     use std::convert::Infallible;
 
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
     use databend_common_meta_kvapi::kvapi::KeyError;
 
     use crate::tenant::tenant::Tenant;
+
+    impl kvapi::KeyCodec for Tenant {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_str(&self.tenant)
+        }
+
+        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
+            let tenant = p.next_nonempty()?;
+
+            Ok(Self {
+                tenant: tenant.to_string(),
+            })
+        }
+    }
 
     impl kvapi::Key for Tenant {
         const PREFIX: &'static str = "__fd_tenant";
@@ -100,21 +118,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             None
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            p.done()?;
-
-            Ok(Self { tenant })
         }
     }
 }

@@ -24,6 +24,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -35,6 +37,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -47,6 +51,10 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -64,13 +72,13 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -85,6 +93,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use databend_storages_common_txn::TxnManagerRef;
 use databend_storages_common_txn::TxnState;
 
@@ -123,7 +132,7 @@ impl Catalog for SessionCatalog {
     /// Database.
 
     // Get the database by name.
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         self.inner.get_database(tenant, db_name).await
     }
 
@@ -216,13 +225,13 @@ impl Catalog for SessionCatalog {
     }
 
     // Get the table meta by meta id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         let state = self.txn_mgr.lock().state();
         match state {
             TxnState::Active => {
                 let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
                 if let Some(t) = mutated_table {
-                    Ok((t.ident, Arc::new(t.meta.clone())))
+                    Ok(Some(SeqV::new(t.ident.seq, t.meta.clone())))
                 } else {
                     self.inner.get_table_meta_by_id(table_id).await
                 }
@@ -231,26 +240,10 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    // Get the table name by meta id.
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::Active => {
-                let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
-                if let Some(t) = mutated_table {
-                    Ok(t.name.clone())
-                } else {
-                    self.inner.get_table_name_by_id(table_id).await
-                }
-            }
-            _ => self.inner.get_table_name_by_id(table_id).await,
-        }
-    }
-
     // Mget the dbs name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
         self.inner.mget_table_names_by_ids(tenant, table_ids).await
@@ -273,7 +266,7 @@ impl Catalog for SessionCatalog {
     // Get one table by db and table name.
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -301,12 +294,12 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         self.inner.list_tables(tenant, db_name).await
     }
     async fn list_tables_history(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         self.inner.list_tables_history(tenant, db_name).await
@@ -335,13 +328,17 @@ impl Catalog for SessionCatalog {
         self.inner.undrop_table(req).await
     }
 
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        self.inner.undrop_table_by_id(req).await
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         self.inner.rename_table(req).await
     }
 
     async fn upsert_table_option(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -387,7 +384,7 @@ impl Catalog for SessionCatalog {
 
     async fn get_table_copied_file_info(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -479,5 +476,23 @@ impl Catalog for SessionCatalog {
         if is_active {
             self.txn_mgr.lock().upsert_stream_table(stream, source);
         }
+    }
+
+    async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        self.inner.create_sequence(req).await
+    }
+    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
+        self.inner.get_sequence(req).await
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        self.inner.get_sequence_next_value(req).await
+    }
+
+    async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
+        self.inner.drop_sequence(req).await
     }
 }

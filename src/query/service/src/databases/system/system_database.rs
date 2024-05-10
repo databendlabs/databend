@@ -16,10 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_config::InnerConfig;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::BackgroundJobTable;
 use databend_common_storages_system::BackgroundTaskTable;
@@ -47,7 +47,6 @@ use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::ProcessorProfileTable;
-use databend_common_storages_system::QueriesQueueTable;
 use databend_common_storages_system::QueryCacheTable;
 use databend_common_storages_system::QueryLogTable;
 use databend_common_storages_system::RolesTable;
@@ -60,7 +59,6 @@ use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
-use databend_common_storages_system::TracingTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::ViewsTableWithHistory;
@@ -100,9 +98,7 @@ impl SystemDatabase {
             ClustersTable::create(sys_db_meta.next_table_id()),
             DatabasesTable::create(sys_db_meta.next_table_id()),
             StreamsTable::create(sys_db_meta.next_table_id()),
-            Arc::new(TracingTable::create(sys_db_meta.next_table_id())),
             ProcessesTable::create(sys_db_meta.next_table_id()),
-            QueriesQueueTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),
             MetricsTable::create(sys_db_meta.next_table_id()),
             MallocStatsTable::create(sys_db_meta.next_table_id()),
@@ -161,10 +157,7 @@ impl SystemDatabase {
                 db_id: sys_db_meta.next_db_id(),
                 seq: 0,
             },
-            name_ident: DatabaseNameIdent {
-                tenant: Tenant::new_literal("dummy"),
-                db_name: "system".to_string(),
-            },
+            name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), "system"),
             meta: DatabaseMeta {
                 engine: "SYSTEM".to_string(),
                 ..Default::default()

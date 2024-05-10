@@ -33,11 +33,13 @@ use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
 use super::CreateOption;
-use crate::schema::database::DatabaseNameIdent;
+use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
@@ -76,14 +78,14 @@ pub struct TableNameIdent {
 
 impl TableNameIdent {
     pub fn new(
-        tenant: Tenant,
-        db_name: impl Into<String>,
-        table_name: impl Into<String>,
+        tenant: impl ToTenant,
+        db_name: impl ToString,
+        table_name: impl ToString,
     ) -> TableNameIdent {
         TableNameIdent {
-            tenant,
-            db_name: db_name.into(),
-            table_name: table_name.into(),
+            tenant: tenant.to_tenant(),
+            db_name: db_name.to_string(),
+            table_name: table_name.to_string(),
         }
     }
 
@@ -96,10 +98,7 @@ impl TableNameIdent {
     }
 
     pub fn db_name_ident(&self) -> DatabaseNameIdent {
-        DatabaseNameIdent {
-            tenant: self.tenant.clone(),
-            db_name: self.db_name.clone(),
-        }
+        DatabaseNameIdent::new(&self.tenant, &self.db_name)
     }
 }
 
@@ -108,7 +107,7 @@ impl Display for TableNameIdent {
         write!(
             f,
             "'{}'.'{}'.'{}'",
-            self.tenant.name(),
+            self.tenant.tenant_name(),
             self.db_name,
             self.table_name
         )
@@ -144,15 +143,16 @@ impl Display for TableId {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct TableIdListKey {
-    pub db_id: u64,
+/// The meta-service key for storing table id history ever used by a table name
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct TableIdHistoryIdent {
+    pub database_id: u64,
     pub table_name: String,
 }
 
-impl Display for TableIdListKey {
+impl Display for TableIdHistoryIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.'{}'", self.db_id, self.table_name)
+        write!(f, "{}.'{}'", self.database_id, self.table_name)
     }
 }
 
@@ -161,25 +161,7 @@ impl Display for TableIdListKey {
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(database_type::ShareNameIdent),
-}
-
-mod database_type {
-    /// Same as  [`crate::share::ShareNameIdent`] but with serde support for being used as a value.
-    /// while [`crate::share::ShareNameIdent`] can only be used as key.
-    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-    pub struct ShareNameIdent {
-        pub tenant: String,
-        pub share_name: String,
-    }
-    impl From<crate::share::ShareNameIdent> for ShareNameIdent {
-        fn from(value: crate::share::ShareNameIdent) -> Self {
-            Self {
-                tenant: value.tenant.name().to_string(),
-                share_name: value.share_name,
-            }
-        }
-    }
+    ShareDB(ShareNameIdentRaw),
 }
 
 impl Display for DatabaseType {
@@ -192,7 +174,8 @@ impl Display for DatabaseType {
                 write!(
                     f,
                     "share database: {}-{}",
-                    share_ident.tenant, share_ident.share_name
+                    share_ident.tenant_name(),
+                    share_ident.name()
                 )
             }
         }
@@ -494,6 +477,14 @@ pub struct CreateTableReq {
     pub create_option: CreateOption,
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
+
+    /// Set it to true if a dropped table needs to be created,
+    ///
+    /// since [CreateOption] is used by various scenarios, we use
+    /// this dedicated flag to mark this behavior.
+    ///
+    /// currently used in atomic CTAS.
+    pub as_dropped: bool,
 }
 
 impl CreateTableReq {
@@ -514,7 +505,7 @@ impl Display for CreateTableReq {
             CreateOption::Create => write!(
                 f,
                 "create_table:{}/{}-{}={}",
-                self.tenant().name(),
+                self.tenant().tenant_name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -522,7 +513,7 @@ impl Display for CreateTableReq {
             CreateOption::CreateIfNotExists => write!(
                 f,
                 "create_table_if_not_exists:{}/{}-{}={}",
-                self.tenant().name(),
+                self.tenant().tenant_name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -530,7 +521,7 @@ impl Display for CreateTableReq {
             CreateOption::CreateOrReplace => write!(
                 f,
                 "create_or_replace_table:{}/{}-{}={}",
-                self.tenant().name(),
+                self.tenant().tenant_name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -542,6 +533,8 @@ impl Display for CreateTableReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableReply {
     pub table_id: u64,
+    pub table_id_seq: Option<u64>,
+    pub db_id: u64,
     pub new_table: bool,
     pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
 }
@@ -590,6 +583,16 @@ pub struct UndropTableReq {
     pub name_ident: TableNameIdent,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UndropTableByIdReq {
+    pub name_ident: TableNameIdent,
+    pub db_id: MetaId,
+    pub table_id: MetaId,
+    pub table_id_seq: u64,
+    // Indicates whether to forcefully replace an existing table with the same name, if it exists.
+    pub force_replace: bool,
+}
+
 impl UndropTableReq {
     pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant
@@ -607,7 +610,7 @@ impl Display for UndropTableReq {
         write!(
             f,
             "undrop_table:{}/{}-{}",
-            self.tenant().name(),
+            self.tenant().tenant_name(),
             self.db_name(),
             self.table_name()
         )
@@ -642,7 +645,7 @@ impl Display for RenameTableReq {
         write!(
             f,
             "rename_table:{}/{}-{}=>{}-{}",
-            self.tenant().name(),
+            self.tenant().tenant_name(),
             self.db_name(),
             self.table_name(),
             self.new_db_name,
@@ -831,11 +834,7 @@ impl From<(&str, &str, &str)> for GetTableReq {
 }
 
 impl GetTableReq {
-    pub fn new(
-        tenant: &Tenant,
-        db_name: impl Into<String>,
-        table_name: impl Into<String>,
-    ) -> GetTableReq {
+    pub fn new(tenant: &Tenant, db_name: impl ToString, table_name: impl ToString) -> GetTableReq {
         GetTableReq {
             inner: TableNameIdent::new(tenant.clone(), db_name, table_name),
         }
@@ -856,12 +855,9 @@ impl Deref for ListTableReq {
 }
 
 impl ListTableReq {
-    pub fn new(tenant: &Tenant, db_name: impl Into<String>) -> ListTableReq {
+    pub fn new(tenant: &Tenant, db_name: impl ToString) -> ListTableReq {
         ListTableReq {
-            inner: DatabaseNameIdent {
-                tenant: tenant.clone(),
-                db_name: db_name.into(),
-            },
+            inner: DatabaseNameIdent::new(tenant, db_name),
         }
     }
 }
@@ -974,8 +970,10 @@ pub struct EmptyProto {}
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
-    use crate::primitive::Id;
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
     use crate::schema::LeastVisibleTime;
@@ -983,11 +981,22 @@ mod kvapi_key_impl {
     use crate::schema::TableCopiedFileInfo;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
+    use crate::schema::TableIdHistoryIdent;
     use crate::schema::TableIdList;
-    use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
-    use crate::tenant::Tenant;
+
+    impl kvapi::KeyCodec for DBIdTableName {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.db_id).push_str(&self.table_name)
+        }
+
+        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
+            let db_id = p.next_u64()?;
+            let table_name = p.next_str()?;
+            Ok(Self { db_id, table_name })
+        }
+    }
 
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
@@ -998,22 +1007,16 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             Some(DatabaseId::new(self.db_id).to_string_key())
         }
+    }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.db_id)
-                .push_str(&self.table_name)
-                .done()
+    impl kvapi::KeyCodec for TableIdToName {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.table_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let db_id = p.next_u64()?;
-            let table_name = p.next_str()?;
-            p.done()?;
-
-            Ok(DBIdTableName { db_id, table_name })
+        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
+            let table_id = p.next_u64()?;
+            Ok(Self { table_id })
         }
     }
 
@@ -1026,20 +1029,16 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             Some(TableId::new(self.table_id).to_string_key())
         }
+    }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .done()
+    impl kvapi::KeyCodec for TableId {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.table_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
+        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
             let table_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(TableIdToName { table_id })
+            Ok(Self { table_id })
         }
     }
 
@@ -1052,76 +1051,46 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             None
         }
+    }
 
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .done()
+    impl kvapi::KeyCodec for TableIdHistoryIdent {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.database_id).push_str(&self.table_name)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let table_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(TableId { table_id })
+        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+            let db_id = b.next_u64()?;
+            let table_name = b.next_str()?;
+            Ok(Self {
+                database_id: db_id,
+                table_name,
+            })
         }
     }
 
     /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
-    impl kvapi::Key for TableIdListKey {
+    impl kvapi::Key for TableIdHistoryIdent {
         const PREFIX: &'static str = "__fd_table_id_list";
 
         type ValueType = TableIdList;
 
         fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.db_id)
-                .push_str(&self.table_name)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let db_id = p.next_u64()?;
-            let table_name = p.next_str()?;
-            p.done()?;
-
-            Ok(TableIdListKey { db_id, table_name })
+            Some(DatabaseId::new(self.database_id).to_string_key())
         }
     }
 
-    /// Reserved removed key, never reused:
-    /// "__fd_table_count/<tenant>" -> <table_count>
-    ///
-    /// It was used for count number of tables belonging to a tenant
-    #[derive(Debug)]
-    struct CountTablesKey {
-        #[allow(dead_code)]
-        tenant: Tenant,
-    }
-
-    impl kvapi::Key for CountTablesKey {
-        const PREFIX: &'static str = "__fd_table_count";
-
-        type ValueType = Id;
-
-        fn parent(&self) -> Option<String> {
-            None
+    impl kvapi::KeyCodec for TableCopiedFileNameIdent {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            // TODO: file is not escaped!!!
+            //       There already are non escaped data stored on disk.
+            //       We can not change it anymore.
+            b.push_u64(self.table_id).push_raw(&self.file)
         }
 
-        fn to_string_key(&self) -> String {
-            unimplemented!("removed and reserved")
-        }
-
-        fn from_str_key(_s: &str) -> Result<Self, kvapi::KeyError> {
-            unimplemented!("removed and reserved")
+        fn decode_key(p: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+            let table_id = p.next_u64()?;
+            let file = p.tail_raw()?.to_string();
+            Ok(Self { table_id, file })
         }
     }
 
@@ -1134,24 +1103,16 @@ mod kvapi_key_impl {
         fn parent(&self) -> Option<String> {
             Some(TableId::new(self.table_id).to_string_key())
         }
+    }
 
-        fn to_string_key(&self) -> String {
-            // TODO: file is not escaped!!!
-            //       There already are non escaped data stored on disk.
-            //       We can not change it anymore.
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .push_raw(&self.file)
-                .done()
+    impl kvapi::KeyCodec for LeastVisibleTimeKey {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.table_id)
         }
 
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let table_id = p.next_u64()?;
-            let file = p.tail_raw()?.to_string();
-
-            Ok(TableCopiedFileNameIdent { table_id, file })
+        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+            let table_id = b.next_u64()?;
+            Ok(Self { table_id })
         }
     }
 
@@ -1163,21 +1124,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             Some(TableId::new(self.table_id).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.table_id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let table_id = p.next_u64()?;
-            p.done()?;
-
-            Ok(LeastVisibleTimeKey { table_id })
         }
     }
 

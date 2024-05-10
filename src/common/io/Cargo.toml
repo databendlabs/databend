@@ -10,7 +10,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [dependencies]
 # Workspace dependencies
@@ -24,11 +24,13 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
+geos = { workspace = true }
 geozero = { workspace = true }
 lexical-core = "0.8.5"
 micromarshal = "0.5.0"
 ordered-float = { workspace = true }
 roaring = { version = "0.10.1", features = ["serde"] }
+scroll = "0.12.0"
 serde = { workspace = true }
 wkt = "0.10.3"
 
@@ -36,3 +38,6 @@ wkt = "0.10.3"
 aho-corasick = { version = "1.0.1" }
 rand = { workspace = true }
 rmp-serde = "1.1.1"
+
+[package.metadata.cargo-machete]
+ignored = ["geos"]

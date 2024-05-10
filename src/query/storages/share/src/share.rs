@@ -30,7 +30,7 @@ pub struct ShareSpecVec {
     share_specs: BTreeMap<String, ext::ShareSpecExt>,
 }
 
-pub fn get_share_spec_location(tenant: &String) -> String {
+pub fn get_share_spec_location(tenant: &str) -> String {
     format!("{}/{}/share_specs.json", SHARE_CONFIG_PREFIX, tenant,)
 }
 
@@ -67,7 +67,7 @@ pub async fn save_share_table_info(
 
 #[async_backtrace::framed]
 pub async fn save_share_spec(
-    tenant: &String,
+    tenant: &str,
     operator: Operator,
     spec_vec: Option<Vec<ShareSpec>>,
     share_table_info: Option<Vec<ShareTableInfoMap>>,
@@ -178,79 +178,5 @@ mod ext {
         let database_storage_prefix = database_storage_prefix(database_id);
         // storage_prefix has suffix character '/'
         format!("{}{}/", storage_prefix, database_storage_prefix)
-    }
-
-    #[cfg(test)]
-    mod tests {
-
-        use opendal::services::Fs;
-
-        use super::*;
-
-        #[test]
-        fn test_serialize_share_spec_ext() -> Result<()> {
-            let share_spec = ShareSpec {
-                name: "test_share_name".to_string(),
-                version: 1,
-                share_id: 1,
-                database: Some(ShareDatabaseSpec {
-                    name: "share_database".to_string(),
-                    id: 1,
-                }),
-                tables: vec![ShareTableSpec {
-                    name: "share_table".to_string(),
-                    database_id: 1,
-                    table_id: 1,
-                    presigned_url_timeout: "100s".to_string(),
-                }],
-                tenants: vec!["test_tenant".to_owned()],
-                comment: None,
-                share_on: None,
-                db_privileges: None,
-            };
-            let tmp_dir = tempfile::tempdir()?;
-            let test_root = tmp_dir.path().join("test_cluster_id/test_tenant_id");
-            let test_root_str = test_root.to_str().unwrap();
-            let operator = {
-                let mut builder = Fs::default();
-                builder.root(test_root_str);
-                Operator::new(builder)?.finish()
-            };
-
-            let share_spec_ext = ShareSpecExt::from_share_spec(share_spec, &operator);
-            let spec_json_value = serde_json::to_value(share_spec_ext).unwrap();
-
-            use serde_json::json;
-            use serde_json::Value::Null;
-
-            let expected = json!({
-              "name": "test_share_name",
-              "share_id": 1,
-              "version": 1,
-              "database": {
-                "location": format!("{}/1/", test_root_str),
-                "name": "share_database",
-                "id": 1
-              },
-              "tables": [
-                {
-                  "location": format!("{}/1/1/", test_root_str),
-                  "name": "share_table",
-                  "database_id": 1,
-                  "table_id": 1,
-                  "presigned_url_timeout": "100s"
-                }
-              ],
-              "tenants": [
-                "test_tenant"
-              ],
-              "db_privileges": Null,
-              "comment": Null,
-              "share_on": Null
-            });
-
-            assert_eq!(expected, spec_json_value);
-            Ok(())
-        }
     }
 }

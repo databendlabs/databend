@@ -107,7 +107,7 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
             traces_sample_rate,
             ..Default::default()
         })));
-        sentry::configure_scope(|scope| scope.set_tag("tenant", tenant.name()));
+        sentry::configure_scope(|scope| scope.set_tag("tenant", tenant.tenant_name()));
         sentry::configure_scope(|scope| scope.set_tag("cluster_id", cluster_id));
         sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }

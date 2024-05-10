@@ -28,6 +28,7 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_query::auth::AuthMgr;
+use databend_query::servers::http::middleware::get_client_ip;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_final_uri;
@@ -486,7 +487,7 @@ async fn test_wait_time_secs() -> Result<()> {
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert_eq!(result.state, ExecuteStateKind::Running, "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Starting, "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
     let next_uri = make_page_uri(query_id, 0);
@@ -507,7 +508,9 @@ async fn test_wait_time_secs() -> Result<()> {
                 assert!(
                     matches!(
                         result.state,
-                        ExecuteStateKind::Succeeded | ExecuteStateKind::Running
+                        ExecuteStateKind::Succeeded
+                            | ExecuteStateKind::Running
+                            | ExecuteStateKind::Starting
                     ),
                     "{:?}",
                     result
@@ -1717,5 +1720,41 @@ async fn test_txn_timeout() -> Result<()> {
             last_query_id
         )
     );
+    Ok(())
+}
+
+#[test]
+fn test_parse_ip() -> Result<()> {
+    let req = poem::Request::builder()
+        .header("X-Forwarded-For", "1.2.3.4")
+        .finish();
+    let ip = get_client_ip(&req);
+    assert_eq!(ip, Some("1.2.3.4".to_string()));
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_has_result_set() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let sqls = vec![
+        ("create table tb2(id int, c1 varchar) Engine=Fuse;", false),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", false),
+        ("select * from tb2;", true),
+    ];
+
+    let wait_time_secs = 5;
+    for (sql, has_result_set) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        assert!(reply.error().is_none(), "{:?}", reply.error());
+        assert_eq!(
+            reply.state(),
+            ExecuteStateKind::Succeeded,
+            "SQL '{sql}' not finish after {wait_time_secs} secs"
+        );
+        assert_eq!(reply.last().1.has_result_set, Some(has_result_set));
+    }
+
     Ok(())
 }

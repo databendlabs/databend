@@ -108,7 +108,7 @@ impl Interpreter for ReclusterTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
         let mut table = catalog
-            .get_table(tenant.name(), &self.plan.database, &self.plan.table)
+            .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
 
         // check mutability
@@ -159,6 +159,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 mutator.remained_blocks,
                 mutator.removed_segment_indexes,
                 mutator.removed_segment_summary,
+                true,
             )?;
 
             let mut build_res =
@@ -204,7 +205,7 @@ impl Interpreter for ReclusterTableInterpreter {
 
             // refresh table.
             table = catalog
-                .get_table(tenant.name(), &self.plan.database, &self.plan.table)
+                .get_table(&tenant, &self.plan.database, &self.plan.table)
                 .await?;
         }
 
@@ -222,6 +223,7 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_recluster_physical_plan(
     tasks: Vec<ReclusterTask>,
     table_info: TableInfo,
@@ -230,6 +232,7 @@ pub fn build_recluster_physical_plan(
     remained_blocks: Vec<Arc<BlockMeta>>,
     removed_segment_indexes: Vec<usize>,
     removed_segment_summary: Statistics,
+    need_lock: bool,
 ) -> Result<PhysicalPlan> {
     let is_distributed = tasks.len() > 1;
     let mut root = PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
@@ -258,6 +261,7 @@ pub fn build_recluster_physical_plan(
         removed_segment_indexes,
         removed_segment_summary,
         plan_id: u32::MAX,
+        need_lock,
     }));
     plan.adjust_plan_id(&mut 0);
     Ok(plan)

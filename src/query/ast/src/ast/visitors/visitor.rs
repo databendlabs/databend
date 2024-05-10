@@ -708,6 +708,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_alter_task(&mut self, _stmt: &'ast AlterTaskStmt) {}
 
+    fn visit_create_dynamic_table(&mut self, stmt: &'ast CreateDynamicTableStmt) {
+        self.visit_query(stmt.as_query.as_ref())
+    }
+
     fn visit_create_notification(&mut self, _stmt: &'ast CreateNotificationStmt) {}
     fn visit_drop_notification(&mut self, _stmt: &'ast DropNotificationStmt) {}
     fn visit_describe_notification(&mut self, _stmt: &'ast DescribeNotificationStmt) {}
@@ -827,4 +831,8 @@ pub trait Visitor<'ast>: Sized {
     fn visit_drop_connection(&mut self, _stmt: &'ast DropConnectionStmt) {}
     fn visit_describe_connection(&mut self, _stmt: &'ast DescribeConnectionStmt) {}
     fn visit_show_connections(&mut self, _stmt: &'ast ShowConnectionsStmt) {}
+
+    fn visit_create_sequence(&mut self, _stmt: &'ast CreateSequenceStmt) {}
+    fn visit_drop_sequence(&mut self, _stmt: &'ast DropSequenceStmt) {}
+    fn visit_set_priority(&mut self, _priority: &'ast Priority, _object_id: &'ast str) {}
 }

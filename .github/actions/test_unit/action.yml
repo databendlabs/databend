@@ -15,6 +15,7 @@ runs:
       env:
         RUST_TEST_THREADS: "8"
         RUST_LOG: ERROR
+        RUST_MIN_STACK: 104857600
         # RUST_BACKTRACE: full
 
     - name: Upload failure

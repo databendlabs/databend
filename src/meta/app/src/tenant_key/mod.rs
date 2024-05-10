@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tenant key is an abstraction of key in form `<PREFIX>/<TENANT>/<NAME>`.
+//! Tenant key is an abstraction of all meta-service keys in form of `<PREFIX>/<TENANT>/<NAME>`.
 
 pub mod errors;
 pub mod ident;
+pub mod raw;
 pub mod resource;

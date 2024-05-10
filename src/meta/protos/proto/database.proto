@@ -21,17 +21,7 @@ syntax = "proto3";
 package databend_proto;
 
 import "share.proto";
-
-message DatabaseNameIdent {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  // The user this db belongs to
-  string tenant = 1;
-
-  // Database name
-  string db_name = 2;
-}
+import "tenant.proto";
 
 // DatabaseMeta is a container of all non-identity information.
 message DatabaseMeta {
@@ -61,7 +51,7 @@ message DatabaseMeta {
 
   repeated uint64 shared_by = 24;
 
-  optional ShareNameIdent from_share = 25;
+  optional TIdent from_share = 25;
 
   // Now the owner is stored independently in the meta. Prefix with __fd_object_owners
   // optional Ownership owner = 26;

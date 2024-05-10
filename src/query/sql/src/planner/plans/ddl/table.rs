@@ -178,7 +178,7 @@ impl crate::plans::VacuumTemporaryFilesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![DataField::new(
             "Files",
-            DataType::String,
+            DataType::Number(NumberDataType::UInt64),
         )]))
     }
 }
@@ -216,7 +216,8 @@ impl OptimizeTablePlan {
 pub enum OptimizeTableAction {
     All,
     Purge(Option<NavigationPoint>),
-    CompactBlocks,
+    // Optionally, specify the limit on the number of blocks to be compacted.
+    CompactBlocks(Option<usize>),
     CompactSegments,
 }
 
@@ -251,6 +252,21 @@ impl RenameTablePlan {
     }
 }
 
+/// Modify table comment.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModifyTableCommentPlan {
+    pub new_comment: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl ModifyTableCommentPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// SetOptions
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetOptionsPlan {
@@ -269,7 +285,7 @@ impl SetOptionsPlan {
 // Table add column
 #[derive(Clone, Debug, PartialEq)]
 pub struct AddTableColumnPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -294,7 +310,7 @@ pub enum AddColumnOption {
 // Table rename column
 #[derive(Clone, Debug, PartialEq)]
 pub struct RenameTableColumnPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -434,7 +450,7 @@ impl ExistsTablePlan {
 /// Cluster key.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterTableClusterKeyPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -449,7 +465,7 @@ impl AlterTableClusterKeyPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableClusterKeyPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,

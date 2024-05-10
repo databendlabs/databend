@@ -534,6 +534,7 @@ Explain {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
@@ -616,6 +617,7 @@ Explain {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
@@ -702,6 +704,7 @@ Explain {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -860,6 +863,7 @@ CreateIndex(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: FunctionCall {
@@ -1052,6 +1056,7 @@ CreateIndex(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: FunctionCall {
@@ -1633,6 +1638,7 @@ CreateTable(
                         ),
                         hints: None,
                         distinct: false,
+                        top_n: None,
                         select_list: [
                             StarColumns {
                                 qualified: [
@@ -2228,8 +2234,8 @@ CreateTable(
 
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/'
-             connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
-             location_prefix = 'db';
+    connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
+    location_prefix = 'db';
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' ) LOCATION_PREFIX = 'db'
 ---------- AST ------------
@@ -2563,7 +2569,7 @@ CreateDatabase(
                 tenant: Tenant {
                     tenant: "a",
                 },
-                share_name: "s",
+                name: "s",
             },
         ),
     },
@@ -2825,6 +2831,7 @@ CreateView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -2946,6 +2953,7 @@ AlterView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -3099,6 +3107,7 @@ CreateView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -3230,6 +3239,7 @@ CreateView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -3360,6 +3370,7 @@ AlterView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -4425,6 +4436,7 @@ CreateTable(
                         ),
                         hints: None,
                         distinct: false,
+                        top_n: None,
                         select_list: [
                             StarColumns {
                                 qualified: [
@@ -4512,6 +4524,29 @@ AlterUser(
 
 
 ---------- Input ----------
+ALTER USER u1 WITH disabled = false;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH DISABLED = false
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            Disabled(
+                false,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
 ALTER USER u1 WITH default_role = role1;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
@@ -4535,9 +4570,9 @@ AlterUser(
 
 
 ---------- Input ----------
-ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;
+ALTER USER u1 WITH DEFAULT_ROLE = role1, DISABLED=true, TENANTSETTING;
 ---------- Output ---------
-ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1', TENANTSETTING
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1', DISABLED = true, TENANTSETTING
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -4551,6 +4586,9 @@ AlterUser(
         user_options: [
             DefaultRole(
                 "role1",
+            ),
+            Disabled(
+                true,
             ),
             TenantSetting(
                 true,
@@ -4662,6 +4700,33 @@ CreateUser(
 
 
 ---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DISABLED = true
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        create_option: Create,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            Disabled(
+                true,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
 DROP database if exists db1;
 ---------- Output ---------
 DROP DATABASE IF EXISTS db1
@@ -4700,6 +4765,7 @@ Query(
                 ),
                 hints: None,
                 distinct: true,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -4943,6 +5009,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -4992,6 +5059,75 @@ Query(
 
 
 ---------- Input ----------
+select top 2 * from t4;
+---------- Output ---------
+SELECT TOP 2 * FROM t4
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..22,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..22,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: Some(
+                    2,
+                ),
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    13..14,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            20..22,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                20..22,
+                            ),
+                            name: "t4",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        temporal: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 select * from aa.bb;
 ---------- Output ---------
 SELECT * FROM aa.bb
@@ -5009,6 +5145,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5084,6 +5221,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5188,6 +5326,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5340,6 +5479,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5497,6 +5637,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5654,6 +5795,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5811,6 +5953,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5968,6 +6111,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6125,6 +6269,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6282,6 +6427,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6439,6 +6585,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6596,6 +6743,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6753,6 +6901,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6910,6 +7059,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7067,6 +7217,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7172,6 +7323,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7277,6 +7429,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7382,6 +7535,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7487,6 +7641,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7573,6 +7728,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -7674,6 +7830,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7760,6 +7917,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -7861,6 +8019,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7947,6 +8106,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -8048,6 +8208,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8132,6 +8293,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -8233,6 +8395,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -8344,6 +8507,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8470,6 +8634,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8536,6 +8701,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -8583,6 +8749,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -8630,6 +8797,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -8677,6 +8845,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8763,6 +8932,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8819,6 +8989,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: Literal {
@@ -8888,6 +9059,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: BinaryOp {
@@ -9026,6 +9198,7 @@ INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 Insert(
     InsertStmt {
         hints: None,
+        with: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -9107,6 +9280,7 @@ INSERT INTO t (c1, c2) VALUES (1, 2)
 Insert(
     InsertStmt {
         hints: None,
+        with: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -9170,6 +9344,7 @@ INSERT INTO t SELECT * FROM t2
 Insert(
     InsertStmt {
         hints: None,
+        with: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -9194,6 +9369,7 @@ Insert(
                         ),
                         hints: None,
                         distinct: false,
+                        top_n: None,
                         select_list: [
                             StarColumns {
                                 qualified: [
@@ -9263,6 +9439,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: MapAccess {
@@ -9361,6 +9538,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: FunctionCall {
@@ -10019,6 +10197,40 @@ AlterTable(
                     },
                 },
             ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t COMMENT='t1-commnet';
+---------- Output ---------
+ALTER TABLE t COMMENT='t1-commnet'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                is_hole: false,
+            },
+            alias: None,
+            temporal: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyTableComment {
+            new_comment: "t1-commnet",
         },
     },
 )
@@ -11966,13 +12178,14 @@ Revoke(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM '@~/mybucket/my data.csv'
-                size_limit=10;
+    FROM '@~/mybucket/my data.csv'
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "~/mybucket/my data.csv",
@@ -12012,19 +12225,20 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @~/mybucket/data.csv
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM @~/mybucket/data.csv
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "~/mybucket/data.csv",
@@ -12077,20 +12291,21 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10
-                max_files=10;
+    FROM 's3://mybucket/data.csv'
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10
+    max_files=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12152,20 +12367,21 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10
-                max_files=3000;
+    FROM 's3://mybucket/data.csv'
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10
+    max_files=3000;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12227,22 +12443,23 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                CONNECTION = (
-                    ENDPOINT_URL = 'http://127.0.0.1:9900'
-                )
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM 's3://mybucket/data.csv'
+    CONNECTION = (
+        ENDPOINT_URL = 'http://127.0.0.1:9900'
+    )
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12306,22 +12523,23 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                CONNECTION = (
-                    ENDPOINT_URL = 'http://127.0.0.1:9900'
-                )
-                size_limit=10
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                );
+    FROM 's3://mybucket/data.csv'
+    CONNECTION = (
+        ENDPOINT_URL = 'http://127.0.0.1:9900'
+    )
+    size_limit=10
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12385,12 +12603,13 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 'https://127.0.0.1:9900';
+    FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
 COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12439,12 +12658,13 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 'https://127.0.0.1:';
+    FROM 'https://127.0.0.1:';
 ---------- Output ---------
 COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12493,20 +12713,21 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @my_stage
-                FILE_FORMAT = (
-                    type = CSV,
-                    field_delimiter = ',',
-                    record_delimiter = '\n',
-                    skip_header = 1,
-                    error_on_column_count_mismatch = FALSE
-                )
-                size_limit=10;
+    FROM @my_stage
+    FILE_FORMAT = (
+        type = CSV,
+        field_delimiter = ',',
+        record_delimiter = '\n',
+        skip_header = 1,
+        error_on_column_count_mismatch = FALSE
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "my_stage",
@@ -12562,18 +12783,19 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO 's3://mybucket/data.csv'
-                FROM mytable
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
+    FROM mytable
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12581,7 +12803,7 @@ CopyIntoLocation(
                 database: None,
                 table: Identifier {
                     span: Some(
-                        56..63,
+                        44..51,
                     ),
                     name: "mytable",
                     quote: None,
@@ -12626,12 +12848,13 @@ CopyIntoLocation(
 
 ---------- Input ----------
 COPY INTO '@my_stage/my data'
-                FROM mytable;
+    FROM mytable;
 ---------- Output ---------
 COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12639,7 +12862,7 @@ CopyIntoLocation(
                 database: None,
                 table: Identifier {
                     span: Some(
-                        51..58,
+                        39..46,
                     ),
                     name: "mytable",
                     quote: None,
@@ -12662,18 +12885,19 @@ CopyIntoLocation(
 
 ---------- Input ----------
 COPY INTO @my_stage
-                FROM mytable
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                );
+    FROM mytable
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    );
 ---------- Output ---------
 COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12681,7 +12905,7 @@ CopyIntoLocation(
                 database: None,
                 table: Identifier {
                     span: Some(
-                        41..48,
+                        29..36,
                     ),
                     name: "mytable",
                     quote: None,
@@ -12717,23 +12941,24 @@ CopyIntoLocation(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                CREDENTIALS = (
-                    AWS_KEY_ID = 'access_key'
-                    AWS_SECRET_KEY = 'secret_key'
-                )
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM 's3://mybucket/data.csv'
+    CREDENTIALS = (
+        AWS_KEY_ID = 'access_key'
+        AWS_SECRET_KEY = 'secret_key'
+    )
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12798,19 +13023,20 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @external_stage/path/to/file.csv
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM @external_stage/path/to/file.csv
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/file.csv",
@@ -12863,19 +13089,20 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @external_stage/path/to/dir/
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM @external_stage/path/to/dir/
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/dir/",
@@ -12928,19 +13155,20 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @external_stage/path/to/file.csv
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                force=true;
+    FROM @external_stage/path/to/file.csv
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    force=true;
 ---------- Output ---------
 COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/file.csv",
@@ -12993,20 +13221,21 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 'fs:///path/to/data.csv'
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10
-                disable_variant_check=true;
+    FROM 'fs:///path/to/data.csv'
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10
+    disable_variant_check=true;
 ---------- Output ---------
 COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -13068,18 +13297,19 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO books FROM 's3://databend/books.csv'
-                CONNECTION = (
-                    ENDPOINT_URL = 'http://localhost:9000/',
-                    ACCESS_KEY_ID = 'ROOTUSER',
-                    SECRET_ACCESS_KEY = 'CHANGEME123',
-                    region = 'us-west-2'
-                )
-                FILE_FORMAT = (type = CSV);
+    CONNECTION = (
+        ENDPOINT_URL = 'http://localhost:9000/',
+        ACCESS_KEY_ID = 'ROOTUSER',
+        SECRET_ACCESS_KEY = 'CHANGEME123',
+        region = 'us-west-2'
+    )
+    FILE_FORMAT = (type = CSV);
 ---------- Output ---------
 COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -14605,6 +14835,7 @@ Update(
                 },
             },
         ),
+        with: None,
     },
 )
 
@@ -14745,6 +14976,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -14802,23 +15034,24 @@ Query(
 
 ---------- Input ----------
 SELECT t.c1 FROM @stage1/dir/file
-        ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
+    ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
 ---------- Output ---------
 SELECT t.c1 FROM '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'PARQUET', ) AS t
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            0..100,
+            0..96,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    0..100,
+                    0..96,
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -14855,7 +15088,7 @@ Query(
                 from: [
                     Location {
                         span: Some(
-                            17..100,
+                            17..96,
                         ),
                         location: Stage(
                             "stage1/dir/file",
@@ -14877,7 +15110,7 @@ Query(
                             TableAlias {
                                 name: Identifier {
                                     span: Some(
-                                        99..100,
+                                        95..96,
                                     ),
                                     name: "t",
                                     quote: None,
@@ -14905,24 +15138,25 @@ Query(
 
 ---------- Input ----------
 select table0.c1, table1.c2 from
-            @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
-            left join table1;
+    @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
+    left join table1;
 ---------- Output ---------
 SELECT table0.c1, table1.c2 FROM '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'parquet', ) AS table0 LEFT OUTER JOIN table1
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            0..154,
+            0..138,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    0..154,
+                    0..138,
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -14990,14 +15224,14 @@ Query(
                 from: [
                     Join {
                         span: Some(
-                            138..147,
+                            122..131,
                         ),
                         join: Join {
                             op: LeftOuter,
                             condition: None,
                             left: Location {
                                 span: Some(
-                                    45..125,
+                                    37..117,
                                 ),
                                 location: Stage(
                                     "stage1/dir/file",
@@ -15019,7 +15253,7 @@ Query(
                                     TableAlias {
                                         name: Identifier {
                                             span: Some(
-                                                119..125,
+                                                111..117,
                                             ),
                                             name: "table0",
                                             quote: None,
@@ -15031,13 +15265,13 @@ Query(
                             },
                             right: Table {
                                 span: Some(
-                                    148..154,
+                                    132..138,
                                 ),
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
                                     span: Some(
-                                        148..154,
+                                        132..138,
                                     ),
                                     name: "table1",
                                     quote: None,
@@ -15084,6 +15318,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -15167,7 +15402,7 @@ Query(
 
 ---------- Input ----------
 CREATE FILE FORMAT my_csv
-            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+    type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
 CREATE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
 ---------- AST ------------
@@ -15195,7 +15430,7 @@ CreateFileFormat {
 
 ---------- Input ----------
 CREATE OR REPLACE FILE FORMAT my_csv
-            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+    type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
 CREATE OR REPLACE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
 ---------- AST ------------
@@ -15258,6 +15493,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -15413,6 +15649,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -15566,6 +15803,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -15738,6 +15976,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -15890,6 +16129,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -16018,6 +16258,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -16838,9 +17079,933 @@ AlterNetworkPolicy(
 
 
 ---------- Input ----------
+CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
+    TARGET_LAG = 10 SECOND
+    WAREHOUSE = 'MyWarehouse'
+    REFRESH_MODE = FULL
+    INITIALIZE = ON_CREATE
+    COMMENT = 'This is test dynamic table'
+AS
+    SELECT * FROM t
+---------- Output ---------
+CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t TARGET_LAG = 10 SECOND WAREHOUSE = 'MyWarehouse' REFRESH_MODE = FULL INITIALIZE = ON_CREATE comment = 'This is test dynamic table' AS SELECT * FROM t
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: CreateOrReplace,
+        transient: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    32..34,
+                ),
+                name: "db",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                35..44,
+            ),
+            name: "MyDynamic",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Like {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        50..51,
+                    ),
+                    name: "t",
+                    quote: None,
+                    is_hole: false,
+                },
+            },
+        ),
+        cluster_by: [],
+        target_lag: IntervalSecs(
+            10,
+        ),
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        refresh_mode: Full,
+        initialize: OnCreate,
+        table_options: {
+            "comment": "This is test dynamic table",
+        },
+        as_query: Query {
+            span: Some(
+                210..225,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        210..225,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        217..218,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                224..225,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    224..225,
+                                ),
+                                name: "t",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            alias: None,
+                            temporal: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a int, b string)
+    TARGET_LAG = 10 MINUTE
+    WAREHOUSE = 'MyWarehouse'
+    REFRESH_MODE = INCREMENTAL
+    INITIALIZE = ON_SCHEDULE
+    COMMENT = 'This is test dynamic table'
+AS
+    SELECT * FROM t
+---------- Output ---------
+CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a Int32, b STRING) TARGET_LAG = 600 SECOND WAREHOUSE = 'MyWarehouse' REFRESH_MODE = INCREMENTAL INITIALIZE = ON_SCHEDULE comment = 'This is test dynamic table' AS SELECT * FROM t
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: CreateIfNotExists,
+        transient: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    35..37,
+                ),
+                name: "db",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                38..47,
+            ),
+            name: "MyDynamic",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                49..50,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                56..57,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        cluster_by: [],
+        target_lag: IntervalSecs(
+            600,
+        ),
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        refresh_mode: Incremental,
+        initialize: OnSchedule,
+        table_options: {
+            "comment": "This is test dynamic table",
+        },
+        as_query: Query {
+            span: Some(
+                233..248,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        233..248,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        240..241,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                247..248,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    247..248,
+                                ),
+                                name: "t",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            alias: None,
+                            temporal: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
+    CLUSTER BY (a)
+    TARGET_LAG = 10 HOUR
+    REFRESH_MODE = AUTO
+    COMMENT = 'This is test dynamic table'
+    STORAGE_FORMAT = 'native'
+AS
+    SELECT c, d FROM t
+---------- Output ---------
+CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    21..23,
+                ),
+                name: "db",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                24..33,
+            ),
+            name: "MyDynamic",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                35..36,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                42..43,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        cluster_by: [
+            ColumnRef {
+                span: Some(
+                    68..69,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                68..69,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ],
+        target_lag: IntervalSecs(
+            36000,
+        ),
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        refresh_mode: Auto,
+        initialize: OnCreate,
+        table_options: {
+            "comment": "This is test dynamic table",
+            "storage_format": "native",
+        },
+        as_query: Query {
+            span: Some(
+                200..218,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        200..218,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    207..208,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                207..208,
+                                            ),
+                                            name: "c",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    210..211,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                210..211,
+                                            ),
+                                            name: "d",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                217..218,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    217..218,
+                                ),
+                                name: "t",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            alias: None,
+                            temporal: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
+    CLUSTER BY (a)
+    TARGET_LAG = 10 DAY
+AS
+    SELECT avg(a), d FROM t GROUP BY d
+---------- Output ---------
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: CreateIfNotExists,
+        transient: true,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                45..54,
+            ),
+            name: "MyDynamic",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                56..57,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                63..64,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        cluster_by: [
+            ColumnRef {
+                span: Some(
+                    89..90,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                89..90,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ],
+        target_lag: IntervalSecs(
+            864000,
+        ),
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        refresh_mode: Auto,
+        initialize: OnCreate,
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                123..157,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        123..157,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: FunctionCall {
+                                span: Some(
+                                    130..136,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            130..133,
+                                        ),
+                                        name: "avg",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                134..135,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            134..135,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                            alias: None,
+                        },
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    138..139,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                138..139,
+                                            ),
+                                            name: "d",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                145..146,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    145..146,
+                                ),
+                                name: "t",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            alias: None,
+                            temporal: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: Some(
+                        Normal(
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        156..157,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    156..157,
+                                                ),
+                                                name: "d",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
+                                        ),
+                                    },
+                                },
+                            ],
+                        ),
+                    ),
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
+    CLUSTER BY (a)
+    REFRESH_MODE = INCREMENTAL
+    TARGET_LAG = DOWNSTREAM
+AS
+    SELECT avg(a), d FROM db.t GROUP BY d
+---------- Output ---------
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: CreateIfNotExists,
+        transient: true,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                45..54,
+            ),
+            name: "MyDynamic",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                56..57,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                63..64,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        cluster_by: [
+            ColumnRef {
+                span: Some(
+                    89..90,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                89..90,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ],
+        target_lag: Downstream,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        refresh_mode: Incremental,
+        initialize: OnCreate,
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                158..195,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        158..195,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: FunctionCall {
+                                span: Some(
+                                    165..171,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            165..168,
+                                        ),
+                                        name: "avg",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                169..170,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            169..170,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                            alias: None,
+                        },
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    173..174,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                173..174,
+                                            ),
+                                            name: "d",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                180..184,
+                            ),
+                            catalog: None,
+                            database: Some(
+                                Identifier {
+                                    span: Some(
+                                        180..182,
+                                    ),
+                                    name: "db",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ),
+                            table: Identifier {
+                                span: Some(
+                                    183..184,
+                                ),
+                                name: "t",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            alias: None,
+                            temporal: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: Some(
+                        Normal(
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        194..195,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    194..195,
+                                                ),
+                                                name: "d",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
+                                        ),
+                                    },
+                                },
+                            ],
+                        ),
+                    ),
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENTS = 'This is test task 1'database = 'target', timezone = 'America/Los Angeles' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENTS = 'This is test task 1' database = 'target', timezone = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16953,7 +18118,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1  SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16988,7 +18153,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1  SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -17019,7 +18184,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1  SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -17050,7 +18215,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1  AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -17150,15 +18315,15 @@ CreateTask(
 
 
 ---------- Input ----------
-CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
-            BEGIN
-              begin;
-              insert into t values('a;');
-              delete from t where c = ';';
-              vacuum table t;
-              merge into t using s on t.id = s.id when matched then update *;
-              commit;
-            END
+CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles' as
+    BEGIN
+    begin;
+    insert into t values('a;');
+    delete from t where c = ';';
+    vacuum table t;
+    merge into t using s on t.id = s.id when matched then update *;
+    commit;
+    END
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS BEGIN
 BEGIN;
@@ -17202,15 +18367,15 @@ CreateTask(
 
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
-        AS BEGIN
-          MERGE INTO t USING s ON t.c = s.c
-            WHEN MATCHED THEN
-            UPDATE
-                *
-                WHEN NOT MATCHED THEN
-            INSERT
-                *;
-        END
+AS BEGIN
+MERGE INTO t USING s ON t.c = s.c
+    WHEN MATCHED THEN
+    UPDATE
+        *
+        WHEN NOT MATCHED THEN
+    INSERT
+        *;
+END
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
 MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
@@ -17247,14 +18412,14 @@ CreateTask(
 
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
-        AS BEGIN
-          MERGE INTO t USING s ON t.c = s.c
-            WHEN MATCHED THEN
-            UPDATE
-                *
-                WHEN NOT MATCHED THEN
-            INSERT values('a;', 1, "str");
-        END
+AS BEGIN
+MERGE INTO t USING s ON t.c = s.c
+    WHEN MATCHED THEN
+    UPDATE
+        *
+        WHEN NOT MATCHED THEN
+    INSERT values('a;', 1, "str");
+END
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
 MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
@@ -17517,14 +18682,14 @@ AlterTask(
 
 ---------- Input ----------
 ALTER TASK MyTask2 MODIFY AS
-            BEGIN
-              begin;
-              insert into t values('a;');
-              delete from t where c = ';';
-              vacuum table t;
-              merge into t using s on t.id = s.id when matched then update *;
-              commit;
-            END
+BEGIN
+  begin;
+  insert into t values('a;');
+  delete from t where c = ';';
+  vacuum table t;
+  merge into t using s on t.id = s.id when matched then update *;
+  commit;
+END
 ---------- Output ---------
 ALTER TASK MyTask2 MODIFY AS BEGIN
 BEGIN;
@@ -17806,6 +18971,7 @@ CreatePipe(
         auto_ingest: true,
         comments: "This is test pipe 1",
         copy_stmt: CopyIntoTableStmt {
+            with: None,
             src: Location(
                 Stage(
                     "~/MyStage1",
@@ -17860,6 +19026,7 @@ CreatePipe(
         auto_ingest: false,
         comments: "",
         copy_stmt: CopyIntoTableStmt {
+            with: None,
             src: Location(
                 Stage(
                     "~/mybucket/data.csv",
@@ -18163,28 +19330,29 @@ DescribeNotification(
 
 ---------- Input ----------
 --各环节转各环节转各环节转各环节转各
-  select 34343
+select 34343
 ---------- Output ---------
 SELECT 34343
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            56..68,
+            54..66,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    56..68,
+                    54..66,
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
                             span: Some(
-                                63..68,
+                                61..66,
                             ),
                             value: UInt64(
                                 34343,
@@ -18228,6 +19396,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -18259,28 +19428,29 @@ Query(
 
 ---------- Input ----------
 -- xxxxx
-  select 34343;
+select 34343;
 ---------- Output ---------
 SELECT 34343
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            11..23,
+            9..21,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    11..23,
+                    9..21,
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
                             span: Some(
-                                18..23,
+                                16..21,
                             ),
                             value: UInt64(
                                 34343,
@@ -18334,6 +19504,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: FunctionCall {
@@ -18451,6 +19622,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: FunctionCall {
@@ -19001,12 +20173,12 @@ handler = 'addone_py'
 as
 $$
 def addone_py(i):
-  return i+1
+return i+1
 $$;
 ---------- Output ---------
 CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
 def addone_py(i):
-  return i+1
+return i+1
 $$
 ---------- AST ------------
 CreateUDF(
@@ -19030,7 +20202,7 @@ CreateUDF(
             return_type: Nullable(
                 Int32,
             ),
-            code: "\ndef addone_py(i):\n  return i+1\n",
+            code: "def addone_py(i):\nreturn i+1",
             handler: "addone_py",
             language: "python",
             runtime_version: "",
@@ -19073,5 +20245,30 @@ DropUDF {
         is_hole: false,
     },
 }
+
+
+---------- Input ----------
+EXECUTE IMMEDIATE 
+$$
+BEGIN
+    LOOP
+        RETURN 1;
+    END LOOP;
+END;
+$$
+---------- Output ---------
+EXECUTE IMMEDIATE $$
+BEGIN
+    LOOP
+        RETURN 1;
+    END LOOP;
+END;
+$$
+---------- AST ------------
+ExecuteImmediate(
+    ExecuteImmediateStmt {
+        script: "BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;",
+    },
+)
 
 

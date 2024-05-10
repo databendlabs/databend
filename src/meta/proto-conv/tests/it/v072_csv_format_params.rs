@@ -50,6 +50,7 @@ fn test_decode_v72_csv_file_format_params() -> anyhow::Result<()> {
             error_on_column_count_mismatch: false,
             empty_field_as: EmptyFieldAs::String,
             binary_format: Default::default(),
+            geometry_format: Default::default(),
         })
     };
     common::test_load_old(func_name!(), file_format_params_v72.as_slice(), 0, want())?;

@@ -153,7 +153,7 @@ impl TaskDependentsEnableSource {
     fn build_request(&self) -> EnableTaskDependentsRequest {
         EnableTaskDependentsRequest {
             task_name: self.task_name.clone(),
-            tenant_id: self.ctx.get_tenant().name().to_string(),
+            tenant_id: self.ctx.get_tenant().tenant_name().to_string(),
         }
     }
 }
@@ -173,11 +173,16 @@ impl AsyncSource for TaskDependentsEnableSource {
         }
         let cloud_api = CloudControlApiProvider::instance();
         let tenant = self.ctx.get_tenant();
-        let user = self.ctx.get_current_user()?.identity().to_string();
+        let user = self
+            .ctx
+            .get_current_user()?
+            .identity()
+            .display()
+            .to_string();
         let query_id = self.ctx.get_id();
 
         let cfg = build_client_config(
-            tenant.name().to_string(),
+            tenant.tenant_name().to_string(),
             user,
             query_id,
             cloud_api.get_timeout(),

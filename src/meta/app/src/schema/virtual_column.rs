@@ -21,33 +21,9 @@ use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
 use super::CreateOption;
+use crate::schema::virtual_column_ident::VirtualColumnIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VirtualColumnNameIdent {
-    pub tenant: Tenant,
-    pub table_id: u64,
-}
-
-impl VirtualColumnNameIdent {
-    pub fn new(tenant: impl ToTenant, table_id: impl Into<u64>) -> VirtualColumnNameIdent {
-        VirtualColumnNameIdent {
-            tenant: tenant.to_tenant(),
-            table_id: table_id.into(),
-        }
-    }
-
-    pub fn table_id(&self) -> u64 {
-        self.table_id
-    }
-}
-
-impl Display for VirtualColumnNameIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}'/{}", self.tenant.name(), self.table_id)
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct VirtualColumnMeta {
@@ -61,16 +37,17 @@ pub struct VirtualColumnMeta {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnReq {
     pub create_option: CreateOption,
-    pub name_ident: VirtualColumnNameIdent,
+    pub name_ident: VirtualColumnIdent,
     pub virtual_columns: Vec<String>,
 }
 
 impl Display for CreateVirtualColumnReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "create_virtual_column ({:?}) for {}",
-            self.virtual_columns, self.name_ident
+            self.virtual_columns,
+            self.name_ident.display()
         )
     }
 }
@@ -81,16 +58,17 @@ pub struct CreateVirtualColumnReply {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateVirtualColumnReq {
     pub if_exists: bool,
-    pub name_ident: VirtualColumnNameIdent,
+    pub name_ident: VirtualColumnIdent,
     pub virtual_columns: Vec<String>,
 }
 
 impl Display for UpdateVirtualColumnReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "update_virtual_column ({:?}) for {}",
-            self.virtual_columns, self.name_ident
+            self.virtual_columns,
+            self.name_ident.display()
         )
     }
 }
@@ -101,12 +79,12 @@ pub struct UpdateVirtualColumnReply {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropVirtualColumnReq {
     pub if_exists: bool,
-    pub name_ident: VirtualColumnNameIdent,
+    pub name_ident: VirtualColumnIdent,
 }
 
 impl Display for DropVirtualColumnReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "drop_virtual_column for {}", self.name_ident)
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "drop_virtual_column for {}", self.name_ident.display())
     }
 }
 
@@ -124,51 +102,6 @@ impl ListVirtualColumnsReq {
         ListVirtualColumnsReq {
             tenant: tenant.to_tenant(),
             table_id,
-        }
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::schema::VirtualColumnMeta;
-    use crate::schema::VirtualColumnNameIdent;
-    use crate::tenant::Tenant;
-
-    /// <prefix>/<tenant>/<table_id>
-    impl kvapi::Key for VirtualColumnNameIdent {
-        const PREFIX: &'static str = "__fd_virtual_column";
-
-        type ValueType = VirtualColumnMeta;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(self.tenant.name())
-                .push_u64(self.table_id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_nonempty()?;
-            let table_id = p.next_u64()?;
-            p.done()?;
-
-            let tenant = Tenant::new_nonempty(tenant);
-
-            Ok(VirtualColumnNameIdent { tenant, table_id })
-        }
-    }
-
-    impl kvapi::Value for VirtualColumnMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
         }
     }
 }

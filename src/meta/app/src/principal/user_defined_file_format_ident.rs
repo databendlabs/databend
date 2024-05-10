@@ -32,6 +32,8 @@ mod kvapi_impl {
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_file_formats";
+        const TYPE: &'static str = "UserDefinedFileFormatIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = UserDefinedFileFormat;
     }
 

@@ -128,9 +128,8 @@ impl StreamTable {
 
         if table.get_table_info().ident.table_id != self.table_id {
             return Err(ErrorCode::IllegalStream(format!(
-                "Table id mismatch, expect {}, got {}",
-                self.table_id,
-                table.get_table_info().ident.table_id
+                "Base table '{}'.'{}' dropped, cannot read from stream {}",
+                self.table_database, self.table_name, self.stream_info.desc,
             )));
         }
 

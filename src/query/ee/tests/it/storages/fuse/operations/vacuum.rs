@@ -117,7 +117,10 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     operator.write("test_dir/test2", vec![1, 2]).await?;
     operator.write("test_dir/test3", vec![1, 2]).await?;
 
-    assert_eq!(3, operator.list("test_dir/").await?.len());
+    assert_eq!(
+        3,
+        operator.list_with("test_dir/").recursive(true).await?.len()
+    );
 
     tokio::time::sleep(Duration::from_secs(2)).await;
     do_vacuum_temporary_files(
@@ -129,8 +132,23 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
 
     assert_eq!(2, operator.list("test_dir/").await?.len());
 
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), None).await?;
-    assert_eq!(0, operator.list("test_dir/").await?.len());
+    operator.write("test_dir/test4/test4", vec![1, 2]).await?;
+    operator.write("test_dir/test5/test5", vec![1, 2]).await?;
+    operator
+        .write("test_dir/test5/finished", vec![1, 2])
+        .await?;
+
+    do_vacuum_temporary_files(
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(2)),
+        Some(2),
+    )
+    .await?;
+    assert_eq!(operator.list("test_dir/").await?.len(), 2);
+
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(3)), None).await?;
+    assert!(operator.list_with("test_dir/").await?.is_empty());
 
     Ok(())
 }
@@ -163,6 +181,7 @@ mod test_accessor {
             self.hit_delete.load(Ordering::Acquire)
         }
     }
+
     #[async_trait::async_trait]
     impl Accessor for AccessorFaultyDeletion {
         type Reader = ();
@@ -234,10 +253,9 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     Ok(())
 }
 
+// fuse table on external storage is same as internal storage.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
-    // do_vacuum_drop_table should return Ok(None) if external storage detected
-
     let meta = TableMeta {
         storage_params: Some(StorageParams::default()),
         ..Default::default()
@@ -255,12 +273,9 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     let operator = OperatorBuilder::new(accessor.clone()).finish();
 
     let result = do_vacuum_drop_table(&table_info, &operator, None).await;
+    assert!(result.is_err());
 
-    // verify that Ok(None) is returned
-    assert!(result.is_ok());
-    assert!(result.unwrap().is_none());
-
-    // verify that accessor.delete() was NOT called
+    // verify that accessor.delete() was called
     assert!(!accessor.hit_delete_operation());
 
     Ok(())

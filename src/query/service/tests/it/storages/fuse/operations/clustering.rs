@@ -66,7 +66,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
 
     // add cluster key
     let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
-        tenant: fixture.default_tenant().name().to_string(),
+        tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
@@ -103,7 +103,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
 
     // drop cluster key
     let drop_table_cluster_key_plan = DropTableClusterKeyPlan {
-        tenant: fixture.default_tenant().name().to_string(),
+        tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),

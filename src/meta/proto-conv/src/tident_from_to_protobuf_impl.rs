@@ -15,11 +15,8 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::ident;
+use databend_common_meta_app::tenant_key::raw;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
-use databend_common_meta_app::KeyWithTenant;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
 
 use crate::reader_check_msg;
@@ -28,7 +25,7 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
-impl<R> FromToProto for ident::TIdent<R>
+impl<R> FromToProto for raw::TIdentRaw<R>
 where R: TenantResource
 {
     type PB = pb::TIdent;
@@ -38,12 +35,7 @@ where R: TenantResource
     fn from_pb(p: pb::TIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let non_empty = NonEmptyString::new(p.tenant.clone())
-            .map_err(|_e| Incompatible::new("tenant is empty"))?;
-
-        let tenant = Tenant::new_nonempty(non_empty);
-
-        let v = Self::new(tenant, p.name);
+        let v = Self::new(p.tenant, p.name);
         Ok(v)
     }
 

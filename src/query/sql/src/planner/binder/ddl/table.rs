@@ -82,7 +82,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use derive_visitor::DriveMut;
 use log::debug;
-use log::error;
 
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
@@ -109,6 +108,7 @@ use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
+use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
@@ -390,7 +390,7 @@ impl Binder {
                 self.ctx
                     .get_catalog(&ctl_name)
                     .await?
-                    .get_database(self.ctx.get_tenant().name(), &database)
+                    .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
             }
@@ -565,16 +565,6 @@ impl Binder {
             }
         };
 
-        // for fuse engine, we will insert database_id, so if we check it in execute phase,
-        // we can't distinct user key and our internal key.
-        if options.contains_key(&OPT_KEY_DATABASE_ID.to_lowercase()) {
-            error!("invalid opt for fuse table in create table statement");
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "table option {} is invalid for create table statement",
-                OPT_KEY_DATABASE_ID
-            )));
-        }
-
         if engine == Engine::Fuse {
             // Currently, [Table] can not accesses its database id yet, thus
             // here we keep the db id AS an entry of `table_meta.options`.
@@ -586,7 +576,7 @@ impl Binder {
             // safely eliminate this "FUSE" constant and the table meta option entry.
             let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
-                .get_database(self.ctx.get_tenant().name(), &database)
+                .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
@@ -835,6 +825,14 @@ impl Binder {
                     table,
                 })))
             }
+            AlterTableAction::ModifyTableComment { new_comment } => {
+                Ok(Plan::ModifyTableComment(Box::new(ModifyTableCommentPlan {
+                    new_comment: new_comment.to_string(),
+                    catalog,
+                    database,
+                    table,
+                })))
+            }
             AlterTableAction::RenameColumn {
                 old_column,
                 new_column,
@@ -848,7 +846,7 @@ impl Binder {
                     .analyze_rename_column(old_column, new_column, schema)
                     .await?;
                 Ok(Plan::RenameTableColumn(Box::new(RenameTableColumnPlan {
-                    tenant: self.ctx.get_tenant().name().to_string(),
+                    tenant: self.ctx.get_tenant(),
                     catalog,
                     database,
                     table,
@@ -875,7 +873,7 @@ impl Binder {
                     AstAddColumnOption::End => AddColumnOption::End,
                 };
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
-                    tenant: self.ctx.get_tenant().name().to_string(),
+                    tenant: self.ctx.get_tenant(),
                     catalog,
                     database,
                     table,
@@ -938,7 +936,7 @@ impl Binder {
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
                     AlterTableClusterKeyPlan {
-                        tenant: tenant.name().to_string(),
+                        tenant,
                         catalog,
                         database,
                         table,
@@ -948,7 +946,7 @@ impl Binder {
             }
             AlterTableAction::DropTableClusterKey => Ok(Plan::DropTableClusterKey(Box::new(
                 DropTableClusterKeyPlan {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     catalog,
                     database,
                     table,
@@ -981,7 +979,7 @@ impl Binder {
                 };
 
                 Ok(Plan::ReclusterTable(Box::new(ReclusterTablePlan {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     catalog,
                     database,
                     table,
@@ -994,7 +992,7 @@ impl Binder {
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point).await?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     catalog,
                     database,
                     table,
@@ -1101,7 +1099,7 @@ impl Binder {
                 OptimizeTableAction::Purge(p)
             }
             AstOptimizeTableAction::Compact { target } => match target {
-                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
+                CompactTarget::Block => OptimizeTableAction::CompactBlocks(None),
                 CompactTarget::Segment => OptimizeTableAction::CompactSegments,
             },
         };
@@ -1389,7 +1387,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn analyze_create_table_schema(
+    pub(in crate::planner::binder) async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource,
     ) -> Result<(TableSchemaRef, Vec<String>)> {
@@ -1424,7 +1422,9 @@ impl Binder {
     }
 
     /// Validate the schema of the table to be created.
-    fn validate_create_table_schema(schema: &TableSchemaRef) -> Result<()> {
+    pub(in crate::planner::binder) fn validate_create_table_schema(
+        schema: &TableSchemaRef,
+    ) -> Result<()> {
         // Check if there are duplicated column names
         let mut name_set = HashSet::new();
         for field in schema.fields() {
@@ -1439,7 +1439,7 @@ impl Binder {
         Ok(())
     }
 
-    fn insert_table_option_with_validation(
+    pub(in crate::planner::binder) fn insert_table_option_with_validation(
         &self,
         options: &mut BTreeMap<String, String>,
         key: String,
@@ -1459,7 +1459,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn analyze_cluster_keys(
+    pub(in crate::planner::binder) async fn analyze_cluster_keys(
         &mut self,
         cluster_by: &[Expr],
         schema: TableSchemaRef,

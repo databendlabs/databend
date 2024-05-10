@@ -102,7 +102,7 @@ impl AsyncSystemTable for NotificationHistoryTable {
 
         let tenant = ctx.get_tenant();
         let query_id = ctx.get_id();
-        let user = ctx.get_current_user()?.identity().to_string();
+        let user = ctx.get_current_user()?.identity().display().to_string();
 
         let result_limit = push_downs
             .as_ref()
@@ -123,7 +123,7 @@ impl AsyncSystemTable for NotificationHistoryTable {
         }
 
         let req = ListNotificationHistoryRequest {
-            tenant_id: tenant.name().to_string(),
+            tenant_id: tenant.tenant_name().to_string(),
             result_limit,
             notification_name,
             ..Default::default()
@@ -132,7 +132,7 @@ impl AsyncSystemTable for NotificationHistoryTable {
         let cloud_api = CloudControlApiProvider::instance();
         let notification_client = cloud_api.get_notification_client();
         let mut cfg = build_client_config(
-            tenant.name().to_string(),
+            tenant.tenant_name().to_string(),
             user,
             query_id,
             cloud_api.get_timeout(),

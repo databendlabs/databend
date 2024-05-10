@@ -14,6 +14,7 @@
 
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
+use crate::BindContext;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -33,6 +34,7 @@ pub struct DeletePlan {
     pub database_name: String,
     pub table_name: String,
     pub metadata: MetadataRef,
+    pub bind_context: Box<BindContext>,
     pub selection: Option<ScalarExpr>,
     pub subquery_desc: Vec<SubqueryDesc>,
 }

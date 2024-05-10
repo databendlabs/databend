@@ -119,12 +119,14 @@ pub struct ExecuteRunning {
     // mainly used to get progress for now
     ctx: Arc<QueryContext>,
     schema: Vec<QueryResponseField>,
+    has_result_set: bool,
     #[allow(dead_code)]
     queue_guard: AcquireQueueGuard,
 }
 
 pub struct ExecuteStopped {
     pub schema: Vec<QueryResponseField>,
+    pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
@@ -173,6 +175,7 @@ impl Executor {
             warnings: self.get_warnings(),
             affect: self.get_affect(),
             schema: self.get_schema(),
+            has_result_set: self.has_result_set(),
         }
     }
     pub fn get_schema(&self) -> Vec<QueryResponseField> {
@@ -182,6 +185,15 @@ impl Executor {
             Stopped(f) => f.schema.clone(),
         }
     }
+
+    pub fn has_result_set(&self) -> Option<bool> {
+        match &self.state {
+            Starting(_) => None,
+            Running(r) => Some(r.has_result_set),
+            Stopped(f) => f.has_result_set,
+        }
+    }
+
     pub fn get_progress(&self) -> Progresses {
         match &self.state {
             Starting(_) => Default::default(),
@@ -276,6 +288,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     schema: vec![],
+                    has_result_set: None,
                     reason,
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     query_duration_ms: s.ctx.get_query_duration_ms(),
@@ -294,6 +307,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     schema: r.schema.clone(),
+                    has_result_set: Some(r.has_result_set),
                     reason,
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     query_duration_ms: r.ctx.get_query_duration_ms(),
@@ -345,11 +359,19 @@ impl ExecuteState {
         );
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let has_result_set = plan.has_result_set();
+        let schema = if has_result_set {
+            // check has_result_set first for safety
+            QueryResponseField::from_schema(plan.schema())
+        } else {
+            vec![]
+        };
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
             queue_guard,
-            schema: QueryResponseField::from_schema(plan.schema()),
+            schema,
+            has_result_set,
         };
         info!("{}: http query change state to Running", &ctx.get_id());
         Executor::start_to_running(&executor, Running(running_state)).await;

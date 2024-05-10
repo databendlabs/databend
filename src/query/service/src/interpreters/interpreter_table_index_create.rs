@@ -38,8 +38,34 @@ static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|
     r
 });
 
+// valid values for inverted index option filter
+static INDEX_FILTER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("english_stop");
+    r.insert("english_stemmer");
+    r.insert("chinese_stop");
+    r
+});
+
+// valid values for inverted index record option
+static INDEX_RECORD_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("basic");
+    r.insert("freq");
+    r.insert("position");
+    r
+});
+
 fn is_valid_tokenizer_values<S: AsRef<str>>(opt_val: S) -> bool {
-    INDEX_TOKENIZER_VALUES.contains(opt_val.as_ref().to_lowercase().as_str())
+    INDEX_TOKENIZER_VALUES.contains(opt_val.as_ref())
+}
+
+fn is_valid_filter_values<S: AsRef<str>>(opt_val: S) -> bool {
+    INDEX_FILTER_VALUES.contains(opt_val.as_ref())
+}
+
+fn is_valid_index_record_values<S: AsRef<str>>(opt_val: S) -> bool {
+    INDEX_RECORD_VALUES.contains(opt_val.as_ref())
 }
 
 pub struct CreateTableIndexInterpreter {
@@ -79,18 +105,45 @@ impl Interpreter for CreateTableIndexInterpreter {
         let mut options = BTreeMap::new();
         for (opt, val) in self.plan.index_options.iter() {
             let key = opt.to_lowercase();
-            if key == "tokenizer" {
-                let value = val.to_lowercase();
-                if !is_valid_tokenizer_values(&value) {
+            let value = val.to_lowercase();
+            match key.as_str() {
+                "tokenizer" => {
+                    if !is_valid_tokenizer_values(&value) {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{value}` is invalid index tokenizer",
+                        )));
+                    }
+                    options.insert("tokenizer".to_string(), value.to_string());
+                }
+                "filters" => {
+                    let raw_filters: Vec<&str> = value.split(',').collect();
+                    let mut filters = Vec::with_capacity(raw_filters.len());
+                    for raw_filter in raw_filters {
+                        let filter = raw_filter.trim();
+                        if !is_valid_filter_values(filter) {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{filter}` is invalid index filters",
+                            )));
+                        }
+                        filters.push(filter);
+                    }
+                    options.insert("filters".to_string(), filters.join(",").to_string());
+                }
+                "index_record" => {
+                    if !is_valid_index_record_values(&value) {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{value}` is invalid index record option",
+                        )));
+                    }
+                    // convert to a JSON string, for `IndexRecordOption` deserialize
+                    let index_record_val = format!("\"{}\"", value);
+                    options.insert("index_record".to_string(), index_record_val);
+                }
+                _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(
-                        "value {value} is invalid invalid tokenizer option value",
+                        "index option `{key}` is invalid key for create inverted index statement",
                     )));
                 }
-                options.insert("tokenizer".to_string(), value.to_string());
-            } else {
-                return Err(ErrorCode::IndexOptionInvalid(format!(
-                    "index option {key} is invalid for create inverted index statement",
-                )));
             }
         }
 

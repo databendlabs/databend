@@ -454,3 +454,103 @@ select count(*) from crt1;
 
 statement ok
 drop table if exists crt1
+
+### Atomic CTAS ###
+
+# CASE: no (visible)table should be created if anything fails
+statement error 1006
+create table t as select number/0 from numbers(1);
+
+# table t should not be created
+# expects:  ERROR 1105 (HY000): UnknownTable. Code: 1025, Text = error: ...
+statement error 1025
+select * from t;
+
+
+# CASE: create or replace
+
+# normal case
+statement ok
+create or replace table t as select * from numbers(1);
+
+query I
+select count(*) from t;
+----
+1
+
+statement ok
+create or replace table t as select * from numbers(2);
+
+query I
+select count(*) from t;
+----
+2
+
+statement ok
+drop table t;
+
+# replace exists table which created with plain create stmt:
+# table t should be replaced, (schema also changed)
+
+statement ok
+create table t(c int);
+
+statement ok
+insert into table t values(-1);
+
+statement ok
+create or replace table t as select * from numbers(2);
+
+query I
+select * from t order by number;
+----
+0
+1
+
+statement ok
+drop table t;
+
+# create or replace failed:
+# table should not be replaced if anything fails
+
+statement ok
+create or replace table t as select * from numbers(1);
+
+# table t should not be replaced
+statement error 1006
+create or replace table t as select number/0 from numbers(2);
+
+query I
+select * from t order by number;
+----
+0
+
+statement ok
+drop table t
+
+# CASE: create if not exist
+
+# brand new table
+
+statement ok
+create table if not exists t as select * from numbers(100);
+
+query I
+select count(*) from t;
+----
+100
+
+
+# table exists
+
+statement ok
+create table if not exists t as select * from numbers(1);
+
+# table not changed
+query I
+select count(*) from t;
+----
+100
+
+statement ok
+drop table t

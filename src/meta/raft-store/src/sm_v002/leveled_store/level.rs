@@ -19,6 +19,7 @@ use std::ops::RangeBounds;
 
 use databend_common_meta_types::KVMeta;
 use futures_util::StreamExt;
+use log::warn;
 
 use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::KVResultStream;
@@ -109,6 +110,13 @@ impl MapApiRO<String> for Level {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<Vec<_>>();
 
+        if vec.len() > 1000 {
+            warn!(
+                "Level::<String>::range() returns big range of len={}",
+                vec.len()
+            );
+        }
+
         let strm = futures::stream::iter(vec).map(Ok).boxed();
         Ok(strm)
     }
@@ -158,6 +166,13 @@ impl MapApiRO<ExpireKey> for Level {
             .range(range)
             .map(|(k, v)| (*k, v.clone()))
             .collect::<Vec<_>>();
+
+        if vec.len() > 1000 {
+            warn!(
+                "Level::<ExpireKey>::range() returns big range of len={}",
+                vec.len()
+            );
+        }
 
         let strm = futures::stream::iter(vec).map(Ok).boxed();
         Ok(strm)

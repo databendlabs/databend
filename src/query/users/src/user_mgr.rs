@@ -69,6 +69,15 @@ impl UserApiProvider {
     ) -> Result<UserInfo> {
         let user_info = self.get_user(tenant, user).await?;
 
+        if let Some(disabled) = user_info.option.disabled() {
+            if *disabled {
+                return Err(ErrorCode::AuthenticateFailure(format!(
+                    "AuthenticateFailure: user {} is disabled. Not allowed to login",
+                    user_info.name
+                )));
+            }
+        }
+
         if let Some(name) = user_info.option.network_policy() {
             let ip_addr: Ipv4Addr = match client_ip {
                 Some(client_ip) => client_ip.parse().unwrap(),
@@ -343,10 +352,14 @@ impl UserApiProvider {
         tenant: Tenant,
         user: UserIdentity,
         authed: bool,
+        user_info: &UserInfo,
     ) -> Result<()> {
-        if self.get_configured_user(&user.username).is_some() {
+        if self.get_configured_user(&user.username).is_some()
+            || user_info.option.password_policy().is_none()
+        {
             return Ok(());
         }
+
         let client = self.user_api(&tenant);
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {

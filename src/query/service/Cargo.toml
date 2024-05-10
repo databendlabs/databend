@@ -9,7 +9,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 default = ["simd", "z3-prove"]
@@ -50,6 +50,7 @@ databend-common-io = { path = "../../common/io" }
 databend-common-management = { path = "../management" }
 databend-common-meta-api = { path = "../../meta/api" }
 databend-common-meta-app = { path = "../../meta/app" }
+databend-common-script = { path = "../script" }
 
 databend-common-cloud-control = { path = "../../common/cloud_control" }
 databend-common-license = { path = "../../common/license" }
@@ -94,6 +95,7 @@ databend-storages-common-blocks = { path = "../storages/common/blocks" }
 databend-storages-common-cache = { path = "../storages/common/cache" }
 databend-storages-common-cache-manager = { path = "../storages/common/cache_manager" }
 databend-storages-common-index = { path = "../storages/common/index" }
+databend-storages-common-io = { path = "../storages/common/io" }
 databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 databend-storages-common-txn = { path = "../storages/common/txn" }
 jsonb = { workspace = true }
@@ -101,9 +103,8 @@ jsonb = { workspace = true }
 # GitHub dependencies
 
 # Crates.io dependencies
-## TODO add python support
-# arrow-udf-python = {package = "arrow-udf-python", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
-arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
+arrow-udf-js = { workspace = true }
+arrow-udf-wasm = { workspace = true }
 
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
@@ -158,7 +159,7 @@ prost = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
-rustls = "0.21.6"
+rustls = "0.21.11"
 rustls-pemfile = "1.0.2"
 rustyline = "11.0.0"
 serde = { workspace = true }
@@ -183,7 +184,6 @@ xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"
 arrow-cast = { workspace = true }
 ordered-float = { workspace = true }
 
-base64 = "0.21.0"
 criterion = "0.4"
 goldenfile = "1.4"
 hex = "0.4.3"

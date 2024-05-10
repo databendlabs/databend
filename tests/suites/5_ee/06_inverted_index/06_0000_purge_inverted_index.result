@@ -1,0 +1,35 @@
+###################
+###1st insertion###
+###################
+== number of snapshots (expects 1)==
+1
+== number of invert index files (expects 2) ==
+2
+###################
+###2nd insertion###
+###################
+== number of snapshots (expects 1)==
+1
+== number of invert index files (expects 4) ==
+4
+###################
+###3nd insertion###
+###################
+== number of snapshots (expects 1)==
+1
+== number of invert index files (expects 6) ==
+6
+###################
+####compaction#####
+###################
+== number of snapshots (expects 1)==
+1
+== number of invert index files (expects 2) ==
+2
+###################
+####new insertion##
+###################
+== number of snapshots (expects 1) ==
+1
+== number of invert index files (expects 4) ==
+4

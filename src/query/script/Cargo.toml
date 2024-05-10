@@ -20,4 +20,5 @@ minitrace = { workspace = true }
 
 [dev-dependencies]
 goldenfile = "1.4"
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 unindent = "0.2.3"

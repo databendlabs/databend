@@ -55,7 +55,7 @@ impl CreateTaskInterpreter {
             .to_string();
         let mut req = CreateTaskRequest {
             task_name: plan.task_name,
-            tenant_id: plan.tenant,
+            tenant_id: plan.tenant.tenant_name().to_string(),
             query_text: "".to_string(),
             owner,
             comment: plan.comment,

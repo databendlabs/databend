@@ -46,7 +46,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::MergeIntoSource;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -97,7 +96,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
             PhysicalPlan::MergeIntoAddRowNumber(plan) => self.replace_add_row_number(plan),
-            PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 self.replace_merge_into_row_id_apply(plan)
             }
@@ -116,6 +114,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkAppendData(plan) => self.replace_chunk_append_data(plan),
             PhysicalPlan::ChunkMerge(plan) => self.replace_chunk_merge(plan),
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
+            PhysicalPlan::AsyncFunction(plan) => Ok(PhysicalPlan::AsyncFunction(plan.clone())),
         }
     }
 
@@ -485,14 +484,6 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
-    fn replace_merge_into_source(&mut self, plan: &MergeIntoSource) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoSource(MergeIntoSource {
-            input: Box::new(input),
-            ..plan.clone()
-        }))
-    }
-
     fn replace_merge_into_row_id_apply(
         &mut self,
         plan: &MergeIntoAppendNotMatched,
@@ -628,6 +619,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::DeleteSource(_)
+                | PhysicalPlan::AsyncFunction(_)
                 | PhysicalPlan::UpdateSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
@@ -704,9 +696,6 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ReplaceInto(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::MergeIntoSource(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeInto(plan) => {

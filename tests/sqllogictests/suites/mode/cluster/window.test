@@ -1,0 +1,122 @@
+statement ok
+drop table if exists employees;
+
+statement ok
+drop table if exists departments;
+
+statement ok
+CREATE TABLE employees (
+    employee_id INT,
+    name VARCHAR(100),
+    department_id INT,
+    salary DECIMAL(10, 2)
+);
+
+statement ok
+CREATE TABLE departments (
+    department_id INT,
+    department_name VARCHAR(100)
+);
+
+statement ok
+INSERT INTO departments (department_id, department_name) VALUES
+(1, 'Human Resources'),
+(2, 'Marketing'),
+(3, 'Finance'),
+(4, 'IT');
+
+statement ok
+INSERT INTO employees (employee_id, name, department_id, salary) VALUES
+(1, 'Alice', 1, 50000.00),
+(2, 'Bob', 1, 52000.00),
+(3, 'Charlie', 2, 55000.00),
+(4, 'David', 2, 50000.00),
+(5, 'Eve', 3, 75000.00),
+(6, 'Frank', 3, 82000.00),
+(7, 'Grace', 4, 72000.00),
+(8, 'Hannah', 4, 69000.00),
+(9, 'Ian', 4, 67000.00),
+(10, 'Jack', 3, 70000.00);
+
+
+query TT?I
+SELECT
+    e.name AS EmployeeName,
+    d.department_name AS DepartmentName,
+    e.salary AS Salary,
+    ROW_NUMBER() OVER (PARTITION BY d.department_id ORDER BY e.salary DESC) AS SalaryRank
+FROM
+    employees e
+JOIN
+    departments d ON e.department_id = d.department_id
+ORDER BY
+    DepartmentName,
+    SalaryRank;
+----
+Frank Finance 82000.00 1
+Eve Finance 75000.00 2
+Jack Finance 70000.00 3
+Bob Human Resources 52000.00 1
+Alice Human Resources 50000.00 2
+Grace IT 72000.00 1
+Hannah IT 69000.00 2
+Ian IT 67000.00 3
+Charlie Marketing 55000.00 1
+David Marketing 50000.00 2
+
+
+query 
+explain SELECT e.name AS EmployeeName,
+    d.department_name AS DepartmentName,
+    e.salary AS Salary,
+    ROW_NUMBER() OVER (PARTITION BY d.department_id ORDER BY e.salary DESC) AS SalaryRank
+FROM
+    employees e
+JOIN
+    departments d ON e.department_id = d.department_id;
+----
+Window
+├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4), ROW_NUMBER() OVER ( PARTITION BY d.department_id ORDER BY e.salary DESC ) (#6)]
+├── aggregate function: [row_number]
+├── partition by: [department_id]
+├── order by: [salary]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+└── Exchange
+    ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
+    ├── exchange type: Merge
+    └── HashJoin
+        ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
+        ├── join type: INNER
+        ├── build keys: [d.department_id (#4)]
+        ├── probe keys: [e.department_id (#2)]
+        ├── filters: []
+        ├── estimated rows: 8.00
+        ├── Exchange(Build)
+        │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
+        │   ├── exchange type: Broadcast
+        │   └── TableScan
+        │       ├── table: default.default.departments
+        │       ├── output columns: [department_id (#4), department_name (#5)]
+        │       ├── read rows: 4
+        │       ├── read size: < 1 KiB
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │       ├── push downs: [filters: [], limit: NONE]
+        │       └── estimated rows: 4.00
+        └── TableScan(Probe)
+            ├── table: default.default.employees
+            ├── output columns: [name (#1), department_id (#2), salary (#3)]
+            ├── read rows: 10
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 10.00
+
+statement ok
+DROP TABLE employees;
+
+statement ok
+DROP TABLE departments;

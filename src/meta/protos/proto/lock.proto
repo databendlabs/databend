@@ -26,6 +26,7 @@ message LockKey {
 
   message Table {
     uint64 table_id = 1;
+    string tenant = 2;
   }
 
   oneof key {

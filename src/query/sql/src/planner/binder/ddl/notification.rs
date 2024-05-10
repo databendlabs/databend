@@ -91,10 +91,12 @@ impl Binder {
                         method: Some(method),
                         authorization_header: opts.authorization_header.clone(),
                     });
+
                 let tenant = self.ctx.get_tenant();
+
                 let plan = CreateNotificationPlan {
                     if_not_exists: *if_not_exists,
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     name: name.to_string(),
                     notification_type: t,
                     enabled: *enabled,
@@ -117,7 +119,9 @@ impl Binder {
             name,
             options,
         } = stmt;
+
         let tenant = self.ctx.get_tenant();
+
         match options {
             AlterNotificationOptions::Set(opts) => {
                 if opts.enabled.is_none() && opts.webhook_opts.is_none() && opts.comments.is_none()
@@ -130,7 +134,7 @@ impl Binder {
         }
         let plan = AlterNotificationPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant,
             name: name.to_string(),
             options: options.clone(),
         };
@@ -145,9 +149,10 @@ impl Binder {
     ) -> Result<Plan> {
         let DropNotificationStmt { if_exists, name } = stmt;
         let tenant = self.ctx.get_tenant();
+
         let plan = DropNotificationPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant,
             name: name.to_string(),
         };
         Ok(Plan::DropNotification(Box::new(plan)))
@@ -160,9 +165,11 @@ impl Binder {
         stmt: &DescribeNotificationStmt,
     ) -> Result<Plan> {
         let DescribeNotificationStmt { name } = stmt;
+
         let tenant = self.ctx.get_tenant();
+
         let plan = DescNotificationPlan {
-            tenant: tenant.name().to_string(),
+            tenant,
             name: name.to_string(),
         };
         Ok(Plan::DescNotification(Box::new(plan)))

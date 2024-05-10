@@ -18,6 +18,7 @@ use std::intrinsics::assume;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ThreadTracker;
@@ -41,6 +42,17 @@ pub enum ExecutorTask {
     Sync(ProcessorWrapper),
     Async(ProcessorWrapper),
     AsyncCompleted(CompletedAsyncTask),
+}
+
+impl ExecutorTask {
+    pub fn get_graph(&self) -> Option<Arc<RunningGraph>> {
+        match self {
+            ExecutorTask::None => None,
+            ExecutorTask::Sync(p) => Some(p.graph.clone()),
+            ExecutorTask::Async(p) => Some(p.graph.clone()),
+            ExecutorTask::AsyncCompleted(p) => Some(p.graph.clone()),
+        }
+    }
 }
 
 pub struct CompletedAsyncTask {
@@ -97,12 +109,14 @@ impl ExecutorWorkerContext {
         std::mem::replace(&mut self.task, ExecutorTask::None)
     }
 
-    pub fn get_graph(&self) -> Option<Arc<RunningGraph>> {
-        match &self.task {
-            ExecutorTask::None => None,
-            ExecutorTask::Sync(p) => Some(p.graph.clone()),
-            ExecutorTask::Async(p) => Some(p.graph.clone()),
-            ExecutorTask::AsyncCompleted(p) => Some(p.graph.clone()),
+    pub fn get_task_info(&self) -> Option<(Arc<RunningGraph>, NodeIndex)> {
+        unsafe {
+            match &self.task {
+                ExecutorTask::None => None,
+                ExecutorTask::Sync(p) => Some((p.graph.clone(), p.processor.id())),
+                ExecutorTask::Async(p) => Some((p.graph.clone(), p.processor.id())),
+                ExecutorTask::AsyncCompleted(p) => Some((p.graph.clone(), p.id)),
+            }
         }
     }
 
@@ -110,26 +124,34 @@ impl ExecutorWorkerContext {
     pub unsafe fn execute_task(
         &mut self,
         executor: Option<&Arc<QueriesPipelineExecutor>>,
-    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>, Box<NodeErrorType>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
-            ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
+            ExecutorTask::None => Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
+                "Execute none task.",
+            )))),
+            ExecutorTask::Sync(processor) => match self.execute_sync_task(processor) {
+                Ok(res) => Ok(res),
+                Err(cause) => Err(Box::new(NodeErrorType::SyncProcessError(cause))),
+            },
             ExecutorTask::Async(processor) => {
                 if let Some(executor) = executor {
-                    self.execute_async_task(
+                    match self.execute_async_task(
                         processor,
                         executor,
                         executor.global_tasks_queue.clone(),
-                    )
+                    ) {
+                        Ok(res) => Ok(res),
+                        Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
+                    }
                 } else {
-                    Err(ErrorCode::Internal(
+                    Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
                         "Async task should only be executed on queries executor",
-                    ))
+                    ))))
                 }
             }
             ExecutorTask::AsyncCompleted(task) => match task.res {
                 Ok(_) => Ok(Some((task.id, task.graph))),
-                Err(cause) => Err(cause),
+                Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
             },
         }
     }

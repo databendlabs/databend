@@ -4,7 +4,7 @@ DROP CONNECTION IF EXISTS test_conn
 statement error 2510.*Connection 'test_conn' does not exist.
 DROP CONNECTION test_conn
 
-statement error (?s)1005.*unexpected end of line
+statement error (?s)1005.*unexpected end of input
 CREATE CONNECTION test_conn
 
 statement error 1005

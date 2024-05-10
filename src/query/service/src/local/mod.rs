@@ -56,7 +56,7 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
 
     GlobalServices::init(&conf).await?;
     // init oss license manager
-    OssLicenseManager::init(conf.query.tenant_id.name().to_string()).unwrap();
+    OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
 
     // Cluster register.
     ClusterDiscovery::instance()

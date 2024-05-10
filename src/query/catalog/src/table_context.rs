@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
-use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
@@ -76,7 +76,7 @@ pub struct ProcessInfo {
     pub database: String,
     pub user: Option<UserInfo>,
     pub settings: Arc<Settings>,
-    pub client_address: Option<SocketAddr>,
+    pub client_address: Option<String>,
     pub session_extra_info: Option<String>,
     pub memory_usage: i64,
     /// storage metrics for persisted data reading.
@@ -157,8 +157,8 @@ pub trait TableContext: Send + Sync {
     fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;
     fn set_can_scan_from_agg_index(&self, enable: bool);
-    fn set_need_compact_after_write(&self, enable: bool);
-    fn get_need_compact_after_write(&self) -> bool;
+    fn set_compaction_num_block_hint(&self, hint: u64);
+    fn get_compaction_num_block_hint(&self) -> u64;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn get_query_str(&self) -> String;
@@ -278,4 +278,7 @@ pub trait TableContext: Send + Sync {
 
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
+
+    fn get_query_queued_duration(&self) -> Duration;
+    fn set_query_queued_duration(&self, queued_duration: Duration);
 }

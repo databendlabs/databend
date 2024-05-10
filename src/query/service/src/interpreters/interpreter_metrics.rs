@@ -41,7 +41,7 @@ impl InterpreterMetrics {
         vec![
             (LABEL_HANDLER, handler_type),
             (LABEL_KIND, query_kind),
-            (LABEL_TENANT, tenant_id.name().to_string()),
+            (LABEL_TENANT, tenant_id.tenant_name().to_string()),
             (LABEL_CLUSTER, cluster_id),
         ]
     }
@@ -127,11 +127,6 @@ impl InterpreterMetrics {
                 QUERY_FAILED.get_or_create(&labels).inc();
             }
         };
-    }
-
-    pub fn record_query_error(ctx: &QueryContext) {
-        let labels = Self::common_labels(ctx);
-        QUERY_ERROR.get_or_create(&labels).inc();
     }
 }
 

@@ -38,10 +38,8 @@ SELECT * FROM left_table ANTI JOIN (SELECT a as foo from right_table where b = 1
 43	1	1
 
 # Should throw error when filtering on column in right table
-statement error
+statement error (?s)1065.*column a doesn't exist
 SELECT * FROM left_table ANTI JOIN right_table ON left_table.a = right_table.a WHERE right_table.a < 43;
-----
-Binder Error
 
 statement ok
 INSERT INTO left_table VALUES (43, 1, 5), (43, 1, 5), (43, 1, 5), (43, 1, 5);

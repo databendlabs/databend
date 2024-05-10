@@ -365,6 +365,10 @@ pub enum AlterTableAction {
         old_column: Identifier,
         new_column: Identifier,
     },
+    ModifyTableComment {
+        #[drive(skip)]
+        new_comment: String,
+    },
     ModifyColumn {
         action: ModifyColumnAction,
     },
@@ -401,6 +405,9 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")?;
+            }
+            AlterTableAction::ModifyTableComment { new_comment } => {
+                write!(f, "COMMENT='{new_comment}'")?;
             }
             AlterTableAction::RenameColumn {
                 old_column,

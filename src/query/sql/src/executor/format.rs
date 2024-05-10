@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_base::base::convert_byte_size;
+use databend_common_base::base::format_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
@@ -24,6 +24,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
+use super::physical_plans::AsyncFunction;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -240,7 +241,6 @@ fn to_format_tree(
         }
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
         PhysicalPlan::MergeInto(_) => Ok(FormatTreeNode::new("MergeInto".to_string())),
-        PhysicalPlan::MergeIntoSource(_) => Ok(FormatTreeNode::new("MergeIntoSource".to_string())),
         PhysicalPlan::MergeIntoAddRowNumber(_) => {
             Ok(FormatTreeNode::new("MergeIntoAddRowNumber".to_string()))
         }
@@ -265,6 +265,7 @@ fn to_format_tree(
         PhysicalPlan::ChunkCommitInsert(_) => {
             Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
         }
+        PhysicalPlan::AsyncFunction(plan) => async_function_to_format_tree(plan, metadata, profs),
     }
 }
 
@@ -543,6 +544,31 @@ fn eval_scalar_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "EvalScalar".to_string(),
+        children,
+    ))
+}
+
+fn async_function_to_format_tree(
+    plan: &AsyncFunction,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    append_profile_info(&mut children, profs, plan.plan_id);
+
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
+
+    Ok(FormatTreeNode::with_children(
+        "AsyncFunction".to_string(),
         children,
     ))
 }
@@ -1027,13 +1053,7 @@ fn union_all_to_format_tree(
 }
 
 fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
-    let read_size = if info.read_bytes == 0 {
-        "0".to_string()
-    } else if info.read_bytes < 1024 {
-        "< 1 KiB".to_string()
-    } else {
-        convert_byte_size(info.read_bytes as f64)
-    };
+    let read_size = format_byte_size(info.read_bytes);
     let mut items = vec![
         FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
         FormatTreeNode::new(format!("read size: {}", read_size)),

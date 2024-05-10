@@ -1,0 +1,82 @@
+control sortmode rowsort
+
+statement ok
+use default;
+
+statement ok
+drop table if exists t1 all;
+
+statement ok
+create table t1(a integer, b integer, c integer, d integer, e integer);
+
+statement ok
+insert into t1(e,c,b,d,a) values(103,102,100,101,104);
+
+statement ok
+insert into t1(a,c,d,e,b) values(107,106,108,109,105);
+
+statement ok
+insert into t1(e,d,b,a,c) values(110,114,112,111,113);
+
+statement ok
+insert into t1(d,c,e,a,b) values(116,119,117,115,118);
+
+statement ok
+drop table if exists t2 all;
+
+statement ok
+create table t2(a integer, b integer, c integer, d integer, e integer);
+
+statement ok
+with cte_t as (select * from t1) insert into t2 select * from cte_t;
+
+query IIIII
+select * from t2;
+----
+104 100 102 101 103
+107 105 106 108 109
+111 112 113 114 110
+115 118 119 116 117
+
+statement ok
+delete from t2;
+
+statement ok
+with tt1 as (select * from t1), tt2 as (select * from tt1) insert into t2 select * from tt2;
+
+query IIIII
+select * from t2;
+----
+104 100 102 101 103
+107 105 106 108 109
+111 112 113 114 110
+115 118 119 116 117
+
+statement ok
+delete from t2;
+
+statement ok
+with tt1 as (select * from t1), tt2 as (select * from tt1 where a > 110), tt3 as (select * from tt2 where d > 110) insert into t2 select tt1.a, tt2.a, tt3.a, tt1.b, tt2.b from tt1, tt2, tt3;
+
+query IIIII
+select * from t2;
+----
+104 111 111 100 112
+104 111 115 100 112
+104 115 111 100 118
+104 115 115 100 118
+107 111 111 105 112
+107 111 115 105 112
+107 115 111 105 118
+107 115 115 105 118
+111 111 111 112 112
+111 111 115 112 112
+111 115 111 112 118
+111 115 115 112 118
+115 111 111 118 112
+115 111 115 118 112
+115 115 111 118 118
+115 115 115 118 118
+
+statement ok
+drop table t2;

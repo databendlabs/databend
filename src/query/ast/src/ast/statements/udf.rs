@@ -92,7 +92,7 @@ impl Display for UDFDefinition {
                 write_comma_separated_list(f, arg_types)?;
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' AS $${code}$$"
+                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' AS $$\n{code}\n$$"
                 )?;
             }
         }

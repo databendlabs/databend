@@ -116,6 +116,9 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (84, "2024-03-21: Rename: background.proto/BackgroundJobIdent to BackgroundTaskCreator"),
     (85, "2024-03-26: Add: table.inverted_index sync_creation"),
     (86, "2024-04-01: Add: table.inverted_index version, options"),
+    (87, "2024-04-17: Add: UserOption::disabled"),
+    (88, "2024-04-17: Add: SequenceMeta"),
+    (89, "2024-04-19: Add: geometry_output_format settings"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

@@ -67,7 +67,7 @@ error:
 1 | a.add(b)
   | -^
   | ||
-  | |chain function only works in experimental dialect, try `set sql_dialect = experimental`
+  | |chain function only works in experimental dialect, try `set sql_dialect = 'experimental'`
   | |while parsing x.function(...)
   | while parsing expression
 
@@ -81,7 +81,7 @@ error:
 1 | [ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]
   | ^
   | |
-  | list comprehension only works in experimental dialect, try `set sql_dialect = experimental`
+  | list comprehension only works in experimental dialect, try `set sql_dialect = 'experimental'`
   | while parsing expression
   | while parsing [expr for x in ... [if ...]]
 

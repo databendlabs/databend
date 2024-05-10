@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_license::license::Feature::VirtualColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_sql::plans::AlterVirtualColumnPlan;
 use databend_enterprise_virtual_column::get_virtual_column_handler;
 
@@ -73,7 +73,7 @@ impl Interpreter for AlterVirtualColumnInterpreter {
 
         let update_virtual_column_req = UpdateVirtualColumnReq {
             if_exists: self.plan.if_exists,
-            name_ident: VirtualColumnNameIdent::new(&tenant, table_id),
+            name_ident: VirtualColumnIdent::new(&tenant, table_id),
             virtual_columns: self.plan.virtual_columns.clone(),
         };
 

@@ -294,7 +294,7 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 catalog
-                    .get_database(self.ctx.get_tenant().name(), &database)
+                    .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 database
             }

@@ -47,7 +47,7 @@ impl Display for CreateUserStmt {
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
-        write!(f, " {} IDENTIFIED", self.user)?;
+        write!(f, " {} IDENTIFIED", self.user.display())?;
         write!(f, " {}", self.auth_option)?;
         if !self.user_options.is_empty() {
             write!(f, " WITH ")?;
@@ -93,7 +93,7 @@ impl Display for AlterUserStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ALTER USER")?;
         if let Some(user) = &self.user {
-            write!(f, " {user}")?;
+            write!(f, " {}", user.display())?;
         } else {
             write!(f, " USER()")?;
         }
@@ -234,6 +234,7 @@ pub enum SecondaryRolesOption {
 pub enum UserOptionItem {
     TenantSetting(#[drive(skip)] bool),
     DefaultRole(#[drive(skip)] String),
+    Disabled(#[drive(skip)] bool),
     SetNetworkPolicy(#[drive(skip)] String),
     UnsetNetworkPolicy,
     SetPasswordPolicy(#[drive(skip)] String),
@@ -251,6 +252,7 @@ impl UserOptionItem {
             Self::UnsetNetworkPolicy => option.set_network_policy(None),
             Self::SetPasswordPolicy(v) => option.set_password_policy(Some(v.clone())),
             Self::UnsetPasswordPolicy => option.set_password_policy(None),
+            Self::Disabled(v) => option.set_disabled(Some(*v)),
         }
     }
 }
@@ -265,6 +267,7 @@ impl Display for UserOptionItem {
             UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK POLICY"),
             UserOptionItem::SetPasswordPolicy(v) => write!(f, "SET PASSWORD POLICY = '{}'", v),
             UserOptionItem::UnsetPasswordPolicy => write!(f, "UNSET PASSWORD POLICY"),
+            UserOptionItem::Disabled(v) => write!(f, "DISABLED = {}", v),
         }
     }
 }

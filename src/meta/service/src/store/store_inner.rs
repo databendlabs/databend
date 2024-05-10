@@ -58,7 +58,7 @@ use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StorageIOError;
 use databend_common_meta_types::Vote;
-use futures::Stream;
+use futures::TryStreamExt;
 use log::debug;
 use log::info;
 use log::warn;
@@ -229,27 +229,63 @@ impl StoreInner {
 
         info!("do_build_snapshot writing snapshot start");
 
-        let mut snapshot_store = self.snapshot_store();
+        let mut ss_store = self.snapshot_store();
 
-        let strm = snapshot_view.export().await.map_err(|e| {
+        let mut strm = snapshot_view.export().await.map_err(|e| {
             SnapshotStoreError::read(e).with_meta("export state machine", &snapshot_meta)
         })?;
 
-        // Move heavy load to a blocking thread pool.
-        let (snapshot_id, snapshot_size) = tokio::task::block_in_place({
-            let sto = &mut snapshot_store;
-            let meta = snapshot_meta.clone();
-            let sleep = self.get_delay_config("write").await;
+        let meta = snapshot_meta.clone();
 
-            move || {
-                Self::testing_sleep("write", sleep);
-                futures::executor::block_on(Self::write_snapshot(sto, meta, strm))
-            }
-        })?;
+        let (tx, rx) = tokio::sync::mpsc::channel(64 * 1024);
+
+        // Spawn another thread to write entries to disk.
+        let th = databend_common_base::runtime::spawn_blocking(move || {
+            let mut writer = ss_store.new_writer()?;
+
+            info!("do_build_snapshot writer start");
+
+            writer
+                .write_entries_sync(rx)
+                .map_err(|e| SnapshotStoreError::write(e).with_meta("serialize entries", &meta))?;
+
+            info!("do_build_snapshot commit start");
+
+            let (snapshot_id, snapshot_size) = writer
+                .commit(None)
+                .map_err(|e| SnapshotStoreError::write(e).with_meta("writer.commit", &meta))?;
+
+            Ok::<(SnapshotStoreV002, MetaSnapshotId, u64), SnapshotStoreError>((
+                ss_store,
+                snapshot_id,
+                snapshot_size,
+            ))
+        });
+
+        // Pipe entries to the writer.
+        while let Some(ent) = strm
+            .try_next()
+            .await
+            .map_err(|e| StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e))?
+        {
+            tx.send(ent).await.map_err(|e| {
+                let e = StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e);
+                StorageError::from(e)
+            })?;
+        }
+
+        // Close the channel tx so that the io thread `th` can be finished.
+        drop(tx);
+
+        let (ss_store, snapshot_id, snapshot_size) = th
+            .await
+            .map_err(|e| StorageIOError::write_snapshot(None, &e))??;
 
         info!(snapshot_size :% =(snapshot_size); "do_build_snapshot complete");
 
-        snapshot_store.clean_old_snapshots().await?;
+        ss_store.clean_old_snapshots().await?;
+
+        info!("do_build_snapshot clean_old_snapshots complete");
 
         assert_eq!(
             snapshot_id.last_applied, snapshot_meta.last_log_id,
@@ -267,7 +303,7 @@ impl StoreInner {
             *current_snapshot = Some(snapshot);
         }
 
-        let r = snapshot_store
+        let r = ss_store
             .load_snapshot(&snapshot_meta.snapshot_id)
             .await
             .map_err(|e| {
@@ -344,27 +380,6 @@ impl StoreInner {
         }
 
         Ok(snapshot_view)
-    }
-
-    async fn write_snapshot(
-        snapshot_store: &mut SnapshotStoreV002,
-        snapshot_meta: SnapshotMeta,
-        entry_stream: impl Stream<Item = Result<RaftStoreEntry, io::Error>>,
-    ) -> Result<(MetaSnapshotId, u64), SnapshotStoreError> {
-        let mut writer = snapshot_store.new_writer()?;
-
-        writer
-            .write_entry_results::<io::Error>(entry_stream)
-            .await
-            .map_err(|e| {
-                SnapshotStoreError::write(e).with_meta("serialize entries", &snapshot_meta)
-            })?;
-
-        let (snapshot_id, file_size) = writer
-            .commit(None)
-            .map_err(|e| SnapshotStoreError::write(e).with_meta("writer.commit", &snapshot_meta))?;
-
-        Ok((snapshot_id, file_size))
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
@@ -463,28 +478,21 @@ impl StoreInner {
             yield s;
         };
 
-        // Export logs that has smaller or equal leader id as `vote`
-        {
-            let tree_name = &log.inner.name;
+        drop(raft_state);
 
-            let log_kvs = log.inner.export()?;
+        // Dump logs that has smaller or equal leader id as `vote`
+        let log_tree_name = log.inner.name.clone();
+        let log_kvs = log.inner.export()?;
 
-            for kv in log_kvs.iter() {
-                let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
+        drop(log);
 
-                let tree_kv = (tree_name, kv_entry);
-                let line = serde_json::to_string(&tree_kv).map_err(invalid_data)?;
-                yield line;
-            }
-        }
+        // Dump snapshot of state machine
 
-        // Export snapshot of state machine
-        {
-            // NOTE:
-            // The name in form of "state_machine/[0-9]+" had been used by the sled tree based sm.
-            // Do not change it for keeping compatibility.
-            let tree_name = "state_machine/0";
-
+        // NOTE:
+        // The name in form of "state_machine/[0-9]+" had been used by the sled tree based sm.
+        // Do not change it for keeping compatibility.
+        let sm_tree_name = "state_machine/0";
+        let f = {
             let snapshot = current_snapshot.clone();
             if let Some(s) = snapshot {
                 let meta = s.meta;
@@ -495,17 +503,33 @@ impl StoreInner {
                     .load_snapshot(&meta.snapshot_id)
                     .await
                     .map_err(invalid_data)?;
-                let bf = BufReader::new(f);
-                let mut lines = AsyncBufReadExt::lines(bf);
+                Some(f)
+            } else {
+                None
+            }
+        };
 
-                while let Some(l) = lines.next_line().await? {
-                    let ent: RaftStoreEntry = serde_json::from_str(&l).map_err(invalid_data)?;
+        drop(current_snapshot);
 
-                    let named_entry = (tree_name, ent);
+        for kv in log_kvs.iter() {
+            let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
 
-                    let line = serde_json::to_string(&named_entry).map_err(invalid_data)?;
-                    yield line;
-                }
+            let tree_kv = (&log_tree_name, kv_entry);
+            let line = serde_json::to_string(&tree_kv).map_err(invalid_data)?;
+            yield line;
+        }
+
+        if let Some(f) = f {
+            let bf = BufReader::new(f);
+            let mut lines = AsyncBufReadExt::lines(bf);
+
+            while let Some(l) = lines.next_line().await? {
+                let ent: RaftStoreEntry = serde_json::from_str(&l).map_err(invalid_data)?;
+
+                let named_entry = (sm_tree_name, ent);
+
+                let line = serde_json::to_string(&named_entry).map_err(invalid_data)?;
+                yield line;
             }
         }
     }

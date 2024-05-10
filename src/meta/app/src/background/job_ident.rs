@@ -13,32 +13,43 @@
 // limitations under the License.
 
 use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
 /// Defines the meta-service key for background job.
 pub type BackgroundJobIdent = TIdent<Resource>;
+pub type BackgroundJobIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
+
+impl BackgroundJobIdent {
+    pub fn job_name(&self) -> &str {
+        self.name()
+    }
+}
 
 mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::background::BackgroundJobId;
+    use crate::background::BackgroundJobIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_background_job";
-        type ValueType = BackgroundJobId;
+        const TYPE: &'static str = "BackgroundJobIdent";
+        const HAS_TENANT: bool = true;
+        type ValueType = BackgroundJobIdIdent;
     }
 
-    impl kvapi::Value for BackgroundJobId {
+    impl kvapi::Value for BackgroundJobIdIdent {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }
 
+    // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     //     fn from(err: ExistError<Resource>) -> Self {
     //         ErrorCode::ConnectionAlreadyExists(err.to_string())

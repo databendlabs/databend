@@ -26,12 +26,14 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::is_stream_column_id;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use log::info;
 use opendal::Operator;
 
 use crate::io::SegmentsIO;
@@ -82,12 +84,16 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
-        let (num_segment_limit, num_block_limit) =
-            if let Some(limit) = self.compact_params.num_segment_limit {
-                (limit, MAX_BLOCK_COUNT * 100)
-            } else {
-                (number_segments, MAX_BLOCK_COUNT)
-            };
+        let num_segment_limit = self
+            .compact_params
+            .num_segment_limit
+            .unwrap_or(number_segments);
+        let num_block_limit = self
+            .compact_params
+            .num_block_limit
+            .unwrap_or(MAX_BLOCK_COUNT);
+
+        info!("block compaction limits: seg {num_segment_limit},  block {num_block_limit}");
 
         // Status.
         self.ctx
@@ -141,8 +147,13 @@ impl BlockCompactMutator {
                     self.generate_part(segments, &mut parts, &mut checker);
                 }
 
-                if checker.compacted_segment_cnt + checker.segments.len() >= num_segment_limit
-                    || checker.compacted_block_cnt >= num_block_limit as u64
+                let residual_segment_cnt = checker.segments.len();
+                let residual_block_cnt = checker
+                    .segments
+                    .iter()
+                    .fold(0, |acc, e| acc + e.1.summary.block_count);
+                if checker.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
+                    || checker.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
                 {
                     is_end = true;
                     break;
@@ -185,6 +196,7 @@ impl BlockCompactMutator {
         let cluster = self.ctx.get_cluster();
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
+            // NOTE: The snapshot schema does not contain the stream column.
             let column_ids = self
                 .compact_params
                 .base_snapshot
@@ -461,7 +473,14 @@ impl CompactTaskBuilder {
     }
 
     fn check_compact(&self, block: &Arc<BlockMeta>) -> bool {
-        let column_ids: HashSet<ColumnId> = block.col_metas.keys().cloned().collect();
+        // The snapshot schema does not contain stream columns,
+        // so the stream columns need to be filtered out.
+        let column_ids = block
+            .col_metas
+            .keys()
+            .filter(|id| !is_stream_column_id(**id))
+            .cloned()
+            .collect::<HashSet<_>>();
         if self.column_ids == column_ids {
             // Check if the block needs to be resort.
             self.cluster_key_id.is_some_and(|key| {

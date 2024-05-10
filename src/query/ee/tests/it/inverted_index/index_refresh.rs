@@ -18,11 +18,9 @@ use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_sql::plans::RefreshTableIndexPlan;
-use databend_common_storages_fuse::io::read::load_inverted_index_info;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
@@ -35,6 +33,11 @@ use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
+use tantivy::schema::Field;
+use tantivy::tokenizer::LowerCaser;
+use tantivy::tokenizer::SimpleTokenizer;
+use tantivy::tokenizer::TextAnalyzer;
+use tantivy::tokenizer::TokenizerManager;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
@@ -60,12 +63,17 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let index_name = "idx1".to_string();
     let mut options = BTreeMap::new();
     options.insert("tokenizer".to_string(), "english".to_string());
+    options.insert(
+        "filters".to_string(),
+        "english_stop,english_stemmer,chinese_stop".to_string(),
+    );
+
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
         name: index_name.clone(),
         column_ids: vec![0, 1],
-        sync_creation: true,
+        sync_creation: false,
         options,
     };
 
@@ -91,18 +99,13 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let new_snapshot = new_fuse_table.read_table_snapshot().await?;
     assert!(new_snapshot.is_some());
     let new_snapshot = new_snapshot.unwrap();
-    assert!(new_snapshot.inverted_indexes.is_some());
 
-    let index_info_loc = new_snapshot
-        .inverted_indexes
-        .as_ref()
-        .and_then(|i| i.get(&index_name));
-    assert!(index_info_loc.is_some());
-    let index_info =
-        load_inverted_index_info(new_fuse_table.get_operator(), index_info_loc).await?;
-    assert!(index_info.is_some());
-    let index_info = index_info.unwrap();
-    let index_version = index_info.index_version.clone();
+    let table_info = new_table.get_table_info();
+    let table_indexes = &table_info.meta.indexes;
+    let table_index = table_indexes.get(&index_name);
+    assert!(table_index.is_some());
+    let table_index = table_index.unwrap();
+    let index_version = table_index.version.clone();
 
     let segment_reader =
         MetaReaders::segment_info_reader(new_fuse_table.get_operator(), table_schema.clone());
@@ -125,8 +128,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let block_meta = &block_metas[0];
 
     let dal = new_fuse_table.get_operator_ref();
-    let schema = DataSchema::from(table_schema);
-    let query_columns = vec!["title".to_string(), "content".to_string()];
+    let fields = ["title".to_string(), "content".to_string()];
 
     let index_loc = TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
         &block_meta.location.0,
@@ -134,11 +136,38 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         &index_version,
     );
 
-    let index_reader =
-        InvertedIndexReader::try_create(dal.clone(), &schema, &query_columns, &index_loc).await?;
+    let field_nums = fields.len();
+    let has_score = true;
+    let need_position = false;
+
+    let mut query_fields = Vec::with_capacity(fields.len());
+    let query_field_boosts = Vec::new();
+    for i in 0..fields.len() {
+        let field = Field::from_field_id(i as u32);
+        query_fields.push(field);
+    }
+    let tokenizer_manager = TokenizerManager::new();
+    let english_analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
+        .filter(LowerCaser)
+        .build();
+    tokenizer_manager.register("english", english_analyzer);
+
+    let index_reader = InvertedIndexReader::try_create(
+        dal.clone(),
+        field_nums,
+        has_score,
+        need_position,
+        query_fields,
+        query_field_boosts,
+        tokenizer_manager,
+        &index_loc,
+    )
+    .await?;
 
     let query = "rust";
-    let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;
+    let matched_rows = index_reader
+        .clone()
+        .do_filter(query, block_meta.row_count)?;
     assert!(matched_rows.is_some());
     let matched_rows = matched_rows.unwrap();
     assert_eq!(matched_rows.len(), 2);
@@ -146,7 +175,9 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     assert_eq!(matched_rows[1].0, 1);
 
     let query = "java";
-    let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;
+    let matched_rows = index_reader
+        .clone()
+        .do_filter(query, block_meta.row_count)?;
     assert!(matched_rows.is_some());
     let matched_rows = matched_rows.unwrap();
     assert_eq!(matched_rows.len(), 1);

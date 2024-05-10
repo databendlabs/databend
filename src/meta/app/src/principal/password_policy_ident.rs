@@ -33,6 +33,8 @@ mod kvapi_impl {
 
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_password_policies";
+        const TYPE: &'static str = "PasswordPolicyIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = PasswordPolicy;
     }
 

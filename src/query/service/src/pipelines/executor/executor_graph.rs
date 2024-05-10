@@ -21,8 +21,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::base::WatchNotify;
+use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ErrorInfo;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
@@ -127,6 +130,13 @@ impl Node {
             // Node tracking metrics
             tracking_payload.metrics = scope.as_ref().map(|x| x.metrics_registry.clone());
 
+            // Node tracking error
+            tracking_payload.node_error = Some(ErrorInfo::create(
+                pid,
+                unsafe { processor.name() },
+                scope.as_ref().map(|x| x.id),
+            ));
+
             tracking_payload
         };
 
@@ -138,6 +148,23 @@ impl Node {
             outputs_port: outputs_port.to_vec(),
             tracking_payload,
         })
+    }
+
+    pub fn record_error(&self, error: NodeErrorType) {
+        if self.tracking_payload.node_error.is_some() {
+            let mut guard = self
+                .tracking_payload
+                .node_error
+                .as_ref()
+                .unwrap()
+                .error
+                .lock();
+
+            // Only record the first error
+            if (*guard).is_none() {
+                *guard = Some(error);
+            }
+        }
     }
 
     pub unsafe fn trigger(&self, queue: &mut VecDeque<DirectedEdge>) {
@@ -152,8 +179,8 @@ impl Node {
 const POINTS_MASK: u64 = 0xFFFFFFFF00000000;
 const EPOCH_MASK: u64 = 0x00000000FFFFFFFF;
 
-// TODO: Replace with a variable, not a const value
-const MAX_POINTS: u64 = 3;
+// DEFAULT_POINTS is equal to Priority::MEDIUM
+const DEFAULT_POINTS: u64 = 3;
 
 struct ExecutingGraph {
     finished_nodes: AtomicUsize,
@@ -163,8 +190,10 @@ struct ExecutingGraph {
     /// - the high 32 bit store the number of points that can be consumed
     /// - the low 32 bit store this points belong to which epoch
     points: AtomicU64,
+    max_points: AtomicU64,
     query_id: Arc<String>,
     should_finish: AtomicBool,
+    finished_notify: Arc<WatchNotify>,
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     finished_error: Mutex<Option<ErrorCode>>,
 }
@@ -183,9 +212,11 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
-            points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
+            points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
+            max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
             should_finish: AtomicBool::new(false),
+            finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
         })
@@ -206,9 +237,11 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
-            points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
+            points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
+            max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
             should_finish: AtomicBool::new(false),
+            finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
         })
@@ -425,7 +458,8 @@ impl ExecutingGraph {
     }
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
-    pub fn can_perform_task(&self, global_epoch: u32, max_points: u64) -> bool {
+    pub fn can_perform_task(&self, global_epoch: u32) -> bool {
+        let max_points = self.max_points.load(Ordering::SeqCst);
         let mut expected_value = 0;
         let mut desired_value = 0;
         loop {
@@ -435,16 +469,18 @@ impl ExecutingGraph {
                 Ordering::SeqCst,
                 Ordering::Relaxed,
             ) {
-                Ok(old_value) => {
-                    return (old_value & EPOCH_MASK) as u32 == global_epoch;
+                Ok(_) => {
+                    return (desired_value & EPOCH_MASK) as u32 == global_epoch;
                 }
                 Err(new_expected) => {
                     let remain_points = (new_expected & POINTS_MASK) >> 32;
                     let epoch = new_expected & EPOCH_MASK;
 
                     expected_value = new_expected;
-                    if epoch != global_epoch as u64 {
+                    if epoch > global_epoch as u64 {
                         desired_value = new_expected;
+                    } else if epoch < global_epoch as u64 {
+                        desired_value = (max_points - 1) << 32 | global_epoch as u64;
                     } else if remain_points >= 1 {
                         desired_value = (remain_points - 1) << 32 | epoch;
                     } else {
@@ -578,7 +614,7 @@ impl ScheduleQueue {
         while let Some(processor) = self.async_queue.pop_front() {
             if processor
                 .graph
-                .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+                .can_perform_task(executor.epoch.load(Ordering::SeqCst))
             {
                 let query_id = processor.graph.get_query_id().clone();
                 Self::schedule_async_task_with_condition(
@@ -600,7 +636,7 @@ impl ScheduleQueue {
             while let Some(processor) = self.sync_queue.pop_front() {
                 if processor
                     .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+                    .can_perform_task(executor.epoch.load(Ordering::SeqCst))
                 {
                     context.set_task(ExecutorTask::Sync(processor));
                     break;
@@ -618,7 +654,7 @@ impl ScheduleQueue {
             while let Some(processor) = self.sync_queue.pop_front() {
                 if processor
                     .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
+                    .can_perform_task(executor.epoch.load(Ordering::SeqCst))
                 {
                     current_tasks.push_back(ExecutorTask::Sync(processor));
                 } else {
@@ -765,6 +801,7 @@ impl RunningGraph {
             return Ok(());
         }
         self.0.should_finish.store(true, Ordering::SeqCst);
+        self.0.finished_notify.notify_waiters();
         self.interrupt_running_nodes();
         let mut finished_error = self.0.finished_error.lock();
         if finished_error.is_none() {
@@ -787,8 +824,8 @@ impl RunningGraph {
     }
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
-    pub fn can_perform_task(&self, global_epoch: u32, max_points: u64) -> bool {
-        self.0.can_perform_task(global_epoch, max_points)
+    pub fn can_perform_task(&self, global_epoch: u32) -> bool {
+        self.0.can_perform_task(global_epoch)
     }
 
     pub fn get_query_id(&self) -> Arc<String> {
@@ -798,6 +835,18 @@ impl RunningGraph {
     pub fn get_error(&self) -> Option<ErrorCode> {
         let finished_error = self.0.finished_error.lock();
         finished_error.clone()
+    }
+
+    pub fn record_node_error(&self, node_index: NodeIndex, error: NodeErrorType) {
+        self.0.graph[node_index].record_error(error);
+    }
+
+    pub fn get_points(&self) -> u64 {
+        self.0.points.load(Ordering::SeqCst)
+    }
+
+    pub fn get_finished_notify(&self) -> Arc<WatchNotify> {
+        self.0.finished_notify.clone()
     }
 
     pub fn format_graph_nodes(&self) -> String {
@@ -901,6 +950,11 @@ impl RunningGraph {
         }
 
         format!("{:?}", nodes_display)
+    }
+
+    /// Change the priority
+    pub fn change_priority(&self, priority: u64) {
+        self.0.max_points.store(priority, Ordering::SeqCst);
     }
 }
 

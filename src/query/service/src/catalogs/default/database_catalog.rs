@@ -32,6 +32,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateSequenceReply;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -43,6 +45,8 @@ use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
+use databend_common_meta_app::schema::DropSequenceReply;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
@@ -55,6 +59,10 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetSequenceNextValueReply;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -72,13 +80,13 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
@@ -92,7 +100,9 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
@@ -162,13 +172,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while get database)",
-            ));
-        }
-
+    async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let r = self.immutable_catalog.get_database(tenant, db_name).await;
         match r {
             Err(e) => {
@@ -196,12 +200,12 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                req.name_ident.db_name
+                req.name_ident.database_name()
             )));
         }
         // create db in BOTTOM layer only
@@ -215,7 +219,7 @@ impl Catalog for DatabaseCatalog {
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
-            .exists_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
             return self.immutable_catalog.drop_database(req).await;
@@ -229,11 +233,11 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
             || self
                 .immutable_catalog
-                .exists_database(req.name_ident.tenant.name(), &req.new_db_name)
+                .exists_database(req.name_ident.tenant(), &req.new_db_name)
                 .await?
         {
             return self.immutable_catalog.rename_database(req).await;
@@ -257,7 +261,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         let res = self.immutable_catalog.get_table_meta_by_id(table_id).await;
 
         if let Ok(x) = res {
@@ -268,27 +272,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        let res = self.immutable_catalog.get_table_name_by_id(table_id).await;
-
-        if let Ok(x) = res {
-            Ok(x)
-        } else {
-            self.mutable_catalog.get_table_name_by_id(table_id).await
-        }
-    }
-
-    #[async_backtrace::framed]
     async fn mget_table_names_by_ids(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         table_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         // Fetching system database names
-        let sys_dbs = self
-            .immutable_catalog
-            .list_databases(&Tenant::new_literal(tenant))
-            .await?;
+        let sys_dbs = self.immutable_catalog.list_databases(tenant).await?;
 
         // Collecting system table names from all system databases
         let mut sys_table_ids = Vec::new();
@@ -376,16 +366,10 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn get_table(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while get table)",
-            ));
-        }
-
         let res = self
             .immutable_catalog
             .get_table(tenant, db_name, table_name)
@@ -405,13 +389,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while list tables)",
-            ));
-        }
-
+    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let r = self.immutable_catalog.list_tables(tenant, db_name).await;
         match r {
             Ok(x) => Ok(x),
@@ -428,15 +406,9 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while list tables)",
-            ));
-        }
-
         let r = self
             .immutable_catalog
             .list_tables_history(tenant, db_name)
@@ -461,7 +433,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(req.tenant().name(), req.db_name())
+            .exists_database(req.tenant(), req.db_name())
             .await?
         {
             return self.immutable_catalog.create_table(req).await;
@@ -481,7 +453,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(req.tenant().name(), req.db_name())
+            .exists_database(req.tenant(), req.db_name())
             .await?
         {
             return self.immutable_catalog.undrop_table(req).await;
@@ -490,12 +462,26 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+        info!("Undrop table by id from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?
+        {
+            return self.immutable_catalog.undrop_table_by_id(req).await;
+        }
+        self.mutable_catalog.undrop_table_by_id(req).await
+    }
+
+    #[async_backtrace::framed]
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         info!("Undrop database from req:{:?}", req);
 
         if self
             .immutable_catalog
-            .exists_database(req.tenant().name(), req.db_name())
+            .exists_database(req.tenant(), req.db_name())
             .await?
         {
             return self.immutable_catalog.undrop_database(req).await;
@@ -509,11 +495,11 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(req.tenant().name(), req.db_name())
+            .exists_database(req.tenant(), req.db_name())
             .await?
             || self
                 .immutable_catalog
-                .exists_database(req.tenant().name(), &req.new_db_name)
+                .exists_database(req.tenant(), &req.new_db_name)
                 .await?
         {
             return Err(ErrorCode::Unimplemented(
@@ -537,7 +523,7 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
@@ -558,7 +544,7 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
-        tenant: &str,
+        tenant: &Tenant,
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
@@ -720,5 +706,23 @@ impl Catalog for DatabaseCatalog {
 
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
         self.mutable_catalog.gc_drop_tables(req).await
+    }
+
+    async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
+        self.mutable_catalog.create_sequence(req).await
+    }
+    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
+        self.mutable_catalog.get_sequence(req).await
+    }
+
+    async fn get_sequence_next_value(
+        &self,
+        req: GetSequenceNextValueReq,
+    ) -> Result<GetSequenceNextValueReply> {
+        self.mutable_catalog.get_sequence_next_value(req).await
+    }
+
+    async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
+        self.mutable_catalog.drop_sequence(req).await
     }
 }

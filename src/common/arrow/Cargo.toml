@@ -1,22 +1,22 @@
 [package]
+description = "Arrow implementation forked from arrow2 and native format implementation forked from strawboat."
 edition = "2021"
 license = "Apache-2.0"
 name = "databend-common-arrow"
 publish = false
 version = "0.1.0"
-description = "Arrow implementation forked from arrow2 and native format implementation forked from strawboat."
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 default = ["arrow-default", "parquet-default"]
 
 arrow = ["arrow-buffer", "arrow-schema", "arrow-data", "arrow-array"]
+io_flight = ["io_ipc", "arrow-format/flight-data"]
 io_ipc = []
 io_ipc_compression = []
-io_flight = ["io_ipc", "arrow-format/flight-data"]
 
 # base64 + io_ipc because arrow schemas are stored as base64-encoded ipc format.
 io_parquet = ["io_ipc", "base64", "streaming-iterator", "fallible-streaming-iterator"]
@@ -34,21 +34,15 @@ io_parquet_compression = [
 io_parquet_sample_test = ["io_parquet_async"]
 
 # compression backends
-io_parquet_zstd = ["parquet2/zstd"]
-io_parquet_gzip = ["parquet2/gzip"]
-io_parquet_snappy = ["parquet2/snappy"]
-io_parquet_lz4 = ["parquet2/lz4"]
 io_parquet_brotli = ["parquet2/brotli"]
+io_parquet_gzip = ["parquet2/gzip"]
+io_parquet_lz4 = ["parquet2/lz4"]
+io_parquet_snappy = ["parquet2/snappy"]
+io_parquet_zstd = ["parquet2/zstd"]
 
 # parquet bloom filter functions
 io_parquet_bloom_filter = ["parquet2/bloom_filter"]
 
-compute_aggregate = []
-compute_cast = ["lexical-core", "compute_take"]
-compute_concatenate = []
-compute_merge_sort = ["itertools", "compute_sort"]
-compute_sort = ["compute_take"]
-compute_take = []
 compute = [
     "compute_aggregate",
     "compute_cast",
@@ -57,6 +51,12 @@ compute = [
     "compute_sort",
     "compute_take",
 ]
+compute_aggregate = []
+compute_cast = ["lexical-core", "compute_take"]
+compute_concatenate = []
+compute_merge_sort = ["itertools", "compute_sort"]
+compute_sort = ["compute_take"]
+compute_take = []
 
 serde_types = ["serde", "serde_derive"]
 simd = []
@@ -104,7 +104,10 @@ dyn-clone = "1"
 either = "1.9"
 foreign_vec = "0.1.0"
 num-traits = "0.2"
-parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async"] }
+parquet2 = { package = "databend-common-parquet2", path = "../parquet2", default_features = false, features = [
+    "serde_types",
+    "async",
+] }
 
 # for decimal i256
 ethnum = { workspace = true }

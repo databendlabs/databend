@@ -15,7 +15,9 @@
 use databend_common_ast::ast::*;
 use databend_common_exception::Result;
 use databend_common_meta_app::share::ShareEndpointIdent;
+use databend_common_meta_app::tenant::UninitTenant;
 use itertools::Itertools;
+use minitrace::func_name;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -50,10 +52,16 @@ impl Binder {
 
         let endpoint = normalize_identifier(endpoint, &self.name_resolution_ctx).name;
 
+        let tenant = {
+            let tenant_name = tenant.to_string();
+            let uninit_tenant = UninitTenant::new_or_err(tenant_name, func_name!())?;
+            uninit_tenant.initialize(())
+        };
+
         let plan = CreateShareEndpointPlan {
             create_option: *create_option,
             endpoint: ShareEndpointIdent::new(self.ctx.get_tenant(), endpoint),
-            tenant: tenant.to_string(),
+            tenant,
             url: format!("{}://{}{}", url.protocol, url.name, url.path),
             args: args.clone(),
             comment: comment.as_ref().cloned(),

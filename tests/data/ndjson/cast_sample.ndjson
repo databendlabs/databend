@@ -1,0 +1,3 @@
+{"name":"data1","tags":{"env":"test1","length":"ok"}}
+{"name":"data2","tags":{"env":"test2","length":true}}
+{"name":"data3","tags":{"env":"test3","length":10}}

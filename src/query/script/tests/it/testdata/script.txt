@@ -1,34 +1,37 @@
 ---------- Input ----------
-CREATE TABLE t1 (a INT, b INT, c INT);
+CREATE OR REPLACE TABLE t1 (a INT, b INT, c INT);
 INSERT INTO t1 VALUES (1, 2, 3);
-DROP TABLE t1;
+RETURN TABLE(SELECT a FROM t1);
 ---------- IR -------------
-QUERY CREATE TABLE t1 (a Int32, b Int32, c Int32), __unused_result0(0)
+QUERY CREATE OR REPLACE TABLE t1 (a Int32, b Int32, c Int32), __unused_result0(0)
 QUERY INSERT INTO t1 VALUES (1, 2, 3), __unused_result1(1)
-QUERY DROP TABLE t1, __unused_result2(2)
+QUERY SELECT a FROM t1, __return_set2(2)
+RETURN __return_set2(2)
 ---------- QUERY ---------
-QUERY: CREATE TABLE t1 (a Int32, b Int32, c Int32)
+QUERY: CREATE OR REPLACE TABLE t1 (a Int32, b Int32, c Int32)
 BLOCK: (): 
 QUERY: INSERT INTO t1 VALUES (1, 2, 3)
 BLOCK: (): 
-QUERY: DROP TABLE t1
-BLOCK: (): 
+QUERY: SELECT a FROM t1
+BLOCK: (a): (1)
 ---------- Output ---------
-None
+Some(Set(MockSet { column_names: ["a"], data: [[UInt64(1)]] }))
 
 
 ---------- Input ----------
 LET x := 1;
-LET y := x + 1;
-LET z RESULTSET := SELECT :y + 1;
+LET x := x + 1;
+LET x RESULTSET := SELECT :x + 1;
+RETURN TABLE(x);
 ---------- IR -------------
 QUERY SELECT 1, __expr_result1(1)
 ITER __expr_result1(1), __expr_result_iter2(2)
 READ __expr_result_iter2(2), $0, x(0)
 QUERY SELECT :0 + 1, __expr_result4(4)
 ITER __expr_result4(4), __expr_result_iter5(5)
-READ __expr_result_iter5(5), $0, y(3)
-QUERY SELECT :3 + 1, z(6)
+READ __expr_result_iter5(5), $0, x(3)
+QUERY SELECT :3 + 1, x(6)
+RETURN x(6)
 ---------- QUERY ---------
 QUERY: SELECT 1
 BLOCK: ($0): (1)
@@ -37,7 +40,69 @@ BLOCK: ($0): (2)
 QUERY: SELECT 2 + 1
 BLOCK: ($0): (3)
 ---------- Output ---------
-None
+Some(Set(MockSet { column_names: ["$0"], data: [[UInt64(3)]] }))
+
+
+---------- Input ----------
+LET x := 1;
+RETURN TABLE(SELECT :x + 1);
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT :0 + 1, __return_set3(3)
+RETURN __return_set3(3)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 1
+BLOCK: ($0): (2)
+---------- Output ---------
+Some(Set(MockSet { column_names: ["$0"], data: [[UInt64(2)]] }))
+
+
+---------- Input ----------
+LET x RESULTSET := SELECT 1;
+LET x := 1;
+RETURN x;
+---------- IR -------------
+QUERY SELECT 1, x(0)
+QUERY SELECT 1, __expr_result2(2)
+ITER __expr_result2(2), __expr_result_iter3(3)
+READ __expr_result_iter3(3), $0, x(1)
+QUERY SELECT :1, __expr_result5(5)
+ITER __expr_result5(5), __expr_result_iter6(6)
+READ __expr_result_iter6(6), $0, __return_val4(4)
+RETURN __return_val4(4)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+---------- Output ---------
+Some(Var(UInt64(1)))
+
+
+---------- Input ----------
+LET table := 1;
+RETURN table;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, table(0)
+QUERY SELECT :0, __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, __return_val3(3)
+RETURN __return_val3(3)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+---------- Output ---------
+Some(Var(UInt64(1)))
 
 
 ---------- Input ----------
@@ -183,6 +248,101 @@ Some(Var(UInt64(3)))
 
 
 ---------- Input ----------
+LET sum := 0;
+FOR row IN SELECT * FROM numbers(3) DO
+    sum := sum + row.number;
+END FOR;
+RETURN sum;
+---------- IR -------------
+QUERY SELECT 0, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, sum(0)
+QUERY SELECT * FROM numbers(3), __for_in_set3(3)
+ITER __for_in_set3(3), row(6)
+__LOOP4(4):
+JUMP_IF_ENDED row(6), __LOOP_END5(5)
+READ row(6), "number", __row.number7(7)
+QUERY SELECT :0 + :7, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, sum(0)
+NEXT row(6)
+GOTO __LOOP4(4)
+__LOOP_END5(5):
+QUERY SELECT :0, __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, __return_val10(10)
+RETURN __return_val10(10)
+---------- QUERY ---------
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT * FROM numbers(3)
+BLOCK: (number): (0), (1), (2)
+QUERY: SELECT 0 + 0
+BLOCK: ($0): (0)
+QUERY: SELECT 0 + 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 2
+BLOCK: ($0): (3)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+---------- Output ---------
+Some(Var(UInt64(3)))
+
+
+---------- Input ----------
+LET x RESULTSET := SELECT * FROM numbers(3);
+LET sum := 0;
+FOR x IN x DO
+    LET x := x.number;
+    sum := sum + x;
+END FOR x;
+RETURN sum;
+---------- IR -------------
+QUERY SELECT * FROM numbers(3), x(0)
+QUERY SELECT 0, __expr_result2(2)
+ITER __expr_result2(2), __expr_result_iter3(3)
+READ __expr_result_iter3(3), $0, sum(1)
+ITER x(0), x(6)
+x_LOOP(4):
+JUMP_IF_ENDED x(6), x_LOOP_END(5)
+READ x(6), "number", __x.number8(8)
+QUERY SELECT :8, __expr_result9(9)
+ITER __expr_result9(9), __expr_result_iter10(10)
+READ __expr_result_iter10(10), $0, x(7)
+QUERY SELECT :1 + :7, __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, sum(1)
+NEXT x(6)
+GOTO x_LOOP(4)
+x_LOOP_END(5):
+QUERY SELECT :1, __expr_result14(14)
+ITER __expr_result14(14), __expr_result_iter15(15)
+READ __expr_result_iter15(15), $0, __return_val13(13)
+RETURN __return_val13(13)
+---------- QUERY ---------
+QUERY: SELECT * FROM numbers(3)
+BLOCK: (number): (0), (1), (2)
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT 0 + 0
+BLOCK: ($0): (0)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 0 + 1
+BLOCK: ($0): (1)
+QUERY: SELECT 2
+BLOCK: ($0): (2)
+QUERY: SELECT 1 + 2
+BLOCK: ($0): (3)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+---------- Output ---------
+Some(Var(UInt64(3)))
+
+
+---------- Input ----------
 LET x := 1;
 WHILE x < 3 DO
     x := x + 1;
@@ -258,6 +418,56 @@ BLOCK: ($0): (2)
 QUERY: SELECT is_true(2 = 3)
 BLOCK: ($0): (FALSE)
 QUERY: SELECT 2 + 1
+BLOCK: ($0): (3)
+QUERY: SELECT is_true(3 = 3)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+---------- Output ---------
+Some(Var(UInt64(3)))
+
+
+---------- Input ----------
+LET x := 1;
+REPEAT
+    x := x + 1;
+    LET y := 3;
+UNTIL x = y
+END REPEAT;
+RETURN x;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+__LOOP3(3):
+QUERY SELECT :0 + 1, __expr_result5(5)
+ITER __expr_result5(5), __expr_result_iter6(6)
+READ __expr_result_iter6(6), $0, x(0)
+QUERY SELECT 3, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, y(7)
+QUERY SELECT is_true(:0 = :7), __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, __break_condition10(10)
+JUMP_IF_TRUE __break_condition10(10), __LOOP_END4(4)
+GOTO __LOOP3(3)
+__LOOP_END4(4):
+QUERY SELECT :0, __expr_result14(14)
+ITER __expr_result14(14), __expr_result_iter15(15)
+READ __expr_result_iter15(15), $0, __return_val13(13)
+RETURN __return_val13(13)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 1
+BLOCK: ($0): (2)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+QUERY: SELECT is_true(2 = 3)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT 2 + 1
+BLOCK: ($0): (3)
+QUERY: SELECT 3
 BLOCK: ($0): (3)
 QUERY: SELECT is_true(3 = 3)
 BLOCK: ($0): (TRUE)

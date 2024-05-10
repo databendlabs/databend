@@ -38,12 +38,12 @@ INSERT INTO t VALUES
 (10, 'An apple a day keeps the doctor away')
 
 statement ok
-CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content) tokenizer = 'chinese'
+CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop'
 
 query TT
 SHOW CREATE TABLE t
 ----
-t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) tokenizer = 'chinese' ) ENGINE=FUSE
+t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) filters = 'english_stop,english_stemmer,chinese_stop', tokenizer = 'chinese' ) ENGINE=FUSE
 
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
@@ -66,11 +66,6 @@ SELECT id, score(), content FROM t WHERE match(content, 'word')
 ----
 2 1.5948367 A picture is worth a thousand words
 4 1.6550698 Actions speak louder than words
-
-query T
-SELECT id, score(), content FROM t WHERE match(content, '"early bird"')
-----
-3 4.503372 The early bird catches the worm
 
 statement ok
 INSERT INTO t VALUES 
@@ -173,52 +168,260 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 2.002842 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-# Test pruning status
+# index without optional filters and index rocord is basic
+statement ok
+CREATE OR REPLACE INVERTED INDEX idx1 ON t(content) tokenizer = 'chinese' index_record='basic'
 
 statement ok
-CREATE TABLE t_small_blocks (id int, content string) row_per_block=2
-
-statement ok
-CREATE INVERTED INDEX IF NOT EXISTS inverted_idx2 ON t_small_blocks(content) tokenizer = 'chinese'
-
-statement ok
-INSERT INTO t_small_blocks VALUES
-(1, 'The quick brown fox jumps over the lazy dog'),
-(2, 'A picture is worth a thousand words'),
-(3, 'The early bird catches the worm'),
-(4, 'Actions speak louder than words'),
-(5, 'Time flies like an arrow; fruit flies like a banana'),
-(6, 'Beauty is in the eye of the beholder'),
-(7, 'When life gives you lemons, make lemonade'),
-(8, 'Put all your eggs in one basket'),
-(9, 'You can not judge a book by its cover'),
-(10, 'An apple a day keeps the doctor away')
+REFRESH INVERTED INDEX idx1 ON t
 
 query T
-SELECT id, content FROM t WHERE match(content, '"early bird"')
+SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
-3 The early bird catches the worm
+1 0.8323383 The quick brown fox jumps over the lazy dog
+3 0.9893832 The early bird catches the worm
+6 0.8788376 Beauty is in the eye of the beholder
+10 0.8788376 An apple a day keeps the doctor away
 
 query T
-EXPLAIN SELECT id, content FROM t WHERE match(content, '"early bird"')
+SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
-Filter
-├── output columns: [t.id (#0), t.content (#1)]
-├── filters: [t._search_matched (#2)]
-├── estimated rows: 29.00
-└── TableScan
-    ├── table: default.test_index.t
-    ├── output columns: [id (#0), content (#1), _search_matched (#2)]
-    ├── read rows: 10
-    ├── read size: < 1 KiB
-    ├── partitions total: 3
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, inverted pruning: 3 to 1>]
-    ├── push downs: [filters: [t._search_matched (#2)], limit: NONE]
-    └── estimated rows: 29.00
+
+
+statement ok
+CREATE TABLE books(
+  id int,
+  title string,
+  author string,
+  description string
+)
+
+statement ok
+CREATE INVERTED INDEX IF NOT EXISTS idx1 ON books(title, author, description) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop'
+
+statement ok
+INSERT INTO books VALUES
+(1, '这就是ChatGPT', '[美]斯蒂芬·沃尔弗拉姆（Stephen Wolfram）', 'ChatGPT是OpenAI开发的人工智能聊天机器人程序，于2022年11月推出。它能够自动生成一些表面上看起来像人类写的文字，这是一件很厉害且出乎大家意料的事。那么，它是如何做到的呢？又为何能做到呢？本书会大致介绍ChatGPT的内部机制，然后探讨一下为什么它能很好地生成我们认为有意义的文本。'),
+(2, 'Python深度学习（第2版）', '[美]弗朗索瓦·肖莱（François Chollet）', '本书由流行深度学习框架Keras之父弗朗索瓦·肖莱执笔，通过直观的解释和丰富的示例帮助你构建深度学习知识体系。作者避免使用数学符号，转而采用Python代码来解释深度学习的核心思想。全书共计14章，既涵盖了深度学习的基本原理，又体现了这一迅猛发展的领域在近几年里取得的重要进展，包括Transformer架构的原理和示例。读完本书后，你将能够使用Keras解决从计算机视觉到自然语言处理等现实世界的诸多问题，包括图像分类、图像分割、时间序列预测、文本分类、机器翻译、文本生成等。'),
+(3, '大模型应用开发极简入门', '[比]奥利维耶·卡埃朗（Olivier Caelen）', '本书为大模型应用开发极简入门手册，为初学者提供了一份清晰、全面的“最小可用知识”，带领大家快速了解GPT-4和ChatGPT的工作原理及优势，并在此基础上使用流行的Python编程语言构建大模型应用。通过本书，你不仅可以学会如何构建文本生成、问答和内容摘要等初阶大模型应用，还能了解到提示工程、模型微调、插件、LangChain等高阶实践技术。书中提供了简单易学的示例，帮你理解并应用在自己的项目中。此外，书后还提供了一份术语表，方便你随时参考。'),
+(4, '白话深度学习的数学', '[日]立石贤吾', '本书通过想要学习深度学习的程序员绫乃和她朋友美绪的对话，逐步讲解深度学习中实用的数学基础知识。内容涉及神经网络的结构、感知机、正向传播和反向传播，以及卷积神经网络。其中，重点讲解了容易成为学习绊脚石的数学公式和符号。同时，还通过实际的Python 编程实现神经网络，加深读者对相关数学知识的理解。'),
+(5, 'BERT基础教程：Transformer大模型实战', '[印] 苏达哈尔桑·拉维昌迪兰（Sudharsan Ravichandiran）', '本书聚焦谷歌公司开发的BERT自然语言处理模型，由浅入深地介绍了BERT的工作原理、BERT的各种变体及其应用。本书呈现了大量示意图、代码和实例，详细解析了如何训练BERT模型、如何使用BERT模型执行自然语言推理任务、文本摘要任务、问答任务、命名实体识别任务等各种下游任务，以及如何将BERT模型应用于多种语言。通读本书后，读者不仅能够全面了解有关BERT的各种概念、术语和原理，还能够使用BERT模型及其变体执行各种自然语言处理任务。'),
+(6, 'Flask Web开发：基于Python的Web应用开发实战（第2版）', '[美]米格尔•格林贝格（Miguel Grinberg）', '本书共分三部分，全面介绍如何基于Python微框架Flask进行Web开发。第一部分是Flask简介，介绍使用Flask框架及扩展开发Web程序的必备基础知识。第二部分则给出一个实例，真正带领大家一步步开发完整的博客和社交应用Flasky，从而将前述知识融会贯通，付诸实践。第三部分介绍了发布应用之前必须考虑的事项，如单元测试策略、性能分析技术、Flask程序的部署方式等。第2版针对Python 3.6全面修订。'),
+(7, 'Apache Pulsar实战', '[美]戴维·克杰鲁姆加德（David Kjerrumgaard）', 'Apache Pulsar被誉为下一代分布式消息系统，旨在打通发布/ 订阅式消息传递和流数据分析。本书作者既与Pulsar项目创始成员共事多年，又有在生产环境中使用Pulsar 的丰富经验。正是这些宝贵的经验成就了这本Pulsar“避坑指南”，为想轻松上手Pulsar的读者铺平了学习之路。本书分为三大部分，共有12章。第一部分概述Pulsar的设计理念和用途。第二部分介绍Pulsar的特性。第三部分以一个虚构的外卖应用程序为例，详细地介绍Pulsar Functions框架的用法，并展示如何用它实现常见的微服务设计模式。本书示例采用Java语言，并同时提供Python实现。'),
+(8, 'Rust程序设计（第2版）', '[美]吉姆 • 布兰迪（Jim Blandy）', '本书是Rust领域经典参考书，由业内资深系统程序员编写，广受读者好评。书中全面介绍了Rust这种新型系统编程语言——具有无与伦比的安全性，兼具C和C++的高性能，并大大简化了并发程序的编写。第2版对上一版内容进行了重组和完善，新增了对“异步编程”的介绍。借助书中的大量案例，你也能用Rust编写出兼顾安全性与高性能的程序。本书内容包括基本数据类型、所有权、引用、表达式、错误处理、crate与模块、结构、枚举与模式等基础知识，以及特型与泛型、闭包、迭代器、集合、字符串与文本、输入与输出、并发、异步编程、宏等进阶知识。'),
+(9, 'Vue.js设计与实现', '霍春阳（HcySunYang）', '本书基于Vue.js 3，从规范出发，以源码为基础，并结合大量直观的配图，循序渐进地讲解Vue.js中各个功能模块的实现，细致剖析框架设计原理。全书共18章，分为六篇，主要内容包括：框架设计概览、响应系统、渲染器、组件化、编译器和服务端渲染等。通过阅读本书，对Vue.js 2/3具有上手经验的开发人员能够进一步理解Vue.js框架的实现细节，没有Vue.js使用经验但对框架设计感兴趣的前端开发人员，能够快速掌握Vue.js的设计原理。'),
+(10, '前端架构设计', '[美]迈卡·高保特（Micah Godbolt）', '本书展示了一名成熟的前端架构师对前端开发全面而深刻的理解。作者结合自己在Red Hat公司的项目实战经历，探讨了前端架构原则和前端架构的核心内容，包括工作流程、测试流程和文档记录，以及作为前端架构师所要承担的具体开发工作，包括HTML、JavaScript和CSS等。'),
+(11, 'OpenAI GPT For Python Developers, 2nd Edition', 'Aymen El Amri', 'The knowledge you’ll acquire from this guide will be applicable to the current families of GPT models (GPT-3, GPT-3.5, GPT-4, etc.) and will likely also be relevant to GPT-5, should it ever be released.'),
+(12, 'Developing Apps with GPT-4 and ChatGPT', 'Olivier Caelen, Marie-Alice Blete', 'This minibook is a comprehensive guide for Python developers who want to learn how to build applications with large language models. Authors Olivier Caelen and Marie-Alice Blete cover the main features and benefits of GPT-4 and ChatGPT and explain how they work. You’ll also get a step-by-step guide for developing applications using the GPT-4 and ChatGPT Python library, including text generation, Q&A, and content summarization tools.'),
+(13, 'Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT', 'Leo Porter, Daniel Zingaro', 'AI has changed the way we write computer programs. With tools like Copilot and ChatGPT, you can describe what you want in plain English, and watch your AI assistant generate the code right before your eyes. It’s perfect for beginners, or anyone who’s struggled with the steep learning curve of traditional programming.'),
+(14, 'Building Recommendation Systems in Python and JAX', 'Bryan Bischof, Hector Yee', 'Implementing and designing systems that make suggestions to users are among the most popular and essential machine learning applications available. Whether you want customers to find the most appealing items at your online store, videos to enrich and entertain them, or news they need to know, recommendation systems (RecSys) provide the way.'),
+(15, 'Code Like a Pro in Rust', 'Brenden Matthews', 'Code Like a Pro in Rust dives deep into memory management, asynchronous programming, and the core Rust skills that make you a Rust pro! Plus, you’ll find essential productivity techniques for Rust testing, tooling, and project management. You’ll soon be writing high-quality code that needs way less maintenance overhead.'),
+(16, 'Rust Atomics and Locks', 'Mara Bos', 'The Rust programming language is extremely well suited for concurrency, and its ecosystem has many libraries that include lots of concurrent data structures, locks, and more. But implementing those structures correctly can be very difficult. Even in the most well-used libraries, memory ordering bugs are not uncommon.'),
+(17, 'Rust for Rustaceans', 'Jon Gjengset', 'For developers who’ve mastered the basics, this book is the next step on your way to professional-level programming in Rust. It covers everything you need to build and maintain larger code bases, write powerful and flexible applications and libraries, and confidently expand the scope and complexity of your projects.'),
+(18, 'Database Internals', 'Alex Petrov', 'When it comes to choosing, using, and maintaining a database, understanding its internals is essential. But with so many distributed databases and tools available today, it’s often difficult to understand what each one offers and how they differ. With this practical guide, Alex Petrov guides developers through the concepts behind modern database and storage engine internals.'),
+(19, 'Time Series Databases', 'Ted Dunning, Ellen Friedman', 'Time series data is of growing importance, especially with the rapid expansion of the Internet of Things. This concise guide shows you effective ways to collect, persist, and access large-scale time series data for analysis. You’ll explore the theory behind time series databases and learn practical methods for implementing them. Authors Ted Dunning and Ellen Friedman provide a detailed examination of open source tools such as OpenTSDB and new modifications that greatly speed up data ingestion.'),
+(20, 'CockroachDB: The Definitive Guide', 'Guy Harrison, Jesse Seldess, Ben Darnell', 'Get the lowdown on CockroachDB, the distributed SQL database built to handle the demands of today’s data-driven cloud applications. In this hands-on guide, software developers, architects, and DevOps/SRE teams will learn how to use CockroachDB to create applications that scale elastically and provide seamless delivery for end users while remaining indestructible. Teams will also learn how to migrate existing applications to CockroachDB’s performant, cloud-native data architecture.')
+
+query IFT
+SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'python') ORDER BY score() DESC
+----
+2 8.500097 Python深度学习（第2版）
+6 6.7982116 Flask Web开发：基于Python的Web应用开发实战（第2版）
+14 5.509352 Building Recommendation Systems in Python and JAX
+11 5.263399 OpenAI GPT For Python Developers, 2nd Edition
+13 4.4659142 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+12 1.8816761 Developing Apps with GPT-4 and ChatGPT
+4 1.5154111 白话深度学习的数学
+3 1.3515654 大模型应用开发极简入门
+7 1.2369337 Apache Pulsar实战
+
+query IFT
+SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'ChatGPT') ORDER BY score() DESC
+----
+1 14.471097 这就是ChatGPT
+12 10.599274 Developing Apps with GPT-4 and ChatGPT
+13 7.9292374 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+3 1.77537 大模型应用开发极简入门
+
+query IFT
+SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', '设计') ORDER BY score() DESC
+----
+9 14.486509 Vue.js设计与实现
+10 10.238626 前端架构设计
+8 9.061771 Rust程序设计（第2版）
+7 3.2078874 Apache Pulsar实战
+
+query IFT
+SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', '设计 实现') ORDER BY score() DESC
+----
+9 32.441788 Vue.js设计与实现
+10 10.238626 前端架构设计
+8 9.061771 Rust程序设计（第2版）
+7 5.9086094 Apache Pulsar实战
+4 2.3153453 白话深度学习的数学
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:python') ORDER BY score() DESC
+----
+2 1.4378065 Python深度学习（第2版）
+14 1.1018704 Building Recommendation Systems in Python and JAX
+11 1.0526798 OpenAI GPT For Python Developers, 2nd Edition
+6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
+13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:python OR rust') ORDER BY score() DESC
+----
+17 1.8827661 Rust for Rustaceans
+16 1.6531605 Rust Atomics and Locks
+8 1.5581512 Rust程序设计（第2版）
+2 1.4378065 Python深度学习（第2版）
+15 1.3975171 Code Like a Pro in Rust
+14 1.1018704 Building Recommendation Systems in Python and JAX
+11 1.0526798 OpenAI GPT For Python Developers, 2nd Edition
+6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
+13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:python AND rust') ORDER BY score() DESC
+----
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:设计 AND 实现 OR 实战') ORDER BY score() DESC
+----
+9 5.063791 Vue.js设计与实现
+7 2.189928 Apache Pulsar实战
+5 1.7138567 BERT基础教程：Transformer大模型实战
+6 1.2924166 Flask Web开发：基于Python的Web应用开发实战（第2版）
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:"Rust Atomics"') ORDER BY score() DESC
+----
+16 5.0420737 Rust Atomics and Locks
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:"Python深度学习"') ORDER BY score() DESC
+----
+2 6.005718 Python深度学习（第2版）
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:(+python -学习)') ORDER BY score() DESC
+----
+14 1.1018704 Building Recommendation Systems in Python and JAX
+11 1.0526798 OpenAI GPT For Python Developers, 2nd Edition
+6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
+13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:+设计 -实现') ORDER BY score() DESC
+----
+10 2.0477252 前端架构设计
+8 1.8123543 Rust程序设计（第2版）
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:+设计 实现') ORDER BY score() DESC
+----
+9 5.063791 Vue.js设计与实现
+10 2.0477252 前端架构设计
+8 1.8123543 Rust程序设计（第2版）
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:python^5 description:chatgpt^2.1') ORDER BY score() DESC
+----
+13 7.890149 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+2 7.1890326 Python深度学习（第2版）
+14 5.509352 Building Recommendation Systems in Python and JAX
+11 5.263399 OpenAI GPT For Python Developers, 2nd Edition
+6 4.8319726 Flask Web开发：基于Python的Web应用开发实战（第2版）
+1 4.732555 这就是ChatGPT
+12 4.325484 Developing Apps with GPT-4 and ChatGPT
+3 3.106897 大模型应用开发极简入门
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 description:(学习 +神经网络)^1.1') ORDER BY score() DESC
+----
+9 25.318954 Vue.js设计与实现
+4 22.395063 白话深度学习的数学
+10 10.238626 前端架构设计
+8 9.061771 Rust程序设计（第2版）
+
+
+# index without optional filters and index rocord is basic
+statement ok
+CREATE OR REPLACE INVERTED INDEX idx1 ON books(title, author, description) tokenizer = 'chinese' index_record='basic'
+
+statement ok
+REFRESH INVERTED INDEX idx1 ON books
+
+query IFT
+SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'python') ORDER BY score() DESC
+----
+2 8.192706 Python深度学习（第2版）
+6 6.235875 Flask Web开发：基于Python的Web应用开发实战（第2版）
+14 5.4896193 Building Recommendation Systems in Python and JAX
+11 5.2801366 OpenAI GPT For Python Developers, 2nd Edition
+13 4.2964296 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+4 1.5421177 白话深度学习的数学
+3 1.3799851 大模型应用开发极简入门
+12 1.3110648 Developing Apps with GPT-4 and ChatGPT
+7 1.2791233 Apache Pulsar实战
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:设计 AND 实现 OR 实战') ORDER BY score() DESC
+----
+9 5.027091 Vue.js设计与实现
+7 2.2837715 Apache Pulsar实战
+5 1.7452873 BERT基础教程：Transformer大模型实战
+6 1.2672173 Flask Web开发：基于Python的Web应用开发实战（第2版）
+
+# basic index record can't search phrase terms
+onlyif mysql
+statement error 1105
+SELECT id, score(), title FROM books WHERE query('title:"Rust Atomics"') ORDER BY score() DESC
+
+onlyif mysql
+statement error 1105
+SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 description:(学习 +神经网络)^1.1') ORDER BY score() DESC
+
+statement ok
+CREATE TABLE t1 (id int, body json)
+
+statement ok
+CREATE INVERTED INDEX IF NOT EXISTS idx ON t1(body) tokenizer = 'chinese'
+
+statement ok
+INSERT INTO t1 VALUES
+(1, '{"title":"The Psychology of Persuasion","metadata":{"author":"Oliver","publishedDate":"2021-06-15","tags":["psychology","persuasion","behavior"]}}'),
+(2, '{"title":"Sustainable Energy Solutions","metadata":{"author":"Pamela","publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]}}'),
+(3, '{"title":"The Future of Autonomous Vehicles","metadata":{"author":"Quincy","publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]}}'),
+(4, '{"title":"The Role of AI in Customer Service","metadata":{"author":"Rachel","publishedDate":"2021-09-20","tags":["AI","customer service","automation"]}}'),
+(5, '{"title":"Internet of Things Applications","metadata":{"author":"Samuel","publishedDate":"2023-12-15","tags":["IoT","applications","technology"]}}'),
+(6, '{"title":"人工智能与机器学习","metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]}}'),
+(7, '{"title":"区块链在金融行业的应用","metadata":{"author":"李四","publishedDate":"2023-09-18","tags":["区块链","金融行业","金融科技"]}}'),
+(8, '{"title":"物联网与智能家居","metadata":{"author":"王五","publishedDate":"2023-08-15","tags":["物联网","智能家居","生活"]}}'),
+(9, '{"title":"量子计算的未来","metadata":{"author":"赵六","publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]}}'),
+(10, '{"title":"网络安全与隐私保护","metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]}}')
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.title:energy')
+----
+2 3.2352333 {"metadata":{"author":"Pamela","publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]},"title":"Sustainable Energy Solutions"}
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:technology')
+----
+3 2.4057739 {"metadata":{"author":"Quincy","publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
+5 2.4057739 {"metadata":{"author":"Samuel","publishedDate":"2023-12-15","tags":["IoT","applications","technology"]},"title":"Internet of Things Applications"}
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:技术')
+----
+6 2.4057739 {"metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
+10 2.4057739 {"metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
 
 statement ok
 use default
 
 statement ok
 drop database test_index
+

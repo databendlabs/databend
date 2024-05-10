@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -60,7 +61,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().name(), &db_name, &tbl_name)
+        .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -77,7 +78,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().name(), &db_name, &tbl_name)
+        .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -108,7 +109,9 @@ async fn test_compact() -> Result<()> {
 async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<bool> {
     let settings = ctx.get_settings();
     let mut pipeline = databend_common_pipeline_core::Pipeline::create();
-    let res = table.compact_blocks(ctx.clone(), None).await?;
+    let res = table
+        .compact_blocks(ctx.clone(), CompactionLimits::default())
+        .await?;
 
     let table_info = table.get_table_info().clone();
     let catalog_info = ctx.get_catalog("default").await?.info();
@@ -214,7 +217,6 @@ async fn test_safety() -> Result<()> {
             locations.clone(),
             None,
             None,
-            None,
         );
 
         let limit: usize = rand.gen_range(1..15);
@@ -222,6 +224,7 @@ async fn test_safety() -> Result<()> {
             base_snapshot: Arc::new(snapshot),
             block_per_seg: 10,
             num_segment_limit: Some(limit),
+            num_block_limit: None,
         };
 
         eprintln!("running target select");

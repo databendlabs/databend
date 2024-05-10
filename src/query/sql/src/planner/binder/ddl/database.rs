@@ -30,7 +30,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use log::debug;
 
 use crate::binder::Binder;
@@ -260,7 +261,7 @@ impl Binder {
             engine: engine.to_string(),
             engine_options,
             options,
-            from_share: from_share.clone(),
+            from_share: from_share.as_ref().map(ShareNameIdentRaw::from),
             ..Default::default()
         })
     }

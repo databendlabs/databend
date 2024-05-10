@@ -1,15 +1,15 @@
 [package]
-name = "databend-enterprise-query"
-description = "A real-time Cloud Distributed Query Engine"
-version = { workspace = true }
 authors = { workspace = true }
-license = { workspace = true }
-publish = { workspace = true }
+description = "A real-time Cloud Distributed Query Engine"
 edition = { workspace = true }
+license = { workspace = true }
+name = "databend-enterprise-query"
+publish = { workspace = true }
+version = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [dependencies]
 # Workspace dependencies
@@ -38,6 +38,7 @@ databend-enterprise-background-service = { path = "../ee_features/background_ser
 databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
 databend-enterprise-inverted-index = { path = "../ee_features/inverted_index" }
 databend-enterprise-storage-encryption = { path = "../ee_features/storage_encryption" }
+databend-enterprise-storage-quota = { path = "../ee_features/storage_quota" }
 databend-enterprise-stream-handler = { path = "../ee_features/stream_handler" }
 databend-enterprise-vacuum-handler = { path = "../ee_features/vacuum_handler" }
 databend-enterprise-virtual-column = { path = "../ee_features/virtual_column" }
@@ -60,6 +61,8 @@ log = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]
+jsonb = { workspace = true }
+tantivy = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { path = "../../common/building" }

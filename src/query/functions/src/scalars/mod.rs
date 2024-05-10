@@ -37,9 +37,6 @@ mod tuple;
 mod variant;
 mod vector;
 
-pub use comparison::check_pattern_type;
-pub use comparison::is_like_pattern_escape;
-pub use comparison::PatternType;
 pub use comparison::ALL_COMP_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::physical_plans::AsyncFunction;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -41,7 +42,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::MergeIntoSource;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -104,7 +104,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
-            PhysicalPlan::MergeIntoSource(merge_into_source) => write!(f, "{}", merge_into_source)?,
             PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
             PhysicalPlan::MergeIntoAppendNotMatched(merge_into_row_id_apply) => {
                 write!(f, "{}", merge_into_row_id_apply)?
@@ -126,6 +125,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".fmt(f)?,
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".fmt(f)?,
             PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".fmt(f)?,
+            PhysicalPlan::AsyncFunction(_) => "AsyncFunction".fmt(f)?,
         }
 
         for node in self.node.children() {
@@ -505,12 +505,6 @@ impl Display for MergeIntoAppendNotMatched {
     }
 }
 
-impl Display for MergeIntoSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MergeIntoSource")
-    }
-}
-
 impl Display for ReclusterSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ReclusterSource")
@@ -540,5 +534,11 @@ impl Display for Udf {
             })
             .collect::<Vec<String>>();
         write!(f, "Udf functions: {}", scalars.join(", "))
+    }
+}
+
+impl Display for AsyncFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AsyncFunction: {}", self.display_name)
     }
 }

@@ -15,6 +15,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -223,6 +224,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -412,6 +414,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -509,6 +512,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -601,6 +605,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -693,6 +698,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -830,6 +836,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -976,6 +983,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -1131,6 +1139,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -1223,6 +1232,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -1390,6 +1400,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -1458,6 +1469,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -1622,6 +1634,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -1690,6 +1703,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -1845,6 +1859,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -1913,6 +1928,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -2077,6 +2093,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -2163,6 +2180,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     StarColumns {
                                         qualified: [
@@ -2237,6 +2255,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -2339,6 +2358,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -2610,6 +2630,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -2669,6 +2690,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -2739,6 +2761,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -2934,6 +2957,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -3065,6 +3089,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -3236,6 +3261,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
@@ -3655,6 +3681,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3702,6 +3729,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3775,6 +3803,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3822,6 +3851,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -3902,6 +3932,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -3949,6 +3980,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -3998,6 +4030,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4078,6 +4111,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4125,6 +4159,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4174,6 +4209,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4247,6 +4283,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4301,6 +4338,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4348,6 +4386,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4430,6 +4469,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4477,6 +4517,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4526,6 +4567,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4599,6 +4641,7 @@ Query {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -4653,6 +4696,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4700,6 +4744,7 @@ Query {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 StarColumns {
                                     qualified: [
@@ -4768,6 +4813,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -4805,6 +4851,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             StarColumns {
                                                 qualified: [
@@ -4832,6 +4879,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             StarColumns {
                                                 qualified: [
@@ -4905,6 +4953,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -4942,6 +4991,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             StarColumns {
                                                 qualified: [
@@ -4969,6 +5019,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             StarColumns {
                                                 qualified: [
@@ -5042,6 +5093,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -5072,6 +5124,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     StarColumns {
                                         qualified: [
@@ -5210,6 +5263,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -5383,6 +5437,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -5524,6 +5579,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -5603,6 +5659,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: FunctionCall {
@@ -5776,6 +5833,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
@@ -6163,6 +6221,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -6193,6 +6252,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     StarColumns {
                                         qualified: [
@@ -6331,6 +6391,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -6588,6 +6649,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -6653,6 +6715,7 @@ Query {
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: Literal {
@@ -6700,6 +6763,7 @@ Query {
                                 ),
                                 hints: None,
                                 distinct: false,
+                                top_n: None,
                                 select_list: [
                                     AliasedExpr {
                                         expr: Literal {
@@ -6760,6 +6824,7 @@ Query {
             ),
             hints: None,
             distinct: false,
+            top_n: None,
             select_list: [
                 StarColumns {
                     qualified: [
@@ -6859,6 +6924,127 @@ Query {
                             columns: [],
                         },
                     ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from flatten(input => parse_json('{"a":1, "b":[77,88]}'), outer => true)
+---------- Output ---------
+SELECT * FROM flatten(input=>parse_json('{"a":1, "b":[77,88]}'),outer=>TRUE)
+---------- AST ------------
+Query {
+    span: Some(
+        0..81,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..81,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                TableFunction {
+                    span: Some(
+                        14..81,
+                    ),
+                    lateral: false,
+                    name: Identifier {
+                        span: Some(
+                            14..21,
+                        ),
+                        name: "flatten",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    params: [],
+                    named_params: [
+                        (
+                            Identifier {
+                                span: Some(
+                                    22..27,
+                                ),
+                                name: "input",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            FunctionCall {
+                                span: Some(
+                                    31..65,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            31..41,
+                                        ),
+                                        name: "parse_json",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    args: [
+                                        Literal {
+                                            span: Some(
+                                                42..64,
+                                            ),
+                                            value: String(
+                                                "{\"a\":1, \"b\":[77,88]}",
+                                            ),
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                        ),
+                        (
+                            Identifier {
+                                span: Some(
+                                    67..72,
+                                ),
+                                name: "outer",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            Literal {
+                                span: Some(
+                                    76..80,
+                                ),
+                                value: Boolean(
+                                    true,
+                                ),
+                            },
+                        ),
+                    ],
+                    alias: None,
                 },
             ],
             selection: None,

@@ -85,9 +85,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog("default").await?;
 
-    let table = catalog
-        .get_table(ctx.get_tenant().name(), "default", "t")
-        .await?;
+    let table = catalog.get_table(&ctx.get_tenant(), "default", "t").await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
@@ -127,9 +125,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog("default").await?;
 
-    let table = catalog
-        .get_table(ctx.get_tenant().name(), "default", "t")
-        .await?;
+    let table = catalog.get_table(&ctx.get_tenant(), "default", "t").await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
@@ -187,9 +183,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     // try compact segment
     let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog("default").await?;
-    let table = catalog
-        .get_table(ctx.get_tenant().name(), "default", "t")
-        .await?;
+    let table = catalog.get_table(&ctx.get_tenant(), "default", "t").await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
@@ -265,6 +259,7 @@ async fn build_mutator(
         base_snapshot,
         block_per_seg,
         num_segment_limit: limit,
+        num_block_limit: None,
     };
 
     let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;

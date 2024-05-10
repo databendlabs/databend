@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
+use databend_common_meta_api::txn_cond_eq_seq;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
@@ -61,16 +62,6 @@ impl StageMgr {
 
     fn stage_ident(&self, stage: &str) -> StageIdent {
         StageIdent::new(self.tenant.clone(), stage)
-    }
-
-    fn stage_key(&self, stage: &str) -> String {
-        self.stage_ident(stage).to_string_key()
-    }
-
-    fn stage_file_key(&self, stage: &str, path: &str) -> String {
-        let si = StageIdent::new(self.tenant.clone(), stage);
-        let fi = StageFileIdent::new(si, path);
-        fi.to_string_key()
     }
 
     fn stage_file_ident(&self, stage: impl ToString, name: impl ToString) -> StageFileIdent {
@@ -133,27 +124,30 @@ impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn drop_stage(&self, name: &str) -> Result<()> {
-        let stage_key = self.stage_key(name);
+        let stage_ident = self.stage_ident(name);
         let file_key_prefix = self.stage_file_prefix(name);
 
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            let stage_seq = match self.kv_api.get_kv(&stage_key).await? {
+            let stage_seq = match self.kv_api.get_kv(&stage_ident.to_string_key()).await? {
                 Some(seq_v) => seq_v.seq,
                 None => return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
             };
 
             // list all stage file keys, and delete them
             let file_keys = self.kv_api.prefix_list_kv(&file_key_prefix).await?;
-            let mut dels: Vec<TxnOp> = file_keys.iter().map(|(key, _)| txn_op_del(key)).collect();
-            dels.push(txn_op_del(&stage_key));
+            let mut dels: Vec<TxnOp> = file_keys
+                .iter()
+                .map(|(key, _)| TxnOp::delete(key))
+                .collect();
+            dels.push(txn_op_del(&stage_ident));
 
             let txn_req = TxnRequest {
                 condition: vec![
                     // stage is not change, prevent add file to stage
-                    txn_cond_seq(&stage_key, Eq, stage_seq),
+                    txn_cond_eq_seq(&stage_ident, stage_seq),
                 ],
                 if_then: dels,
                 else_then: vec![],
@@ -174,21 +168,21 @@ impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn add_file(&self, name: &str, file: StageFile) -> Result<u64> {
-        let stage_key = self.stage_key(name);
-        let file_key = self.stage_file_key(name, &file.path);
+        let stage_ident = self.stage_ident(name);
+        let file_ident = self.stage_file_ident(name, &file.path);
 
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            if let Some(_v) = self.kv_api.get_kv(&file_key).await? {
+            if let Some(_v) = self.kv_api.get_kv(&file_ident.to_string_key()).await? {
                 return Err(ErrorCode::StageAlreadyExists(format!(
                     "Stage '{}' already exists.",
                     name,
                 )));
             }
             let (stage_seq, mut old_stage): (_, StageInfo) =
-                if let Some(seq_v) = self.kv_api.get_kv(&stage_key).await? {
+                if let Some(seq_v) = self.kv_api.get_kv(&stage_ident.to_string_key()).await? {
                     (
                         seq_v.seq,
                         deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
@@ -204,17 +198,17 @@ impl StageApi for StageMgr {
             let txn_req = TxnRequest {
                 condition: vec![
                     // file does not exist
-                    txn_cond_seq(&file_key, Eq, 0),
+                    txn_cond_seq(&file_ident, Eq, 0),
                     // stage is not changed
-                    txn_cond_seq(&stage_key, Eq, stage_seq),
+                    txn_cond_seq(&stage_ident, Eq, stage_seq),
                 ],
                 if_then: vec![
                     txn_op_put(
-                        &file_key,
+                        &file_ident,
                         serialize_struct(&file, ErrorCode::IllegalStageFileFormat, || "")?,
                     ),
                     txn_op_put(
-                        &stage_key,
+                        &stage_ident,
                         serialize_struct(&old_stage, ErrorCode::IllegalUserStageFormat, || "")?,
                     ),
                 ],
@@ -248,14 +242,14 @@ impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn remove_files(&self, name: &str, paths: Vec<String>) -> Result<()> {
-        let stage_key = self.stage_key(name);
+        let stage_ident = self.stage_ident(name);
 
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
             let (stage_seq, mut old_stage): (_, StageInfo) =
-                if let Some(seq_v) = self.kv_api.get_kv(&stage_key).await? {
+                if let Some(seq_v) = self.kv_api.get_kv(&stage_ident.to_string_key()).await? {
                     (
                         seq_v.seq,
                         deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
@@ -266,19 +260,19 @@ impl StageApi for StageMgr {
 
             let mut if_then = Vec::with_capacity(paths.len());
             for path in &paths {
-                let key = self.stage_file_key(name, path);
+                let key = self.stage_file_ident(name, path);
                 if_then.push(txn_op_del(&key));
             }
             old_stage.number_of_files -= paths.len() as u64;
             if_then.push(txn_op_put(
-                &stage_key,
+                &stage_ident,
                 serialize_struct(&old_stage, ErrorCode::IllegalUserStageFormat, || "")?,
             ));
 
             let txn_req = TxnRequest {
                 condition: vec![
                     // stage is not change
-                    txn_cond_seq(&stage_key, Eq, stage_seq),
+                    txn_cond_seq(&stage_ident, Eq, stage_seq),
                 ],
                 if_then,
                 else_then: vec![],

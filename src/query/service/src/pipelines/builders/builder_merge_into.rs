@@ -38,7 +38,6 @@ use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MergeInto;
 use databend_common_sql::executor::physical_plans::MergeIntoAddRowNumber;
 use databend_common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
-use databend_common_sql::executor::physical_plans::MergeIntoSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
@@ -171,7 +170,7 @@ impl PipelineBuilder {
             ];
             self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-            // not macthed operation
+            // not matched operation
             let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                 unmatched.clone(),
                 input_schema.clone(),
@@ -329,43 +328,6 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    // Optimization Todo(@JackTan25): If insert only, we can reduce the target columns after join.
-    pub(crate) fn build_merge_into_source(
-        &mut self,
-        merge_into_source: &MergeIntoSource,
-    ) -> Result<()> {
-        let MergeIntoSource {
-            input,
-            merge_type,
-            merge_into_split_idx,
-            ..
-        } = merge_into_source;
-
-        self.build_pipeline(input)?;
-        self.main_pipeline
-            .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
-        // 1. if matchedOnly, we will use inner join
-        // 2. if insert Only, we will use right anti join
-        // 3. other cases, we use right outer join
-        // an optimization later: for unmatched only, we can reverse
-        // `on conditions` and use inner join.
-        // merge into's parallism depends on the join probe number.
-        if let MergeIntoType::FullOperation = merge_type {
-            let mut items = Vec::with_capacity(self.main_pipeline.output_len());
-            let output_len = self.main_pipeline.output_len();
-            for _ in 0..output_len {
-                let merge_into_split_processor =
-                    MergeIntoSplitProcessor::create(*merge_into_split_idx, false)?;
-                items.push(merge_into_split_processor.into_pipe_item());
-            }
-
-            self.main_pipeline
-                .add_pipe(Pipe::create(output_len, output_len * 2, items));
-        }
-
-        Ok(())
-    }
-
     fn resize_row_id(&mut self, step: usize) -> Result<()> {
         // resize row_id
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
@@ -405,10 +367,28 @@ impl PipelineBuilder {
             merge_type,
             change_join_order,
             can_try_update_column_only,
+            merge_into_split_idx,
             ..
         } = merge_into;
 
         self.build_pipeline(input)?;
+
+        self.main_pipeline
+            .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
+
+        // If `merge_into_split_idx` isn't None, it means the merge type is full operation.
+        if let Some(split_idx) = merge_into_split_idx {
+            let mut items = Vec::with_capacity(self.main_pipeline.output_len());
+            let output_len = self.main_pipeline.output_len();
+            for _ in 0..output_len {
+                let merge_into_split_processor =
+                    MergeIntoSplitProcessor::create(*split_idx as u32)?;
+                items.push(merge_into_split_processor.into_pipe_item());
+            }
+
+            self.main_pipeline
+                .add_pipe(Pipe::create(output_len, output_len * 2, items));
+        }
 
         let tbl = self
             .ctx
@@ -443,7 +423,7 @@ impl PipelineBuilder {
         //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
         //                                    |                       |   |                |                             +-+
         // +----------------------+           |                       +---+                +-----------------------------+-+
-        // |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|
+        // |      MergeInto       +---------->|MergeIntoSplitProcessor|
         // +----------------------+           |                       +---+                +-----------------------------+
         //                                    |                       |   | NotMatched     |                             +-+
         //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
@@ -526,13 +506,13 @@ impl PipelineBuilder {
         // the complete pipeline(with matched and unmatched) below:
         // row_id port0_1
         // matched update data port0_2
-        // not macthed insert data port0_3
+        // not matched insert data port0_3
         // row_id port1_1
         // matched update data port1_2
-        // not macthed insert data port1_3
+        // not matched insert data port1_3
         // ......
         // 1.for matched only, there are no not matched ports
-        // 2.for unmatched only/insert only, there are no macthed update ports and row_id ports
+        // 2.for unmatched only/insert only, there are no matched update ports and row_id ports
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
         if !*distributed {
             // complete pipeline

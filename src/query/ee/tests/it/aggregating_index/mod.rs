@@ -13,4 +13,4 @@
 // limitations under the License.
 
 mod index_refresh;
-mod index_scan;
+// mod index_scan;

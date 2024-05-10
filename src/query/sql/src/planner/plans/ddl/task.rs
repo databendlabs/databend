@@ -28,6 +28,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::tenant::Tenant;
 
 pub fn task_schema() -> DataSchemaRef {
     Arc::new(DataSchema::new(vec![
@@ -80,7 +81,7 @@ pub fn task_run_schema() -> DataSchemaRef {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateTaskPlan {
     pub if_not_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub task_name: String,
     pub warehouse_opts: WarehouseOptions,
     pub schedule_opts: Option<ScheduleOptions>,
@@ -102,7 +103,7 @@ impl CreateTaskPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AlterTaskPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub task_name: String,
     pub alter_options: AlterTaskOptions,
 }
@@ -116,7 +117,7 @@ impl AlterTaskPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DropTaskPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub task_name: String,
 }
 
@@ -128,7 +129,7 @@ impl DropTaskPlan {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DescribeTaskPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub task_name: String,
 }
 
@@ -140,7 +141,7 @@ impl DescribeTaskPlan {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExecuteTaskPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub task_name: String,
 }
 
@@ -152,7 +153,7 @@ impl ExecuteTaskPlan {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShowTasksPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub limit: Option<ShowLimit>,
 }
 

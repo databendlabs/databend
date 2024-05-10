@@ -537,6 +537,7 @@ impl FastValuesDecodeFallback for RawValueSource {
             let metadata = self.metadata.clone();
 
             let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+
             bind_context
                 .exprs_to_scalar(
                     &exprs,

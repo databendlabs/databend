@@ -80,7 +80,9 @@ impl Display for CreateTaskStmt {
 
         write!(f, " {}", self.name)?;
 
-        write!(f, " {}", self.warehouse_opts)?;
+        if self.warehouse_opts.warehouse.is_some() {
+            write!(f, " {}", self.warehouse_opts)?;
+        }
 
         if let Some(schedule_opt) = self.schedule_opts.as_ref() {
             write!(f, " SCHEDULE = {}", schedule_opt)?;
@@ -106,7 +108,10 @@ impl Display for CreateTaskStmt {
             write!(f, " COMMENTS = '{}'", comments)?;
         }
 
-        write_comma_separated_string_map(f, &self.session_parameters)?;
+        if !self.session_parameters.is_empty() {
+            write!(f, " ")?;
+            write_comma_separated_string_map(f, &self.session_parameters)?;
+        }
 
         write!(f, " AS {}", self.sql)?;
 

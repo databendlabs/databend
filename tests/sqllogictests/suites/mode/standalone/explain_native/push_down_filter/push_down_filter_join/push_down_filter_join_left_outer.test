@@ -182,3 +182,51 @@ drop table if exists t1;
 
 statement ok
 drop table if exists t2;
+
+statement ok
+drop table if exists m1;
+
+statement ok
+drop table if exists j1;
+
+statement ok
+create table m1(id varchar, "context" varchar);
+
+statement ok
+create table j1(id varchar);
+
+# In `can_filter_null`, if the function is `assume_not_null` or `remove_nullable`, we cannot replace the column bindings with `Scalar::Null`.
+query T
+explain WITH base AS (SELECT id, context FROM m1), src1 AS (SELECT base.id FROM base WHERE IFNULL(base.context, '') = ''), join1 AS (SELECT id FROM j1) SELECT src1.id FROM src1 LEFT OUTER JOIN join1 ON TRUE;
+----
+HashJoin
+├── output columns: [m1.id (#0)]
+├── join type: LEFT OUTER
+├── build keys: []
+├── probe keys: []
+├── filters: []
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.j1
+│   ├── output columns: []
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.m1
+    ├── output columns: [id (#0)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [is_true(if(CAST(is_not_null(m1.context (#1)) AS Boolean NULL), CAST(assume_not_null(m1.context (#1)) AS String NULL), true, '', NULL) = '')], limit: NONE]
+    └── estimated rows: 0.00
+
+statement ok
+drop table if exists m1;
+
+statement ok
+drop table if exists j1;

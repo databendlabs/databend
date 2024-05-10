@@ -95,6 +95,7 @@ where K: MapKey
 }
 
 /// Trait for using Self as an implementation of the MapApi.
+#[allow(dead_code)]
 pub(in crate::sm_v002) trait AsMap {
     /// Use Self as an implementation of the [`MapApiRO`] (Read-Only) interface.
     fn as_map<K: MapKey>(&self) -> &impl MapApiRO<K>

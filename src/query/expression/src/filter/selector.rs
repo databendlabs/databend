@@ -29,6 +29,7 @@ use crate::EvalContext;
 use crate::EvaluateOptions;
 use crate::Evaluator;
 use crate::Expr;
+use crate::LikePattern;
 use crate::Scalar;
 use crate::Value;
 
@@ -115,6 +116,18 @@ impl<'a> Selector<'a> {
                 select_op,
                 exprs,
                 generics,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            )?,
+            SelectExpr::Like((column_ref, like_pattern, like_str, not)) => self.process_like(
+                column_ref,
+                like_pattern,
+                like_str,
+                *not,
                 true_selection,
                 false_selection,
                 mutable_true_idx,
@@ -300,6 +313,52 @@ impl<'a> Selector<'a> {
             right_value,
             left_data_type,
             right_data_type,
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        )
+    }
+
+    // Process SelectExpr::Like.
+    #[allow(clippy::too_many_arguments)]
+    fn process_like(
+        &self,
+        column_ref: &Expr,
+        like_pattern: &LikePattern,
+        like_str: &String,
+        not: bool,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        let selection = self.selection(
+            true_selection,
+            false_selection.0,
+            *mutable_true_idx + count,
+            *mutable_false_idx + count,
+            &select_strategy,
+        );
+        let mut eval_options = EvaluateOptions::new(selection);
+        let (value, data_type) = self
+            .evaluator
+            .get_select_child(column_ref, &mut eval_options)?;
+        debug_assert!(
+            matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
+        );
+        // It's safe to unwrap because the expr is a column ref.
+        let column = value.into_column().unwrap();
+        self.select_like(
+            column,
+            &data_type,
+            like_pattern,
+            like_str.as_bytes(),
+            not,
             true_selection,
             false_selection,
             mutable_true_idx,

@@ -24,6 +24,8 @@ use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::VariantType;
+use databend_common_expression::types::F32;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
@@ -36,7 +38,6 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_sql::BloomIndexColumns;
-use databend_common_storages_fuse::io::read::load_inverted_index_info;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseTable;
@@ -85,6 +86,7 @@ async fn test_block_pruner() -> Result<()> {
         TableField::new("id", TableDataType::Number(NumberDataType::UInt64)),
         TableField::new("idiom", TableDataType::String),
         TableField::new("meaning", TableDataType::String),
+        TableField::new("extras", TableDataType::Variant),
     ]);
 
     let row_per_block = 5;
@@ -121,7 +123,7 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog("default").await?;
     let table = catalog
         .get_table(
-            fixture.default_tenant().name(),
+            &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
@@ -144,6 +146,13 @@ async fn test_block_pruner() -> Result<()> {
             "The worst possible situation".to_string(),
             "Better to show than tell".to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"Introduction to Full-Text Search","metadata":{"author":"John","publishedDate":"2023-04-01","tags":["database","search","indexing"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Art of Programming","metadata":{"author":"Alice","publishedDate":"2022-01-01","tags":["programming","algorithms","best practices"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Data Structures for Beginners","metadata":{"author":"Bob","publishedDate":"2021-12-15","tags":["data structures","beginner","tutorials"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Web Development Trends in 2023","metadata":{"author":"Charlie","publishedDate":"2023-02-20","tags":["web development","trends","2023"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Introduction to Databases","metadata":{"author":"David","publishedDate":"2020-09-01","tags":["databases","SQL","introductory"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
     let block1 = DataBlock::new_from_columns(vec![
         UInt64Type::from_data(vec![6, 7, 8, 9, 10]),
@@ -160,6 +169,13 @@ async fn test_block_pruner() -> Result<()> {
             "To be mistaken, to be looking for solutions in the wrong place".to_string(),
             "People who are alike are often friends".to_string(),
             "Take on a project that you cannot finish".to_string(),
+        ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"The Future of Artificial Intelligence","metadata":{"author":"Emily","publishedDate":"2023-03-10","tags":["AI","future","predictions"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Software Architecture Patterns","metadata":{"author":"Frank","publishedDate":"2021-08-15","tags":["software architecture","patterns","design"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Front-End Development Best Practices","metadata":{"author":"Grace","publishedDate":"2022-06-01","tags":["front-end","development","best practices"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Cybersecurity Challenges in the Modern World","metadata":{"author":"Henry","publishedDate":"2023-01-05","tags":["cybersecurity","challenges","modern world"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Game Development for Kids","metadata":{"author":"Isabella","publishedDate":"2022-07-20","tags":["game development","kids","educational"]}}"#.as_bytes()).unwrap().to_vec(),
         ]),
     ]);
     let block2 = DataBlock::new_from_columns(vec![
@@ -178,6 +194,13 @@ async fn test_block_pruner() -> Result<()> {
             "Very expensive".to_string(),
             "Do something without having planned beforehand".to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"Blockchain Technology Explained","metadata":{"author":"Jack","publishedDate":"2021-05-10","tags":["blockchain","technology","explained"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"UX Design Principles","metadata":{"author":"Alice","publishedDate":"2022-04-01","tags":["UX","design","principles"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Python for Data Analysis","metadata":{"author":"Bob","publishedDate":"2021-06-15","tags":["python","data","analysis"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Cloud Computing Fundamentals","metadata":{"author":"Charlie","publishedDate":"2023-01-10","tags":["cloud","computing","fundamentals"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"IoT Security Challenges","metadata":{"author":"David","publishedDate":"2022-09-01","tags":["IoT","security","challenges"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
     let block3 = DataBlock::new_from_columns(vec![
         UInt64Type::from_data(vec![16, 17, 18, 19, 20]),
@@ -194,6 +217,13 @@ async fn test_block_pruner() -> Result<()> {
             "There's no reason to complain about something that can't be fixed".to_string(),
             "You're not very good at this".to_string(),
             "What you're doing is too risky".to_string(),
+        ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"Mobile App Development Guide","metadata":{"author":"Frank","publishedDate":"2021-11-15","tags":["mobile","apps","development"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Big Data Analytics in Healthcare","metadata":{"author":"Grace","publishedDate":"2023-02-10","tags":["big data","analytics","healthcare"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Digital Marketing Strategies","metadata":{"author":"Henry","publishedDate":"2022-07-05","tags":["digital","marketing","strategies"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Introduction to Quantum Computing","metadata":{"author":"Isabella","publishedDate":"2021-10-20","tags":["quantum","computing","introduction"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Software Development Methodologies","metadata":{"author":"Karen","publishedDate":"2021-08-01","tags":["software","development","methodologies"]}}"#.as_bytes()).unwrap().to_vec(),
         ]),
     ]);
     let block4 = DataBlock::new_from_columns(vec![
@@ -212,6 +242,13 @@ async fn test_block_pruner() -> Result<()> {
             "To do something pointless".to_string(),
             "Be patient".to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"Machine Learning for Beginners","metadata":{"author":"Leo","publishedDate":"2023-03-15","tags":["machine learning","beginners","intro"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Responsive Web Design Techniques","metadata":{"author":"Mike","publishedDate":"2022-01-20","tags":["responsive","web","design"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Artificial Intelligence Ethics","metadata":{"author":"Nina","publishedDate":"2021-12-01","tags":["AI","ethics","morality"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Cryptocurrency Investment Guide","metadata":{"author":"Oliver","publishedDate":"2023-04-10","tags":["cryptocurrency","investment","guide"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"API Development and Integration","metadata":{"author":"Paula","publishedDate":"2022-06-15","tags":["API","development","integration"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
     let block5 = DataBlock::new_from_columns(vec![
         UInt64Type::from_data(vec![26, 27, 28, 29, 30]),
@@ -228,6 +265,13 @@ async fn test_block_pruner() -> Result<()> {
             "Get something exactly right".to_string(),
             "You're better off not knowing".to_string(),
             "This isn't over yet".to_string(),
+        ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"The Future of Electric Vehicles","metadata":{"author":"Quincy","publishedDate":"2021-09-01","tags":["electric vehicles","future","technology"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Full-Stack Development Trends","metadata":{"author":"Emily","publishedDate":"2022-02-20","tags":["full-stack","development","trends"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Introduction to Augmented Reality","metadata":{"author":"Rachel","publishedDate":"2023-01-05","tags":["augmented reality","introduction","VR"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"E-Commerce Best Practices for SMBs","metadata":{"author":"Sam","publishedDate":"2022-08-20","tags":["e-commerce","SMBs"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"SEO Strategies for Websites","metadata":{"author":"Tina","publishedDate":"2022-10-10","tags":["SEO","websites","strategies"]}}"#.as_bytes()).unwrap().to_vec(),
         ]),
     ]);
     let block6 = DataBlock::new_from_columns(vec![
@@ -246,6 +290,13 @@ async fn test_block_pruner() -> Result<()> {
             "Get two things done with a single action".to_string(),
             "Give away a secret".to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"Blockchain Technology Applications","metadata":{"author":"Uma","publishedDate":"2021-07-15","tags":["blockchain","technology","applications"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Data Visualization Techniques","metadata":{"author":"Victor","publishedDate":"2023-05-01","tags":["data","visualization","techniques"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Green Computing Principles","metadata":{"author":"Wendy","publishedDate":"2022-03-15","tags":["green computing","principles","sustainability"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Cybersecurity for Small Businesses","metadata":{"author":"Xavier","publishedDate":"2021-12-15","tags":["cybersecurity","small businesses","security"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Artificial Intelligence in Education","metadata":{"author":"Yvonne","publishedDate":"2023-06-10","tags":["AI","education","applications"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
     let block7 = DataBlock::new_from_columns(vec![
         UInt64Type::from_data(vec![36, 37, 38, 39, 40]),
@@ -263,6 +314,13 @@ async fn test_block_pruner() -> Result<()> {
             "Rarely".to_string(),
             "To argue the opposite, just for the sake of argument".to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"Social Media Marketing Trends","metadata":{"author":"Zach","publishedDate":"2022-11-05","tags":["social media","marketing","trends"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Fundamentals of Cryptography","metadata":{"author":"Amy","publishedDate":"2021-04-20","tags":["cryptography","fundamentals","security"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Game Development for Beginners","metadata":{"author":"Beth","publishedDate":"2023-07-15","tags":["game development","beginners","programming"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"FinTech Innovations in Banking","metadata":{"author":"Carl","publishedDate":"2022-02-10","tags":["FinTech","banking","innovations"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Power of Content Marketing","metadata":{"author":"Diana","publishedDate":"2021-11-01","tags":["content marketing","strategy","advertising"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
     let block8 = DataBlock::new_from_columns(vec![
         UInt64Type::from_data(vec![41, 42, 43, 44, 45]),
@@ -279,6 +337,13 @@ async fn test_block_pruner() -> Result<()> {
             "Saving money for later".to_string(),
             "Reliability is more important than speed".to_string(),
             "Give away a secret".to_string(),
+        ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"Web Development Frameworks","metadata":{"author":"Edwin","publishedDate":"2023-08-05","tags":["web development","frameworks","technology"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Economics of Cryptocurrency","metadata":{"author":"Frankie","publishedDate":"2022-09-15","tags":["cryptocurrency","economics","finance"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Rise of 5G Technology","metadata":{"author":"Georgia","publishedDate":"2021-05-01","tags":["5G","technology","communications"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Introduction to Quantum Computing","metadata":{"author":"Hannah","publishedDate":"2023-09-10","tags":["quantum computing","introduction","physics"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Future of Remote Work","metadata":{"author":"Ian","publishedDate":"2022-04-15","tags":["remote work","future","trends"]}}"#.as_bytes()).unwrap().to_vec(),
         ]),
     ]);
     let block9 = DataBlock::new_from_columns(vec![
@@ -298,6 +363,13 @@ async fn test_block_pruner() -> Result<()> {
             "It looks good from a distance, but when you look closer, there are problems"
                 .to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"The Principles of Agile Development","metadata":{"author":"Jared","publishedDate":"2021-10-10","tags":["agile","development","principles"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"UI/UX Design for Mobile Apps","metadata":{"author":"Katherine","publishedDate":"2023-10-05","tags":["UI/UX","mobile apps","design"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Fundamentals of Data Science","metadata":{"author":"Larry","publishedDate":"2022-07-01","tags":["data","science"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Big Data Analytics in Healthcare","metadata":{"author":"Mia","publishedDate":"2023-11-15","tags":["big data","analytics","healthcare"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Cloud Computing for Startups","metadata":{"author":"Noah","publishedDate":"2022-08-10","tags":["cloud computing","startups","technology"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
     let block10 = DataBlock::new_from_columns(vec![
         UInt64Type::from_data(vec![51, 52, 53, 54, 55]),
@@ -315,6 +387,13 @@ async fn test_block_pruner() -> Result<()> {
             "It's ok to miss this opportunity. Others will arise".to_string(),
             "He seems crazy but actually he's clever".to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"The Psychology of Persuasion","metadata":{"author":"Oliver","publishedDate":"2021-06-15","tags":["psychology","persuasion","behavior"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Sustainable Energy Solutions","metadata":{"author":"Pamela","publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Future of Autonomous Vehicles","metadata":{"author":"Quincy","publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Role of AI in Customer Service","metadata":{"author":"Rachel","publishedDate":"2021-09-20","tags":["AI","customer service","automation"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Internet of Things Applications","metadata":{"author":"Samuel","publishedDate":"2023-12-15","tags":["IoT","applications","technology"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
     let block11 = DataBlock::new_from_columns(vec![
         UInt64Type::from_data(vec![56, 57, 58, 59, 60]),
@@ -331,6 +410,13 @@ async fn test_block_pruner() -> Result<()> {
             "You can't have everything".to_string(),
             "This person or thing may look bad, but it's good inside".to_string(),
             "People who don't understand something fully are dangerous".to_string(),
+        ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"The Art of Storytelling in Marketing","metadata":{"author":"Thomas","publishedDate":"2022-06-10","tags":["storytelling","marketing","advertising"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Innovations in Renewable Energy","metadata":{"author":"Ursula","publishedDate":"2021-08-15","tags":["renewable energy","innovations","sustainability"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Impact of Social Media on Society","metadata":{"author":"Victoria","publishedDate":"2023-11-01","tags":["social media","impact","society"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"Virtual Reality in Tourism","metadata":{"author":"Emma","publishedDate":"2023-06-30","tags":["virtual reality","tourism","travel"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"The Future of Blockchain Technology","metadata":{"author":"Bob","publishedDate":"2023-10-01","tags":["blockchain","future","cryptocurrency"]}}"#.as_bytes()).unwrap().to_vec(),
         ]),
     ]);
     let block12 = DataBlock::new_from_columns(vec![
@@ -350,6 +436,13 @@ async fn test_block_pruner() -> Result<()> {
             "人活在世上就要尽情的享受欢乐，不要使自己的酒杯只对着月亮".to_string(),
             "上天造就了我的才干就必然是有用处的，千两黄金花完了也能够再次获得".to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"人工智能与机器学习","metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"区块链在金融行业的应用","metadata":{"author":"李四","publishedDate":"2023-09-18","tags":["区块链","金融行业","金融科技"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"物联网与智能家居","metadata":{"author":"王五","publishedDate":"2023-08-15","tags":["物联网","智能家居","生活"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"量子计算的未来","metadata":{"author":"赵六","publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"网络安全与隐私保护","metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
     let block13 = DataBlock::new_from_columns(vec![
         UInt64Type::from_data(vec![66, 67, 68, 69, 70]),
@@ -368,6 +461,13 @@ async fn test_block_pruner() -> Result<()> {
             "时机难得，必需抓紧，不可错过".to_string(),
             "一支箭射中两只雕，比喻做一件事而达到两个目的".to_string(),
         ]),
+        VariantType::from_data(vec![
+            jsonb::parse_value(r#"{"title":"虚拟现实在教育中的应用","metadata":{"author":"周八","publishedDate":"2023-05-30","tags":["虚拟现实","教育技术","创新教育"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"大数据与医疗健康","metadata":{"author":"吴九","publishedDate":"2023-04-25","tags":["大数据","医疗健康","数据分析"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"云计算在企业中的应用","metadata":{"author":"郑十","publishedDate":"2023-03-20","tags":["云计算","企业管理","信息技术"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"科技前沿探索","metadata":{"author":"陈十一","publishedDate":"2023-10-27","tags":["科技创新","前沿技术","探索之旅"]}}"#.as_bytes()).unwrap().to_vec(),
+            jsonb::parse_value(r#"{"title":"环保生活实践","metadata":{"author":"韩十二","publishedDate":"2023-10-23","tags":["环境保护","绿色生活","可持续发展"]}}"#.as_bytes()).unwrap().to_vec(),
+        ]),
     ]);
 
     let blocks = vec![
@@ -381,7 +481,7 @@ async fn test_block_pruner() -> Result<()> {
 
     let table = catalog
         .get_table(
-            fixture.default_tenant().name(),
+            &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
@@ -393,15 +493,20 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
-    let mut options = BTreeMap::new();
-    options.insert("tokenizer".to_string(), "chinese".to_string());
+    let mut index_options = BTreeMap::new();
+    index_options.insert("tokenizer".to_string(), "chinese".to_string());
+    index_options.insert(
+        "filters".to_string(),
+        "english_stop,english_stemmer,chinese_stop".to_string(),
+    );
+
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
         name: index_name.clone(),
-        column_ids: vec![1, 2],
-        sync_creation: true,
-        options,
+        column_ids: vec![1, 2, 3],
+        sync_creation: false,
+        options: index_options.clone(),
     };
 
     let res = handler.do_create_table_index(catalog.clone(), req).await;
@@ -410,6 +515,7 @@ async fn test_block_pruner() -> Result<()> {
     let index_table_schema = TableSchemaRefExt::create(vec![
         TableField::new("idiom", TableDataType::String),
         TableField::new("meaning", TableDataType::String),
+        TableField::new("extras", TableDataType::Variant),
     ]);
 
     let refresh_index_plan = RefreshTableIndexPlan {
@@ -430,24 +536,23 @@ async fn test_block_pruner() -> Result<()> {
     assert!(snapshot.is_some());
     let snapshot = snapshot.unwrap();
 
-    let index_info_loc = snapshot
-        .inverted_indexes
-        .as_ref()
-        .and_then(|i| i.get(&index_name));
-    assert!(index_info_loc.is_some());
-    let index_info = load_inverted_index_info(fuse_table.get_operator(), index_info_loc).await?;
-    assert!(index_info.is_some());
-    let index_info = index_info.unwrap();
-    let index_version = index_info.index_version.clone();
+    let table_info = new_table.get_table_info();
+    let table_indexes = &table_info.meta.indexes;
+    let table_index = table_indexes.get(&index_name);
+    assert!(table_index.is_some());
+    let table_index = table_index.unwrap();
+    let index_version = table_index.version.clone();
 
     let index_schema = DataSchema::from(index_table_schema);
     let e1 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "test".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -455,9 +560,11 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "save".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -465,9 +572,11 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "one".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -475,9 +584,11 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "the".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -485,9 +596,11 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "光阴".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -495,9 +608,11 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["idiom".to_string()],
+            query_fields: vec![("idiom".to_string(), None)],
             query_text: "人生".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -505,9 +620,11 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["meaning".to_string()],
+            query_fields: vec![("meaning".to_string(), None)],
             query_text: "people".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -515,9 +632,11 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["meaning".to_string()],
+            query_fields: vec![("meaning".to_string(), None)],
             query_text: "bad".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -525,9 +644,11 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["meaning".to_string()],
+            query_fields: vec![("meaning".to_string(), None)],
             query_text: "黄金".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -535,9 +656,77 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
+            index_options: index_options.clone(),
             index_schema: index_schema.clone(),
-            query_columns: vec!["meaning".to_string()],
+            query_fields: vec![("meaning".to_string(), None)],
             query_text: "时间".to_string(),
+            has_score: false,
+        }),
+        ..Default::default()
+    };
+    let e11 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_version: index_version.clone(),
+            index_options: index_options.clone(),
+            index_schema: index_schema.clone(),
+            query_fields: vec![
+                ("idiom".to_string(), Some(F32::from(5.0))),
+                ("meaning".to_string(), Some(F32::from(1.0))),
+            ],
+            query_text: "you".to_string(),
+            has_score: false,
+        }),
+        ..Default::default()
+    };
+    let e12 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_version: index_version.clone(),
+            index_options: index_options.clone(),
+            index_schema: index_schema.clone(),
+            query_fields: vec![
+                ("idiom".to_string(), Some(F32::from(5.0))),
+                ("meaning".to_string(), Some(F32::from(1.0))),
+            ],
+            query_text: "光阴".to_string(),
+            has_score: false,
+        }),
+        ..Default::default()
+    };
+    let e13 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_version: index_version.clone(),
+            index_options: index_options.clone(),
+            index_schema: index_schema.clone(),
+            query_fields: vec![("extras".to_string(), None)],
+            query_text: "extras.title:Blockchain".to_string(),
+            has_score: false,
+        }),
+        ..Default::default()
+    };
+    let e14 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_version: index_version.clone(),
+            index_options: index_options.clone(),
+            index_schema: index_schema.clone(),
+            query_fields: vec![("extras".to_string(), None)],
+            query_text: "extras.metadata.author:David".to_string(),
+            has_score: false,
+        }),
+        ..Default::default()
+    };
+    let e15 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_version: index_version.clone(),
+            index_options: index_options.clone(),
+            index_schema: index_schema.clone(),
+            query_fields: vec![("extras".to_string(), None)],
+            query_text: "extras.metadata.tags:技术".to_string(),
+            has_score: false,
         }),
         ..Default::default()
     };
@@ -552,7 +741,13 @@ async fn test_block_pruner() -> Result<()> {
         (Some(e8), 4, 4),
         (Some(e9), 1, 2),
         (Some(e10), 2, 2),
+        (Some(e11), 9, 15),
+        (Some(e12), 2, 2),
+        (Some(e13), 3, 3),
+        (Some(e14), 2, 2),
+        (Some(e15), 2, 5),
     ];
+
     for (extra, expected_blocks, expected_rows) in extras {
         let block_metas = apply_block_pruning(
             snapshot.clone(),

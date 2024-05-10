@@ -164,6 +164,8 @@ pub struct UserOption {
     network_policy: Option<String>,
 
     password_policy: Option<String>,
+
+    disabled: Option<bool>,
 }
 
 impl UserOption {
@@ -173,6 +175,7 @@ impl UserOption {
             default_role: None,
             network_policy: None,
             password_policy: None,
+            disabled: None,
         }
     }
 
@@ -200,6 +203,11 @@ impl UserOption {
         self
     }
 
+    pub fn with_disabled(mut self, disabled: Option<bool>) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub fn with_set_flag(mut self, flag: UserOptionFlag) -> Self {
         self.flags.insert(flag);
         self
@@ -221,6 +229,10 @@ impl UserOption {
         self.password_policy.as_ref()
     }
 
+    pub fn disabled(&self) -> Option<&bool> {
+        self.disabled.as_ref()
+    }
+
     pub fn set_default_role(&mut self, default_role: Option<String>) {
         self.default_role = default_role;
     }
@@ -231,6 +243,10 @@ impl UserOption {
 
     pub fn set_password_policy(&mut self, password_policy: Option<String>) {
         self.password_policy = password_policy;
+    }
+
+    pub fn set_disabled(&mut self, disabled: Option<bool>) {
+        self.disabled = disabled;
     }
 
     pub fn set_all_flag(&mut self) {

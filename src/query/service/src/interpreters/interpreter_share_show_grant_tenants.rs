@@ -19,8 +19,8 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::GetShareGrantTenantsReq;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -55,10 +55,7 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tenant = self.ctx.get_tenant();
         let req = GetShareGrantTenantsReq {
-            share_name: ShareNameIdent {
-                tenant,
-                share_name: self.plan.share_name.clone(),
-            },
+            share_name: ShareNameIdent::new(&tenant, &self.plan.share_name),
         };
         let resp = meta_api.get_grant_tenants_of_share(req).await?;
         if resp.accounts.is_empty() {

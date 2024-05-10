@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::F32;
 use databend_common_expression::DataSchema;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -69,13 +71,27 @@ pub struct PrewhereInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
+/// Information about inverted index.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InvertedIndexInfo {
+    /// The index name.
     pub index_name: String,
+    /// The index version.
     pub index_version: String,
+    /// The index options: tokenizer, filters, etc.
+    pub index_options: BTreeMap<String, String>,
+    /// The index schema.
     pub index_schema: DataSchema,
-    pub query_columns: Vec<String>,
+    /// The query field names and optional boost value,
+    /// if boost is set, the score for the field is multiplied by the boost value.
+    /// For example, if set `title^5.0, description^2.0`,
+    /// it means that the score for `title` field is multiplied by 5.0,
+    /// and the score for `description` field is multiplied by 2.0.
+    pub query_fields: Vec<(String, Option<F32>)>,
+    /// The search query text with query syntax.
     pub query_text: String,
+    /// whether search with score function
+    pub has_score: bool,
 }
 
 /// Extras is a wrapper for push down items.

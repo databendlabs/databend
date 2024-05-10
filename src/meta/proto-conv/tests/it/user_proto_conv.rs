@@ -42,7 +42,8 @@ use crate::common::print_err;
 fn test_user_info() -> mt::principal::UserInfo {
     let option = mt::principal::UserOption::default()
         .with_set_flag(mt::principal::UserOptionFlag::TenantSetting)
-        .with_default_role(Some("role1".into()));
+        .with_default_role(Some("role1".into()))
+        .with_disabled(None);
 
     mt::principal::UserInfo {
         name: "test_user".to_string(),
@@ -728,6 +729,7 @@ fn test_load_old_user() -> anyhow::Result<()> {
         let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         assert_eq!(got.name, "test_user".to_string());
         assert_eq!(got.option.default_role().clone(), None);
+        assert_eq!(got.option.disabled().clone(), None);
     }
 
     {

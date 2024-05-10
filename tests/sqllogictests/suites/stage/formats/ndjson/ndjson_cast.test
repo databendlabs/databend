@@ -1,0 +1,17 @@
+statement ok
+drop table if exists cast_ndjson
+
+statement ok
+CREATE TABLE cast_ndjson (name String, tags Map(String, String))
+
+query 
+copy into cast_ndjson from @data/ndjson/cast_sample.ndjson file_format = (type = NDJSON) ON_ERROR=continue
+----
+ndjson/cast_sample.ndjson 3 0 NULL NULL
+
+query 
+select * from cast_ndjson
+----
+data1 {'env':'test1','length':'ok'}
+data2 {'env':'test2','length':'true'}
+data3 {'env':'test3','length':'10'}

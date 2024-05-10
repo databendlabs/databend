@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -47,6 +48,17 @@ pub enum ValidationMode {
     ReturnAllErrors,
 }
 
+impl Display for ValidationMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValidationMode::None => write!(f, ""),
+            ValidationMode::ReturnNRows(v) => write!(f, "RETURN_ROWS={v}"),
+            ValidationMode::ReturnErrors => write!(f, "RETURN_ERRORS"),
+            ValidationMode::ReturnAllErrors => write!(f, "RETURN_ALL_ERRORS"),
+        }
+    }
+}
+
 impl FromStr for ValidationMode {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, String> {
@@ -75,6 +87,21 @@ pub enum CopyIntoTableMode {
     Copy,
 }
 
+impl Display for CopyIntoTableMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CopyIntoTableMode::Insert { overwrite } => {
+                if *overwrite {
+                    write!(f, "INSERT OVERWRITE")
+                } else {
+                    write!(f, "INSERT")
+                }
+            }
+            CopyIntoTableMode::Replace => write!(f, "REPLACE"),
+            CopyIntoTableMode::Copy => write!(f, "COPY"),
+        }
+    }
+}
 impl CopyIntoTableMode {
     pub fn is_overwrite(&self) -> bool {
         match self {
@@ -127,21 +154,19 @@ impl CopyIntoTablePlan {
             if self.force {
                 stage_table_info
                     .files_info
-                    .blocking_list(&operator, false, max_files)
+                    .blocking_list(&operator, max_files)
             } else {
-                stage_table_info
-                    .files_info
-                    .blocking_list(&operator, false, None)
+                stage_table_info.files_info.blocking_list(&operator, None)
             }
         } else if self.force {
             stage_table_info
                 .files_info
-                .list(&operator, thread_num, false, max_files)
+                .list(&operator, thread_num, max_files)
                 .await
         } else {
             stage_table_info
                 .files_info
-                .list(&operator, thread_num, false, None)
+                .list(&operator, thread_num, None)
                 .await
         }?;
 
@@ -164,8 +189,10 @@ impl CopyIntoTablePlan {
                 return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
             }
             info!(
-                "force mode, ignore file filtering. ({}.{})",
-                &self.database_name, &self.table_name
+                "{}: force mode, ignore file filtering. ({}.{})",
+                ctx.get_id(),
+                &self.database_name,
+                &self.table_name
             );
             (all_source_file_infos, vec![])
         } else {
@@ -200,11 +227,16 @@ impl CopyIntoTablePlan {
             (files_to_copy, duplicated_files)
         };
 
+        let len = need_copy_file_infos.len();
+        let sum: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
+
         info!(
-            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{:?}",
+            "{}: collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
+            ctx.get_id(),
             max_files,
-            num_all_files,
             need_copy_file_infos.len(),
+            num_all_files - len,
+            sum,
             start.elapsed()
         );
 

@@ -325,7 +325,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjecto
         Arc::new(AggregateInjector::<Method, V> {
             ctx,
             method,
-            tenant: tenant.name().to_string(),
+            tenant: tenant.tenant_name().to_string(),
             aggregator_params: params,
             _phantom: Default::default(),
         })
@@ -369,7 +369,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         let params = self.aggregator_params.clone();
 
         let operator = DataOperator::instance().operator();
-        let location_prefix = query_spill_prefix(&self.tenant);
+        let location_prefix = query_spill_prefix(&self.tenant, &self.ctx.get_id());
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
@@ -417,7 +417,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         let method = &self.method;
         let params = self.aggregator_params.clone();
         let operator = DataOperator::instance().operator();
-        let location_prefix = query_spill_prefix(&self.tenant);
+        let location_prefix = query_spill_prefix(&self.tenant, &self.ctx.get_id());
 
         let schema = shuffle_params.schema.clone();
         let local_id = &shuffle_params.executor_id;

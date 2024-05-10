@@ -57,7 +57,7 @@ async fn load_background_tasks(
         .await?;
     debug!(
         "list_background_tasks: tenant: {}, candidate tasks: {}",
-        tenant.name(),
+        tenant.tenant_name(),
         tasks.len()
     );
     let mut task_infos = Vec::with_capacity(tasks.len());

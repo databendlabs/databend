@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug)]
 pub struct RevertTablePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,

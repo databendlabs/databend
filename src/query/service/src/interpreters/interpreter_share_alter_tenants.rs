@@ -17,9 +17,9 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::AddShareAccountsReq;
 use databend_common_meta_app::share::RemoveShareAccountsReq;
-use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::UserApiProvider;
 
@@ -56,10 +56,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         if self.plan.is_add {
             let req = AddShareAccountsReq {
-                share_name: ShareNameIdent {
-                    tenant,
-                    share_name: self.plan.share.clone(),
-                },
+                share_name: ShareNameIdent::new(&tenant, &self.plan.share),
                 if_exists: self.plan.if_exists,
                 accounts: self.plan.accounts.clone(),
                 share_on: Utc::now(),
@@ -67,7 +64,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
             let resp = meta_api.add_share_tenants(req).await?;
 
             save_share_spec(
-                &self.ctx.get_tenant().name().to_string(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 resp.spec_vec,
                 None,
@@ -75,17 +72,14 @@ impl Interpreter for AlterShareTenantsInterpreter {
             .await?;
         } else {
             let req = RemoveShareAccountsReq {
-                share_name: ShareNameIdent {
-                    tenant,
-                    share_name: self.plan.share.clone(),
-                },
+                share_name: ShareNameIdent::new(&tenant, &self.plan.share),
                 if_exists: self.plan.if_exists,
                 accounts: self.plan.accounts.clone(),
             };
             let resp = meta_api.remove_share_tenants(req).await?;
 
             save_share_spec(
-                &self.ctx.get_tenant().name().to_string(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 resp.spec_vec,
                 None,

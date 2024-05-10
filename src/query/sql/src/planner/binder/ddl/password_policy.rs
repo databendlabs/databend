@@ -38,9 +38,10 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
+
         let plan = CreatePasswordPolicyPlan {
             create_option: *create_option,
-            tenant: tenant.name().to_string(),
+            tenant,
             name: name.to_string(),
             set_options: set_options.clone(),
         };
@@ -59,9 +60,10 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
+
         let plan = AlterPasswordPolicyPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant,
             name: name.to_string(),
             action: action.clone(),
         };
@@ -76,9 +78,10 @@ impl Binder {
         let DropPasswordPolicyStmt { if_exists, name } = stmt;
 
         let tenant = self.ctx.get_tenant();
+
         let plan = DropPasswordPolicyPlan {
             if_exists: *if_exists,
-            tenant: tenant.name().to_string(),
+            tenant,
             name: name.to_string(),
         };
         Ok(Plan::DropPasswordPolicy(Box::new(plan)))

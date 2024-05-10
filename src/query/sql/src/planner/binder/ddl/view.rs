@@ -105,7 +105,7 @@ impl Binder {
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
-            tenant: tenant.name().to_string(),
+            tenant,
             catalog,
             database,
             view_name,

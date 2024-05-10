@@ -20,6 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::share::ShowSharesReq;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_users::UserApiProvider;
 
@@ -62,7 +63,7 @@ impl Interpreter for ShowSharesInterpreter {
 
         // query all share endpoint for other tenant inbound shares
         let share_specs = ShareEndpointManager::instance()
-            .get_inbound_shares(tenant.name(), None, None)
+            .get_inbound_shares(&tenant, None, None)
             .await?;
         for (from_tenant, share_spec) in share_specs {
             names.push(share_spec.name.clone());
@@ -70,7 +71,7 @@ impl Interpreter for ShowSharesInterpreter {
             created_owns.push(share_spec.share_on.unwrap_or_default().to_string());
             database_names.push(share_spec.database.unwrap_or_default().name);
             from.push(from_tenant);
-            to.push(tenant.name().to_string());
+            to.push(tenant.tenant_name().to_string());
             comments.push(share_spec.comment.unwrap_or_default());
         }
 
@@ -80,11 +81,11 @@ impl Interpreter for ShowSharesInterpreter {
         let resp = meta_api.show_shares(req).await?;
 
         for entry in resp.outbound_accounts {
-            names.push(entry.share_name.share_name.clone());
+            names.push(entry.share_name.share_name().to_string());
             kinds.push("OUTBOUND".to_string());
             created_owns.push(entry.create_on.to_string());
             database_names.push(entry.database_name.unwrap_or_default());
-            from.push(entry.share_name.tenant.name().to_string());
+            from.push(entry.share_name.tenant_name().to_string());
             to.push(
                 entry
                     .accounts

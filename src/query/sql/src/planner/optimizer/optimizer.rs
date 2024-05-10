@@ -63,6 +63,7 @@ pub struct OptimizerContext {
     enable_distributed_optimization: bool,
     enable_join_reorder: bool,
     enable_dphyp: bool,
+    enable_merge_into_join_reorder: bool,
 }
 
 impl OptimizerContext {
@@ -74,6 +75,7 @@ impl OptimizerContext {
             enable_distributed_optimization: false,
             enable_join_reorder: true,
             enable_dphyp: true,
+            enable_merge_into_join_reorder: true,
         }
     }
 
@@ -89,6 +91,11 @@ impl OptimizerContext {
 
     pub fn with_enable_dphyp(mut self, enable: bool) -> Self {
         self.enable_dphyp = enable;
+        self
+    }
+
+    pub fn with_enable_merge_into_join_reorder(mut self, enable: bool) -> Self {
+        self.enable_merge_into_join_reorder = enable;
         self
     }
 }
@@ -149,7 +156,6 @@ impl<'a> RecursiveOptimizer<'a> {
 }
 
 #[minitrace::trace]
-#[async_backtrace::framed]
 pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
@@ -227,7 +233,6 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     }
 }
 
-#[async_backtrace::framed]
 pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
@@ -316,7 +321,6 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
-#[async_backtrace::framed]
 async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
@@ -359,7 +363,6 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     Ok(cascades.memo)
 }
 
-#[async_backtrace::framed]
 async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
     // optimize source :fix issue #13733
     // reason: if there is subquery,windowfunc exprs etc. see
@@ -383,10 +386,9 @@ async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) ->
     }
     // replace right source
     let mut join_sexpr = plan.input.clone();
-    join_sexpr = Box::new(join_sexpr.replace_children(vec![
-        Arc::new(join_sexpr.child(0)?.clone()),
-        Arc::new(right_source),
-    ]));
+    let left_target = optimize_query(opt_ctx.clone(), join_sexpr.child(0)?.clone()).await?;
+    join_sexpr =
+        Box::new(join_sexpr.replace_children(vec![Arc::new(left_target), Arc::new(right_source)]));
 
     let join_op = Join::try_from(join_sexpr.plan().clone())?;
     let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
@@ -396,21 +398,25 @@ async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) ->
     // 3. for full merge into, we use right outer join
     // for now, let's import the statistic info to determine left join or right join
     // we just do optimization for the top join (target and source),won't do recursive optimization.
-    let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
-    let mut state = TransformResult::new();
-    // we will reorder the join order according to the cardinality of target and source.
-    rule.apply(&join_sexpr, &mut state)?;
-    assert!(state.results().len() <= 1);
-    // we need to check whether we do swap left and right.
-    let change_join_order = if state.results().len() == 1 {
-        join_sexpr = Box::new(state.results()[0].clone());
-        true
+    let change_join_order = if opt_ctx.enable_merge_into_join_reorder {
+        let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
+        let mut state = TransformResult::new();
+        // we will reorder the join order according to the cardinality of target and source.
+        rule.apply(&join_sexpr, &mut state)?;
+        assert!(state.results().len() <= 1);
+        // we need to check whether we do swap left and right.
+        if state.results().len() == 1 {
+            join_sexpr = Box::new(state.results()[0].clone());
+            true
+        } else {
+            false
+        }
     } else {
         false
     };
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
-    // don't support spill for now, and we need the macthed clauses' count
+    // don't support spill for now, and we need the matched clauses' count
     // is one, just support `merge into t using source when matched then
     // update xx when not matched then insert xx`.
     let flag = plan.matched_evaluators.len() == 1

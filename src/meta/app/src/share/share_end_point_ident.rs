@@ -13,10 +13,25 @@
 // limitations under the License.
 
 use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
 pub type ShareEndpointIdent = TIdent<Resource>;
 
+pub type ShareEndpointIdentRaw = TIdentRaw<Resource>;
+
 pub use kvapi_impl::Resource;
+
+impl ShareEndpointIdent {
+    pub fn share_endpoint_name(&self) -> &str {
+        self.name()
+    }
+}
+
+impl ShareEndpointIdentRaw {
+    pub fn share_endpoint_name(&self) -> &str {
+        self.name()
+    }
+}
 
 mod kvapi_impl {
 
@@ -29,6 +44,8 @@ mod kvapi_impl {
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_share_endpoint";
+        const TYPE: &'static str = "ShareEndpointIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = ShareEndpointId;
     }
 
@@ -38,6 +55,7 @@ mod kvapi_impl {
         }
     }
 
+    // // Use these error types to replace usage of ErrorCode if possible.
     // impl From<ExistError<Resource>> for ErrorCode {
     // impl From<UnknownError<Resource>> for ErrorCode {
 }

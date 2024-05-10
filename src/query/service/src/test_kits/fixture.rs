@@ -212,7 +212,7 @@ impl TestFixture {
         }
 
         GlobalServices::init_with(config).await?;
-        OssLicenseManager::init(config.query.tenant_id.name().to_string())?;
+        OssLicenseManager::init(config.query.tenant_id.tenant_name().to_string())?;
 
         // Cluster register.
         {
@@ -787,7 +787,7 @@ impl TestFixture {
             .get_catalog(CATALOG_DEFAULT)
             .await?
             .get_table(
-                self.default_tenant().name(),
+                &self.default_tenant(),
                 self.default_db_name().as_str(),
                 self.default_table_name().as_str(),
             )

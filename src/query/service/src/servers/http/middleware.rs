@@ -95,11 +95,7 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
-    let client_ip = match req.remote_addr().0 {
-        Addr::SocketAddr(addr) => Some(addr.ip().to_string()),
-        Addr::Custom(..) => Some("127.0.0.1".to_string()),
-        _ => None,
-    };
+    let client_ip = get_client_ip(req);
     if std_auth_headers.is_empty() {
         if matches!(kind, HttpHandlerKind::Clickhouse) {
             auth_clickhouse_name_password(req, client_ip)
@@ -111,6 +107,33 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
     } else {
         auth_by_header(&std_auth_headers, client_ip)
     }
+}
+
+/// this function tries to get the client IP address from the headers. if the ip in header
+/// not found, fallback to the remote address, which might be local proxy's ip address.
+/// please note that when it comes with network policy, we need make sure the incoming
+/// traffic comes from a trustworthy proxy instance.
+pub fn get_client_ip(req: &Request) -> Option<String> {
+    let headers = ["X-Real-IP", "X-Forwarded-For", "CF-Connecting-IP"];
+    for &header in headers.iter() {
+        if let Some(value) = req.headers().get(header) {
+            if let Ok(mut ip_str) = value.to_str() {
+                if header == "X-Forwarded-For" {
+                    ip_str = ip_str.split(',').next().unwrap_or("");
+                }
+                return Some(ip_str.to_string());
+            }
+        }
+    }
+
+    // fallback to the connection's remote address, take care
+    let client_ip = match req.remote_addr().0 {
+        Addr::SocketAddr(addr) => Some(addr.ip().to_string()),
+        Addr::Custom(..) => Some("127.0.0.1".to_string()),
+        _ => None,
+    };
+
+    client_ip
 }
 
 fn auth_by_header(
@@ -233,6 +256,7 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(TRACE_PARENT)
             .map(|id| id.to_str().unwrap().to_string());
         let baggage = extract_baggage_from_headers(req.headers());
+        let client_host = get_client_ip(req);
         Ok(HttpQueryContext::new(
             session,
             query_id,
@@ -243,6 +267,7 @@ impl<E> HTTPSessionEndpoint<E> {
             baggage,
             req.method().to_string(),
             req.uri().to_string(),
+            client_host,
         ))
     }
 }

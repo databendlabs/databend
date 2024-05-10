@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use chrono::Utc;
 use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
@@ -28,27 +30,35 @@ use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 
+use crate::normalize_identifier;
 use crate::planner::resolve_type_name;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
+use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
 use crate::Binder;
 
 impl Binder {
+    fn is_allowed_language(language: &str) -> bool {
+        let allowed_languages: HashSet<&str> = ["javascript", "wasm"].iter().cloned().collect();
+        allowed_languages.contains(&language.to_lowercase().as_str())
+    }
+
     pub(in crate::planner::binder) async fn bind_udf_definition(
         &mut self,
         udf_name: &Identifier,
         udf_description: &Option<String>,
         udf_definition: &UDFDefinition,
     ) -> Result<UserDefinedFunction> {
+        let name = normalize_identifier(udf_name, &self.name_resolution_ctx).to_string();
         match udf_definition {
             UDFDefinition::LambdaUDF {
                 parameters,
                 definition,
             } => {
                 let mut validator = UDFValidator {
-                    name: udf_name.to_string(),
+                    name,
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
                     ..Default::default()
                 };
@@ -100,6 +110,9 @@ impl Binder {
                     self.ctx
                         .get_settings()
                         .get_external_server_request_timeout_secs()?,
+                    self.ctx
+                        .get_settings()
+                        .get_external_server_request_batch_rows()?,
                 )
                 .await?;
                 client
@@ -107,7 +120,7 @@ impl Binder {
                     .await?;
 
                 Ok(UserDefinedFunction {
-                    name: udf_name.to_string(),
+                    name,
                     description: udf_description.clone().unwrap_or_default(),
                     definition: PlanUDFDefinition::UDFServer(UDFServer {
                         address: address.clone(),
@@ -133,26 +146,19 @@ impl Binder {
                 }
                 let return_type = DataType::from(&resolve_type_name(return_type, true)?);
 
-                if !["python", "javascript"].contains(&language.to_lowercase().as_str()) {
+                if !Self::is_allowed_language(language) {
                     return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}', must be python or javascript"
-                    )));
-                }
-
-                // TODO add python remove these line
-                if language.to_ascii_lowercase() == "python" {
-                    return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}' is not supported now, must be javascript"
+                        "Unallowed UDF language '{language}', must be javascript or wasm"
                     )));
                 }
 
                 let mut runtime_version = runtime_version.to_string();
                 if runtime_version.is_empty() && language.to_lowercase() == "python" {
-                    runtime_version = "3.12.0".to_string();
+                    runtime_version = "3.12.2".to_string();
                 }
 
                 Ok(UserDefinedFunction {
-                    name: udf_name.to_string(),
+                    name,
                     description: udf_description.clone().unwrap_or_default(),
                     definition: PlanUDFDefinition::UDFScript(UDFScript {
                         code: code.clone(),
@@ -189,5 +195,17 @@ impl Binder {
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
         Ok(Plan::AlterUDF(Box::new(AlterUDFPlan { udf })))
+    }
+
+    pub(in crate::planner::binder) async fn bind_drop_udf(
+        &mut self,
+        if_exists: bool,
+        udf_name: &Identifier,
+    ) -> Result<Plan> {
+        let name = normalize_identifier(udf_name, &self.name_resolution_ctx).to_string();
+        Ok(Plan::DropUDF(Box::new(DropUDFPlan {
+            if_exists,
+            udf: name,
+        })))
     }
 }

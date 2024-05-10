@@ -72,3 +72,57 @@ CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DES
 
 statement ok
 DROP FUNCTION IF EXISTS isnotempty_test_replace;
+
+statement ok
+create or replace function SOME_NAME as (x) -> x * x
+
+query I
+SELECT SOME_NAME(2)
+----
+4
+
+query I
+SELECT some_name(2)
+----
+4
+
+statement ok
+alter function SOME_NAME as (x) -> x * x + 1
+
+query I
+SELECT SOME_NAME(2)
+----
+5
+
+query I
+SELECT some_name(2)
+----
+5
+
+statement ok
+drop function SOME_NAME
+
+statement ok
+create or replace function `SOME_NAME` as (x) -> x * x
+
+query I
+SELECT `SOME_NAME`(2)
+----
+4
+
+statement error 1008
+SELECT SOME_NAME(2)
+
+statement error 1008
+SELECT `some_name`(2)
+
+statement ok
+alter function `SOME_NAME` as (x) -> x * x + 1
+
+query I
+SELECT `SOME_NAME`(2)
+----
+5
+
+statement ok
+drop function `SOME_NAME`

@@ -290,6 +290,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("disable_merge_into_join_reorder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable merge into join reorder optimization.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",
@@ -535,7 +541,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(50),
+                    value: UserSettingValue::UInt64(25),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -624,6 +630,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("external_server_request_batch_rows", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(65536),
+                    desc: "Request batch rows to external server",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables parquet prewhere",
@@ -643,7 +655,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::String(vec!["rounding".into(), "truncating".into()])),
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "experiment setting disables stage and udf privilege check(disable by default).",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -669,6 +681,12 @@ impl DefaultSettings {
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Refresh aggregating index after new data written",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("parse_datetime_ignore_remainder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Ignore trailing chars when parse string to datetime(disable by default)",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -718,6 +736,24 @@ impl DefaultSettings {
                 ("statement_queued_timeout_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The maximum waiting seconds in the queue. The default value is 0(no limit).",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("geometry_output_format", DefaultSettingValue {
+                    value: UserSettingValue::String("GeoJSON".to_owned()),
+                    desc: "Display format for GEOMETRY values.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::String(vec!["WKT".into(), "WKB".into(), "EWKT".into(), "EWKB".into(), "GeoJSON".into()])),
+                }),
+                ("script_max_steps", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "The maximum steps allowed in a single execution of script.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("max_vacuum_temp_files_after_query", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The maximum temp files will be removed after query. please enable vacuum feature. The default value is 0(all temp files)",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 })

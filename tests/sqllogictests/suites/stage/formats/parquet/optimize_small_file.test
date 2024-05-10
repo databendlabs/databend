@@ -52,7 +52,7 @@ truncate table ai
 
 
 query 
-copy /*+ set_var(parquet_fast_read_bytes=30000) */ into ai from @data/parquet/multi_page/ PATTERN='.*[.]parquet' force=true;
+copy /*+ set_var(parquet_fast_read_bytes=3000) */ into ai from @data/parquet/multi_page/ PATTERN='.*[.]parquet' force=true;
 ----
 parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
 parquet/multi_page/multi_page_2.parquet 120 0 NULL NULL

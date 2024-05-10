@@ -15,6 +15,7 @@
 use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
 
 use crate::settings::Settings;
@@ -301,6 +302,10 @@ impl Settings {
         Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
     }
 
+    pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
@@ -552,6 +557,10 @@ impl Settings {
         self.try_get_u64("external_server_request_timeout_secs")
     }
 
+    pub fn get_external_server_request_batch_rows(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_batch_rows")
+    }
+
     pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {
         Ok(self.try_get_u64("create_query_flight_client_with_current_rt")? != 0)
     }
@@ -586,6 +595,10 @@ impl Settings {
             "enable_refresh_aggregating_index_after_write",
             u64::from(val),
         )
+    }
+
+    pub fn get_parse_datetime_ignore_remainder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("parse_datetime_ignore_remainder")? != 0)
     }
 
     pub fn get_disable_variant_check(&self) -> Result<bool> {
@@ -626,5 +639,18 @@ impl Settings {
 
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {
         self.try_get_u64("statement_queued_timeout_in_seconds")
+    }
+
+    pub fn get_geometry_output_format(&self) -> Result<GeometryDataType> {
+        let v = self.try_get_string("geometry_output_format")?;
+        v.parse()
+    }
+
+    pub fn get_script_max_steps(&self) -> Result<u64> {
+        self.try_get_u64("script_max_steps")
+    }
+
+    pub fn get_max_vacuum_temp_files_after_query(&self) -> Result<u64> {
+        self.try_get_u64("max_vacuum_temp_files_after_query")
     }
 }

@@ -56,12 +56,12 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
     let mut table_infos: Vec<TenantTableInfo> = vec![];
     let mut warnings: Vec<String> = vec![];
     for database in databases {
-        let tables = match catalog.list_tables(tenant.name(), database.name()).await {
+        let tables = match catalog.list_tables(tenant, database.name()).await {
             Ok(v) => v,
             Err(err) => {
                 warnings.push(format!(
                     "failed to list tables of database {}.{}: {}",
-                    tenant.name(),
+                    tenant.tenant_name(),
                     database.name(),
                     err
                 ));

@@ -42,7 +42,6 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use super::RemoveReason;
-use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -113,6 +112,7 @@ impl HttpQueryRequest {
             final_uri: None,
             kill_uri: None,
             error: Some(QueryError::from_error_code(err)),
+            has_result_set: None,
         })
     }
 }
@@ -218,6 +218,7 @@ pub struct StageAttachmentConf {
 
 #[derive(Debug, Clone)]
 pub struct ResponseState {
+    pub has_result_set: Option<bool>,
     pub schema: Vec<QueryResponseField>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
@@ -405,6 +406,9 @@ impl HttpQuery {
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
+
+        session.set_client_host(ctx.client_host.clone());
+
         let http_ctx = ctx;
         let ctx = session.create_query_context().await?;
 
@@ -479,10 +483,10 @@ impl HttpQuery {
                 )
                 .await
                 {
-                    InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         schema: vec![],
+                        has_result_set: None,
                         reason: Err(e.clone()),
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),

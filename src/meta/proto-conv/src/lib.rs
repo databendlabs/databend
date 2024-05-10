@@ -77,6 +77,7 @@ mod owner_from_to_protobuf_impl;
 mod ownership_from_to_protobuf_impl;
 mod role_from_to_protobuf_impl;
 mod schema_from_to_protobuf_impl;
+mod sequence_from_to_protobuf_impl;
 mod share_from_to_protobuf_impl;
 mod stage_from_to_protobuf_impl;
 mod table_from_to_protobuf_impl;

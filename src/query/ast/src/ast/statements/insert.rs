@@ -25,10 +25,13 @@ use crate::ast::FileFormatOptions;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::ast::With;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct InsertStmt {
     pub hints: Option<Hint>,
+    // With clause, common table expression
+    pub with: Option<With>,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -40,6 +43,9 @@ pub struct InsertStmt {
 
 impl Display for InsertStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if let Some(cte) = &self.with {
+            write!(f, "WITH {} ", cte)?;
+        }
         write!(f, "INSERT ")?;
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;

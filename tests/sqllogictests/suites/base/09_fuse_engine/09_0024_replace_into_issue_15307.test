@@ -1,0 +1,40 @@
+statement ok
+DROP DATABASE IF EXISTS issue_15307
+
+statement ok
+CREATE DATABASE issue_15307
+
+statement ok
+USE issue_15307
+
+# https://github.com/datafuselabs/databend/issues/15307
+
+statement ok
+create or replace table t( c1 bool);
+
+statement ok
+replace into t on(c1) values(false);
+
+statement ok
+replace into t on(c1) values(false);
+
+# there should be only one row left there
+query I
+select count() from t;
+----
+1
+
+# let's insert a different bool value
+statement ok
+replace into t on(c1) values(true);
+
+query I
+select count() from t;
+----
+2
+
+statement ok
+drop table t;
+
+statement ok
+DROP DATABASE issue_15307

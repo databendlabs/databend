@@ -17,6 +17,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use chrono::Utc;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,9 +32,12 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
@@ -66,6 +71,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
+use log::info;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
@@ -125,7 +131,7 @@ impl Interpreter for CreateTableInterpreter {
             // If a database has lot of tables, list_tables will be slow.
             // So We check get it when max_tables_per_database != 0
             let tables = catalog
-                .list_tables(self.plan.tenant.name(), &self.plan.database)
+                .list_tables(&self.plan.tenant, &self.plan.database)
                 .await?;
             if tables.len() >= quota.max_tables_per_database as usize {
                 return Err(ErrorCode::TenantQuotaExceeded(format!(
@@ -171,31 +177,33 @@ impl CreateTableInterpreter {
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
-        let reply = catalog.create_table(self.build_request(None)?).await?;
+        let mut req = self.build_request(None)?;
+
+        // create a dropped table first.
+        req.as_dropped = true;
+        req.table_meta.drop_on = Some(Utc::now());
+        let table_meta = req.table_meta.clone();
+        let reply = catalog.create_table(req).await?;
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
 
-        let table = catalog
-            .get_table(tenant.name(), &self.plan.database, &self.plan.table)
-            .await?;
+        let table_id = reply.table_id;
+        let table_id_seq = reply
+            .table_id_seq
+            .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
+        let db_id = reply.db_id;
 
         // grant the ownership of the table to the current role.
         let current_role = self.ctx.get_current_role();
         if let Some(current_role) = current_role {
-            let db = catalog
-                .get_database(tenant.name(), &self.plan.database)
-                .await?;
-            let db_id = db.get_db_info().ident.db_id;
-
             let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .grant_ownership(
                     &OwnershipObject::Table {
                         catalog_name: self.plan.catalog.clone(),
                         db_id,
-                        table_id: table.get_id(),
+                        table_id,
                     },
                     &current_role.name,
                 )
@@ -212,20 +220,28 @@ impl CreateTableInterpreter {
         //
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
+
+        let table_info = TableInfo::new(
+            &self.plan.database,
+            &self.plan.table,
+            TableIdent::new(table_id, table_id_seq),
+            table_meta,
+        );
+
         let insert_plan = Insert {
             catalog: self.plan.catalog.clone(),
             database: self.plan.database.clone(),
             table: self.plan.table.clone(),
-            table_id: table.get_id(),
             schema: self.plan.schema.clone(),
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
+            table_info: Some(table_info),
         };
 
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &tenant.name().to_string(),
+                tenant.tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
@@ -233,9 +249,51 @@ impl CreateTableInterpreter {
             .await?;
         }
 
-        InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
+        let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
-            .await
+            .await?;
+
+        let db_name = self.plan.database.clone();
+        let table_name = self.plan.table.clone();
+
+        // Add a callback to restore table visibility upon successful insert pipeline completion.
+        // As there might be previous on_finish callbacks(e.g. refresh/compact/re-cluster hooks) which
+        // depend on the table being visible, this callback is added at the beginning of the on_finish
+        // callback list.
+        //
+        // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
+
+        pipeline
+            .main_pipeline
+            .push_front_on_finished_callback(move |(_profiles, err)| {
+                if err.is_ok() {
+                    let qualified_table_name = format!("{}.{}", db_name, table_name);
+                    let undrop_fut = async move {
+                        let undrop_by_id = UndropTableByIdReq {
+                            name_ident: TableNameIdent {
+                                tenant,
+                                db_name,
+                                table_name,
+                            },
+                            db_id,
+                            table_id,
+                            table_id_seq,
+                            force_replace: true,
+                        };
+                        catalog.undrop_table_by_id(undrop_by_id).await
+                    };
+                    GlobalIORuntime::instance()
+                        .block_on(undrop_fut)
+                        .map_err(|e| {
+                            info!("create {} as select failed. {:?}", qualified_table_name, e);
+                            e
+                        })?;
+                }
+
+                Ok(())
+            });
+
+        Ok(pipeline)
     }
 
     #[async_backtrace::framed]
@@ -276,9 +334,7 @@ impl CreateTableInterpreter {
         // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
         if let Some(current_role) = self.ctx.get_current_role() {
             let tenant = self.ctx.get_tenant();
-            let db = catalog
-                .get_database(tenant.name(), &self.plan.database)
-                .await?;
+            let db = catalog.get_database(&tenant, &self.plan.database).await?;
             let db_id = db.get_db_info().ident.db_id;
 
             let role_api = UserApiProvider::instance().role_api(&tenant);
@@ -298,7 +354,7 @@ impl CreateTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &self.ctx.get_tenant().name().to_string(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
@@ -340,11 +396,7 @@ impl CreateTableInterpreter {
             default_cluster_key: None,
             field_comments,
             drop_on: None,
-            statistics: if let Some(stat) = statistics {
-                stat
-            } else {
-                Default::default()
-            },
+            statistics: statistics.unwrap_or_default(),
             comment: comment.unwrap_or_default(),
             ..Default::default()
         };
@@ -379,6 +431,7 @@ impl CreateTableInterpreter {
                 table_name: self.plan.table.to_string(),
             },
             table_meta,
+            as_dropped: false,
         };
 
         Ok(req)
@@ -445,6 +498,7 @@ impl CreateTableInterpreter {
                 table_name: self.plan.table.to_string(),
             },
             table_meta,
+            as_dropped: false,
         };
 
         Ok(req)

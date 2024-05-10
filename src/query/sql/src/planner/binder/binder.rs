@@ -22,6 +22,7 @@ use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::With;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -35,7 +36,6 @@ use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
-use log::info;
 use log::warn;
 
 use super::Finder;
@@ -52,7 +52,6 @@ use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
-use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::MaterializedCte;
 use crate::plans::Plan;
@@ -136,7 +135,10 @@ impl<'a> Binder {
         let mut init_bind_context = BindContext::new();
         let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
         self.bind_query_index(&mut init_bind_context, &plan).await?;
-        info!("bind stmt to plan, time used: {:?}", start.elapsed());
+        self.ctx.set_status_info(&format!(
+            "bind stmt to plan done, time used: {:?}",
+            start.elapsed()
+        ));
         Ok(plan)
     }
 
@@ -339,7 +341,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
@@ -380,10 +382,17 @@ impl<'a> Binder {
             Statement::DropStage {
                 stage_name,
                 if_exists,
-            } => Plan::DropStage(Box::new(DropStagePlan {
+            } => {
+                // Check user stage.
+                if stage_name == "~" {
+                    return Err(ErrorCode::StagePermissionDenied(
+                        "user stage is not allowed to be dropped",
+                    ));
+                }
+                Plan::DropStage(Box::new(DropStagePlan {
                 if_exists: *if_exists,
                 name: stage_name.clone(),
-            })),
+            }))},
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
@@ -478,10 +487,7 @@ impl<'a> Binder {
             Statement::DropUDF {
                 if_exists,
                 udf_name,
-            } => Plan::DropUDF(Box::new(DropUDFPlan {
-                if_exists: *if_exists,
-                udf: udf_name.to_string(),
-            })),
+            } => self.bind_drop_udf(*if_exists, udf_name).await?,
             Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
@@ -614,6 +620,9 @@ impl<'a> Binder {
             Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
             Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
 
+            // Dynamic Table
+            Statement::CreateDynamicTable(stmt) => self.bind_create_dynamic_table(stmt).await?,
+
             Statement::CreatePipe(_) => {
                 todo!()
             }
@@ -638,9 +647,19 @@ impl<'a> Binder {
             Statement::DescribeNotification(stmt) => {
                 self.bind_desc_notification(stmt).await?
             }
+            Statement::CreateSequence(stmt) => {
+                self.bind_create_sequence(stmt).await?
+            }
+            Statement::DropSequence(stmt) => {
+                self.bind_drop_sequence(stmt).await?
+            }
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
+            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?,
+            Statement::SetPriority {priority, object_id} => {
+                self.bind_set_priority(priority, object_id).await?
+            },
         };
         Ok(plan)
     }
@@ -715,6 +734,7 @@ impl<'a> Binder {
                     | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         let mut finder = Finder::new(&f);
@@ -834,7 +854,9 @@ impl<'a> Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+                ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         let mut finder = Finder::new(&f);
@@ -851,6 +873,7 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
                     | ScalarExpr::UDFCall(_)
             )
         };
@@ -858,5 +881,32 @@ impl<'a> Binder {
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())
+    }
+
+    pub(crate) fn add_cte(&mut self, with: &With, bind_context: &mut BindContext) -> Result<()> {
+        for (idx, cte) in with.ctes.iter().enumerate() {
+            let table_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
+            if bind_context.cte_map_ref.contains_key(&table_name) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "duplicate cte {table_name}"
+                )));
+            }
+            let cte_info = CteInfo {
+                columns_alias: cte
+                    .alias
+                    .columns
+                    .iter()
+                    .map(|c| normalize_identifier(c, &self.name_resolution_ctx).name)
+                    .collect(),
+                query: *cte.query.clone(),
+                materialized: cte.materialized,
+                cte_idx: idx,
+                used_count: 0,
+                columns: vec![],
+            };
+            self.ctes_map.insert(table_name.clone(), cte_info.clone());
+            bind_context.cte_map_ref.insert(table_name, cte_info);
+        }
+        Ok(())
     }
 }

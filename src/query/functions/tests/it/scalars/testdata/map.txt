@@ -117,7 +117,7 @@ output         : NULL
 
 ast            : map([1,2],['a','b'])[1]
 raw expr       : get(map(array(1, 2), array('a', 'b')), 1)
-checked expr   : get<T0=UInt8, T1=String><Map(T0, T1), T0>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")), 1_u8)
+checked expr   : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")) AS Map(UInt8, String NULL)), 1_u8)
 optimized expr : "a"
 output type    : String NULL
 output domain  : {"a"..="a"}
@@ -126,7 +126,7 @@ output         : 'a'
 
 ast            : map([1,2],['a','b'])[10]
 raw expr       : get(map(array(1, 2), array('a', 'b')), 10)
-checked expr   : get<T0=UInt8, T1=String><Map(T0, T1), T0>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")), 10_u8)
+checked expr   : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")) AS Map(UInt8, String NULL)), 10_u8)
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -135,7 +135,7 @@ output         : NULL
 
 ast            : map(['a','b'],[1,2])['a']
 raw expr       : get(map(array('a', 'b'), array(1, 2)), 'a')
-checked expr   : get<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)), "a")
+checked expr   : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)) AS Map(String, UInt8 NULL)), "a")
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -144,7 +144,7 @@ output         : 1
 
 ast            : map(['a','b'],[1,2])['x']
 raw expr       : get(map(array('a', 'b'), array(1, 2)), 'x')
-checked expr   : get<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)), "x")
+checked expr   : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)) AS Map(String, UInt8 NULL)), "x")
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
@@ -171,7 +171,7 @@ output         : NULL
 
 ast            : {'k1':'v1','k2':'v2'}['k1']
 raw expr       : get(map(array('k1', 'k2'), array('v1', 'v2')), 'k1')
-checked expr   : get<T0=String, T1=String><Map(T0, T1), T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), "k1")
+checked expr   : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String NULL)), "k1")
 optimized expr : "v1"
 output type    : String NULL
 output domain  : {"v1"..="v1"}
@@ -180,7 +180,7 @@ output         : 'v1'
 
 ast            : {'k1':'v1','k2':'v2'}['k3']
 raw expr       : get(map(array('k1', 'k2'), array('v1', 'v2')), 'k3')
-checked expr   : get<T0=String, T1=String><Map(T0, T1), T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), "k3")
+checked expr   : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String NULL)), "k3")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -189,8 +189,8 @@ output         : NULL
 
 ast            : map([k1,k2],[v1,v2])[1]
 raw expr       : get(map(array(k1::Int16, k2::Int16), array(v1::String, v2::String)), 1)
-checked expr   : get<T0=Int16, T1=String><Map(T0, T1), T0>(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)), to_int16<UInt8>(1_u8))
-optimized expr : get<T0=Int16, T1=String><Map(T0, T1), T0>(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)), 1_i16)
+checked expr   : get<T0=Int16, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)) AS Map(Int16, String NULL)), to_int16<UInt8>(1_u8))
+optimized expr : get<T0=Int16, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)) AS Map(Int16, String NULL)), 1_i16)
 evaluation:
 +--------+---------+---------+---------------+---------------+-------------+
 |        | k1      | k2      | v1            | v2            | Output      |
@@ -210,5 +210,320 @@ evaluation (internal):
 | v2     | StringColumn { data: 0x76337634, offsets: [0, 2, 4] }                                                |
 | Output | NullableColumn { column: StringColumn { data: 0x7631, offsets: [0, 2, 2] }, validity: [0b______01] } |
 +--------+------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_keys({})
+raw expr       : map_keys(map(array(), array()))
+checked expr   : map_keys<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()))
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : map_keys({'a':1,'b':2,'c':3})
+raw expr       : map_keys(map(array('a', 'b', 'c'), array(1, 2, 3)))
+checked expr   : map_keys<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)))
+optimized expr : ['a', 'b', 'c']
+output type    : Array(String)
+output domain  : [{"a"..="c"}]
+output         : ['a', 'b', 'c']
+
+
+ast            : map_keys({1:'a',2:'b',3:'c'})
+raw expr       : map_keys(map(array(1, 2, 3), array('a', 'b', 'c')))
+checked expr   : map_keys<T0=UInt8, T1=String><Map(T0, T1)>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), array<T0=String><T0, T0, T0>("a", "b", "c")))
+optimized expr : [1, 2, 3]
+output type    : Array(UInt8)
+output domain  : [{1..=3}]
+output         : [1, 2, 3]
+
+
+ast            : map_keys({'a':NULL,'b':2,'c':NULL})
+raw expr       : map_keys(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
+checked expr   : map_keys<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
+optimized expr : ['a', 'b', 'c']
+output type    : Array(String)
+output domain  : [{"a"..="c"}]
+output         : ['a', 'b', 'c']
+
+
+ast            : map_keys(map([a_col, b_col, c_col], [d_col, e_col, f_col]))
+raw expr       : map_keys(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)))
+checked expr   : map_keys<T0=String, T1=String NULL><Map(T0, T1)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)))
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-----------------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output          |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-----------------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | Array(String)   |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown         |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | ['a', 'd', 'x'] |
+| Row 1  | 'b'         | 'e'         | 'y'         | 'v2'          | 'v5'                 | NULL                 | ['b', 'e', 'y'] |
+| Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | ['c', 'f', 'z'] |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-----------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                |
++--------+-------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                                              |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                                              |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                                              |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] }                     |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }                         |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }                         |
+| Output | ArrayColumn { values: StringColumn { data: 0x61647862657963667a, offsets: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] }, offsets: [0, 3, 6, 9] } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_values({})
+raw expr       : map_values(map(array(), array()))
+checked expr   : map_values<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()))
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : map_values({'a':1,'b':2,'c':3})
+raw expr       : map_values(map(array('a', 'b', 'c'), array(1, 2, 3)))
+checked expr   : map_values<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)))
+optimized expr : [1, 2, 3]
+output type    : Array(UInt8)
+output domain  : [{1..=3}]
+output         : [1, 2, 3]
+
+
+ast            : map_values({1:'a',2:'b',3:'c'})
+raw expr       : map_values(map(array(1, 2, 3), array('a', 'b', 'c')))
+checked expr   : map_values<T0=UInt8, T1=String><Map(T0, T1)>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), array<T0=String><T0, T0, T0>("a", "b", "c")))
+optimized expr : ['a', 'b', 'c']
+output type    : Array(String)
+output domain  : [{"a"..="c"}]
+output         : ['a', 'b', 'c']
+
+
+ast            : map_values({'a':NULL,'b':2,'c':NULL})
+raw expr       : map_values(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
+checked expr   : map_values<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
+optimized expr : [NULL, 2, NULL]
+output type    : Array(UInt8 NULL)
+output domain  : [{0..=2} ∪ {NULL}]
+output         : [NULL, 2, NULL]
+
+
+ast            : map_values(map([a_col, b_col, c_col], [d_col, e_col, f_col]))
+raw expr       : map_values(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)))
+checked expr   : map_values<T0=String, T1=String NULL><Map(T0, T1)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)))
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output             |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | Array(String NULL) |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown            |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | ['v1', 'v4', 'v6'] |
+| Row 1  | 'b'         | 'e'         | 'y'         | 'v2'          | 'v5'                 | NULL                 | ['v2', 'v5', NULL] |
+| Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | ['v3', NULL, 'v7'] |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                              |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                                                                                                                            |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                                                                                                                            |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                                                                                                                            |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] }                                                                                                   |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }                                                                                                       |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }                                                                                                       |
+| Output | ArrayColumn { values: NullableColumn { column: StringColumn { data: 0x7631763476367632763576337637, offsets: [0, 2, 4, 6, 8, 10, 10, 12, 12, 14] }, validity: [0b01011111, 0b_______1] }, offsets: [0, 3, 6, 9] } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_size({})
+raw expr       : map_size(map(array(), array()))
+checked expr   : map_size<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()))
+optimized expr : 0_u8
+output type    : UInt8
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : map_size({'a':1,'b':2,'c':3})
+raw expr       : map_size(map(array('a', 'b', 'c'), array(1, 2, 3)))
+checked expr   : map_size<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : map_size({'a':NULL,'b':2,'c':NULL})
+raw expr       : map_size(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
+checked expr   : map_size<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : map_size(map([a_col, b_col, c_col], [d_col, e_col, f_col]))
+raw expr       : map_size(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)))
+checked expr   : map_size<T0=String, T1=String NULL><Map(T0, T1)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)))
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output  |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | UInt64  |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | 3       |
+| Row 1  | 'b'         | 'e'         | 'y'         | 'v2'          | 'v5'                 | NULL                 | 3       |
+| Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | 3       |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                          |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                          |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                          |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] } |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }     |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }     |
+| Output | UInt64([3, 3, 3])                                                                                               |
++--------+-----------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_cat({}, {})
+raw expr       : map_cat(map(array(), array()), map(array(), array()))
+checked expr   : map_cat<Map(Nothing), Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>()))
+optimized expr : {} :: Map(Nothing)
+output type    : Map(Nothing)
+output domain  : {}
+output         : {}
+
+
+ast            : map_cat({}, {'k1': 'v1'})
+raw expr       : map_cat(map(array(), array()), map(array('k1'), array('v1')))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String)), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")))
+optimized expr : {"k1":"v1"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
+output         : {'k1':'v1'}
+
+
+ast            : map_cat({'k1': 'v1'}, {})
+raw expr       : map_cat(map(array('k1'), array('v1')), map(array(), array()))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")), CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String)))
+optimized expr : {"k1":"v1"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
+output         : {'k1':'v1'}
+
+
+ast            : map_cat(map([a_col, b_col], [d_col, e_col]), map([c_col], [f_col]))
+raw expr       : map_cat(map(array(a_col::String, b_col::String), array(d_col::String, e_col::String)), map(array(c_col::String), array(f_col::String)))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>(a_col, b_col), array<T0=String><T0, T0>(d_col, e_col)), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>(c_col), array<T0=String><T0>(f_col)))
+evaluation:
++--------+-------------------+-------------------+-------------------+-------------------+-------------------+-------------------+-----------------------------------------------+
+|        | a_col             | b_col             | c_col             | d_col             | e_col             | f_col             | Output                                        |
++--------+-------------------+-------------------+-------------------+-------------------+-------------------+-------------------+-----------------------------------------------+
+| Type   | String            | String            | String            | String            | String            | String            | Map(String, String)                           |
+| Domain | {"a_k1"..="a_k3"} | {"b_k1"..="b_k3"} | {"c_k1"..="c_k3"} | {"aaa1"..="aaa3"} | {"bbb1"..="bbb3"} | {"ccc1"..="ccc3"} | Unknown                                       |
+| Row 0  | 'a_k1'            | 'b_k1'            | 'c_k1'            | 'aaa1'            | 'bbb1'            | 'ccc1'            | {'a_k1':'aaa1', 'b_k1':'bbb1', 'c_k1':'ccc1'} |
+| Row 1  | 'a_k2'            | 'b_k2'            | 'c_k2'            | 'aaa2'            | 'bbb2'            | 'ccc2'            | {'a_k2':'aaa2', 'b_k2':'bbb2', 'c_k2':'ccc2'} |
+| Row 2  | 'a_k3'            | 'b_k3'            | 'c_k3'            | 'aaa3'            | 'bbb3'            | 'ccc3'            | {'a_k3':'aaa3', 'b_k3':'bbb3', 'c_k3':'ccc3'} |
++--------+-------------------+-------------------+-------------------+-------------------+-------------------+-------------------+-----------------------------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                         |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x615f6b31615f6b32615f6b33, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                                                                    |
+| b_col  | StringColumn { data: 0x625f6b31625f6b32625f6b33, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                                                                    |
+| c_col  | StringColumn { data: 0x635f6b31635f6b32635f6b33, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                                                                    |
+| d_col  | StringColumn { data: 0x616161316161613261616133, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                                                                    |
+| e_col  | StringColumn { data: 0x626262316262623262626233, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                                                                    |
+| f_col  | StringColumn { data: 0x636363316363633263636333, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                                                                    |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x615f6b31625f6b31635f6b31615f6b32625f6b32635f6b32615f6b33625f6b33635f6b33, offsets: [0, 4, 8, 12, 16, 20, 24, 28, 32, 36] }, StringColumn { data: 0x616161316262623163636331616161326262623263636332616161336262623363636333, offsets: [0, 4, 8, 12, 16, 20, 24, 28, 32, 36] }]), offsets: [0, 3, 6, 9] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_cat({'k1':'v1','k2':'v2'}, {'k1':'abc'})
+raw expr       : map_cat(map(array('k1', 'k2'), array('v1', 'v2')), map(array('k1'), array('abc')))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("abc")))
+optimized expr : {"k1":"abc", "k2":"v2"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k2"}], [{"abc"..="v2"}]}
+output         : {'k1':'abc', 'k2':'v2'}
+
+
+ast            : map_cat(map([a_col, b_col], [d_col, e_col]), map([c_col], [f_col]))
+raw expr       : map_cat(map(array(a_col::String, b_col::String), array(d_col::String, e_col::String)), map(array(c_col::String), array(f_col::String)))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>(a_col, b_col), array<T0=String><T0, T0>(d_col, e_col)), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>(c_col), array<T0=String><T0>(f_col)))
+evaluation:
++--------+-------------------+-------------------+-------------------+-------------------+-------------------+-------------------+-----------------------------------------------+
+|        | a_col             | b_col             | c_col             | d_col             | e_col             | f_col             | Output                                        |
++--------+-------------------+-------------------+-------------------+-------------------+-------------------+-------------------+-----------------------------------------------+
+| Type   | String            | String            | String            | String            | String            | String            | Map(String, String)                           |
+| Domain | {"a_k1"..="c_k3"} | {"b_k1"..="c_k2"} | {"c_k1"..="c_k3"} | {"aaa1"..="aaa3"} | {"bbb1"..="bbb3"} | {"ccc1"..="ccc3"} | Unknown                                       |
+| Row 0  | 'a_k1'            | 'b_k1'            | 'c_k1'            | 'aaa1'            | 'bbb1'            | 'ccc1'            | {'a_k1':'aaa1', 'b_k1':'bbb1', 'c_k1':'ccc1'} |
+| Row 1  | 'a_k2'            | 'c_k2'            | 'c_k2'            | 'aaa2'            | 'bbb2'            | 'ccc2'            | {'a_k2':'aaa2', 'c_k2':'ccc2'}                |
+| Row 2  | 'c_k3'            | 'b_k3'            | 'c_k3'            | 'aaa3'            | 'bbb3'            | 'ccc3'            | {'c_k3':'ccc3', 'b_k3':'bbb3'}                |
++--------+-------------------+-------------------+-------------------+-------------------+-------------------+-------------------+-----------------------------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                         |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x615f6b31615f6b32635f6b33, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                    |
+| b_col  | StringColumn { data: 0x625f6b31635f6b32625f6b33, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                    |
+| c_col  | StringColumn { data: 0x635f6b31635f6b32635f6b33, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                    |
+| d_col  | StringColumn { data: 0x616161316161613261616133, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                    |
+| e_col  | StringColumn { data: 0x626262316262623262626233, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                    |
+| f_col  | StringColumn { data: 0x636363316363633263636333, offsets: [0, 4, 8, 12] }                                                                                                                                                                                                                                    |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x615f6b31625f6b31635f6b31615f6b32635f6b32635f6b33625f6b33, offsets: [0, 4, 8, 12, 16, 20, 24, 28] }, StringColumn { data: 0x61616131626262316363633161616132636363326363633362626233, offsets: [0, 4, 8, 12, 16, 20, 24, 28] }]), offsets: [0, 3, 5, 7] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_cat({'k1': 'v1', 'k2': 'v2'}, {'k3': 'v3'})
+raw expr       : map_cat(map(array('k1', 'k2'), array('v1', 'v2')), map(array('k3'), array('v3')))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k3"), array<T0=String><T0>("v3")))
+optimized expr : {"k1":"v1", "k2":"v2", "k3":"v3"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k3"}], [{"v1"..="v3"}]}
+output         : {'k1':'v1', 'k2':'v2', 'k3':'v3'}
+
+
+ast            : map_cat({'k1': 'v1'}, {'k2': 'v2', 'k3': 'v3'})
+raw expr       : map_cat(map(array('k1'), array('v1')), map(array('k2', 'k3'), array('v2', 'v3')))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k2", "k3"), array<T0=String><T0, T0>("v2", "v3")))
+optimized expr : {"k1":"v1", "k2":"v2", "k3":"v3"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k3"}], [{"v1"..="v3"}]}
+output         : {'k1':'v1', 'k2':'v2', 'k3':'v3'}
+
+
+ast            : map_cat({'k1': 'v1', 'k2': NULL}, {'k2': 'v2', 'k3': NULL})
+raw expr       : map_cat(map(array('k1', 'k2'), array('v1', NULL)), map(array('k2', 'k3'), array('v2', NULL)))
+checked expr   : map_cat<T0=String, T1=String NULL><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String NULL><T0, T0>(CAST("v1" AS String NULL), CAST(NULL AS String NULL))), map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k2", "k3"), array<T0=String NULL><T0, T0>(CAST("v2" AS String NULL), CAST(NULL AS String NULL))))
+optimized expr : {"k1":"v1", "k2":"v2", "k3":NULL}
+output type    : Map(String, String NULL)
+output domain  : {[{"k1"..="k3"}], [{""..="v2"} ∪ {NULL}]}
+output         : {'k1':'v1', 'k2':'v2', 'k3':NULL}
+
+
+ast            : map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k2': {'nk3': 'nv3'}, 'k3': {'nk4': 'nv4'}})
+raw expr       : map_cat(map(array('k1', 'k2'), array(map(array('nk1'), array('nv1')), map(array('nk2'), array('nv2')))), map(array('k2', 'k3'), array(map(array('nk3'), array('nv3')), map(array('nk4'), array('nv4')))))
+checked expr   : map_cat<T0=String, T1=Map(String, String)><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk1"), array<T0=String><T0>("nv1")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk2"), array<T0=String><T0>("nv2")))), map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k2", "k3"), array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk3"), array<T0=String><T0>("nv3")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk4"), array<T0=String><T0>("nv4")))))
+optimized expr : {"k1":{"nk1":"nv1"}, "k2":{"nk3":"nv3"}, "k3":{"nk4":"nv4"}}
+output type    : Map(String, Map(String, String))
+output domain  : {[{"k1"..="k3"}], [{[{"nk1"..="nk4"}], [{"nv1"..="nv4"}]}]}
+output         : {'k1':{'nk1':'nv1'}, 'k2':{'nk3':'nv3'}, 'k3':{'nk4':'nv4'}}
+
+
+ast            : map_cat({'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}}, {'k1': {'nk1': 'new_nv1'}, 'k2': {'nk3': 'nv3'}})
+raw expr       : map_cat(map(array('k1', 'k2'), array(map(array('nk1'), array('nv1')), map(array('nk2'), array('nv2')))), map(array('k1', 'k2'), array(map(array('nk1'), array('new_nv1')), map(array('nk3'), array('nv3')))))
+checked expr   : map_cat<T0=String, T1=Map(String, String)><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk1"), array<T0=String><T0>("nv1")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk2"), array<T0=String><T0>("nv2")))), map<T0=String, T1=Map(String, String)><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=Map(String, String)><T0, T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk1"), array<T0=String><T0>("new_nv1")), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("nk3"), array<T0=String><T0>("nv3")))))
+optimized expr : {"k1":{"nk1":"new_nv1"}, "k2":{"nk3":"nv3"}}
+output type    : Map(String, Map(String, String))
+output domain  : {[{"k1"..="k2"}], [{[{"nk1"..="nk3"}], [{"new_nv1"..="nv3"}]}]}
+output         : {'k1':{'nk1':'new_nv1'}, 'k2':{'nk3':'nv3'}}
 
 

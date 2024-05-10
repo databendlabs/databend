@@ -332,7 +332,7 @@ impl BackgroundApiTestSuite {
             assert!(res.is_ok());
             let resp = res.unwrap();
             assert_eq!(1, resp.len());
-            assert_eq!(job_ident.name(), resp[0].1, "expect same ident name");
+            assert_eq!(*job_ident.name(), resp[0].1, "expect same ident name");
             assert_eq!(
                 BackgroundJobState::FAILED,
                 resp[0].2.job_status.clone().unwrap().job_state,

@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use crate::filter::like::gerenate_like_pattern;
+use crate::filter::like::LikePattern;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectOp;
 use crate::types::DataType;
@@ -22,7 +24,7 @@ use crate::Function;
 use crate::FunctionID;
 use crate::Scalar;
 
-// The `SelectExpr` is used to represent the predicates expression.
+/// The `SelectExpr` is used to represent the predicates expression.
 #[derive(Clone, Debug)]
 pub enum SelectExpr {
     // And SelectExprs.
@@ -31,6 +33,8 @@ pub enum SelectExpr {
     Or((Vec<SelectExpr>, FilterPermutation)),
     // Compare operations: ((Equal | NotEqual | Gt | Lt | Gte | Lte), args, data type of args).
     Compare((SelectOp, Vec<Expr>, Vec<DataType>)),
+    // Like operation: (column ref, like pattern, like str, is not like).
+    Like((Expr, LikePattern, String, bool)),
     // Other operations: for example, like, is_null, is_not_null, etc.
     Others(Expr),
     // Boolean column: (column id, data type of column).
@@ -131,6 +135,42 @@ impl SelectExprBuilder {
                                 result
                             } else {
                                 SelectExprBuildResult::new(SelectExpr::Others(expr.clone()))
+                            }
+                        }
+                        "like" => {
+                            let (column, column_data_type, scalar) = match (&args[0], &args[1]) {
+                                (
+                                    Expr::ColumnRef { data_type, .. },
+                                    Expr::Constant { scalar, .. },
+                                ) if matches!(data_type, DataType::String | DataType::Nullable(box DataType::String)) => {
+                                    (&args[0], data_type, scalar)
+                                }
+                                (
+                                    Expr::Constant { scalar, .. },
+                                    Expr::ColumnRef { data_type, .. },
+                                ) if matches!(data_type, DataType::String | DataType::Nullable(box DataType::String)) => {
+                                    (&args[1], data_type, scalar)
+                                }
+                                _ => {
+                                    return SelectExprBuildResult::new(SelectExpr::Others(
+                                        expr.clone(),
+                                    ))
+                                    .can_push_down_not(false);
+                                }
+                            };
+                            if matches!(column_data_type, DataType::String | DataType::Nullable(box DataType::String))
+                                && let Scalar::String(like_str) = scalar
+                            {
+                                let like_pattern = gerenate_like_pattern(like_str.as_bytes());
+                                SelectExprBuildResult::new(SelectExpr::Like((
+                                    column.clone(),
+                                    like_pattern,
+                                    like_str.clone(),
+                                    not,
+                                )))
+                            } else {
+                                SelectExprBuildResult::new(SelectExpr::Others(expr.clone()))
+                                    .can_push_down_not(false)
                             }
                         }
                         "is_true" => self.build_select_expr(&args[0], not),

@@ -25,12 +25,6 @@ SELECT AVG(3::DOUBLE), AVG(NULL::DOUBLE)
 ----
 3.0 NULL
 
-statement error 1005
-CREATE SEQUENCE seq
-
-statement error 1008
-SELECT AVG(nextval('seq'))
-
 statement ok
 drop table if exists integers
 

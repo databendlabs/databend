@@ -166,7 +166,7 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                     value: None,
                 });
             }
-            let has_null = if stats.len() == 1 {
+            let has_null = if stats.len() == 1 && !matches!(inner_ty, &DataType::Array(_)) {
                 stats[0].null_count > 0
             } else {
                 // Only leaf columns have statistics,

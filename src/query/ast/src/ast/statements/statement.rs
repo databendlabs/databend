@@ -309,6 +309,8 @@ pub enum Statement {
     DropTask(DropTaskStmt),
     ShowTasks(ShowTasksStmt),
 
+    CreateDynamicTable(CreateDynamicTableStmt),
+
     // pipes
     CreatePipe(CreatePipeStmt),
     DescribePipe(DescribePipeStmt),
@@ -325,6 +327,20 @@ pub enum Statement {
     AlterNotification(AlterNotificationStmt),
     DropNotification(DropNotificationStmt),
     DescribeNotification(DescribeNotificationStmt),
+
+    // Stored procedures
+    ExecuteImmediate(ExecuteImmediateStmt),
+
+    // sequence
+    CreateSequence(CreateSequenceStmt),
+    DropSequence(DropSequenceStmt),
+
+    // Set priority for query
+    SetPriority {
+        priority: Priority,
+        #[drive(skip)]
+        object_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -571,7 +587,7 @@ impl Display for Statement {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {user}")?;
+                write!(f, " {}", user.display())?;
             }
             Statement::CreateRole {
                 if_not_exists,
@@ -716,6 +732,18 @@ impl Display for Statement {
             Statement::AlterNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DropNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeNotification(stmt) => write!(f, "{stmt}")?,
+            Statement::ExecuteImmediate(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateSequence(stmt) => write!(f, "{stmt}")?,
+            Statement::DropSequence(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,
+            Statement::SetPriority {
+                priority,
+                object_id,
+            } => {
+                write!(f, "SET PRIORITY")?;
+                write!(f, " {priority}")?;
+                write!(f, " '{object_id}'")?;
+            }
         }
         Ok(())
     }

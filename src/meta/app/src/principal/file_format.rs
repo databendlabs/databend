@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::escape_string;
+use databend_common_io::GeometryDataType;
 use paste::paste;
 use serde::Deserialize;
 use serde::Serialize;
@@ -246,6 +247,7 @@ impl FileFormatParams {
                     empty_field_as,
                     binary_format,
                     output_header,
+                    geometry_format: std::default::Default::default(),
                 })
             }
             StageFileFormatType::Tsv => {
@@ -368,6 +370,7 @@ pub struct CsvFileFormatParams {
     pub null_display: String,
     pub nan_display: String,
     pub empty_field_as: EmptyFieldAs,
+    pub geometry_format: GeometryDataType,
 }
 
 impl Default for CsvFileFormatParams {
@@ -385,6 +388,7 @@ impl Default for CsvFileFormatParams {
             empty_field_as: Default::default(),
             output_header: false,
             binary_format: Default::default(),
+            geometry_format: GeometryDataType::default(),
         }
     }
 }

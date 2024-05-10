@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::future::Future;
-use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -210,10 +209,7 @@ impl QueryContext {
         let catalog = self
             .get_catalog(self.get_current_catalog().as_str())
             .await?;
-        match catalog
-            .get_database(tenant_id.name(), &new_database_name)
-            .await
-        {
+        match catalog.get_database(&tenant_id, &new_database_name).await {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -255,7 +251,7 @@ impl QueryContext {
     }
 
     /// Get the client socket address.
-    pub fn get_client_address(&self) -> Option<SocketAddr> {
+    pub fn get_client_address(&self) -> Option<String> {
         self.shared.session.session_ctx.get_client_host()
     }
 
@@ -494,15 +490,18 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
-    // Need compact after write, over the threshold.
-    fn get_need_compact_after_write(&self) -> bool {
-        self.shared.auto_compact_after_write.load(Ordering::Acquire)
+    // get a hint at the number of blocks that need to be compacted.
+    fn get_compaction_num_block_hint(&self) -> u64 {
+        self.shared
+            .num_fragmented_block_hint
+            .load(Ordering::Acquire)
     }
 
-    fn set_need_compact_after_write(&self, enable: bool) {
+    // set a hint at the number of blocks that need to be compacted.
+    fn set_compaction_num_block_hint(&self, hint: u64) {
         self.shared
-            .auto_compact_after_write
-            .store(enable, Ordering::Release);
+            .num_fragmented_block_hint
+            .store(hint, Ordering::Release);
     }
 
     fn attach_query_str(&self, kind: QueryKind, query: String) {
@@ -523,7 +522,7 @@ impl TableContext for QueryContext {
         self.shared
             .catalog_manager
             .get_catalog(
-                self.get_tenant().name(),
+                self.get_tenant().tenant_name(),
                 catalog_name.as_ref(),
                 self.txn_mgr(),
             )
@@ -597,7 +596,11 @@ impl TableContext for QueryContext {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-        let format = FormatSettings { timezone };
+        let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let format = FormatSettings {
+            timezone,
+            geometry_format,
+        };
         Ok(format)
     }
 
@@ -610,19 +613,21 @@ impl TableContext for QueryContext {
     }
 
     fn get_function_context(&self) -> Result<FunctionContext> {
-        let external_server_connect_timeout_secs = self
-            .get_settings()
-            .get_external_server_connect_timeout_secs()?;
-        let external_server_request_timeout_secs = self
-            .get_settings()
-            .get_external_server_request_timeout_secs()?;
+        let settings = self.get_settings();
+        let external_server_connect_timeout_secs =
+            settings.get_external_server_connect_timeout_secs()?;
+        let external_server_request_timeout_secs =
+            settings.get_external_server_request_timeout_secs()?;
+        let external_server_request_batch_rows =
+            settings.get_external_server_request_batch_rows()?;
 
-        let tz = self.get_settings().get_timezone()?;
+        let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
-        let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
+        let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
-        let disable_variant_check = self.get_settings().get_disable_variant_check()?;
-
+        let disable_variant_check = settings.get_disable_variant_check()?;
+        let geometry_output_format = settings.get_geometry_output_format()?;
+        let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -639,6 +644,9 @@ impl TableContext for QueryContext {
 
             external_server_connect_timeout_secs,
             external_server_request_timeout_secs,
+            external_server_request_batch_rows,
+            geometry_output_format,
+            parse_datetime_ignore_remainder,
         })
     }
 
@@ -824,7 +832,7 @@ impl TableContext for QueryContext {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table(tenant.name(), database_name, table_name)
+            .get_table(&tenant, database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
@@ -840,7 +848,7 @@ impl TableContext for QueryContext {
             let req = GetTableCopiedFileReq { table_id, files };
             let start_request = Instant::now();
             let copied_files = catalog
-                .get_table_copied_file_info(tenant.name(), database_name, req)
+                .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
 
@@ -1078,6 +1086,14 @@ impl TableContext for QueryContext {
 
     fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
         *self.block_threshold.write() = thresholds;
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        *self.shared.query_queued_duration.read()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: Duration) {
+        *self.shared.query_queued_duration.write() = queued_duration;
     }
 }
 

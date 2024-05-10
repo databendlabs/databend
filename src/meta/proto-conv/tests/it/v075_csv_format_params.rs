@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::EmptyFieldAs;
@@ -50,6 +51,7 @@ fn test_decode_v75_csv_file_format_params() -> anyhow::Result<()> {
         error_on_column_count_mismatch: false,
         empty_field_as: EmptyFieldAs::String,
         binary_format: BinaryFormat::Base64,
+        geometry_format: GeometryDataType::EWKT,
     };
     common::test_load_old(
         func_name!(),

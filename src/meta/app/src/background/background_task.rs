@@ -202,7 +202,7 @@ pub struct ListBackgroundTasksReq {
 
 impl Display for ListBackgroundTasksReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "list_background_tasks({})", self.tenant.name())
+        write!(f, "list_background_tasks({})", self.tenant.tenant_name())
     }
 }
 

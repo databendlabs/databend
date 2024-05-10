@@ -57,7 +57,7 @@ fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
         GlobalServices::init(&conf).await.unwrap();
 
         // init oss license manager
-        OssLicenseManager::init(conf.query.tenant_id.name().to_string()).unwrap();
+        OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
         ClusterDiscovery::instance()
             .register_to_metastore(&conf)
             .await

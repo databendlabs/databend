@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -174,7 +175,7 @@ impl TxnManager {
 
     pub fn get_table_from_buffer(
         &self,
-        _tenant: &str,
+        _tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Option<TableInfo> {

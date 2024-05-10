@@ -1,0 +1,52 @@
+control sortmode rowsort
+
+statement ok
+use default;
+
+statement ok
+drop table if exists t1 all;
+
+statement ok
+create table t1(a integer, b integer, c integer, d integer, e integer);
+
+statement ok
+insert into t1(e,c,b,d,a) values(103,102,100,101,104);
+
+statement ok
+insert into t1(a,c,d,e,b) values(107,106,108,109,105);
+
+statement ok
+insert into t1(e,d,b,a,c) values(110,114,112,111,113);
+
+statement ok
+insert into t1(d,c,e,a,b) values(116,119,117,115,118);
+
+statement ok
+drop table if exists t2 all;
+
+statement ok
+create table t2(a integer, b integer, c integer, d integer, e integer);
+
+statement ok
+with cte_t as (select * from t1) insert into t2 select * from cte_t;
+
+statement ok
+with cte_t as (select * from t1 where a > 105) delete from t2 where t2.a in (select a from cte_t);
+
+query IIIII
+select * from t2;
+----
+104 100 102 101 103
+
+statement ok
+with tt1 as (select * from t1), tt2 as (select * from tt1 where a < 105) delete from t2 where t2.a in (select a from tt2);
+
+query IIIII
+select * from t2;
+----
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;

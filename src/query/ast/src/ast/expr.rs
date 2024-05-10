@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_exception::merge_span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
@@ -302,6 +303,139 @@ impl Expr {
             | Expr::DateSub { span, .. }
             | Expr::DateTrunc { span, .. }
             | Expr::Hole { span, .. } => *span,
+        }
+    }
+
+    pub fn whole_span(&self) -> Span {
+        match self {
+            Expr::ColumnRef { span, .. } => *span,
+            Expr::IsNull { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::IsDistinctFrom {
+                span, left, right, ..
+            } => merge_span(merge_span(*span, left.whole_span()), right.whole_span()),
+            Expr::InList {
+                span, expr, list, ..
+            } => {
+                let mut span = merge_span(*span, expr.whole_span());
+                for item in list {
+                    span = merge_span(span, item.whole_span());
+                }
+                span
+            }
+            Expr::InSubquery {
+                span,
+                expr,
+                subquery,
+                ..
+            } => merge_span(merge_span(*span, expr.whole_span()), subquery.span),
+            Expr::Between {
+                span,
+                expr,
+                low,
+                high,
+                ..
+            } => merge_span(
+                merge_span(*span, expr.whole_span()),
+                merge_span(low.whole_span(), high.whole_span()),
+            ),
+            Expr::BinaryOp {
+                span, left, right, ..
+            } => merge_span(merge_span(*span, left.whole_span()), right.whole_span()),
+            Expr::JsonOp {
+                span, left, right, ..
+            } => merge_span(merge_span(*span, left.whole_span()), right.whole_span()),
+            Expr::UnaryOp { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::Cast { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::TryCast { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::Extract { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::DatePart { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::Position {
+                span,
+                substr_expr,
+                str_expr,
+                ..
+            } => merge_span(
+                merge_span(*span, substr_expr.whole_span()),
+                str_expr.whole_span(),
+            ),
+            Expr::Substring {
+                span,
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => {
+                let mut span = merge_span(
+                    merge_span(*span, expr.whole_span()),
+                    substring_from.whole_span(),
+                );
+                if let Some(substring_for) = substring_for {
+                    span = merge_span(span, substring_for.whole_span());
+                }
+                span
+            }
+            Expr::Trim { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::Literal { span, .. } => *span,
+            Expr::CountAll { span, .. } => *span,
+            Expr::Tuple { span, exprs } => {
+                let mut span = *span;
+                for expr in exprs {
+                    span = merge_span(span, expr.whole_span());
+                }
+                span
+            }
+            Expr::FunctionCall { span, .. } => *span,
+            Expr::Case {
+                span,
+                operand,
+                conditions,
+                results,
+                else_result,
+            } => {
+                let mut span = *span;
+                if let Some(operand) = operand {
+                    span = merge_span(span, operand.whole_span());
+                }
+                for (cond, res) in conditions.iter().zip(results) {
+                    span = merge_span(merge_span(span, cond.whole_span()), res.whole_span());
+                }
+                if let Some(else_result) = else_result {
+                    span = merge_span(span, else_result.whole_span());
+                }
+                span
+            }
+            Expr::Exists { span, subquery, .. } => merge_span(*span, subquery.span),
+            Expr::Subquery { span, subquery, .. } => merge_span(*span, subquery.span),
+            Expr::MapAccess { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::Array { span, exprs } => {
+                let mut span = *span;
+                for expr in exprs {
+                    span = merge_span(span, expr.whole_span());
+                }
+                span
+            }
+            Expr::Map { span, kvs } => {
+                let mut span = *span;
+                for (_, v) in kvs {
+                    span = merge_span(span, v.whole_span());
+                }
+                span
+            }
+            Expr::Interval { span, expr, .. } => merge_span(*span, expr.whole_span()),
+            Expr::DateAdd {
+                span,
+                interval,
+                date,
+                ..
+            } => merge_span(merge_span(*span, interval.whole_span()), date.whole_span()),
+            Expr::DateSub {
+                span,
+                interval,
+                date,
+                ..
+            } => merge_span(merge_span(*span, interval.whole_span()), date.whole_span()),
+            Expr::DateTrunc { span, date, .. } => merge_span(*span, date.whole_span()),
+            Expr::Hole { span, .. } => *span,
         }
     }
 

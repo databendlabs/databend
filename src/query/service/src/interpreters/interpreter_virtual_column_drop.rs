@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_license::license::Feature::VirtualColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
-use databend_common_meta_app::schema::VirtualColumnNameIdent;
+use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_sql::plans::DropVirtualColumnPlan;
 use databend_enterprise_virtual_column::get_virtual_column_handler;
 
@@ -73,7 +73,7 @@ impl Interpreter for DropVirtualColumnInterpreter {
 
         let drop_virtual_column_req = DropVirtualColumnReq {
             if_exists: self.plan.if_exists,
-            name_ident: VirtualColumnNameIdent::new(tenant, table_id),
+            name_ident: VirtualColumnIdent::new(tenant, table_id),
         };
 
         let handler = get_virtual_column_handler();

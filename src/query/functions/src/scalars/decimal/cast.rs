@@ -328,7 +328,7 @@ fn decimal_to_string(
     })
 }
 
-fn convert_to_decimal(
+pub fn convert_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
     from_type: &DataType,
@@ -387,7 +387,7 @@ fn convert_to_decimal(
     })
 }
 
-fn convert_to_decimal_domain(
+pub fn convert_to_decimal_domain(
     func_ctx: &FunctionContext,
     domain: Domain,
     dest_type: DecimalDataType,

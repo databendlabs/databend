@@ -53,9 +53,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let db = catalog
-            .get_database(tenant.name(), &self.plan.database)
-            .await?;
+        let db = catalog.get_database(&tenant, &self.plan.database).await?;
         let name = db.name();
         let mut info = format!("CREATE DATABASE `{}`", name);
         if !db.engine().is_empty() {

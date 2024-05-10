@@ -17,17 +17,22 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
 
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::Prewhere;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
+use crate::plans::SubqueryExpr;
+use crate::plans::Visitor;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
@@ -58,44 +63,54 @@ impl RulePushDownPrewhere {
         table_index: IndexType,
         schema: &TableSchemaRef,
         expr: &ScalarExpr,
-        columns: &mut ColumnSet,
-    ) -> Result<()> {
-        match expr {
-            ScalarExpr::BoundColumnRef(column) => {
+    ) -> Result<ColumnSet> {
+        struct ColumnVisitor {
+            table_index: IndexType,
+            schema: TableSchemaRef,
+            columns: ColumnSet,
+        }
+        impl<'a> Visitor<'a> for ColumnVisitor {
+            fn visit_bound_column_ref(&mut self, column: &'a BoundColumnRef) -> Result<()> {
                 if let Some(index) = &column.column.table_index {
-                    if table_index == *index
+                    if self.table_index == *index
                         && (column.column.visibility == Visibility::InVisible
-                            || schema.index_of(column.column.column_name.as_str()).is_ok())
+                            || self
+                                .schema
+                                .index_of(column.column.column_name.as_str())
+                                .is_ok())
                     {
-                        columns.insert(column.column.index);
+                        if column.column.column_name == SEARCH_SCORE_COL_NAME
+                            || column.column.column_name == SEARCH_MATCHED_COL_NAME
+                        {
+                            return Err(ErrorCode::StorageUnsupported(
+                                "Prewhere don't support search functions".to_string(),
+                            ));
+                        }
+                        self.columns.insert(column.column.index);
                         return Ok(());
                     }
                 }
-                return Err(ErrorCode::Unimplemented("Column is not in the table"));
+                Err(ErrorCode::Unimplemented("Column is not in the table"))
             }
-            ScalarExpr::FunctionCall(func) => {
-                for arg in func.arguments.iter() {
-                    Self::collect_columns_impl(table_index, schema, arg, columns)?;
-                }
-            }
-            ScalarExpr::CastExpr(cast) => {
-                Self::collect_columns_impl(table_index, schema, cast.argument.as_ref(), columns)?;
-            }
-            ScalarExpr::ConstantExpr(_) => {}
-            ScalarExpr::UDFCall(udf) => {
-                for arg in udf.arguments.iter() {
-                    Self::collect_columns_impl(table_index, schema, arg, columns)?;
-                }
-            }
-            _ => {
-                // SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
-                return Err(ErrorCode::Unimplemented(format!(
+
+            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+                Err(ErrorCode::Unimplemented(format!(
                     "Prewhere don't support expr {:?}",
-                    expr
-                )));
+                    subquery
+                )))
             }
         }
-        Ok(())
+
+        let mut column_visitor = ColumnVisitor {
+            table_index,
+            schema: schema.clone(),
+            columns: ColumnSet::new(),
+        };
+        // WindowFunc, SubqueryExpr and AggregateFunction will not appear in Scan
+        // WindowFunc and AggFunc already check in binder:
+        // Where clause can't contain aggregate or window functions
+        column_visitor.visit(expr)?;
+        Ok(column_visitor.columns)
     }
 
     // analyze if the expression can be moved to prewhere
@@ -104,11 +119,7 @@ impl RulePushDownPrewhere {
         schema: &TableSchemaRef,
         expr: &ScalarExpr,
     ) -> Option<ColumnSet> {
-        let mut columns = ColumnSet::new();
-        // columns in subqueries are not considered
-        Self::collect_columns_impl(table_index, schema, expr, &mut columns).ok()?;
-
-        Some(columns)
+        Self::collect_columns_impl(table_index, schema, expr).ok()
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {

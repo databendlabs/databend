@@ -256,7 +256,7 @@ impl PhysicalPlanBuilder {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.txn_mgr())?
-            .get_table(self.ctx.get_tenant().name(), "system", "one")
+            .get_table(&self.ctx.get_tenant(), "system", "one")
             .await?;
 
         if !table.result_can_be_cached() {

@@ -15,9 +15,11 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
@@ -108,7 +110,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
-    pub(in crate::sessions) auto_compact_after_write: Arc<AtomicBool>,
+    pub(in crate::sessions) num_fragmented_block_hint: Arc<AtomicU64>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
 
@@ -125,6 +127,8 @@ pub struct QueryContextShared {
 
     // Records query level data cache metrics
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
+
+    pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
 }
 
 impl QueryContextShared {
@@ -161,7 +165,7 @@ impl QueryContextShared {
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
-            auto_compact_after_write: Arc::new(AtomicBool::new(true)),
+            num_fragmented_block_hint: Arc::new(AtomicU64::new(0)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
@@ -173,6 +177,7 @@ impl QueryContextShared {
             runtime_filters: Default::default(),
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
+            query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
         }))
     }
 
@@ -338,9 +343,13 @@ impl QueryContextShared {
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
         let catalog = self
             .catalog_manager
-            .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
+            .get_catalog(
+                tenant.tenant_name(),
+                catalog,
+                self.session.session_ctx.txn_mgr(),
+            )
             .await?;
-        let cache_table = catalog.get_table(tenant.name(), database, table).await?;
+        let cache_table = catalog.get_table(&tenant, database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
 
@@ -368,14 +377,27 @@ impl QueryContextShared {
                 let tenant = self.get_tenant();
                 let catalog = self
                     .catalog_manager
-                    .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
+                    .get_catalog(
+                        tenant.tenant_name(),
+                        catalog,
+                        self.session.session_ctx.txn_mgr(),
+                    )
                     .await?;
                 let source_table = match catalog.get_stream_source_table(stream_desc)? {
                     Some(source_table) => source_table,
                     None => {
                         let source_table = catalog
-                            .get_table(tenant.name(), database, table_name)
-                            .await?;
+                            .get_table(&tenant, database, table_name)
+                            .await
+                            .map_err(|err| {
+                            ErrorCode::IllegalStream(format!(
+                                "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                                database,
+                                table_name,
+                                stream_desc,
+                                err.message()
+                            ))
+                        })?;
                         catalog.cache_stream_source_table(
                             stream.get_table_info().clone(),
                             source_table.get_table_info().clone(),
@@ -505,6 +527,12 @@ impl QueryContextShared {
 
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
         &self.query_cache_metrics
+    }
+
+    pub fn set_priority(&self, priority: u8) {
+        if let Some(executor) = self.executor.read().upgrade() {
+            executor.change_priority(priority)
+        }
     }
 }
 

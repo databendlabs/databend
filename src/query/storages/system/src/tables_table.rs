@@ -36,6 +36,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
@@ -59,7 +60,7 @@ pub trait HistoryAware {
     const TABLE_NAME: &'static str;
     async fn list_tables(
         catalog: &Arc<dyn Catalog>,
-        tenant: &str,
+        tenant: &Tenant,
         database_name: &str,
         with_history: bool,
         without_view: bool,
@@ -75,7 +76,7 @@ macro_rules! impl_history_aware {
             #[async_backtrace::framed]
             async fn list_tables(
                 catalog: &Arc<dyn Catalog>,
-                tenant: &str,
+                tenant: &Tenant,
                 database_name: &str,
                 with_history: bool,
                 _without_view: bool,
@@ -247,7 +248,7 @@ where TablesTable<T, U>: HistoryAware
                         }
                     });
                     for db in db_name {
-                        match ctl.get_database(tenant.name(), db.as_str()).await {
+                        match ctl.get_database(&tenant, db.as_str()).await {
                             Ok(database) => dbs.push(database),
                             Err(err) => {
                                 let msg = format!("Failed to get database: {}, {}", db, err);
@@ -290,7 +291,7 @@ where TablesTable<T, U>: HistoryAware
                 let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
                 let name: &str = Box::leak(name);
-                let tables = match Self::list_tables(&ctl, tenant.name(), name, T, U).await {
+                let tables = match Self::list_tables(&ctl, &tenant, name, T, U).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.

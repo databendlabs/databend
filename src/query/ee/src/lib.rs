@@ -19,6 +19,7 @@ pub mod enterprise_services;
 pub mod inverted_index;
 pub mod license;
 pub mod storage_encryption;
+pub mod storage_quota;
 pub mod storages;
 pub mod stream;
 pub mod test_kits;

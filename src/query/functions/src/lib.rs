@@ -39,10 +39,13 @@ pub fn is_builtin_function(name: &str) -> bool {
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
         || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
         || GENERAL_SEARCH_FUNCTIONS.contains(&name)
+        || ASYNC_FUNCTIONS.contains(&name)
 }
 
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
+
+pub const ASYNC_FUNCTIONS: [&str; 1] = ["nextval"];
 
 pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "row_number",
@@ -68,7 +71,7 @@ pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 5] = [
     "array_reduce",
 ];
 
-pub const GENERAL_SEARCH_FUNCTIONS: [&str; 2] = ["match", "score"];
+pub const GENERAL_SEARCH_FUNCTIONS: [&str; 3] = ["match", "query", "score"];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

@@ -83,6 +83,9 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateStream(_)
                 | Plan::DropStream(_)
 
+                // Dynamic table.
+                | Plan::CreateDynamicTable(_)
+
                 // User.
                 | Plan::AlterUser(_)
                 | Plan::CreateUser(_)

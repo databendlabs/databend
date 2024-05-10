@@ -223,7 +223,7 @@ impl AsyncSource for StreamStatusDataSource {
             .ctx
             .get_catalog(&self.cat_name)
             .await?
-            .get_table(tenant_id.name(), &self.db_name, &self.stream_name)
+            .get_table(&tenant_id, &self.db_name, &self.stream_name)
             .await?;
 
         let tbl = StreamTable::try_from_table(tbl.as_ref())?;

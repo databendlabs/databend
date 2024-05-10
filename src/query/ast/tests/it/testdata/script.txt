@@ -1,13 +1,13 @@
 ---------- Input ----------
-LET cost DECIMAL(38, 2) := 100.0
+LET cost := 100.0
 ---------- Output ---------
-LET cost Decimal(38, 2) := 100.0
+LET cost := 100.0
 ---------- AST ------------
 LetVar {
-    span: Some(
-        0..32,
-    ),
-    declare: VariableDeclare {
+    declare: DeclareVar {
+        span: Some(
+            4..17,
+        ),
         name: Identifier {
             span: Some(
                 4..8,
@@ -16,15 +16,9 @@ LetVar {
             quote: None,
             is_hole: false,
         },
-        data_type: Some(
-            Decimal {
-                precision: 38,
-                scale: 2,
-            },
-        ),
         default: Literal {
             span: Some(
-                27..32,
+                12..17,
             ),
             value: Decimal256 {
                 value: 1000,
@@ -42,10 +36,10 @@ LET t1 RESULTSET := SELECT * FROM numbers(100)
 LET t1 RESULTSET := SELECT * FROM numbers(100)
 ---------- AST ------------
 LetStatement {
-    span: Some(
-        0..46,
-    ),
-    declare: StatementDeclare {
+    declare: DeclareSet {
+        span: Some(
+            4..46,
+        ),
         name: Identifier {
             span: Some(
                 4..6,
@@ -67,6 +61,7 @@ LetStatement {
                         ),
                         hints: None,
                         distinct: false,
+                        top_n: None,
                         select_list: [
                             StarColumns {
                                 qualified: [
@@ -189,39 +184,6 @@ Assign {
 
 
 ---------- Input ----------
-RETURN profit
----------- Output ---------
-RETURN profit
----------- AST ------------
-Return {
-    span: Some(
-        0..13,
-    ),
-    value: Some(
-        ColumnRef {
-            span: Some(
-                7..13,
-            ),
-            column: ColumnRef {
-                database: None,
-                table: None,
-                column: Name(
-                    Identifier {
-                        span: Some(
-                            7..13,
-                        ),
-                        name: "profit",
-                        quote: None,
-                        is_hole: false,
-                    },
-                ),
-            },
-        },
-    ),
-}
-
-
----------- Input ----------
 RETURN
 ---------- Output ---------
 RETURN
@@ -231,6 +193,140 @@ Return {
         0..6,
     ),
     value: None,
+}
+
+
+---------- Input ----------
+RETURN profit
+---------- Output ---------
+RETURN profit
+---------- AST ------------
+Return {
+    span: Some(
+        0..13,
+    ),
+    value: Some(
+        Var(
+            ColumnRef {
+                span: Some(
+                    7..13,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                7..13,
+                            ),
+                            name: "profit",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+RETURN TABLE(t1)
+---------- Output ---------
+RETURN TABLE(t1)
+---------- AST ------------
+Return {
+    span: Some(
+        0..16,
+    ),
+    value: Some(
+        Set(
+            Identifier {
+                span: Some(
+                    13..15,
+                ),
+                name: "t1",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+RETURN TABLE(select count(*) from t1)
+---------- Output ---------
+RETURN TABLE(SELECT COUNT(*) FROM t1)
+---------- AST ------------
+Return {
+    span: Some(
+        0..37,
+    ),
+    value: Some(
+        Statement(
+            Query(
+                Query {
+                    span: Some(
+                        13..36,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                13..36,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: CountAll {
+                                        span: Some(
+                                            20..28,
+                                        ),
+                                        window: None,
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [
+                                Table {
+                                    span: Some(
+                                        34..36,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            34..36,
+                                        ),
+                                        name: "t1",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        ),
+    ),
 }
 
 
@@ -353,7 +449,7 @@ FOR rec IN resultset DO
     CONTINUE;
 END FOR label1
 ---------- AST ------------
-ForIn {
+ForInSet {
     span: Some(
         0..52,
     ),
@@ -385,6 +481,117 @@ ForIn {
         Identifier {
             span: Some(
                 46..52,
+            ),
+            name: "label1",
+            quote: None,
+            is_hole: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+FOR rec IN SELECT * FROM numbers(100) DO
+    CONTINUE;
+END FOR label1
+---------- Output ---------
+FOR rec IN
+    SELECT * FROM numbers(100)
+DO
+    CONTINUE;
+END FOR label1
+---------- AST ------------
+ForInStatement {
+    span: Some(
+        0..69,
+    ),
+    variable: Identifier {
+        span: Some(
+            4..7,
+        ),
+        name: "rec",
+        quote: None,
+        is_hole: false,
+    },
+    stmt: Query(
+        Query {
+            span: Some(
+                11..37,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        11..37,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        18..19,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: Some(
+                                25..37,
+                            ),
+                            lateral: false,
+                            name: Identifier {
+                                span: Some(
+                                    25..32,
+                                ),
+                                name: "numbers",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            params: [
+                                Literal {
+                                    span: Some(
+                                        33..36,
+                                    ),
+                                    value: UInt64(
+                                        100,
+                                    ),
+                                },
+                            ],
+                            named_params: [],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+    body: [
+        Continue {
+            span: Some(
+                45..53,
+            ),
+            label: None,
+        },
+    ],
+    label: Some(
+        Identifier {
+            span: Some(
+                63..69,
             ),
             name: "label1",
             quote: None,
@@ -1331,6 +1538,7 @@ Loop {
                             ),
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: [
                                 AliasedExpr {
                                     expr: ColumnRef {
@@ -1473,6 +1681,7 @@ RunStatement {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -1537,6 +1746,7 @@ RunStatement {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
@@ -1600,6 +1810,7 @@ RunStatement {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -1689,6 +1900,147 @@ RunStatement {
             ignore_result: false,
         },
     ),
+}
+
+
+---------- Input ----------
+BEGIN
+    LOOP
+        CONTINUE;
+    END LOOP;
+END;
+---------- Output ---------
+DECLARE
+BEGIN
+    LOOP
+        CONTINUE;
+    END LOOP;
+END;
+
+---------- AST ------------
+ScriptBlock {
+    span: Some(
+        0..51,
+    ),
+    declares: [],
+    body: [
+        Loop {
+            span: Some(
+                10..45,
+            ),
+            body: [
+                Continue {
+                    span: Some(
+                        23..31,
+                    ),
+                    label: None,
+                },
+            ],
+            label: None,
+        },
+    ],
+}
+
+
+---------- Input ----------
+DECLARE
+    x := 1;
+BEGIN
+    FOR y in x TO 10 DO
+        CONTINUE;
+    END FOR;
+END;
+---------- Output ---------
+DECLARE
+    x := 1;
+BEGIN
+    FOR y IN x TO 10 DO
+        CONTINUE;
+    END FOR;
+END;
+
+---------- AST ------------
+ScriptBlock {
+    span: Some(
+        0..85,
+    ),
+    declares: [
+        Var(
+            DeclareVar {
+                span: Some(
+                    12..18,
+                ),
+                name: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "x",
+                    quote: None,
+                    is_hole: false,
+                },
+                default: Literal {
+                    span: Some(
+                        17..18,
+                    ),
+                    value: UInt64(
+                        1,
+                    ),
+                },
+            },
+        ),
+    ],
+    body: [
+        ForLoop {
+            span: Some(
+                30..79,
+            ),
+            variable: Identifier {
+                span: Some(
+                    34..35,
+                ),
+                name: "y",
+                quote: None,
+                is_hole: false,
+            },
+            is_reverse: false,
+            lower_bound: ColumnRef {
+                span: Some(
+                    39..40,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                39..40,
+                            ),
+                            name: "x",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+            upper_bound: Literal {
+                span: Some(
+                    44..46,
+                ),
+                value: UInt64(
+                    10,
+                ),
+            },
+            body: [
+                Continue {
+                    span: Some(
+                        58..66,
+                    ),
+                    label: None,
+                },
+            ],
+            label: None,
+        },
+    ],
 }
 
 

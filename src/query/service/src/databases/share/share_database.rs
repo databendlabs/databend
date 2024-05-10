@@ -69,14 +69,15 @@ impl ShareDatabase {
     #[async_backtrace::framed]
     async fn get_table_info(&self, table_name: &str) -> Result<Arc<TableInfo>> {
         let table_info_map = ShareEndpointManager::instance()
-            .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![
+            .get_table_info_map(self.ctx.tenant(), &self.db_info, vec![
                 table_name.to_string(),
             ])
             .await?;
         match table_info_map.get(table_name) {
             None => Err(ErrorCode::UnknownTable(format!(
                 "share table `{}`.`{}` is unknown",
-                &self.db_info.name_ident.db_name, table_name
+                self.db_info.name_ident.database_name(),
+                table_name
             ))),
             Some(table_info) => Ok(Arc::new(table_info.clone())),
         }
@@ -98,7 +99,7 @@ impl ShareDatabase {
 #[async_trait::async_trait]
 impl Database for ShareDatabase {
     fn name(&self) -> &str {
-        &self.db_info.name_ident.db_name
+        self.db_info.name_ident.database_name()
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {

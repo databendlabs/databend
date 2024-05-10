@@ -67,7 +67,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
         let table = catalog
-            .get_table(tenant.name(), &self.plan.database, &self.plan.table)
+            .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
 
         match table.engine() {
