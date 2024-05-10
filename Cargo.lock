@@ -4412,6 +4412,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "bstr 1.9.1",
+ "bytes",
  "csv-core",
  "dashmap",
  "databend-common-base",

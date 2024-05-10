@@ -15,6 +15,7 @@
 use std::cmp::min;
 use std::sync::Arc;
 
+use bytes::BytesMut;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -31,13 +32,18 @@ use crate::read::row_based::batch::BytesBatch;
 
 struct FileState {
     file: OneFilePartition,
-    offset: usize,
     reader: opendal::Reader,
+    buf: BytesMut,
+
+    consume_offset: usize,
+    read_offset: usize,
 }
+
 pub struct BytesReader {
     table_ctx: Arc<dyn TableContext>,
     op: Operator,
     read_batch_size: usize,
+    io_size: usize,
     file_state: Option<FileState>,
     prefetch_num: usize,
 }
@@ -46,14 +52,22 @@ impl BytesReader {
     pub fn try_create(
         table_ctx: Arc<dyn TableContext>,
         op: Operator,
-        _read_batch_size: usize,
+        read_batch_size: usize,
         prefetch_num: usize,
     ) -> Result<Self> {
+        // TODO: Use 4MiB as default IO size for now, we can extract as a new config.
+        let default_io_size = 4 * 1024 * 1024;
+        // Calculate the IO size, which:
+        //
+        // - is the multiple of read_batch_size.
+        // - is larger or equal to default_io_size.
+        let io_size = ((default_io_size + read_batch_size - 1) / read_batch_size) * read_batch_size;
+
         Ok(Self {
             table_ctx,
             op,
-            // TODO(xuanwo): bring batch size back when we figure how to play with range based read.
-            read_batch_size: 4 * 1024 * 1024,
+            read_batch_size,
+            io_size,
             file_state: None,
             prefetch_num,
         })
@@ -61,26 +75,36 @@ impl BytesReader {
 
     pub async fn read_batch(&mut self) -> Result<DataBlock> {
         if let Some(state) = &mut self.file_state {
-            let end = min(self.read_batch_size + state.offset, state.file.size) as u64;
+            if state.buf.is_empty() {
+                let end = min(self.io_size + state.read_offset, state.file.size) as u64;
 
-            let buffer = state.reader.read(state.offset as u64..end).await?.to_vec();
-            let n = buffer.len();
-            if (n as u64) < end - state.offset as u64 {
-                return Err(ErrorCode::BadBytes(format!(
-                    "Unexpected EOF {} expect {} bytes, read only {} bytes.",
-                    state.file.path, state.file.size, state.offset
-                )));
+                let n = state
+                    .reader
+                    .read_into(&mut state.buf, state.read_offset as u64..end)
+                    .await?;
+                if (n as u64) < end - state.read_offset as u64 {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "Unexpected EOF {} expect {} bytes, read only {} bytes.",
+                        state.file.path, state.file.size, state.read_offset
+                    )));
+                }
+                state.read_offset += n;
             }
+            let is_eof = state.read_offset == state.file.size;
 
-            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, n);
-            self.table_ctx
-                .get_scan_progress()
-                .incr(&ProgressValues { rows: 0, bytes: n });
+            let size = self.read_batch_size.min(state.buf.len());
+            // TODO: we can use bytes instead to better reuse existing allocation.
+            let buffer = state.buf.split_to(size).to_vec();
 
-            debug!("read {} bytes", n);
-            let offset = state.offset;
-            state.offset += n;
-            let is_eof = state.offset == state.file.size;
+            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, size);
+            self.table_ctx.get_scan_progress().incr(&ProgressValues {
+                rows: 0,
+                bytes: size,
+            });
+
+            debug!("read {} bytes", size);
+            let offset = state.consume_offset;
+            state.consume_offset += size;
             let batch = Box::new(BytesBatch {
                 data: buffer,
                 path: state.file.path.clone(),
@@ -122,7 +146,9 @@ impl PrefetchAsyncSource for BytesReader {
             self.file_state = Some(FileState {
                 file,
                 reader,
-                offset: 0,
+                buf: BytesMut::with_capacity(self.io_size),
+                consume_offset: 0,
+                read_offset: 0,
             })
         }
         match self.read_batch().await {
