@@ -250,8 +250,8 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             .reader_with(&split_info.file.path)
             // TODO: use 8MiB for chunk size.
             .chunk(8 * 1024 * 1024)
-            // TODO: use 2 concurrent for test, let's extract as a new setting.
-            .concurrent(2)
+            // TODO: use 4 concurrent for test, let's extract as a new setting.
+            .concurrent(4)
             .await?
             .into_futures_async_read(offset..offset + size as u64);
         let mut total_read = 0;
