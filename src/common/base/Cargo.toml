@@ -57,6 +57,9 @@ tikv-jemalloc-ctl = { workspace = true }
 tikv-jemalloc-sys = "0.5.2"
 tokio = { workspace = true }
 uuid = { workspace = true }
+env_logger = "0.10.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = "0.1"
 
 [dev-dependencies]
 anyerror = { workspace = true }

@@ -3008,6 +3008,7 @@ dependencies = [
  "ctrlc",
  "databend-common-exception",
  "enquote",
+ "env_logger",
  "futures",
  "libc",
  "log",
@@ -3029,6 +3030,8 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 

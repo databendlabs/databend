@@ -16,6 +16,7 @@ mod backtrace;
 mod catch_unwind;
 pub mod error_info;
 mod global_runtime;
+pub mod log;
 mod memory;
 pub mod metrics;
 pub mod profile;
