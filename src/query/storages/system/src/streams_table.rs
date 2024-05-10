@@ -15,6 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -37,6 +40,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_storages_fuse::io::SnapshotsIO;
+use databend_common_storages_fuse::operations::acquire_task_permit;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
@@ -93,6 +97,10 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
         let mut updated_on = vec![];
         let mut table_version = vec![];
         let mut snapshot_location = vec![];
+
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
+        let runtime = GlobalIORuntime::instance();
 
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
@@ -173,6 +181,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     }
                 };
 
+                let mut handlers = Vec::new();
                 for table in tables {
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
@@ -222,28 +231,45 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                             table_id.push(stream_table.source_table_id());
                             snapshot_location.push(stream_table.snapshot_loc());
 
-                            let mut reason = "".to_string();
-                            match stream_table.source_table(ctx.clone()).await {
-                                Ok(source) => {
-                                    let fuse_table = FuseTable::try_from_table(source.as_ref())?;
-                                    if let Some(location) = stream_table.snapshot_loc() {
-                                        reason = SnapshotsIO::read_snapshot(
-                                            location,
-                                            fuse_table.get_operator(),
-                                        )
-                                        .await
-                                        .err()
-                                        .map_or("".to_string(), |e| e.display_text());
+                            let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
+                            let ctx = ctx.clone();
+                            let table = table.clone();
+                            let handler = runtime.spawn(ctx.get_id(), async move {
+                                let mut reason = "".to_string();
+                                // safe unwrap.
+                                let stream_table =
+                                    StreamTable::try_from_table(table.as_ref()).unwrap();
+                                match stream_table.source_table(ctx).await {
+                                    Ok(source) => {
+                                        // safe unwrap, has been checked in source_table.
+                                        let fuse_table =
+                                            FuseTable::try_from_table(source.as_ref()).unwrap();
+                                        if let Some(location) = stream_table.snapshot_loc() {
+                                            reason = SnapshotsIO::read_snapshot(
+                                                location,
+                                                fuse_table.get_operator(),
+                                            )
+                                            .await
+                                            .err()
+                                            .map_or("".to_string(), |e| e.display_text());
+                                        }
+                                    }
+                                    Err(e) => {
+                                        reason = e.display_text();
                                     }
                                 }
-                                Err(e) => {
-                                    reason = e.display_text();
-                                }
-                            }
-                            invalid_reason.push(reason);
+                                drop(permit);
+                                reason
+                            });
+                            handlers.push(handler);
                         }
                     }
                 }
+
+                let mut joint = futures::future::try_join_all(handlers)
+                    .await
+                    .unwrap_or_default();
+                invalid_reason.append(&mut joint);
             }
         }
 
