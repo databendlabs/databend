@@ -89,15 +89,8 @@ impl FlightActions {
     }
 
     pub async fn do_action(&self, path: &str, data: &[u8]) -> Result<Vec<u8>> {
-        let req = serde_json::from_slice(data).map_err(|cause| {
-            ErrorCode::BadArguments(format!(
-                "Cannot parse request for {}, cause: {:?}",
-                path, cause
-            ))
-        })?;
-
         match self.actions.get(path) {
-            Some(fun) => fun(req).await,
+            Some(fun) => fun(data).await,
             None => Err(ErrorCode::Unimplemented(format!(
                 "{} action is unimplemented in flight service",
                 path
