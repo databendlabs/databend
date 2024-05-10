@@ -134,8 +134,8 @@ impl PrefetchAsyncSource for BytesReader {
                 .op
                 .reader_with(&file.path)
                 .chunk(self.io_size)
-                // TODO: Use 4 concurrent for test.
-                .concurrent(4)
+                // TODO: Use 2 concurrent for test, let's extract as a new setting.
+                .concurrent(2)
                 .await?
                 .into_futures_async_read(0..file.size as u64);
             self.file_state = Some(FileState {
