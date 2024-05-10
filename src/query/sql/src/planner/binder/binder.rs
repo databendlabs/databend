@@ -654,7 +654,10 @@ impl<'a> Binder {
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
-            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?
+            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?,
+            Statement::SetPriority {priority, object_id} => {
+                self.bind_set_priority(priority, object_id).await?
+            },
         };
         Ok(plan)
     }

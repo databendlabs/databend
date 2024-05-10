@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_actions;
-
-pub use flight_actions::FlightAction;
-pub use flight_actions::InitNodesChannel;
-pub use flight_actions::InitQueryFragmentsPlan;
-pub use flight_actions::KillQuery;
-pub use flight_actions::SetPriority;
-pub use flight_actions::TruncateTable;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetPriorityPlan {
+    pub id: String,
+    pub priority: u8,
+}

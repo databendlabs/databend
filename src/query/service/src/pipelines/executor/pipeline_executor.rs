@@ -337,4 +337,15 @@ impl PipelineExecutor {
             }
         }
     }
+
+    pub fn change_priority(&self, priority: u8) {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(_) => {
+                unreachable!("Logic error, cannot change priority for QueryPipelineExecutor")
+            }
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                query_wrapper.graph.change_priority(priority as u64);
+            }
+        }
+    }
 }

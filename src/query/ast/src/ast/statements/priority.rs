@@ -12,11 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_actions;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
-pub use flight_actions::FlightAction;
-pub use flight_actions::InitNodesChannel;
-pub use flight_actions::InitQueryFragmentsPlan;
-pub use flight_actions::KillQuery;
-pub use flight_actions::SetPriority;
-pub use flight_actions::TruncateTable;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum Priority {
+    HIGH,
+    MEDIUM,
+    LOW,
+}
+
+impl Display for Priority {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Priority::HIGH => write!(f, "HIGH"),
+            Priority::MEDIUM => write!(f, "MEDIUM"),
+            Priority::LOW => write!(f, "LOW"),
+        }
+    }
+}
