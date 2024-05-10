@@ -252,6 +252,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         // - is larger or equal to default_io_size.
         let io_size = ((default_io_size + batch_size - 1) / batch_size) * batch_size;
 
+        // TODO: we can add concurrent support here.
         let reader = operator.reader_with(&split_info.file.path).await?;
 
         let mut total_read: u64 = 0;
