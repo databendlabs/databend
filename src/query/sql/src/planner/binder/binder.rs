@@ -613,7 +613,7 @@ impl<'a> Binder {
                 self.bind_execute_task(stmt).await?
             }
             Statement::ShowTasks(stmt) => {
-                self.bind_show_tasks(stmt).await?
+                self.bind_show_tasks(bind_context, stmt).await?
             }
 
             // Streams

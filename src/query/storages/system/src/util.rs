@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
@@ -106,4 +112,36 @@ pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
             }
         }
     }
+}
+
+pub(crate) async fn get_owned_task_names(
+    user_api: Arc<UserApiProvider>,
+    tenant: &Tenant,
+    all_effective_roles: &[String],
+) -> Vec<String> {
+    let mut owned_tasks_names = vec![];
+    let has_admin_role = all_effective_roles
+        .iter()
+        .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
+    if has_admin_role {
+        // Note: In old version databend-query the hashmap maybe empty
+        let task_ownerships = user_api
+            .list_tasks_ownerships(tenant)
+            .await
+            .unwrap_or_default();
+        for (ownership, role) in task_ownerships {
+            match ownership {
+                OwnershipObject::Database { .. } => {}
+                OwnershipObject::Table { .. } => {}
+                OwnershipObject::Stage { .. } => {}
+                OwnershipObject::UDF { .. } => {}
+                OwnershipObject::Task { name } => {
+                    if all_effective_roles.contains(&role) && !owned_tasks_names.contains(&name) {
+                        owned_tasks_names.push(name);
+                    }
+                }
+            }
+        }
+    }
+    owned_tasks_names
 }

@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
-use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::TaskSql;
 use databend_common_ast::ast::WarehouseOptions;
 use databend_common_expression::types::DataType;
@@ -148,17 +147,5 @@ pub struct ExecuteTaskPlan {
 impl ExecuteTaskPlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![])
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ShowTasksPlan {
-    pub tenant: Tenant,
-    pub limit: Option<ShowLimit>,
-}
-
-impl ShowTasksPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        task_schema()
     }
 }

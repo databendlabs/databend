@@ -36,9 +36,11 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_schema;
+use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::get_owned_task_names;
 
 pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut created_on: Vec<i64> = Vec::with_capacity(tasks.len());
@@ -120,6 +122,7 @@ impl AsyncSystemTable for TasksTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
+        let user_api = UserApiProvider::instance();
         let config = GlobalConfig::instance();
         if config.query.cloud_control_grpc_server_address.is_none() {
             return Err(ErrorCode::CloudControlNotEnabled(
@@ -130,16 +133,22 @@ impl AsyncSystemTable for TasksTable {
         let tenant = ctx.get_tenant();
         let query_id = ctx.get_id();
         let user = ctx.get_current_user()?.identity().display().to_string();
-        let available_roles = ctx.get_available_roles().await?;
+        let all_effective_roles: Vec<String> = ctx
+            .get_all_effective_roles()
+            .await?
+            .into_iter()
+            .map(|x| x.identity().to_string())
+            .collect();
+
+        let owned_tasks_names = get_owned_task_names(user_api, &tenant, &all_effective_roles).await;
+
         let req = ShowTasksRequest {
             tenant_id: tenant.tenant_name().to_string(),
             name_like: "".to_string(),
             result_limit: 10000, // TODO: use plan.limit pushdown
-            owners: available_roles
-                .into_iter()
-                .map(|x| x.identity().to_string())
-                .collect(),
+            owners: all_effective_roles.clone(),
             task_ids: vec![],
+            task_names: owned_tasks_names.clone(),
         };
 
         let cloud_api = CloudControlApiProvider::instance();
