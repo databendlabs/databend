@@ -31,6 +31,7 @@ fn test_map() {
     test_map_values(file);
     test_map_size(file);
     test_map_cat(file);
+    test_map_contains_key(file);
 }
 
 fn test_map_cat(file: &mut impl Write) {
@@ -180,6 +181,11 @@ fn test_map_keys(file: &mut impl Write) {
         "map_keys(map([a_col, b_col, c_col], [d_col, e_col, f_col]))",
         &columns,
     );
+}
+
+fn test_map_contains_key(file: &mut impl Write) {
+    run_ast(file, "map_contains_key({'k1': 'v1', 'k2': 'v2'}, 'k1')", &[
+    ]);
 }
 
 fn test_map_values(file: &mut impl Write) {
