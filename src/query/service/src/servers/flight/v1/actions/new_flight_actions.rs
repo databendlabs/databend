@@ -14,7 +14,10 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::sync::Arc;
 
+use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures_util::future::BoxFuture;
@@ -50,14 +53,31 @@ impl FlightActions {
         Fut: Future<Output = Result<Res>> + Send + 'static,
         F: Fn(Req) -> Fut + Send + Sync + 'static,
     {
+        let path = path.into();
+        let t = Arc::new(t);
         self.actions.insert(
-            path.into(),
+            path.clone(),
             Box::new(move |request| {
-                let request = serde_json::from_value(request).unwrap();
-                let future = t(request);
+                let path = path.clone();
+                let t = t.clone();
                 Box::pin(async move {
-                    match future.await {
-                        Ok(v) => Ok(serde_json::to_value(v).expect("")),
+                    let request = serde_json::from_value(request).map_err(|cause| {
+                        ErrorCode::BadArguments(format!(
+                            "Cannot parse request for {}, cause: {:?}",
+                            path, cause
+                        ))
+                    })?;
+
+                    let future = catch_unwind(move || t(request))?;
+
+                    let future = CatchUnwindFuture::create(future);
+                    match future.await.flatten() {
+                        Ok(v) => serde_json::to_value(v).map_err(|cause| {
+                            ErrorCode::BadBytes(format!(
+                                "Cannot serialize response for {}, cause: {:?}",
+                                path, cause
+                            ))
+                        }),
                         Err(err) => Err(err),
                     }
                 })
@@ -68,15 +88,19 @@ impl FlightActions {
     }
 
     pub async fn do_action(&self, path: &str, data: &[u8]) -> Result<Value> {
+        let req = serde_json::from_slice(data).map_err(|cause| {
+            ErrorCode::BadArguments(format!(
+                "Cannot parse request for {}, cause: {:?}",
+                path, cause
+            ))
+        })?;
+
         match self.actions.get(path) {
+            Some(fun) => fun(req).await,
             None => Err(ErrorCode::Unimplemented(format!(
                 "{} action is unimplemented in flight service",
                 path
             ))),
-            Some(fun) => match serde_json::from_slice(data) {
-                Err(_) => Err(ErrorCode::BadArguments("")),
-                Ok(value) => fun(value).await,
-            },
         }
     }
 }
