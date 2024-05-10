@@ -16,6 +16,8 @@
       "defaults": true,
       "additional": [
         "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
         "aarch64-apple-darwin"
       ]
     }
