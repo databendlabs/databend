@@ -380,10 +380,17 @@ impl<'a> Binder {
             Statement::DropStage {
                 stage_name,
                 if_exists,
-            } => Plan::DropStage(Box::new(DropStagePlan {
+            } => {
+                // Check user stage.
+                if stage_name == "~" {
+                    return Err(ErrorCode::StagePermissionDenied(
+                        "user stage is not allowed to be dropped",
+                    ));
+                }
+                Plan::DropStage(Box::new(DropStagePlan {
                 if_exists: *if_exists,
                 name: stage_name.clone(),
-            })),
+            }))},
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }

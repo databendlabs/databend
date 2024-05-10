@@ -513,8 +513,8 @@ evaluation (internal):
 
 ast            : contains([1,2,null], nullable_col)
 raw expr       : contains(array(1, 2, NULL), nullable_col::Int64 NULL)
-checked expr   : contains<T0=Int64 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), nullable_col)
-optimized expr : contains<T0=Int64 NULL><Array(T0), T0>([1, 2, NULL], nullable_col)
+checked expr   : contains<T0=Int64 NULL><Array(T0) NULL, T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL) NULL), nullable_col)
+optimized expr : contains<T0=Int64 NULL><Array(T0) NULL, T0>([1, 2, NULL], nullable_col)
 evaluation:
 +--------+-------------------+---------------+
 |        | nullable_col      | Output        |
@@ -537,7 +537,7 @@ evaluation (internal):
 
 ast            : contains([(1,'2', 3, false), (1,'2', 4, true), null], (1,'2', 3, false))
 raw expr       : contains(array(tuple(1, '2', 3, false), tuple(1, '2', 4, true), NULL), tuple(1, '2', 3, false))
-checked expr   : contains<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><Array(T0), T0>(array<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><T0, T0, T0>(CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 4_u8, true) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(NULL AS Tuple(UInt8, String, UInt8, Boolean) NULL)), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL))
+checked expr   : contains<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><Array(T0) NULL, T0>(CAST(array<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><T0, T0, T0>(CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 4_u8, true) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(NULL AS Tuple(UInt8, String, UInt8, Boolean) NULL)) AS Array(Tuple(UInt8, String, UInt8, Boolean) NULL) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -717,7 +717,7 @@ evaluation (internal):
 
 ast            : array_concat([], [])
 raw expr       : array_concat(array(), array())
-checked expr   : array_concat<Array(Nothing) NULL, Array(Nothing) NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(array<>() AS Array(Nothing) NULL))
+checked expr   : array_concat<Array(Nothing), Array(Nothing)>(array<>(), array<>())
 optimized expr : [] :: Array(Nothing)
 output type    : Array(Nothing)
 output domain  : []
@@ -749,9 +749,10 @@ error:
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array_concat(Array(Boolean), Array(UInt8))`
 
 has tried possible overloads:
-  array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)  : unable to unify `Array(Boolean)` with `Array(Nothing)`
-  array_concat(Array(T0), Array(T0)) :: Array(T0)                           : unable to find a common super type for `Boolean` and `UInt8`
-  array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL            : unable to find a common super type for `Boolean` and `UInt8`
+  array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)                 : unable to unify `Array(Boolean)` with `Array(Nothing)`
+  array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL  : unable to unify `Array(Boolean)` with `Array(Nothing)`
+  array_concat(Array(T0), Array(T0)) :: Array(T0)                                : unable to find a common super type for `Boolean` and `UInt8`
+  array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL                 : unable to find a common super type for `Boolean` and `UInt8`
 
 
 
@@ -777,16 +778,16 @@ raw expr       : array_concat(array(1, 2, 3, 4, 5, NULL), array(nullable_col::In
 checked expr   : array_concat<T0=Int64 NULL><Array(T0), Array(T0)>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), array<T0=Int64 NULL><T0>(nullable_col))
 optimized expr : array_concat<T0=Int64 NULL><Array(T0), Array(T0)>([1, 2, 3, 4, 5, NULL], array<T0=Int64 NULL><T0>(nullable_col))
 evaluation:
-+--------+-------------------+---------------------------------------------------------+
-|        | nullable_col      | Output                                                  |
-+--------+-------------------+---------------------------------------------------------+
-| Type   | Int64 NULL        | Array(Int64 NULL)                                       |
-| Domain | {9..=12} ∪ {NULL} | [{-9223372036854775808..=9223372036854775807} ∪ {NULL}] |
-| Row 0  | 9                 | [1, 2, 3, 4, 5, NULL, 9]                                |
-| Row 1  | 10                | [1, 2, 3, 4, 5, NULL, 10]                               |
-| Row 2  | NULL              | [1, 2, 3, 4, 5, NULL, NULL]                             |
-| Row 3  | NULL              | [1, 2, 3, 4, 5, NULL, NULL]                             |
-+--------+-------------------+---------------------------------------------------------+
++--------+-------------------+-----------------------------+
+|        | nullable_col      | Output                      |
++--------+-------------------+-----------------------------+
+| Type   | Int64 NULL        | Array(Int64 NULL)           |
+| Domain | {9..=12} ∪ {NULL} | [{0..=12} ∪ {NULL}]         |
+| Row 0  | 9                 | [1, 2, 3, 4, 5, NULL, 9]    |
+| Row 1  | 10                | [1, 2, 3, 4, 5, NULL, 10]   |
+| Row 2  | NULL              | [1, 2, 3, 4, 5, NULL, NULL] |
+| Row 3  | NULL              | [1, 2, 3, 4, 5, NULL, NULL] |
++--------+-------------------+-----------------------------+
 evaluation (internal):
 +--------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column       | Data                                                                                                                                                                                                                                     |
@@ -801,16 +802,16 @@ raw expr       : array_concat(array(1, 2, NULL), array(int8_col::Int8))
 checked expr   : array_concat<T0=Int16 NULL><Array(T0), Array(T0)>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int16 NULL)), CAST(array<T0=Int8><T0>(int8_col) AS Array(Int16 NULL)))
 optimized expr : array_concat<T0=Int16 NULL><Array(T0), Array(T0)>([1, 2, NULL], CAST(array<T0=Int8><T0>(int8_col) AS Array(Int16 NULL)))
 evaluation:
-+--------+----------+-----------------------------+
-|        | int8_col | Output                      |
-+--------+----------+-----------------------------+
-| Type   | Int8     | Array(Int16 NULL)           |
-| Domain | {1..=8}  | [{-32768..=32767} ∪ {NULL}] |
-| Row 0  | 1        | [1, 2, NULL, 1]             |
-| Row 1  | 2        | [1, 2, NULL, 2]             |
-| Row 2  | 7        | [1, 2, NULL, 7]             |
-| Row 3  | 8        | [1, 2, NULL, 8]             |
-+--------+----------+-----------------------------+
++--------+----------+--------------------+
+|        | int8_col | Output             |
++--------+----------+--------------------+
+| Type   | Int8     | Array(Int16 NULL)  |
+| Domain | {1..=8}  | [{0..=8} ∪ {NULL}] |
+| Row 0  | 1        | [1, 2, NULL, 1]    |
+| Row 1  | 2        | [1, 2, NULL, 2]    |
+| Row 2  | 7        | [1, 2, NULL, 7]    |
+| Row 3  | 8        | [1, 2, NULL, 8]    |
++--------+----------+--------------------+
 evaluation (internal):
 +----------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column   | Data                                                                                                                                                                       |
@@ -822,7 +823,7 @@ evaluation (internal):
 
 ast            : array_prepend(1, [])
 raw expr       : array_prepend(1, array())
-checked expr   : array_prepend<T0=UInt8><T0, Array(T0)>(1_u8, CAST(array<>() AS Array(UInt8)))
+checked expr   : array_prepend<T0=UInt8><T0, Array(T0) NULL>(1_u8, CAST(array<>() AS Array(UInt8) NULL))
 optimized expr : [1]
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
@@ -831,7 +832,7 @@ output         : [1]
 
 ast            : array_prepend(1, [2, 3, NULL, 4])
 raw expr       : array_prepend(1, array(2, 3, NULL, 4))
-checked expr   : array_prepend<T0=UInt8 NULL><T0, Array(T0)>(CAST(1_u8 AS UInt8 NULL), array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL)))
+checked expr   : array_prepend<T0=UInt8 NULL><T0, Array(T0) NULL>(CAST(1_u8 AS UInt8 NULL), CAST(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL)) AS Array(UInt8 NULL) NULL))
 optimized expr : [1, 2, 3, NULL, 4]
 output type    : Array(UInt8 NULL)
 output domain  : [{0..=4} ∪ {NULL}]
@@ -840,26 +841,44 @@ output         : [1, 2, 3, NULL, 4]
 
 ast            : array_prepend('a', ['b', NULL, NULL, 'c', 'd'])
 raw expr       : array_prepend('a', array('b', NULL, NULL, 'c', 'd'))
-checked expr   : array_prepend<T0=String NULL><T0, Array(T0)>(CAST("a" AS String NULL), array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)))
+checked expr   : array_prepend<T0=String NULL><T0, Array(T0) NULL>(CAST("a" AS String NULL), CAST(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)) AS Array(String NULL) NULL))
 optimized expr : ['a', 'b', NULL, NULL, 'c', 'd']
 output type    : Array(String NULL)
 output domain  : [{""..="d"} ∪ {NULL}]
 output         : ['a', 'b', NULL, NULL, 'c', 'd']
 
 
+ast            : array_prepend(NULL, CAST([2, 3] AS Array(INT8 NULL) NULL))
+raw expr       : array_prepend(NULL, CAST(array(2, 3) AS Array(Int8 NULL) NULL))
+checked expr   : array_prepend<T0=Int8 NULL><T0, Array(T0) NULL>(CAST(NULL AS Int8 NULL), CAST(array<T0=UInt8><T0, T0>(2_u8, 3_u8) AS Array(Int8 NULL) NULL))
+optimized expr : [NULL, 2, 3]
+output type    : Array(Int8 NULL)
+output domain  : [{0..=3} ∪ {NULL}]
+output         : [NULL, 2, 3]
+
+
+ast            : array_prepend(1, CAST([2, 3] AS Array(INT8 NULL) NULL))
+raw expr       : array_prepend(1, CAST(array(2, 3) AS Array(Int8 NULL) NULL))
+checked expr   : array_prepend<T0=Int16 NULL><T0, Array(T0) NULL>(CAST(1_u8 AS Int16 NULL), CAST(CAST(array<T0=UInt8><T0, T0>(2_u8, 3_u8) AS Array(Int8 NULL) NULL) AS Array(Int16 NULL) NULL))
+optimized expr : [1, 2, 3]
+output type    : Array(Int16 NULL)
+output domain  : [{1..=3}]
+output         : [1, 2, 3]
+
+
 ast            : array_prepend(a, [b, c])
 raw expr       : array_prepend(a::Int16, array(b::Int16, c::Int16))
-checked expr   : array_prepend<T0=Int16><T0, Array(T0)>(a, array<T0=Int16><T0, T0>(b, c))
+checked expr   : array_prepend<T0=Int16><T0, Array(T0) NULL>(a, CAST(array<T0=Int16><T0, T0>(b, c) AS Array(Int16) NULL))
 evaluation:
-+--------+---------+---------+---------+--------------------+
-|        | a       | b       | c       | Output             |
-+--------+---------+---------+---------+--------------------+
-| Type   | Int16   | Int16   | Int16   | Array(Int16)       |
-| Domain | {0..=2} | {3..=5} | {6..=8} | [{-32768..=32767}] |
-| Row 0  | 0       | 3       | 6       | [0, 3, 6]          |
-| Row 1  | 1       | 4       | 7       | [1, 4, 7]          |
-| Row 2  | 2       | 5       | 8       | [2, 5, 8]          |
-+--------+---------+---------+---------+--------------------+
++--------+---------+---------+---------+--------------+
+|        | a       | b       | c       | Output       |
++--------+---------+---------+---------+--------------+
+| Type   | Int16   | Int16   | Int16   | Array(Int16) |
+| Domain | {0..=2} | {3..=5} | {6..=8} | [{0..=8}]    |
+| Row 0  | 0       | 3       | 6       | [0, 3, 6]    |
+| Row 1  | 1       | 4       | 7       | [1, 4, 7]    |
+| Row 2  | 2       | 5       | 8       | [2, 5, 8]    |
++--------+---------+---------+---------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------+
 | Column | Data                                                                              |
@@ -873,7 +892,7 @@ evaluation (internal):
 
 ast            : array_append([], 1)
 raw expr       : array_append(array(), 1)
-checked expr   : array_append<T0=UInt8><Array(T0), T0>(CAST(array<>() AS Array(UInt8)), 1_u8)
+checked expr   : array_append<T0=UInt8><Array(T0) NULL, T0>(CAST(array<>() AS Array(UInt8) NULL), 1_u8)
 optimized expr : [1]
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
@@ -882,7 +901,7 @@ output         : [1]
 
 ast            : array_append([2, 3, NULL, 4], 5)
 raw expr       : array_append(array(2, 3, NULL, 4), 5)
-checked expr   : array_append<T0=UInt8 NULL><Array(T0), T0>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL)), CAST(5_u8 AS UInt8 NULL))
+checked expr   : array_append<T0=UInt8 NULL><Array(T0) NULL, T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL)) AS Array(UInt8 NULL) NULL), CAST(5_u8 AS UInt8 NULL))
 optimized expr : [2, 3, NULL, 4, 5]
 output type    : Array(UInt8 NULL)
 output domain  : [{0..=5} ∪ {NULL}]
@@ -891,26 +910,44 @@ output         : [2, 3, NULL, 4, 5]
 
 ast            : array_append(['b', NULL, NULL, 'c', 'd'], 'e')
 raw expr       : array_append(array('b', NULL, NULL, 'c', 'd'), 'e')
-checked expr   : array_append<T0=String NULL><Array(T0), T0>(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)), CAST("e" AS String NULL))
+checked expr   : array_append<T0=String NULL><Array(T0) NULL, T0>(CAST(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)) AS Array(String NULL) NULL), CAST("e" AS String NULL))
 optimized expr : ['b', NULL, NULL, 'c', 'd', 'e']
 output type    : Array(String NULL)
 output domain  : [{""..="e"} ∪ {NULL}]
 output         : ['b', NULL, NULL, 'c', 'd', 'e']
 
 
+ast            : array_append(CAST([1, 2] AS Array(INT8 NULL) NULL), NULL)
+raw expr       : array_append(CAST(array(1, 2) AS Array(Int8 NULL) NULL), NULL)
+checked expr   : array_append<T0=Int8 NULL><Array(T0) NULL, T0>(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Int8 NULL) NULL), CAST(NULL AS Int8 NULL))
+optimized expr : [1, 2, NULL]
+output type    : Array(Int8 NULL)
+output domain  : [{0..=2} ∪ {NULL}]
+output         : [1, 2, NULL]
+
+
+ast            : array_append(CAST([1, 2] AS Array(INT8 NULL) NULL), 3)
+raw expr       : array_append(CAST(array(1, 2) AS Array(Int8 NULL) NULL), 3)
+checked expr   : array_append<T0=Int16 NULL><Array(T0) NULL, T0>(CAST(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Int8 NULL) NULL) AS Array(Int16 NULL) NULL), CAST(3_u8 AS Int16 NULL))
+optimized expr : [1, 2, 3]
+output type    : Array(Int16 NULL)
+output domain  : [{1..=3}]
+output         : [1, 2, 3]
+
+
 ast            : array_append([b, c], a)
 raw expr       : array_append(array(b::Int16, c::Int16), a::Int16)
-checked expr   : array_append<T0=Int16><Array(T0), T0>(array<T0=Int16><T0, T0>(b, c), a)
+checked expr   : array_append<T0=Int16><Array(T0) NULL, T0>(CAST(array<T0=Int16><T0, T0>(b, c) AS Array(Int16) NULL), a)
 evaluation:
-+--------+---------+---------+---------+--------------------+
-|        | a       | b       | c       | Output             |
-+--------+---------+---------+---------+--------------------+
-| Type   | Int16   | Int16   | Int16   | Array(Int16)       |
-| Domain | {0..=2} | {3..=5} | {6..=8} | [{-32768..=32767}] |
-| Row 0  | 0       | 3       | 6       | [3, 6, 0]          |
-| Row 1  | 1       | 4       | 7       | [4, 7, 1]          |
-| Row 2  | 2       | 5       | 8       | [5, 8, 2]          |
-+--------+---------+---------+---------+--------------------+
++--------+---------+---------+---------+--------------+
+|        | a       | b       | c       | Output       |
++--------+---------+---------+---------+--------------+
+| Type   | Int16   | Int16   | Int16   | Array(Int16) |
+| Domain | {0..=2} | {3..=5} | {6..=8} | [{0..=8}]    |
+| Row 0  | 0       | 3       | 6       | [3, 6, 0]    |
+| Row 1  | 1       | 4       | 7       | [4, 7, 1]    |
+| Row 2  | 2       | 5       | 8       | [5, 8, 2]    |
++--------+---------+---------+---------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------+
 | Column | Data                                                                              |
@@ -1129,16 +1166,16 @@ ast            : array_distinct([a, b, c, d])
 raw expr       : array_distinct(array(a::Int16, b::Int16, c::Int16, d::Int16))
 checked expr   : array_distinct<T0=Int16><Array(T0)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
 evaluation:
-+--------+---------+---------+---------+---------+--------------------+
-|        | a       | b       | c       | d       | Output             |
-+--------+---------+---------+---------+---------+--------------------+
-| Type   | Int16   | Int16   | Int16   | Int16   | Array(Int16)       |
-| Domain | {1..=4} | {1..=4} | {1..=4} | {2..=4} | [{-32768..=32767}] |
-| Row 0  | 1       | 2       | 3       | 4       | [1, 2, 3, 4]       |
-| Row 1  | 1       | 1       | 1       | 2       | [1, 2]             |
-| Row 2  | 2       | 2       | 3       | 3       | [2, 3]             |
-| Row 3  | 4       | 4       | 4       | 4       | [4]                |
-+--------+---------+---------+---------+---------+--------------------+
++--------+---------+---------+---------+---------+--------------+
+|        | a       | b       | c       | d       | Output       |
++--------+---------+---------+---------+---------+--------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Array(Int16) |
+| Domain | {1..=4} | {1..=4} | {1..=4} | {2..=4} | [{1..=4}]    |
+| Row 0  | 1       | 2       | 3       | 4       | [1, 2, 3, 4] |
+| Row 1  | 1       | 1       | 1       | 2       | [1, 2]       |
+| Row 2  | 2       | 2       | 3       | 3       | [2, 3]       |
+| Row 3  | 4       | 4       | 4       | 4       | [4]          |
++--------+---------+---------+---------+---------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------+
 | Column | Data                                                                                 |

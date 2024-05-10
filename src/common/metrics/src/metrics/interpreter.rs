@@ -22,7 +22,6 @@ use databend_common_base::runtime::metrics::FamilyHistogram;
 use crate::VecLabels;
 
 const METRIC_QUERY_START: &str = "query_start";
-const METRIC_QUERY_ERROR: &str = "query_error";
 const METRIC_QUERY_SUCCESS: &str = "query_success";
 const METRIC_QUERY_FAILED: &str = "query_failed";
 
@@ -42,8 +41,6 @@ const METRIC_QUERY_RESULT_BYTES: &str = "query_result_bytes";
 
 pub static QUERY_START: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_START));
-pub static QUERY_ERROR: LazyLock<FamilyCounter<VecLabels>> =
-    LazyLock::new(|| register_counter_family(METRIC_QUERY_ERROR));
 pub static QUERY_SUCCESS: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_SUCCESS));
 pub static QUERY_FAILED: LazyLock<FamilyCounter<VecLabels>> =

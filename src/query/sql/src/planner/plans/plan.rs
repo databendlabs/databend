@@ -481,49 +481,11 @@ impl Plan {
             Plan::ExecuteImmediate(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
 
-            other => {
-                debug_assert!(!other.has_result_set());
-                Arc::new(DataSchema::empty())
-            }
+            _ => Arc::new(DataSchema::empty()),
         }
     }
 
     pub fn has_result_set(&self) -> bool {
-        matches!(
-            self,
-            Plan::Query { .. }
-                | Plan::Explain { .. }
-                | Plan::ExplainAst { .. }
-                | Plan::ExplainSyntax { .. }
-                | Plan::ExplainAnalyze { .. }
-                | Plan::ShowCreateDatabase(_)
-                | Plan::ShowCreateTable(_)
-                | Plan::ShowCreateCatalog(_)
-                | Plan::ShowFileFormats(_)
-                | Plan::ShowRoles(_)
-                | Plan::DescShare(_)
-                | Plan::ShowShares(_)
-                | Plan::ShowShareEndpoint(_)
-                | Plan::ShowObjectGrantPrivileges(_)
-                | Plan::ShowGrantTenantsOfShare(_)
-                | Plan::DescribeTable(_)
-                | Plan::ShowGrants(_)
-                | Plan::Presign(_)
-                | Plan::VacuumTable(_)
-                | Plan::VacuumDropTable(_)
-                | Plan::DescDatamaskPolicy(_)
-                | Plan::DescNetworkPolicy(_)
-                | Plan::ShowNetworkPolicies(_)
-                | Plan::DescPasswordPolicy(_)
-                | Plan::CopyIntoTable(_)
-                | Plan::CopyIntoLocation(_)
-                | Plan::ShowTasks(_)
-                | Plan::DescribeTask(_)
-                | Plan::DescConnection(_)
-                | Plan::ShowConnections(_)
-                | Plan::MergeInto(_)
-                | Plan::ExecuteImmediate(_)
-                | Plan::InsertMultiTable(_)
-        )
+        !self.schema().fields().is_empty()
     }
 }

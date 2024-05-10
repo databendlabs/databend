@@ -247,6 +247,7 @@ impl OptimizeTableInterpreter {
                         mutator.remained_blocks,
                         mutator.removed_segment_indexes,
                         mutator.removed_segment_summary,
+                        self.plan.need_lock,
                     )?;
 
                     build_res =

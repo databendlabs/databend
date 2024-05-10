@@ -178,7 +178,7 @@ impl crate::plans::VacuumTemporaryFilesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![DataField::new(
             "Files",
-            DataType::String,
+            DataType::Number(NumberDataType::UInt64),
         )]))
     }
 }
