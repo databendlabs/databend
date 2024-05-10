@@ -26,6 +26,8 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::Pipeline;
+use futures::AsyncRead;
+use futures_util::AsyncReadExt;
 use log::debug;
 use log::error;
 use log::warn;
@@ -241,50 +243,36 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         debug!("started");
         let operator = ctx.source.get_operator()?;
         let offset = split_info.offset as u64;
-        let size = split_info.size as u64;
+        let size = split_info.size;
+        let mut batch_size = ctx.read_batch_size.min(size);
 
-        let batch_size = ctx.read_batch_size.min(size as _) as u64;
-        // TODO: Use 4MiB as default IO size for now, we can extract as a new config.
-        let default_io_size = 4 * 1024 * 1024;
-        // Calculate the IO size, which:
-        //
-        // - is the multiple of read_batch_size.
-        // - is larger or equal to default_io_size.
-        let io_size = ((default_io_size + batch_size - 1) / batch_size) * batch_size;
+        let mut reader = operator
+            .reader_with(&split_info.file.path)
+            // TODO: use 8MiB for chunk size.
+            .chunk(8 * 1024 * 1024)
+            // TODO: use 2 concurrent for test, let's extract as a new setting.
+            .concurrent(2)
+            .await?
+            .into_futures_async_read(offset..offset + size as u64);
+        let mut total_read = 0;
 
-        // TODO: we can add concurrent support here.
-        let reader = operator.reader_with(&split_info.file.path).await?;
-
-        let mut total_read: u64 = 0;
         loop {
-            // Read finished.
-            if offset + total_read == size {
-                break;
-            }
-
-            let read_size = io_size.min(size - total_read);
-            let mut bs = reader
-                .read(offset + total_read..offset + total_read + read_size)
-                .await?
-                // TODO: opendal::Buffer should support split.
-                .to_bytes();
-            if bs.len() != read_size as usize {
-                return Err(ErrorCode::BadBytes(format!(
-                    "split {} expect {} bytes, read only {} bytes",
-                    split_info,
-                    split_info.size,
-                    total_read + bs.len() as u64
-                )));
-            }
-            total_read += bs.len() as u64;
-
-            loop {
-                if bs.is_empty() {
-                    break;
+            batch_size = batch_size.min(size - total_read);
+            let mut batch = vec![0u8; batch_size];
+            let n = read_full(&mut reader, &mut batch[0..]).await?;
+            if n == 0 {
+                if total_read != size {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "split {} expect {} bytes, read only {} bytes",
+                        split_info, size, total_read
+                    )));
                 }
-                let batch_size = bs.len().min(batch_size as usize);
-                let batch = bs.split_to(batch_size);
-                if let Err(e) = batch_tx.send(Ok(batch.to_vec().into())).await {
+                break;
+            } else {
+                total_read += n;
+                batch.truncate(n);
+                debug!("read {} bytes", n);
+                if let Err(e) = batch_tx.send(Ok(batch.into())).await {
                     warn!("fail to send ReadBatch: {}", e);
                     break;
                 }
@@ -293,4 +281,20 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         debug!("finished");
         Ok(())
     }
+}
+
+/// FIXME: we have repeat pattern here, maybe provide a better API?
+#[async_backtrace::framed]
+pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
+    let mut buf = &mut buf[0..];
+    let mut n = 0;
+    while !buf.is_empty() {
+        let read = reader.read(buf).await?;
+        if read == 0 {
+            break;
+        }
+        n += read;
+        buf = &mut buf[read..]
+    }
+    Ok(n)
 }
