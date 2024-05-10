@@ -14,6 +14,7 @@
 
 use databend_common_base::base::mask_connection_info;
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
@@ -220,7 +221,6 @@ impl QueryResponse {
 /// 1. check `next_uri` before refer to other fields of the response.
 ///
 /// the client in sql logic tests should follow this.
-
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
@@ -228,8 +228,11 @@ async fn query_final_handler(
 ) -> PoemResult<impl IntoResponse> {
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(query_id.clone());
+    let _guard = ThreadTracker::tracking(tracking_payload);
 
-    async {
+    ThreadTracker::tracking_future(async {
         info!(
             "{}: got /v1/query/{}/final request, this query is going to be finally completed.",
             query_id, query_id
@@ -249,7 +252,7 @@ async fn query_final_handler(
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
-    }
+    })
     .in_span(root)
     .await
 }
@@ -262,8 +265,11 @@ async fn query_cancel_handler(
 ) -> PoemResult<impl IntoResponse> {
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(query_id.clone());
+    let _guard = ThreadTracker::tracking(tracking_payload);
 
-    async {
+    ThreadTracker::tracking_future(async {
         info!(
             "{}: got /v1/query/{}/kill request, cancel the query",
             query_id, query_id
@@ -280,7 +286,7 @@ async fn query_cancel_handler(
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
-    }
+    })
     .in_span(root)
     .await
 }
@@ -291,8 +297,11 @@ async fn query_state_handler(
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(query_id.clone());
+    let _guard = ThreadTracker::tracking(tracking_payload);
 
-    async {
+    ThreadTracker::tracking_future(async {
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
@@ -305,7 +314,7 @@ async fn query_state_handler(
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
-    }
+    })
     .in_span(root)
     .await
 }
@@ -317,8 +326,11 @@ async fn query_page_handler(
 ) -> PoemResult<impl IntoResponse> {
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(query_id.clone());
+    let _guard = ThreadTracker::tracking(tracking_payload);
 
-    async {
+    ThreadTracker::tracking_future(async {
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
@@ -335,7 +347,7 @@ async fn query_page_handler(
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
-    }
+    })
     .in_span(root)
     .await
 }
@@ -348,8 +360,11 @@ pub(crate) async fn query_handler(
 ) -> PoemResult<impl IntoResponse> {
     let root = get_http_tracing_span(full_name!(), ctx, &ctx.query_id);
     let _t = SlowRequestLogTracker::new(ctx);
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(ctx.query_id.clone());
+    let _guard = ThreadTracker::tracking(tracking_payload);
 
-    async {
+    ThreadTracker::tracking_future(async {
         info!("http query new request: {:}", mask_connection_info(&format!("{:?}", req)));
         let http_query_manager = HttpQueryManager::instance();
         let sql = req.sql.clone();
@@ -386,9 +401,9 @@ pub(crate) async fn query_handler(
                 Ok(req.fail_to_start_sql(&e).into_response())
             }
         }
-    }
-    .in_span(root)
-    .await
+    })
+        .in_span(root)
+        .await
 }
 
 pub fn query_route() -> Route {
@@ -420,6 +435,7 @@ fn query_id_removed(query_id: &str, remove_reason: RemoveReason) -> PoemError {
         StatusCode::BAD_REQUEST,
     )
 }
+
 fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
     PoemError::from_string(
         format!("query id {query_id} not found on {node_id}"),

@@ -101,6 +101,7 @@ pub struct ThreadTracker {
 
 #[derive(Clone)]
 pub struct TrackingPayload {
+    pub query_id: Option<String>,
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
@@ -164,6 +165,7 @@ impl ThreadTracker {
                 profile: None,
                 metrics: None,
                 mem_stat: None,
+                query_id: None,
                 node_error: None,
             },
         }
@@ -282,6 +284,13 @@ impl ThreadTracker {
             Ok(Ok(_)) | Err(_) => Ok(()),
             Ok(Err(oom)) => Err(oom),
         }
+    }
+
+    pub fn query_id() -> Option<&'static String> {
+        TRACKER.with(|tracker| match &tracker.borrow().payload.query_id {
+            None => None,
+            Some(query_id) => unsafe { Some(&*(query_id as *const String)) },
+        })
     }
 }
 
