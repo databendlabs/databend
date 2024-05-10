@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use bytes::BufMut;
-use bytes::BytesMut;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -24,7 +22,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_sources::PrefetchAsyncSource;
-use futures::StreamExt;
+use futures::AsyncRead;
+use futures::AsyncReadExt;
 use log::debug;
 use opendal::Operator;
 
@@ -33,11 +32,8 @@ use crate::read::row_based::batch::BytesBatch;
 
 struct FileState {
     file: OneFilePartition,
-    reader: opendal::FuturesBytesStream,
-    buf: BytesMut,
-
-    consume_offset: usize,
-    read_offset: usize,
+    reader: opendal::FuturesAsyncReader,
+    offset: usize,
 }
 
 pub struct BytesReader {
@@ -76,40 +72,26 @@ impl BytesReader {
 
     pub async fn read_batch(&mut self) -> Result<DataBlock> {
         if let Some(state) = &mut self.file_state {
-            if state.buf.is_empty() {
-                // TODO: we need to find a way to avoid this copy.
-                let bs = state.reader.next().await.transpose()?;
-                match bs {
-                    Some(bs) => {
-                        debug!("BytesReader read {} bytes", bs.len());
-                        state.read_offset += bs.len();
-                        state.buf.put(bs)
-                    }
-                    None => {
-                        if state.read_offset != state.file.size {
-                            return Err(ErrorCode::BadBytes(format!(
-                                "Unexpected EOF {} expect {} bytes, read only {} bytes.",
-                                state.file.path, state.file.size, state.read_offset
-                            )));
-                        };
-                    }
-                }
-            }
+            let end = state.file.size.min(self.read_batch_size + state.offset);
+            let mut buffer = vec![0u8; end - state.offset];
+            let n = read_full(&mut state.reader, &mut buffer[..]).await?;
+            if n == 0 {
+                return Err(ErrorCode::BadBytes(format!(
+                    "Unexpected EOF {} expect {} bytes, read only {} bytes.",
+                    state.file.path, state.file.size, state.offset
+                )));
+            };
+            buffer.truncate(n);
 
-            let size = self.read_batch_size.min(state.buf.len());
-            // TODO: we can use bytes instead to better reuse existing allocation.
-            let buffer = state.buf.split_to(size).to_vec();
+            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, n);
+            self.table_ctx
+                .get_scan_progress()
+                .incr(&ProgressValues { rows: 0, bytes: n });
 
-            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, size);
-            self.table_ctx.get_scan_progress().incr(&ProgressValues {
-                rows: 0,
-                bytes: size,
-            });
-
-            let offset = state.consume_offset;
-            state.consume_offset += size;
-            debug!("BytesReader consumed {size} bytes");
-            let is_eof = state.consume_offset == state.file.size;
+            debug!("read {} bytes", n);
+            let offset = state.offset;
+            state.offset += n;
+            let is_eof = state.offset == state.file.size;
 
             let batch = Box::new(BytesBatch {
                 data: buffer,
@@ -155,13 +137,11 @@ impl PrefetchAsyncSource for BytesReader {
                 // TODO: Use 4 concurrent for test.
                 .concurrent(4)
                 .await?
-                .into_bytes_stream(0..file.size as u64);
+                .into_futures_async_read(0..file.size as u64);
             self.file_state = Some(FileState {
                 file,
                 reader,
-                buf: BytesMut::with_capacity(self.io_size),
-                consume_offset: 0,
-                read_offset: 0,
+                offset: 0,
             })
         }
         match self.read_batch().await {
@@ -169,4 +149,19 @@ impl PrefetchAsyncSource for BytesReader {
             Err(e) => Err(e),
         }
     }
+}
+
+#[async_backtrace::framed]
+pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
+    let mut buf = &mut buf[0..];
+    let mut n = 0;
+    while !buf.is_empty() {
+        let read = reader.read(buf).await?;
+        if read == 0 {
+            break;
+        }
+        n += read;
+        buf = &mut buf[read..]
+    }
+    Ok(n)
 }
