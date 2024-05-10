@@ -37,12 +37,11 @@ with NativeClient(name="client1>") as client1:
     res = mycursor.fetchone()
     kill_query = "kill query " + str(res[0]) + ";"
     mycursor.execute(kill_query)
-    time.sleep(0.1)
+    time.sleep(0.5)
     mycursor.execute(
         "SELECT * FROM system.processes WHERE extra_info LIKE '%SELECT max(number)%' AND extra_info NOT LIKE '%system.processes%';"
     )
     res = mycursor.fetchone()
 
-    ## TODO NEW EXPRESSION
-    ## assert res is None
+    assert res is None
     client1.expect(prompt)

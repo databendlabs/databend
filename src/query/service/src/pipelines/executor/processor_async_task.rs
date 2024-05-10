@@ -78,6 +78,10 @@ impl ExecutorTasksQueue {
             }
         }
     }
+
+    pub fn is_queries_executor(&self) -> bool {
+        matches!(self, ExecutorTasksQueue::QueriesExecutorTasksQueue(_))
+    }
 }
 
 pub struct ProcessorAsyncTask {
@@ -101,7 +105,11 @@ impl ProcessorAsyncTask {
         graph: Arc<RunningGraph>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
-        let finished_notify = queue.get_finished_notify();
+        let finished_notify = if queue.is_queries_executor() {
+            graph.get_finished_notify()
+        } else {
+            queue.get_finished_notify()
+        };
 
         let inner = async move {
             let left = Box::pin(inner);

@@ -189,8 +189,10 @@ impl CopyIntoTablePlan {
                 return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
             }
             info!(
-                "force mode, ignore file filtering. ({}.{})",
-                &self.database_name, &self.table_name
+                "{}: force mode, ignore file filtering. ({}.{})",
+                ctx.get_id(),
+                &self.database_name,
+                &self.table_name
             );
             (all_source_file_infos, vec![])
         } else {
@@ -225,11 +227,16 @@ impl CopyIntoTablePlan {
             (files_to_copy, duplicated_files)
         };
 
+        let len = need_copy_file_infos.len();
+        let sum: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
+
         info!(
-            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{:?}",
+            "{}: collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
+            ctx.get_id(),
             max_files,
-            num_all_files,
             need_copy_file_infos.len(),
+            num_all_files - len,
+            sum,
             start.elapsed()
         );
 
