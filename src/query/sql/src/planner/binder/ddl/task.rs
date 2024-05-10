@@ -23,6 +23,7 @@ use databend_common_ast::ast::DescribeTaskStmt;
 use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::ScheduleOptions;
+use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowTasksStmt;
 use databend_common_ast::ast::TaskSql;
 use databend_common_ast::parser::parse_sql;
@@ -30,6 +31,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::debug;
 
 use crate::plans::AlterTaskPlan;
 use crate::plans::CreateTaskPlan;
@@ -37,8 +39,10 @@ use crate::plans::DescribeTaskPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::Plan;
-use crate::plans::ShowTasksPlan;
+use crate::plans::RewriteKind;
+use crate::BindContext;
 use crate::Binder;
+use crate::SelectBuilder;
 
 fn verify_single_statement(sql: &String) -> Result<()> {
     let tokens = tokenize_sql(sql.as_str()).map_err(|e| {
@@ -243,16 +247,27 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_tasks(
         &mut self,
+        bind_context: &mut BindContext,
         stmt: &ShowTasksStmt,
     ) -> Result<Plan> {
         let ShowTasksStmt { limit } = stmt;
 
-        let tenant = self.ctx.get_tenant();
+        let mut select_builder = SelectBuilder::from("system.tasks");
 
-        let plan = ShowTasksPlan {
-            tenant,
-            limit: limit.clone(),
+        let query = match limit {
+            None => select_builder.build(),
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+                select_builder.build()
+            }
         };
-        Ok(Plan::ShowTasks(Box::new(plan)))
+
+        debug!("show tasks rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTasks)
+            .await
     }
 }

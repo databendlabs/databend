@@ -916,3 +916,48 @@ error:
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
 
+---------- Input ----------
+GRANT CREATE TASK ON task mytask1 TO role role1
+---------- Output ---------
+error: 
+  --> SQL:1:22
+  |
+1 | GRANT CREATE TASK ON task mytask1 TO role role1
+  | ----- ------         ^^^^ unexpected `task`, expecting `FALSE`, <QuotedString>, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `*`, or <Ident>
+  | |     |               
+  | |     while parsing <privileges> ON <privileges_level>
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+GRANT ownership ON task MyTask1 TO u1
+---------- Output ---------
+error: 
+  --> SQL:1:36
+  |
+1 | GRANT ownership ON task MyTask1 TO u1
+  | -----                              ^^ unexpected `u1`, expecting `ROLE`
+  | |                                   
+  | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
+
+
+---------- Input ----------
+GRANT select ON task MyTask1 TO u2
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | GRANT select ON task MyTask1 TO u2
+  |                 ^^^^ unexpected `task`, expecting `FALSE`, `TABLE`, <QuotedString>, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `DATABASE`, `*`, or <Ident>
+
+
+---------- Input ----------
+GRANT usage ON task MyTask1 TO u1
+---------- Output ---------
+error: 
+  --> SQL:1:16
+  |
+1 | GRANT usage ON task MyTask1 TO u1
+  |                ^^^^ unexpected `task`, expecting `FALSE`, `TABLE`, <QuotedString>, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `DATABASE`, `UDF`, `*`, or <Ident>
+
+

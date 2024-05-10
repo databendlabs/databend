@@ -202,9 +202,8 @@ impl Plan {
             Plan::AlterTask(_) => Ok("AlterTask".to_string()),
             Plan::DescribeTask(_) => Ok("DescribeTask".to_string()),
             Plan::ExecuteTask(_) => Ok("ExecuteTask".to_string()),
-            Plan::ShowTasks(_) => Ok("ShowTasks".to_string()),
 
-            // task
+            // Connection
             Plan::CreateConnection(_) => Ok("CreateConnection".to_string()),
             Plan::DescConnection(_) => Ok("DescConnection".to_string()),
             Plan::DropConnection(_) => Ok("DropConnection".to_string()),
