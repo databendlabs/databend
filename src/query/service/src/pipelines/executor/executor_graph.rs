@@ -21,6 +21,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -191,6 +192,7 @@ struct ExecutingGraph {
     points: AtomicU64,
     query_id: Arc<String>,
     should_finish: AtomicBool,
+    finished_notify: Arc<WatchNotify>,
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     finished_error: Mutex<Option<ErrorCode>>,
 }
@@ -212,6 +214,7 @@ impl ExecutingGraph {
             points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
             query_id,
             should_finish: AtomicBool::new(false),
+            finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
         })
@@ -235,6 +238,7 @@ impl ExecutingGraph {
             points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
             query_id,
             should_finish: AtomicBool::new(false),
+            finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
         })
@@ -793,6 +797,7 @@ impl RunningGraph {
             return Ok(());
         }
         self.0.should_finish.store(true, Ordering::SeqCst);
+        self.0.finished_notify.notify_waiters();
         self.interrupt_running_nodes();
         let mut finished_error = self.0.finished_error.lock();
         if finished_error.is_none() {
@@ -834,6 +839,10 @@ impl RunningGraph {
 
     pub fn get_points(&self) -> u64 {
         self.0.points.load(Ordering::SeqCst)
+    }
+
+    pub fn get_finished_notify(&self) -> Arc<WatchNotify> {
+        self.0.finished_notify.clone()
     }
 
     pub fn format_graph_nodes(&self) -> String {
