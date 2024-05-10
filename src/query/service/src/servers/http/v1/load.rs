@@ -20,6 +20,7 @@ use databend_common_base::base::tokio::io::AsyncRead;
 use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::base::unescape_string;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -99,6 +100,7 @@ pub async fn streaming_load(
         "new streaming load request:, headers={:?}",
         sanitize_request_headers(req.headers()),
     );
+
     let session = ctx.upgrade_session(SessionType::HTTPStreamingLoad)?;
     let context = session
         .create_query_context()
