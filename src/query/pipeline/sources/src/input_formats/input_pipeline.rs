@@ -242,27 +242,47 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let operator = ctx.source.get_operator()?;
         let offset = split_info.offset as u64;
         let size = split_info.size as u64;
-        let mut batch_size = ctx.read_batch_size.min(size as _) as u64;
+
+        let batch_size = ctx.read_batch_size.min(size as _) as u64;
+        // TODO: Use 4MiB as default IO size for now, we can extract as a new config.
+        let default_io_size = 4 * 1024 * 1024;
+        // Calculate the IO size, which:
+        //
+        // - is the multiple of read_batch_size.
+        // - is larger or equal to default_io_size.
+        let io_size = ((default_io_size + batch_size - 1) / batch_size) * batch_size;
 
         let reader = operator.reader_with(&split_info.file.path).await?;
+
         let mut total_read: u64 = 0;
         loop {
-            batch_size = batch_size.min(size - total_read);
-            let batch = reader
-                .read(offset + total_read..offset + total_read + batch_size)
-                .await?;
-
-            if batch.is_empty() {
-                if total_read != size {
-                    return Err(ErrorCode::BadBytes(format!(
-                        "split {} expect {} bytes, read only {} bytes",
-                        split_info, size, total_read
-                    )));
-                }
+            // Read finished.
+            if offset + total_read == size {
                 break;
-            } else {
-                total_read += batch.len() as u64;
-                debug!("read {} bytes", batch.len());
+            }
+
+            let read_size = io_size.min(size - total_read);
+            let mut bs = reader
+                .read(offset + total_read..offset + total_read + read_size)
+                .await?
+                // TODO: opendal::Buffer should support split.
+                .to_bytes();
+            if bs.len() != read_size as usize {
+                return Err(ErrorCode::BadBytes(format!(
+                    "split {} expect {} bytes, read only {} bytes",
+                    split_info,
+                    split_info.size,
+                    total_read + bs.len() as u64
+                )));
+            }
+            total_read += bs.len() as u64;
+
+            loop {
+                if bs.is_empty() {
+                    break;
+                }
+                let batch_size = bs.len().min(batch_size as usize);
+                let batch = bs.split_to(batch_size);
                 if let Err(e) = batch_tx.send(Ok(batch.to_vec().into())).await {
                     warn!("fail to send ReadBatch: {}", e);
                     break;
