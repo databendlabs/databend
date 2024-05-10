@@ -88,6 +88,7 @@ impl BytesReader {
                         state.file.path, state.file.size, state.read_offset
                     )));
                 }
+                debug!("BytesReader read {n} bytes");
                 state.read_offset += n;
             }
 
@@ -101,9 +102,9 @@ impl BytesReader {
                 bytes: size,
             });
 
-            debug!("read {} bytes", size);
             let offset = state.consume_offset;
             state.consume_offset += size;
+            debug!("BytesReader consumed {size} bytes");
             let is_eof = state.consume_offset == state.file.size;
 
             let batch = Box::new(BytesBatch {
