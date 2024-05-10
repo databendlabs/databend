@@ -189,8 +189,10 @@ impl CopyIntoTablePlan {
                 return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
             }
             info!(
-                "force mode, ignore file filtering. ({}.{})",
-                &self.database_name, &self.table_name
+                "{}: force mode, ignore file filtering. ({}.{})",
+                ctx.get_id(),
+                &self.database_name,
+                &self.table_name
             );
             (all_source_file_infos, vec![])
         } else {
@@ -226,7 +228,8 @@ impl CopyIntoTablePlan {
         };
 
         info!(
-            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{:?}",
+            "{}: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{:?}",
+            ctx.get_id(),
             max_files,
             num_all_files,
             need_copy_file_infos.len(),
