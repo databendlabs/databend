@@ -2282,7 +2282,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Batch get all table-name by id
         let seq_names = self.mget_kv(&id_name_kv_keys).await?;
-        let mut table_names = Vec::with_capacity(id_name_kv_keys.len());
+        let mut table_names = vec![];
 
         // None means table_name not found, maybe immutable table id. Ignore it
         for seq_name in seq_names.into_iter().flatten() {
@@ -2346,7 +2346,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Batch get all table-name by id
         let seq_names = self.mget_kv(&kv_keys).await?;
-        let mut db_names = Vec::with_capacity(kv_keys.len());
+        // If multi drop/create db the capacity may not same
+        let mut db_names = vec![];
 
         // None means db_name not found, maybe immutable database id. Ignore it
         for seq_name in seq_names.into_iter().flatten() {
