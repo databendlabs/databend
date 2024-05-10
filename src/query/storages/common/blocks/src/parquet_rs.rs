@@ -92,7 +92,7 @@ fn choose_compression_scheme(
     table_schema: &TableSchema,
     stat: &StatisticsOfColumns,
 ) -> Result<WriterPropertiesBuilder> {
-    for ((parquet_field, table_field), col) in parquet_fields
+    for ((parquet_field, table_field), _col) in parquet_fields
         .iter()
         .zip(table_schema.fields.iter())
         .zip(block.columns())
@@ -104,19 +104,21 @@ fn choose_compression_scheme(
                 type_length: _,
                 scale: _,
                 precision: _,
-            } => {
-                let distinct_of_values = stat
-                    .get(&table_field.column_id)
-                    .and_then(|stat| stat.distinct_of_values);
-                let num_rows = block.num_rows();
-                if can_apply_dict_encoding(physical_type, distinct_of_values, num_rows, col)? {
-                    let col_path = ColumnPath::new(vec![table_field.name().clone()]);
-                    props = props.set_column_dictionary_enabled(col_path, true);
-                } else if can_apply_delta_binary_pack(physical_type, col, num_rows)? {
-                    let col_path = ColumnPath::new(vec![table_field.name().clone()]);
-                    props = props.set_column_encoding(col_path, Encoding::DELTA_BINARY_PACKED);
+            } => match physical_type {
+                PhysicalType::BYTE_ARRAY | PhysicalType::FIXED_LEN_BYTE_ARRAY => {
+                    let ndv = stat
+                        .get(&table_field.column_id)
+                        .and_then(|stat| stat.distinct_of_values);
+                    let num_rows = block.num_rows();
+                    if let Some(ndv) = ndv {
+                        if num_rows as f64 / ndv as f64 > 10.0 {
+                            let col_path = ColumnPath::new(vec![table_field.name().clone()]);
+                            props = props.set_column_dictionary_enabled(col_path, true);
+                        }
+                    }
                 }
-            }
+                _ => {}
+            },
             Type::GroupType {
                 basic_info: _,
                 fields: _,
@@ -126,26 +128,7 @@ fn choose_compression_scheme(
     Ok(props)
 }
 
-fn can_apply_dict_encoding(
-    physical_type: &PhysicalType,
-    distinct_of_values: Option<u64>,
-    num_rows: usize,
-    col: &BlockEntry,
-) -> Result<bool> {
-    const LOW_CARDINALITY_THRESHOLD: f64 = 10.0;
-    const AVG_BYTES_PER_VALUE: f64 = 10.0;
-    if !matches!(physical_type, PhysicalType::BYTE_ARRAY) {
-        return Ok(false);
-    }
-    let is_low_cardinality = distinct_of_values
-        .is_some_and(|ndv| num_rows as f64 / ndv as f64 > LOW_CARDINALITY_THRESHOLD);
-    let column = col.value.convert_to_full_column(&col.data_type, num_rows);
-    let memory_size = column.memory_size();
-    let total_bytes = memory_size - num_rows * 8;
-    let avg_bytes_per_value = total_bytes as f64 / num_rows as f64;
-    Ok(is_low_cardinality && avg_bytes_per_value < AVG_BYTES_PER_VALUE)
-}
-
+#[allow(dead_code)]
 fn can_apply_delta_binary_pack(
     physical_type: &PhysicalType,
     col: &BlockEntry,
