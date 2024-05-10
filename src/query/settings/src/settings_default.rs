@@ -362,18 +362,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("parquet_uncompressed_buffer_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(2 * 1024 * 1024),
-                    desc: "Sets the byte size of the buffer used for reading Parquet files.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
-                ("enable_bushy_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables generating a bushy join plan with the optimizer.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_query_result_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables caching query results to improve performance for identical queries.",
@@ -558,12 +546,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_replace_into_bloom_pruning", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enables bloom pruning for replace-into statement.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Max number of columns used by bloom pruning for replace-into statement.",
@@ -585,12 +567,6 @@ impl DefaultSettings {
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets new columns to be nullable (1) or not (0) by default in table operations.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_query_profiling", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables recording query profile",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
