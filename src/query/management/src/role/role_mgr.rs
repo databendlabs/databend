@@ -217,6 +217,28 @@ impl RoleApi for RoleMgr {
         Ok(r)
     }
 
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn list_tasks_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
+        let mut task_object_owner_prefix = self.ownership_object_prefix();
+        task_object_owner_prefix.push_str("task-by-name/");
+        let values = self
+            .kv_api
+            .prefix_list_kv(task_object_owner_prefix.as_str())
+            .await?;
+
+        let mut r = vec![];
+
+        let mut quota = Quota::new(func_name!());
+
+        for (key, val) in values {
+            let u = check_and_upgrade_to_pb(&mut quota, key, &val, self.kv_api.as_ref()).await?;
+            r.push(u);
+        }
+
+        Ok(r)
+    }
+
     /// General role update.
     ///
     /// It fetch the role that matches the specified seq number, update it in place, then write it back with the seq it sees.

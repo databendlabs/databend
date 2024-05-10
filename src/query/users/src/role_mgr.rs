@@ -101,6 +101,23 @@ impl UserApiProvider {
         Ok(roles)
     }
 
+    pub async fn list_tasks_ownerships(
+        &self,
+        tenant: &Tenant,
+    ) -> Result<HashMap<OwnershipObject, String>> {
+        let seq_owns = self
+            .role_api(tenant)
+            .list_tasks_ownerships()
+            .await
+            .map_err(|e| e.add_message_back("(while get ownerships)."))?;
+
+        let roles: HashMap<OwnershipObject, String> = seq_owns
+            .into_iter()
+            .map(|r| (r.data.object, r.data.role))
+            .collect();
+        Ok(roles)
+    }
+
     #[async_backtrace::framed]
     pub async fn exists_role(&self, tenant: &Tenant, role: String) -> Result<bool> {
         match self.get_role(tenant, role).await {

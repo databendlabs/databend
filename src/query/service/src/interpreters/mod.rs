@@ -122,7 +122,6 @@ mod interpreter_task_create;
 mod interpreter_task_describe;
 mod interpreter_task_drop;
 mod interpreter_task_execute;
-mod interpreter_tasks_show;
 mod interpreter_txn_abort;
 mod interpreter_txn_begin;
 mod interpreter_txn_commit;
