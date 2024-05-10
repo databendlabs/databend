@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
 use std::sync::Arc;
 
+use bytes::BufMut;
 use bytes::BytesMut;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_sources::PrefetchAsyncSource;
+use futures::StreamExt;
 use log::debug;
 use opendal::Operator;
 
@@ -32,7 +33,7 @@ use crate::read::row_based::batch::BytesBatch;
 
 struct FileState {
     file: OneFilePartition,
-    reader: opendal::Reader,
+    reader: opendal::FuturesBytesStream,
     buf: BytesMut,
 
     consume_offset: usize,
@@ -55,8 +56,8 @@ impl BytesReader {
         read_batch_size: usize,
         prefetch_num: usize,
     ) -> Result<Self> {
-        // TODO: Use 4MiB as default IO size for now, we can extract as a new config.
-        let default_io_size = 4 * 1024 * 1024;
+        // TODO: Use 8MiB as default IO size for now, we can extract as a new config.
+        let default_io_size = 8 * 1024 * 1024;
         // Calculate the IO size, which:
         //
         // - is the multiple of read_batch_size.
@@ -76,20 +77,23 @@ impl BytesReader {
     pub async fn read_batch(&mut self) -> Result<DataBlock> {
         if let Some(state) = &mut self.file_state {
             if state.buf.is_empty() {
-                let end = min(self.io_size + state.read_offset, state.file.size) as u64;
-
-                let n = state
-                    .reader
-                    .read_into(&mut state.buf, state.read_offset as u64..end)
-                    .await?;
-                if (n as u64) < end - state.read_offset as u64 {
-                    return Err(ErrorCode::BadBytes(format!(
-                        "Unexpected EOF {} expect {} bytes, read only {} bytes.",
-                        state.file.path, state.file.size, state.read_offset
-                    )));
+                // TODO: we need to find a way to avoid this copy.
+                let bs = state.reader.next().await.transpose()?;
+                match bs {
+                    Some(bs) => {
+                        debug!("BytesReader read {} bytes", bs.len());
+                        state.read_offset += bs.len();
+                        state.buf.put(bs)
+                    }
+                    None => {
+                        if state.read_offset != state.file.size {
+                            return Err(ErrorCode::BadBytes(format!(
+                                "Unexpected EOF {} expect {} bytes, read only {} bytes.",
+                                state.file.path, state.file.size, state.read_offset
+                            )));
+                        };
+                    }
                 }
-                debug!("BytesReader read {n} bytes");
-                state.read_offset += n;
             }
 
             let size = self.read_batch_size.min(state.buf.len());
@@ -144,7 +148,14 @@ impl PrefetchAsyncSource for BytesReader {
             };
             let file = OneFilePartition::from_part(&part)?.clone();
 
-            let reader = self.op.reader_with(&file.path).await?;
+            let reader = self
+                .op
+                .reader_with(&file.path)
+                .chunk(self.io_size)
+                // TODO: Use 4 concurrent for test.
+                .concurrent(4)
+                .await?
+                .into_bytes_stream(0..file.size as u64);
             self.file_state = Some(FileState {
                 file,
                 reader,
