@@ -29,7 +29,6 @@ databend-common-users = { path = "../query/users" }
 databend-query = { path = "../query/service", features = [
     "simd",
     "disable_initial_exec_tls",
-    "enable_queries_executor",
 ], default-features = false }
 
 # # Crates.io dependencies
