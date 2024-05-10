@@ -24,8 +24,6 @@ use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownShare;
 use databend_common_meta_app::app_error::UnknownShareAccounts;
-use databend_common_meta_app::app_error::UnknownShareEndpoint;
-use databend_common_meta_app::app_error::UnknownShareEndpointId;
 use databend_common_meta_app::app_error::UnknownShareId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
@@ -50,7 +48,6 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_app::share::share_end_point_ident::ShareEndpointIdentRaw;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::share::*;
@@ -456,104 +453,6 @@ pub async fn get_table_by_id_or_err(
     );
 
     Ok((seq, table_meta))
-}
-
-// Return (share_endpoint_id_seq, share_endpoint_id, share_endpoint_meta_seq, share_endpoint_meta)
-pub async fn get_share_endpoint_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &ShareEndpointIdent,
-    msg: impl Display,
-) -> Result<(u64, u64, u64, ShareEndpointMeta), KVAppError> {
-    let (share_endpoint_id_seq, share_endpoint_id) = get_u64_value(kv_api, name_key).await?;
-    share_endpoint_has_to_exist(share_endpoint_id_seq, name_key, &msg)?;
-
-    let (share_endpoint_meta_seq, share_endpoint_meta) =
-        get_share_endpoint_meta_by_id_or_err(kv_api, share_endpoint_id, msg).await?;
-
-    Ok((
-        share_endpoint_id_seq,
-        share_endpoint_id,
-        share_endpoint_meta_seq,
-        share_endpoint_meta,
-    ))
-}
-
-async fn get_share_endpoint_meta_by_id_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    share_endpoint_id: u64,
-    msg: impl Display,
-) -> Result<(u64, ShareEndpointMeta), KVAppError> {
-    let id_key = ShareEndpointId { share_endpoint_id };
-
-    let (share_endpoint_meta_seq, share_endpoint_meta) = get_pb_value(kv_api, &id_key).await?;
-    share_endpoint_meta_has_to_exist(share_endpoint_meta_seq, share_endpoint_id, msg)?;
-
-    Ok((share_endpoint_meta_seq, share_endpoint_meta.unwrap()))
-}
-
-fn share_endpoint_meta_has_to_exist(
-    seq: u64,
-    share_endpoint_id: u64,
-    msg: impl Display,
-) -> Result<(), KVAppError> {
-    if seq == 0 {
-        debug!(
-            seq = seq,
-            share_endpoint_id = share_endpoint_id;
-            "share endpoint meta does not exist"
-        );
-
-        Err(KVAppError::AppError(AppError::UnknownShareEndpointId(
-            UnknownShareEndpointId::new(
-                share_endpoint_id,
-                format!("{}: {}", msg, share_endpoint_id),
-            ),
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-fn share_endpoint_has_to_exist(
-    seq: u64,
-    name_key: &ShareEndpointIdent,
-    msg: impl Display,
-) -> Result<(), KVAppError> {
-    if seq == 0 {
-        debug!(seq = seq, name_key :? =(name_key); "share endpoint does not exist");
-
-        Err(KVAppError::AppError(AppError::UnknownShareEndpoint(
-            UnknownShareEndpoint::new(name_key.name(), format!("{}", msg)),
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-pub async fn get_share_endpoint_id_to_name_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    share_endpoint_id: u64,
-    msg: impl Display,
-) -> Result<(u64, ShareEndpointIdentRaw), KVAppError> {
-    let id_key = ShareEndpointIdToName { share_endpoint_id };
-
-    let (share_endpoint_name_seq, share_endpoint) = get_pb_value(kv_api, &id_key).await?;
-    if share_endpoint_name_seq == 0 {
-        debug!(
-            share_endpoint_name_seq = share_endpoint_name_seq,
-            share_endpoint_id = share_endpoint_id;
-            "share meta does not exist"
-        );
-
-        return Err(KVAppError::AppError(AppError::UnknownShareEndpointId(
-            UnknownShareEndpointId::new(
-                share_endpoint_id,
-                format!("{}: {}", msg, share_endpoint_id),
-            ),
-        )));
-    }
-
-    Ok((share_endpoint_name_seq, share_endpoint.unwrap()))
 }
 
 // Return (share_id_seq, share_id, share_meta_seq, share_meta)
