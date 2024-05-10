@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::runtime::ThreadTracker;
 use databend_enterprise_background_service::Suggestion;
 use http::StatusCode;
 use poem::error::InternalServerError;
