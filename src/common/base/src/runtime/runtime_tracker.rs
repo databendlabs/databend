@@ -287,9 +287,13 @@ impl ThreadTracker {
     }
 
     pub fn query_id() -> Option<&'static String> {
-        TRACKER.with(|tracker| match &tracker.borrow().payload.query_id {
-            None => None,
-            Some(query_id) => unsafe { Some(&*(query_id as *const String)) },
+        TRACKER.with(|tracker| {
+            tracker
+                .borrow()
+                .payload
+                .query_id
+                .as_ref()
+                .map(|query_id| unsafe { &*(query_id as *const String) })
         })
     }
 }
