@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::pin::Pin;
+use futures_util::stream;
 
 use databend_common_arrow::arrow_format::flight::data::Action;
 use databend_common_arrow::arrow_format::flight::data::ActionType;
@@ -167,6 +168,6 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn list_actions(&self, _: Request<Empty>) -> Response<Self::ListActionsStream> {
-        Err(Status::unimplemented("unimplemented list_actions"))
+        Ok(RawResponse::new(Box::pin(stream::empty())))
     }
 }
