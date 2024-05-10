@@ -350,6 +350,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let set_priority = map(
+        rule! {
+            SET ~ PRIORITY ~  #priority  ~ #parameter_to_string
+        },
+        |(_, _, priority, object_id)| Statement::SetPriority {
+            object_id,
+            priority,
+        },
+    );
+
     let set_variable = map(
         rule! {
             SET ~ GLOBAL? ~ #ident ~ "=" ~ #subexpr(0)
@@ -2052,6 +2062,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
+            | #set_priority: "SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>"
         ),
         // database
         rule!(
@@ -3633,6 +3644,14 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     alt((
         value(KillTarget::Query, rule! { QUERY }),
         value(KillTarget::Connection, rule! { CONNECTION }),
+    ))(i)
+}
+
+pub fn priority(i: Input) -> IResult<Priority> {
+    alt((
+        value(Priority::LOW, rule! { LOW }),
+        value(Priority::MEDIUM, rule! { MEDIUM }),
+        value(Priority::HIGH, rule! { HIGH }),
     ))(i)
 }
 
