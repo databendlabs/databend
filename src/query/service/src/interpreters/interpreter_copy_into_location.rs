@@ -85,6 +85,7 @@ impl CopyIntoLocationInterpreter {
         let mut physical_plan = PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
             plan_id: 0,
             input: Box::new(query_physical_plan),
+            project_columns: query_interpreter.get_result_columns(),
             input_schema: query_result_schema,
             to_stage_info: StageTableInfo {
                 schema: table_schema,
