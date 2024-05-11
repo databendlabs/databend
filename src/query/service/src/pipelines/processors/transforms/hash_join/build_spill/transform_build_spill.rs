@@ -158,11 +158,10 @@ impl BuildSpillHandler {
             return Ok(HashJoinBuildStep::Spill);
         }
         if build_state.join_type() != JoinType::Cross {
-            info!(
-                "Processor: {}, spill info: {}",
-                processor_id,
-                self.spill_state().spiller.format_spill_info()
-            );
+            let spill_info = self.spill_state().spiller.format_spill_info();
+            if !spill_info.is_empty() {
+                info!("Processor: {}, spill info: {}", processor_id, spill_info);
+            }
         }
         if !spilled_partition_set.is_empty() {
             build_state
