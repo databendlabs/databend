@@ -150,5 +150,5 @@ pub async fn do_vacuum_drop_tables(
         start.elapsed().as_secs()
     );
 
-    Ok(result.map(|result| result))
+    Ok(result)
 }
