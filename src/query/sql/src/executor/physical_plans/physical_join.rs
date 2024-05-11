@@ -54,7 +54,7 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         )
     }
 
-    if !range_conditions.is_empty() { 
+    if !range_conditions.is_empty() {
         if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
             return Ok(PhysicalJoinType::RangeJoin(
                 range_conditions,
@@ -160,14 +160,8 @@ impl PhysicalPlanBuilder {
                 .await
             }
             PhysicalJoinType::AsofJoin(range, other) => {
-                self.build_asof_join(
-                    join,
-                    s_expr,
-                    (left_required, right_required),
-                    range,
-                    other,
-                )
-                .await
+                self.build_asof_join(join, s_expr, (left_required, right_required), range, other)
+                    .await
             }
             PhysicalJoinType::RangeJoin(range, other) => {
                 self.build_range_join(s_expr, left_required, right_required, range, other)
