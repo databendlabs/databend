@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::BufWriter;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -231,7 +232,10 @@ fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
                 humantime::format_rfc3339_micros(SystemTime::now()),
                 record.level(),
                 record.module_path().unwrap_or(""),
-                record.file().unwrap_or(""),
+                Path::new(record.file().unwrap_or_default())
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default(),
                 record.line().unwrap_or(0),
                 message,
                 KvDisplay::new(record.key_values()),
@@ -244,7 +248,10 @@ fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
                 humantime::format_rfc3339_micros(SystemTime::now()),
                 record.level(),
                 record.module_path().unwrap_or(""),
-                record.file().unwrap_or(""),
+                Path::new(record.file().unwrap_or_default())
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default(),
                 record.line().unwrap_or(0),
                 message,
                 KvDisplay::new(record.key_values()),
