@@ -4949,7 +4949,6 @@ dependencies = [
  "opendal",
  "opensrv-mysql",
  "opentelemetry",
- "opentelemetry-http",
  "opentelemetry_sdk",
  "ordered-float 4.2.0",
  "p256",
@@ -4996,7 +4995,6 @@ name = "databend-sharing-endpoint"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-trait-fn",
  "base64 0.22.0",
  "bytes",
  "chrono",
@@ -10400,18 +10398,6 @@ dependencies = [
  "pin-project-lite",
  "thiserror",
  "urlencoding",
-]
-
-[[package]]
-name = "opentelemetry-http"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7690dc77bf776713848c4faa6501157469017eaf332baccd4eb1cea928743d94"
-dependencies = [
- "async-trait",
- "bytes",
- "http 0.2.11",
- "opentelemetry",
 ]
 
 [[package]]

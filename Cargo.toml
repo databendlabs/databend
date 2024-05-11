@@ -247,7 +247,6 @@ opentelemetry = { version = "0.22", features = ["trace", "logs"] }
 opentelemetry-otlp = { version = "0.15", features = ["trace", "logs", "grpc-tonic"] }
 opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
 tracing = "0.1.40"
-opentelemetry-http = "0.11.0"
 tracing-appender = "0.2.3"
 console-subscriber = { version = "0.2.0" }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }

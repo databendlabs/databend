@@ -75,7 +75,6 @@ impl HTTPSessionMiddleware {
     }
 }
 
-/// TODO: Remove me once opentelemetry_http has been upgraded to http 1.0
 pub struct HeaderExtractor<'a>(pub &'a http::HeaderMap);
 impl<'a> Extractor for HeaderExtractor<'a> {
     /// Get a value for a key from the HeaderMap.  If the value is not valid ASCII, returns None.
