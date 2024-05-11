@@ -18,33 +18,23 @@ use std::time::Instant;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::EntryMode;
 use opendal::Metakey;
+use opendal::Operator;
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_drop_table(
-    tables: Vec<Arc<dyn Table>>,
+    tables: Vec<(TableInfo, Operator)>,
     dry_run_limit: Option<usize>,
 ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
     let mut list_files = vec![];
-    for table in tables {
-        let (table_info, operator) =
-            if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
-                (fuse_table.get_table_info(), fuse_table.get_operator())
-            } else {
-                info!(
-                    "ignore table {}, which is not of FUSE engine. Table engine {}",
-                    table.get_table_info().name,
-                    table.engine()
-                );
-                continue;
-            };
-
-        let dir = format!("{}/", FuseTable::parse_storage_prefix(table_info)?);
+    for (table_info, operator) in tables {
+        let dir = format!("{}/", FuseTable::parse_storage_prefix(&table_info)?);
 
         info!(
             "vacuum drop table {:?} dir {:?}, is_external_table:{:?}",
@@ -109,10 +99,27 @@ pub async fn do_vacuum_drop_tables(
 
     let batch_size = (tables_len / threads_nums).min(50).max(1);
 
-    let result = if batch_size >= tables.len() {
-        do_vacuum_drop_table(tables, dry_run_limit).await?
+    let mut table_vecs = Vec::with_capacity(tables.len());
+    for table in tables {
+        let (table_info, operator) =
+            if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
+                (fuse_table.get_table_info(), fuse_table.get_operator())
+            } else {
+                info!(
+                    "ignore table {}, which is not of FUSE engine. Table engine {}",
+                    table.get_table_info().name,
+                    table.engine()
+                );
+                continue;
+            };
+
+        table_vecs.push((table_info.clone(), operator));
+    }
+
+    let result = if batch_size >= table_vecs.len() {
+        do_vacuum_drop_table(table_vecs, dry_run_limit).await?
     } else {
-        let mut chunks = tables.chunks(batch_size);
+        let mut chunks = table_vecs.chunks(batch_size);
         let dry_run_limit = dry_run_limit
             .map(|dry_run_limit| (dry_run_limit / threads_nums).min(dry_run_limit).max(1));
         let tasks = std::iter::from_fn(move || {

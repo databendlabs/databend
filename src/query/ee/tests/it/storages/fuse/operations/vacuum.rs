@@ -21,6 +21,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::TableContext;
 use databend_enterprise_query::storages::fuse::do_vacuum_drop_tables;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
@@ -246,7 +247,8 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
 
-    let result = do_vacuum_drop_table(&table_info, &operator, None).await;
+    let tables = vec![(table_info, operator)];
+    let result = do_vacuum_drop_table(tables, None).await;
     assert!(result.is_err());
 
     // verify that accessor.delete() was called
@@ -274,7 +276,8 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     let accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
     let operator = OperatorBuilder::new(accessor.clone()).finish();
 
-    let result = do_vacuum_drop_table(&table_info, &operator, None).await;
+    let tables = vec![(table_info, operator)];
+    let result = do_vacuum_drop_table(tables, None).await;
     assert!(result.is_err());
 
     // verify that accessor.delete() was called
