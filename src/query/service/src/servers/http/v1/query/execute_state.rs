@@ -337,11 +337,6 @@ impl ExecuteState {
             .await
             .map_err(|err| err.display_with_sql(&sql))?;
 
-        info!(
-            "http query finished planning sql, plan: {:?}, extras: {:?}",
-            plan, extras
-        );
-
         let query_queue_manager = QueriesQueueManager::instance();
 
         info!(
