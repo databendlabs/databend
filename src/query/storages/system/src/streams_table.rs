@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::catalog::Catalog;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -37,6 +40,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_storages_fuse::io::SnapshotsIO;
+use databend_common_storages_fuse::operations::acquire_task_permit;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
@@ -46,12 +50,15 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
 
-pub struct StreamsTable {
+pub type FullStreamsTable = StreamsTable<true>;
+pub type TerseStreamsTable = StreamsTable<false>;
+
+pub struct StreamsTable<const FULL: bool> {
     table_info: TableInfo,
 }
 
 #[async_trait::async_trait]
-impl AsyncSystemTable for StreamsTable {
+impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
     const NAME: &'static str = "system.streams";
 
     fn get_table_info(&self) -> &TableInfo {
@@ -67,13 +74,13 @@ impl AsyncSystemTable for StreamsTable {
         let tenant = ctx.get_tenant();
 
         let catalog_mgr = CatalogManager::instance();
-        let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
+        let ctls = catalog_mgr
             .list_catalogs(&tenant, ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
-            .collect();
-
+            .collect::<Vec<_>>();
+        let visibility_checker = ctx.get_visibility_checker().await?;
         let user_api = UserApiProvider::instance();
 
         let mut catalogs = vec![];
@@ -91,9 +98,11 @@ impl AsyncSystemTable for StreamsTable {
         let mut table_version = vec![];
         let mut snapshot_location = vec![];
 
-        let visibility_checker = ctx.get_visibility_checker().await?;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
+        let runtime = GlobalIORuntime::instance();
 
-        for (ctl_name, ctl) in ctls.into_iter() {
+        for (ctl_name, ctl) in ctls.iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
                 let mut db_name: Vec<String> = Vec::new();
@@ -109,17 +118,31 @@ impl AsyncSystemTable for StreamsTable {
                         }
                     });
                     for db in db_name {
-                        if let Ok(database) = ctl.get_database(&tenant, db.as_str()).await {
-                            dbs.push(database);
+                        match ctl.get_database(&tenant, db.as_str()).await {
+                            Ok(database) => dbs.push(database),
+                            Err(err) => {
+                                let msg = format!("Failed to get database: {}, {}", db, err);
+                                warn!("{}", msg);
+                                ctx.push_warning(msg);
+                            }
                         }
                     }
                 }
             }
 
             if dbs.is_empty() {
-                dbs = ctl.list_databases(&tenant).await?;
+                dbs = match ctl.list_databases(&tenant).await {
+                    Ok(dbs) => dbs,
+                    Err(err) => {
+                        let msg =
+                            format!("List databases failed on catalog {}: {}", ctl.name(), err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+
+                        vec![]
+                    }
+                }
             }
-            let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
             let final_dbs = dbs
                 .into_iter()
@@ -131,25 +154,32 @@ impl AsyncSystemTable for StreamsTable {
                     )
                 })
                 .collect::<Vec<_>>();
+
+            let ownership = if T {
+                user_api.get_ownerships(&tenant).await.unwrap_or_default()
+            } else {
+                HashMap::new()
+            };
+
             for db in final_dbs {
-                let name = db.name().to_string().into_boxed_str();
-                let name: &str = Box::leak(name);
-                let tables = match ctl.list_tables(&tenant, name).await {
+                let db_id = db.get_db_info().ident.db_id;
+                let db_name = db.name();
+                let tables = match ctl.list_tables(&tenant, db_name).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // Swallow the errors related with sharing. Listing tables in a shared database
-                        // is easy to get errors with invalid configs, but system.tables is better not
+                        // is easy to get errors with invalid configs, but system.streams is better not
                         // to be affected by it.
-                        if db.get_db_info().meta.from_share.is_some() {
-                            warn!("list tables failed on sharing db {}: {}", db.name(), err);
-                            continue;
-                        }
-                        return Err(err);
+                        let msg =
+                            format!("Failed to list tables in database: {}, {}", db_name, err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+
+                        continue;
                     }
                 };
 
-                let db_id = db.get_db_info().ident.db_id;
-
+                let mut handlers = Vec::new();
                 for table in tables {
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
@@ -162,122 +192,166 @@ impl AsyncSystemTable for StreamsTable {
                         t_id,
                     ) && table.engine() == "STREAM"
                     {
-                        catalogs.push(ctl_name);
-                        databases.push(name);
-
                         let stream_info = table.get_table_info();
-                        names.push(table.name().to_string());
-                        stream_id.push(stream_info.ident.table_id);
-                        created_on.push(stream_info.meta.created_on.timestamp_micros());
-                        updated_on.push(stream_info.meta.updated_on.timestamp_micros());
-                        owner.push(
-                            user_api
-                                .get_ownership(&tenant, &OwnershipObject::Table {
-                                    catalog_name: ctl_name.to_string(),
-                                    db_id,
-                                    table_id: t_id,
-                                })
-                                .await
-                                .ok()
-                                .and_then(|ownership| ownership.map(|o| o.role.clone())),
-                        );
-                        comment.push(stream_info.meta.comment.clone());
-
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
+
+                        catalogs.push(ctl_name.as_str());
+                        databases.push(db_name.to_owned());
+                        names.push(stream_table.name().to_string());
                         table_name.push(format!(
                             "{}.{}",
                             stream_table.source_table_database(),
                             stream_table.source_table_name()
                         ));
                         mode.push(stream_table.mode().to_string());
-                        table_version.push(stream_table.offset());
-                        table_id.push(stream_table.source_table_id());
-                        snapshot_location.push(stream_table.snapshot_loc());
 
-                        let mut reason = "".to_string();
-                        match stream_table.source_table(ctx.clone()).await {
-                            Ok(source) => {
-                                let fuse_table = FuseTable::try_from_table(source.as_ref())?;
-                                if let Some(location) = stream_table.snapshot_loc() {
-                                    reason = SnapshotsIO::read_snapshot(
-                                        location,
-                                        fuse_table.get_operator(),
-                                    )
-                                    .await
-                                    .err()
-                                    .map_or("".to_string(), |e| e.display_text());
+                        if T {
+                            stream_id.push(stream_info.ident.table_id);
+                            created_on.push(stream_info.meta.created_on.timestamp_micros());
+                            updated_on.push(stream_info.meta.updated_on.timestamp_micros());
+
+                            if ownership.is_empty() {
+                                owner.push(None);
+                            } else {
+                                owner.push(
+                                    ownership
+                                        .get(&OwnershipObject::Table {
+                                            catalog_name: ctl_name.to_string(),
+                                            db_id,
+                                            table_id: t_id,
+                                        })
+                                        .map(|role| role.to_string()),
+                                );
+                            }
+                            comment.push(stream_info.meta.comment.clone());
+
+                            table_version.push(stream_table.offset());
+                            table_id.push(stream_table.source_table_id());
+                            snapshot_location.push(stream_table.snapshot_loc());
+
+                            let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
+                            let ctx = ctx.clone();
+                            let table = table.clone();
+                            let handler = runtime.spawn(ctx.get_id(), async move {
+                                let mut reason = "".to_string();
+                                // safe unwrap.
+                                let stream_table =
+                                    StreamTable::try_from_table(table.as_ref()).unwrap();
+                                match stream_table.source_table(ctx).await {
+                                    Ok(source) => {
+                                        // safe unwrap, has been checked in source_table.
+                                        let fuse_table =
+                                            FuseTable::try_from_table(source.as_ref()).unwrap();
+                                        if let Some(location) = stream_table.snapshot_loc() {
+                                            reason = SnapshotsIO::read_snapshot(
+                                                location,
+                                                fuse_table.get_operator(),
+                                            )
+                                            .await
+                                            .err()
+                                            .map_or("".to_string(), |e| e.display_text());
+                                        }
+                                    }
+                                    Err(e) => {
+                                        reason = e.display_text();
+                                    }
                                 }
-                            }
-                            Err(e) => {
-                                reason = e.display_text();
-                            }
+                                drop(permit);
+                                reason
+                            });
+                            handlers.push(handler);
                         }
-                        invalid_reason.push(reason);
                     }
                 }
+
+                let mut joint = futures::future::try_join_all(handlers)
+                    .await
+                    .unwrap_or_default();
+                invalid_reason.append(&mut joint);
             }
         }
 
-        Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(catalogs),
-            StringType::from_data(databases),
-            StringType::from_data(names),
-            UInt64Type::from_data(stream_id),
-            TimestampType::from_data(created_on),
-            TimestampType::from_data(updated_on),
-            StringType::from_data(mode),
-            StringType::from_data(comment),
-            StringType::from_data(table_name),
-            UInt64Type::from_data(table_id),
-            UInt64Type::from_data(table_version),
-            StringType::from_opt_data(snapshot_location),
-            StringType::from_data(invalid_reason),
-            StringType::from_opt_data(owner),
-        ]))
+        if T {
+            Ok(DataBlock::new_from_columns(vec![
+                StringType::from_data(catalogs),
+                StringType::from_data(databases),
+                StringType::from_data(names),
+                UInt64Type::from_data(stream_id),
+                TimestampType::from_data(created_on),
+                TimestampType::from_data(updated_on),
+                StringType::from_data(mode),
+                StringType::from_data(comment),
+                StringType::from_data(table_name),
+                UInt64Type::from_data(table_id),
+                UInt64Type::from_data(table_version),
+                StringType::from_opt_data(snapshot_location),
+                StringType::from_data(invalid_reason),
+                StringType::from_opt_data(owner),
+            ]))
+        } else {
+            Ok(DataBlock::new_from_columns(vec![
+                StringType::from_data(catalogs),
+                StringType::from_data(databases),
+                StringType::from_data(names),
+                StringType::from_data(mode),
+                StringType::from_data(table_name),
+            ]))
+        }
     }
 }
 
-impl StreamsTable {
+impl<const T: bool> StreamsTable<T> {
     pub fn schema() -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![
-            TableField::new("catalog", TableDataType::String),
-            TableField::new("database", TableDataType::String),
-            TableField::new("name", TableDataType::String),
-            TableField::new("stream_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("created_on", TableDataType::Timestamp),
-            TableField::new("updated_on", TableDataType::Timestamp),
-            TableField::new("mode", TableDataType::String),
-            TableField::new("comment", TableDataType::String),
-            TableField::new("table_name", TableDataType::String),
-            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new(
-                "table_version",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "snapshot_location",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-            TableField::new("invalid_reason", TableDataType::String),
-            TableField::new(
-                "owner",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-        ])
+        if T {
+            TableSchemaRefExt::create(vec![
+                TableField::new("catalog", TableDataType::String),
+                TableField::new("database", TableDataType::String),
+                TableField::new("name", TableDataType::String),
+                TableField::new("stream_id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("created_on", TableDataType::Timestamp),
+                TableField::new("updated_on", TableDataType::Timestamp),
+                TableField::new("mode", TableDataType::String),
+                TableField::new("comment", TableDataType::String),
+                TableField::new("table_name", TableDataType::String),
+                TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new(
+                    "table_version",
+                    TableDataType::Number(NumberDataType::UInt64),
+                ),
+                TableField::new(
+                    "snapshot_location",
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+                TableField::new("invalid_reason", TableDataType::String),
+                TableField::new(
+                    "owner",
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+            ])
+        } else {
+            TableSchemaRefExt::create(vec![
+                TableField::new("catalog", TableDataType::String),
+                TableField::new("database", TableDataType::String),
+                TableField::new("name", TableDataType::String),
+                TableField::new("mode", TableDataType::String),
+                TableField::new("table_name", TableDataType::String),
+            ])
+        }
     }
 
     pub fn create(table_id: u64) -> Arc<dyn Table> {
+        let name = if T { "streams" } else { "streams_terse" };
         let table_info = TableInfo {
-            desc: "'system'.'streams'".to_string(),
-            name: "streams".to_string(),
+            desc: format!("'system'.'{name}'"),
+            name: name.to_owned(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
-                schema: StreamsTable::schema(),
+                schema: StreamsTable::<T>::schema(),
                 engine: "SystemStreams".to_string(),
                 ..Default::default()
             },
             ..Default::default()
         };
-        AsyncOneBlockSystemTable::create(StreamsTable { table_info })
+        AsyncOneBlockSystemTable::create(StreamsTable::<T> { table_info })
     }
 }

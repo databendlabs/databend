@@ -71,7 +71,7 @@ use futures::Stream;
 use log::info;
 use prost::Message;
 use tonic::metadata::MetadataValue;
-use tonic::transport::NamedService;
+use tonic::server::NamedService;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
@@ -103,6 +103,8 @@ fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
     let endpoint = FlightEndpoint {
         ticket: Some(ticket),
         location: vec![loc],
+        expiration_time: None,
+        app_metadata: Default::default(),
     };
     let endpoints = vec![endpoint];
 
@@ -118,6 +120,7 @@ fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
         total_records: -1,
         total_bytes: -1,
         ordered: false,
+        app_metadata: Default::default(),
     };
     Response::new(info)
 }
@@ -237,6 +240,8 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let endpoint = FlightEndpoint {
             ticket: Some(ticket),
             location: vec![loc],
+            expiration_time: None,
+            app_metadata: Default::default(),
         };
         let endpoints = vec![endpoint];
 
@@ -257,6 +262,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
             total_records: -1,
             total_bytes: -1,
             ordered: false,
+            app_metadata: Default::default(),
         };
         let resp = Response::new(info);
         Ok(resp)

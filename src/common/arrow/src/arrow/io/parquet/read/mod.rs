@@ -39,10 +39,6 @@ pub use deserialize::NestedState;
 pub use deserialize::StructIterator;
 pub use file::FileReader;
 pub use file::RowGroupReader;
-#[cfg(feature = "io_parquet_async")]
-use futures::AsyncRead;
-#[cfg(feature = "io_parquet_async")]
-use futures::AsyncSeek;
 pub use parquet2::error::Error as ParquetError;
 pub use parquet2::fallible_streaming_iterator;
 pub use parquet2::metadata::ColumnChunkMetaData;
@@ -103,10 +99,8 @@ pub fn read_metadata<R: Read + Seek>(reader: &mut R) -> Result<FileMetaData> {
 /// Reads parquets' metadata asynchronously.
 #[cfg(feature = "io_parquet_async")]
 #[cfg_attr(docsrs, doc(cfg(feature = "io_parquet_async")))]
-pub async fn read_metadata_async<R: AsyncRead + AsyncSeek + Send + Unpin>(
-    reader: &mut R,
-) -> Result<FileMetaData> {
-    Ok(_read_metadata_async(reader).await?)
+pub async fn read_metadata_async(reader: opendal::Reader, file_size: u64) -> Result<FileMetaData> {
+    Ok(_read_metadata_async(reader, file_size).await?)
 }
 
 fn convert_days_ms(value: &[u8]) -> crate::arrow::types::days_ms {

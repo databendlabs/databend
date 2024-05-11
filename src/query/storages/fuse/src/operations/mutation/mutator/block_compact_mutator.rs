@@ -26,6 +26,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::is_stream_column_id;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
@@ -195,6 +196,7 @@ impl BlockCompactMutator {
         let cluster = self.ctx.get_cluster();
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
+            // NOTE: The snapshot schema does not contain the stream column.
             let column_ids = self
                 .compact_params
                 .base_snapshot
@@ -471,7 +473,14 @@ impl CompactTaskBuilder {
     }
 
     fn check_compact(&self, block: &Arc<BlockMeta>) -> bool {
-        let column_ids: HashSet<ColumnId> = block.col_metas.keys().cloned().collect();
+        // The snapshot schema does not contain stream columns,
+        // so the stream columns need to be filtered out.
+        let column_ids = block
+            .col_metas
+            .keys()
+            .filter(|id| !is_stream_column_id(**id))
+            .cloned()
+            .collect::<HashSet<_>>();
         if self.column_ids == column_ids {
             // Check if the block needs to be resort.
             self.cluster_key_id.is_some_and(|key| {

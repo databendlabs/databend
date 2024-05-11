@@ -255,7 +255,7 @@ pub fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
         if !write_data.is_empty() {
             let mut writer = operator
                 .writer_with(&location)
-                .buffer(8 * 1024 * 1024)
+                .chunk(8 * 1024 * 1024)
                 .await?;
             for write_bucket_data in write_data.into_iter() {
                 for data in write_bucket_data.into_iter() {
@@ -352,7 +352,7 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
         if !write_data.is_empty() {
             let mut writer = operator
                 .writer_with(&location)
-                .buffer(8 * 1024 * 1024)
+                .chunk(8 * 1024 * 1024)
                 .await?;
             for write_bucket_data in write_data.into_iter() {
                 for data in write_bucket_data.into_iter() {

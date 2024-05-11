@@ -444,7 +444,7 @@ impl CreateTableInterpreter {
         let operator = operator.operator();
         let reader = MetaReaders::table_snapshot_reader(operator.clone());
         let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-        let snapshot_loc = operator.read(&hint).await?;
+        let snapshot_loc = operator.read(&hint).await?.to_vec();
         let snapshot_loc = String::from_utf8(snapshot_loc)?;
         let info = operator.info();
         let root = info.root();

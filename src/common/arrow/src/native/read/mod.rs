@@ -31,6 +31,12 @@ impl<R: std::io::Read> NativeReadBuf for BufReader<R> {
     }
 }
 
+impl<R: bytes::Buf> NativeReadBuf for bytes::buf::Reader<R> {
+    fn buffer_bytes(&self) -> &[u8] {
+        self.get_ref().chunk()
+    }
+}
+
 impl NativeReadBuf for &[u8] {
     fn buffer_bytes(&self) -> &[u8] {
         self

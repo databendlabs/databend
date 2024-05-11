@@ -164,7 +164,7 @@ pub fn read_and_deserialize<R, T>(
     compression: &MetaCompression,
 ) -> Result<T>
 where
-    R: Read + Unpin + Send,
+    R: Read,
     T: DeserializeOwned,
 {
     let mut compressed_data = vec![0; size as usize];
@@ -184,7 +184,7 @@ pub struct SegmentHeader {
 }
 
 pub fn decode_segment_header<R>(reader: &mut R) -> Result<SegmentHeader>
-where R: Read + Unpin + Send {
+where R: Read {
     let version = reader.read_scalar::<u64>()?;
     let encoding = MetaEncoding::try_from(reader.read_scalar::<u8>()?)?;
     let compression = MetaCompression::try_from(reader.read_scalar::<u8>()?)?;
@@ -199,7 +199,7 @@ where R: Read + Unpin + Send {
     })
 }
 
-pub async fn load_json<T>(bytes: &[u8], _v: &PhantomData<T>) -> Result<T>
+pub fn load_json<T>(r: impl Read, _v: &PhantomData<T>) -> Result<T>
 where T: DeserializeOwned {
-    Ok(serde_json::from_slice::<T>(bytes)?)
+    Ok(serde_json::from_reader(r)?)
 }

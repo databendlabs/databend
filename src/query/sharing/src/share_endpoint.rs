@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use bytes::Buf;
 use bytes::Bytes;
 use databend_common_auth::RefreshableToken;
 use databend_common_base::base::GlobalInstance;
@@ -36,8 +37,8 @@ use http::Method;
 use http::Request;
 use log::debug;
 use log::error;
-use opendal::raw::AsyncBody;
 use opendal::raw::HttpClient;
+use opendal::Buffer;
 
 use crate::signer::TENANT_HEADER;
 
@@ -162,7 +163,7 @@ impl ShareEndpointManager {
             .header(AUTHORIZATION, auth)
             .header(CONTENT_LENGTH, bs.len())
             .header(TENANT_HEADER, requester)
-            .body(AsyncBody::Bytes(bs))?;
+            .body(Buffer::from(bs))?;
         let resp = self.client.send(req).await;
         match resp {
             Ok(resp) => {
@@ -176,8 +177,8 @@ impl ShareEndpointManager {
                         }
                     )));
                 }
-                let bs = resp.into_body().bytes().await?;
-                match serde_json::from_slice(&bs) {
+                let bs = resp.into_body();
+                match serde_json::from_reader(bs.reader()) {
                     Ok(table_info_map) => Ok(table_info_map),
                     Err(e) => Err(ErrorCode::ShareStorageError(format!(
                         "share {:?} storage error: deser json file error: {:?}",
@@ -247,17 +248,13 @@ impl ShareEndpointManager {
                 .header(AUTHORIZATION, auth)
                 .header(CONTENT_LENGTH, bs.len())
                 .header(TENANT_HEADER, requester)
-                .body(AsyncBody::Bytes(bs))?;
+                .body(Buffer::from(bs))?;
             let resp = self.client.send(req).await;
 
             match resp {
                 Ok(resp) => {
-                    let bs = resp.into_body().bytes().await?;
-
-                    debug!("get_inbound_shares OK resp bytes: {:?}", bs);
-
-                    let ret: Vec<ShareSpec> = serde_json::from_slice(&bs)?;
-
+                    let bs = resp.into_body();
+                    let ret: Vec<ShareSpec> = serde_json::from_reader(bs.reader())?;
                     debug!("get_inbound_shares OK resp ret: {:?}", ret);
 
                     for share_spec in ret {

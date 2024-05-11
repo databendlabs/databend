@@ -14,19 +14,10 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::io::ipc::write::WriteOptions;
-use databend_common_arrow::arrow::io::ipc::IpcField;
 use databend_common_expression::DataSchemaRef;
 
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::scatter::FlightScatter;
-
-#[derive(Clone)]
-pub struct SerializeParams {
-    pub options: WriteOptions,
-    pub ipc_fields: Vec<IpcField>,
-    pub local_executor_pos: usize,
-}
 
 #[derive(Clone)]
 pub struct ShuffleExchangeParams {

@@ -187,7 +187,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         .operator
                         .read_with(&payload.location)
                         .range(payload.data_range.clone())
-                        .await?;
+                        .await?
+                        .to_vec();
 
                     info!(
                         "Read aggregate spill {} successfully, elapsed: {:?}",
@@ -206,7 +207,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             let data_range = payload.data_range.clone();
                             read_data.push(databend_common_base::runtime::spawn(async move {
                                 let instant = Instant::now();
-                                let data = operator.read_with(&location).range(data_range).await?;
+                                let data = operator
+                                    .read_with(&location)
+                                    .range(data_range)
+                                    .await?
+                                    .to_vec();
 
                                 // perf
                                 {

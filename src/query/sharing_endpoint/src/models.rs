@@ -25,7 +25,6 @@ use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use enumflags2::BitFlags;
 use poem::async_trait;
 use poem::error::Result as PoemResult;
-use poem::http;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
