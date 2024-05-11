@@ -19,7 +19,6 @@ use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
-use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFilesInfo;
 use log::debug;
@@ -82,16 +81,10 @@ impl CopyIntoLocationInterpreter {
         let query_physical_plan = query_interpreter.build_physical_plan().await?;
         let query_result_schema = query_interpreter.get_result_schema();
         let table_schema = infer_table_schema(&query_result_schema)?;
-        let projected_query_physical_plan = PhysicalPlan::Project(Project::from_columns_binding(
-            0,
-            Box::new(query_physical_plan),
-            query_interpreter.get_result_columns(),
-            false,
-        )?);
 
         let mut physical_plan = PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
             plan_id: 0,
-            input: Box::new(projected_query_physical_plan),
+            input: Box::new(query_physical_plan),
             input_schema: query_result_schema,
             to_stage_info: StageTableInfo {
                 schema: table_schema,

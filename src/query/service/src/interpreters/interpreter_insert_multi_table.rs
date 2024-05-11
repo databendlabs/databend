@@ -34,7 +34,6 @@ use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::FillAndReorder;
 use databend_common_sql::executor::physical_plans::MultiInsertEvalScalar;
-use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
@@ -218,21 +217,7 @@ impl InsertMultiTableInterpreter {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
-                let input_schema = input_source.output_schema()?;
-                let mut projections = Vec::with_capacity(input_schema.num_fields());
-                for col in &bind_context.columns {
-                    let index = col.index;
-                    projections.push(input_schema.index_of(index.to_string().as_str())?);
-                }
-                let rendered_input_source = PhysicalPlan::Project(Project {
-                    plan_id: 0,
-                    input: Box::new(input_source),
-                    projections,
-                    ignore_result: false,
-                    columns: Default::default(),
-                    stat_info: None,
-                });
-                Ok((rendered_input_source, metadata.clone()))
+                Ok((input_source, metadata.clone()))
             }
             _ => unreachable!(),
         }
