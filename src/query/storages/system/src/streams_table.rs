@@ -102,7 +102,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
         let runtime = GlobalIORuntime::instance();
 
-        for (ctl_name, ctl) in ctls.into_iter() {
+        for (ctl_name, ctl) in ctls.iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
                 let mut db_name: Vec<String> = Vec::new();
@@ -143,7 +143,6 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     }
                 }
             }
-            let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
             let final_dbs = dbs
                 .into_iter()
@@ -163,17 +162,16 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             };
 
             for db in final_dbs {
-                let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
-                let name: &str = Box::leak(name);
-                let tables = match ctl.list_tables(&tenant, name).await {
+                let db_name = db.name();
+                let tables = match ctl.list_tables(&tenant, db_name).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // Swallow the errors related with sharing. Listing tables in a shared database
                         // is easy to get errors with invalid configs, but system.streams is better not
                         // to be affected by it.
                         let msg =
-                            format!("Failed to list tables in database: {}, {}", db.name(), err);
+                            format!("Failed to list tables in database: {}, {}", db_name, err);
                         warn!("{}", msg);
                         ctx.push_warning(msg);
 
@@ -197,8 +195,8 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                         let stream_info = table.get_table_info();
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
 
-                        catalogs.push(ctl_name);
-                        databases.push(name);
+                        catalogs.push(ctl_name.as_str());
+                        databases.push(db_name.to_owned());
                         names.push(stream_table.name().to_string());
                         table_name.push(format!(
                             "{}.{}",
