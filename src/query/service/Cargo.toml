@@ -146,7 +146,6 @@ once_cell = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.5.0", features = ["tls"] }
 opentelemetry = { workspace = true }
-opentelemetry-http = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }

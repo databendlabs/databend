@@ -25,12 +25,12 @@ databend-common-exception = { path = "../exception" }
 # Crates.io dependencies
 anyerror = { workspace = true }
 futures = { workspace = true }
+http = { workspace = true }
 log = { workspace = true }
 poem = { workspace = true }
 serde = { workspace = true }
 tempfile = { version = "3.4.0", optional = true }
 thiserror = { workspace = true }
-http = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = "1.3.0"

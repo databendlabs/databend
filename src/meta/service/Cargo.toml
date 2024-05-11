@@ -42,7 +42,6 @@ databend-common-tracing = { path = "../../common/tracing" }
 sled = { workspace = true }
 
 # Crates.io dependencies
-http = { workspace = true }
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -52,6 +51,7 @@ derive_more = { workspace = true }
 feature-set = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
+http = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
