@@ -327,7 +327,7 @@ impl Spiller {
                 .format(2);
             let files = self.partition_location.get(p_id).unwrap().len();
             info.push_str(&format!(
-                "Partition {}: spilled {}, {} files \n",
+                " [Partition {}: spilled {}, {} files] ",
                 p_id, spill_gb, files
             ));
         }
