@@ -137,3 +137,51 @@ SELECT MAP_CAT(
 
 statement ok
 DROP DATABASE map_func_test
+
+# Test map_contains_key function
+statement ok
+CREATE DATABASE IF NOT EXISTS map_contains_key_test
+
+statement ok
+USE map_contains_key_test
+
+query
+CREATE TABLE t(col1 Map(String, String Null) Not Null, col2 Map(String, Int Null) Null)
+----
+CREATE TABLE t(col1 Map(String, String Null) Not Null, col2 Map(String, Int Null) Null)
+
+query
+INSERT INTO t VALUES({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, null)
+----
+INSERT INTO t VALUES({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, null)
+
+query
+SELECT map_contains_key(col1, 'k1')
+----
+true
+
+query
+SELECT map_contains_key(col1, 'k4')
+----
+false
+
+# Test empty maps
+query
+SELECT map_contains_key({}, 'k1')
+----
+false
+
+# Test NULL maps
+query
+SELECT map_contains_key(NULL, 'k1')
+----
+false
+
+# Test non-existent key
+query
+SELECT map_contains_key({'k1': 'v1', 'k2': 'v2'}, 'k3')
+----
+false
+
+statement ok
+DROP DATABASE map_contains_key_test

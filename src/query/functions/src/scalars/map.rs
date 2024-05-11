@@ -241,7 +241,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::Full,
             |map, key, _| {
                 map.iter()
-                    .any(|(k, _)| format!("{:?}", k) == format!("{:?}", key))
+                    .any(|(k, _)| k == key)
             },
         );
 }
