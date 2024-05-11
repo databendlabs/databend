@@ -182,14 +182,8 @@ impl PhysicalPlanBuilder {
                 .await
             }
             PhysicalJoinType::AsofJoin(range, other) => {
-                self.build_asof_join(
-                    join,
-                    s_expr,
-                    (left_required, right_required),
-                    range,
-                    other,
-                )
-                .await
+                self.build_asof_join(join, s_expr, (left_required, right_required), range, other)
+                    .await
             }
             PhysicalJoinType::RangeJoin(range, other) => {
                 self.build_range_join(s_expr, left_required, right_required, range, other)
