@@ -19,11 +19,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::metrics::MetricSample;
 use databend_common_base::runtime::metrics::ScopedRegistry;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_exception::ErrorCode;
 
 pub struct PlanScopeGuard {
     idx: usize,
@@ -48,6 +50,31 @@ impl Drop for PlanScopeGuard {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ErrorInfoDesc {
+    message: String,
+    detail: String,
+    backtrace: String,
+}
+
+impl ErrorInfoDesc {
+    pub fn create(error: &ErrorCode) -> ErrorInfoDesc {
+        ErrorInfoDesc {
+            message: error.message(),
+            detail: error.detail(),
+            backtrace: error.backtrace_str(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub enum ErrorInfo {
+    Other(ErrorInfoDesc),
+    IoError(ErrorInfoDesc),
+    ScheduleError(ErrorInfoDesc),
+    CalculationError(ErrorInfoDesc),
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlanProfile {
     pub id: Option<u32>,
@@ -60,9 +87,32 @@ pub struct PlanProfile {
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[serde(default)]
     pub metrics: BTreeMap<String, Vec<MetricSample>>,
+
+    pub errors: Vec<Arc<ErrorInfo>>,
 }
 
 impl PlanProfile {
+    fn get_profile_error(profile: &Profile) -> Vec<Arc<ErrorInfo>> {
+        let errors = profile.errors.lock();
+
+        let mut errors_info = Vec::with_capacity(errors.len());
+
+        for error in errors.iter() {
+            errors_info.push(Arc::new(match error {
+                NodeErrorType::ScheduleEventError(e) => {
+                    ErrorInfo::ScheduleError(ErrorInfoDesc::create(e))
+                }
+                NodeErrorType::SyncProcessError(e) => {
+                    ErrorInfo::CalculationError(ErrorInfoDesc::create(e))
+                }
+                NodeErrorType::AsyncProcessError(e) => ErrorInfo::IoError(ErrorInfoDesc::create(e)),
+                NodeErrorType::LocalError(e) => ErrorInfo::Other(ErrorInfoDesc::create(e)),
+            }));
+        }
+
+        errors_info
+    }
+
     pub fn create(profile: &Profile) -> PlanProfile {
         PlanProfile {
             id: profile.plan_id,
@@ -74,6 +124,7 @@ impl PlanProfile {
                 profile.statistics[index].load(Ordering::SeqCst)
             }),
             metrics: BTreeMap::new(),
+            errors: Self::get_profile_error(profile),
         }
     }
 
@@ -81,6 +132,8 @@ impl PlanProfile {
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
             self.statistics[index] += profile.statistics[index].load(Ordering::SeqCst);
         }
+
+        self.errors.extend(Self::get_profile_error(profile));
     }
 
     pub fn merge(&mut self, profile: &PlanProfile) {
@@ -90,6 +143,10 @@ impl PlanProfile {
 
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
             self.statistics[index] += profile.statistics[index];
+        }
+
+        for errors in &profile.errors {
+            self.errors.push(errors.clone());
         }
 
         for (id, metrics) in &profile.metrics {
