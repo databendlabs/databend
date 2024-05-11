@@ -69,10 +69,12 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     let tbl = fixture.default_table_name();
     let qry = format!("drop table {}.{}", db, tbl);
     fixture.execute_command(&qry).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
     // verify dry run never delete files
     {
-        do_vacuum_drop_tables(vec![table.clone()], Some(100)).await?;
+        do_vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate files",
@@ -88,7 +90,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     }
 
     {
-        do_vacuum_drop_tables(vec![table], None).await?;
+        do_vacuum_drop_tables(threads_nums, vec![table], None).await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(

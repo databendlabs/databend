@@ -15,120 +15,143 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::EntryMode;
 use opendal::Metakey;
-use opendal::Operator;
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_drop_table(
-    table_info: &TableInfo,
-    operator: &Operator,
+    tables: Vec<Arc<dyn Table>>,
     dry_run_limit: Option<usize>,
 ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
-    let dir = format!("{}/", FuseTable::parse_storage_prefix(table_info)?);
+    let mut list_files = vec![];
+    for table in tables {
+        let (table_info, operator) =
+            if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
+                (fuse_table.get_table_info(), fuse_table.get_operator())
+            } else {
+                info!(
+                    "ignore table {}, which is not of FUSE engine. Table engine {}",
+                    table.get_table_info().name,
+                    table.engine()
+                );
+                continue;
+            };
 
-    info!(
-        "vacuum drop table {:?} dir {:?}, is_external_table:{:?}",
-        table_info.name,
-        dir,
-        table_info.meta.storage_params.is_some()
-    );
+        let dir = format!("{}/", FuseTable::parse_storage_prefix(table_info)?);
 
-    let start = Instant::now();
+        info!(
+            "vacuum drop table {:?} dir {:?}, is_external_table:{:?}",
+            table_info.name,
+            dir,
+            table_info.meta.storage_params.is_some()
+        );
 
-    let ret = match dry_run_limit {
-        None => {
-            operator.remove_all(&dir).await?;
-            Ok(None)
-        }
-        Some(dry_run_limit) => {
-            let mut ds = operator
-                .lister_with(&dir)
-                .recursive(true)
-                .metakey(Metakey::Mode)
-                .metakey(Metakey::ContentLength)
-                .await?;
-            let mut list_files = Vec::new();
-            while let Some(de) = ds.try_next().await? {
-                let meta = de.metadata();
-                if EntryMode::FILE == meta.mode() {
-                    list_files.push((
-                        table_info.name.clone(),
-                        de.name().to_string(),
-                        meta.content_length(),
-                    ));
-                    if list_files.len() >= dry_run_limit {
-                        break;
+        let start = Instant::now();
+
+        match dry_run_limit {
+            None => {
+                operator.remove_all(&dir).await?;
+            }
+            Some(dry_run_limit) => {
+                let mut ds = operator
+                    .lister_with(&dir)
+                    .recursive(true)
+                    .metakey(Metakey::Mode)
+                    .metakey(Metakey::ContentLength)
+                    .await?;
+
+                while let Some(de) = ds.try_next().await? {
+                    let meta = de.metadata();
+                    if EntryMode::FILE == meta.mode() {
+                        list_files.push((
+                            table_info.name.clone(),
+                            de.name().to_string(),
+                            meta.content_length(),
+                        ));
+                        if list_files.len() >= dry_run_limit {
+                            break;
+                        }
                     }
                 }
             }
+        };
 
-            Ok(Some(list_files))
-        }
-    };
-
-    info!(
-        "vacuum drop table {:?} dir {:?}, cost:{} sec",
-        table_info.name,
-        dir,
-        start.elapsed().as_secs()
-    );
-    ret
+        info!(
+            "vacuum drop table {:?} dir {:?}, cost:{} sec",
+            table_info.name,
+            dir,
+            start.elapsed().as_secs()
+        );
+    }
+    Ok(if dry_run_limit.is_some() {
+        Some(list_files)
+    } else {
+        None
+    })
 }
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_drop_tables(
+    threads_nums: usize,
     tables: Vec<Arc<dyn Table>>,
     dry_run_limit: Option<usize>,
 ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
     let start = Instant::now();
     let tables_len = tables.len();
     info!("do_vacuum_drop_tables {} tables", tables_len);
-    let mut list_files = Vec::new();
-    let mut left_limit = dry_run_limit;
-    for table in tables {
-        // only operate fuse table
-        let ret = if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
-            let table_info = table.get_table_info();
-            let operator = fuse_table.get_operator_ref();
-            do_vacuum_drop_table(table_info, operator, left_limit).await?
+
+    let batch_size = (tables_len / threads_nums).min(50).max(1);
+
+    let result = if batch_size >= tables.len() {
+        do_vacuum_drop_table(tables, dry_run_limit).await?
+    } else {
+        let mut chunks = tables.chunks(batch_size);
+        let thread_limit = if let Some(dry_run_limit) = dry_run_limit {
+            Some((dry_run_limit / threads_nums).min(dry_run_limit).max(1))
         } else {
-            info!(
-                "ignore table {}, which is not of FUSE engine. Table engine {}",
-                table.get_table_info().name,
-                table.engine()
-            );
-            continue;
+            None
         };
-        if let Some(ret) = ret {
-            list_files.extend(ret);
-            if list_files.len() >= dry_run_limit.unwrap() {
-                info!(
-                    "do_vacuum_drop_tables {} tables, cost:{} sec",
-                    tables_len,
-                    start.elapsed().as_secs()
-                );
-                return Ok(Some(list_files));
-            } else {
-                left_limit = Some(dry_run_limit.unwrap() - list_files.len());
+        let tasks = std::iter::from_fn(move || {
+            chunks
+                .next()
+                .map(|tables| do_vacuum_drop_table(tables.to_vec(), thread_limit))
+        });
+
+        let result = execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            threads_nums * 2,
+            "batch-vacuum-drop-tables-worker".to_owned(),
+        )
+        .await?;
+        if dry_run_limit.is_some() {
+            let mut ret_files = vec![];
+            for file in result {
+                if let Ok(Some(files)) = file {
+                    ret_files.extend(files);
+                }
             }
+            Some(ret_files)
+        } else {
+            None
         }
-    }
+    };
+
     info!(
         "do_vacuum_drop_tables {} tables, cost:{} sec",
         tables_len,
         start.elapsed().as_secs()
     );
 
-    Ok(if dry_run_limit.is_some() {
-        Some(list_files)
+    Ok(if let Some(result) = result {
+        Some(result)
     } else {
         None
     })
