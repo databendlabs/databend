@@ -3816,22 +3816,24 @@ impl<'a> TypeChecker<'a> {
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            let column_entry = self.metadata.read().column(column.index).clone();
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
-                column_entry
-            {
-                // Use data type from meta to get the field names of tuple type.
-                table_data_type = data_type.clone();
-                if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
-                    let box (inner_scalar, _inner_data_type) = self
-                        .resolve_tuple_map_access_pushdown(
-                            expr.span(),
-                            column.clone(),
-                            &mut table_data_type,
-                            &mut paths,
-                        )
-                        .await?;
-                    scalar = inner_scalar;
+            if column.index < self.metadata.read().columns().len() {
+                let column_entry = self.metadata.read().column(column.index).clone();
+                if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
+                    column_entry
+                {
+                    // Use data type from meta to get the field names of tuple type.
+                    table_data_type = data_type.clone();
+                    if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
+                        let box (inner_scalar, _inner_data_type) = self
+                            .resolve_tuple_map_access_pushdown(
+                                expr.span(),
+                                column.clone(),
+                                &mut table_data_type,
+                                &mut paths,
+                            )
+                            .await?;
+                        scalar = inner_scalar;
+                    }
                 }
             }
         }
