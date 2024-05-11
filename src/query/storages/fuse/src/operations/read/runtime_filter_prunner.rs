@@ -36,6 +36,7 @@ use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
 use databend_storages_common_index::statistics_to_domain;
+use log::debug;
 use log::info;
 use xorf::BinaryFuse16;
 use xorf::Filter;
@@ -77,7 +78,7 @@ pub fn runtime_filter_pruner(
                     func_ctx,
                     &BUILTIN_FUNCTIONS,
                 );
-                info!("Runtime filter after constant fold is {:?}", new_expr.sql_display());
+                debug!("Runtime filter after constant fold is {:?}", new_expr.sql_display());
                 return matches!(new_expr, Expr::Constant {
                     scalar: Scalar::Boolean(false),
                     ..
