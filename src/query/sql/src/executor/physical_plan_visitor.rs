@@ -46,7 +46,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -69,7 +68,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::TableScan(plan) => self.replace_table_scan(plan),
             PhysicalPlan::CteScan(plan) => self.replace_cte_scan(plan),
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
-            PhysicalPlan::Project(plan) => self.replace_project(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
@@ -150,19 +148,6 @@ pub trait PhysicalPlanReplacer {
             projections: plan.projections.clone(),
             input: Box::new(input),
             predicates: plan.predicates.clone(),
-            stat_info: plan.stat_info.clone(),
-        }))
-    }
-
-    fn replace_project(&mut self, plan: &Project) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-
-        Ok(PhysicalPlan::Project(Project {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-            projections: plan.projections.clone(),
-            ignore_result: plan.ignore_result,
-            columns: plan.columns.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -623,9 +608,6 @@ impl PhysicalPlan {
                 | PhysicalPlan::AsyncFunction(_)
                 | PhysicalPlan::UpdateSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Project(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::EvalScalar(plan) => {
