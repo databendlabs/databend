@@ -259,7 +259,7 @@ impl Interpreter for SelectInterpreter {
             .format(self.metadata.clone(), Default::default())?
             .format_pretty()?;
         info!(
-            "Query id: {}, query plan: \n{}",
+            "Query id: {}, query plan: {}",
             self.ctx.get_id(),
             query_plan
         );
