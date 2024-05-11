@@ -39,7 +39,6 @@ use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_storages_result_cache::WriteResultCacheSink;
 use databend_common_users::UserApiProvider;
 use log::error;
-use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -255,14 +254,6 @@ impl Interpreter for SelectInterpreter {
 
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
-        let query_plan = physical_plan
-            .format(self.metadata.clone(), Default::default())?
-            .format_pretty()?;
-        info!(
-            "Query id: {}, query plan: {}",
-            self.ctx.get_id(),
-            query_plan
-        );
 
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
