@@ -129,7 +129,7 @@ ethnum = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 h2 = "0.3.26"
-headers = "0.3.8"
+headers = "0.4.0"
 highway = "1.1"
 http = { workspace = true }
 humantime = "2.1.0"

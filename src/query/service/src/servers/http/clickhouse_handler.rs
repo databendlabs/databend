@@ -35,6 +35,9 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use futures::StreamExt;
+use futures::TryStreamExt;
+use http::HeaderMap;
+use http::StatusCode;
 use log::debug;
 use log::info;
 use log::warn;
@@ -45,8 +48,6 @@ use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::get;
-use poem::http::HeaderMap;
-use poem::http::StatusCode;
 use poem::post;
 use poem::web::Query;
 use poem::web::WithContentType;
@@ -216,6 +217,7 @@ async fn execute(
                 handle.await.expect("must")
             }
 
+            let stream = stream.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
             Ok(Body::from_bytes_stream(stream).with_content_type(format_typ.get_content_type()))
         }
     })?

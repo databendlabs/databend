@@ -15,9 +15,9 @@
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
+use http::StatusCode;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
-use poem::http::StatusCode;
 use poem::web::Json;
 use poem::web::Multipart;
 use poem::Request;

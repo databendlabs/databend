@@ -32,3 +32,4 @@ poem = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
+async-trait = { workspace = true }

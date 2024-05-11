@@ -29,19 +29,19 @@ use databend_common_storages_fuse::TableContext;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
+use http::header::AUTHORIZATION;
+use http::HeaderMap;
+use http::HeaderValue;
+use http::StatusCode;
 use log::error;
 use log::warn;
 use minitrace::func_name;
 use opentelemetry::baggage::BaggageExt;
+use opentelemetry::propagation::Extractor;
 use opentelemetry::propagation::TextMapPropagator;
-use opentelemetry_http::HeaderExtractor;
 use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
-use poem::http::header::AUTHORIZATION;
-use poem::http::HeaderMap;
-use poem::http::HeaderValue;
-use poem::http::StatusCode;
 use poem::Addr;
 use poem::Body;
 use poem::Endpoint;
@@ -72,6 +72,23 @@ pub struct HTTPSessionMiddleware {
 impl HTTPSessionMiddleware {
     pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
         HTTPSessionMiddleware { kind, auth_manager }
+    }
+}
+
+/// TODO: Remove me once opentelemetry_http has been upgraded to http 1.0
+pub struct HeaderExtractor<'a>(pub &'a http::HeaderMap);
+impl<'a> Extractor for HeaderExtractor<'a> {
+    /// Get a value for a key from the HeaderMap.  If the value is not valid ASCII, returns None.
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|value| value.to_str().ok())
+    }
+
+    /// Collect all the keys from the HeaderMap.
+    fn keys(&self) -> Vec<&str> {
+        self.0
+            .keys()
+            .map(|value| value.as_str())
+            .collect::<Vec<_>>()
     }
 }
 
@@ -267,7 +284,6 @@ impl<E> HTTPSessionEndpoint<E> {
     }
 }
 
-#[poem::async_trait]
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = Response;
 
@@ -377,7 +393,6 @@ pub struct MetricsMiddlewareEndpoint<E> {
     ep: E,
 }
 
-#[poem::async_trait]
 impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
     type Output = Response;
 

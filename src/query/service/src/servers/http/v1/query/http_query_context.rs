@@ -24,6 +24,7 @@ use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
+#[derive(Clone)]
 pub struct HttpQueryContext {
     session: Arc<Session>,
     pub query_id: String,
@@ -102,7 +103,6 @@ impl HttpQueryContext {
     }
 }
 
-#[async_trait::async_trait]
 impl<'a> FromRequest<'a> for &'a HttpQueryContext {
     #[async_backtrace::framed]
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {

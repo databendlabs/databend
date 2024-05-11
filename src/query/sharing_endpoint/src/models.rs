@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use enumflags2::BitFlags;
-use poem::async_trait;
 use poem::error::Result as PoemResult;
 use poem::FromRequest;
 use poem::Request;
@@ -170,12 +169,11 @@ struct TableMetaLambdaOutput {
     table_meta_resp: TableMetaResponse,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Credentials {
     pub(crate) token: String,
 }
 
-#[async_trait]
 impl<'a> FromRequest<'a> for &'a Credentials {
     #[async_backtrace::framed]
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
