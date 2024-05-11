@@ -29,7 +29,7 @@ runs:
 
     - name: Configure AWS Credentials
       if: inputs.ecr_role_arn
-      uses: aws-actions/configure-aws-credentials@v2
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ inputs.ecr_role_arn }}
         role-duration-seconds: 900
@@ -43,7 +43,7 @@ runs:
 
     - name: Login to DockerHub
       if: inputs.dockerhub_token
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ inputs.dockerhub_user }}
         password: ${{ inputs.dockerhub_token }}
