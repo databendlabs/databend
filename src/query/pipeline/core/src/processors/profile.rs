@@ -53,6 +53,7 @@ impl Drop for PlanScopeGuard {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ErrorInfoDesc {
     message: String,
+    detail: String,
     backtrace: String,
 }
 
@@ -60,6 +61,7 @@ impl ErrorInfoDesc {
     pub fn create(error: &ErrorCode) -> ErrorInfoDesc {
         ErrorInfoDesc {
             message: error.message(),
+            detail: error.detail(),
             backtrace: error.backtrace_str(),
         }
     }
