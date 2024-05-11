@@ -139,9 +139,7 @@ pub async fn do_vacuum_drop_tables(
             let mut ret_files = vec![];
             for file in result {
                 // return error if any errors happens during `do_vacuum_drop_table`
-                if let Err(e) = file {
-                    return Err(e);
-                } else if let Ok(Some(files)) = file {
+                if let Some(files) = file? {
                     ret_files.extend(files);
                 }
             }
