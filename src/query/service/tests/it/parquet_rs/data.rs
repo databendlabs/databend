@@ -79,6 +79,7 @@ fn make_timestamp_batch(offset: Duration) -> RecordBatch {
                 offset_nanos
                     + t.parse::<chrono::NaiveDateTime>()
                         .unwrap()
+                        .and_utc()
                         .timestamp_nanos_opt()
                         .unwrap()
             })
@@ -218,7 +219,7 @@ fn make_date_batch(offset: Duration) -> RecordBatch {
                     .unwrap()
                     .and_time(chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap());
                 let t = t + offset;
-                t.timestamp_millis()
+                t.and_utc().timestamp_millis()
             })
         })
         .collect::<Vec<_>>();

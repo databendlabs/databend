@@ -29,9 +29,9 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_storages_parquet::ParquetFileReader;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSFullReader;
-use opendal::Reader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
 use crate::partition::IcebergPartInfo;
@@ -48,7 +48,7 @@ pub struct IcebergTableSource {
     // Used to read parquet.
     output_schema: DataSchemaRef,
     parquet_reader: Arc<ParquetRSFullReader>,
-    stream: Option<ParquetRecordBatchStream<Reader>>,
+    stream: Option<ParquetRecordBatchStream<ParquetFileReader>>,
 }
 
 impl IcebergTableSource {
@@ -136,7 +136,7 @@ impl Processor for IcebergTableSource {
                     assert_eq!(files.files.len(), 1);
                     let stream = self
                         .parquet_reader
-                        .prepare_data_stream(&files.files[0].0, None)
+                        .prepare_data_stream(&files.files[0].0, files.files[0].1, None)
                         .await?;
                     self.stream = Some(stream);
                 }

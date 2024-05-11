@@ -14,13 +14,9 @@ databend-common-exception = { path = "../../../../common/exception" }
 databend-common-expression = { path = "../../../expression" }
 databend-common-io = { path = "../../../../common/io" }
 
-async-backtrace = { workspace = true }
-async-trait = { workspace = true }
 bincode = "1.3.3"
 chrono = { workspace = true }
 enum-as-inner = "0.5"
-futures = { workspace = true }
-futures-util = { workspace = true }
 parquet_rs = { workspace = true }
 rmp-serde = "1.1.1"
 serde = { workspace = true }

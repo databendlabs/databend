@@ -11,7 +11,6 @@ doctest = false
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 bytes = { workspace = true }
 databend-common-auth = { path = "../../common/auth" }
 databend-common-base = { path = "../../common/base" }
@@ -23,10 +22,9 @@ databend-common-storage = { path = "../../common/storage" }
 databend-common-users = { path = "../users" }
 
 async-backtrace = { workspace = true }
-http = "0.2"
+http = { workspace = true }
 log = { workspace = true }
 moka = "0.12"
 opendal = { workspace = true }
-reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

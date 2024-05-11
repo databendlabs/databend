@@ -29,9 +29,6 @@ use databend_common_storages_fuse::TableContext;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
-use http::header::AUTHORIZATION;
-use http::HeaderMap;
-use http::HeaderValue;
 use log::error;
 use log::warn;
 use minitrace::func_name;
@@ -41,6 +38,9 @@ use opentelemetry_http::HeaderExtractor;
 use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
+use poem::http::header::AUTHORIZATION;
+use poem::http::HeaderMap;
+use poem::http::HeaderValue;
 use poem::http::StatusCode;
 use poem::Addr;
 use poem::Body;
@@ -336,7 +336,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     }
 }
 
-pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
+pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<String, String> {
     let sensitive_headers = ["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()
