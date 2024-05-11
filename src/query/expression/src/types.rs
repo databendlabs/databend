@@ -220,7 +220,7 @@ impl DataType {
            }
            DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
               ordered_float::OrderedFloat(f64::NEG_INFINITY),
-           )),
+           ))),
            DataType::Number(NumberDataType::Int64) => {
               Ok(Scalar::Number(NumberScalar::Int64((-MAX).into())))
            }

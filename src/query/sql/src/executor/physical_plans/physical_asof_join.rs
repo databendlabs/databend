@@ -31,7 +31,6 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
-
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
@@ -83,13 +82,13 @@ impl PhysicalPlanBuilder {
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
 
         debug_assert!(!range_conditions.is_empty());
-        let (window_func, right_column) = 
+        let (window_func, right_column) =
             self.bind_window_func(join, s_expr, &range_conditions, &mut other_conditions)?;
         let window_plan = self.build_window_plan(&window_func)?;
         self.add_range_condition(
-            &window_func, 
-            &window_plan, 
-            &mut range_conditions, 
+            &window_func,
+            &window_plan,
+            &mut range_conditions,
             right_column,
         )?;
         let mut ss_expr = s_expr.clone();
@@ -99,7 +98,11 @@ impl PhysicalPlanBuilder {
         )
         .into();
         let left_required = required.0.union(&left_prop.used_columns).cloned().collect();
-        let right_required = required.1.union(&right_prop.used_columns).cloned().collect();
+        let right_required = required
+            .1
+            .union(&right_prop.used_columns)
+            .cloned()
+            .collect();
         self.build_range_join(
             &ss_expr,
             left_required,
@@ -118,7 +121,7 @@ impl PhysicalPlanBuilder {
         right_column: ScalarExpr,
     ) -> Result<bool> {
         let mut folded_args: Vec<ScalarExpr> = Vec::with_capacity(2);
-        let mut func_name = String::from("eq"); 
+        let mut func_name = String::from("eq");
         // Generate a ColumnBinding for each argument of aggregates
         let column = ColumnBindingBuilder::new(
             window_func.display_name.clone(),
@@ -130,8 +133,8 @@ impl PhysicalPlanBuilder {
         folded_args.push(right_column.clone());
         folded_args.push(
             BoundColumnRef {
-               span: right_column.span().clone(),
-               column,
+                span: right_column.span().clone(),
+                column,
             }
             .into(),
         );
@@ -139,18 +142,18 @@ impl PhysicalPlanBuilder {
             if let ScalarExpr::FunctionCall(func) = condition {
                 match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap() {
                     ComparisonOp::GTE => {
-                        func_name = String::from("lt");  
+                        func_name = String::from("lt");
                     }
                     ComparisonOp::GT => {
-                        func_name = String::from("lte");  
+                        func_name = String::from("lte");
                     }
                     ComparisonOp::LT =>{
-                        func_name = String::from("gte");  
+                        func_name = String::from("gte");
                     }
                     ComparisonOp::LTE => {
-                        func_name = String::from("gt");  
+                        func_name = String::from("gt");
                     }
-                    _ => unreachable!("must be range condition!")
+                    _ => unreachable!("must be range condition!"),
                 }
             }
         }
@@ -189,7 +192,7 @@ impl PhysicalPlanBuilder {
                     for arg in func.arguments.iter() {
                         if let ScalarExpr::BoundColumnRef(_) = arg {
                             let mut asc: Option<bool> = None;
-                            match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap() 
+                            match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap()
                             {
                                 ComparisonOp::GT | ComparisonOp::GTE => {
                                     asc = Some(true);
@@ -225,10 +228,10 @@ impl PhysicalPlanBuilder {
                             }
                         } else {
                             return Err(ErrorCode::Internal(
-                                  "Cannot downcast Scalar to BoundColumnRef",
-                              ));
+                                "Cannot downcast Scalar to BoundColumnRef",
+                            ));
                         }
-                    }   
+                    }
                 }
             }
         }
@@ -239,12 +242,12 @@ impl PhysicalPlanBuilder {
         for (right_exp, left_exp) in join
             .right_conditions
             .iter()
-            .zip(join.left_conditions.iter()) 
+            .zip(join.left_conditions.iter())
         {
-            if matches!(right_exp ,ScalarExpr::BoundColumnRef(_)) 
-            && matches!(left_exp ,ScalarExpr::BoundColumnRef(_)) 
-            {                   
-                partition_items.push(right_exp.clone()); 
+            if matches!(right_exp, ScalarExpr::BoundColumnRef(_)) 
+            && matches!(left_exp, ScalarExpr::BoundColumnRef(_)) 
+            {
+                partition_items.push(right_exp.clone());
                 other_args.clear();
                 other_args.push(left_exp.clone());
                 other_args.push(right_exp.clone());

@@ -204,8 +204,7 @@ impl Binder {
                 "Join conditions should be empty in cross join",
             ));
         }
-        if join_type == JoinType::AsOf && non_equi_conditions.is_empty()
-        {
+        if join_type == JoinType::AsOf && non_equi_conditions.is_empty() {
             return Err(ErrorCode::SemanticError(
                 "unequal conditions should not be empty in asof join",
             ));
