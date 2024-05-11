@@ -250,13 +250,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
 
             let mut detect_valid_key_list = Vec::new();
-            let input_keys: Vec<_> = input_keys.iter().map(|key| key).collect();
+            let mut input_key_list = Vec::new();
+            for key in input_keys.iter() {
+                input_key_list.push(key);
+            }
 
             input_map
                 .iter()
                 .enumerate()
                 .for_each(|(index, (map_key, _map_value))| {
-                    if !input_keys.contains(&map_key) {
+                    if !input_key_list.contains(&map_key) {
                         detect_valid_key_list.push((map_key.clone(), index));
                     }
                 });
