@@ -55,7 +55,6 @@ futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = { workspace = true }
 log = { workspace = true }
-metrics = "0.20.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet_rs = { workspace = true }

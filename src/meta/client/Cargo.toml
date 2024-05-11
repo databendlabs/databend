@@ -13,9 +13,6 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[features]
-enable-histogram = ["databend-common-metrics/enable-histogram"]
-
 [dependencies]
 databend-common-arrow = { path = "../../common/arrow" }
 databend-common-base = { path = "../../common/base" }
