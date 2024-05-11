@@ -1,7 +1,7 @@
 {
   "name": "@databend-driver/lib-darwin-x64",
   "repository": "https://github.com/datafuselabs/bendsql.git",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "os": [
     "darwin"
   ],
