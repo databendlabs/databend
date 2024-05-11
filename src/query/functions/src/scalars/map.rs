@@ -227,4 +227,48 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |map, _| map.len() as u64,
     );
+
+    registry.register_2_arg::<EmptyMapType, EmptyArrayType, EmptyMapType, _, _>(
+        "map_delete",
+        |_, _, _| FunctionDomain::Full,
+        |_, _, _| (),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "map_delete",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<
+            MapType<GenericType<0>, GenericType<1>>,
+            ArrayType<GenericType<0>>,
+            MapType<GenericType<0>, GenericType<1>>,
+        >(|input_map, input_keys, output_map, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output_map.len()) {
+                    output_map.commit_row();
+                    return;
+                }
+            }
+
+            let mut detect_valid_key_list = Vec::new();
+            let input_keys: Vec<_> = input_keys.iter().map(|key| key).collect();
+
+            input_map
+                .iter()
+                .enumerate()
+                .for_each(|(index, (map_key, _map_value))| {
+                    if !input_keys.contains(&map_key) {
+                        detect_valid_key_list.push((map_key.clone(), index));
+                    }
+                });
+
+            if !detect_valid_key_list.is_empty() {
+                detect_valid_key_list.iter().for_each(|(key, index)| {
+                    let (_, map_value) = input_map.index(*index).unwrap();
+                    output_map.put_item((key.clone(), map_value.clone()));
+                });
+            }
+
+            output_map.commit_row();
+        }),
+    );
 }

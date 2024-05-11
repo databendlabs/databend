@@ -135,5 +135,62 @@ SELECT MAP_CAT(
 ----
 {'k1':{'nk1':'nv1'},'k2':{'nk2':'nv2'},'k3':{'nk1':'new_nv1'},'k4':{'nk3':'nv3'}}
 
+# Deleting keys from a map literal
+query
+SELECT MAP_DELETE(
+  {'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, 
+  ['k3', 'k2']
+)
+----
+{'k1':'v1','k4':'v4'}
+
+# Deleting keys from a nested map
+statement ok
+drop table if exists map_delete_test all
+
+statement ok
+CREATE TABLE map_delete_test(src_map Map(String, String) Not Null);
+
+statement ok
+INSERT INTO map_delete_test VALUES ({'a_k1': 'aaa1', 'b_k1': 'bbb1'}),
+({'a_k2': 'aaa2', 'b_k2': 'bbb2'}),
+({'a_k3': 'aaa3', 'b_k3': 'bbb3'});
+
+query
+SELECT * FROM map_delete_test LIMIT 3;
+----
+{'a_k1':'aaa1','b_k1':'bbb1'}
+{'a_k2':'aaa2','b_k2':'bbb2'}
+{'a_k3':'aaa3','b_k3':'bbb3'}
+
+query
+SELECT 
+  MAP_DELETE(src_map, ['a_k2', 'b_k3'])
+FROM
+  map_delete_test;
+----
+{'a_k1':'aaa1','b_k1':'bbb1'}
+{'b_k2':'bbb2'}
+{'a_k3':'aaa3'}
+
+# Deleting all keys from a map
+query
+SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k2', 'k3'] )
+----
+{}
+
+# Deleting keys from a map with duplicate keys
+query
+SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k1'] )
+----
+{'k2':'v2','k3':'v3'}
+
+
+# Deleting non-existent keys
+query
+SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2'}, ['k3', 'k4'] )
+----
+{'k1':'v1','k2':'v2'}
+
 statement ok
 DROP DATABASE map_func_test

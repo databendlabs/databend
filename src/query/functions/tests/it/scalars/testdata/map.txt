@@ -527,3 +527,64 @@ output domain  : {[{"k1"..="k2"}], [{[{"nk1"..="nk3"}], [{"new_nv1"..="nv3"}]}]}
 output         : {'k1':{'nk1':'new_nv1'}, 'k2':{'nk3':'nv3'}}
 
 
+ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, ['k3', 'k2'])
+raw expr       : map_delete(map(array('k1', 'k2', 'k3', 'k4'), array('v1', 'v2', 'v3', 'v4')), array('k3', 'k2'))
+checked expr   : map_delete<T0=String, T1=String><Map(T0, T1), Array(T0)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0, T0>("k1", "k2", "k3", "k4"), array<T0=String><T0, T0, T0, T0>("v1", "v2", "v3", "v4")), array<T0=String><T0, T0>("k3", "k2"))
+optimized expr : {"k1":"v1", "k4":"v4"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k4"}], [{"v1"..="v4"}]}
+output         : {'k1':'v1', 'k4':'v4'}
+
+
+ast            : map_delete(map([a_col, b_col], [d_col, e_col]), ['a_k2', 'b_k3'])
+raw expr       : map_delete(map(array(a_col::String, b_col::String), array(d_col::String, e_col::String)), array('a_k2', 'b_k3'))
+checked expr   : map_delete<T0=String, T1=String><Map(T0, T1), Array(T0)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>(a_col, b_col), array<T0=String><T0, T0>(d_col, e_col)), array<T0=String><T0, T0>("a_k2", "b_k3"))
+optimized expr : map_delete<T0=String, T1=String><Map(T0, T1), Array(T0)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>(a_col, b_col), array<T0=String><T0, T0>(d_col, e_col)), ['a_k2', 'b_k3'])
+evaluation:
++--------+-------------------+-------------------+-------------------+-------------------+--------------------------------+
+|        | a_col             | b_col             | d_col             | e_col             | Output                         |
++--------+-------------------+-------------------+-------------------+-------------------+--------------------------------+
+| Type   | String            | String            | String            | String            | Map(String, String)            |
+| Domain | {"a_k1"..="a_k3"} | {"b_k1"..="b_k3"} | {"aaa1"..="aaa3"} | {"bbb1"..="bbb3"} | Unknown                        |
+| Row 0  | 'a_k1'            | 'b_k1'            | 'aaa1'            | 'bbb1'            | {'a_k1':'aaa1', 'b_k1':'bbb1'} |
+| Row 1  | 'a_k2'            | 'b_k2'            | 'aaa2'            | 'bbb2'            | {'b_k2':'bbb2'}                |
+| Row 2  | 'a_k3'            | 'b_k3'            | 'aaa3'            | 'bbb3'            | {'a_k3':'aaa3'}                |
++--------+-------------------+-------------------+-------------------+-------------------+--------------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x615f6b31615f6b32615f6b33, offsets: [0, 4, 8, 12] }                                                                                                                                                            |
+| b_col  | StringColumn { data: 0x625f6b31625f6b32625f6b33, offsets: [0, 4, 8, 12] }                                                                                                                                                            |
+| d_col  | StringColumn { data: 0x616161316161613261616133, offsets: [0, 4, 8, 12] }                                                                                                                                                            |
+| e_col  | StringColumn { data: 0x626262316262623262626233, offsets: [0, 4, 8, 12] }                                                                                                                                                            |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x615f6b31625f6b31625f6b32615f6b33, offsets: [0, 4, 8, 12, 16] }, StringColumn { data: 0x61616131626262316262623261616133, offsets: [0, 4, 8, 12, 16] }]), offsets: [0, 2, 3, 4] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k2', 'k3'])
+raw expr       : map_delete(map(array('k1', 'k2', 'k3'), array('v1', 'v2', 'v3')), array('k1', 'k2', 'k3'))
+checked expr   : map_delete<T0=String, T1=String><Map(T0, T1), Array(T0)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("k1", "k2", "k3"), array<T0=String><T0, T0, T0>("v1", "v2", "v3")), array<T0=String><T0, T0, T0>("k1", "k2", "k3"))
+optimized expr : {}
+output type    : Map(String, String)
+output domain  : {}
+output         : {}
+
+
+ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k1'])
+raw expr       : map_delete(map(array('k1', 'k2', 'k3'), array('v1', 'v2', 'v3')), array('k1', 'k1'))
+checked expr   : map_delete<T0=String, T1=String><Map(T0, T1), Array(T0)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("k1", "k2", "k3"), array<T0=String><T0, T0, T0>("v1", "v2", "v3")), array<T0=String><T0, T0>("k1", "k1"))
+optimized expr : {"k2":"v2", "k3":"v3"}
+output type    : Map(String, String)
+output domain  : {[{"k2"..="k3"}], [{"v2"..="v3"}]}
+output         : {'k2':'v2', 'k3':'v3'}
+
+
+ast            : map_delete({'k1': 'v1', 'k2': 'v2'}, ['k3', 'k4'])
+raw expr       : map_delete(map(array('k1', 'k2'), array('v1', 'v2')), array('k3', 'k4'))
+checked expr   : map_delete<T0=String, T1=String><Map(T0, T1), Array(T0)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), array<T0=String><T0, T0>("k3", "k4"))
+optimized expr : {"k1":"v1", "k2":"v2"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
+output         : {'k1':'v1', 'k2':'v2'}
+
