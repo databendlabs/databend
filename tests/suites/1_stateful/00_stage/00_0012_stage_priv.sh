@@ -9,8 +9,6 @@ export TEST_USER_CONNECT="bendsql --user=u1 --password=password --host=${QUERY_M
 export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export RM_UUID="sed -E ""s/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/UUID/g"""
 
-echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
-
 echo "drop table if exists test_table;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists u1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop STAGE if exists s2;" | $BENDSQL_CLIENT_CONNECT
@@ -144,5 +142,3 @@ echo "insert into t select \$1 from 'fs:///tmp/00_0020/' (FILE_FORMAT => 'CSV');
 echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists b" | $BENDSQL_CLIENT_CONNECT
 rm -rf /tmp/00_0012
-
-echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT

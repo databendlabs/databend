@@ -32,6 +32,7 @@ use databend_common_sql::Planner;
 use log::error;
 use log::info;
 
+use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -63,14 +64,19 @@ pub trait Interpreter: Sync + Send {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-        ctx.set_status_info("building pipeline");
-        InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);
-
-        if let Err(err) = ctx.check_aborting() {
-            log_query_finished(&ctx, Some(err.clone()), false);
-            return Err(err);
+        match self.execute_inner(ctx.clone()).await {
+            Ok(stream) => Ok(stream),
+            Err(err) => {
+                log_query_finished(&ctx, Some(err.clone()), false);
+                Err(err)
+            }
         }
+    }
+
+    async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        ctx.set_status_info("building pipeline");
+        ctx.check_aborting()?;
         if self.is_ddl() {
             CommitInterpreter::try_create(ctx.clone())?
                 .execute2()
@@ -78,70 +84,68 @@ pub trait Interpreter: Sync + Send {
             ctx.clear_tables_cache();
         }
         if !self.is_txn_command() && ctx.txn_mgr().lock().is_fail() {
-            let error = ErrorCode::CurrentTransactionIsAborted(
+            let err = ErrorCode::CurrentTransactionIsAborted(
                 "current transaction is aborted, commands ignored until end of transaction block",
             );
-            log_query_finished(&ctx, Some(error.clone()), false);
-            return Err(error);
+            return Err(err);
         }
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
-            Err(build_error) => {
-                InterpreterMetrics::record_query_error(&ctx);
-                log_query_finished(&ctx, Some(build_error.clone()), false);
-                return Err(build_error);
+            Err(err) => {
+                return Err(err);
             }
         };
 
         if build_res.main_pipeline.is_empty() {
-            InterpreterMetrics::record_query_finished(&ctx, None);
             log_query_finished(&ctx, None, false);
-
             return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
         let query_ctx = ctx.clone();
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            let mut has_profiles = false;
-            if let Ok(plans_profile) = may_error {
-                query_ctx.add_query_profiles(plans_profile);
+        build_res
+            .main_pipeline
+            .set_on_finished(move |(plans_profile, may_error)| {
+                let mut has_profiles = false;
+                // Standalone mode or query executed is successfully
+                if query_ctx.get_cluster().is_empty() || may_error.is_ok() {
+                    query_ctx.add_query_profiles(plans_profile);
 
-                let query_profiles = query_ctx.get_query_profiles();
+                    let query_profiles = query_ctx.get_query_profiles();
 
-                if !query_profiles.is_empty() {
-                    has_profiles = true;
-                    #[derive(serde::Serialize)]
-                    struct QueryProfiles {
-                        query_id: String,
-                        profiles: Vec<PlanProfile>,
-                        statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+                    if !query_profiles.is_empty() {
+                        has_profiles = true;
+                        #[derive(serde::Serialize)]
+                        struct QueryProfiles {
+                            query_id: String,
+                            profiles: Vec<PlanProfile>,
+                            statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+                        }
+
+                        info!(
+                            target: "databend::log::profile",
+                            "{}",
+                            serde_json::to_string(&QueryProfiles {
+                                query_id: query_ctx.get_id(),
+                                profiles: query_profiles,
+                                statistics_desc: get_statistics_desc(),
+                            })?
+                        );
                     }
-
-                    info!(
-                        target: "databend::log::profile",
-                        "{}",
-                        serde_json::to_string(&QueryProfiles {
-                            query_id: query_ctx.get_id(),
-                            profiles: query_profiles,
-                            statistics_desc: get_statistics_desc(),
-                        })?
-                    );
                 }
-            }
 
-            let err_opt = match may_error {
-                Ok(_) => None,
-                Err(e) => Some(e.clone()),
-            };
+                hook_vacuum_temp_files(&query_ctx)?;
 
-            InterpreterMetrics::record_query_finished(&query_ctx, err_opt.clone());
-            log_query_finished(&query_ctx, err_opt, has_profiles);
+                let err_opt = match may_error {
+                    Ok(_) => None,
+                    Err(e) => Some(e.clone()),
+                };
 
-            match may_error {
-                Ok(_) => Ok(()),
-                Err(error) => Err(error.clone()),
-            }
-        });
+                log_query_finished(&query_ctx, err_opt, has_profiles);
+                match may_error {
+                    Ok(_) => Ok(()),
+                    Err(error) => Err(error.clone()),
+                }
+            });
 
         ctx.set_status_info("executing pipeline");
 
@@ -187,6 +191,7 @@ pub trait Interpreter: Sync + Send {
 pub type InterpreterPtr = Arc<dyn Interpreter>;
 
 fn log_query_start(ctx: &QueryContext) {
+    InterpreterMetrics::record_query_start(ctx);
     let now = SystemTime::now();
     let session = ctx.get_current_session();
 
@@ -200,6 +205,8 @@ fn log_query_start(ctx: &QueryContext) {
 }
 
 fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
+    InterpreterMetrics::record_query_finished(ctx, error.clone());
+
     let now = SystemTime::now();
     let session = ctx.get_current_session();
 
