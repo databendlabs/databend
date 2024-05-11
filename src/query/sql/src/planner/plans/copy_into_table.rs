@@ -228,15 +228,15 @@ impl CopyIntoTablePlan {
             (files_to_copy, duplicated_files)
         };
 
-        let len = need_copy_file_infos.len();
-        let sum: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
+        let num_copied_files = need_copy_file_infos.len();
+        let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
 
         info!(
             "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
             max_files,
             need_copy_file_infos.len(),
-            num_all_files - len,
-            sum,
+            copied_bytes,
+            num_all_files - num_copied_files,
             start.elapsed()
         );
 
