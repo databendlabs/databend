@@ -42,6 +42,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
   musl:
+    needs: debian
     runs-on: ubuntu-latest
     strategy:
       matrix:

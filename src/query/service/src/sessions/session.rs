@@ -326,6 +326,14 @@ impl Session {
     pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
         self.session_ctx.set_txn_mgr(txn_mgr)
     }
+
+    pub fn set_query_priority(&self, priority: u8) {
+        let session_ctx = self.session_ctx.clone();
+
+        if let Some(context_shared) = session_ctx.get_query_context_shared() {
+            context_shared.set_priority(priority);
+        }
+    }
 }
 
 impl Drop for Session {

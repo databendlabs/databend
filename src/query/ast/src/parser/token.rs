@@ -639,6 +639,8 @@ pub enum TokenKind {
     GZIP,
     #[token("HAVING", ignore(ascii_case))]
     HAVING,
+    #[token("HIGH", ignore(ascii_case))]
+    HIGH,
     #[token("HISTORY", ignore(ascii_case))]
     HISTORY,
     #[token("HIVE", ignore(ascii_case))]
@@ -738,6 +740,8 @@ pub enum TokenKind {
     LIMIT,
     #[token("LIST", ignore(ascii_case))]
     LIST,
+    #[token("LOW", ignore(ascii_case))]
+    LOW,
     #[token("LZO", ignore(ascii_case))]
     LZO,
     #[token("MASKING", ignore(ascii_case))]
@@ -748,6 +752,8 @@ pub enum TokenKind {
     MAX_FILE_SIZE,
     #[token("MASTER_KEY", ignore(ascii_case))]
     MASTER_KEY,
+    #[token("MEDIUM", ignore(ascii_case))]
+    MEDIUM,
     #[token("MEMO", ignore(ascii_case))]
     MEMO,
     #[token("MEMORY", ignore(ascii_case))]
@@ -864,6 +870,8 @@ pub enum TokenKind {
     POSITION,
     #[token("PROCESSLIST", ignore(ascii_case))]
     PROCESSLIST,
+    #[token("PRIORITY", ignore(ascii_case))]
+    PRIORITY,
     #[token("PURGE", ignore(ascii_case))]
     PURGE,
     #[token("QUARTER", ignore(ascii_case))]

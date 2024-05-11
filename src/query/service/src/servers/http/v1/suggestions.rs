@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_enterprise_background_service::Suggestion;
-use http::StatusCode;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
+use poem::http::StatusCode;
 use poem::web::Json;
 use poem::Request;
 use serde::Deserialize;

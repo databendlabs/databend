@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use http::StatusCode;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
@@ -69,7 +68,7 @@ impl HttpQueryContext {
         SessionManager::instance()
             .try_upgrade_session(self.session.clone(), session_type.clone())
             .map_err(|err| {
-                poem::Error::from_string(err.message(), StatusCode::TOO_MANY_REQUESTS)
+                poem::Error::from_string(err.message(), poem::http::StatusCode::TOO_MANY_REQUESTS)
             })?;
         Ok(self.session.clone())
     }

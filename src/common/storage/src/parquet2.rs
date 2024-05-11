@@ -25,10 +25,13 @@ use opendal::Operator;
 
 #[async_backtrace::framed]
 pub async fn read_parquet_schema_async(operator: &Operator, path: &str) -> Result<ArrowSchema> {
-    let mut reader = operator.reader(path).await?;
-    let meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
-        ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
-    })?;
+    let meta = operator.stat(path).await?;
+    let reader = operator.reader(path).await?;
+    let meta = pread::read_metadata_async(reader, meta.content_length())
+        .await
+        .map_err(|e| {
+            ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
+        })?;
 
     infer_schema_with_extension(&meta)
 }
@@ -68,9 +71,9 @@ async fn read_parquet_metas_batch(
 ) -> Result<Vec<FileMetaData>> {
     // todo(youngsofun): we should use size in StageFileInfo, but parquet2 do not have the interface for now
     let mut metas = vec![];
-    for (path, _size) in file_infos {
-        let mut reader = op.reader(&path).await?;
-        metas.push(pread::read_metadata_async(&mut reader).await?)
+    for (path, size) in file_infos {
+        let reader = op.reader(&path).await?;
+        metas.push(pread::read_metadata_async(reader, size).await?)
     }
     let used = GLOBAL_MEM_STAT.get_memory_usage();
     if max_memory_usage as i64 - used < 100 * 1024 * 1024 {
