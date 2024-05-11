@@ -113,15 +113,12 @@ pub async fn do_vacuum_drop_tables(
         do_vacuum_drop_table(tables, dry_run_limit).await?
     } else {
         let mut chunks = tables.chunks(batch_size);
-        let thread_limit = if let Some(dry_run_limit) = dry_run_limit {
-            Some((dry_run_limit / threads_nums).min(dry_run_limit).max(1))
-        } else {
-            None
-        };
+        let dry_run_limit = dry_run_limit
+            .map(|dry_run_limit| (dry_run_limit / threads_nums).min(dry_run_limit).max(1));
         let tasks = std::iter::from_fn(move || {
             chunks
                 .next()
-                .map(|tables| do_vacuum_drop_table(tables.to_vec(), thread_limit))
+                .map(|tables| do_vacuum_drop_table(tables.to_vec(), dry_run_limit))
         });
 
         let result = execute_futures_in_parallel(
@@ -134,7 +131,10 @@ pub async fn do_vacuum_drop_tables(
         if dry_run_limit.is_some() {
             let mut ret_files = vec![];
             for file in result {
-                if let Ok(Some(files)) = file {
+                // return error if any errors happens during `do_vacuum_drop_table`
+                if let Err(e) = file {
+                    return Err(e);
+                } else if let Ok(Some(files)) = file {
                     ret_files.extend(files);
                 }
             }
@@ -150,9 +150,5 @@ pub async fn do_vacuum_drop_tables(
         start.elapsed().as_secs()
     );
 
-    Ok(if let Some(result) = result {
-        Some(result)
-    } else {
-        None
-    })
+    Ok(result.map(|result| result))
 }
