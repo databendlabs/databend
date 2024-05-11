@@ -18,6 +18,7 @@
 use chrono::format::parse;
 use chrono::format::Parsed;
 use chrono::format::StrftimeItems;
+use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Duration;
 use chrono::FixedOffset;
@@ -56,7 +57,7 @@ pub fn date32_to_datetime(v: i32) -> NaiveDateTime {
 /// converts a `i32` representing a `date32` to [`NaiveDateTime`]
 #[inline]
 pub fn date32_to_datetime_opt(v: i32) -> Option<NaiveDateTime> {
-    NaiveDateTime::from_timestamp_opt(v as i64 * SECONDS_IN_DAY, 0)
+    DateTime::from_timestamp(v as i64 * SECONDS_IN_DAY, 0).map(|v| v.naive_utc())
 }
 
 /// converts a `i32` representing a `date32` to [`NaiveDate`]
@@ -74,13 +75,14 @@ pub fn date32_to_date_opt(days: i32) -> Option<NaiveDate> {
 /// converts a `i64` representing a `date64` to [`NaiveDateTime`]
 #[inline]
 pub fn date64_to_datetime(v: i64) -> NaiveDateTime {
-    NaiveDateTime::from_timestamp_opt(
+    DateTime::from_timestamp(
         // extract seconds from milliseconds
         v / MILLISECONDS,
         // discard extracted seconds and convert milliseconds to nanoseconds
         (v % MILLISECONDS * MICROSECONDS) as u32,
     )
     .expect("invalid or out-of-range datetime")
+    .naive_utc()
 }
 
 /// converts a `i64` representing a `date64` to [`NaiveDate`]
@@ -175,7 +177,7 @@ pub fn timestamp_s_to_datetime(seconds: i64) -> NaiveDateTime {
 /// converts a `i64` representing a `timestamp(s)` to [`NaiveDateTime`]
 #[inline]
 pub fn timestamp_s_to_datetime_opt(seconds: i64) -> Option<NaiveDateTime> {
-    NaiveDateTime::from_timestamp_opt(seconds, 0)
+    DateTime::from_timestamp(seconds, 0).map(|v| v.naive_utc())
 }
 
 /// converts a `i64` representing a `timestamp(ms)` to [`NaiveDateTime`]
@@ -187,8 +189,8 @@ pub fn timestamp_ms_to_datetime(v: i64) -> NaiveDateTime {
 /// converts a `i64` representing a `timestamp(ms)` to [`NaiveDateTime`]
 #[inline]
 pub fn timestamp_ms_to_datetime_opt(v: i64) -> Option<NaiveDateTime> {
-    if v >= 0 {
-        NaiveDateTime::from_timestamp_opt(
+    let t = if v >= 0 {
+        DateTime::from_timestamp(
             // extract seconds from milliseconds
             v / MILLISECONDS,
             // discard extracted seconds and convert milliseconds to nanoseconds
@@ -198,16 +200,18 @@ pub fn timestamp_ms_to_datetime_opt(v: i64) -> Option<NaiveDateTime> {
         let secs_rem = (v / MILLISECONDS, v % MILLISECONDS);
         if secs_rem.1 == 0 {
             // whole/integer seconds; no adjustment required
-            NaiveDateTime::from_timestamp_opt(secs_rem.0, 0)
+            DateTime::from_timestamp(secs_rem.0, 0)
         } else {
             // negative values with fractional seconds require 'div_floor' rounding behaviour.
             // (which isn't yet stabilised: https://github.com/rust-lang/rust/issues/88581)
-            NaiveDateTime::from_timestamp_opt(
+            DateTime::from_timestamp(
                 secs_rem.0 - 1,
                 (NANOSECONDS + (v % MILLISECONDS * MICROSECONDS)) as u32,
             )
         }
-    }
+    };
+
+    t.map(|v| v.naive_utc())
 }
 
 /// converts a `i64` representing a `timestamp(us)` to [`NaiveDateTime`]
@@ -219,8 +223,8 @@ pub fn timestamp_us_to_datetime(v: i64) -> NaiveDateTime {
 /// converts a `i64` representing a `timestamp(us)` to [`NaiveDateTime`]
 #[inline]
 pub fn timestamp_us_to_datetime_opt(v: i64) -> Option<NaiveDateTime> {
-    if v >= 0 {
-        NaiveDateTime::from_timestamp_opt(
+    let t = if v >= 0 {
+        DateTime::from_timestamp(
             // extract seconds from microseconds
             v / MICROSECONDS,
             // discard extracted seconds and convert microseconds to nanoseconds
@@ -230,16 +234,18 @@ pub fn timestamp_us_to_datetime_opt(v: i64) -> Option<NaiveDateTime> {
         let secs_rem = (v / MICROSECONDS, v % MICROSECONDS);
         if secs_rem.1 == 0 {
             // whole/integer seconds; no adjustment required
-            NaiveDateTime::from_timestamp_opt(secs_rem.0, 0)
+            DateTime::from_timestamp(secs_rem.0, 0)
         } else {
             // negative values with fractional seconds require 'div_floor' rounding behaviour.
             // (which isn't yet stabilised: https://github.com/rust-lang/rust/issues/88581)
-            NaiveDateTime::from_timestamp_opt(
+            DateTime::from_timestamp(
                 secs_rem.0 - 1,
                 (NANOSECONDS + (v % MICROSECONDS * MILLISECONDS)) as u32,
             )
         }
-    }
+    };
+
+    t.map(|v| v.naive_utc())
 }
 
 /// converts a `i64` representing a `timestamp(ns)` to [`NaiveDateTime`]
@@ -251,8 +257,8 @@ pub fn timestamp_ns_to_datetime(v: i64) -> NaiveDateTime {
 /// converts a `i64` representing a `timestamp(ns)` to [`NaiveDateTime`]
 #[inline]
 pub fn timestamp_ns_to_datetime_opt(v: i64) -> Option<NaiveDateTime> {
-    if v >= 0 {
-        NaiveDateTime::from_timestamp_opt(
+    let t = if v >= 0 {
+        DateTime::from_timestamp(
             // extract seconds from nanoseconds
             v / NANOSECONDS,
             // discard extracted seconds
@@ -262,16 +268,15 @@ pub fn timestamp_ns_to_datetime_opt(v: i64) -> Option<NaiveDateTime> {
         let secs_rem = (v / NANOSECONDS, v % NANOSECONDS);
         if secs_rem.1 == 0 {
             // whole/integer seconds; no adjustment required
-            NaiveDateTime::from_timestamp_opt(secs_rem.0, 0)
+            DateTime::from_timestamp(secs_rem.0, 0)
         } else {
             // negative values with fractional seconds require 'div_floor' rounding behaviour.
             // (which isn't yet stabilised: https://github.com/rust-lang/rust/issues/88581)
-            NaiveDateTime::from_timestamp_opt(
-                secs_rem.0 - 1,
-                (NANOSECONDS + (v % NANOSECONDS)) as u32,
-            )
+            DateTime::from_timestamp(secs_rem.0 - 1, (NANOSECONDS + (v % NANOSECONDS)) as u32)
         }
-    }
+    };
+
+    t.map(|v| v.naive_utc())
 }
 
 /// Converts a timestamp in `time_unit` and `timezone` into [`chrono::DateTime`].
@@ -405,10 +410,10 @@ pub fn utf8_to_naive_timestamp_scalar(value: &str, fmt: &str, tu: &TimeUnit) -> 
     parsed
         .to_naive_datetime_with_offset(0)
         .map(|x| match tu {
-            TimeUnit::Second => x.timestamp(),
-            TimeUnit::Millisecond => x.timestamp_millis(),
-            TimeUnit::Microsecond => x.timestamp_micros(),
-            TimeUnit::Nanosecond => x.timestamp_nanos_opt().unwrap(),
+            TimeUnit::Second => x.and_utc().timestamp(),
+            TimeUnit::Millisecond => x.and_utc().timestamp_millis(),
+            TimeUnit::Microsecond => x.and_utc().timestamp_micros(),
+            TimeUnit::Nanosecond => x.and_utc().timestamp_nanos_opt().unwrap(),
         })
         .ok()
 }
@@ -531,10 +536,10 @@ pub fn add_naive_interval(timestamp: i64, time_unit: TimeUnit, interval: months_
 
     // convert back to the target unit
     match time_unit {
-        TimeUnit::Second => new_datetime_tz.timestamp_millis() / 1000,
-        TimeUnit::Millisecond => new_datetime_tz.timestamp_millis(),
-        TimeUnit::Microsecond => new_datetime_tz.timestamp_nanos_opt().unwrap() / 1000,
-        TimeUnit::Nanosecond => new_datetime_tz.timestamp_nanos_opt().unwrap(),
+        TimeUnit::Second => new_datetime_tz.and_utc().timestamp_millis() / 1000,
+        TimeUnit::Millisecond => new_datetime_tz.and_utc().timestamp_millis(),
+        TimeUnit::Microsecond => new_datetime_tz.and_utc().timestamp_nanos_opt().unwrap() / 1000,
+        TimeUnit::Nanosecond => new_datetime_tz.and_utc().timestamp_nanos_opt().unwrap(),
     }
 }
 

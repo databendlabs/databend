@@ -368,7 +368,8 @@ impl FuseTable {
                 let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
                 match self.operator.read(url).await {
                     Ok(data) => {
-                        let s = str::from_utf8(&data)?;
+                        let bs = data.to_vec();
+                        let s = str::from_utf8(&bs)?;
                         Ok(Some(s.to_string()))
                     }
                     Err(e) => {
@@ -385,7 +386,7 @@ impl FuseTable {
                     let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
                     let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
                     let snapshot_loc = {
-                        let hint_content = self.operator.read(&hint).await?;
+                        let hint_content = self.operator.read(&hint).await?.to_vec();
                         let snapshot_full_path = String::from_utf8(hint_content)?;
                         let operator_info = self.operator.info();
                         snapshot_full_path[operator_info.root().len()..].to_string()

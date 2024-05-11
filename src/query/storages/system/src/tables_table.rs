@@ -232,7 +232,7 @@ where TablesTable<T, U>: HistoryAware
         let mut owner: Vec<Option<String>> = Vec::new();
         let user_api = UserApiProvider::instance();
 
-        for (ctl_name, ctl) in ctls.into_iter() {
+        for (ctl_name, ctl) in ctls.iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
                 let mut db_name: Vec<String> = Vec::new();
@@ -273,7 +273,6 @@ where TablesTable<T, U>: HistoryAware
                     }
                 }
             }
-            let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
             let final_dbs = dbs
                 .into_iter()
@@ -288,10 +287,9 @@ where TablesTable<T, U>: HistoryAware
 
             let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
             for db in final_dbs {
-                let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
-                let name: &str = Box::leak(name);
-                let tables = match Self::list_tables(&ctl, &tenant, name, T, U).await {
+                let db_name = db.name();
+                let tables = match Self::list_tables(ctl, &tenant, db_name, T, U).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
@@ -302,7 +300,7 @@ where TablesTable<T, U>: HistoryAware
                         // - others
                         // TODO(liyz): return the warnings in the HTTP query protocol.
                         let msg =
-                            format!("Failed to list tables in database: {}, {}", db.name(), err);
+                            format!("Failed to list tables in database: {}, {}", db_name, err);
                         warn!("{}", msg);
                         ctx.push_warning(msg);
 
@@ -312,19 +310,19 @@ where TablesTable<T, U>: HistoryAware
 
                 for table in tables {
                     let table_id = table.get_id();
-                    // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
+                    // If db1 is visible, do not mean db1.table1 is visible. A user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
                     if visibility_checker.check_table_visibility(
                         ctl_name,
-                        db.name(),
+                        db_name,
                         table.name(),
                         db_id,
                         table_id,
                     ) && table.engine() != "STREAM"
                     {
                         if !U && table.get_table_info().engine() == "VIEW" {
-                            catalogs.push(ctl_name);
-                            databases.push(name);
+                            catalogs.push(ctl_name.as_str());
+                            databases.push(db_name.to_owned());
                             database_tables.push(table);
                             if ownership.is_empty() {
                                 owner.push(None);
@@ -340,8 +338,8 @@ where TablesTable<T, U>: HistoryAware
                                 );
                             }
                         } else if U && table.get_table_info().engine() != "VIEW" {
-                            catalogs.push(ctl_name);
-                            databases.push(name);
+                            catalogs.push(ctl_name.as_str());
+                            databases.push(db_name.to_owned());
                             database_tables.push(table);
                             if ownership.is_empty() {
                                 owner.push(None);

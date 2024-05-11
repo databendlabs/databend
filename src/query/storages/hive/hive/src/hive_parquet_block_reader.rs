@@ -209,7 +209,11 @@ impl HiveBlockReader {
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<u8>> {
         let handler = databend_common_base::runtime::spawn(async move {
-            let chunk = op.read_with(&path).range(offset..offset + length).await?;
+            let chunk = op
+                .read_with(&path)
+                .range(offset..offset + length)
+                .await?
+                .to_vec();
 
             let _semaphore_permit = semaphore.acquire().await.unwrap();
             Ok(chunk)

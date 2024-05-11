@@ -18,4 +18,5 @@ pub use flight_actions::FlightAction;
 pub use flight_actions::InitNodesChannel;
 pub use flight_actions::InitQueryFragmentsPlan;
 pub use flight_actions::KillQuery;
+pub use flight_actions::SetPriority;
 pub use flight_actions::TruncateTable;

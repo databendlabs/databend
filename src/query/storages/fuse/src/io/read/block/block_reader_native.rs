@@ -127,7 +127,7 @@ impl BlockReader {
             );
 
             let reader = op.read_with(path).range(offset..offset + length).await?;
-            let reader: Reader = Box::new(std::io::Cursor::new(reader));
+            let reader: Reader = Box::new(std::io::Cursor::new(reader.to_bytes()));
 
             let native_reader = NativeReader::new(reader, native_meta.pages.clone(), vec![]);
             native_readers.push(native_reader);
@@ -188,8 +188,9 @@ impl BlockReader {
             let reader = op
                 .blocking()
                 .reader_with(path)
-                .range(offset..offset + length)
-                .call()?;
+                .call()?
+                .into_std_read(offset..offset + length);
+
             let reader: Reader = Box::new(BufReader::new(reader));
 
             let native_reader = NativeReader::new(reader, native_meta.pages.clone(), vec![]);
@@ -248,7 +249,13 @@ impl BlockReader {
     }
 
     pub fn sync_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
-        let mut reader = self.operator.blocking().reader(loc).ok()?;
+        let meta = self.operator.blocking().stat(loc).ok()?;
+        let mut reader = self
+            .operator
+            .blocking()
+            .reader(loc)
+            .ok()?
+            .into_std_read(0..meta.content_length());
         let schema = infer_schema(&mut reader).ok()?;
         Some(schema)
     }

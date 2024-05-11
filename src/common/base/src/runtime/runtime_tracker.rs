@@ -52,7 +52,6 @@ use std::task::Poll;
 
 use pin_project_lite::pin_project;
 
-use crate::runtime::error_info::ErrorInfo;
 use crate::runtime::memory::MemStat;
 use crate::runtime::memory::OutOfLimit;
 use crate::runtime::memory::StatBuffer;
@@ -101,10 +100,10 @@ pub struct ThreadTracker {
 
 #[derive(Clone)]
 pub struct TrackingPayload {
+    pub query_id: Option<String>,
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
-    pub node_error: Option<Arc<ErrorInfo>>,
 }
 
 pub struct TrackingGuard {
@@ -164,7 +163,7 @@ impl ThreadTracker {
                 profile: None,
                 metrics: None,
                 mem_stat: None,
-                node_error: None,
+                query_id: None,
             },
         }
     }
@@ -282,6 +281,17 @@ impl ThreadTracker {
             Ok(Ok(_)) | Err(_) => Ok(()),
             Ok(Err(oom)) => Err(oom),
         }
+    }
+
+    pub fn query_id() -> Option<&'static String> {
+        TRACKER.with(|tracker| {
+            tracker
+                .borrow()
+                .payload
+                .query_id
+                .as_ref()
+                .map(|query_id| unsafe { &*(query_id as *const String) })
+        })
     }
 }
 

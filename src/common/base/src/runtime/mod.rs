@@ -30,7 +30,6 @@ pub use backtrace::AsyncTaskItem;
 pub use catch_unwind::catch_unwind;
 pub use catch_unwind::drop_guard;
 pub use catch_unwind::CatchUnwindFuture;
-pub use error_info::ErrorInfo;
 pub use global_runtime::GlobalIORuntime;
 pub use global_runtime::GlobalQueryRuntime;
 pub use memory::set_alloc_error_hook;
