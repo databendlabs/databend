@@ -221,7 +221,8 @@ impl Processor for ParquetSource {
                                 let op = self.row_group_reader.operator();
                                 let path = path.clone();
                                 handlers.push(async move {
-                                    let data = op.read(&path).await?;
+                                    // TODO: we can use opendal::Buffer to reduce memory alloc.
+                                    let data = op.read(&path).await?.to_vec();
                                     Ok::<_, ErrorCode>((path, data))
                                 });
                             }

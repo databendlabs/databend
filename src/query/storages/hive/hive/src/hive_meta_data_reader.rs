@@ -39,12 +39,13 @@ impl MetaDataReader {
 impl Loader<FileMetaData> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<FileMetaData> {
-        let mut reader = if let Some(len) = params.len_hint {
-            self.0.reader_with(&params.location).range(0..len).await?
-        } else {
-            self.0.reader(&params.location).await?
+        let size = match params.len_hint {
+            Some(v) => v,
+            None => self.0.stat(&params.location).await?.content_length(),
         };
-        read_metadata_async(&mut reader).await.map_err(|err| {
+        let reader = self.0.reader(&params.location).await?;
+
+        read_metadata_async(reader, size).await.map_err(|err| {
             ErrorCode::Internal(format!(
                 "read file meta failed, {}, {:?}",
                 params.location, err

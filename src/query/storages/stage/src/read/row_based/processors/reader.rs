@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::io::AsyncRead;
-use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -25,6 +22,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_sources::PrefetchAsyncSource;
+use futures::AsyncRead;
+use futures::AsyncReadExt;
 use log::debug;
 use opendal::Operator;
 
@@ -33,13 +32,15 @@ use crate::read::row_based::batch::BytesBatch;
 
 struct FileState {
     file: OneFilePartition,
+    reader: opendal::FuturesAsyncReader,
     offset: usize,
-    reader: opendal::Reader,
 }
+
 pub struct BytesReader {
     table_ctx: Arc<dyn TableContext>,
     op: Operator,
     read_batch_size: usize,
+    io_size: usize,
     file_state: Option<FileState>,
     prefetch_num: usize,
 }
@@ -51,10 +52,19 @@ impl BytesReader {
         read_batch_size: usize,
         prefetch_num: usize,
     ) -> Result<Self> {
+        // TODO: Use 8MiB as default IO size for now, we can extract as a new config.
+        let default_io_size = 8 * 1024 * 1024;
+        // Calculate the IO size, which:
+        //
+        // - is the multiple of read_batch_size.
+        // - is larger or equal to default_io_size.
+        let io_size = ((default_io_size + read_batch_size - 1) / read_batch_size) * read_batch_size;
+
         Ok(Self {
             table_ctx,
             op,
             read_batch_size,
+            io_size,
             file_state: None,
             prefetch_num,
         })
@@ -62,7 +72,7 @@ impl BytesReader {
 
     pub async fn read_batch(&mut self) -> Result<DataBlock> {
         if let Some(state) = &mut self.file_state {
-            let end = min(self.read_batch_size + state.offset, state.file.size);
+            let end = state.file.size.min(self.read_batch_size + state.offset);
             let mut buffer = vec![0u8; end - state.offset];
             let n = read_full(&mut state.reader, &mut buffer[..]).await?;
             if n == 0 {
@@ -82,6 +92,7 @@ impl BytesReader {
             let offset = state.offset;
             state.offset += n;
             let is_eof = state.offset == state.file.size;
+
             let batch = Box::new(BytesBatch {
                 data: buffer,
                 path: state.file.path.clone(),
@@ -119,7 +130,14 @@ impl PrefetchAsyncSource for BytesReader {
             };
             let file = OneFilePartition::from_part(&part)?.clone();
 
-            let reader = self.op.reader_with(&file.path).await?;
+            let reader = self
+                .op
+                .reader_with(&file.path)
+                .chunk(self.io_size)
+                // TODO: Use 4 concurrent for test, let's extract as a new setting.
+                .concurrent(4)
+                .await?
+                .into_futures_async_read(0..file.size as u64);
             self.file_state = Some(FileState {
                 file,
                 reader,

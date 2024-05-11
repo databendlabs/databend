@@ -14,26 +14,17 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::io::SeekFrom;
-use std::mem;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
-use async_trait::async_trait;
-use bytes::Bytes;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
-use futures::ready;
 use futures::Future;
 use opendal::raw::oio;
-use opendal::raw::oio::ReadExt;
-use opendal::raw::Accessor;
+use opendal::raw::Access;
 use opendal::raw::Layer;
-use opendal::raw::LayeredAccessor;
+use opendal::raw::LayeredAccess;
+use opendal::raw::MaybeSend;
 use opendal::raw::OpCreateDir;
 use opendal::raw::OpDelete;
 use opendal::raw::OpList;
@@ -46,6 +37,7 @@ use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
+use opendal::Buffer;
 use opendal::Result;
 
 /// # TODO
@@ -73,10 +65,10 @@ impl RuntimeLayer {
     }
 }
 
-impl<A: Accessor> Layer<A> for RuntimeLayer {
-    type LayeredAccessor = RuntimeAccessor<A>;
+impl<A: Access> Layer<A> for RuntimeLayer {
+    type LayeredAccess = RuntimeAccessor<A>;
 
-    fn layer(&self, inner: A) -> Self::LayeredAccessor {
+    fn layer(&self, inner: A) -> Self::LayeredAccess {
         RuntimeAccessor {
             inner: Arc::new(inner),
             runtime: self.runtime.clone(),
@@ -96,8 +88,7 @@ impl<A> Debug for RuntimeAccessor<A> {
     }
 }
 
-#[async_trait]
-impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
+impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
     type Inner = A;
     type Reader = RuntimeIO<A::Reader>;
     type BlockingReader = A::BlockingReader;
@@ -189,154 +180,33 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
 }
 
 pub struct RuntimeIO<R: 'static> {
+    inner: Arc<R>,
     runtime: Arc<Runtime>,
-    state: State<R>,
-    buf: Vec<u8>,
 }
 
 impl<R> RuntimeIO<R> {
     fn new(inner: R, runtime: Arc<Runtime>) -> Self {
         Self {
+            inner: Arc::new(inner),
             runtime,
-            state: State::Idle(Some(inner)),
-            buf: vec![],
         }
     }
 }
-
-pub enum State<R: 'static> {
-    Idle(Option<R>),
-    Read(JoinHandle<(R, Result<Vec<u8>>)>),
-    Seek(JoinHandle<(R, Result<u64>)>),
-    Next(JoinHandle<(R, Option<Result<Bytes>>)>),
-}
-
-/// Safety: State will only be accessed under &mut.
-unsafe impl<R> Sync for State<R> {}
 
 impl<R: oio::Read> oio::Read for RuntimeIO<R> {
-    /// TODO: the performance of `read` could be affected, we will improve it later.
-    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize>> {
-        match &mut self.state {
-            State::Idle(r) => {
-                let mut r = r.take().expect("Idle must have a valid reader");
-                let mut buffer = mem::take(&mut self.buf);
+    fn read_at(
+        &self,
+        offset: u64,
+        limit: usize,
+    ) -> impl Future<Output = Result<Buffer>> + MaybeSend {
+        let r = self.inner.clone();
 
-                buffer.reserve(buf.len());
-                // Safety: buffer is reserved with buf.len() bytes.
-                #[allow(clippy::uninit_vec)]
-                unsafe {
-                    buffer.set_len(buf.len())
-                }
-
-                self.state = State::Read(self.runtime.spawn(GLOBAL_TASK, async move {
-                    let mut buffer = buffer;
-                    let res = r.read(&mut buffer).await;
-                    match res {
-                        Ok(size) => {
-                            // Safety: we trust our reader, the returning size is correct.
-                            unsafe { buffer.set_len(size) }
-                            (r, Ok(buffer))
-                        }
-                        Err(err) => (r, Err(err)),
-                    }
-                }));
-
-                self.poll_read(cx, buf)
-            }
-            State::Read(future) => {
-                let (r, res) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-                match res {
-                    Ok(mut buffer) => {
-                        let size = buffer.len();
-                        buf[..size].copy_from_slice(&buffer);
-                        // Safety: set length to 0 as we don't care the remaining content.
-                        unsafe { buffer.set_len(0) }
-                        // Always reuse the same buffer
-                        self.buf = buffer;
-                        Poll::Ready(Ok(size))
-                    }
-                    Err(err) => Poll::Ready(Err(err)),
-                }
-            }
-            State::Seek(future) => {
-                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-
-                self.poll_read(cx, buf)
-            }
-            State::Next(future) => {
-                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-
-                self.poll_read(cx, buf)
-            }
-        }
-    }
-
-    fn poll_seek(&mut self, cx: &mut Context<'_>, pos: SeekFrom) -> Poll<Result<u64>> {
-        match &mut self.state {
-            State::Idle(r) => {
-                let mut r = r.take().expect("Idle must have a valid reader");
-
-                self.state = State::Seek(self.runtime.spawn(GLOBAL_TASK, async move {
-                    let res = r.seek(pos).await;
-                    (r, res)
-                }));
-
-                self.poll_seek(cx, pos)
-            }
-            State::Read(future) => {
-                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-
-                self.poll_seek(cx, pos)
-            }
-            State::Seek(future) => {
-                let (r, res) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-
-                Poll::Ready(res)
-            }
-            State::Next(future) => {
-                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-
-                self.poll_seek(cx, pos)
-            }
-        }
-    }
-
-    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<bytes::Bytes>>> {
-        match &mut self.state {
-            State::Idle(r) => {
-                let mut r = r.take().expect("Idle must have a valid reader");
-                self.state = State::Next(self.runtime.spawn(GLOBAL_TASK, async move {
-                    let res = r.next().await;
-                    (r, res)
-                }));
-
-                self.poll_next(cx)
-            }
-            State::Read(future) => {
-                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-
-                self.poll_next(cx)
-            }
-            State::Seek(future) => {
-                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-
-                self.poll_next(cx)
-            }
-            State::Next(future) => {
-                let (r, res) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                self.state = State::Idle(Some(r));
-
-                Poll::Ready(res)
-            }
+        let runtime = self.runtime.clone();
+        async move {
+            runtime
+                .spawn(GLOBAL_TASK, async move { r.read_at(offset, limit).await })
+                .await
+                .expect("join must success")
         }
     }
 }

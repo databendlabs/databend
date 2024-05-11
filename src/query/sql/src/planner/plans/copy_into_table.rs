@@ -102,6 +102,7 @@ impl Display for CopyIntoTableMode {
         }
     }
 }
+
 impl CopyIntoTableMode {
     pub fn is_overwrite(&self) -> bool {
         match self {
@@ -121,8 +122,10 @@ pub struct CopyIntoTablePlan {
     pub table_name: String,
     pub from_attachment: bool,
 
-    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
-    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
+    pub required_values_schema: DataSchemaRef,
+    // ... into table(<columns>) ..  -> <columns>
+    pub values_consts: Vec<Scalar>,
+    // (1, ?, 'a', ?) -> (1, 'a')
     pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
 
     pub write_mode: CopyIntoTableMode,
@@ -189,10 +192,8 @@ impl CopyIntoTablePlan {
                 return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
             }
             info!(
-                "{}: force mode, ignore file filtering. ({}.{})",
-                ctx.get_id(),
-                &self.database_name,
-                &self.table_name
+                "force mode, ignore file filtering. ({}.{})",
+                &self.database_name, &self.table_name
             );
             (all_source_file_infos, vec![])
         } else {
@@ -227,16 +228,15 @@ impl CopyIntoTablePlan {
             (files_to_copy, duplicated_files)
         };
 
-        let len = need_copy_file_infos.len();
-        let sum: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
+        let num_copied_files = need_copy_file_infos.len();
+        let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
 
         info!(
-            "{}: collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
-            ctx.get_id(),
+            "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
             max_files,
             need_copy_file_infos.len(),
-            num_all_files - len,
-            sum,
+            copied_bytes,
+            num_all_files - num_copied_files,
             start.elapsed()
         );
 

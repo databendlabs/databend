@@ -22,8 +22,6 @@ io-uring = [
     "databend-common-meta-raft-store/io-uring",
 ]
 
-enable-histogram = ["databend-common-metrics/enable-histogram"]
-
 [dependencies]
 # Workspace dependencies
 databend-common-arrow = { path = "../../common/arrow" }

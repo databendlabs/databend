@@ -239,7 +239,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     let storage_prefix = storage_meta_data.root();
 
     let expected = format!("{}{}", storage_prefix, last_snapshot_location);
-    let content = operator.read(location.as_str()).await?;
+    let content = operator.read(location.as_str()).await?.to_vec();
 
     assert_eq!(content.as_slice(), expected.as_bytes());
 
