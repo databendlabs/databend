@@ -29,7 +29,6 @@ use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
 use futures::future::BoxFuture;
 use futures::StreamExt;
 use futures::TryFutureExt;
-use opendal::Metadata;
 use opendal::Operator;
 use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowPredicateFn;
@@ -79,6 +78,7 @@ impl ParquetRSFullReader {
     pub async fn prepare_data_stream(
         &self,
         loc: &str,
+        size: u64,
         partition_fields: Option<&[(TableField, Scalar)]>,
     ) -> Result<ParquetRecordBatchStream<ParquetFileReader>> {
         let partition_values_map = partition_fields.map(|arr| {
@@ -86,9 +86,8 @@ impl ParquetRSFullReader {
                 .map(|(f, v)| (f.name().to_string(), v.clone()))
                 .collect::<std::collections::HashMap<String, Scalar>>()
         });
-        let meta = self.op.stat(loc).await?;
         let reader: Reader = self.op.reader(loc).await?;
-        let reader = ParquetFileReader::new(reader, meta);
+        let reader = ParquetFileReader::new(reader, size);
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
             reader,
             ArrowReaderOptions::new()
@@ -252,13 +251,13 @@ impl ParquetRSFullReader {
 /// - `preload_offset_index`: Load the Offset Index as part of [`Self::get_metadata`].
 pub struct ParquetFileReader {
     r: Reader,
-    meta: Metadata,
+    size: u64,
 }
 
 impl ParquetFileReader {
     /// Create a new ParquetFileReader
-    pub fn new(r: Reader, meta: Metadata) -> Self {
-        Self { r, meta }
+    pub fn new(r: Reader, size: u64) -> Self {
+        Self { r, size }
     }
 }
 
@@ -274,8 +273,8 @@ impl AsyncFileReader for ParquetFileReader {
 
     fn get_metadata(&mut self) -> BoxFuture<'_, parquet::errors::Result<Arc<ParquetMetaData>>> {
         Box::pin(async move {
-            let file_size = self.meta.content_length();
-            let mut loader = MetadataLoader::load(self, file_size as usize, None).await?;
+            let size = self.size as usize;
+            let mut loader = MetadataLoader::load(self, size, None).await?;
             loader.load_page_index(false, false).await?;
             Ok(Arc::new(loader.finish()))
         })

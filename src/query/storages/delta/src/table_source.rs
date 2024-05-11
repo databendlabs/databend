@@ -188,7 +188,11 @@ impl Processor for DeltaTableSource {
                         .collect::<Vec<_>>();
                     let stream = self
                         .parquet_reader
-                        .prepare_data_stream(&files.files[0].0, Some(&partition_fields))
+                        .prepare_data_stream(
+                            &files.files[0].0,
+                            files.files[0].1,
+                            Some(&partition_fields),
+                        )
                         .await?;
                     self.stream = Some(stream);
                 }
