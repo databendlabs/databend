@@ -99,6 +99,10 @@ use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
+use crate::values::Column;
+use crate::values::Scalar;
+use crate::ColumnBuilder;
+use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
 

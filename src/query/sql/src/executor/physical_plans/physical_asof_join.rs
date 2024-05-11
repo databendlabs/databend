@@ -100,17 +100,17 @@ impl PhysicalPlanBuilder {
             Arc::new(s_expr.child(1)?.clone()),
         )
         .into();
-      let left_required =  required.0.union(&left_prop.used_columns).cloned().collect();
-      let right_required = required.1.union(&right_prop.used_columns).cloned().collect();
-      self.build_range_join(
-          &ss_expr,
-          left_required,
-          right_required,
-          range_conditions,
-          other_conditions,
-        )
-        .await
-    }
+        let left_required =  required.0.union(&left_prop.used_columns).cloned().collect();
+        let right_required = required.1.union(&right_prop.used_columns).cloned().collect();
+        self.build_range_join(
+            &ss_expr,
+            left_required,
+            right_required,
+            range_conditions,
+            other_conditions,
+            )
+            .await
+        }
 
     fn add_range_condition(
         &mut self,
@@ -410,6 +410,4 @@ impl PhysicalPlanBuilder {
             })
         }
     }
-
-
 }
