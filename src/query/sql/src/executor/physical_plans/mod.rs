@@ -60,8 +60,6 @@ mod physical_merge_into;
 pub use physical_merge_into::*;
 mod physical_merge_into_add_row_number;
 pub use physical_merge_into_add_row_number::MergeIntoAddRowNumber;
-mod physical_project;
-pub use physical_project::Project;
 mod physical_project_set;
 pub use physical_project_set::ProjectSet;
 mod physical_range_join;

@@ -34,7 +34,6 @@ use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::FillAndReorder;
 use databend_common_sql::executor::physical_plans::MultiInsertEvalScalar;
-use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
@@ -44,6 +43,7 @@ use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 
@@ -104,7 +104,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 
 impl InsertMultiTableInterpreter {
     async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let (mut root, metadata) = self.build_source_physical_plan().await?;
+        let (mut root, metadata, bind_ctx) = self.build_source_physical_plan().await?;
         let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), &metadata).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
@@ -150,6 +150,7 @@ impl InsertMultiTableInterpreter {
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
             input: Box::new(root),
+            project_columns: bind_ctx.columns.clone(),
             n: branches.len(),
         }));
 
@@ -207,7 +208,9 @@ impl InsertMultiTableInterpreter {
         Ok(root)
     }
 
-    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
+    async fn build_source_physical_plan(
+        &self,
+    ) -> Result<(PhysicalPlan, MetadataRef, Box<BindContext>)> {
         match &self.plan.input_source {
             Plan::Query {
                 s_expr,
@@ -218,21 +221,7 @@ impl InsertMultiTableInterpreter {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
-                let input_schema = input_source.output_schema()?;
-                let mut projections = Vec::with_capacity(input_schema.num_fields());
-                for col in &bind_context.columns {
-                    let index = col.index;
-                    projections.push(input_schema.index_of(index.to_string().as_str())?);
-                }
-                let rendered_input_source = PhysicalPlan::Project(Project {
-                    plan_id: 0,
-                    input: Box::new(input_source),
-                    projections,
-                    ignore_result: false,
-                    columns: Default::default(),
-                    stat_info: None,
-                });
-                Ok((rendered_input_source, metadata.clone()))
+                Ok((input_source, metadata.clone(), bind_context.clone()))
             }
             _ => unreachable!(),
         }

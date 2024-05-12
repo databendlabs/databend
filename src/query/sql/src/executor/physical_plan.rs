@@ -54,7 +54,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -76,7 +75,6 @@ pub enum PhysicalPlan {
     /// Query
     TableScan(TableScan),
     Filter(Filter),
-    Project(Project),
     EvalScalar(EvalScalar),
     ProjectSet(ProjectSet),
     AggregateExpand(AggregateExpand),
@@ -162,11 +160,6 @@ impl PhysicalPlan {
                 *next_id += 1;
             }
             PhysicalPlan::Filter(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::Project(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -391,7 +384,6 @@ impl PhysicalPlan {
             PhysicalPlan::AsyncFunction(v) => v.plan_id,
             PhysicalPlan::TableScan(v) => v.plan_id,
             PhysicalPlan::Filter(v) => v.plan_id,
-            PhysicalPlan::Project(v) => v.plan_id,
             PhysicalPlan::EvalScalar(v) => v.plan_id,
             PhysicalPlan::ProjectSet(v) => v.plan_id,
             PhysicalPlan::AggregateExpand(v) => v.plan_id,
@@ -443,7 +435,6 @@ impl PhysicalPlan {
             PhysicalPlan::AsyncFunction(plan) => plan.output_schema(),
             PhysicalPlan::TableScan(plan) => plan.output_schema(),
             PhysicalPlan::Filter(plan) => plan.output_schema(),
-            PhysicalPlan::Project(plan) => plan.output_schema(),
             PhysicalPlan::EvalScalar(plan) => plan.output_schema(),
             PhysicalPlan::AggregateExpand(plan) => plan.output_schema(),
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
@@ -500,7 +491,6 @@ impl PhysicalPlan {
             },
             PhysicalPlan::AsyncFunction(_) => "AsyncFunction".to_string(),
             PhysicalPlan::Filter(_) => "Filter".to_string(),
-            PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
             PhysicalPlan::AggregateExpand(_) => "AggregateExpand".to_string(),
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
@@ -561,7 +551,6 @@ impl PhysicalPlan {
             | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::UpdateSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -622,7 +611,6 @@ impl PhysicalPlan {
         match self {
             PhysicalPlan::TableScan(scan) => Some(&scan.source),
             PhysicalPlan::Filter(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::Project(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::EvalScalar(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Window(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Sort(plan) => plan.input.try_find_single_data_source(),
@@ -711,12 +699,6 @@ impl PhysicalPlan {
                 Some(limit) => format!("LIMIT {} OFFSET {}", limit, v.offset),
                 None => format!("OFFSET {}", v.offset),
             },
-            PhysicalPlan::Project(v) => v
-                .output_schema()?
-                .fields
-                .iter()
-                .map(|x| x.name())
-                .join(", "),
             PhysicalPlan::EvalScalar(v) => v
                 .exprs
                 .iter()
@@ -882,17 +864,6 @@ impl PhysicalPlan {
                     v.exprs
                         .iter()
                         .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .collect(),
-                );
-            }
-            PhysicalPlan::Project(v) => {
-                labels.insert(
-                    String::from("List of Expressions"),
-                    v.output_schema()?
-                        .fields
-                        .iter()
-                        .map(|x| x.name())
-                        .cloned()
                         .collect(),
                 );
             }

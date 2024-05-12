@@ -24,6 +24,7 @@ use enum_as_inner::EnumAsInner;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
+use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
@@ -39,6 +40,7 @@ pub struct CopyIntoTable {
     pub stage_table_info: StageTableInfo,
     pub table_info: TableInfo,
 
+    pub project_columns: Option<Vec<ColumnBinding>>,
     pub source: CopyIntoTableSource,
 }
 
