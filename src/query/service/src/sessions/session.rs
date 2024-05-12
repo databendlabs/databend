@@ -46,8 +46,7 @@ use crate::sessions::SessionType;
 pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: RwLock<SessionType>,
-    pub(in crate::sessions) session_ctx: Arc<SessionContext>,
-    pub(in crate::sessions) privilege_mgr: SessionPrivilegeManagerImpl,
+    pub(in crate::sessions) session_ctx: Box<SessionContext>,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
     format_settings: FormatSettings,
@@ -57,17 +56,15 @@ impl Session {
     pub fn try_create(
         id: String,
         typ: SessionType,
-        session_ctx: Arc<SessionContext>,
+        session_ctx: Box<SessionContext>,
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let status = Arc::new(Default::default());
-        let privilege_mgr = SessionPrivilegeManagerImpl::new(session_ctx.clone());
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
             status,
             session_ctx,
-            privilege_mgr,
             mysql_connection_id,
             format_settings: FormatSettings::default(),
         }))
@@ -114,7 +111,8 @@ impl Session {
     }
 
     pub fn quit(self: &Arc<Self>) {
-        let session_ctx = self.session_ctx.clone();
+        let session_ctx = self.session_ctx.as_ref();
+
         if session_ctx.get_current_query_id().is_some() {
             if let Some(shutdown_fun) = session_ctx.take_io_shutdown_tx() {
                 shutdown_fun();
@@ -138,9 +136,7 @@ impl Session {
     }
 
     pub fn force_kill_query(self: &Arc<Self>, cause: ErrorCode) {
-        let session_ctx = self.session_ctx.clone();
-
-        if let Some(context_shared) = session_ctx.get_query_context_shared() {
+        if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.kill(cause);
         }
     }
@@ -205,7 +201,11 @@ impl Session {
     }
 
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
-        self.privilege_mgr.get_current_user()
+        self.privilege_mgr().get_current_user()
+    }
+
+    pub fn privilege_mgr(&self) -> SessionPrivilegeManagerImpl<'_> {
+        SessionPrivilegeManagerImpl::new(self.session_ctx.as_ref())
     }
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
@@ -218,21 +218,23 @@ impl Session {
         user: UserInfo,
         restricted_role: Option<String>,
     ) -> Result<()> {
-        self.privilege_mgr
+        self.privilege_mgr()
             .set_authed_user(user, restricted_role)
             .await
     }
 
     #[async_backtrace::framed]
     pub async fn validate_available_role(self: &Arc<Self>, role_name: &str) -> Result<RoleInfo> {
-        self.privilege_mgr.validate_available_role(role_name).await
+        self.privilege_mgr()
+            .validate_available_role(role_name)
+            .await
     }
 
     // Only the available role can be set as current role. The current role can be set by the SET
     // ROLE statement, or by the `session.role` field in the HTTP query request body.
     #[async_backtrace::framed]
     pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
-        self.privilege_mgr
+        self.privilege_mgr()
             .set_current_role(Some(role_name.to_string()))
             .await
     }
@@ -242,20 +244,20 @@ impl Session {
         self: &Arc<Self>,
         role_names: Option<Vec<String>>,
     ) -> Result<()> {
-        self.privilege_mgr.set_secondary_roles(role_names).await
+        self.privilege_mgr().set_secondary_roles(role_names).await
     }
 
     pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
-        self.privilege_mgr.get_current_role()
+        self.privilege_mgr().get_current_role()
     }
 
     pub fn get_secondary_roles(self: &Arc<Self>) -> Option<Vec<String>> {
-        self.privilege_mgr.get_secondary_roles()
+        self.privilege_mgr().get_secondary_roles()
     }
 
     #[async_backtrace::framed]
     pub async fn unset_current_role(self: &Arc<Self>) -> Result<()> {
-        self.privilege_mgr.set_current_role(None).await
+        self.privilege_mgr().set_current_role(None).await
     }
 
     // Returns all the roles the current session has. If the user have been granted restricted_role,
@@ -263,12 +265,12 @@ impl Session {
     // On executing SET ROLE, the role have to be one of the available roles.
     #[async_backtrace::framed]
     pub async fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
-        self.privilege_mgr.get_all_available_roles().await
+        self.privilege_mgr().get_all_available_roles().await
     }
 
     #[async_backtrace::framed]
     pub async fn get_all_effective_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
-        self.privilege_mgr.get_all_effective_roles().await
+        self.privilege_mgr().get_all_effective_roles().await
     }
 
     #[async_backtrace::framed]
@@ -280,7 +282,7 @@ impl Session {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
-        self.privilege_mgr
+        self.privilege_mgr()
             .validate_privilege(object, privilege)
             .await
     }
@@ -290,12 +292,12 @@ impl Session {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(true);
         }
-        self.privilege_mgr.has_ownership(object).await
+        self.privilege_mgr().has_ownership(object).await
     }
 
     #[async_backtrace::framed]
     pub async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
-        self.privilege_mgr.get_visibility_checker().await
+        self.privilege_mgr().get_visibility_checker().await
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
@@ -325,6 +327,12 @@ impl Session {
     }
     pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
         self.session_ctx.set_txn_mgr(txn_mgr)
+    }
+
+    pub fn set_query_priority(&self, priority: u8) {
+        if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
+            context_shared.set_priority(priority);
+        }
     }
 }
 

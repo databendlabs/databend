@@ -146,11 +146,17 @@ impl BlockReader {
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
         let chunk = op.blocking().read_with(path).range(start..end).call()?;
-        Ok((index, chunk))
+        Ok((index, chunk.to_vec()))
     }
 
     pub fn sync_read_schema(&self, loc: &str) -> Option<ArrowSchema> {
-        let mut reader = self.operator.blocking().reader(loc).ok()?;
+        let meta = self.operator.blocking().stat(loc).ok()?;
+        let mut reader = self
+            .operator
+            .blocking()
+            .reader(loc)
+            .ok()?
+            .into_std_read(0..meta.content_length());
         let metadata = read_metadata(&mut reader).ok()?;
         debug_assert_eq!(metadata.row_groups.len(), 1);
         let schema = infer_schema_with_extension(&metadata).ok()?;

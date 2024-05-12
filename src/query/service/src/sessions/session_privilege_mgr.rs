@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
@@ -73,12 +71,12 @@ pub trait SessionPrivilegeManager {
     // fn show_grants(&self);
 }
 
-pub struct SessionPrivilegeManagerImpl {
-    session_ctx: Arc<SessionContext>,
+pub struct SessionPrivilegeManagerImpl<'a> {
+    session_ctx: &'a SessionContext,
 }
 
-impl SessionPrivilegeManagerImpl {
-    pub fn new(session_ctx: Arc<SessionContext>) -> Self {
+impl<'a> SessionPrivilegeManagerImpl<'a> {
+    pub fn new(session_ctx: &'a SessionContext) -> Self {
         Self { session_ctx }
     }
 
@@ -126,7 +124,7 @@ impl SessionPrivilegeManagerImpl {
 }
 
 #[async_trait::async_trait]
-impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
+impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
     // granted by external authenticator, it will over write the current user's granted roles, and

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use poem::http::StatusCode;
+use http::StatusCode;
 use poem::web::Json;
 use poem::IntoResponse;
 use serde::Deserialize;

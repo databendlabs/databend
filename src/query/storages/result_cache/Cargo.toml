@@ -12,7 +12,6 @@ doctest = false
 test = true
 
 [dependencies]
-bytes = { workspace = true }
 databend-common-arrow = { path = "../../../common/arrow" }
 databend-common-catalog = { path = "../../catalog" }
 databend-common-exception = { path = "../../../common/exception" }

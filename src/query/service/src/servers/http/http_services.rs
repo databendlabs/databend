@@ -29,6 +29,7 @@ use poem::listener::RustlsConfig;
 use poem::middleware::CatchPanic;
 use poem::middleware::NormalizePath;
 use poem::middleware::TrailingSlash;
+use poem::post;
 use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -40,6 +41,7 @@ use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::PanicHandler;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::list_suggestions;
+use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
@@ -96,6 +98,7 @@ impl HttpHandler {
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
         let ep_v1 = Route::new()
             .nest("/query", query_route())
+            .at("/login", post(login_handler))
             .at("/streaming_load", put(streaming_load))
             .at("/upload_to_stage", put(upload_to_stage))
             .at("/suggested_background_tasks", get(list_suggestions));
