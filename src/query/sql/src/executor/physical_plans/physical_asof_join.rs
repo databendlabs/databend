@@ -191,23 +191,13 @@ impl PhysicalPlanBuilder {
                 if func.arguments.len() == 2 {
                     for arg in func.arguments.iter() {
                         if let ScalarExpr::BoundColumnRef(_) = arg {
-                            let mut asc: Option<bool> = None;
-                            match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap()
+                            let asc = match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap()
                             {
-                                ComparisonOp::GT | ComparisonOp::GTE => {
-                                    asc = Some(true);
-                                }
-                                ComparisonOp::LT | ComparisonOp::LTE => {
-                                    asc = Some(false);
-                                }
-                                _ => unreachable!("must be range condition!"),
-                            }
+                                ComparisonOp::GT | ComparisonOp::GTE => Ok(Some(true)),
+                                ComparisonOp::LT | ComparisonOp::LTE => Ok(Some(false)),
+                                _ => Err(ErrorCode::Internal("must be range condition!")),
+                            }?;
                             if arg.used_columns().is_subset(&left_prop.output_columns) {
-                                order_items.push(WindowOrderBy {
-                                    expr: arg.clone(),
-                                    asc: asc.clone(),
-                                    nulls_first: Some(true),
-                                });
                                 left_column = arg.clone();
                                 constant_default.span = left_column.span();
                                 constant_default.value = left_column
@@ -222,6 +212,11 @@ impl PhysicalPlanBuilder {
                                         .ninfinity()
                                         .unwrap();
                                 }
+                                order_items.push(WindowOrderBy {
+                                    expr: arg.clone(),
+                                    asc,
+                                    nulls_first: Some(true),
+                                });
                             }
                             if arg.used_columns().is_subset(&right_prop.output_columns) {
                                 right_column = arg.clone();
