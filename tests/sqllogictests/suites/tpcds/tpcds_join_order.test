@@ -2110,7 +2110,11 @@ HashJoin: RIGHT ANTI
 │       │       └── Probe
 │       │           └── Scan: default.tpcds.call_center (#3) (read rows: 1)
 │       └── Probe
-│           └── Scan: default.tpcds.catalog_sales (#4) (read rows: 14313)
+│           └── HashJoin: INNER 
+│               ├── Build
+│               │   └── Scan: default.tpcds.catalog_sales (#4) (read rows: 14313)
+│               └── Probe
+│                   └── Scan: default.tpcds.catalog_sales (#0) (read rows: 14313)
 └── Probe
     └── Scan: default.tpcds.catalog_returns (#5) (read rows: 1358)
 

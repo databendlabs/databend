@@ -615,15 +615,15 @@ HashJoin
 │       ├── push downs: [filters: [is_true(t.i (#1) > 10)], limit: NONE]
 │       └── estimated rows: 4.00
 └── TableScan(Probe)
-   ├── table: default.default.t
-   ├── output columns: [i (#0)]
-   ├── read rows: 4
-   ├── read size: < 1 KiB
-   ├── partitions total: 1
-   ├── partitions scanned: 1
-   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-   ├── push downs: [filters: [], limit: NONE]
-   └── estimated rows: 4.00
+    ├── table: default.default.t
+    ├── output columns: [i (#0)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
 
 statement ok
 drop table if exists t;

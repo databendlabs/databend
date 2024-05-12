@@ -27,6 +27,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
+use databend_common_storages_fuse::operations::TransformAccumulateSegment;
 use databend_common_storages_fuse::operations::TransformMutationSubquery;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
@@ -127,6 +128,13 @@ impl PipelineBuilder {
                 TableMutationAggregator::new(table, ctx.clone(), vec![], MutationKind::Replace);
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
+            )))
+        })?;
+
+        self.main_pipeline.resize(1, true)?;
+        self.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(Box::new(
+                TransformAccumulateSegment::new(input, output, table.get_id()),
             )))
         })?;
 

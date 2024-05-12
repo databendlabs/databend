@@ -26,6 +26,7 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::ModifyBySubquery;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
@@ -223,6 +224,17 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.state = State::DeleteLeaf;
 
         Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
+    }
+
+    fn replace_modify_by_subquery(&mut self, plan: &ModifyBySubquery) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let input = self.replace(&plan.input)?;
+        fragments.append(&mut self.fragments);
+        self.fragments = fragments;
+        Ok(PhysicalPlan::ModifyBySubquery(ModifyBySubquery {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
     }
 
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {

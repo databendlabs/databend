@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod transform_accumulate_segment;
 mod transform_mutation_subquery;
 
+pub use transform_accumulate_segment::TransformAccumulateSegment;
 pub use transform_mutation_subquery::TransformMutationSubquery;

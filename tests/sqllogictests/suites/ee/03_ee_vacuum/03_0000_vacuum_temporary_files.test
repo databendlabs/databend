@@ -7,6 +7,10 @@ statement ok
 set aggregate_spilling_bytes_threshold_per_proc = 1024 * 1024 * 1;
 
 onlyif mysql
+statement ok
+set max_vacuum_temp_files_after_query = 1;
+
+onlyif mysql
 query TIFS
 SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string);
 ----
@@ -36,6 +40,10 @@ SELECT COUNT() FROM (SELECT COUNT() as c FROM system.temp_files) WHERE c > 0;
 onlyif mysql
 statement ok
 unset max_threads;
+
+onlyif mysql
+statement ok
+set max_vacuum_temp_files_after_query = 0;
 
 onlyif mysql
 statement ok

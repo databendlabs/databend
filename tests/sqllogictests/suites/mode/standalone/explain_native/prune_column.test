@@ -263,23 +263,23 @@ AggregateFinal
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-   ├── group by: []
-   ├── aggregate functions: [count()]
-   ├── estimated rows: 1.00
-   └── Filter
-       ├── output columns: []
-       ├── filters: [is_true(t.b (#1) = 2)]
-       ├── estimated rows: 1.00
-       └── TableScan
-           ├── table: default.default.t
-           ├── output columns: [b (#1)]
-           ├── read rows: 2
-           ├── read size: < 1 KiB
-           ├── partitions total: 1
-           ├── partitions scanned: 1
-           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-           ├── push downs: [filters: [is_true(t.b (#1) = 2)], limit: NONE]
-           └── estimated rows: 2.00
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── Filter
+        ├── output columns: []
+        ├── filters: [is_true(t.b (#1) = 2)]
+        ├── estimated rows: 1.00
+        └── TableScan
+            ├── table: default.default.t
+            ├── output columns: [b (#1)]
+            ├── read rows: 2
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+            ├── push downs: [filters: [is_true(t.b (#1) = 2)], limit: NONE]
+            └── estimated rows: 2.00
 
 statement ok
 drop table t

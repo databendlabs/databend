@@ -375,19 +375,7 @@ pub async fn modify_by_subquery(
 
     // 3: build pipelines
     let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
-    let mut root = builder.build(&root, outer_columns.clone()).await?;
-
-    // distribute the root source
-    if is_distributed {
-        root = PhysicalPlan::Exchange(Exchange {
-            plan_id: 0,
-            input: Box::new(root),
-            kind: FragmentKind::Merge,
-            keys: vec![],
-            allow_adjust_parallelism: true,
-            ignore_exchange: false,
-        });
-    }
+    let root = builder.build(&root, outer_columns.clone()).await?;
 
     let build_res = build_query_pipeline_without_render_result_set(&ctx, &root).await?;
 

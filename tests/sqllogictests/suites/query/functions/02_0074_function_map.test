@@ -13,6 +13,11 @@ select map_keys({}), map_values({})
 [] []
 
 query TT
+select map_size({})
+----
+0
+
+query TT
 select map_keys({'k1':1,'k2':2,'k3':null}), map_values({'k1':1,'k2':2,'k3':null})
 ----
 ['k1','k2','k3'] [1,2,NULL]
@@ -29,6 +34,13 @@ select map_keys(col1), map_keys(col2) from t
 ['k1','k2','k3'] ['a','b']
 ['k5','k6'] ['d','e','f']
 [] NULL
+
+query TT
+select map_size(col1), map_size(col2) from t
+----
+3 2
+2 3
+0 NULL
 
 query TT
 select map_values(col1), map_values(col2) from t

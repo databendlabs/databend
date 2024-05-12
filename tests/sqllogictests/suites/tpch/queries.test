@@ -2161,7 +2161,7 @@ order by
     numwait desc,
     s_name;
 ----
-HashJoin: RIGHT ANTI
+HashJoin: LEFT MARK
 ├── Build
 │   └── HashJoin: RIGHT SEMI
 │       ├── Build
@@ -2179,9 +2179,17 @@ HashJoin: RIGHT ANTI
 │       │       └── Probe
 │       │           └── Scan: default.tpch_test.orders (#2) (read rows: 150000)
 │       └── Probe
-│           └── Scan: default.tpch_test.lineitem (#4) (read rows: 600572)
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── Scan: default.tpch_test.lineitem (#4) (read rows: 600572)
+│               └── Probe
+│                   └── Scan: default.tpch_test.lineitem (#1) (read rows: 600572)
 └── Probe
-    └── Scan: default.tpch_test.lineitem (#5) (read rows: 600572)
+     └── HashJoin: INNER
+       ├── Build
+       │   └── Scan: default.tpch_test.lineitem (#5) (read rows: 600572)
+       └── Probe
+           └── Scan: default.tpch_test.lineitem (#1) (read rows: 600572)
 
 # Q22
 query I

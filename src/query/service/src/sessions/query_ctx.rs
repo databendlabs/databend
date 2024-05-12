@@ -618,6 +618,8 @@ impl TableContext for QueryContext {
             settings.get_external_server_connect_timeout_secs()?;
         let external_server_request_timeout_secs =
             settings.get_external_server_request_timeout_secs()?;
+        let external_server_request_batch_rows =
+            settings.get_external_server_request_batch_rows()?;
 
         let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
@@ -642,6 +644,7 @@ impl TableContext for QueryContext {
 
             external_server_connect_timeout_secs,
             external_server_request_timeout_secs,
+            external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
         })

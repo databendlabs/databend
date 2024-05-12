@@ -21,41 +21,41 @@ insert into t2 values(null, null), (1, 1), (2, 2);
 query T
 explain select t1.a from t1 where exists (select * from t2 where t1.a = t2.a) and t1.a > 3;
 ----
-HashJoin
+HashJoin                     
 ├── output columns: [t1.a (#0)]
-├── join type: LEFT SEMI
-├── build keys: [a (#2)]
-├── probe keys: [a (#0)]
-├── filters: []
-├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2)]
-│   ├── filters: [is_true(t2.a (#2) = t2.a (#2))]
-│   ├── estimated rows: 0.60
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── output columns: [a (#2)]
-│       ├── read rows: 3
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(t2.a (#2) = t2.a (#2))], limit: NONE]
-│       └── estimated rows: 3.00
-└── Filter(Probe)
-   ├── output columns: [t1.a (#0)]
-   ├── filters: [is_true(t1.a (#0) > 3)]
-   ├── estimated rows: 1.00
-   └── TableScan
-       ├── table: default.default.t1
-       ├── output columns: [a (#0)]
-       ├── read rows: 0
-       ├── read size: 0
-       ├── partitions total: 1
-       ├── partitions scanned: 0
-       ├── pruning stats: [segments: <range pruning: 1 to 0>]
-       ├── push downs: [filters: [is_true(t1.a (#0) > 3)], limit: NONE]
-       └── estimated rows: 4.00
+├── join type: LEFT SEMI      
+├── build keys: [a (#2)]     
+├── probe keys: [a (#0)]    
+├── filters: []            
+├── estimated rows: 0.00  
+├── Filter(Build)                                                          
+│   ├── output columns: [t2.a (#2)]                                       
+│   ├── filters: [is_true(t2.a (#2) = t2.a (#2))]                        
+│   ├── estimated rows: 0.60                                            
+│   └── TableScan                                                      
+│       ├── table: default.default.t2                                 
+│       ├── output columns: [a (#2)]                                 
+│      ├── read rows: 3                                            
+│      ├── read size: < 1 KiB                                     
+│       ├── partitions total: 1                                   
+│       ├── partitions scanned: 1                                
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]     
+│       ├── push downs: [filters: [is_true(t2.a (#2) = t2.a (#2))], limit: NONE]                   
+│       └── estimated rows: 3.00                                                                  
+└── Filter(Probe)                                                                                
+ ├── output columns: [t1.a (#0)]                                                                
+ ├── filters: [is_true(t1.a (#0) > 3)]                                                         
+ ├── estimated rows: 1.00                                                                     
+ └── TableScan                                                                               
+     ├── table: default.default.t1                                                          
+     ├── output columns: [a (#0)]                                                          
+     ├── read rows: 0                                                                     
+     ├── read size: 0                                                                    
+     ├── partitions total: 1                                                            
+     ├── partitions scanned: 0                                                        
+     ├── pruning stats: [segments: <range pruning: 1 to 0>]                          
+     ├── push downs: [filters: [is_true(t1.a (#0) > 3)], limit: NONE]               
+     └── estimated rows: 4.00                                                      
 
 # left anti, can propagate t1.a > 3
 query T

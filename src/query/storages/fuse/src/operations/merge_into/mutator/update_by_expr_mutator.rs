@@ -74,7 +74,6 @@ impl UpdateByExprMutator {
             self.expr.clone().unwrap()
         };
         expr = cast_expr_to_non_null_boolean(expr)?;
-        assert_eq!(expr.data_type(), &DataType::Boolean);
 
         // it's the first update, after update, we need to add a filter column
         if data_block.num_columns() == self.origin_input_columns {
