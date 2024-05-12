@@ -490,6 +490,16 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
+    fn get_enable_sort_spill(&self) -> bool {
+        self.shared.enable_sort_spill.load(Ordering::Acquire)
+    }
+
+    fn set_enable_sort_spill(&self, enable: bool) {
+        self.shared
+            .enable_sort_spill
+            .store(enable, Ordering::Release);
+    }
+
     // get a hint at the number of blocks that need to be compacted.
     fn get_compaction_num_block_hint(&self) -> u64 {
         self.shared
