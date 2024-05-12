@@ -133,7 +133,7 @@ impl PhysicalPlanBuilder {
         folded_args.push(right_column.clone());
         folded_args.push(
             BoundColumnRef {
-                span: right_column.span().clone(),
+                span: right_column.span(),
                 column,
             }
             .into(),
@@ -159,7 +159,7 @@ impl PhysicalPlanBuilder {
         }
         range_conditions.push(
             FunctionCall {
-                span: range_conditions[0].span().clone(),
+                span: range_conditions[0].span(),
                 params: vec![],
                 arguments: folded_args,
                 func_name,
@@ -173,7 +173,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         join: &Join,
         s_expr: &SExpr,
-        range_conditions: &Vec<ScalarExpr>,
+        range_conditions: &[ScalarExpr],
         other_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<(WindowFunc, ScalarExpr), ErrorCode> {
         let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
@@ -183,7 +183,7 @@ impl PhysicalPlanBuilder {
         let mut left_column = range_conditions[0].clone();
         let mut order_items: Vec<WindowOrderBy> = Vec::with_capacity(range_conditions.len());
         let mut constant_default = ConstantExpr {
-            span: right_column.span().clone(),
+            span: right_column.span(),
             value: Scalar::Null,
         };
         for condition in range_conditions.iter() {
@@ -205,11 +205,11 @@ impl PhysicalPlanBuilder {
                             if arg.used_columns().is_subset(&left_prop.output_columns) {
                                 order_items.push(WindowOrderBy {
                                     expr: arg.clone(),
-                                    asc,
+                                    asc: asc.clone(),
                                     nulls_first: Some(true),
                                 });
                                 left_column = arg.clone();
-                                constant_default.span = left_column.span().clone();
+                                constant_default.span = left_column.span();
                                 constant_default.value = left_column
                                     .data_type()?
                                     .remove_nullable()
@@ -253,7 +253,7 @@ impl PhysicalPlanBuilder {
                 other_args.push(right_exp.clone());
                 other_conditions.push(
                     FunctionCall {
-                        span: range_conditions[0].span().clone(),
+                        span: range_conditions[0].span(),
                         params: vec![],
                         arguments: other_args.clone(),
                         func_name: String::from("eq"),
@@ -274,7 +274,7 @@ impl PhysicalPlanBuilder {
             return_type: Box::new(left_column.data_type()?.remove_nullable().clone()),
         });
         let window_func = WindowFunc {
-            span: range_conditions[0].span().clone(),
+            span: range_conditions[0].span(),
             display_name: func_type.func_name(),
             partition_by: partition_items,
             func: func_type,
