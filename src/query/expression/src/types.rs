@@ -180,54 +180,54 @@ impl DataType {
 
     pub fn infinity(&self) -> Result<Scalar, String> {
         match &self {
-           DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MAX)),
-           DataType::Date => Ok(Scalar::Date(DATE_MAX)),
-           DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
-              ordered_float::OrderedFloat(f32::INFINITY),
-           ))),
-           DataType::Number(NumberDataType::Int32) => Ok(Scalar::Number(NumberScalar::Int32(MAX))),
-           DataType::Number(NumberDataType::Int16) => {
-              Ok(Scalar::Number(NumberScalar::Int16(MAX.try_into().unwrap())))
-           }
-           DataType::Number(NumberDataType::Int8) => {
-              Ok(Scalar::Number(NumberScalar::Int8(MAX.try_into().unwrap())))
-           }
-           DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
-              ordered_float::OrderedFloat(f64::INFINITY),
-           ))),
-           DataType::Number(NumberDataType::Int64) => {
-              Ok(Scalar::Number(NumberScalar::Int64(MAX.into())))
-           }
-           _ => Result::Err(format!(
-              "only support numeric types and time types, but got {:?}",
-              self
-           )),
+            DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MAX)),
+            DataType::Date => Ok(Scalar::Date(DATE_MAX)),
+            DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
+               ordered_float::OrderedFloat(f32::INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int32) => Ok(Scalar::Number(NumberScalar::Int32(MAX))),
+            DataType::Number(NumberDataType::Int16) => {
+               Ok(Scalar::Number(NumberScalar::Int16(MAX.try_into().unwrap())))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+               Ok(Scalar::Number(NumberScalar::Int8(MAX.try_into().unwrap())))
+            }
+            DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
+               ordered_float::OrderedFloat(f64::INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int64) => {
+               Ok(Scalar::Number(NumberScalar::Int64(MAX.into())))
+            }
+            _ => Result::Err(format!(
+               "only support numeric types and time types, but got {:?}",
+               self
+            )),
         }
     }
     pub fn ninfinity(&self) -> Result<Scalar,String> {
         match &self {
-           DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MIN)),
-           DataType::Date => Ok(Scalar::Date(DATE_MIN)),
-           DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
-              ordered_float::OrderedFloat(f32::NEG_INFINITY),
-           ))),
-           DataType::Number(NumberDataType::Int32) => Ok(Scalar::Number(NumberScalar::Int32(-MAX))),
-           DataType::Number(NumberDataType::Int16) => {
-              Ok(Scalar::Number(NumberScalar::Int16((-MAX).try_into().unwrap())))
-           }
-           DataType::Number(NumberDataType::Int8) => {
-              Ok(Scalar::Number(NumberScalar::Int8((-MAX).try_into().unwrap())))
-           }
-           DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
-              ordered_float::OrderedFloat(f64::NEG_INFINITY),
-           ))),
-           DataType::Number(NumberDataType::Int64) => {
-              Ok(Scalar::Number(NumberScalar::Int64((-MAX).into())))
-           }
-           _ => Result::Err(format!(
-              "only support numeric types and time types, but got {:?}",
-              self
-           )),
+            DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MIN)),
+            DataType::Date => Ok(Scalar::Date(DATE_MIN)),
+            DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
+               ordered_float::OrderedFloat(f32::NEG_INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int32) => Ok(Scalar::Number(NumberScalar::Int32(-MAX))),
+            DataType::Number(NumberDataType::Int16) => {
+               Ok(Scalar::Number(NumberScalar::Int16((-MAX).try_into().unwrap())))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+               Ok(Scalar::Number(NumberScalar::Int8((-MAX).try_into().unwrap())))
+            }
+            DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
+               ordered_float::OrderedFloat(f64::NEG_INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int64) => {
+               Ok(Scalar::Number(NumberScalar::Int64((-MAX).into())))
+            }
+            _ => Result::Err(format!(
+               "only support numeric types and time types, but got {:?}",
+               self
+            )),
         }
     }
 
