@@ -170,7 +170,7 @@ impl SessionContext {
         conf.query.tenant_id.clone()
     }
 
-    pub fn set_current_tenant(&self, tenant: Tenant) {
+    pub(in crate::sessions) fn set_current_tenant(&self, tenant: Tenant) {
         let mut lock = self.current_tenant.write();
         *lock = Some(tenant);
     }
