@@ -206,7 +206,7 @@ impl Binder {
         }
         if join_type == JoinType::AsOf && non_equi_conditions.is_empty() {
             return Err(ErrorCode::SemanticError(
-                "unequal conditions should not be empty in asof join",
+                "Missing inequality condition!",
             ));
         }
         self.push_down_other_conditions(
