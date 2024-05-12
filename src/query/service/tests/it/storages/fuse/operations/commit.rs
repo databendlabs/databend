@@ -841,8 +841,8 @@ impl Catalog for FakedCatalog {
         self.cat.mget_table_names_by_ids(tenant, table_id).await
     }
 
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
-        self.cat.get_db_name_by_id(db_id).await
+    async fn get_db_name_by_id(&self, tenant: &Tenant, db_id: MetaId) -> Result<String> {
+        self.cat.get_db_name_by_id(tenant, db_id).await
     }
 
     #[async_backtrace::framed]

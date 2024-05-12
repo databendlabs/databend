@@ -250,8 +250,12 @@ impl Catalog for SessionCatalog {
     }
 
     // Mget the db name by meta id.
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
-        self.inner.get_db_name_by_id(db_id).await
+    async fn get_db_name_by_id(
+        &self,
+        tenant: &Tenant,
+        db_id: MetaId,
+    ) -> databend_common_exception::Result<String> {
+        self.inner.get_db_name_by_id(tenant, db_id).await
     }
 
     // Mget the dbs name by meta ids.

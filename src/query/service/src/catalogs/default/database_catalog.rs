@@ -318,13 +318,16 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
-        let res = self.immutable_catalog.get_db_name_by_id(db_id).await;
+    async fn get_db_name_by_id(&self, tenant: &Tenant, db_id: MetaId) -> Result<String> {
+        let res = self
+            .immutable_catalog
+            .get_db_name_by_id(tenant, db_id)
+            .await;
 
         if let Ok(x) = res {
             Ok(x)
         } else {
-            self.mutable_catalog.get_db_name_by_id(db_id).await
+            self.mutable_catalog.get_db_name_by_id(tenant, db_id).await
         }
     }
 

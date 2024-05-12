@@ -85,7 +85,7 @@ use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdIdent;
-use databend_common_meta_app::schema::DatabaseIdToName;
+use databend_common_meta_app::schema::DatabaseIdToNameIdent;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseInfoFilter;
@@ -322,7 +322,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let db_id = fetch_id(self, IdGenerator::database_id()).await?;
             let db_id_ident = DatabaseIdIdent::new(&tenant, db_id);
-            let id_to_name_key = DatabaseIdToName { db_id };
+            let id_to_name_key = DatabaseIdToNameIdent::new(&tenant, db_id);
 
             debug!(db_id = db_id, name_key :? =(name_key); "new database id");
 
@@ -520,6 +520,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<RenameDatabaseReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
+        let tenant = req.name_ident.tenant().clone();
         let tenant_dbname = &req.name_ident;
         let tenant_newdbname = DatabaseNameIdent::new(tenant_dbname.tenant(), &req.new_db_name);
 
@@ -548,7 +549,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             db_has_to_not_exist(db_id_seq, &tenant_newdbname, "rename_database")?;
 
             // get db id -> name
-            let db_id_key = DatabaseIdToName { db_id: old_db_id };
+            let db_id_key = DatabaseIdToNameIdent::new(&tenant, old_db_id);
             let (db_name_seq, _): (_, Option<DatabaseNameIdentRaw>) =
                 get_pb_value(self, &db_id_key).await?;
 
@@ -2262,19 +2263,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
-    async fn get_db_name_by_id(&self, db_id: u64) -> Result<String, KVAppError> {
-        debug!(req :? =(&db_id); "SchemaApi: {}", func_name!());
+    async fn get_db_name_by_id(&self, db_id_ident: DatabaseIdIdent) -> Result<String, KVAppError> {
+        debug!(req :? =(&db_id_ident); "SchemaApi: {}", func_name!());
 
-        let db_id_to_name_key = DatabaseIdToName { db_id };
+        let db_id_to_name_ident = DatabaseIdToNameIdent::new_from(db_id_ident.clone());
 
         let (meta_seq, db_name): (_, Option<DatabaseNameIdentRaw>) =
-            get_pb_value(self, &db_id_to_name_key).await?;
+            get_pb_value(self, &db_id_to_name_ident).await?;
 
-        debug!(ident :% =(&db_id_to_name_key); "get_db_name_by_id");
+        debug!(ident :% =(&db_id_to_name_ident.display()); "get_db_name_by_id");
 
         if meta_seq == 0 || db_name.is_none() {
             return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
-                UnknownDatabaseId::new(db_id, "get_db_name_by_id"),
+                UnknownDatabaseId::new(db_id_ident.database_id(), "get_db_name_by_id"),
             )));
         }
 
@@ -2292,7 +2293,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let mut kv_keys = Vec::with_capacity(db_ids.len());
         for id in db_ids {
-            let k = DatabaseIdToName { db_id: *id }.to_string_key();
+            let k = DatabaseIdToNameIdent::new(tenant, *id).to_string_key();
             kv_keys.push(k);
         }
 
@@ -4684,7 +4685,7 @@ async fn gc_dropped_db_by_id(
         if db_meta_seq == 0 {
             return Ok(());
         }
-        let id_to_name = DatabaseIdToName { db_id };
+        let id_to_name = DatabaseIdToNameIdent::new(tenant, db_id);
         let (name_ident_seq, _name_ident): (_, Option<DatabaseNameIdentRaw>) =
             get_pb_value(kv_api, &id_to_name).await?;
         if name_ident_seq == 0 {

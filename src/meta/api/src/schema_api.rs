@@ -29,6 +29,7 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DatabaseIdIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropCatalogReply;
@@ -223,7 +224,7 @@ pub trait SchemaApi: Send + Sync {
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>, KVAppError>;
 
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String, KVAppError>;
+    async fn get_db_name_by_id(&self, db_id: DatabaseIdIdent) -> Result<String, KVAppError>;
 
     async fn get_table_copied_file_info(
         &self,

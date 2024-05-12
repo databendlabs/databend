@@ -39,6 +39,7 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DatabaseIdIdent;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -382,8 +383,16 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
-        let res = self.ctx.meta.get_db_name_by_id(db_id).await?;
+    async fn get_db_name_by_id(
+        &self,
+        tenant: &Tenant,
+        db_id: MetaId,
+    ) -> databend_common_exception::Result<String> {
+        let res = self
+            .ctx
+            .meta
+            .get_db_name_by_id(DatabaseIdIdent::new(tenant, db_id))
+            .await?;
         Ok(res)
     }
 

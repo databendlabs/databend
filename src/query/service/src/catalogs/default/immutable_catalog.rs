@@ -217,7 +217,11 @@ impl Catalog for ImmutableCatalog {
         Ok(table_name)
     }
 
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
+    async fn get_db_name_by_id(
+        &self,
+        _tenant: &Tenant,
+        db_id: MetaId,
+    ) -> databend_common_exception::Result<String> {
         if self.sys_db.get_db_info().ident.db_id == db_id {
             Ok("system".to_string())
         } else if self.info_schema_db.get_db_info().ident.db_id == db_id {

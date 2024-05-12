@@ -52,7 +52,7 @@ use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdIdent;
-use databend_common_meta_app::schema::DatabaseIdToName;
+use databend_common_meta_app::schema::DatabaseIdToNameIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
@@ -470,7 +470,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_table(req).await?;
             table_id = res.table_id;
 
-            let db_id_name_key = DatabaseIdToName { db_id };
+            let db_id_name_key = DatabaseIdToNameIdent::new(&tenant, db_id);
             let ret_db_name_ident: DatabaseNameIdentRaw =
                 get_kv_data(mt.as_kv_api(), &db_id_name_key).await?;
             assert_eq!(
@@ -498,7 +498,7 @@ impl SchemaApiTestSuite {
             info!("rename database res: {:?}", res);
             assert!(res.is_ok());
 
-            let db_id_2_name_key = DatabaseIdToName { db_id };
+            let db_id_2_name_key = DatabaseIdToNameIdent::new(&tenant, db_id);
             let ret_db_name_ident: DatabaseNameIdentRaw =
                 get_kv_data(mt.as_kv_api(), &db_id_2_name_key).await?;
             assert_eq!(
@@ -724,7 +724,7 @@ impl SchemaApiTestSuite {
 
             let orig_db_id: u64 = get_kv_u64_data(mt.as_kv_api(), &db_name).await?;
             assert_eq!(orig_db_id, res.ident.db_id);
-            let db_id_name_key = DatabaseIdToName { db_id: orig_db_id };
+            let db_id_name_key = DatabaseIdToNameIdent::new(&tenant, orig_db_id);
             let ret_db_name_ident: DatabaseNameIdentRaw =
                 get_kv_data(mt.as_kv_api(), &db_id_name_key).await?;
             assert_eq!(ret_db_name_ident, DatabaseNameIdentRaw::from(&db_name));
@@ -748,7 +748,7 @@ impl SchemaApiTestSuite {
 
             let db_id: u64 = get_kv_u64_data(mt.as_kv_api(), &db_name).await?;
             assert_eq!(db_id, res.ident.db_id);
-            let db_id_name_key = DatabaseIdToName { db_id };
+            let db_id_name_key = DatabaseIdToNameIdent::new(&tenant, db_id);
             let ret_db_name_ident: DatabaseNameIdentRaw =
                 get_kv_data(mt.as_kv_api(), &db_id_name_key).await?;
             assert_eq!(ret_db_name_ident, DatabaseNameIdentRaw::from(&db_name));
@@ -2038,7 +2038,7 @@ impl SchemaApiTestSuite {
 
         info!("--- drop db-id-to-name mapping to ensure dropping table does not rely on it");
         {
-            let id_to_name_key = DatabaseIdToName { db_id: util.db_id };
+            let id_to_name_key = DatabaseIdToNameIdent::new(&util.tenant, util.db_id);
             util.mt
                 .as_kv_api()
                 .upsert_kv(UpsertKV::delete(id_to_name_key.to_string_key()))
@@ -3384,7 +3384,7 @@ impl SchemaApiTestSuite {
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.iter() {
             let id_key = DatabaseIdIdent::new(&tenant, *db_id);
-            let id_mapping = DatabaseIdToName { db_id: *db_id };
+            let id_mapping = DatabaseIdToNameIdent::new(&tenant, *db_id);
 
             let meta_res: Result<DatabaseMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
@@ -3767,7 +3767,7 @@ impl SchemaApiTestSuite {
         // assert old db meta and id to name mapping has been removed
         for db_id in old_id_list.id_list.iter() {
             let id_key = DatabaseIdIdent::new(&tenant, *db_id);
-            let id_mapping = DatabaseIdToName { db_id: *db_id };
+            let id_mapping = DatabaseIdToNameIdent::new(&tenant, *db_id);
 
             let meta_res: Result<DatabaseMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
@@ -4981,7 +4981,9 @@ impl SchemaApiTestSuite {
 
             assert_eq!(1, res.db_id, "first database id is 1");
 
-            let got = mt.get_db_name_by_id(res.db_id).await?;
+            let got = mt
+                .get_db_name_by_id(DatabaseIdIdent::new(&tenant, res.db_id))
+                .await?;
             assert_eq!(got, db_name.to_string())
         }
 
@@ -4995,14 +4997,18 @@ impl SchemaApiTestSuite {
 
                 let db = mt.get_database(plan).await.unwrap();
 
-                let got = mt.get_db_name_by_id(db.ident.db_id).await?;
+                let got = mt
+                    .get_db_name_by_id(DatabaseIdIdent::new(&tenant, db.ident.db_id))
+                    .await?;
 
                 assert_eq!(got, db_name.to_string());
             }
 
             info!("--- get_db_name_by_id with not exists db_id");
             {
-                let got = mt.get_db_name_by_id(1024).await;
+                let got = mt
+                    .get_db_name_by_id(DatabaseIdIdent::new(&tenant, 1024))
+                    .await;
 
                 let err = got.unwrap_err();
                 let err = ErrorCode::from(err);
