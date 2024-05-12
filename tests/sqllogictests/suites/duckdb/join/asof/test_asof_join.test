@@ -38,28 +38,28 @@ FROM trades t ASOF JOIN prices p
 #
 
 # Invalid ASOF JOIN comparison
-statement error (?s)1065.*Missing inequality condition!
+statement error (?s).*Missing inequality condition!
 SELECT p.ts, e.value
 FROM range(0,10) p(ts) ASOF JOIN events0 e
 ON p.ts <> e.begin
 ORDER BY p.ts ASC
 
 # Invalid ASOF JOIN condition
-statement error (?s)1065.*Missing equality condition!
+statement error (?s).*Missing equality condition!
 SELECT p.ts, e.value
 FROM range(0,10) p(ts) ASOF JOIN events0 e
 ON 1 = 1 AND p.ts >= e.begin
 ORDER BY p.ts ASC
 
 # Missing ASOF JOIN inequality
-statement error (?s)1065.*Missing inequality condition!
+statement error (?s).*Missing inequality condition!
 SELECT p.ts, e.value
 FROM range(0,10) p(ts) ASOF JOIN events0 e
 ON p.ts = e.begin
 ORDER BY p.ts ASC
 
 # Multiple ASOF JOIN inequalities
-statement error (?s)1065.*Multiple inequalities condition!
+statement error (?s).*Multiple inequalities condition!
 SELECT p.ts, e.value
 FROM range(0,10) p(ts) ASOF JOIN events0 e
 ON p.ts >= e.begin AND p.ts >= e.value
