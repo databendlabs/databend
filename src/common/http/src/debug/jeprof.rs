@@ -14,8 +14,8 @@
 
 use databend_common_base::mem_allocator::dump_profile;
 use databend_common_exception::ErrorCode;
+use http::StatusCode;
 use poem::error::InternalServerError;
-use poem::http::StatusCode;
 use poem::web::IntoResponse;
 use poem::web::Query;
 use poem::Error;
