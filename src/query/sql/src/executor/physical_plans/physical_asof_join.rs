@@ -87,7 +87,7 @@ impl PhysicalPlanBuilder {
         if range_conditions.len() > 1 {
             return Err(ErrorCode::Internal("Multiple inequalities condition!"));
         }
-        if join.left_conditions.is_empty(){
+        if join.left_conditions.is_empty() {
             return Err(ErrorCode::Internal("Missing equality condition!"));
         }
         let (window_func, right_column) =
@@ -199,7 +199,7 @@ impl PhysicalPlanBuilder {
                 if func.arguments.len() == 2 {
                     for arg in func.arguments.iter() {
                         if let ScalarExpr::BoundColumnRef(_) = arg {
-                            let asc = 
+                            let asc =
                                 match ComparisonOp::try_from_func_name(func.func_name.as_str())
                                     .unwrap()
                                 {
