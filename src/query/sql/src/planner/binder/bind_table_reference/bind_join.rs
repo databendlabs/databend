@@ -373,9 +373,7 @@ impl Binder {
             ));
         }
         if join_type == JoinType::AsOf && non_equi_conditions.is_empty() {
-            return Err(ErrorCode::SemanticError(
-                "Missing inequality condition!",
-            ));
+            return Err(ErrorCode::SemanticError("Missing inequality condition!"));
         }
         self.push_down_other_conditions(
             &join_type,
