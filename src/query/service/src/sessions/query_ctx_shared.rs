@@ -272,10 +272,6 @@ impl QueryContextShared {
         self.session.get_current_role()
     }
 
-    pub fn set_current_tenant(&self, tenant: Tenant) {
-        self.session.set_current_tenant(tenant);
-    }
-
     /// Get all tables that already attached in this query.
     pub fn get_tables_refs(&self) -> Vec<Arc<dyn Table>> {
         let tables = self.tables_refs.lock();
