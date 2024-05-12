@@ -135,5 +135,37 @@ SELECT MAP_CAT(
 ----
 {'k1':{'nk1':'nv1'},'k2':{'nk2':'nv2'},'k3':{'nk1':'new_nv1'},'k4':{'nk3':'nv3'}}
 
+# Test map_contains_key function
+statement ok
+CREATE TABLE map_contains_test(col_str Map(String, String Null) Not Null, col_int Map(String, Int Null) Null)
+
+statement ok
+INSERT INTO map_contains_test VALUES ({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, null)
+
+query TT
+select map_contains_key(col_str, 'k1'), map_contains_key(col_str, 'k2'), map_contains_key(col_int, 'a') from map_contains_test
+----
+1 1 1
+0 0 0
+0 0 NULL
+
+# Test empty map
+query
+SELECT map_contains_key({}, 'k1')
+----
+0
+
+# Test non-existent key
+query
+SELECT map_contains_key({'k1': 'v1', 'k2': 'v2'}, 'k3')
+----
+0
+
+# Test NULL value
+query
+SELECT map_contains_key({'k1': 'v1', 'k2': NULL}, 'k2')
+----
+1
+
 statement ok
 DROP DATABASE map_func_test

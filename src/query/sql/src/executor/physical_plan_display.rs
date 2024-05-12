@@ -43,7 +43,6 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::ModifyBySubquery;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -78,7 +77,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
         match self.node {
             PhysicalPlan::TableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::Filter(filter) => write!(f, "{}", filter)?,
-            PhysicalPlan::Project(project) => write!(f, "{}", project)?,
             PhysicalPlan::EvalScalar(eval_scalar) => write!(f, "{}", eval_scalar)?,
             PhysicalPlan::AggregateExpand(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
@@ -182,24 +180,6 @@ impl Display for Filter {
             .join(", ");
 
         write!(f, "Filter: [{predicates}]")
-    }
-}
-
-impl Display for Project {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Ok(input_schema) = self.input.output_schema() {
-            let project_columns_name = self
-                .projections
-                .iter()
-                .sorted()
-                .map(|idx| input_schema.field(*idx).name())
-                .cloned()
-                .collect::<Vec<String>>();
-
-            return write!(f, "Project: [{}]", project_columns_name.join(", "));
-        }
-
-        write!(f, "Project: [{:?}]", self.projections)
     }
 }
 

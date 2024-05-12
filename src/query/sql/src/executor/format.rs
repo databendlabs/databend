@@ -46,7 +46,6 @@ use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::ModifyBySubquery;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
@@ -202,7 +201,6 @@ fn to_format_tree(
     match plan {
         PhysicalPlan::TableScan(plan) => table_scan_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata, profs),
         PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata, profs),
         PhysicalPlan::AggregateExpand(plan) => {
             aggregate_expand_to_format_tree(plan, metadata, profs)
@@ -486,31 +484,6 @@ fn filter_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "Filter".to_string(),
-        children,
-    ))
-}
-
-fn project_to_format_tree(
-    plan: &Project,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![FormatTreeNode::new(format!(
-        "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata, true)
-    ))];
-
-    if let Some(info) = &plan.stat_info {
-        let items = plan_stats_info_to_format_tree(info);
-        children.extend(items);
-    }
-
-    append_profile_info(&mut children, profs, plan.plan_id);
-
-    children.push(to_format_tree(&plan.input, metadata, profs)?);
-
-    Ok(FormatTreeNode::with_children(
-        "Project".to_string(),
         children,
     ))
 }

@@ -21,11 +21,13 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::PhysicalPlan;
+use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoLocation {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
+    pub project_columns: Vec<ColumnBinding>,
     pub input_schema: DataSchemaRef,
     pub to_stage_info: StageTableInfo,
 }

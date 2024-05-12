@@ -118,7 +118,6 @@ impl PipelineBuilder {
         //  2.2 matched only: rowids and MutationLogs
         //  2.3 insert only: MutationLogs
         self.build_pipeline(input)?;
-        self.main_pipeline.try_resize(1)?;
 
         // deserialize MixRowIdKindAndLog
         if *change_join_order {

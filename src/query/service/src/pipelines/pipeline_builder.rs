@@ -126,7 +126,6 @@ impl PipelineBuilder {
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
             PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
-            PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
             PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
