@@ -25,7 +25,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 pub struct HttpQueryContext {
-    session: Arc<Session>,
+    pub session: Arc<Session>,
     pub query_id: String,
     pub node_id: String,
     pub deduplicate_label: Option<String>,
