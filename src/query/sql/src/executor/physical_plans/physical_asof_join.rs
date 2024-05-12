@@ -147,7 +147,7 @@ impl PhysicalPlanBuilder {
                     ComparisonOp::GT => {
                         func_name = String::from("lte");
                     }
-                    ComparisonOp::LT =>{
+                    ComparisonOp::LT => {
                         func_name = String::from("gte");
                     }
                     ComparisonOp::LTE => {
@@ -244,8 +244,8 @@ impl PhysicalPlanBuilder {
             .iter()
             .zip(join.left_conditions.iter())
         {
-            if matches!(right_exp, ScalarExpr::BoundColumnRef(_)) 
-            && matches!(left_exp, ScalarExpr::BoundColumnRef(_)) 
+            if matches!(right_exp, ScalarExpr::BoundColumnRef(_))
+                && matches!(left_exp, ScalarExpr::BoundColumnRef(_)) 
             {
                 partition_items.push(right_exp.clone());
                 other_args.clear();
