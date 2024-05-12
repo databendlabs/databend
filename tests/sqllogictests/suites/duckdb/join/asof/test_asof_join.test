@@ -31,7 +31,7 @@ SELECT t.*, p.price
 FROM trades t ASOF JOIN prices p 
   ON t.symbol = p.symbol AND t.wh >= p.wh;
 ----
-2020-01-01 00:00:03	1	42
+2020-01-01 00:00:03.000000 1 42
 
 #
 #  Errors
