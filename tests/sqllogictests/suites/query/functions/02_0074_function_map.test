@@ -135,53 +135,37 @@ SELECT MAP_CAT(
 ----
 {'k1':{'nk1':'nv1'},'k2':{'nk2':'nv2'},'k3':{'nk1':'new_nv1'},'k4':{'nk3':'nv3'}}
 
-statement ok
-DROP DATABASE map_func_test
-
 # Test map_contains_key function
 statement ok
-CREATE DATABASE IF NOT EXISTS map_contains_key_test
+CREATE TABLE map_contains_test(col_str Map(String, String Null) Not Null, col_int Map(String, Int Null) Null)
 
 statement ok
-USE map_contains_key_test
+INSERT INTO map_contains_test VALUES ({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, null)
 
-query
-CREATE TABLE t(col1 Map(String, String Null) Not Null, col2 Map(String, Int Null) Null)
+query TT
+select map_contains_key(col_str, 'k1'), map_contains_key(col_str, 'k2'), map_contains_key(col_int, 'a') from map_contains_test
 ----
-CREATE TABLE t(col1 Map(String, String Null) Not Null, col2 Map(String, Int Null) Null)
+1 1 1
+0 0 0
+0 0 NULL
 
-query
-INSERT INTO t VALUES({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, null)
-----
-INSERT INTO t VALUES({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, null)
-
-query
-SELECT map_contains_key(col1, 'k1')
-----
-true
-
-query
-SELECT map_contains_key(col1, 'k4')
-----
-false
-
-# Test empty maps
+# Test empty map
 query
 SELECT map_contains_key({}, 'k1')
 ----
-false
-
-# Test NULL maps
-query
-SELECT map_contains_key(NULL, 'k1')
-----
-false
+0
 
 # Test non-existent key
 query
 SELECT map_contains_key({'k1': 'v1', 'k2': 'v2'}, 'k3')
 ----
-false
+0
+
+# Test NULL value
+query
+SELECT map_contains_key({'k1': 'v1', 'k2': NULL}, 'k2')
+----
+1
 
 statement ok
-DROP DATABASE map_contains_key_test
+DROP DATABASE map_func_test
