@@ -31,11 +31,16 @@ pub struct RealStorageEncryptionHandler {
 #[async_trait::async_trait]
 impl StorageEncryptionHandler for RealStorageEncryptionHandler {
     async fn check_license(&self) -> Result<()> {
-        let settings = SessionManager::create(&self.cfg)
+        let session_manager = SessionManager::create(&self.cfg);
+        let session = session_manager
             .create_session(SessionType::Dummy)
             .await
-            .unwrap()
-            .get_settings();
+            .unwrap();
+
+        let session = session_manager.register_session(session)?;
+
+        let settings = session.get_settings();
+
         // check for valid license
         get_license_manager().manager.check_enterprise_enabled(
             unsafe { settings.get_enterprise_license().unwrap_or_default() },
