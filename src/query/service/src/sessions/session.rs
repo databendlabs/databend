@@ -70,7 +70,7 @@ impl Session {
         }))
     }
 
-    pub fn to_minitrace_properties(self: &Arc<Self>) -> Vec<(String, String)> {
+    pub fn to_minitrace_properties(&self) -> Vec<(String, String)> {
         let mut properties = vec![
             ("session_id".to_string(), self.id.clone()),
             ("session_database".to_string(), self.get_current_database()),
@@ -88,11 +88,11 @@ impl Session {
         properties
     }
 
-    pub fn get_mysql_conn_id(self: &Arc<Self>) -> Option<u32> {
+    pub fn get_mysql_conn_id(&self) -> Option<u32> {
         self.mysql_connection_id
     }
 
-    pub fn get_id(self: &Arc<Self>) -> String {
+    pub fn get_id(&self) -> String {
         self.id.clone()
     }
 
@@ -106,11 +106,11 @@ impl Session {
         *lock = typ;
     }
 
-    pub fn is_aborting(self: &Arc<Self>) -> bool {
+    pub fn is_aborting(&self) -> bool {
         self.session_ctx.get_abort()
     }
 
-    pub fn quit(self: &Arc<Self>) {
+    pub fn quit(&self) {
         let session_ctx = self.session_ctx.as_ref();
 
         if session_ctx.get_current_query_id().is_some() {
@@ -123,19 +123,19 @@ impl Session {
         http_queries_manager.kill_session(&self.id);
     }
 
-    pub fn kill(self: &Arc<Self>) {
+    pub fn kill(&self) {
         self.session_ctx.set_abort(true);
         self.quit();
     }
 
-    pub fn force_kill_session(self: &Arc<Self>) {
+    pub fn force_kill_session(&self) {
         self.force_kill_query(ErrorCode::AbortedQuery(
             "Aborted query, because the server is shutting down or the query was killed",
         ));
         self.kill(/* shutdown io stream */);
     }
 
-    pub fn force_kill_query(self: &Arc<Self>, cause: ErrorCode) {
+    pub fn force_kill_query(&self, cause: ErrorCode) {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.kill(cause);
         }
@@ -169,38 +169,38 @@ impl Session {
         self.session_ctx.get_current_query_id()
     }
 
-    pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
+    pub fn attach<F>(&self, host: Option<SocketAddr>, io_shutdown: F)
     where F: FnOnce() + Send + Sync + 'static {
         self.session_ctx
             .set_client_host(host.map(|host| host.ip().to_string()));
         self.session_ctx.set_io_shutdown_tx(io_shutdown);
     }
 
-    pub fn set_client_host(self: &Arc<Self>, host: Option<String>) {
+    pub fn set_client_host(&self, host: Option<String>) {
         self.session_ctx.set_client_host(host);
     }
 
-    pub fn set_current_database(self: &Arc<Self>, database_name: String) {
+    pub fn set_current_database(&self, database_name: String) {
         self.session_ctx.set_current_database(database_name);
     }
 
-    pub fn get_current_database(self: &Arc<Self>) -> String {
+    pub fn get_current_database(&self) -> String {
         self.session_ctx.get_current_database()
     }
 
-    pub fn get_current_catalog(self: &Arc<Self>) -> String {
+    pub fn get_current_catalog(&self) -> String {
         self.session_ctx.get_current_catalog()
     }
 
-    pub fn get_current_tenant(self: &Arc<Self>) -> Tenant {
+    pub fn get_current_tenant(&self) -> Tenant {
         self.session_ctx.get_current_tenant()
     }
 
-    pub fn set_current_tenant(self: &Arc<Self>, tenant: Tenant) {
+    pub fn set_current_tenant(&self, tenant: Tenant) {
         self.session_ctx.set_current_tenant(tenant);
     }
 
-    pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
+    pub fn get_current_user(&self) -> Result<UserInfo> {
         self.privilege_mgr().get_current_user()
     }
 
@@ -214,7 +214,7 @@ impl Session {
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
     pub async fn set_authed_user(
-        self: &Arc<Self>,
+        &self,
         user: UserInfo,
         restricted_role: Option<String>,
     ) -> Result<()> {
@@ -224,7 +224,7 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn validate_available_role(self: &Arc<Self>, role_name: &str) -> Result<RoleInfo> {
+    pub async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo> {
         self.privilege_mgr()
             .validate_available_role(role_name)
             .await
@@ -233,30 +233,27 @@ impl Session {
     // Only the available role can be set as current role. The current role can be set by the SET
     // ROLE statement, or by the `session.role` field in the HTTP query request body.
     #[async_backtrace::framed]
-    pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
+    pub async fn set_current_role_checked(&self, role_name: &str) -> Result<()> {
         self.privilege_mgr()
             .set_current_role(Some(role_name.to_string()))
             .await
     }
 
     #[async_backtrace::framed]
-    pub async fn set_secondary_roles_checked(
-        self: &Arc<Self>,
-        role_names: Option<Vec<String>>,
-    ) -> Result<()> {
+    pub async fn set_secondary_roles_checked(&self, role_names: Option<Vec<String>>) -> Result<()> {
         self.privilege_mgr().set_secondary_roles(role_names).await
     }
 
-    pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
+    pub fn get_current_role(&self) -> Option<RoleInfo> {
         self.privilege_mgr().get_current_role()
     }
 
-    pub fn get_secondary_roles(self: &Arc<Self>) -> Option<Vec<String>> {
+    pub fn get_secondary_roles(&self) -> Option<Vec<String>> {
         self.privilege_mgr().get_secondary_roles()
     }
 
     #[async_backtrace::framed]
-    pub async fn unset_current_role(self: &Arc<Self>) -> Result<()> {
+    pub async fn unset_current_role(&self) -> Result<()> {
         self.privilege_mgr().set_current_role(None).await
     }
 
@@ -264,18 +261,18 @@ impl Session {
     // the other roles will be ignored.
     // On executing SET ROLE, the role have to be one of the available roles.
     #[async_backtrace::framed]
-    pub async fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
+    pub async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         self.privilege_mgr().get_all_available_roles().await
     }
 
     #[async_backtrace::framed]
-    pub async fn get_all_effective_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
+    pub async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
         self.privilege_mgr().get_all_effective_roles().await
     }
 
     #[async_backtrace::framed]
     pub async fn validate_privilege(
-        self: &Arc<Self>,
+        &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
@@ -288,7 +285,7 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn has_ownership(self: &Arc<Self>, object: &OwnershipObject) -> Result<bool> {
+    pub async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(true);
         }
@@ -300,24 +297,24 @@ impl Session {
         self.privilege_mgr().get_visibility_checker().await
     }
 
-    pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
+    pub fn get_settings(&self) -> Arc<Settings> {
         self.session_ctx.get_settings()
     }
 
-    pub fn get_memory_usage(self: &Arc<Self>) -> usize {
+    pub fn get_memory_usage(&self) -> usize {
         // TODO(winter): use thread memory tracker
         0
     }
 
-    pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
+    pub fn get_status(&self) -> Arc<RwLock<SessionStatus>> {
         self.status.clone()
     }
 
-    pub fn get_query_result_cache_key(self: &Arc<Self>, query_id: &str) -> Option<String> {
+    pub fn get_query_result_cache_key(&self, query_id: &str) -> Option<String> {
         self.session_ctx.get_query_result_cache_key(query_id)
     }
 
-    pub fn update_query_ids_results(self: &Arc<Self>, query_id: String, result_cache_key: String) {
+    pub fn update_query_ids_results(&self, query_id: String, result_cache_key: String) {
         self.session_ctx
             .update_query_ids_results(query_id, Some(result_cache_key))
     }
