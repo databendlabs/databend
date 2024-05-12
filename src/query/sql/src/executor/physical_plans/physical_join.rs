@@ -68,7 +68,6 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             &mut other_conditions,
         )
     }
-
     if !range_conditions.is_empty() {
         if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
             return Ok(PhysicalJoinType::RangeJoin(
@@ -76,14 +75,13 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
                 other_conditions,
             ));
         }
-        if join.join_type == JoinType::AsOf {
-            return Ok(PhysicalJoinType::AsofJoin(
-                range_conditions,
-                other_conditions,
-            ));
-        }
     }
-
+    if join.join_type == JoinType::AsOf {
+        return Ok(PhysicalJoinType::AsofJoin(
+            range_conditions,
+            other_conditions,
+        ));
+    }
     // Leverage hash join to execute nested loop join
     Ok(PhysicalJoinType::Hash)
 }
