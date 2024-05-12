@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_expression::Expr;
-use log::info;
+use log::debug;
 
 use super::BlockOperator;
 use crate::optimizer::ColumnSet;
@@ -63,7 +63,7 @@ pub fn apply_cse(
                         let mut expr_cloned = cse_candidate.clone();
                         perform_cse_replacement(&mut expr_cloned, &cse_replacements);
 
-                        info!(
+                        debug!(
                             "cse_candidate: {}, temp_expr: {}",
                             expr_cloned.sql_display(),
                             temp_expr.sql_display()
