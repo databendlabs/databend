@@ -245,7 +245,7 @@ impl PhysicalPlanBuilder {
             .zip(join.left_conditions.iter())
         {
             if matches!(right_exp, ScalarExpr::BoundColumnRef(_))
-                && matches!(left_exp, ScalarExpr::BoundColumnRef(_)) 
+                && matches!(left_exp, ScalarExpr::BoundColumnRef(_))
             {
                 partition_items.push(right_exp.clone());
                 other_args.clear();
