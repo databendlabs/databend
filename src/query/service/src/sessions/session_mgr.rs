@@ -145,7 +145,12 @@ impl SessionManager {
         };
 
         let session_ctx = SessionContext::try_create(settings, typ.clone())?;
-        let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
+        let session = Session::try_create(
+            id.clone(),
+            typ.clone(),
+            Box::new(session_ctx),
+            mysql_conn_id,
+        )?;
 
         self.try_add_session(session.clone(), typ.clone())?;
 
@@ -357,14 +362,18 @@ impl SessionManager {
 
         let mut queries_profiles = HashMap::new();
         for weak_ptr in active_sessions {
-            if let Some(session_ctx) = weak_ptr.upgrade().map(|x| x.session_ctx.clone()) {
-                if let Some(context_shared) = session_ctx.get_query_context_shared() {
-                    if let Some(executor) = context_shared.executor.read().upgrade() {
-                        queries_profiles.insert(
-                            context_shared.init_query_id.as_ref().read().clone(),
-                            executor.get_profiles(),
-                        );
-                    }
+            let Some(arc_sesssion) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_sesssion.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                if let Some(executor) = context_shared.executor.read().upgrade() {
+                    queries_profiles.insert(
+                        context_shared.init_query_id.as_ref().read().clone(),
+                        executor.get_profiles(),
+                    );
                 }
             }
         }
