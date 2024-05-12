@@ -276,7 +276,7 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_db_name_by_id(&self, _table_id: MetaId) -> Result<String> {
+    async fn get_db_name_by_id(&self, _tenant: &Tenant, _table_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in ICEBERG catalog",
         ))

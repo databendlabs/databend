@@ -250,8 +250,12 @@ impl Catalog for SessionCatalog {
     }
 
     // Mget the db name by meta id.
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
-        self.inner.get_db_name_by_id(db_id).await
+    async fn get_db_name_by_id(
+        &self,
+        tenant: &Tenant,
+        db_id: MetaId,
+    ) -> databend_common_exception::Result<String> {
+        self.inner.get_db_name_by_id(tenant, db_id).await
     }
 
     // Mget the dbs name by meta ids.
@@ -355,9 +359,7 @@ impl Catalog for SessionCatalog {
             TxnState::AutoCommit => self.inner.update_table_meta(table_info, req).await,
             TxnState::Active => {
                 self.txn_mgr.lock().update_table_meta(req, table_info);
-                Ok(UpdateTableMetaReply {
-                    share_table_info: None,
-                })
+                Ok(UpdateTableMetaReply {})
             }
             TxnState::Fail => unreachable!(),
         }

@@ -366,7 +366,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
+    async fn get_db_name_by_id(&self, _tenant: &Tenant, _db_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in HIVE catalog",
         ))

@@ -29,6 +29,7 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DatabaseIdIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropCatalogReply;
@@ -95,6 +96,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
@@ -212,15 +214,17 @@ pub trait SchemaApi: Send + Sync {
 
     async fn mget_table_names_by_ids(
         &self,
+        tenant: &Tenant,
         table_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>, KVAppError>;
 
     async fn mget_database_names_by_ids(
         &self,
+        tenant: &Tenant,
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>, KVAppError>;
 
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String, KVAppError>;
+    async fn get_db_name_by_id(&self, db_id: DatabaseIdIdent) -> Result<String, KVAppError>;
 
     async fn get_table_copied_file_info(
         &self,

@@ -39,6 +39,7 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DatabaseIdIdent;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -262,10 +263,7 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(req.name_ident.tenant_name()).await?;
-        Ok(CreateDatabaseReply {
-            db_id: res.db_id,
-            spec_vec: None,
-        })
+        Ok(CreateDatabaseReply { db_id: res.db_id })
     }
 
     #[async_backtrace::framed]
@@ -373,25 +371,41 @@ impl Catalog for MutableCatalog {
 
     async fn mget_table_names_by_ids(
         &self,
-        _tenant: &Tenant,
+        tenant: &Tenant,
         table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
-        let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
+        let res = self
+            .ctx
+            .meta
+            .mget_table_names_by_ids(tenant, table_ids)
+            .await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
-        let res = self.ctx.meta.get_db_name_by_id(db_id).await?;
+    async fn get_db_name_by_id(
+        &self,
+        tenant: &Tenant,
+        db_id: MetaId,
+    ) -> databend_common_exception::Result<String> {
+        let res = self
+            .ctx
+            .meta
+            .get_db_name_by_id(DatabaseIdIdent::new(tenant, db_id))
+            .await?;
         Ok(res)
     }
 
     async fn mget_database_names_by_ids(
         &self,
-        _tenant: &Tenant,
+        tenant: &Tenant,
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
-        let res = self.ctx.meta.mget_database_names_by_ids(db_ids).await?;
+        let res = self
+            .ctx
+            .meta
+            .mget_database_names_by_ids(tenant, db_ids)
+            .await?;
         Ok(res)
     }
 

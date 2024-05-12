@@ -25,7 +25,6 @@ use chrono::Utc;
 use super::CreateOption;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
-use crate::share::ShareSpec;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::KeyWithTenant;
@@ -41,46 +40,6 @@ pub struct DatabaseInfo {
 pub struct DatabaseIdent {
     pub db_id: u64,
     pub seq: u64,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
-pub struct DatabaseId {
-    pub db_id: u64,
-}
-
-impl DatabaseId {
-    pub fn new(db_id: u64) -> Self {
-        DatabaseId { db_id }
-    }
-}
-
-impl From<u64> for DatabaseId {
-    fn from(db_id: u64) -> Self {
-        DatabaseId { db_id }
-    }
-}
-
-impl Display for DatabaseId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.db_id)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DatabaseIdToName {
-    pub db_id: u64,
-}
-
-impl Display for DatabaseIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.db_id)
-    }
-}
-
-impl DatabaseIdToName {
-    pub fn new(db_id: u64) -> Self {
-        DatabaseIdToName { db_id }
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -212,7 +171,6 @@ impl Display for CreateDatabaseReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -256,9 +214,7 @@ impl Display for DropDatabaseReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropDatabaseReply {
-    pub spec_vec: Option<Vec<ShareSpec>>,
-}
+pub struct DropDatabaseReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabaseReq {
@@ -324,70 +280,5 @@ pub struct ListDatabaseReq {
 impl ListDatabaseReq {
     pub fn tenant(&self) -> &Tenant {
         &self.tenant
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::schema::database_name_ident::DatabaseNameIdentRaw;
-    use crate::schema::DatabaseId;
-    use crate::schema::DatabaseIdToName;
-    use crate::schema::DatabaseMeta;
-
-    impl kvapi::KeyCodec for DatabaseId {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.db_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = parser.next_u64()?;
-            Ok(Self { db_id })
-        }
-    }
-
-    /// "__fd_database_by_id/<db_id>"
-    impl kvapi::Key for DatabaseId {
-        const PREFIX: &'static str = "__fd_database_by_id";
-
-        type ValueType = DatabaseMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-    }
-
-    impl kvapi::KeyCodec for DatabaseIdToName {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.db_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = parser.next_u64()?;
-            Ok(Self { db_id })
-        }
-    }
-
-    /// "__fd_database_id_to_name/<db_id> -> DatabaseNameIdent"
-    impl kvapi::Key for DatabaseIdToName {
-        const PREFIX: &'static str = "__fd_database_id_to_name";
-
-        type ValueType = DatabaseNameIdentRaw;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for DatabaseMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for DatabaseNameIdentRaw {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }

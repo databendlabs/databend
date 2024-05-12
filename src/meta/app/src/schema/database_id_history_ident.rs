@@ -39,8 +39,9 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::schema::DatabaseId;
+    use crate::schema::DatabaseIdIdent;
     use crate::schema::DbIdList;
+    use crate::tenant::Tenant;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -53,9 +54,10 @@ mod kvapi_impl {
 
     impl kvapi::Value for DbIdList {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            // TODO(TIdent): add real tenant:
             self.id_list
                 .iter()
-                .map(|id| DatabaseId::new(*id).to_string_key())
+                .map(|id| DatabaseIdIdent::new(Tenant::new_literal("dummy"), *id).to_string_key())
         }
     }
 

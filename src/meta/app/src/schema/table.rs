@@ -34,9 +34,8 @@ use maplit::hashmap;
 
 use super::CreateOption;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::schema::DatabaseIdIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
-use crate::share::ShareSpec;
-use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -534,9 +533,8 @@ impl Display for CreateTableReq {
 pub struct CreateTableReply {
     pub table_id: u64,
     pub table_id_seq: Option<u64>,
-    pub db_id: u64,
+    pub database_id_ident: DatabaseIdIdent,
     pub new_table: bool,
-    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
 }
 
 /// Drop table by id.
@@ -574,9 +572,7 @@ impl Display for DropTableByIdReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropTableReply {
-    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
-}
+pub struct DropTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReq {
@@ -586,7 +582,7 @@ pub struct UndropTableReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableByIdReq {
     pub name_ident: TableNameIdent,
-    pub db_id: MetaId,
+    pub db_id_ident: DatabaseIdIdent,
     pub table_id: MetaId,
     pub table_id_seq: u64,
     // Indicates whether to forcefully replace an existing table with the same name, if it exists.
@@ -737,19 +733,13 @@ pub struct SetTableColumnMaskPolicyReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetTableColumnMaskPolicyReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableOptionReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+pub struct UpsertTableOptionReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpdateTableMetaReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+pub struct UpdateTableMetaReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {
@@ -975,7 +965,7 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use crate::schema::DBIdTableName;
-    use crate::schema::DatabaseId;
+    use crate::schema::DatabaseIdIdent;
     use crate::schema::LeastVisibleTime;
     use crate::schema::LeastVisibleTimeKey;
     use crate::schema::TableCopiedFileInfo;
@@ -985,6 +975,7 @@ mod kvapi_key_impl {
     use crate::schema::TableIdList;
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
+    use crate::tenant::Tenant;
 
     impl kvapi::KeyCodec for DBIdTableName {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
@@ -1005,7 +996,8 @@ mod kvapi_key_impl {
         type ValueType = TableId;
 
         fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
+            // TODO(TIdent): add real tenant
+            Some(DatabaseIdIdent::new(Tenant::new_literal("dummy"), self.db_id).to_string_key())
         }
     }
 
@@ -1075,7 +1067,11 @@ mod kvapi_key_impl {
         type ValueType = TableIdList;
 
         fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.database_id).to_string_key())
+            // TODO(TIdent): add real tenant
+            Some(
+                DatabaseIdIdent::new(Tenant::new_literal("dummy"), self.database_id)
+                    .to_string_key(),
+            )
         }
     }
 

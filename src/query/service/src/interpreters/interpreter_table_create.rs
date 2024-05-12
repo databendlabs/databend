@@ -50,7 +50,6 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
 use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_cache::LoadParams;
@@ -192,7 +191,7 @@ impl CreateTableInterpreter {
         let table_id_seq = reply
             .table_id_seq
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
-        let db_id = reply.db_id;
+        let db_id_ident = reply.database_id_ident;
 
         // grant the ownership of the table to the current role.
         let current_role = self.ctx.get_current_role();
@@ -202,7 +201,7 @@ impl CreateTableInterpreter {
                 .grant_ownership(
                     &OwnershipObject::Table {
                         catalog_name: self.plan.catalog.clone(),
-                        db_id,
+                        db_id: db_id_ident.database_id(),
                         table_id,
                     },
                     &current_role.name,
@@ -238,17 +237,6 @@ impl CreateTableInterpreter {
             table_info: Some(table_info),
         };
 
-        // update share spec if needed
-        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
-            save_share_spec(
-                tenant.tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_info),
-            )
-            .await?;
-        }
-
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
             .await?;
@@ -275,7 +263,7 @@ impl CreateTableInterpreter {
                                 db_name,
                                 table_name,
                             },
-                            db_id,
+                            db_id_ident: db_id_ident,
                             table_id,
                             table_id_seq,
                             force_replace: true,
@@ -349,17 +337,6 @@ impl CreateTableInterpreter {
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
-
-        // update share spec if needed
-        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_info),
-            )
-            .await?;
         }
 
         Ok(PipelineBuildResult::create())
