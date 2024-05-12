@@ -81,20 +81,14 @@ impl PhysicalPlanBuilder {
         let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
 
-        if range_conditions.is_empty(){
-            return Err(ErrorCode::Internal(
-                "Missing inequality condition!",
-            ));
+        if range_conditions.is_empty() {
+            return Err(ErrorCode::Internal("Missing inequality condition!"));
         }
         if range_conditions.len() > 1 {
-            return Err(ErrorCode::Internal(
-                "Multiple inequalities condition!",
-            ));
+            return Err(ErrorCode::Internal("Multiple inequalities condition!"));
         }
         if join.left_conditions.is_empty(){
-            return Err(ErrorCode::Internal(
-                "Missing equality condition!",
-            ));
+            return Err(ErrorCode::Internal("Missing equality condition!"));
         }
         let (window_func, right_column) =
             self.bind_window_func(join, s_expr, &range_conditions, &mut other_conditions)?;
@@ -205,12 +199,14 @@ impl PhysicalPlanBuilder {
                 if func.arguments.len() == 2 {
                     for arg in func.arguments.iter() {
                         if let ScalarExpr::BoundColumnRef(_) = arg {
-                            let asc = match ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap()
-                            {
-                                ComparisonOp::GT | ComparisonOp::GTE => Ok(Some(true)),
-                                ComparisonOp::LT | ComparisonOp::LTE => Ok(Some(false)),
-                                _ => Err(ErrorCode::Internal("must be range condition!")),
-                            }?;
+                            let asc = 
+                                match ComparisonOp::try_from_func_name(func.func_name.as_str())
+                                    .unwrap()
+                                {
+                                    ComparisonOp::GT | ComparisonOp::GTE => Ok(Some(true)),
+                                    ComparisonOp::LT | ComparisonOp::LTE => Ok(Some(false)),
+                                    _ => Err(ErrorCode::Internal("must be range condition!")),
+                                }?;
                             if arg.used_columns().is_subset(&left_prop.output_columns) {
                                 left_column = arg.clone();
                                 constant_default.span = left_column.span();
