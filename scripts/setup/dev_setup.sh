@@ -131,6 +131,11 @@ function install_ziglang {
 }
 
 function install_python3 {
+	PACKAGE_MANAGER=$1
+	if ! command -v git > /dev/null; then
+		install_pkg git "$PACKAGE_MANAGER"
+	fi
+	
 	echo "==> installing python3 via pyenv..."
 	curl https://pyenv.run | bash
 
