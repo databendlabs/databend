@@ -19,6 +19,8 @@ use std::sync::Arc;
 use databend_common_arrow::arrow_format::flight::data::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::future::TimingFutureExt;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingGuard;
 use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
@@ -281,15 +283,20 @@ impl MetaService for MetaServiceImpl {
     async fn kv_api(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         self.check_token(request.metadata())?;
 
-        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = RequestInFlight::guard();
+        let _guard = thread_tracking_guard(&request);
+        ThreadTracker::tracking_future(async move {
+            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+            let _guard = RequestInFlight::guard();
 
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
-        let reply = self.handle_kv_api(request).in_span(root).await?;
+            let root =
+                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+            let reply = self.handle_kv_api(request).in_span(root).await?;
 
-        network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
+            network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-        Ok(Response::new(reply))
+            Ok(Response::new(reply))
+        })
+        .await
     }
 
     type KvReadV1Stream = BoxStream<StreamItem>;
@@ -300,15 +307,20 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::KvReadV1Stream>, Status> {
         self.check_token(request.metadata())?;
 
-        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let _guard = thread_tracking_guard(&request);
+        ThreadTracker::tracking_future(async move {
+            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+            let root =
+                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
-        let (endpoint, strm) = self.handle_kv_read_v1(request).in_span(root).await?;
+            let (endpoint, strm) = self.handle_kv_read_v1(request).in_span(root).await?;
 
-        let mut resp = Response::new(strm);
-        GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+            let mut resp = Response::new(strm);
+            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
 
-        Ok(resp)
+            Ok(resp)
+        })
+        .await
     }
 
     async fn transaction(
@@ -317,18 +329,24 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<TxnReply>, Status> {
         self.check_token(request.metadata())?;
 
-        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = RequestInFlight::guard();
+        let _guard = thread_tracking_guard(&request);
 
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
-        let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
+        ThreadTracker::tracking_future(async move {
+            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+            let _guard = RequestInFlight::guard();
 
-        network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
+            let root =
+                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+            let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
 
-        let mut resp = Response::new(reply);
-        GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+            network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-        Ok(resp)
+            let mut resp = Response::new(reply);
+            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+
+            Ok(resp)
+        })
+        .await
     }
 
     type ExportStream = Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;
@@ -482,4 +500,16 @@ impl MetaService for MetaServiceImpl {
         }
         Err(Status::unavailable("can not get client ip address"))
     }
+}
+
+fn thread_tracking_guard<T>(req: &tonic::Request<T>) -> Option<TrackingGuard> {
+    if let Some(value) = req.metadata().get("QueryID") {
+        if let Ok(value) = value.to_str() {
+            let mut tracking_payload = ThreadTracker::new_tracking_payload();
+            tracking_payload.query_id = Some(value.to_string());
+            return Some(ThreadTracker::tracking(tracking_payload));
+        }
+    }
+
+    None
 }

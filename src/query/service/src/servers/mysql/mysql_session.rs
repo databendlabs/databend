@@ -20,7 +20,6 @@ use databend_common_base::base::tokio::net::TcpStream;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -53,7 +52,7 @@ impl MySQLConnection {
         let query_executor =
             Runtime::with_worker_threads(1, Some("mysql-query-executor".to_string()))?;
         Thread::spawn(move || {
-            let join_handle = query_executor.spawn(GLOBAL_TASK, async move {
+            let join_handle = query_executor.spawn(async move {
                 let client_addr = match non_blocking_stream.peer_addr() {
                     Ok(addr) => addr.to_string(),
                     Err(e) => {

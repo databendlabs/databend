@@ -232,7 +232,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                             let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
                             let ctx = ctx.clone();
                             let table = table.clone();
-                            let handler = runtime.spawn(ctx.get_id(), async move {
+                            let handler = runtime.spawn(async move {
                                 let mut reason = "".to_string();
                                 // safe unwrap.
                                 let stream_table =

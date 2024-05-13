@@ -19,7 +19,6 @@ use std::time::Instant;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
@@ -68,7 +67,7 @@ where
     #[async_backtrace::framed]
     async fn execute_in_runtime(self, runtime: &Runtime) -> Result<T::Output> {
         runtime
-            .try_spawn(GLOBAL_TASK, self)?
+            .try_spawn(self)?
             .await
             .map_err(|e| ErrorCode::TokioError(format!("runtime join error. {}", e)))
     }

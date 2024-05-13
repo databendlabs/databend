@@ -91,7 +91,7 @@ impl SinkAnalyzeState {
         snapshot_id: SnapshotId,
         input: Arc<InputPort>,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, ctx.clone(), SinkAnalyzeState {
+        let sinker = AsyncSinker::create(input, SinkAnalyzeState {
             ctx,
             output_schema,
             catalog: catalog.to_string(),
