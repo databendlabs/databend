@@ -114,7 +114,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
             let retry_io_timeout = env::var("_DATABEND_INTERNAL_RETRY_IO_TIMEOUT")
                 .ok()
                 .and_then(|v| v.parse::<u64>().ok())
-                .unwrap_or(10);
+                .unwrap_or(60);
 
             let mut timeout_layer = TimeoutLayer::new();
 
