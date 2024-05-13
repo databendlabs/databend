@@ -14,29 +14,20 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::table_schema_to_arrow_schema_ignore_inside_nullable;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
-use ethnum::I256;
 use parquet_rs::arrow::arrow_to_parquet_schema;
 use parquet_rs::arrow::ArrowWriter;
 use parquet_rs::basic::Encoding;
-use parquet_rs::basic::Type as PhysicalType;
 use parquet_rs::file::properties::EnabledStatistics;
 use parquet_rs::file::properties::WriterProperties;
-use parquet_rs::file::properties::WriterPropertiesBuilder;
 use parquet_rs::format::FileMetaData;
-use parquet_rs::schema::types::ColumnPath;
-use parquet_rs::schema::types::Type;
-use parquet_rs::schema::types::TypePtr;
+
+use crate::codec::choose_codec;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -63,7 +54,7 @@ pub fn blocks_to_parquet(
     let parquet_schema = arrow_to_parquet_schema(&arrow_schema)?;
     if blocks.len() == 1 {
         // doesn't not cover the case of multiple blocks for now. to simplify the implementation
-        props_builder = choose_compression_scheme(
+        props_builder = choose_codec(
             props_builder,
             &blocks[0],
             parquet_schema.root_schema().get_fields(),
@@ -83,291 +74,4 @@ pub fn blocks_to_parquet(
     }
     let file_meta = writer.close()?;
     Ok(file_meta)
-}
-
-fn choose_compression_scheme(
-    mut props: WriterPropertiesBuilder,
-    block: &DataBlock,
-    parquet_fields: &[TypePtr],
-    table_schema: &TableSchema,
-    stat: &StatisticsOfColumns,
-) -> Result<WriterPropertiesBuilder> {
-    for ((parquet_field, table_field), _col) in parquet_fields
-        .iter()
-        .zip(table_schema.fields.iter())
-        .zip(block.columns())
-    {
-        match parquet_field.as_ref() {
-            Type::PrimitiveType {
-                basic_info: _,
-                physical_type,
-                type_length: _,
-                scale: _,
-                precision: _,
-            } => match physical_type {
-                PhysicalType::BYTE_ARRAY | PhysicalType::FIXED_LEN_BYTE_ARRAY => {
-                    let ndv = stat
-                        .get(&table_field.column_id)
-                        .and_then(|stat| stat.distinct_of_values);
-                    let num_rows = block.num_rows();
-                    if let Some(ndv) = ndv {
-                        if num_rows as f64 / ndv as f64 > 10.0 {
-                            let col_path = ColumnPath::new(vec![table_field.name().clone()]);
-                            props = props.set_column_dictionary_enabled(col_path, true);
-                        }
-                    }
-                }
-                _ => {}
-            },
-            Type::GroupType {
-                basic_info: _,
-                fields: _,
-            } => {} // TODO: handle nested fields
-        }
-    }
-    Ok(props)
-}
-
-#[allow(dead_code)]
-fn can_apply_delta_binary_pack(
-    physical_type: &PhysicalType,
-    col: &BlockEntry,
-    num_rows: usize,
-) -> Result<bool> {
-    const MAX_DELTA: i64 = 1 << 3;
-    if !matches!(
-        physical_type,
-        PhysicalType::INT32 | PhysicalType::INT64 | PhysicalType::INT96
-    ) {
-        return Ok(false);
-    }
-    if num_rows == 0 {
-        return Ok(false);
-    }
-    let col = col
-        .value
-        .convert_to_full_column(&col.data_type, num_rows)
-        .remove_nullable();
-    match col.data_type().remove_nullable() {
-        DataType::Number(NumberDataType::UInt8) => {
-            let mut max_delta = 0;
-            let mut min_delta = u8::MAX;
-            let col = col.as_number().unwrap().as_u_int8().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
-        }
-        DataType::Number(NumberDataType::UInt16) => {
-            let mut max_delta = 0;
-            let mut min_delta = u16::MAX;
-            let col = col.as_number().unwrap().as_u_int16().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
-        }
-        DataType::Number(NumberDataType::UInt32) => {
-            let mut max_delta = 0;
-            let mut min_delta = u32::MAX;
-            let col = col.as_number().unwrap().as_u_int32().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
-        }
-        DataType::Number(NumberDataType::UInt64) => {
-            let mut max_delta = 0;
-            let mut min_delta = u64::MAX;
-            let col = col.as_number().unwrap().as_u_int64().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) <= MAX_DELTA as u64)
-        }
-        DataType::Number(NumberDataType::Int8) => {
-            let mut max_delta = 0;
-            let mut min_delta = i8::MAX;
-            let col = col.as_number().unwrap().as_int8().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
-        }
-        DataType::Number(NumberDataType::Int16) => {
-            let mut max_delta = 0;
-            let mut min_delta = i16::MAX;
-            let col = col.as_number().unwrap().as_int16().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
-        }
-        DataType::Number(NumberDataType::Int32) => {
-            let mut max_delta = 0;
-            let mut min_delta = i32::MAX;
-            let col = col.as_number().unwrap().as_int32().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
-        }
-        DataType::Number(NumberDataType::Int64) => {
-            let mut max_delta = 0;
-            let mut min_delta = i64::MAX;
-            let col = col.as_number().unwrap().as_int64().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) <= MAX_DELTA)
-        }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
-            let mut max_delta = 0;
-            let mut min_delta = i128::MAX;
-            let (col, _) = col.as_decimal().unwrap().as_decimal128().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) <= MAX_DELTA as i128)
-        }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
-            let mut max_delta: I256 = I256::ZERO;
-            let mut min_delta = I256::MAX;
-            let (col, _) = col.as_decimal().unwrap().as_decimal256().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok(max_delta - min_delta <= I256::from(MAX_DELTA))
-        }
-        DataType::Timestamp => {
-            let mut max_delta = 0;
-            let mut min_delta = i64::MAX;
-            let col = col.as_timestamp().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) <= MAX_DELTA)
-        }
-        DataType::Date => {
-            let mut max_delta = 0;
-            let mut min_delta = i32::MAX;
-            let col = col.as_date().unwrap();
-            let mut col_iter = col.iter();
-            let mut prev = *col_iter.next().unwrap();
-            for &v in col_iter {
-                let delta = if v > prev { v - prev } else { prev - v };
-                if delta > max_delta {
-                    max_delta = delta;
-                }
-                if delta < min_delta {
-                    min_delta = delta;
-                }
-                prev = v;
-            }
-            Ok((max_delta - min_delta) as i64 <= MAX_DELTA)
-        }
-        _ => Err(ErrorCode::Internal(format!(
-            "Unsupported data type for delta binary pack: {:?}",
-            col.data_type()
-        ))),
-    }
 }

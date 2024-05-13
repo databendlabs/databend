@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+mod byte_array;
+mod choose;
+mod int;
 
-mod codec;
-mod parquet_rs;
-pub use parquet_rs::blocks_to_parquet;
+pub use choose::choose_codec;
