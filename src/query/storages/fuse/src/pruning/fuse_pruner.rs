@@ -291,79 +291,72 @@ impl FusePruner {
 
             let mut batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
             let inverse_range_index = self.get_inverse_range_index();
-            works.push(
-                self.pruning_ctx
-                    .pruning_runtime
-                    .spawn(self.pruning_ctx.ctx.get_id(), {
-                        let block_pruner = block_pruner.clone();
-                        let segment_pruner = segment_pruner.clone();
-                        let pruning_ctx = self.pruning_ctx.clone();
+            works.push(self.pruning_ctx.pruning_runtime.spawn({
+                let block_pruner = block_pruner.clone();
+                let segment_pruner = segment_pruner.clone();
+                let pruning_ctx = self.pruning_ctx.clone();
 
-                        async move {
-                            // Build pruning tasks.
-                            if let Some(internal_column_pruner) =
-                                &pruning_ctx.internal_column_pruner
-                            {
-                                batch = batch
-                                    .into_iter()
-                                    .filter(|segment| {
-                                        internal_column_pruner
-                                            .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
-                                    })
-                                    .collect::<Vec<_>>();
-                            }
+                async move {
+                    // Build pruning tasks.
+                    if let Some(internal_column_pruner) = &pruning_ctx.internal_column_pruner {
+                        batch = batch
+                            .into_iter()
+                            .filter(|segment| {
+                                internal_column_pruner
+                                    .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
+                            })
+                            .collect::<Vec<_>>();
+                    }
 
-                            let mut res = vec![];
-                            let mut deleted_segments = vec![];
-                            let pruned_segments = segment_pruner.pruning(batch).await?;
+                    let mut res = vec![];
+                    let mut deleted_segments = vec![];
+                    let pruned_segments = segment_pruner.pruning(batch).await?;
 
-                            if delete_pruning {
-                                // inverse prun
-                                for (segment_location, compact_segment_info) in &pruned_segments {
-                                    // for delete_prune
-                                    match inverse_range_index.as_ref() {
-                                        Some(range_index) => {
-                                            if !range_index.should_keep(
-                                                &compact_segment_info.summary.col_stats,
-                                                None,
-                                            ) {
-                                                deleted_segments.push(DeletedSegmentInfo {
-                                                    index: segment_location.segment_idx,
-                                                    summary: compact_segment_info.summary.clone(),
-                                                })
-                                            } else {
-                                                res.extend(
-                                                    block_pruner
-                                                        .pruning(
-                                                            segment_location.clone(),
-                                                            compact_segment_info.block_metas()?,
-                                                        )
-                                                        .await?,
-                                                );
-                                            }
-                                        }
-                                        None => {
-                                            res.extend(
-                                                block_pruner
-                                                    .pruning(
-                                                        segment_location.clone(),
-                                                        compact_segment_info.block_metas()?,
-                                                    )
-                                                    .await?,
-                                            );
-                                        }
+                    if delete_pruning {
+                        // inverse prun
+                        for (segment_location, compact_segment_info) in &pruned_segments {
+                            // for delete_prune
+                            match inverse_range_index.as_ref() {
+                                Some(range_index) => {
+                                    if !range_index
+                                        .should_keep(&compact_segment_info.summary.col_stats, None)
+                                    {
+                                        deleted_segments.push(DeletedSegmentInfo {
+                                            index: segment_location.segment_idx,
+                                            summary: compact_segment_info.summary.clone(),
+                                        })
+                                    } else {
+                                        res.extend(
+                                            block_pruner
+                                                .pruning(
+                                                    segment_location.clone(),
+                                                    compact_segment_info.block_metas()?,
+                                                )
+                                                .await?,
+                                        );
                                     }
                                 }
-                            } else {
-                                for (location, info) in pruned_segments {
-                                    let block_metas = info.block_metas()?;
-                                    res.extend(block_pruner.pruning(location, block_metas).await?);
+                                None => {
+                                    res.extend(
+                                        block_pruner
+                                            .pruning(
+                                                segment_location.clone(),
+                                                compact_segment_info.block_metas()?,
+                                            )
+                                            .await?,
+                                    );
                                 }
                             }
-                            Result::<_, ErrorCode>::Ok((res, deleted_segments))
                         }
-                    }),
-            );
+                    } else {
+                        for (location, info) in pruned_segments {
+                            let block_metas = info.block_metas()?;
+                            res.extend(block_pruner.pruning(location, block_metas).await?);
+                        }
+                    }
+                    Result::<_, ErrorCode>::Ok((res, deleted_segments))
+                }
+            }));
         }
 
         match futures::future::try_join_all(works).await {
@@ -407,29 +400,25 @@ impl FusePruner {
             remain -= gap_size;
 
             let batch = block_metas.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(
-                self.pruning_ctx
-                    .pruning_runtime
-                    .spawn(self.pruning_ctx.ctx.get_id(), {
-                        let block_pruner = block_pruner.clone();
-                        async move {
-                            // Build pruning tasks.
-                            let res = block_pruner
-                                .pruning(
-                                    // unused segment location.
-                                    SegmentLocation {
-                                        segment_idx,
-                                        location: ("".to_string(), 0),
-                                        snapshot_loc: None,
-                                    },
-                                    batch,
-                                )
-                                .await?;
+            works.push(self.pruning_ctx.pruning_runtime.spawn({
+                let block_pruner = block_pruner.clone();
+                async move {
+                    // Build pruning tasks.
+                    let res = block_pruner
+                        .pruning(
+                            // unused segment location.
+                            SegmentLocation {
+                                segment_idx,
+                                location: ("".to_string(), 0),
+                                snapshot_loc: None,
+                            },
+                            batch,
+                        )
+                        .await?;
 
-                            Result::<_, ErrorCode>::Ok(res)
-                        }
-                    }),
-            );
+                    Result::<_, ErrorCode>::Ok(res)
+                }
+            }));
             segment_idx += 1;
         }
 

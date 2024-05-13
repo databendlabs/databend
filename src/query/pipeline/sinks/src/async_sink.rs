@@ -20,7 +20,6 @@ use async_trait::unboxed_simple;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
@@ -53,21 +52,15 @@ pub struct AsyncSinker<T: AsyncSink + 'static> {
     inner: Option<T>,
     finished: bool,
     input: Arc<InputPort>,
-    query_id: String,
     input_data: Option<DataBlock>,
     called_on_start: bool,
     called_on_finish: bool,
 }
 
 impl<T: AsyncSink + 'static> AsyncSinker<T> {
-    pub fn create(
-        input: Arc<InputPort>,
-        ctx: Arc<dyn TableContext>,
-        inner: T,
-    ) -> Box<dyn Processor> {
+    pub fn create(input: Arc<InputPort>, inner: T) -> Box<dyn Processor> {
         Box::new(AsyncSinker {
             input,
-            query_id: ctx.get_id(),
             finished: false,
             input_data: None,
             inner: Some(inner),
@@ -82,7 +75,7 @@ impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
         drop_guard(move || {
             if !self.called_on_start || !self.called_on_finish {
                 if let Some(mut inner) = self.inner.take() {
-                    GlobalIORuntime::instance().spawn(self.query_id.clone(), {
+                    GlobalIORuntime::instance().spawn({
                         let called_on_start = self.called_on_start;
                         let called_on_finish = self.called_on_finish;
                         async move {
