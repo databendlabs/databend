@@ -140,6 +140,19 @@ impl Display for ShareGrantObjectName {
     }
 }
 
+impl From<databend_common_ast::ast::ShareGrantObjectName> for ShareGrantObjectName {
+    fn from(obj: databend_common_ast::ast::ShareGrantObjectName) -> Self {
+        match obj {
+            databend_common_ast::ast::ShareGrantObjectName::Database(db_name) => {
+                ShareGrantObjectName::Database(db_name.name)
+            }
+            databend_common_ast::ast::ShareGrantObjectName::Table(db_name, table_name) => {
+                ShareGrantObjectName::Table(db_name.name, table_name.name)
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObjectSeqAndId {
     // db_meta_seq, db_id, DatabaseMeta
@@ -475,12 +488,18 @@ pub enum ShareGrantObjectPrivilege {
     Select = 1 << 2,
 }
 
-impl Display for ShareGrantObjectPrivilege {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            ShareGrantObjectPrivilege::Usage => write!(f, "USAGE"),
-            ShareGrantObjectPrivilege::ReferenceUsage => write!(f, "REFERENCE_USAGE"),
-            ShareGrantObjectPrivilege::Select => write!(f, "SELECT"),
+impl From<databend_common_ast::ast::ShareGrantObjectPrivilege> for ShareGrantObjectPrivilege {
+    fn from(privilege: databend_common_ast::ast::ShareGrantObjectPrivilege) -> Self {
+        match privilege {
+            databend_common_ast::ast::ShareGrantObjectPrivilege::Usage => {
+                ShareGrantObjectPrivilege::Usage
+            }
+            databend_common_ast::ast::ShareGrantObjectPrivilege::ReferenceUsage => {
+                ShareGrantObjectPrivilege::ReferenceUsage
+            }
+            databend_common_ast::ast::ShareGrantObjectPrivilege::Select => {
+                ShareGrantObjectPrivilege::Select
+            }
         }
     }
 }

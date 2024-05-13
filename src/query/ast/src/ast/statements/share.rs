@@ -16,20 +16,19 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::share::ShareGrantObjectName;
-use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
 
-use super::UriLocation;
 use crate::ast::write_comma_separated_string_map;
+use crate::ast::CreateOption;
 use crate::ast::Identifier;
+use crate::ast::ShareGrantObjectName;
+use crate::ast::ShareGrantObjectPrivilege;
+use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateShareEndpointStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub endpoint: Identifier,
     pub url: UriLocation,
@@ -107,9 +106,7 @@ impl Display for DropShareStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct GrantShareObjectStmt {
     pub share: Identifier,
-    #[drive(skip)]
     pub object: ShareGrantObjectName,
-    #[drive(skip)]
     pub privilege: ShareGrantObjectPrivilege,
 }
 
@@ -128,9 +125,7 @@ impl Display for GrantShareObjectStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct RevokeShareObjectStmt {
     pub share: Identifier,
-    #[drive(skip)]
     pub object: ShareGrantObjectName,
-    #[drive(skip)]
     pub privilege: ShareGrantObjectPrivilege,
 }
 
@@ -230,7 +225,6 @@ impl Display for DropShareEndpointStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowObjectGrantPrivilegesStmt {
-    #[drive(skip)]
     pub object: ShareGrantObjectName,
 }
 

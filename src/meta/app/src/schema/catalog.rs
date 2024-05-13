@@ -31,12 +31,12 @@ pub enum CatalogType {
     Iceberg = 3,
 }
 
-impl Display for CatalogType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CatalogType::Default => write!(f, "DEFAULT"),
-            CatalogType::Hive => write!(f, "HIVE"),
-            CatalogType::Iceberg => write!(f, "ICEBERG"),
+impl From<databend_common_ast::ast::CatalogType> for CatalogType {
+    fn from(catalog_type: databend_common_ast::ast::CatalogType) -> Self {
+        match catalog_type {
+            databend_common_ast::ast::CatalogType::Default => CatalogType::Default,
+            databend_common_ast::ast::CatalogType::Hive => CatalogType::Hive,
+            databend_common_ast::ast::CatalogType::Iceberg => CatalogType::Iceberg,
         }
     }
 }
