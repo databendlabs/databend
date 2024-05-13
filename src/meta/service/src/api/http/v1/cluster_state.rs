@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use poem::http::StatusCode;
+use http::StatusCode;
 use poem::web::Data;
 use poem::web::IntoResponse;
 use poem::web::Json;

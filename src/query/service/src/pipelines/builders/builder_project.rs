@@ -21,7 +21,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::EmptySink;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
-use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::ProjectSet;
 use databend_common_sql::ColumnBinding;
 
@@ -29,29 +28,6 @@ use crate::pipelines::processors::transforms::TransformSRF;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_project(&mut self, project: &Project) -> Result<()> {
-        self.build_pipeline(&project.input)?;
-
-        if project.ignore_result {
-            return self
-                .main_pipeline
-                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))));
-        }
-
-        let num_input_columns = project.input.output_schema()?.num_fields();
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                input,
-                output,
-                num_input_columns,
-                self.func_ctx.clone(),
-                vec![BlockOperator::Project {
-                    projection: project.projections.clone(),
-                }],
-            )))
-        })
-    }
-
     pub fn build_result_projection(
         func_ctx: &FunctionContext,
         input_schema: DataSchemaRef,

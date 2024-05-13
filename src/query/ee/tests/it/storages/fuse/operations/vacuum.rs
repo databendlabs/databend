@@ -21,6 +21,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::TableContext;
 use databend_enterprise_query::storages::fuse::do_vacuum_drop_tables;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
@@ -69,10 +70,12 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     let tbl = fixture.default_table_name();
     let qry = format!("drop table {}.{}", db, tbl);
     fixture.execute_command(&qry).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
     // verify dry run never delete files
     {
-        do_vacuum_drop_tables(vec![table.clone()], Some(100)).await?;
+        do_vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate files",
@@ -88,7 +91,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     }
 
     {
-        do_vacuum_drop_tables(vec![table], None).await?;
+        do_vacuum_drop_tables(threads_nums, vec![table], None).await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(
@@ -243,7 +246,8 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
 
-    let result = do_vacuum_drop_table(&table_info, &operator, None).await;
+    let tables = vec![(table_info, operator)];
+    let result = do_vacuum_drop_table(tables, None).await;
     assert!(result.is_err());
 
     // verify that accessor.delete() was called
@@ -271,7 +275,8 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     let accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
     let operator = OperatorBuilder::new(accessor.clone()).finish();
 
-    let result = do_vacuum_drop_table(&table_info, &operator, None).await;
+    let tables = vec![(table_info, operator)];
+    let result = do_vacuum_drop_table(tables, None).await;
     assert!(result.is_err());
 
     // verify that accessor.delete() was called

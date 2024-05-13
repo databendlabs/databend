@@ -130,7 +130,7 @@ ethnum = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 h2 = "0.3.26"
-headers = "0.3.8"
+headers = "0.4.0"
 highway = "1.1"
 http = { workspace = true }
 humantime = "2.1.0"
@@ -140,16 +140,14 @@ jwt-simple = "0.11.0"
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = { workspace = true }
-metrics = "0.20.1"
 minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
 num_cpus = "1.16.0"
 once_cell = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.5.0", features = ["tls"] }
-opentelemetry = { version = "0.21", features = ["trace", "logs"] }
-opentelemetry-http = "0.10.0"
-opentelemetry_sdk = { version = "0.21", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"

@@ -26,7 +26,6 @@ dashmap = { workspace = true, features = ["serde"] }
 flagset = "0.4"
 futures = { workspace = true }
 log = { workspace = true }
-metrics = "0.20.1"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 parquet = { workspace = true }

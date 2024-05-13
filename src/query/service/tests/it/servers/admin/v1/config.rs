@@ -15,10 +15,10 @@
 use databend_common_base::base::tokio;
 use databend_query::servers::admin::v1::config::config_handler;
 use databend_query::test_kits::*;
+use http::Method;
+use http::StatusCode;
+use http::Uri;
 use poem::get;
-use poem::http::Method;
-use poem::http::StatusCode;
-use poem::http::Uri;
 use poem::Endpoint;
 use poem::Request;
 use poem::Route;
