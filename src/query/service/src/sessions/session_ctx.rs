@@ -70,8 +70,8 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create(settings: Arc<Settings>, typ: SessionType) -> Result<Arc<Self>> {
-        Ok(Arc::new(SessionContext {
+    pub fn try_create(settings: Arc<Settings>, typ: SessionType) -> Result<Self> {
+        Ok(SessionContext {
             settings,
             abort: Default::default(),
             current_user: Default::default(),
@@ -87,7 +87,7 @@ impl SessionContext {
             query_ids_results: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
-        }))
+        })
     }
 
     // Get abort status.

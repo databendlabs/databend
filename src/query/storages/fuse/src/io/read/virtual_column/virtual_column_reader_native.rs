@@ -27,7 +27,15 @@ impl VirtualColumnReader {
         &self,
         loc: &str,
     ) -> Option<(NativeSourceData, Option<HashSet<ColumnId>>)> {
-        let mut reader = self.reader.operator.blocking().reader(loc).ok()?;
+        let op = self.reader.operator.blocking();
+        let meta = op.stat(loc).ok()?;
+        let mut reader = self
+            .reader
+            .operator
+            .blocking()
+            .reader(loc)
+            .ok()?
+            .into_std_read(0..meta.content_length());
 
         let metadata = nread::reader::read_meta(&mut reader).ok()?;
         let schema = nread::reader::infer_schema(&mut reader).ok()?;
@@ -71,12 +79,15 @@ impl VirtualColumnReader {
         &self,
         loc: &str,
     ) -> Option<(NativeSourceData, Option<HashSet<ColumnId>>)> {
-        let mut reader = self.reader.operator.reader(loc).await.ok()?;
+        let meta = self.reader.operator.stat(loc).await.ok()?;
+        let reader = self.reader.operator.reader(loc).await.ok()?;
 
-        let metadata = nread::reader::read_meta_async(&mut reader, None)
+        let metadata = nread::reader::read_meta_async(reader.clone(), meta.content_length() as _)
             .await
             .ok()?;
-        let schema = nread::reader::infer_schema_async(&mut reader).await.ok()?;
+        let schema = nread::reader::infer_schema_async(reader, meta.content_length())
+            .await
+            .ok()?;
 
         let num_rows: u64 = metadata[0].pages.iter().map(|p| p.num_values).sum();
         debug_assert!(

@@ -15,10 +15,12 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::BufWriter;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::ThreadTracker;
 use fern::FormatCallback;
 use opentelemetry::logs::AnyValue;
 use opentelemetry::logs::Severity;
@@ -185,12 +187,25 @@ fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
     };
     record.key_values().visit(&mut visitor).ok();
 
-    out.finish(format_args!(
-        r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
-        humantime::format_rfc3339_micros(SystemTime::now()),
-        record.level(),
-        serde_json::to_string(&fields).unwrap_or_default(),
-    ));
+    match ThreadTracker::query_id() {
+        None => {
+            out.finish(format_args!(
+                r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
+                humantime::format_rfc3339_micros(SystemTime::now()),
+                record.level(),
+                serde_json::to_string(&fields).unwrap_or_default(),
+            ));
+        }
+        Some(query_id) => {
+            out.finish(format_args!(
+                r#"{{"timestamp":"{}","level":"{}","query_id":"{}","fields":{}}}"#,
+                humantime::format_rfc3339_micros(SystemTime::now()),
+                record.level(),
+                query_id,
+                serde_json::to_string(&fields).unwrap_or_default(),
+            ));
+        }
+    }
 
     struct KvCollector<'a> {
         fields: &'a mut Map<String, serde_json::Value>,
@@ -210,16 +225,39 @@ fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
 }
 
 fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::Record) {
-    out.finish(format_args!(
-        "{} {:>5} {}: {}:{} {}{}",
-        humantime::format_rfc3339_micros(SystemTime::now()),
-        record.level(),
-        record.module_path().unwrap_or(""),
-        record.file().unwrap_or(""),
-        record.line().unwrap_or(0),
-        message,
-        KvDisplay::new(record.key_values()),
-    ));
+    match ThreadTracker::query_id() {
+        None => {
+            out.finish(format_args!(
+                "{} {:>5} {}: {}:{} {}{}",
+                humantime::format_rfc3339_micros(SystemTime::now()),
+                record.level(),
+                record.module_path().unwrap_or(""),
+                Path::new(record.file().unwrap_or_default())
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default(),
+                record.line().unwrap_or(0),
+                message,
+                KvDisplay::new(record.key_values()),
+            ));
+        }
+        Some(query_id) => {
+            out.finish(format_args!(
+                "{} {} {:>5} {}: {}:{} {}{}",
+                query_id,
+                humantime::format_rfc3339_micros(SystemTime::now()),
+                record.level(),
+                record.module_path().unwrap_or(""),
+                Path::new(record.file().unwrap_or_default())
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default(),
+                record.line().unwrap_or(0),
+                message,
+                KvDisplay::new(record.key_values()),
+            ));
+        }
+    }
 }
 
 pub struct KvDisplay<'kvs> {

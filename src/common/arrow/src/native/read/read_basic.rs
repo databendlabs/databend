@@ -15,8 +15,6 @@
 use std::convert::TryInto;
 use std::io::Read;
 
-use futures::AsyncRead;
-use futures::AsyncReadExt;
 use parquet2::encoding::hybrid_rle::BitmapIter;
 use parquet2::encoding::hybrid_rle::Decoder;
 use parquet2::encoding::hybrid_rle::HybridEncoded;
@@ -187,9 +185,4 @@ pub fn read_compress_header<R: Read>(r: &mut R) -> Result<(u8, usize, usize)> {
 pub fn read_u64<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<u64> {
     r.read_exact(buf)?;
     Ok(u64::from_le_bytes(buf.try_into().unwrap()))
-}
-
-pub async fn read_u32_async<R: AsyncRead + Unpin>(r: &mut R, buf: &mut [u8]) -> Result<u32> {
-    r.read_exact(buf).await?;
-    Ok(u32::from_le_bytes(buf.try_into().unwrap()))
 }

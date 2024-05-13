@@ -124,7 +124,8 @@ pub async fn check_data_dir(
                     .get_data_operator()?
                     .operator()
                     .read(entry_path)
-                    .await?;
+                    .await?
+                    .to_vec();
                 last_snapshot_loc = str::from_utf8(&content)?.to_string();
             }
         }

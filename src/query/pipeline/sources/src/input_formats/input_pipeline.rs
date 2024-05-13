@@ -248,9 +248,14 @@ pub trait InputFormatPipe: Sized + Send + 'static {
 
         let mut reader = operator
             .reader_with(&split_info.file.path)
-            .range(offset..offset + size as u64)
-            .await?;
+            // TODO: use 8MiB for chunk size.
+            .chunk(8 * 1024 * 1024)
+            // TODO: use 4 concurrent for test, let's extract as a new setting.
+            .concurrent(4)
+            .await?
+            .into_futures_async_read(offset..offset + size as u64);
         let mut total_read = 0;
+
         loop {
             batch_size = batch_size.min(size - total_read);
             let mut batch = vec![0u8; batch_size];
@@ -278,6 +283,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 }
 
+/// FIXME: we have repeat pattern here, maybe provide a better API?
 #[async_backtrace::framed]
 pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
     let mut buf = &mut buf[0..];

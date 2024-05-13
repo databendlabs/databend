@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
-use poem::http::StatusCode;
+use http::StatusCode;
 use poem::web::IntoResponse;
 use poem::web::Json;
 
