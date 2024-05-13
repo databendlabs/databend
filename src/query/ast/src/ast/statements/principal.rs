@@ -71,14 +71,14 @@ impl Display for PrincipalIdentity {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum CreateOption {
     Create,
     CreateIfNotExists,
     CreateOrReplace,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AuthType {
     NoPassword,
     Sha256Password,
@@ -97,7 +97,7 @@ impl Display for AuthType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum CatalogType {
     Default,
     Hive,
@@ -114,7 +114,7 @@ impl Display for CatalogType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum UserPrivilegeType {
     // UsagePrivilege is a synonym for “no privileges”, if object is udf, means can use this udf
     Usage,
@@ -209,7 +209,7 @@ impl Display for ShareGrantObjectName {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum ShareGrantObjectPrivilege {
     // For DATABASE or SCHEMA
     Usage,
@@ -267,7 +267,7 @@ impl Display for CopyOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum OnErrorMode {
     Continue,
     SkipFileNum(#[drive(skip)] u64),
