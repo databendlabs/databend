@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_sql::plans::UnSettingPlan;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,18 +52,29 @@ impl Interpreter for UnSettingInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
-
         let settings = self.ctx.get_shared_settings();
+        let session_level = self.set.session_level;
+        settings.load_changes().await?;
+
+        // Fetch global settings asynchronously if necessary
+        let global_settings = if !session_level {
+            UserApiProvider::instance()
+                .setting_api(&self.ctx.get_tenant())
+                .get_settings()
+                .await?
+        } else {
+            Vec::new()
+        };
+
         for var in plan.vars {
             let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => (false, String::from("")),
                 setting_key => {
                     // TODO(liyz): why drop the global setting without checking the variable is global or not?
-                    self.ctx
-                        .get_shared_settings()
-                        .try_drop_global_setting(setting_key)
-                        .await?;
+                    if !self.set.session_level {
+                        settings.try_drop_global_setting(setting_key).await?;
+                    }
 
                     let default_val = match setting_key {
                         "max_memory_usage" => {
@@ -90,7 +102,23 @@ impl Interpreter for UnSettingInterpreter {
                             .map(|v| v.to_string()),
                     };
                     match default_val {
-                        Some(val) => (true, val),
+                        Some(val) => {
+                            let final_val = if global_settings.is_empty() {
+                                val.to_string()
+                            } else {
+                                global_settings
+                                    .iter()
+                                    .find(|setting| setting.name.to_lowercase() == setting_key)
+                                    .map_or(
+                                        {
+                                            self.ctx.get_shared_settings().unset_setting(&var);
+                                            val.to_string()
+                                        },
+                                        |setting| setting.value.to_string(),
+                                    )
+                            };
+                            (true, final_val)
+                        }
                         None => {
                             self.ctx
                                 .push_warning(format!("Unknown setting: '{}'", setting_key));
@@ -100,8 +128,6 @@ impl Interpreter for UnSettingInterpreter {
                 }
             };
             if ok {
-                // reset the current ctx settings, just remove it.
-                self.ctx.get_shared_settings().unset_setting(&var);
                 // set effect, this can be considered to be removed in the future.
                 keys.push(var);
                 values.push(value);
