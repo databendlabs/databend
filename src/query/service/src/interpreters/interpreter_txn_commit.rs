@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_txn::TxnManagerRef;
@@ -55,7 +56,13 @@ impl Interpreter for CommitInterpreter {
         if is_active {
             let catalog = self.ctx.get_default_catalog()?;
             let req = self.ctx.txn_mgr().lock().req();
-            catalog.update_multi_table_meta(req).await?;
+            let mismatched_tids = catalog.update_multi_table_meta(req).await?;
+            if !mismatched_tids.is_empty() {
+                return Err(ErrorCode::TableVersionMismatched(format!(
+                    "Table version mismatched in multi statement transaction, tids: {:?}",
+                    mismatched_tids
+                )));
+            }
             let need_purge_files = self.ctx.txn_mgr().lock().need_purge_files();
             for (stage_info, files) in need_purge_files {
                 PipelineBuilder::try_purge_files(self.ctx.clone(), &stage_info, &files).await;
