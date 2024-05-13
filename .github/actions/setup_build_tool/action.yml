@@ -8,7 +8,7 @@ inputs:
   bypass_env_vars:
     description: "Environment variables bypass to docker container"
     required: false
-    default: RUSTFLAGS,RUST_LOG
+    default: RUSTFLAGS,RUST_LOG,PYO3_PYTHON
 runs:
   using: "composite"
   steps:

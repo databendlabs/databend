@@ -10,7 +10,7 @@ runs:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN,PYO3_PYTHON
 
     - name: Check Apache License Header
       uses: korandoru/hawkeye@v2

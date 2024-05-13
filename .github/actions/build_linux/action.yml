@@ -27,10 +27,10 @@ runs:
   using: "composite"
   steps:
     - name: Setup Build Tool
-      uses: ./.github/actions/setup_build_tool
+    uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,PYO3_PYTHON,PYO3_CROSS_PYTHON_VERSION
 
     - name: Cross setup
       if: startsWith(inputs.target, 'aarch64-')
