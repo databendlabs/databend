@@ -184,9 +184,11 @@ impl TestFixture {
             UserPrivilegeSet::available_privileges_on_global(),
         );
 
-        let dummy_session = SessionManager::instance()
-            .create_session(session_type)
-            .await?;
+        let session_manager = SessionManager::instance();
+
+        let dummy_session = session_manager.create_session(session_type).await?;
+
+        session_manager.register_session(dummy_session.clone())?;
 
         dummy_session.set_authed_user(user_info, None).await?;
         dummy_session.get_settings().set_max_threads(8)?;

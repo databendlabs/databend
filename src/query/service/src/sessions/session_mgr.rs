@@ -92,7 +92,9 @@ impl SessionManager {
         let settings = Settings::create(tenant);
         settings.load_changes().await?;
 
-        self.create_with_settings(typ, settings)
+        let session = self.create_with_settings(typ, settings)?;
+
+        Ok(session)
     }
 
     pub fn try_upgrade_session(&self, session: Arc<Session>, typ_to: SessionType) -> Result<()> {
@@ -152,15 +154,25 @@ impl SessionManager {
             mysql_conn_id,
         )?;
 
+        Ok(session)
+    }
+
+    /// Add session to the session manager.
+    pub fn register_session(&self, session: Arc<Session>) -> Result<()> {
+        let id = session.get_id();
+        let typ = session.get_type();
+
         self.try_add_session(session.clone(), typ.clone())?;
 
         if let SessionType::MySQL = typ {
             let mut mysql_conn_map = self.mysql_conn_map.write();
             self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
+
+            let mysql_conn_id = session.get_mysql_conn_id();
             mysql_conn_map.insert(mysql_conn_id, id);
         }
 
-        Ok(session)
+        Ok(())
     }
 
     pub fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {

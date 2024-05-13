@@ -172,6 +172,7 @@ impl FlightService for DatabendQueryFlightService {
                     }
                     let session =
                         session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    session_manager.register_session(session.clone())?;
 
                     let ctx = session.create_query_context().await?;
                     // Keep query id
@@ -232,6 +233,8 @@ impl FlightService for DatabendQueryFlightService {
                     let settings = Settings::create(config.query.tenant_id.clone());
                     let session =
                         session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    session_manager.register_session(session.clone())?;
+
                     let ctx = session.create_query_context().await?;
 
                     let interpreter =
@@ -245,6 +248,8 @@ impl FlightService for DatabendQueryFlightService {
                     let settings = Settings::create(config.query.tenant_id.clone());
                     let session =
                         session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    session_manager.register_session(session.clone())?;
+
                     let ctx = session.create_query_context().await?;
 
                     let interpreter = KillInterpreter::from_flight(ctx, kill_query.packet)?;
@@ -257,6 +262,8 @@ impl FlightService for DatabendQueryFlightService {
                     let settings = Settings::create(config.query.tenant_id.clone());
                     let session =
                         session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    session_manager.register_session(session.clone())?;
+
                     let ctx = session.create_query_context().await?;
 
                     let interpreter =

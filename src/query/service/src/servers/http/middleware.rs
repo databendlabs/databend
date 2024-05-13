@@ -241,6 +241,8 @@ impl<E> HTTPSessionEndpoint<E> {
         let session_manager = SessionManager::instance();
         let session = session_manager.create_session(SessionType::Dummy).await?;
 
+        session_manager.register_session(session.clone())?;
+
         let ctx = session.create_query_context().await?;
 
         if let Some(tenant_id) = req.headers().get("X-DATABEND-TENANT") {

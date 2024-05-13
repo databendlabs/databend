@@ -265,11 +265,17 @@ impl RealBackgroundService {
     }
 
     async fn check_license(&self) -> Result<()> {
-        let settings = SessionManager::create(&self.conf)
+        let session_manager = SessionManager::create(&self.conf);
+
+        let session = session_manager
             .create_session(SessionType::Dummy)
             .await
-            .unwrap()
-            .get_settings();
+            .unwrap();
+
+        session_manager.register_session(session.clone())?;
+
+        let settings = session.get_settings();
+
         // check for valid license
         get_license_manager().manager.check_enterprise_enabled(
             unsafe { settings.get_enterprise_license().unwrap_or_default() },
