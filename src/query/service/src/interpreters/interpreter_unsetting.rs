@@ -72,7 +72,7 @@ impl Interpreter for UnSettingInterpreter {
                 "sql_mode" | "autocommit" => (false, String::from("")),
                 setting_key => {
                     // TODO(liyz): why drop the global setting without checking the variable is global or not?
-                    if !self.set.session_level {
+                    if !session_level {
                         settings.try_drop_global_setting(setting_key).await?;
                     }
 
