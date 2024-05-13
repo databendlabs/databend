@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
@@ -45,7 +44,6 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyIntoLocationPlan;
-use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
@@ -226,7 +224,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             );
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan).await,
+        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx, plan).await,
 
         // Pass through statements.
         _ => Ok(plan),
@@ -363,57 +361,25 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     Ok(cascades.memo)
 }
 
-async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
-    // optimize source :fix issue #13733
-    // reason: if there is subquery,windowfunc exprs etc. see
-    // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
-    // get dummy index. So we need to use optimizer to solve this.
-    let mut right_source = optimize_query(opt_ctx.clone(), plan.input.child(1)?.clone()).await?;
-
-    // if it's not distributed execution, we should reserve
-    // exchange to merge source data.
-    if opt_ctx.enable_distributed_optimization
-        && opt_ctx
-            .table_ctx
-            .get_settings()
-            .get_enable_distributed_merge_into()?
-    {
-        // we need to remove exchange of right_source, because it's
-        // not an end query.
-        if let RelOperator::Exchange(_) = right_source.plan.as_ref() {
-            right_source = right_source.child(0)?.clone();
-        }
+async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
+    let enable_distributed_merge_into = opt_ctx
+        .table_ctx
+        .get_settings()
+        .get_enable_distributed_merge_into()?;
+    if opt_ctx.enable_distributed_optimization {
+        opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
-    // replace right source
-    let mut join_sexpr = plan.input.clone();
-    let left_target = optimize_query(opt_ctx.clone(), join_sexpr.child(0)?.clone()).await?;
-    join_sexpr =
-        Box::new(join_sexpr.replace_children(vec![Arc::new(left_target), Arc::new(right_source)]));
-
-    let join_op = Join::try_from(join_sexpr.plan().clone())?;
+    let join_op = Join::try_from(plan.input.plan().clone())?;
+    let mut join_s_expr = optimize_query(opt_ctx.clone(), *plan.input.clone()).await?;
+    if let &RelOperator::Exchange(_) = join_s_expr.plan() {
+        join_s_expr = join_s_expr.child(0)?.clone();
+    }
+    let left_conditions = Join::try_from(join_s_expr.plan().clone())?.left_conditions;
+    let mut change_join_order = false;
+    if join_op.left_conditions != left_conditions {
+        change_join_order = true;
+    }
     let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
-    // before, we think source table is always the small table.
-    // 1. for matched only, we use inner join
-    // 2. for insert only, we use right anti join
-    // 3. for full merge into, we use right outer join
-    // for now, let's import the statistic info to determine left join or right join
-    // we just do optimization for the top join (target and source),won't do recursive optimization.
-    let change_join_order = if opt_ctx.enable_merge_into_join_reorder {
-        let rule = RuleFactory::create_rule(RuleID::CommuteJoin, plan.meta_data.clone())?;
-        let mut state = TransformResult::new();
-        // we will reorder the join order according to the cardinality of target and source.
-        rule.apply(&join_sexpr, &mut state)?;
-        assert!(state.results().len() <= 1);
-        // we need to check whether we do swap left and right.
-        if state.results().len() == 1 {
-            join_sexpr = Box::new(state.results()[0].clone());
-            true
-        } else {
-            false
-        }
-    } else {
-        false
-    };
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
     // don't support spill for now, and we need the matched clauses' count
@@ -444,68 +410,21 @@ async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) ->
         })
     }
 
-    // try to optimize distributed join, only if
-    // - distributed optimization is enabled
-    // - no local table scan
-    // - distributed merge-into is enabled
-    if opt_ctx.enable_distributed_optimization
-        && !contains_local_table_scan(&join_sexpr, &opt_ctx.metadata)
-        && opt_ctx
-            .table_ctx
-            .get_settings()
-            .get_enable_distributed_merge_into()?
-    {
-        // distributed execution stargeties:
-        // I. change join order is true, we use the `optimize_distributed_query`'s result.
-        // II. change join order is false and match_pattern and not enable spill and not non-equal-join, we use right outer join with rownumber distributed strategies.
-        // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
-        // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
-        // input is a Join_SExpr
-        let mut merge_into_join_sexpr =
-            optimize_distributed_query(opt_ctx.table_ctx.clone(), &join_sexpr)?;
+    if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
-        // II.
-        // - join spilling is disabled
-        let (optimized_distributed_merge_into_join_sexpr, distributed) = if opt_ctx
-            .table_ctx
-            .get_settings()
-            .get_join_spilling_memory_ratio()?
-            == 0
-            && !change_join_order
+        let mut distributed = false;
+        if !change_join_order
             && merge_source_optimizer
                 .merge_source_matcher
-                .matches(&merge_into_join_sexpr)
+                .matches(&join_s_expr)
             && !non_equal_join
         {
-            (
-                merge_source_optimizer.optimize(&merge_into_join_sexpr)?,
-                true,
-            )
-        } else if change_join_order {
-            // I
-            // we need to judge whether it'a broadcast join to support runtime filter.
-            merge_into_join_sexpr = try_to_change_as_broadcast_join(
-                merge_into_join_sexpr,
-                change_join_order,
-                opt_ctx.table_ctx.clone(),
-                plan.as_ref(),
-                false, // we will open it, but for now we don't support distributed
-                new_columns_set.as_mut(),
-            )?;
-            (
-                merge_into_join_sexpr.clone(),
-                matches!(
-                    merge_into_join_sexpr.plan.as_ref(),
-                    RelOperator::Exchange(_)
-                ),
-            )
-        } else {
-            // III.
-            (merge_into_join_sexpr.clone(), false)
+            join_s_expr = merge_source_optimizer.optimize(&join_s_expr)?;
+            distributed = true;
         };
 
         Ok(Plan::MergeInto(Box::new(MergeInto {
-            input: Box::new(optimized_distributed_merge_into_join_sexpr),
+            input: Box::new(join_s_expr),
             distributed,
             change_join_order,
             columns_set: new_columns_set.clone(),
@@ -513,46 +432,10 @@ async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) ->
         })))
     } else {
         Ok(Plan::MergeInto(Box::new(MergeInto {
-            input: join_sexpr,
+            input: Box::new(join_s_expr),
             change_join_order,
             columns_set: new_columns_set,
             ..*plan
         })))
     }
-}
-
-fn try_to_change_as_broadcast_join(
-    merge_into_join_sexpr: SExpr,
-    _change_join_order: bool,
-    _table_ctx: Arc<dyn TableContext>,
-    _plan: &MergeInto,
-    _only_one_matched_clause: bool,
-    _new_columns_set: &mut HashSet<usize>,
-) -> Result<SExpr> {
-    if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
-        let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
-        if let RelOperator::Exchange(Exchange::Broadcast) = right_exchange.plan.as_ref() {
-            let join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
-            let join_s_expr = merge_into_join_sexpr
-                .child(0)?
-                .replace_plan(Arc::new(RelOperator::Join(join)));
-            // for now, when we use target table as build side and it's a broadcast join,
-            // we will use merge_into_block_info_hashtable to reduce i/o operations.
-            // Todo(JackTan25): we don't support in distributed mod for target build optimization for now. we will enable in next pr.
-            // if change_join_order
-            //     && matches!(plan.merge_type, MergeIntoType::FullOperation)
-            //     && only_one_matched_clause
-            // {
-            // remove rowid
-            // new_columns_set.remove(&plan.row_id_index);
-            // table_ctx.set_merge_into_join(MergeIntoJoin {
-            //     merge_into_join_type: MergeIntoJoinType::Left,
-            //     is_distributed: true,
-            //     target_tbl_idx: plan.target_table_idx,
-            // })
-            // }
-            return Ok(merge_into_join_sexpr.replace_children(vec![Arc::new(join_s_expr)]));
-        }
-    }
-    Ok(merge_into_join_sexpr)
 }

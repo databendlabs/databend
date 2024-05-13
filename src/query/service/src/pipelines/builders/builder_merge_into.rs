@@ -460,9 +460,7 @@ impl PipelineBuilder {
             }
 
             if need_unmatch {
-                // distributed: false, standalone mode, we need to add insert processor
-                // (distributed,change join order):(true,true) target is build side, we
-                // need to support insert in local node.
+                // If merge into doesn't contain right broadcast join, execute insert in local.
                 if !*distributed || *change_join_order {
                     let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                         unmatched.clone(),
