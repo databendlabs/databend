@@ -24,7 +24,6 @@ use databend_common_users::EnsureUser;
 use databend_common_users::UserApiProvider;
 use databend_query::auth::AuthMgr;
 use databend_query::auth::Credential;
-use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
 use jwt_simple::prelude::*;
 use p256::EncodedPoint;
@@ -82,8 +81,9 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
     let second_url = format!("http://{}{}", server.address(), second_path);
     conf.query.jwt_key_file = first_url.clone();
     conf.query.jwt_key_files = vec![second_url];
-    let fixture = TestFixture::setup_with_config(&conf).await?;
-    let ctx = fixture.new_query_ctx().await?;
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
+
+    let mut session = TestFixture::create_dummy_session().await;
 
     let auth_mgr = AuthMgr::instance();
     {
@@ -99,15 +99,14 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let token1 = pair1.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token: token1,
                 client_ip: None,
             })
             .await;
         assert!(res.is_ok());
 
-        let roles: Vec<String> = ctx
-            .get_current_session()
+        let roles: Vec<String> = session
             .get_all_available_roles()
             .await?
             .into_iter()
@@ -125,15 +124,14 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
             .with_subject(user2.to_string());
         let token2 = pair2.sign(claims)?;
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token: token2,
                 client_ip: None,
             })
             .await;
         assert!(res.is_ok());
 
-        let roles: Vec<String> = ctx
-            .get_current_session()
+        let roles: Vec<String> = session
             .get_all_available_roles()
             .await?
             .into_iter()
@@ -150,7 +148,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let claims = Claims::with_custom_claims(non_custom_claim, Duration::from_hours(2))
             .with_subject(user2.to_string());
         let token2 = pair2.sign(claims)?;
-        let tenant = ctx.get_current_session().get_current_tenant();
+        let tenant = session.get_current_tenant();
         let user2_info = UserInfo::new(user2, "%", AuthInfo::JWT);
         UserApiProvider::instance()
             .add_user(
@@ -160,16 +158,13 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
             )
             .await?;
         let res2 = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token: token2,
                 client_ip: None,
             })
             .await;
         assert!(res2.is_ok());
-        assert_eq!(
-            ctx.get_current_session().get_current_user().unwrap(),
-            user2_info
-        );
+        assert_eq!(session.get_current_user().unwrap(), user2_info);
 
         // it would not work on claim with unknown jwt keys
         let claim3 = CustomClaims::new()
@@ -182,7 +177,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
             .with_subject(user3.to_string());
         let token3 = pair3.sign(claims)?;
         let res3 = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token: token3,
                 client_ip: None,
             })
@@ -225,8 +220,9 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     let mut conf = ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
 
-    let fixture = TestFixture::setup_with_config(&conf).await?;
-    let ctx = fixture.new_query_ctx().await?;
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
+
+    let mut session = TestFixture::create_dummy_session().await;
 
     let auth_mgr = AuthMgr::instance();
     let user_name = "test";
@@ -237,7 +233,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
@@ -258,7 +254,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
@@ -280,7 +276,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
@@ -302,12 +298,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await?;
-        let user_info = ctx.get_current_user()?;
+        let user_info = session.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
@@ -321,12 +317,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await?;
-        let user_info = ctx.get_current_user()?;
+        let user_info = session.get_current_user()?;
         assert!(user_info.grants.roles().is_empty());
     }
 
@@ -342,13 +338,13 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await?;
 
-        let user_info = ctx.get_current_user()?;
+        let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
         assert_eq!(user_info.grants.roles(), &["test-role"]);
     }
@@ -367,15 +363,14 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await;
         assert!(res.is_ok());
 
-        let roles: Vec<String> = ctx
-            .get_current_session()
+        let roles: Vec<String> = session
             .get_all_available_roles()
             .await?
             .into_iter()
@@ -391,7 +386,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
@@ -430,9 +425,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
     let mut conf = ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
 
-    let fixture = TestFixture::setup_with_config(&conf).await?;
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
 
-    let ctx = fixture.new_query_ctx().await?;
+    let mut session = TestFixture::create_dummy_session().await;
+
     let auth_mgr = AuthMgr::instance();
     let user_name = "test";
 
@@ -442,7 +438,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
@@ -462,7 +458,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
@@ -484,7 +480,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
@@ -506,12 +502,12 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await?;
-        let user_info = ctx.get_current_user()?;
+        let user_info = session.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
@@ -525,12 +521,12 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await?;
-        let user_info = ctx.get_current_user()?;
+        let user_info = session.get_current_user()?;
         assert!(user_info.grants.roles().is_empty());
     }
 
@@ -546,12 +542,12 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await?;
-        let user_info = ctx.get_current_user()?;
+        let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
         assert_eq!(user_info.grants.roles(), &["test-role"]);
     }
@@ -570,15 +566,14 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await;
         assert!(res.is_ok());
 
-        let roles: Vec<String> = ctx
-            .get_current_session()
+        let roles: Vec<String> = session
             .get_all_available_roles()
             .await?
             .into_iter()
@@ -594,7 +589,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
@@ -630,8 +625,9 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
 
     let mut conf = ConfigBuilder::create().with_management_mode().config();
     conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
-    let fixture = TestFixture::setup_with_config(&conf).await?;
-    let ctx = fixture.new_query_ctx().await?;
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
+
+    let mut session = TestFixture::create_dummy_session().await;
 
     let auth_mgr = AuthMgr::instance();
 
@@ -646,13 +642,13 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
+            .auth(&mut session, &Credential::Jwt {
                 token,
                 client_ip: None,
             })
             .await?;
-        let user_info = ctx.get_current_user()?;
-        let current_tenant = ctx.get_tenant();
+        let user_info = session.get_current_user()?;
+        let current_tenant = session.get_current_tenant();
         assert_eq!(current_tenant.tenant_name().to_string(), tenant.to_string());
         assert_eq!(user_info.grants.roles().len(), 0);
     }

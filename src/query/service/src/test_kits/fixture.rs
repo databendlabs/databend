@@ -173,6 +173,29 @@ impl TestFixture {
         .await
     }
 
+    /// Create a non-shared dummy session.
+    pub async fn create_dummy_session() -> Session {
+        let session_manager = SessionManager::instance();
+        let session = session_manager
+            .create_session(SessionType::Dummy)
+            .await
+            .unwrap();
+
+        let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        });
+
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_global(),
+        );
+
+        session.set_authed_user(user_info, None).await.unwrap();
+        session.get_settings().set_max_threads(8).unwrap();
+        session
+    }
+
     async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
         let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,

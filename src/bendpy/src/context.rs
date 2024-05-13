@@ -46,12 +46,10 @@ impl PySessionContext {
     fn new(tenant: Option<&str>, py: Python) -> PyResult<Self> {
         let session = RUNTIME.block_on(async {
             let session_manager = SessionManager::instance();
-            let session = session_manager
+            let mut session = session_manager
                 .create_session(SessionType::Local)
                 .await
                 .unwrap();
-
-            let session = session_manager.register_session(session).unwrap();
 
             let tenant = if let Some(tenant) = tenant {
                 tenant.to_owned()
@@ -63,12 +61,14 @@ impl PySessionContext {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Error: {}", e))
             })?;
 
+            session.set_current_tenant(tenant);
+
+            let session = session_manager.register_session(session).unwrap();
+
             let config = GlobalConfig::instance();
             UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
                 .await
                 .unwrap();
-
-            session.set_current_tenant(tenant);
 
             let mut user = UserInfo::new_no_auth("root", "%");
             user.grants.grant_privileges(

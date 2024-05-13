@@ -238,23 +238,23 @@ impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
         let credential = get_credential(req, self.kind)?;
+
         let session_manager = SessionManager::instance();
-        let session = session_manager.create_session(SessionType::Dummy).await?;
 
-        let session = session_manager.register_session(session)?;
-
-        let ctx = session.create_query_context().await?;
+        let mut session = session_manager.create_session(SessionType::Dummy).await?;
 
         if let Some(tenant_id) = req.headers().get("X-DATABEND-TENANT") {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
             let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
             session.set_current_tenant(tenant);
         }
-        let node_id = ctx.get_cluster().local_id.clone();
 
-        self.auth_manager
-            .auth(ctx.get_current_session(), &credential)
-            .await?;
+        self.auth_manager.auth(&mut session, &credential).await?;
+
+        let session = session_manager.register_session(session)?;
+
+        let ctx = session.create_query_context().await?;
+        let node_id = ctx.get_cluster().local_id.clone();
 
         let deduplicate_label = req
             .headers()

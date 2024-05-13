@@ -196,7 +196,7 @@ impl Session {
         self.session_ctx.get_current_tenant()
     }
 
-    pub fn set_current_tenant(&self, tenant: Tenant) {
+    pub fn set_current_tenant(&mut self, tenant: Tenant) {
         self.session_ctx.set_current_tenant(tenant);
     }
 
