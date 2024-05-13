@@ -18,7 +18,6 @@ arrow-schema = { workspace = true }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-expression = { path = "../../../expression" }
 databend-storages-common-table-meta = { path = "../table_meta" }
-ethnum = { workspace = true }
 parquet_rs = { workspace = true }
 
 [build-dependencies]
