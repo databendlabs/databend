@@ -99,14 +99,12 @@ struct AggregationContext {
     segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
     io_request_semaphore: Arc<Semaphore>,
-    query_id: String,
     // generate stream columns if necessary
     stream_ctx: Option<StreamContext>,
 }
 
 // Apply MergeIntoOperations to segments
 pub struct MergeIntoOperationAggregator {
-    ctx: Arc<dyn TableContext>,
     deletion_accumulator: DeletionAccumulator,
     aggregation_ctx: Arc<AggregationContext>,
 }
@@ -182,7 +180,6 @@ impl MergeIntoOperationAggregator {
                 Some(reader)
             }
         };
-        let query_id = ctx.get_id();
 
         let stream_ctx = if update_stream_columns {
             Some(StreamContext::try_create(
@@ -196,7 +193,6 @@ impl MergeIntoOperationAggregator {
         };
 
         Ok(Self {
-            ctx,
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
                 segment_locations: AHashMap::from_iter(segment_locations),
@@ -212,7 +208,6 @@ impl MergeIntoOperationAggregator {
                 segment_reader,
                 block_builder,
                 io_request_semaphore,
-                query_id,
                 stream_ctx,
             }),
         })
@@ -350,7 +345,7 @@ impl MergeIntoOperationAggregator {
                 let aggregation_ctx = aggregation_ctx.clone();
                 num_rows_mutated += block_meta.row_count;
                 // self.aggregation_ctx.
-                let handle = io_runtime.spawn(self.ctx.get_id(), async move {
+                let handle = io_runtime.spawn(async move {
                     let mutation_log_entry = aggregation_ctx
                         .apply_deletion_to_data_block(segment_idx, block_index, &block_meta, &keys)
                         .await?;
@@ -422,7 +417,6 @@ impl AggregationContext {
             &self.key_column_reader,
             block_meta,
             &self.read_settings,
-            self.query_id.clone(),
         )
         .await?;
 
@@ -554,7 +548,7 @@ impl AggregationContext {
         let block_builder = self.block_builder.clone();
         let origin_stats = block_meta.cluster_stats.clone();
         let serialized = GlobalIORuntime::instance()
-            .spawn(self.query_id.clone(), async move {
+            .spawn(async move {
                 block_builder.build(new_block, |block, generator| {
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
@@ -653,17 +647,17 @@ impl AggregationContext {
         let block_meta_ptr = block_meta.clone();
         let reader = reader.clone();
         GlobalIORuntime::instance()
-            .spawn(self.query_id.clone(), async move {
-                let column_chunks = merged_io_read_result.columns_chunks()?;
-                reader.deserialize_chunks(
-                    block_meta_ptr.location.0.as_str(),
-                    block_meta_ptr.row_count as usize,
-                    &block_meta_ptr.compression,
-                    &block_meta_ptr.col_metas,
-                    column_chunks,
-                    &storage_format,
-                )
-            })
+            .spawn(async move {
+                            let column_chunks = merged_io_read_result.columns_chunks()?;
+                            reader.deserialize_chunks(
+                                block_meta_ptr.location.0.as_str(),
+                                block_meta_ptr.row_count as usize,
+                                &block_meta_ptr.compression,
+                                &block_meta_ptr.col_metas,
+                                column_chunks,
+                                &storage_format,
+                            )
+                        })
             .await
             .map_err(|e| {
                 ErrorCode::Internal(

@@ -21,7 +21,6 @@ use databend_common_base::base::tokio::time::timeout;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -61,7 +60,7 @@ impl LockManager {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let active_locks = Arc::new(RwLock::new(HashMap::new()));
         let lock_manager = Self { active_locks, tx };
-        GlobalIORuntime::instance().spawn(GLOBAL_TASK, {
+        GlobalIORuntime::instance().spawn({
             let active_locks = lock_manager.active_locks.clone();
             async move {
                 while let Some(revision) = rx.recv().await {

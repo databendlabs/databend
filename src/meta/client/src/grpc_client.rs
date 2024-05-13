@@ -36,7 +36,6 @@ use databend_common_base::future::TimingFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::UnlimitedFuture;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientConf;
@@ -431,14 +430,13 @@ impl MetaGrpcClient {
             rt: rt.clone(),
         });
 
-        rt.spawn(
-            GLOBAL_TASK,
-            UnlimitedFuture::create(Self::worker_loop(worker.clone(), rx)),
-        );
-        rt.spawn(
-            GLOBAL_TASK,
-            UnlimitedFuture::create(Self::auto_sync_endpoints(worker, one_tx)),
-        );
+        rt.spawn(UnlimitedFuture::create(Self::worker_loop(
+            worker.clone(),
+            rx,
+        )));
+        rt.spawn(UnlimitedFuture::create(Self::auto_sync_endpoints(
+            worker, one_tx,
+        )));
 
         Ok(handle)
     }

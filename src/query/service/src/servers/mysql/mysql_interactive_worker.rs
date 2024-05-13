@@ -18,6 +18,7 @@ use std::time::Instant;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::tokio::io::AsyncWrite;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
@@ -43,6 +44,7 @@ use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
+use uuid::Uuid;
 
 use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
@@ -188,10 +190,15 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         query: &'a str,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
+        let query_id = Uuid::new_v4().to_string();
         let root = Span::root(full_name!(), SpanContext::random())
             .with_properties(|| self.base.session.to_minitrace_properties());
 
-        async {
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.query_id = Some(query_id.clone());
+        let _guard = ThreadTracker::tracking(tracking_payload);
+
+        ThreadTracker::tracking_future(async {
             if self.base.session.is_aborting() {
                 writer
                     .error(
@@ -210,7 +217,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             let instant = Instant::now();
             let query_result = self
                 .base
-                .do_query(query)
+                .do_query(query_id, query)
                 .await
                 .map_err(|err| err.display_with_sql(query));
 
@@ -225,7 +232,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             observe_mysql_process_request_duration(instant.elapsed());
 
             write_result
-        }
+        })
         .in_span(root)
         .await
     }
@@ -332,7 +339,11 @@ impl InteractiveWorkerBase {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn do_query(&mut self, query: &str) -> Result<(QueryResult, Option<FormatSettings>)> {
+    async fn do_query(
+        &mut self,
+        query_id: String,
+        query: &str,
+    ) -> Result<(QueryResult, Option<FormatSettings>)> {
         match self.federated_server_command_check(query) {
             Some((schema, data_block)) => {
                 info!("Federated query: {}", query);
@@ -354,6 +365,7 @@ impl InteractiveWorkerBase {
             None => {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
+                context.set_id(query_id);
 
                 // Use interpreter_plan_sql, we can write the query log if an error occurs.
                 let (plan, extras) = interpreter_plan_sql(context.clone(), query).await?;
@@ -392,7 +404,7 @@ impl InteractiveWorkerBase {
     )> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn(context.get_id(), {
+        let query_result = context.try_spawn({
             let ctx = context.clone();
             async move {
                 let mut data_stream = interpreter.execute(ctx.clone()).await?;
@@ -425,9 +437,15 @@ impl InteractiveWorkerBase {
         if database_name.is_empty() {
             return Ok(());
         }
+
+        let query_id = Uuid::new_v4().to_string();
         let init_query = format!("USE `{}`;", database_name);
 
-        let do_query = self.do_query(&init_query).await;
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.query_id = Some(query_id.clone());
+        let _guard = ThreadTracker::tracking(tracking_payload);
+
+        let do_query = ThreadTracker::tracking_future(self.do_query(query_id, &init_query)).await;
         match do_query {
             Ok((_, _)) => Ok(()),
             Err(error_code) => Err(error_code),
