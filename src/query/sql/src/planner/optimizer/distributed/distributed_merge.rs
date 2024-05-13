@@ -34,24 +34,13 @@ impl MergeSourceOptimizer {
         }
     }
 
-    // rewrite plan:
-    // 1. if use right join, and the default
-    // distributed right join will use shuffle hash join, but its
-    // performance is very slow and poor. So we need to rewrite it.
-    // In new distributed plan, target partitions will be shuffled
-    // to query nodes, and source will be broadcasted to all nodes
-    // and build hashtable. It means all nodes hold the same hashtable.
-    // 2. if use left outer join, we will just use distributed optimizer's
-    // result, so we won't arrive here, because the it doesn't take place
-    // change join order.
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let join_s_expr = s_expr.child(0)?;
-        let left_exchange = join_s_expr.child(0)?;
-        assert!(left_exchange.children.len() == 1);
+        let left_exchange = s_expr.child(0)?;
+        assert_eq!(left_exchange.children.len(), 1);
         let left_exchange_input = left_exchange.child(0)?;
 
-        let right_exchange = join_s_expr.child(1)?;
-        assert!(right_exchange.children.len() == 1);
+        let right_exchange = s_expr.child(1)?;
+        assert_eq!(right_exchange.children.len(), 1);
         let right_exchange_input = right_exchange.child(0)?;
 
         // source is build side
@@ -66,18 +55,16 @@ impl MergeSourceOptimizer {
             )),
         ];
 
-        let mut join: Join = join_s_expr.plan().clone().try_into()?;
+        let mut join: Join = s_expr.plan().clone().try_into()?;
         join.need_hold_hash_table = true;
-        let mut join_s_expr = join_s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
+        let mut join_s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
         join_s_expr = join_s_expr.replace_children(new_join_children);
-        Ok(s_expr.replace_children(vec![Arc::new(join_s_expr)]))
+        Ok(join_s_expr)
     }
 
     // for right outer join (source as build)
     fn merge_source_matcher() -> Matcher {
         // Input:
-        //       Exchange(Merge)
-        //          |
         //         Join
         //         /  \
         //        /    \
@@ -86,8 +73,6 @@ impl MergeSourceOptimizer {
         //      *           *
         // source is build we will get below:
         // Output:
-        //       Exchange
-        //          |
         //         Join
         //         /  \
         //        /    \
@@ -97,20 +82,17 @@ impl MergeSourceOptimizer {
         //    |               |
         //    *               *
         Matcher::MatchOp {
-            op_type: RelOp::Exchange,
-            children: vec![Matcher::MatchOp {
-                op_type: RelOp::Join,
-                children: vec![
-                    Matcher::MatchOp {
-                        op_type: RelOp::Exchange,
-                        children: vec![Matcher::Leaf],
-                    },
-                    Matcher::MatchOp {
-                        op_type: RelOp::Exchange,
-                        children: vec![Matcher::Leaf],
-                    },
-                ],
-            }],
+            op_type: RelOp::Join,
+            children: vec![
+                Matcher::MatchOp {
+                    op_type: RelOp::Exchange,
+                    children: vec![Matcher::Leaf],
+                },
+                Matcher::MatchOp {
+                    op_type: RelOp::Exchange,
+                    children: vec![Matcher::Leaf],
+                },
+            ],
         }
     }
 }
