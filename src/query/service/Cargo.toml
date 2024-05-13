@@ -104,8 +104,8 @@ jsonb = { workspace = true }
 
 # Crates.io dependencies
 arrow-udf-js = { workspace = true }
-arrow-udf-wasm = { workspace = true }
 arrow-udf-python = { workspace = true }
+arrow-udf-wasm = { workspace = true }
 
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
