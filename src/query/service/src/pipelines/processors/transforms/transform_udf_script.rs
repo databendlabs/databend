@@ -15,6 +15,7 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
@@ -37,10 +38,14 @@ use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
+/// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
+static GLOBAL_PYTHON_RUNTIME: LazyLock<Arc<RwLock<arrow_udf_python::Runtime>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(arrow_udf_python::Runtime::new().unwrap())));
+
 pub enum ScriptRuntime {
     JavaScript(Arc<RwLock<arrow_udf_js::Runtime>>),
     WebAssembly(Arc<RwLock<arrow_udf_wasm::Runtime>>),
-    Python(Arc<RwLock<arrow_udf_python::Runtime>>),
+    Python,
 }
 
 impl ScriptRuntime {
@@ -52,11 +57,7 @@ impl ScriptRuntime {
                     ErrorCode::UDFDataError(format!("Cannot create js runtime: {}", err))
                 }),
             "wasm" => Self::create_wasm_runtime(code),
-            "python" => arrow_udf_python::Runtime::new()
-                .map(|runtime| ScriptRuntime::Python(Arc::new(RwLock::new(runtime))))
-                .map_err(|err| {
-                    ErrorCode::UDFDataError(format!("Cannot create python runtime: {}", err))
-                }),
+            "python" => Ok(Self::Python),
             _ => Err(ErrorCode::from_string(format!(
                 "Invalid {} lang Runtime not supported",
                 lang
@@ -95,8 +96,8 @@ impl ScriptRuntime {
                     &func.func_name,
                 )
             }
-            ScriptRuntime::Python(runtime) => {
-                let mut runtime = runtime.write();
+            ScriptRuntime::Python => {
+                let mut runtime = GLOBAL_PYTHON_RUNTIME.write();
                 runtime.add_function_with_handler(
                     &func.name,
                     arrow_schema.field(0).data_type().clone(),
@@ -128,8 +129,8 @@ impl ScriptRuntime {
                 })?
             }
 
-            ScriptRuntime::Python(runtime) => {
-                let runtime = runtime.read();
+            ScriptRuntime::Python => {
+                let runtime = GLOBAL_PYTHON_RUNTIME.read();
                 runtime.call(&func.name, input_batch).map_err(|err| {
                     ErrorCode::UDFDataError(format!(
                         "Python UDF '{}' execution failed: {}",
