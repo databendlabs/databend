@@ -131,11 +131,9 @@ function install_ziglang {
 }
 
 function install_python3 {
-	PACKAGE_MANAGER=$1
-
 	echo "==> installing python3 via pyenv..."
 	curl https://pyenv.run | bash
-	
+
 	# Check if pyenv is already initialized in the profile
 	if ! command -v pyenv >/dev/null; then
 		# Add PYENV_ROOT to the profile
@@ -151,11 +149,9 @@ function install_python3 {
 
 	# Source the profile to apply changes to the current session
 	source $HOME/.profile
-	
 	# install python3.12
 	pyenv install 3.12.2
 	pyenv global 3.12.2
-	esac
 }
 
 function install_openssl {
