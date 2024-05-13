@@ -2841,7 +2841,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             UserPrivilegeType::CreateDatabase,
             rule! { CREATE ~ DATABASE },
         ),
-        value(UserPrivilegeType::CreateDatabase, rule! { CREATE ~ TASK }),
+        value(UserPrivilegeType::CreateTask, rule! { CREATE ~ TASK }),
         value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
