@@ -85,7 +85,7 @@ where
         Err(err) => err,
     };
 
-    log::debug!("deserialize as pb err: {}, rollback to use serde json", err);
+    log::warn!("deserialize as pb err: {}, rollback to use serde json", err);
 
     // If there's an error, try to deserialize as JSON.
     let data = serde_json::from_slice::<T>(&seq_value.data).map_err(|e| {
