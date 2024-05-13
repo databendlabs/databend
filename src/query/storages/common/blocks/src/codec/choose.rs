@@ -42,10 +42,10 @@ pub fn choose_codec(
         let column_name = table_field.name.as_str();
         match parquet_field.as_ref() {
             Type::PrimitiveType { physical_type, .. } => match physical_type {
-                PhysicalType::BYTE_ARRAY | PhysicalType::FIXED_LEN_BYTE_ARRAY => {
+                PhysicalType::BYTE_ARRAY => {
                     props = choose_byte_array_encoding(props, stat, array, column_name)?;
                 }
-                PhysicalType::INT32 | PhysicalType::INT64 | PhysicalType::INT96 => {
+                PhysicalType::INT32 | PhysicalType::INT64 => {
                     props = choose_int_encoding(props, stat, array, column_name)?
                 }
                 _ => {}
