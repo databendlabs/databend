@@ -18,6 +18,7 @@ use std::hash::Hash;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::EmptyMapType;
 use databend_common_expression::types::GenericType;
@@ -227,4 +228,20 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |map, _| map.len() as u64,
     );
+
+    registry.register_2_arg_core::<EmptyMapType, GenericType<0>, BooleanType, _, _>(
+        "map_contains_key",
+        |_, _, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(false),
+    );
+
+    registry
+        .register_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, BooleanType, _, _>(
+            "map_contains_key",
+            |_, _, _| FunctionDomain::Full,
+            |map, key, _| {
+                map.iter()
+                    .any(|(k, _)| k == key)
+            },
+        );
 }

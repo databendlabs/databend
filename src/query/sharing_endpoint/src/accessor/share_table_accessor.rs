@@ -14,6 +14,7 @@
 
 use std::time::Duration;
 
+use bytes::Buf;
 use databend_common_exception::Result;
 use databend_common_storages_share::get_share_spec_location;
 
@@ -37,7 +38,7 @@ impl SharingAccessor {
         let sharing_accessor = Self::instance();
         let path = get_share_spec_location(&sharing_accessor.config.tenant);
         let data = sharing_accessor.op.read(&path).await?;
-        let share_specs: models::SharingConfig = serde_json::from_slice(data.as_slice())?;
+        let share_specs: models::SharingConfig = serde_json::from_reader(data.reader())?;
         share_specs.get_tables(input)
     }
 

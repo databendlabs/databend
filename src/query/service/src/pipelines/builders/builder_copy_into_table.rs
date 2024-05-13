@@ -20,8 +20,10 @@ use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
@@ -48,7 +50,27 @@ impl PipelineBuilder {
         let source_schema = match &copy.source {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(input)?;
-                input.output_schema()?
+                // Reorder the result for select clause
+                PipelineBuilder::build_result_projection(
+                    &self.func_ctx,
+                    input.output_schema()?,
+                    copy.project_columns.as_ref().unwrap(),
+                    &mut self.main_pipeline,
+                    false,
+                )?;
+                let fields = copy
+                    .project_columns
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|column_binding| {
+                        DataField::new(
+                            &column_binding.column_name,
+                            *column_binding.data_type.clone(),
+                        )
+                    })
+                    .collect();
+                DataSchemaRefExt::create(fields)
             }
             CopyIntoTableSource::Stage(input) => {
                 self.ctx

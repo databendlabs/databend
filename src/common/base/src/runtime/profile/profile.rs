@@ -16,6 +16,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use parking_lot::Mutex;
+
+use crate::runtime::error_info::NodeErrorType;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::ProfileStatisticsName;
 use crate::runtime::ThreadTracker;
@@ -46,6 +49,7 @@ pub struct Profile {
 
     pub statistics: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
     pub metrics_registry: Option<Arc<ScopedRegistry>>,
+    pub errors: Arc<Mutex<Vec<NodeErrorType>>>,
 }
 
 impl Clone for Profile {
@@ -62,6 +66,7 @@ impl Clone for Profile {
             statistics: std::array::from_fn(|idx| {
                 AtomicUsize::new(self.statistics[idx].load(Ordering::SeqCst))
             }),
+            errors: self.errors.clone(),
         }
     }
 }
@@ -90,6 +95,7 @@ impl Profile {
             labels,
             statistics: Self::create_items(),
             metrics_registry,
+            errors: Arc::new(Mutex::new(vec![])),
         }
     }
 

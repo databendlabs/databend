@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use arrow_schema::ArrowError;
@@ -25,16 +26,21 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
+use futures::future::BoxFuture;
 use futures::StreamExt;
+use futures::TryFutureExt;
 use opendal::Operator;
 use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowPredicateFn;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::arrow_reader::RowFilter;
+use parquet::arrow::async_reader::AsyncFileReader;
+use parquet::arrow::async_reader::MetadataLoader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
+use parquet::file::metadata::ParquetMetaData;
 
 use crate::parquet_rs::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_rs::parquet_reader::utils::transform_record_batch;
@@ -72,14 +78,16 @@ impl ParquetRSFullReader {
     pub async fn prepare_data_stream(
         &self,
         loc: &str,
+        size: u64,
         partition_fields: Option<&[(TableField, Scalar)]>,
-    ) -> Result<ParquetRecordBatchStream<Reader>> {
+    ) -> Result<ParquetRecordBatchStream<ParquetFileReader>> {
         let partition_values_map = partition_fields.map(|arr| {
             arr.iter()
                 .map(|(f, v)| (f.name().to_string(), v.clone()))
                 .collect::<std::collections::HashMap<String, Scalar>>()
         });
         let reader: Reader = self.op.reader(loc).await?;
+        let reader = ParquetFileReader::new(reader, size);
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
             reader,
             ArrowReaderOptions::new()
@@ -145,7 +153,7 @@ impl ParquetRSFullReader {
     /// Read a [`DataBlock`] from parquet file using native apache arrow-rs stream API.
     pub async fn read_block_from_stream(
         &self,
-        stream: &mut ParquetRecordBatchStream<Reader>,
+        stream: &mut ParquetRecordBatchStream<ParquetFileReader>,
     ) -> Result<Option<DataBlock>> {
         let record_batch = stream.next().await.transpose()?;
 
@@ -229,5 +237,46 @@ impl ParquetRSFullReader {
                 })
                 .collect()
         }
+    }
+}
+
+/// ParquetFileReader is a wrapper around a Reader that impls parquet AsyncFileReader.
+///
+/// # TODO
+///
+/// [ParquetObjectReader](https://docs.rs/parquet/latest/src/parquet/arrow/async_reader/store.rs.html#64) contains the following hints to speed up metadata loading, we can consider adding them to this struct:
+///
+/// - `metadata_size_hint`: Provide a hint as to the size of the parquet file's footer.
+/// - `preload_column_index`: Load the Column Index  as part of [`Self::get_metadata`].
+/// - `preload_offset_index`: Load the Offset Index as part of [`Self::get_metadata`].
+pub struct ParquetFileReader {
+    r: Reader,
+    size: u64,
+}
+
+impl ParquetFileReader {
+    /// Create a new ParquetFileReader
+    pub fn new(r: Reader, size: u64) -> Self {
+        Self { r, size }
+    }
+}
+
+impl AsyncFileReader for ParquetFileReader {
+    fn get_bytes(&mut self, range: Range<usize>) -> BoxFuture<'_, parquet::errors::Result<Bytes>> {
+        Box::pin(
+            self.r
+                .read(range.start as u64..range.end as u64)
+                .map_ok(|v| v.to_bytes())
+                .map_err(|err| parquet::errors::ParquetError::External(Box::new(err))),
+        )
+    }
+
+    fn get_metadata(&mut self) -> BoxFuture<'_, parquet::errors::Result<Arc<ParquetMetaData>>> {
+        Box::pin(async move {
+            let size = self.size as usize;
+            let mut loader = MetadataLoader::load(self, size, None).await?;
+            loader.load_page_index(false, false).await?;
+            Ok(Arc::new(loader.finish()))
+        })
     }
 }

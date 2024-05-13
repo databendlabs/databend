@@ -20,6 +20,7 @@ mod topk;
 mod utils;
 
 pub use read_policy::*;
+pub use reader::ParquetFileReader;
 pub use reader::ParquetRSFullReader;
 pub use reader::ParquetRSReaderBuilder;
 pub use reader::ParquetRSRowGroupReader;

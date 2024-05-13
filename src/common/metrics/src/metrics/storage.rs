@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::sync::LazyLock;
+use std::time::Duration;
 
 use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use databend_common_base::runtime::metrics::Counter;
+use databend_common_base::runtime::metrics::Gauge;
 use databend_common_base::runtime::metrics::Histogram;
 
 // Common metrics.
@@ -172,6 +175,9 @@ static COMPACT_BLOCK_BUILD_TASK_MILLISECONDS: LazyLock<Histogram> = LazyLock::ne
 static COMPACT_BLOCK_BUILD_LAZY_PART_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_in_milliseconds("fuse_compact_block_build_lazy_part_milliseconds")
 });
+static COMPACT_SEGMENTS_SELECT_DURATION_SECOND: LazyLock<Gauge> =
+    LazyLock::new(|| register_gauge("fuse_compact_segments_select_duration_second"));
+
 static RECLUSTER_BUILD_TASK_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_recluster_build_task_milliseconds"));
 static RECLUSTER_SEGMENT_NUMS_SCHEDULED: LazyLock<Counter> =
@@ -559,6 +565,10 @@ pub fn metrics_inc_compact_block_build_task_milliseconds(c: u64) {
 
 pub fn metrics_inc_compact_block_build_lazy_part_milliseconds(c: u64) {
     COMPACT_BLOCK_BUILD_LAZY_PART_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_set_compact_segments_select_duration_second(c: Duration) {
+    COMPACT_SEGMENTS_SELECT_DURATION_SECOND.set(c.as_secs() as i64);
 }
 
 /// Pruning metrics.

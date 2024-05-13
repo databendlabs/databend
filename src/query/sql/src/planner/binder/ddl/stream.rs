@@ -128,20 +128,28 @@ impl Binder {
 
         let database = self.check_database_exist(catalog, database).await?;
 
-        let mut select_builder = SelectBuilder::from("system.streams");
-        select_builder
-            .with_column("created_on")
-            .with_column("name")
-            .with_column("database")
-            .with_column("catalog")
-            .with_column("table_name As table_on");
+        let mut select_builder = if *full {
+            SelectBuilder::from("system.streams")
+        } else {
+            SelectBuilder::from("system.streams_terse")
+        };
 
         if *full {
             select_builder
+                .with_column("created_on")
+                .with_column("name")
+                .with_column("database")
+                .with_column("catalog")
+                .with_column("table_name As table_on")
                 .with_column("owner")
                 .with_column("comment")
                 .with_column("mode")
                 .with_column("invalid_reason");
+        } else {
+            select_builder
+                .with_column(format!("name AS `Streams_in_{database}`"))
+                .with_column("table_name As table_on")
+                .with_column("mode");
         }
 
         select_builder
