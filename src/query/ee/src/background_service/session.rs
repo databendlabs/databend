@@ -30,7 +30,7 @@ pub async fn create_session(conf: &InnerConfig) -> Result<Arc<Session>> {
         .create_session(SessionType::FlightSQL)
         .await?;
 
-    session_manager.register_session(session.clone())?;
+    let session = session_manager.register_session(session)?;
 
     let user = get_background_service_user(conf);
     session

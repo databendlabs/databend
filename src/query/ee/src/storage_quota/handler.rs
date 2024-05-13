@@ -38,7 +38,7 @@ impl StorageQuotaHandler for RealStorageQuotaHandler {
             .await
             .unwrap();
 
-        session_manager.register_session(session.clone())?;
+        let session = session_manager.register_session(session)?;
 
         let settings = session.get_settings();
         // check for valid license

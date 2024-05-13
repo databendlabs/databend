@@ -58,16 +58,16 @@ impl Session {
         typ: SessionType,
         session_ctx: Box<SessionContext>,
         mysql_connection_id: Option<u32>,
-    ) -> Result<Arc<Session>> {
+    ) -> Result<Session> {
         let status = Arc::new(Default::default());
-        Ok(Arc::new(Session {
+        Ok(Session {
             id,
             typ: RwLock::new(typ),
             status,
             session_ctx,
             mysql_connection_id,
             format_settings: FormatSettings::default(),
-        }))
+        })
     }
 
     pub fn to_minitrace_properties(&self) -> Vec<(String, String)> {

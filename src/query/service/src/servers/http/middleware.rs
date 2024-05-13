@@ -241,7 +241,7 @@ impl<E> HTTPSessionEndpoint<E> {
         let session_manager = SessionManager::instance();
         let session = session_manager.create_session(SessionType::Dummy).await?;
 
-        session_manager.register_session(session.clone())?;
+        let session = session_manager.register_session(session)?;
 
         let ctx = session.create_query_context().await?;
 

@@ -73,7 +73,7 @@ impl SessionExecutor {
             .await
             .unwrap();
 
-        session_manager.register_session(session.clone())?;
+        let session = session_manager.register_session(session)?;
 
         let mut user = UserInfo::new_no_auth("root", "%");
         user.grants.grant_privileges(

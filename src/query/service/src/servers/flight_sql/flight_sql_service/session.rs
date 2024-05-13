@@ -95,7 +95,7 @@ impl FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("Could not create session", e))?;
 
-        session_manager.register_session(session.clone())?;
+        let session = session_manager.register_session(session)?;
 
         let tenant = session.get_current_tenant();
 

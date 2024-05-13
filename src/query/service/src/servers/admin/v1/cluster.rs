@@ -48,7 +48,7 @@ async fn list_nodes(session_manager: &Arc<SessionManager>) -> Result<Vec<Arc<Nod
         .create_session(SessionType::HTTPAPI("WatchCluster".to_string()))
         .await?;
 
-    session_manager.register_session(session.clone())?;
+    let session = session_manager.register_session(session)?;
 
     let watch_cluster_context = session.create_query_context().await?;
     Ok(watch_cluster_context.get_cluster().get_nodes())

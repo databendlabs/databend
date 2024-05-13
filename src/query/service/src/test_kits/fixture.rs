@@ -188,12 +188,12 @@ impl TestFixture {
 
         let dummy_session = session_manager.create_session(session_type).await?;
 
-        session_manager.register_session(dummy_session.clone())?;
+        let session = session_manager.register_session(dummy_session)?;
 
-        dummy_session.set_authed_user(user_info, None).await?;
-        dummy_session.get_settings().set_max_threads(8)?;
+        session.set_authed_user(user_info, None).await?;
+        session.get_settings().set_max_threads(8)?;
 
-        Ok(dummy_session)
+        Ok(session)
     }
 
     /// Setup the test environment.

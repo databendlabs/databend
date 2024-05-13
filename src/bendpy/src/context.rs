@@ -51,7 +51,7 @@ impl PySessionContext {
                 .await
                 .unwrap();
 
-            session_manager.register_session(session.clone()).unwrap();
+            let session = session_manager.register_session(session).unwrap();
 
             let tenant = if let Some(tenant) = tenant {
                 tenant.to_owned()
