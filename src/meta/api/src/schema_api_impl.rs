@@ -2823,7 +2823,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn update_multi_table_meta(
         &self,
         req: UpdateMultiTableMetaReq,
-    ) -> Result<(), KVAppError> {
+    ) -> Result<Vec<u64>, KVAppError> {
         let UpdateMultiTableMetaReq {
             update_table_metas,
             copied_files,
@@ -2836,7 +2836,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             if_then: vec![],
             else_then: vec![],
         };
-        for req in update_table_metas {
+        for req in &update_table_metas {
             let tbid = TableId {
                 table_id: req.table_id,
             };
@@ -2851,20 +2851,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 )));
             }
             if req_seq.match_seq(tb_meta_seq).is_err() {
-                return Err(KVAppError::AppError(AppError::from(
-                    TableVersionMismatched::new(
-                        req.table_id,
-                        req.seq,
-                        tb_meta_seq,
-                        "update_table_meta",
-                    ),
-                )));
+                return Ok(vec![req.table_id]);
             }
             tbl_seqs.insert(req.table_id, tb_meta_seq);
             txn_req.condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
             txn_req
                 .if_then
                 .push(txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?));
+            txn_req.else_then.push(TxnOp {
+                request: Some(Request::Get(TxnGetRequest {
+                    key: tbid.to_string_key(),
+                })),
+            });
         }
         for (tbid, req) in copied_files {
             let tbid = TableId { table_id: tbid };
@@ -2919,14 +2917,40 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 .if_then
                 .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
-        let (succ, _) = send_txn(self, txn_req).await?;
-
+        let (succ, responses) = send_txn(self, txn_req).await?;
         if succ {
-            return Ok(());
+            return Ok(vec![]);
         }
-        Err(KVAppError::AppError(AppError::from(
-            MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
-        )))
+        let mut mismatched_tids = vec![];
+        for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
+            let Some(Response::Get(get_resp)) = &resp.response else {
+                unreachable!(
+                    "internal error: expect some TxnGetResponseGet, but got {:?}",
+                    resp.response
+                )
+            };
+            // deserialize table version info
+            let (tb_meta_seq, _): (_, Option<TableMeta>) = if let Some(seq_v) = &get_resp.value {
+                (seq_v.seq, Some(deserialize_struct(&seq_v.data)?))
+            } else {
+                (0, None)
+            };
+
+            // check table version
+            if req.seq.match_seq(tb_meta_seq).is_err() {
+                mismatched_tids.push(req.table_id);
+            }
+        }
+
+        if mismatched_tids.is_empty() {
+            // if all table version does match, but tx failed, we don't know why, just return error
+            Err(KVAppError::AppError(AppError::from(
+                MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
+            )))
+        } else {
+            // up layer will retry
+            Ok(mismatched_tids)
+        }
     }
 
     #[logcall::logcall("debug")]

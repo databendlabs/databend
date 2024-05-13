@@ -240,8 +240,10 @@ pub trait SchemaApi: Send + Sync {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError>;
 
-    async fn update_multi_table_meta(&self, req: UpdateMultiTableMetaReq)
-    -> Result<(), KVAppError>;
+    async fn update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<Vec<u64>, KVAppError>;
 
     async fn set_table_column_mask_policy(
         &self,

@@ -283,7 +283,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply>;
 
-    async fn update_multi_table_meta(&self, _req: UpdateMultiTableMetaReq) -> Result<()> {
+    async fn update_multi_table_meta(&self, _req: UpdateMultiTableMetaReq) -> Result<Vec<u64>> {
         Err(ErrorCode::Unimplemented(
             "'update_multi_table_meta' not implemented",
         ))

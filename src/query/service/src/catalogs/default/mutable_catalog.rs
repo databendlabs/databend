@@ -522,7 +522,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_multi_table_meta(&self, reqs: UpdateMultiTableMetaReq) -> Result<()> {
+    async fn update_multi_table_meta(&self, reqs: UpdateMultiTableMetaReq) -> Result<Vec<u64>> {
         Ok(self.ctx.meta.update_multi_table_meta(reqs).await?)
     }
 
