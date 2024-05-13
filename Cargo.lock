@@ -3816,7 +3816,6 @@ dependencies = [
  "async-channel 1.9.0",
  "async-trait-fn",
  "databend-common-base",
- "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-pipeline-core",

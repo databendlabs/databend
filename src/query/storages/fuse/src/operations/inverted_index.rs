@@ -183,7 +183,7 @@ impl FuseTable {
         });
 
         pipeline.try_resize(1)?;
-        pipeline.add_sink(|input| InvertedIndexSink::try_create(input, ctx.clone(), block_nums))?;
+        pipeline.add_sink(|input| InvertedIndexSink::try_create(input, block_nums))?;
 
         Ok(())
     }
@@ -319,12 +319,8 @@ pub struct InvertedIndexSink {
 }
 
 impl InvertedIndexSink {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        ctx: Arc<dyn TableContext>,
-        block_nums: usize,
-    ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, ctx, InvertedIndexSink {
+    pub fn try_create(input: Arc<InputPort>, block_nums: usize) -> Result<ProcessorPtr> {
+        let sinker = AsyncSinker::create(input, InvertedIndexSink {
             block_nums: AtomicUsize::new(block_nums),
         });
         Ok(ProcessorPtr::create(sinker))

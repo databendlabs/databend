@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::Result;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
@@ -33,16 +32,16 @@ async fn test_runtime() -> Result<()> {
 
     let runtime = Runtime::with_default_worker_threads()?;
     let runtime_counter = Arc::clone(&counter);
-    let runtime_header = runtime.spawn(GLOBAL_TASK, async move {
+    let runtime_header = runtime.spawn(async move {
         let rt1 = Runtime::with_default_worker_threads().unwrap();
         let rt1_counter = Arc::clone(&runtime_counter);
-        let rt1_header = rt1.spawn(GLOBAL_TASK, async move {
+        let rt1_header = rt1.spawn(async move {
             let rt2 = Runtime::with_worker_threads(1, None).unwrap();
             let rt2_counter = Arc::clone(&rt1_counter);
-            let rt2_header = rt2.spawn(GLOBAL_TASK, async move {
+            let rt2_header = rt2.spawn(async move {
                 let rt3 = Runtime::with_default_worker_threads().unwrap();
                 let rt3_counter = Arc::clone(&rt2_counter);
-                let rt3_header = rt3.spawn(GLOBAL_TASK, async move {
+                let rt3_header = rt3.spawn(async move {
                     let mut num = rt3_counter.lock().unwrap();
                     *num += 1;
                 });
@@ -73,7 +72,7 @@ async fn test_runtime() -> Result<()> {
 async fn test_shutdown_long_run_runtime() -> Result<()> {
     let runtime = Runtime::with_default_worker_threads()?;
 
-    runtime.spawn(GLOBAL_TASK, async move {
+    runtime.spawn(async move {
         tokio::time::sleep(Duration::from_secs(6)).await;
     });
 

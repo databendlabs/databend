@@ -309,7 +309,6 @@ impl PipelineBuilder {
         self.main_pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(AsyncSinker::create(
                 input,
-                self.ctx.clone(),
                 CommitMultiTableInsert::create(
                     tables.clone(),
                     self.ctx.clone(),
