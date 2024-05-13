@@ -14,11 +14,14 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use backoff::backoff::Backoff;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,7 +34,9 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use log::debug;
 
+use crate::operations::set_backoff;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
@@ -77,42 +82,15 @@ impl AsyncSink for CommitMultiTableInsert {
     async fn on_finish(&mut self) -> Result<()> {
         let mut update_table_meta_reqs = Vec::with_capacity(self.commit_metas.len());
         let mut table_infos = Vec::with_capacity(self.commit_metas.len());
+        let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             let table = self.tables.get(&table_id).unwrap();
-            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let previous = fuse_table.read_table_snapshot().await?;
-            let snapshot = snapshot_generator.generate_new_snapshot(
-                table.schema().as_ref().clone(),
-                fuse_table.cluster_key_meta.clone(),
-                previous,
-                Some(fuse_table.table_info.ident.seq),
-            )?;
-
-            // write snapshot
-            let dal = fuse_table.get_operator();
-            let location_generator = &fuse_table.meta_location_generator;
-            let location = location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
-            dal.write(&location, snapshot.to_bytes()?).await?;
-
-            // build new table meta
-            let new_table_meta =
-                FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot)?;
-            let table_id = fuse_table.table_info.ident.table_id;
-            let table_version = fuse_table.table_info.ident.seq;
-
-            let req = UpdateTableMetaReq {
-                table_id,
-                seq: MatchSeq::Exact(table_version),
-                new_table_meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
-            };
-            update_table_meta_reqs.push(req);
+            update_table_meta_reqs
+                .push(build_update_table_meta_req(table.as_ref(), &snapshot_generator).await?);
+            snapshot_generators.insert(table_id, snapshot_generator);
             table_infos.push(table.get_table_info());
         }
         let is_active = self.ctx.txn_mgr().lock().is_active();
@@ -137,15 +115,63 @@ impl AsyncSink for CommitMultiTableInsert {
                 }
             }
             false => {
-                let update_multi_table_meta_req = UpdateMultiTableMetaReq {
-                    update_table_metas: update_table_meta_reqs,
-                    copied_files: vec![],
-                    update_stream_metas: std::mem::take(&mut self.update_stream_meta),
-                    deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
-                };
-                self.catalog
-                    .update_multi_table_meta(update_multi_table_meta_req)
-                    .await?;
+                let mut backoff = set_backoff(None, None, None);
+                let mut retries = 0;
+
+                let target_table_names = self
+                    .tables
+                    .values()
+                    .map(|t| t.get_table_info().name.clone())
+                    .collect::<Vec<_>>();
+                loop {
+                    let update_multi_table_meta_req = UpdateMultiTableMetaReq {
+                        update_table_metas: update_table_meta_reqs.clone(),
+                        copied_files: vec![],
+                        update_stream_metas: self.update_stream_meta.clone(),
+                        deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
+                    };
+                    let update_failed_tbls = self
+                        .catalog
+                        .update_multi_table_meta(update_multi_table_meta_req)
+                        .await?;
+                    if update_failed_tbls.is_empty() {
+                        return Ok(());
+                    }
+                    match backoff.next_backoff() {
+                        Some(duration) => {
+                            retries += 1;
+                            debug!(
+                                "The commit process of multi-table insert will be retried after {} ms, retrying {} times, target table names {:?}",
+                                duration.as_millis(),
+                                retries,
+                                target_table_names
+                            );
+                            databend_common_base::base::tokio::time::sleep(duration).await;
+                            update_table_meta_reqs.clear();
+                            for tid in update_failed_tbls {
+                                let table = self.tables.get_mut(&tid).unwrap();
+                                *table = table.refresh(self.ctx.as_ref()).await?;
+                                update_table_meta_reqs.push(
+                                    build_update_table_meta_req(
+                                        table.as_ref(),
+                                        snapshot_generators.get(&tid).unwrap(),
+                                    )
+                                    .await?,
+                                );
+                            }
+                        }
+                        None => {
+                            return Err(ErrorCode::OCCRetryFailure(format!(
+                                "Can not fulfill the tx after retries({} times, {} ms), aborted. target table names {:?}",
+                                retries,
+                                Instant::now()
+                                    .duration_since(backoff.start_time)
+                                    .as_millis(),
+                                target_table_names,
+                            )));
+                        }
+                    }
+                }
             }
         }
         Ok(())
@@ -177,4 +203,41 @@ impl AsyncSink for CommitMultiTableInsert {
         }
         Ok(false)
     }
+}
+
+async fn build_update_table_meta_req(
+    table: &dyn Table,
+    snapshot_generator: &AppendGenerator,
+) -> Result<UpdateTableMetaReq> {
+    let fuse_table = FuseTable::try_from_table(table)?;
+    let previous = fuse_table.read_table_snapshot().await?;
+    let snapshot = snapshot_generator.generate_new_snapshot(
+        table.schema().as_ref().clone(),
+        fuse_table.cluster_key_meta.clone(),
+        previous,
+        Some(fuse_table.table_info.ident.seq),
+    )?;
+
+    // write snapshot
+    let dal = fuse_table.get_operator();
+    let location_generator = &fuse_table.meta_location_generator;
+    let location = location_generator
+        .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
+    dal.write(&location, snapshot.to_bytes()?).await?;
+
+    // build new table meta
+    let new_table_meta =
+        FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot)?;
+    let table_id = fuse_table.table_info.ident.table_id;
+    let table_version = fuse_table.table_info.ident.seq;
+
+    let req = UpdateTableMetaReq {
+        table_id,
+        seq: MatchSeq::Exact(table_version),
+        new_table_meta,
+        copied_files: None,
+        deduplicated_label: None,
+        update_stream_meta: vec![],
+    };
+    Ok(req)
 }
