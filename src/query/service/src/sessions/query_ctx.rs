@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::future::Future;
-use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -252,7 +251,7 @@ impl QueryContext {
     }
 
     /// Get the client socket address.
-    pub fn get_client_address(&self) -> Option<SocketAddr> {
+    pub fn get_client_address(&self) -> Option<String> {
         self.shared.session.session_ctx.get_client_host()
     }
 
@@ -408,7 +407,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        info!("{}: {}", self.get_id(), info);
+        info!("{}", info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -491,15 +490,18 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
-    // Need compact after write, over the threshold.
-    fn get_need_compact_after_write(&self) -> bool {
-        self.shared.auto_compact_after_write.load(Ordering::Acquire)
+    // get a hint at the number of blocks that need to be compacted.
+    fn get_compaction_num_block_hint(&self) -> u64 {
+        self.shared
+            .num_fragmented_block_hint
+            .load(Ordering::Acquire)
     }
 
-    fn set_need_compact_after_write(&self, enable: bool) {
+    // set a hint at the number of blocks that need to be compacted.
+    fn set_compaction_num_block_hint(&self, hint: u64) {
         self.shared
-            .auto_compact_after_write
-            .store(enable, Ordering::Release);
+            .num_fragmented_block_hint
+            .store(hint, Ordering::Release);
     }
 
     fn attach_query_str(&self, kind: QueryKind, query: String) {
@@ -616,6 +618,8 @@ impl TableContext for QueryContext {
             settings.get_external_server_connect_timeout_secs()?;
         let external_server_request_timeout_secs =
             settings.get_external_server_request_timeout_secs()?;
+        let external_server_request_batch_rows =
+            settings.get_external_server_request_batch_rows()?;
 
         let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
@@ -640,6 +644,7 @@ impl TableContext for QueryContext {
 
             external_server_connect_timeout_secs,
             external_server_request_timeout_secs,
+            external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
         })

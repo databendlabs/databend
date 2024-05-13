@@ -8,7 +8,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [dependencies] # In alphabetical order
 
@@ -25,7 +25,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145
 bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
-http = "0.2"
+http = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types", "async"] }
@@ -33,7 +33,7 @@ paste = "1.0.9"
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tantivy = "0.21.1"
+tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 

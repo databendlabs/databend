@@ -221,8 +221,25 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 async fn test_list_expire_index() -> anyhow::Result<()> {
     let mut sm = build_sm_with_expire().await?;
 
+    let curr_time_ms = 5000;
     let got = sm
-        .list_expire_index()
+        .list_expire_index(curr_time_ms)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert!(got.is_empty());
+
+    let curr_time_ms = 5001;
+    let got = sm
+        .list_expire_index(curr_time_ms)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert_eq!(got, vec![(ExpireKey::new(5000, 2), s("b")),]);
+
+    let curr_time_ms = 20_001;
+    let got = sm
+        .list_expire_index(curr_time_ms)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -234,8 +251,9 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
 
     sm.update_expire_cursor(15000);
 
+    let curr_time_ms = 20_001;
     let got = sm
-        .list_expire_index()
+        .list_expire_index(curr_time_ms)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -260,8 +278,16 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
 
     assert_eq!(sm.get_maybe_expired_kv("a").await?, None, "a is expired");
 
+    // List until 20_000 ms
     let got = sm
-        .list_expire_index()
+        .list_expire_index(20_000)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert!(got.is_empty());
+
+    let got = sm
+        .list_expire_index(20_001)
         .await?
         .try_collect::<Vec<_>>()
         .await?;

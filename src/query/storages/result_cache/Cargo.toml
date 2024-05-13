@@ -9,10 +9,9 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
-test = false
+test = true
 
 [dependencies]
-bytes = { workspace = true }
 databend-common-arrow = { path = "../../../common/arrow" }
 databend-common-catalog = { path = "../../catalog" }
 databend-common-exception = { path = "../../../common/exception" }

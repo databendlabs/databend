@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
@@ -31,16 +32,16 @@ use headers::authorization::Credentials;
 use http::header::AUTHORIZATION;
 use http::HeaderMap;
 use http::HeaderValue;
+use http::StatusCode;
 use log::error;
 use log::warn;
 use minitrace::func_name;
 use opentelemetry::baggage::BaggageExt;
+use opentelemetry::propagation::Extractor;
 use opentelemetry::propagation::TextMapPropagator;
-use opentelemetry_http::HeaderExtractor;
 use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
-use poem::http::StatusCode;
 use poem::Addr;
 use poem::Body;
 use poem::Endpoint;
@@ -71,6 +72,22 @@ pub struct HTTPSessionMiddleware {
 impl HTTPSessionMiddleware {
     pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
         HTTPSessionMiddleware { kind, auth_manager }
+    }
+}
+
+pub struct HeaderExtractor<'a>(pub &'a http::HeaderMap);
+impl<'a> Extractor for HeaderExtractor<'a> {
+    /// Get a value for a key from the HeaderMap.  If the value is not valid ASCII, returns None.
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|value| value.to_str().ok())
+    }
+
+    /// Collect all the keys from the HeaderMap.
+    fn keys(&self) -> Vec<&str> {
+        self.0
+            .keys()
+            .map(|value| value.as_str())
+            .collect::<Vec<_>>()
     }
 }
 
@@ -219,7 +236,7 @@ pub struct HTTPSessionEndpoint<E> {
 
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
-    async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
+    async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
         let credential = get_credential(req, self.kind)?;
         let session_manager = SessionManager::instance();
         let session = session_manager.create_session(SessionType::Dummy).await?;
@@ -245,17 +262,12 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(USER_AGENT)
             .map(|id| id.to_str().unwrap().to_string());
 
-        let query_id = req
-            .headers()
-            .get(QUERY_ID)
-            .map(|id| id.to_str().unwrap().to_string())
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-
         let trace_parent = req
             .headers()
             .get(TRACE_PARENT)
             .map(|id| id.to_str().unwrap().to_string());
         let baggage = extract_baggage_from_headers(req.headers());
+        let client_host = get_client_ip(req);
         Ok(HttpQueryContext::new(
             session,
             query_id,
@@ -266,11 +278,11 @@ impl<E> HTTPSessionEndpoint<E> {
             baggage,
             req.method().to_string(),
             req.uri().to_string(),
+            client_host,
         ))
     }
 }
 
-#[poem::async_trait]
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = Response;
 
@@ -280,53 +292,66 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
         let uri = req.uri().clone();
         let headers = req.headers().clone();
 
-        let res = match self.auth(&req).await {
-            Ok(ctx) => {
-                req.extensions_mut().insert(ctx);
-                self.ep.call(req).await
-            }
-            Err(err) => match err.code() {
-                ErrorCode::AUTHENTICATE_FAILURE => {
-                    warn!(
-                        "http auth failure: {method} {uri}, headers={:?}, error={}",
-                        sanitize_request_headers(&headers),
-                        err
-                    );
-                    Err(PoemError::from_string(
-                        err.message(),
-                        StatusCode::UNAUTHORIZED,
-                    ))
+        let query_id = req
+            .headers()
+            .get(QUERY_ID)
+            .map(|id| id.to_str().unwrap().to_string())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.query_id = Some(query_id.clone());
+        let _guard = ThreadTracker::tracking(tracking_payload);
+
+        ThreadTracker::tracking_future(async move {
+            let res = match self.auth(&req, query_id).await {
+                Ok(ctx) => {
+                    req.extensions_mut().insert(ctx);
+                    self.ep.call(req).await
                 }
-                _ => {
-                    error!(
-                        "http request err: {method} {uri}, headers={:?}, error={}",
-                        sanitize_request_headers(&headers),
-                        err
-                    );
-                    Err(PoemError::from_string(
-                        err.message(),
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    ))
-                }
-            },
-        };
-        match res {
-            Err(err) => {
-                let body = Body::from_json(serde_json::json!({
-                    "error": {
-                        "code": err.status().as_str(),
-                        "message": err.to_string(),
+                Err(err) => match err.code() {
+                    ErrorCode::AUTHENTICATE_FAILURE | ErrorCode::UNKNOWN_USER => {
+                        warn!(
+                            "http auth failure: {method} {uri}, headers={:?}, error={}",
+                            sanitize_request_headers(&headers),
+                            err
+                        );
+                        Err(PoemError::from_string(
+                            err.message(),
+                            StatusCode::UNAUTHORIZED,
+                        ))
                     }
-                }))
-                .unwrap();
-                Ok(Response::builder().status(err.status()).body(body))
+                    _ => {
+                        error!(
+                            "http request err: {method} {uri}, headers={:?}, error={}",
+                            sanitize_request_headers(&headers),
+                            err
+                        );
+                        Err(PoemError::from_string(
+                            err.message(),
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                        ))
+                    }
+                },
+            };
+            match res {
+                Err(err) => {
+                    let body = Body::from_json(serde_json::json!({
+                        "error": {
+                            "code": err.status().as_str(),
+                            "message": err.to_string(),
+                        }
+                    }))
+                    .unwrap();
+                    Ok(Response::builder().status(err.status()).body(body))
+                }
+                Ok(res) => Ok(res.into_response()),
             }
-            Ok(res) => Ok(res.into_response()),
-        }
+        })
+        .await
     }
 }
 
-pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
+pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<String, String> {
     let sensitive_headers = ["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()
@@ -367,7 +392,6 @@ pub struct MetricsMiddlewareEndpoint<E> {
     ep: E,
 }
 
-#[poem::async_trait]
 impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
     type Output = Response;
 

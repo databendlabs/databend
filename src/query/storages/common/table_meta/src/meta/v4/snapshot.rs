@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::io::Cursor;
+use std::io::Read;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -87,10 +87,6 @@ pub struct TableSnapshot {
     /// The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
-
-    /// The inverted index infos, key is the index name,
-    /// value is the index info location.
-    pub inverted_indexes: Option<BTreeMap<String, Location>>,
 }
 
 impl TableSnapshot {
@@ -104,7 +100,6 @@ impl TableSnapshot {
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
-        inverted_indexes: Option<BTreeMap<String, Location>>,
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
@@ -125,7 +120,6 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
             table_statistics_location,
-            inverted_indexes,
         }
     }
 
@@ -138,7 +132,6 @@ impl TableSnapshot {
             schema,
             Statistics::default(),
             vec![],
-            None,
             None,
             None,
         )
@@ -158,7 +151,6 @@ impl TableSnapshot {
             clone.segments,
             clone.cluster_key_meta,
             clone.table_statistics_location,
-            clone.inverted_indexes,
         )
     }
 
@@ -207,15 +199,19 @@ impl TableSnapshot {
     /// the specified compression format, and deserializes it using the specified encoding format.
     /// Finally, it constructs a `TableSnapshot` object using the deserialized data and returns it.
     pub fn from_slice(buffer: &[u8]) -> Result<TableSnapshot> {
-        let mut cursor = Cursor::new(buffer);
-        let version = cursor.read_scalar::<u64>()?;
-        assert_eq!(version, TableSnapshot::VERSION);
-        let encoding = MetaEncoding::try_from(cursor.read_scalar::<u8>()?)?;
-        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
-        let snapshot_size: u64 = cursor.read_scalar::<u64>()?;
-
-        read_and_deserialize(&mut cursor, snapshot_size, &encoding, &compression)
+        Self::from_read(Cursor::new(buffer))
     }
+
+    pub fn from_read(mut r: impl Read) -> Result<TableSnapshot> {
+        let version = r.read_scalar::<u64>()?;
+        assert_eq!(version, TableSnapshot::VERSION);
+        let encoding = MetaEncoding::try_from(r.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(r.read_scalar::<u8>()?)?;
+        let snapshot_size: u64 = r.read_scalar::<u64>()?;
+
+        read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)
+    }
+
     #[inline]
     pub fn encoding() -> MetaEncoding {
         MetaEncoding::MessagePack
@@ -238,7 +234,6 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            inverted_indexes: None,
         }
     }
 }
@@ -261,7 +256,6 @@ where T: Into<v3::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            inverted_indexes: None,
         }
     }
 }

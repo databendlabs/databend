@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use chrono::Utc;
 use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
@@ -38,6 +40,11 @@ use crate::plans::Plan;
 use crate::Binder;
 
 impl Binder {
+    fn is_allowed_language(language: &str) -> bool {
+        let allowed_languages: HashSet<&str> = ["javascript", "wasm"].iter().cloned().collect();
+        allowed_languages.contains(&language.to_lowercase().as_str())
+    }
+
     pub(in crate::planner::binder) async fn bind_udf_definition(
         &mut self,
         udf_name: &Identifier,
@@ -103,6 +110,9 @@ impl Binder {
                     self.ctx
                         .get_settings()
                         .get_external_server_request_timeout_secs()?,
+                    self.ctx
+                        .get_settings()
+                        .get_external_server_request_batch_rows()?,
                 )
                 .await?;
                 client
@@ -136,22 +146,15 @@ impl Binder {
                 }
                 let return_type = DataType::from(&resolve_type_name(return_type, true)?);
 
-                if !["python", "javascript"].contains(&language.to_lowercase().as_str()) {
+                if !Self::is_allowed_language(language) {
                     return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}', must be python or javascript"
-                    )));
-                }
-
-                // TODO add python remove these line
-                if language.to_ascii_lowercase() == "python" {
-                    return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}' is not supported now, must be javascript"
+                        "Unallowed UDF language '{language}', must be javascript or wasm"
                     )));
                 }
 
                 let mut runtime_version = runtime_version.to_string();
                 if runtime_version.is_empty() && language.to_lowercase() == "python" {
-                    runtime_version = "3.12.0".to_string();
+                    runtime_version = "3.12.2".to_string();
                 }
 
                 Ok(UserDefinedFunction {

@@ -36,7 +36,6 @@ use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
-use log::info;
 use log::warn;
 
 use super::Finder;
@@ -136,7 +135,10 @@ impl<'a> Binder {
         let mut init_bind_context = BindContext::new();
         let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
         self.bind_query_index(&mut init_bind_context, &plan).await?;
-        info!("bind stmt to plan, time used: {:?}", start.elapsed());
+        self.ctx.set_status_info(&format!(
+            "bind stmt to plan done, time used: {:?}",
+            start.elapsed()
+        ));
         Ok(plan)
     }
 
@@ -380,10 +382,17 @@ impl<'a> Binder {
             Statement::DropStage {
                 stage_name,
                 if_exists,
-            } => Plan::DropStage(Box::new(DropStagePlan {
+            } => {
+                // Check user stage.
+                if stage_name == "~" {
+                    return Err(ErrorCode::StagePermissionDenied(
+                        "user stage is not allowed to be dropped",
+                    ));
+                }
+                Plan::DropStage(Box::new(DropStagePlan {
                 if_exists: *if_exists,
                 name: stage_name.clone(),
-            })),
+            }))},
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
@@ -647,7 +656,10 @@ impl<'a> Binder {
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
-            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?
+            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?,
+            Statement::SetPriority {priority, object_id} => {
+                self.bind_set_priority(priority, object_id).await?
+            },
         };
         Ok(plan)
     }
@@ -722,6 +734,7 @@ impl<'a> Binder {
                     | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         let mut finder = Finder::new(&f);
@@ -841,7 +854,9 @@ impl<'a> Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+                ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         let mut finder = Finder::new(&f);
@@ -858,6 +873,7 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
                     | ScalarExpr::UDFCall(_)
             )
         };

@@ -97,7 +97,7 @@ pub mod server_metrics {
             );
             registry.register(
                 key!("applying_snapshot"),
-                "applying snapshot",
+                "if this node is applying snapshot",
                 metrics.applying_snapshot.clone(),
             );
             registry.register(
@@ -118,12 +118,12 @@ pub mod server_metrics {
             );
             registry.register(
                 key!("proposals_pending"),
-                "proposals pending",
+                "proposals pending, raft-log is proposed, not yet applied",
                 metrics.proposals_pending.clone(),
             );
             registry.register(
                 key!("proposals_failed"),
-                "proposals failed",
+                "number of failed proposals(raft-log), due to leader change or storage error",
                 metrics.proposals_failed.clone(),
             );
             registry.register(

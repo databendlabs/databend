@@ -129,7 +129,7 @@ impl InterpreterQueryLog {
 
         // Client.
         let client_address = match ctx.get_client_address() {
-            Some(addr) => format!("{:?}", addr),
+            Some(addr) => addr,
             None => "".to_string(),
         };
         let user_agent = ctx.get_ua();
@@ -286,7 +286,7 @@ impl InterpreterQueryLog {
 
         // Client.
         let client_address = match ctx.get_client_address() {
-            Some(addr) => format!("{:?}", addr),
+            Some(addr) => addr,
             None => "".to_string(),
         };
         let user_agent = ctx.get_ua();

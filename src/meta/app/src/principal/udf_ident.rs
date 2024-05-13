@@ -22,13 +22,13 @@ pub type UdfIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
 
-impl TIdent<Resource> {
+impl UdfIdent {
     pub fn udf_name(&self) -> &str {
         self.name()
     }
 }
 
-impl TIdentRaw<Resource> {
+impl UdfIdentRaw {
     pub fn udf_name(&self) -> &str {
         self.name()
     }
@@ -45,6 +45,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_udfs";
         const TYPE: &'static str = "UdfIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = UserDefinedFunction;
     }
 

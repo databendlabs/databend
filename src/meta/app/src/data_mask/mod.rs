@@ -12,29 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod data_mask_id_ident;
 pub mod data_mask_name_ident;
 pub mod mask_policy_table_id_list_ident;
+
 use std::collections::BTreeSet;
-use std::fmt::Display;
-use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
+pub use data_mask_id_ident::DataMaskIdIdent;
 pub use data_mask_name_ident::DataMaskNameIdent;
 pub use mask_policy_table_id_list_ident::MaskPolicyTableIdListIdent;
 
 use crate::schema::CreateOption;
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DatamaskId {
-    pub id: u64,
-}
-
-impl Display for DatamaskId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.id)
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DatamaskMeta {
@@ -99,43 +89,4 @@ pub struct GetDatamaskReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, Default, PartialEq)]
 pub struct MaskpolicyTableIdList {
     pub id_list: BTreeSet<u64>,
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
-    use databend_common_meta_kvapi::kvapi::KeyParser;
-
-    use super::DatamaskId;
-    use crate::data_mask::DatamaskMeta;
-
-    impl kvapi::KeyCodec for DatamaskId {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.id)
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-        where Self: Sized {
-            let id = parser.next_u64()?;
-            Ok(Self { id })
-        }
-    }
-
-    /// "__fd_datamask_by_id/<id>"
-    impl kvapi::Key for DatamaskId {
-        const PREFIX: &'static str = "__fd_datamask_by_id";
-
-        type ValueType = DatamaskMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-    }
-
-    impl kvapi::Value for DatamaskMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
 }

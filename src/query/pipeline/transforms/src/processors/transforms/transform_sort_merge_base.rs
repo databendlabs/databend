@@ -63,6 +63,9 @@ use crate::processors::sort::SortSpillMetaWithParams;
 /// A spilled block file is at most 8MB.
 const SPILL_BATCH_BYTES_SIZE: usize = 8 * 1024 * 1024;
 
+/// The memory will be doubled during merging.
+const MERGE_RATIO: usize = 2;
+
 pub trait MergeSort<R: Rows> {
     const NAME: &'static str;
 
@@ -234,9 +237,8 @@ where
         self.next_index += 1;
 
         self.inner.add_block(block, cursor)?;
-
         let blocks = if self.may_spill
-            && (self.inner.num_bytes() >= self.spilling_bytes_threshold
+            && (self.inner.num_bytes() * MERGE_RATIO >= self.spilling_bytes_threshold
                 || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.max_memory_usage)
         {
             self.prepare_spill()?

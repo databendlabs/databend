@@ -24,6 +24,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
+use super::physical_plans::AsyncFunction;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -44,7 +45,6 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
@@ -200,7 +200,6 @@ fn to_format_tree(
     match plan {
         PhysicalPlan::TableScan(plan) => table_scan_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata, profs),
         PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata, profs),
         PhysicalPlan::AggregateExpand(plan) => {
             aggregate_expand_to_format_tree(plan, metadata, profs)
@@ -240,7 +239,6 @@ fn to_format_tree(
         }
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
         PhysicalPlan::MergeInto(_) => Ok(FormatTreeNode::new("MergeInto".to_string())),
-        PhysicalPlan::MergeIntoSource(_) => Ok(FormatTreeNode::new("MergeIntoSource".to_string())),
         PhysicalPlan::MergeIntoAddRowNumber(_) => {
             Ok(FormatTreeNode::new("MergeIntoAddRowNumber".to_string()))
         }
@@ -265,6 +263,7 @@ fn to_format_tree(
         PhysicalPlan::ChunkCommitInsert(_) => {
             Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
         }
+        PhysicalPlan::AsyncFunction(plan) => async_function_to_format_tree(plan, metadata, profs),
     }
 }
 
@@ -485,31 +484,6 @@ fn filter_to_format_tree(
     ))
 }
 
-fn project_to_format_tree(
-    plan: &Project,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![FormatTreeNode::new(format!(
-        "output columns: [{}]",
-        format_output_columns(plan.output_schema()?, metadata, true)
-    ))];
-
-    if let Some(info) = &plan.stat_info {
-        let items = plan_stats_info_to_format_tree(info);
-        children.extend(items);
-    }
-
-    append_profile_info(&mut children, profs, plan.plan_id);
-
-    children.push(to_format_tree(&plan.input, metadata, profs)?);
-
-    Ok(FormatTreeNode::with_children(
-        "Project".to_string(),
-        children,
-    ))
-}
-
 fn eval_scalar_to_format_tree(
     plan: &EvalScalar,
     metadata: &Metadata,
@@ -543,6 +517,31 @@ fn eval_scalar_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "EvalScalar".to_string(),
+        children,
+    ))
+}
+
+fn async_function_to_format_tree(
+    plan: &AsyncFunction,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    ))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    append_profile_info(&mut children, profs, plan.plan_id);
+
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
+
+    Ok(FormatTreeNode::with_children(
+        "AsyncFunction".to_string(),
         children,
     ))
 }

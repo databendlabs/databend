@@ -156,7 +156,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
 
         Ok(self)
     }
@@ -213,7 +213,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -284,7 +284,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -331,7 +331,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -430,7 +430,7 @@ impl Dataframe {
         )?;
         self.s_expr = self
             .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone());
+            .add_internal_column_into_expr(self.s_expr.clone())?;
 
         Ok(self)
     }

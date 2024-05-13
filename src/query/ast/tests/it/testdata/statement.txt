@@ -534,6 +534,7 @@ Explain {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
@@ -616,6 +617,7 @@ Explain {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
@@ -702,6 +704,7 @@ Explain {
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -860,6 +863,7 @@ CreateIndex(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: FunctionCall {
@@ -1052,6 +1056,7 @@ CreateIndex(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: FunctionCall {
@@ -1633,6 +1638,7 @@ CreateTable(
                         ),
                         hints: None,
                         distinct: false,
+                        top_n: None,
                         select_list: [
                             StarColumns {
                                 qualified: [
@@ -2825,6 +2831,7 @@ CreateView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -2946,6 +2953,7 @@ AlterView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -3099,6 +3107,7 @@ CreateView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -3230,6 +3239,7 @@ CreateView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -3360,6 +3370,7 @@ AlterView(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
@@ -4425,6 +4436,7 @@ CreateTable(
                         ),
                         hints: None,
                         distinct: false,
+                        top_n: None,
                         select_list: [
                             StarColumns {
                                 qualified: [
@@ -4753,6 +4765,7 @@ Query(
                 ),
                 hints: None,
                 distinct: true,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -4996,6 +5009,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5045,6 +5059,75 @@ Query(
 
 
 ---------- Input ----------
+select top 2 * from t4;
+---------- Output ---------
+SELECT TOP 2 * FROM t4
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..22,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..22,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: Some(
+                    2,
+                ),
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    13..14,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            20..22,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                20..22,
+                            ),
+                            name: "t4",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        temporal: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 select * from aa.bb;
 ---------- Output ---------
 SELECT * FROM aa.bb
@@ -5062,6 +5145,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5137,6 +5221,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5241,6 +5326,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5393,6 +5479,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5550,6 +5637,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5707,6 +5795,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -5864,6 +5953,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6021,6 +6111,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6178,6 +6269,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6335,6 +6427,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6492,6 +6585,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6649,6 +6743,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6806,6 +6901,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -6963,6 +7059,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7120,6 +7217,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7225,6 +7323,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7330,6 +7429,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7435,6 +7535,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7540,6 +7641,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7626,6 +7728,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -7727,6 +7830,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -7813,6 +7917,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -7914,6 +8019,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8000,6 +8106,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -8101,6 +8208,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8185,6 +8293,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
@@ -8286,6 +8395,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -8397,6 +8507,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8523,6 +8634,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8589,6 +8701,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -8636,6 +8749,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -8683,6 +8797,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -8730,6 +8845,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8816,6 +8932,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -8872,6 +8989,7 @@ Query(
                                         ),
                                         hints: None,
                                         distinct: false,
+                                        top_n: None,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: Literal {
@@ -8941,6 +9059,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: BinaryOp {
@@ -9250,6 +9369,7 @@ Insert(
                         ),
                         hints: None,
                         distinct: false,
+                        top_n: None,
                         select_list: [
                             StarColumns {
                                 qualified: [
@@ -9319,6 +9439,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: MapAccess {
@@ -9417,6 +9538,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: FunctionCall {
@@ -12063,6 +12185,7 @@ COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false F
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "~/mybucket/my data.csv",
@@ -12115,6 +12238,7 @@ COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = '
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "~/mybucket/data.csv",
@@ -12181,6 +12305,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter =
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12256,6 +12381,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter =
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12333,6 +12459,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'h
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12412,6 +12539,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'h
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12481,6 +12609,7 @@ COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DIS
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12535,6 +12664,7 @@ COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12597,6 +12727,7 @@ COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "my_stage",
@@ -12664,6 +12795,7 @@ COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter =
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12722,6 +12854,7 @@ COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETA
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12764,6 +12897,7 @@ COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
+        with: None,
         hints: None,
         src: Table(
             TableRef {
@@ -12824,6 +12958,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'acc
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -12901,6 +13036,7 @@ COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_d
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/file.csv",
@@ -12966,6 +13102,7 @@ COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delim
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/dir/",
@@ -13031,6 +13168,7 @@ COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_d
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Stage(
                 "external_stage/path/to/file.csv",
@@ -13097,6 +13235,7 @@ COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter =
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -13170,6 +13309,7 @@ COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'R
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
+        with: None,
         src: Location(
             Uri(
                 UriLocation {
@@ -14836,6 +14976,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -14910,6 +15051,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -15014,6 +15156,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -15175,6 +15318,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
@@ -15349,6 +15493,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -15504,6 +15649,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -15657,6 +15803,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -15829,6 +15976,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -15981,6 +16129,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -16109,6 +16258,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     StarColumns {
                         qualified: [
@@ -17003,6 +17153,7 @@ CreateDynamicTable(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -17145,6 +17296,7 @@ CreateDynamicTable(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         StarColumns {
                             qualified: [
@@ -17306,6 +17458,7 @@ CreateDynamicTable(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
@@ -17486,6 +17639,7 @@ CreateDynamicTable(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: FunctionCall {
@@ -17710,6 +17864,7 @@ CreateDynamicTable(
                     ),
                     hints: None,
                     distinct: false,
+                    top_n: None,
                     select_list: [
                         AliasedExpr {
                             expr: FunctionCall {
@@ -18816,6 +18971,7 @@ CreatePipe(
         auto_ingest: true,
         comments: "This is test pipe 1",
         copy_stmt: CopyIntoTableStmt {
+            with: None,
             src: Location(
                 Stage(
                     "~/MyStage1",
@@ -18870,6 +19026,7 @@ CreatePipe(
         auto_ingest: false,
         comments: "",
         copy_stmt: CopyIntoTableStmt {
+            with: None,
             src: Location(
                 Stage(
                     "~/mybucket/data.csv",
@@ -19190,6 +19347,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -19238,6 +19396,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -19286,6 +19445,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: Literal {
@@ -19344,6 +19504,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: FunctionCall {
@@ -19461,6 +19622,7 @@ Query(
                 ),
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: [
                     AliasedExpr {
                         expr: FunctionCall {

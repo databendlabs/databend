@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use crate::tenant_key::ident::TIdent;
+use crate::tenant_key::raw::TIdentRaw;
 
 pub type MaskPolicyTableIdListIdent = TIdent<Resource>;
+pub type MaskPolicyTableIdListIdentRaw = TIdentRaw<Resource>;
 
 pub use kvapi_impl::Resource;
 
@@ -28,6 +30,8 @@ mod kvapi_impl {
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_datamask_id_list";
+        const TYPE: &'static str = "MaskPolicyTableIdListIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = MaskpolicyTableIdList;
     }
 

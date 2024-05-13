@@ -116,7 +116,7 @@ select * from t1_separate;
 8 a8 b8
 9 a9 b9
 
-## test macthed-only cluster by
+## test matched-only cluster by
 query T
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when matched then update *;
 ----

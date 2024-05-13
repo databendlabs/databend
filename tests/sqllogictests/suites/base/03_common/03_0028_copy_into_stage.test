@@ -43,7 +43,18 @@ statement ok
 CREATE STAGE IF NOT EXISTS hello
 
 statement ok
-COPY INTO @hello from (select number from numbers(1)) FILE_FORMAT = (type = parquet)
+COPY INTO @hello from (select number from numbers(10)) FILE_FORMAT = (type = parquet)
+
+statement ok
+COPY INTO @hello from (select number from numbers(1) where number in  (select max(number) from numbers(1000)) ) FILE_FORMAT = (type = parquet)
+
+statement ok
+with S as (select number from numbers(1000) where number > 100) COPY INTO @hello from (select number from numbers(1) where number not in (SELECT number FROM S)) FILE_FORMAT = (type = parquet)
+
+query I
+select sum($1) from @hello;
+----
+45
 
 statement ok
 CREATE TABLE world(c1 int , c2 int);
@@ -55,7 +66,7 @@ statement ok
 DROP STAGE IF EXISTS hello
 
 statement ok
-drop table world 
+drop table world
 
 statement ok
 DROP DATABASE db1

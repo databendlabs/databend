@@ -26,11 +26,12 @@ use crate::sessions::SessionType;
 
 impl Session {
     pub fn process_info(self: &Arc<Self>) -> ProcessInfo {
-        let session_ctx = self.session_ctx.clone();
-        self.to_process_info(&session_ctx)
+        self.to_process_info()
     }
 
-    fn to_process_info(self: &Arc<Self>, session_ctx: &SessionContext) -> ProcessInfo {
+    fn to_process_info(self: &Arc<Self>) -> ProcessInfo {
+        let session_ctx = self.session_ctx.as_ref();
+
         let mut memory_usage = 0;
 
         let shared_query_context = &session_ctx.get_query_context_shared();

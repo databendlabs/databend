@@ -24,6 +24,7 @@ use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
+use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
@@ -98,6 +99,7 @@ impl PipelineBuilder {
     pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
+            PhysicalPlan::MergeInto(v) if v.merge_type != MergeIntoType::FullOperation => Ok(None),
             _ => {
                 let desc = plan.get_desc()?;
                 let plan_labels = plan.get_labels()?;
@@ -124,7 +126,6 @@ impl PipelineBuilder {
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
             PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
-            PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
             PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
@@ -166,9 +167,6 @@ impl PipelineBuilder {
 
             // Merge into.
             PhysicalPlan::MergeInto(merge_into) => self.build_merge_into(merge_into),
-            PhysicalPlan::MergeIntoSource(merge_into_source) => {
-                self.build_merge_into_source(merge_into_source)
-            }
             PhysicalPlan::MergeIntoAppendNotMatched(merge_into_append_not_matched) => {
                 self.build_merge_into_append_not_matched(merge_into_append_not_matched)
             }
@@ -212,6 +210,7 @@ impl PipelineBuilder {
             PhysicalPlan::ChunkCommitInsert(chunk_commit_insert) => {
                 self.build_chunk_commit_insert(chunk_commit_insert)
             }
+            PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
         }
     }
 }

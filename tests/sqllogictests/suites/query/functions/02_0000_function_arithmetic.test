@@ -146,3 +146,25 @@ query I
 select * from numbers(4) where -number > -1;
 ----
 0
+
+
+## decimal
+
+statement ok
+create table test3 (
+	amount1 DECIMAL(38, 18) NULL,
+	amount2 DECIMAL(28, 8) NULL
+);
+
+statement ok
+insert into test3 values('30.606168460000000000','30.60616846');
+
+
+query TTTTTT
+select sum(amount1)a ,  sum(amount2) b , a  +  b, a - b, a * b, a / b from test3;
+----
+30.606168460000000000 30.60616846 61.212336920000000000 0.000000000000000000 936.73754780189877160000000000 1.000000000000000000
+
+statement ok
+drop table test3
+

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bytes::Buf;
 use databend_common_exception::Result;
 use databend_common_storages_share::get_share_spec_location;
 
@@ -26,7 +27,7 @@ impl SharingAccessor {
         let sharing_accessor = Self::instance();
         let path = get_share_spec_location(&sharing_accessor.config.tenant);
         let data = sharing_accessor.op.read(&path).await?;
-        let share_specs: models::SharingConfig = serde_json::from_slice(data.as_slice())?;
+        let share_specs: models::SharingConfig = serde_json::from_reader(data.reader())?;
         let mut share_spec_vec = vec![];
 
         for (_, share_spec) in share_specs.share_specs {

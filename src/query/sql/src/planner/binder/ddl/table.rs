@@ -1099,7 +1099,7 @@ impl Binder {
                 OptimizeTableAction::Purge(p)
             }
             AstOptimizeTableAction::Compact { target } => match target {
-                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
+                CompactTarget::Block => OptimizeTableAction::CompactBlocks(None),
                 CompactTarget::Segment => OptimizeTableAction::CompactSegments,
             },
         };

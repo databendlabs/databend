@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::vec;
 
 use databend_common_expression::TableSchema;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SnapshotChanges;
@@ -53,7 +54,7 @@ fn test_unresolvable_delete_conflict() {
         merged_statistics: Statistics::default(),
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -142,7 +143,7 @@ fn test_resolvable_delete_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -246,7 +247,7 @@ fn test_resolvable_replace_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Replace);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(

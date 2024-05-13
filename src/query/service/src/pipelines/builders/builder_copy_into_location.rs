@@ -24,6 +24,15 @@ impl PipelineBuilder {
     pub(crate) fn build_copy_into_location(&mut self, copy: &CopyIntoLocation) -> Result<()> {
         self.build_pipeline(&copy.input)?;
 
+        // Reorder the result for select clause
+        PipelineBuilder::build_result_projection(
+            &self.func_ctx,
+            copy.input.output_schema()?,
+            &copy.project_columns,
+            &mut self.main_pipeline,
+            false,
+        )?;
+
         let to_table = StageTable::try_create(copy.to_stage_info.clone())?;
         PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),

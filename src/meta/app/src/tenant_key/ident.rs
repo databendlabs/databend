@@ -88,21 +88,19 @@ where N: Hash
 
 impl<R> TIdent<R, String> {
     pub fn new(tenant: impl ToTenant, name: impl ToString) -> Self {
-        Self {
-            tenant: tenant.to_tenant(),
-            name: name.to_string(),
-            _p: Default::default(),
-        }
+        Self::new_generic(tenant, name.to_string())
     }
 }
 
 impl<R> TIdent<R, u64> {
     pub fn new(tenant: impl ToTenant, name: u64) -> Self {
-        Self {
-            tenant: tenant.to_tenant(),
-            name,
-            _p: Default::default(),
-        }
+        Self::new_generic(tenant, name)
+    }
+}
+
+impl<R> TIdent<R, ()> {
+    pub fn new(tenant: impl ToTenant) -> Self {
+        Self::new_generic(tenant, ())
     }
 }
 
@@ -153,6 +151,7 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyCodec;
     use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_types::NonEmptyString;
 
     use crate::tenant::Tenant;
     use crate::tenant_key::ident::TIdent;
@@ -165,16 +164,25 @@ mod kvapi_key_impl {
         N: KeyCodec,
     {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            let b = b.push_str(self.tenant_name());
+            let b = if R::HAS_TENANT {
+                b.push_str(self.tenant_name())
+            } else {
+                b
+            };
             self.name.encode_key(b)
         }
 
         fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
-            let tenant = p.next_nonempty()?;
+            let tenant_name = if R::HAS_TENANT {
+                p.next_nonempty()?
+            } else {
+                NonEmptyString::new("dummy").unwrap()
+            };
+
             let name = N::decode_key(p)?;
 
             Ok(TIdent::<R, N>::new_generic(
-                Tenant::new_nonempty(tenant),
+                Tenant::new_nonempty(tenant_name),
                 name,
             ))
         }
@@ -219,6 +227,7 @@ mod tests {
 
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
+            const HAS_TENANT: bool = true;
             type ValueType = Infallible;
         }
 
@@ -237,6 +246,7 @@ mod tests {
 
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
+            const HAS_TENANT: bool = true;
             type ValueType = Infallible;
         }
 

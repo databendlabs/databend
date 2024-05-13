@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
@@ -187,7 +188,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         .operator
                         .read_with(&payload.location)
                         .range(payload.data_range.clone())
-                        .await?;
+                        .await?
+                        .to_vec();
 
                     info!(
                         "Read aggregate spill {} successfully, elapsed: {:?}",
@@ -198,6 +200,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
                 AggregateMeta::Partitioned { data, .. } => {
+                    // For log progress.
+                    let mut total_elapsed = Duration::default();
+                    let log_interval = 100;
+                    let mut processed_count = 0;
+
                     let mut read_data = Vec::with_capacity(data.len());
                     for meta in data {
                         if let AggregateMeta::BucketSpilled(payload) = meta {
@@ -206,7 +213,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             let data_range = payload.data_range.clone();
                             read_data.push(databend_common_base::runtime::spawn(async move {
                                 let instant = Instant::now();
-                                let data = operator.read_with(&location).range(data_range).await?;
+                                let data = operator
+                                    .read_with(&location)
+                                    .range(data_range)
+                                    .await?
+                                    .to_vec();
 
                                 // perf
                                 {
@@ -224,11 +235,18 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                                     );
                                 }
 
-                                info!(
-                                    "Read aggregate spill {} successfully, elapsed: {:?}",
-                                    location,
-                                    instant.elapsed()
-                                );
+                                total_elapsed += instant.elapsed();
+                                processed_count += 1;
+
+                                // log the progress
+                                if processed_count % log_interval == 0 {
+                                    info!(
+                                        "Read aggregate {}/{} spilled buckets, elapsed: {:?}",
+                                        processed_count,
+                                        data.len(),
+                                        total_elapsed
+                                    );
+                                }
 
                                 Ok(data)
                             }));
@@ -246,6 +264,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             self.deserializing_meta = Some((block_meta, read_data?));
                         }
                     };
+
+                    info!(
+                        "Read {} aggregate spills successfully, total elapsed: {:?}",
+                        processed_count, total_elapsed
+                    );
                 }
             }
         }

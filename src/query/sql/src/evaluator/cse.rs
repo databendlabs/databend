@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_expression::Expr;
-use log::info;
+use log::debug;
 
 use super::BlockOperator;
 use crate::optimizer::ColumnSet;
@@ -63,7 +63,7 @@ pub fn apply_cse(
                         let mut expr_cloned = cse_candidate.clone();
                         perform_cse_replacement(&mut expr_cloned, &cse_replacements);
 
-                        info!(
+                        debug!(
                             "cse_candidate: {}, temp_expr: {}",
                             expr_cloned.sql_display(),
                             temp_expr.sql_display()
@@ -74,36 +74,31 @@ pub fn apply_cse(
                         temp_var_counter += 1;
                     }
 
-                    let mut new_projections: Option<ColumnSet> =
-                        projections.as_ref().map(|projections| {
-                            projections
-                                .iter()
-                                .filter(|idx| **idx < input_num_columns)
-                                .copied()
-                                .collect::<ColumnSet>()
-                        });
+                    let projections = projections
+                        .unwrap_or((0..input_num_columns + exprs.len()).collect::<ColumnSet>());
 
-                    let has_projections = new_projections.is_some();
+                    // Regenerate the projections based on the replacements
+                    // 1. Initialize the new_projections with the original projections with unchanged indexes
+                    let mut new_projections = projections
+                        .iter()
+                        .filter(|idx| **idx < input_num_columns)
+                        .copied()
+                        .collect::<ColumnSet>();
+
                     for mut expr in exprs {
                         perform_cse_replacement(&mut expr, &cse_replacements);
                         new_exprs.push(expr);
 
-                        if has_projections {
-                            // Safe to unwrap().
-                            if projections
-                                .as_ref()
-                                .unwrap()
-                                .contains(&(temp_var_counter - candidates_nums))
-                            {
-                                new_projections.as_mut().unwrap().insert(temp_var_counter);
-                            }
+                        // 2. Increment projection index because the position is occupied by the cse
+                        if projections.contains(&(temp_var_counter - candidates_nums)) {
+                            new_projections.insert(temp_var_counter);
                         }
                         temp_var_counter += 1;
                     }
 
                     results.push(BlockOperator::Map {
                         exprs: new_exprs,
-                        projections: new_projections,
+                        projections: Some(new_projections),
                     });
                 } else {
                     results.push(BlockOperator::Map { exprs, projections });

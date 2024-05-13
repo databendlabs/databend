@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Read;
 use std::io::SeekFrom;
 
+use bytes::Buf;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -24,20 +26,19 @@ use databend_storages_common_cache::Loader;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_cache_manager::CompactSegmentInfoMeter;
 use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::IndexInfo;
-use databend_storages_common_table_meta::meta::IndexInfoVersion;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::readers::VersionedReader;
 use futures::AsyncSeek;
-use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
+use opendal::Buffer;
 use opendal::Operator;
-use opendal::Reader;
 use parquet_rs::format::FileMetaData;
 use parquet_rs::thrift::TSerializable;
 
@@ -53,7 +54,8 @@ pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
     DefaultHashBuilder,
     CompactSegmentInfoMeter,
 >;
-pub type InvertedIndexInfoReader = InMemoryItemCacheReader<IndexInfo, LoaderWrapper<Operator>>;
+pub type InvertedIndexMetaReader =
+    InMemoryItemCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
 
@@ -86,9 +88,9 @@ impl MetaReaders {
         )
     }
 
-    pub fn inverted_index_info_reader(dal: Operator) -> InvertedIndexInfoReader {
-        InvertedIndexInfoReader::new(
-            CacheManager::instance().get_inverted_index_info_cache(),
+    pub fn inverted_index_meta_reader(dal: Operator) -> InvertedIndexMetaReader {
+        InvertedIndexMetaReader::new(
+            CacheManager::instance().get_inverted_index_meta_cache(),
             LoaderWrapper(dal),
         )
     }
@@ -104,7 +106,7 @@ impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         let version = SnapshotVersion::try_from(params.ver)?;
-        version.read(reader).await
+        version.read(reader.reader())
     }
 }
 
@@ -114,7 +116,7 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
         let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        version.read(reader).await
+        version.read(reader.reader())
     }
 }
 
@@ -125,7 +127,7 @@ impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        (version, schema.clone()).read(reader).await
+        (version, schema.clone()).read(reader.reader())
     }
 }
 
@@ -148,21 +150,79 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
 }
 
 #[async_trait::async_trait]
-impl Loader<IndexInfo> for LoaderWrapper<Operator> {
+impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<IndexInfo> {
-        let version = IndexInfoVersion::try_from(params.ver)?;
-        let LoaderWrapper(operator) = &self;
-        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        version.read(reader).await
+    async fn load(&self, params: &LoadParams) -> Result<InvertedIndexMeta> {
+        let operator = &self.0;
+        let meta = operator.stat(&params.location).await.map_err(|err| {
+            ErrorCode::StorageOther(format!(
+                "read inverted index file meta failed, {}, {:?}",
+                params.location, err
+            ))
+        })?;
+        let file_size = meta.content_length();
+
+        if file_size < 36 {
+            return Err(ErrorCode::StorageOther(
+                "inverted index file must contain a footer with at least 36 bytes",
+            ));
+        }
+        let default_end_len = 36;
+
+        // read the end of the file
+        let data = operator
+            .read_with(&params.location)
+            .range(file_size - default_end_len as u64..file_size)
+            .await
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!(
+                    "read file meta failed, {}, {:?}",
+                    params.location, err
+                ))
+            })?;
+
+        let mut buf = vec![0u8; 4];
+        let mut reader = data.reader();
+        let mut offsets = Vec::with_capacity(8);
+        let fast_fields_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+        let store_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+        let field_norms_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+        let positions_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+        let postings_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+        let terms_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+        let meta_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+        let managed_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+
+        offsets.push(("fast".to_string(), fast_fields_offset));
+        offsets.push(("store".to_string(), store_offset));
+        offsets.push(("fieldnorm".to_string(), field_norms_offset));
+        offsets.push(("pos".to_string(), positions_offset));
+        offsets.push(("idx".to_string(), postings_offset));
+        offsets.push(("term".to_string(), terms_offset));
+        offsets.push(("meta.json".to_string(), meta_offset));
+        offsets.push((".managed.json".to_string(), managed_offset));
+
+        let mut prev_offset = 0;
+        let mut columns = Vec::with_capacity(offsets.len());
+        for (name, offset) in offsets.into_iter() {
+            let column_meta = SingleColumnMeta {
+                offset: prev_offset,
+                len: offset - prev_offset,
+                num_values: 1,
+            };
+            prev_offset = offset;
+            columns.push((name, column_meta));
+        }
+
+        Ok(InvertedIndexMeta { columns })
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Reader> {
+async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
     let reader = if let Some(len) = len_hint {
-        op.reader_with(path).range(0..len).await?
+        op.read_with(path).range(0..len).await?
     } else {
-        op.reader(path).await?
+        op.read(path).await?
     };
     Ok(reader)
 }
@@ -226,11 +286,12 @@ mod thrift_file_meta_read {
         let default_end_len = std::cmp::min(DEFAULT_FOOTER_READ_SIZE, file_size) as usize;
 
         // read the end of the file
-        let mut buffer = op
+        let buffer = op
             .read_with(path)
             .range(file_size - default_end_len as u64..file_size)
             .await
-            .map_err(|err| Error::OutOfSpec(err.to_string()))?;
+            .map_err(|err| Error::OutOfSpec(err.to_string()))?
+            .to_vec();
 
         // check this is indeed a parquet file
         if buffer[default_end_len - 4..] != PARQUET_MAGIC {
@@ -249,30 +310,32 @@ mod thrift_file_meta_read {
             ));
         }
 
-        let reader = if (footer_len as usize) < buffer.len() {
+        if (footer_len as usize) < buffer.len() {
             // the whole metadata is in the bytes we already read
             let remaining = buffer.len() - footer_len as usize;
-            &buffer[remaining..]
+
+            let mut prot = TCompactInputProtocol::new(&buffer[remaining..]);
+            let meta = FileMetaData::read_from_in_protocol(&mut prot)
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
+            Ok(meta)
         } else {
             // the end of file read by default is not long enough, read again including the metadata.
-            let reader = op
-                .reader_with(path)
+            let buffer = op
+                .read_with(path)
                 .range(file_size - footer_len..file_size)
                 .await
                 .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
 
-            buffer.clear();
-            buffer
-                .try_reserve(footer_len as usize)
-                .map_err(|_| ErrorCode::Internal("Failed to reserve buffer for metadata"))?;
-            reader.take(footer_len).read_to_end(&mut buffer).await?;
-
-            &buffer
-        };
-
-        let mut prot = TCompactInputProtocol::new(reader);
-        let meta = FileMetaData::read_from_in_protocol(&mut prot)
-            .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-        Ok(meta)
+            let mut prot = TCompactInputProtocol::new(buffer.reader());
+            let meta = FileMetaData::read_from_in_protocol(&mut prot)
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
+            Ok(meta)
+        }
     }
+}
+
+#[inline(always)]
+fn read_u32<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<u32> {
+    r.read_exact(buf)?;
+    Ok(u32::from_le_bytes(buf.try_into().unwrap()))
 }

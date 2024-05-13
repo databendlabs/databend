@@ -25,6 +25,7 @@ use itertools::Itertools;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
@@ -53,8 +54,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::MergeIntoSource;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -76,7 +75,6 @@ pub enum PhysicalPlan {
     /// Query
     TableScan(TableScan),
     Filter(Filter),
-    Project(Project),
     EvalScalar(EvalScalar),
     ProjectSet(ProjectSet),
     AggregateExpand(AggregateExpand),
@@ -115,7 +113,6 @@ pub enum PhysicalPlan {
     ReplaceInto(Box<ReplaceInto>),
 
     /// MergeInto
-    MergeIntoSource(MergeIntoSource),
     MergeInto(Box<MergeInto>),
     MergeIntoAppendNotMatched(Box<MergeIntoAppendNotMatched>),
     MergeIntoAddRowNumber(Box<MergeIntoAddRowNumber>),
@@ -143,6 +140,9 @@ pub enum PhysicalPlan {
     ChunkAppendData(Box<ChunkAppendData>),
     ChunkMerge(Box<ChunkMerge>),
     ChunkCommitInsert(Box<ChunkCommitInsert>),
+
+    // async function call
+    AsyncFunction(AsyncFunction),
 }
 
 impl PhysicalPlan {
@@ -151,16 +151,15 @@ impl PhysicalPlan {
     /// Which means the plan_id of a node is always greater than the plan_id of its parent node.
     pub fn adjust_plan_id(&mut self, next_id: &mut u32) {
         match self {
+            PhysicalPlan::AsyncFunction(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
             PhysicalPlan::TableScan(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
             PhysicalPlan::Filter(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::Project(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -295,11 +294,6 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::MergeIntoSource(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -387,9 +381,9 @@ impl PhysicalPlan {
     /// Get the id of the plan node
     pub fn get_id(&self) -> u32 {
         match self {
+            PhysicalPlan::AsyncFunction(v) => v.plan_id,
             PhysicalPlan::TableScan(v) => v.plan_id,
             PhysicalPlan::Filter(v) => v.plan_id,
-            PhysicalPlan::Project(v) => v.plan_id,
             PhysicalPlan::EvalScalar(v) => v.plan_id,
             PhysicalPlan::ProjectSet(v) => v.plan_id,
             PhysicalPlan::AggregateExpand(v) => v.plan_id,
@@ -413,7 +407,6 @@ impl PhysicalPlan {
             PhysicalPlan::DeleteSource(v) => v.plan_id,
             PhysicalPlan::MergeInto(v) => v.plan_id,
             PhysicalPlan::MergeIntoAddRowNumber(v) => v.plan_id,
-            PhysicalPlan::MergeIntoSource(v) => v.plan_id,
             PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
@@ -439,9 +432,9 @@ impl PhysicalPlan {
 
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         match self {
+            PhysicalPlan::AsyncFunction(plan) => plan.output_schema(),
             PhysicalPlan::TableScan(plan) => plan.output_schema(),
             PhysicalPlan::Filter(plan) => plan.output_schema(),
-            PhysicalPlan::Project(plan) => plan.output_schema(),
             PhysicalPlan::EvalScalar(plan) => plan.output_schema(),
             PhysicalPlan::AggregateExpand(plan) => plan.output_schema(),
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
@@ -463,7 +456,6 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::Udf(plan) => plan.output_schema(),
-            PhysicalPlan::MergeIntoSource(plan) => plan.input.output_schema(),
             PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
             PhysicalPlan::MergeIntoAddRowNumber(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
@@ -497,8 +489,8 @@ impl PhysicalPlan {
                 DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
                 DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
             },
+            PhysicalPlan::AsyncFunction(_) => "AsyncFunction".to_string(),
             PhysicalPlan::Filter(_) => "Filter".to_string(),
-            PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
             PhysicalPlan::AggregateExpand(_) => "AggregateExpand".to_string(),
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
@@ -524,7 +516,6 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
-            PhysicalPlan::MergeIntoSource(_) => "MergeIntoSource".to_string(),
             PhysicalPlan::MergeIntoAppendNotMatched(_) => "MergeIntoAppendNotMatched".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
@@ -557,9 +548,9 @@ impl PhysicalPlan {
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReclusterSource(_)
+            | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::UpdateSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -592,7 +583,6 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAddRowNumber(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
-            PhysicalPlan::MergeIntoSource(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
@@ -621,7 +611,6 @@ impl PhysicalPlan {
         match self {
             PhysicalPlan::TableScan(scan) => Some(&scan.source),
             PhysicalPlan::Filter(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::Project(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::EvalScalar(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Window(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Sort(plan) => plan.input.try_find_single_data_source(),
@@ -651,7 +640,6 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoAddRowNumber(_)
             | PhysicalPlan::MergeIntoAppendNotMatched(_)
-            | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CteScan(_)
             | PhysicalPlan::ReclusterSource(_)
@@ -665,6 +653,7 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkFillAndReorder(_)
             | PhysicalPlan::ChunkAppendData(_)
             | PhysicalPlan::ChunkMerge(_)
+            | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::ChunkCommitInsert(_) => None,
         }
     }
@@ -710,12 +699,6 @@ impl PhysicalPlan {
                 Some(limit) => format!("LIMIT {} OFFSET {}", limit, v.offset),
                 None => format!("OFFSET {}", v.offset),
             },
-            PhysicalPlan::Project(v) => v
-                .output_schema()?
-                .fields
-                .iter()
-                .map(|x| x.name())
-                .join(", "),
             PhysicalPlan::EvalScalar(v) => v
                 .exprs
                 .iter()
@@ -828,6 +811,7 @@ impl PhysicalPlan {
                 .iter()
                 .map(|(l, r)| format!("#{} <- #{}", l, r))
                 .join(", "),
+            PhysicalPlan::AsyncFunction(async_func) => async_func.display_name.to_string(),
             _ => String::new(),
         })
     }
@@ -880,17 +864,6 @@ impl PhysicalPlan {
                     v.exprs
                         .iter()
                         .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .collect(),
-                );
-            }
-            PhysicalPlan::Project(v) => {
-                labels.insert(
-                    String::from("List of Expressions"),
-                    v.output_schema()?
-                        .fields
-                        .iter()
-                        .map(|x| x.name())
-                        .cloned()
                         .collect(),
                 );
             }

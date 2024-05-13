@@ -37,7 +37,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_file;
 use serfig::parsers::Toml;
-use tokio::io::AsyncReadExt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
@@ -78,7 +77,6 @@ fn parse_output(config: &InspectorConfig) -> Result<Box<dyn Write>> {
 }
 
 async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
-    let mut buffer: Vec<u8> = vec![];
     match &config.input {
         Some(input) => {
             let op = match &config.config {
@@ -98,15 +96,17 @@ async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
                     Operator::new(builder)?.finish()
                 }
             };
-            op.reader(input).await?.read_to_end(&mut buffer).await?;
+            let buf = op.read(input).await?.to_vec();
+            Ok(buf)
         }
         None => {
+            let mut buffer: Vec<u8> = vec![];
             let stdin = io::stdin();
             let handle = stdin.lock();
             io::BufReader::new(handle).read_to_end(&mut buffer)?;
+            Ok(buffer)
         }
-    };
-    Ok(buffer)
+    }
 }
 
 async fn run(config: &InspectorConfig) -> Result<()> {

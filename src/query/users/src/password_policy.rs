@@ -377,7 +377,8 @@ impl UserApiProvider {
             if let Ordering::Greater = lockout_time.cmp(&now) {
                 info!(
                     "user {} can not login until {} because too many password fails",
-                    identity, lockout_time
+                    identity.display(),
+                    lockout_time
                 );
                 return Err(ErrorCode::InvalidPassword(format!(
                     "Disable login before {} because of too many password fails",
@@ -406,7 +407,8 @@ impl UserApiProvider {
                     if failed_retries >= password_policy.max_retries as usize {
                         info!(
                             "user {} can not login because password fails for {} time retries",
-                            identity, failed_retries
+                            identity.display(),
+                            failed_retries
                         );
                         let lockout_time = now
                             .checked_add_signed(Duration::minutes(
@@ -431,7 +433,8 @@ impl UserApiProvider {
 
                         info!(
                             "user {} can not login because password must be changed before {}",
-                            identity, max_change_time
+                            identity.display(),
+                            max_change_time
                         );
                         // Password has not been changed for more than max age days, cannot login
                         if let Ordering::Less = max_change_time.cmp(&now) {

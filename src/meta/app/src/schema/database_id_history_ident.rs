@@ -47,6 +47,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_db_id_list";
         const TYPE: &'static str = "DatabaseIdHistoryIdent";
+        const HAS_TENANT: bool = true;
         type ValueType = DbIdList;
     }
 

@@ -19,7 +19,13 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use opendal::Operator;
+use tantivy::query::QueryParser;
+use tantivy::schema::Field;
+use tantivy::tokenizer::TokenizerManager;
+use tantivy::Score;
 
+use crate::io::create_index_schema;
+use crate::io::create_tokenizer_manager;
 use crate::io::read::InvertedIndexReader;
 use crate::io::TableMetaLocationGenerator;
 
@@ -43,6 +49,12 @@ use crate::io::TableMetaLocationGenerator;
 //
 pub struct InvertedIndexPruner {
     dal: Operator,
+    field_nums: usize,
+    has_score: bool,
+    need_position: bool,
+    query_fields: Vec<Field>,
+    query_field_boosts: Vec<(Field, Score)>,
+    tokenizer_manager: TokenizerManager,
     inverted_index_info: InvertedIndexInfo,
 }
 
@@ -53,8 +65,45 @@ impl InvertedIndexPruner {
     ) -> Result<Option<Arc<InvertedIndexPruner>>> {
         let inverted_index_info = push_down.as_ref().and_then(|p| p.inverted_index.as_ref());
         if let Some(inverted_index_info) = inverted_index_info {
+            // collect query fields and optional boosts
+            let mut query_fields = Vec::with_capacity(inverted_index_info.query_fields.len());
+            let mut query_field_boosts = Vec::with_capacity(inverted_index_info.query_fields.len());
+            for (field_name, boost) in &inverted_index_info.query_fields {
+                let i = inverted_index_info.index_schema.index_of(field_name)?;
+                let field = Field::from_field_id(i as u32);
+                query_fields.push(field);
+                if let Some(boost) = boost {
+                    query_field_boosts.push((field, boost.0));
+                }
+            }
+
+            // parse query text to check whether has phrase terms need position file.
+            let (index_schema, index_fields) = create_index_schema(
+                Arc::new(inverted_index_info.index_schema.clone()),
+                &inverted_index_info.index_options,
+            )?;
+            let tokenizer_manager = create_tokenizer_manager(&inverted_index_info.index_options);
+            let query_parser =
+                QueryParser::new(index_schema, index_fields, tokenizer_manager.clone());
+            let query = query_parser.parse_query(&inverted_index_info.query_text)?;
+            let mut need_position = false;
+            query.query_terms(&mut |_, pos| {
+                if pos {
+                    need_position = true;
+                }
+            });
+            // whether need to generate score internl column
+            let has_score = inverted_index_info.has_score;
+            let field_nums = inverted_index_info.index_schema.num_fields();
+
             return Ok(Some(Arc::new(InvertedIndexPruner {
                 dal,
+                field_nums,
+                has_score,
+                need_position,
+                query_fields,
+                query_field_boosts,
+                tokenizer_manager,
                 inverted_index_info: inverted_index_info.clone(),
             })));
         }
@@ -66,7 +115,7 @@ impl InvertedIndexPruner {
         &self,
         block_loc: &str,
         row_count: u64,
-    ) -> Result<Option<Vec<(usize, F32)>>> {
+    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let index_loc = TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
             block_loc,
             &self.inverted_index_info.index_name,
@@ -75,9 +124,12 @@ impl InvertedIndexPruner {
 
         let inverted_index_reader = InvertedIndexReader::try_create(
             self.dal.clone(),
-            &self.inverted_index_info.index_schema,
-            &self.inverted_index_info.query_fields,
-            &self.inverted_index_info.index_options,
+            self.field_nums,
+            self.has_score,
+            self.need_position,
+            self.query_fields.clone(),
+            self.query_field_boosts.clone(),
+            self.tokenizer_manager.clone(),
             &index_loc,
         )
         .await?;

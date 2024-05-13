@@ -20,6 +20,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactTarget;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -86,8 +87,8 @@ impl Interpreter for OptimizeTableInterpreter {
         table.check_mutable()?;
 
         match self.plan.action.clone() {
-            OptimizeTableAction::CompactBlocks => {
-                self.build_pipeline(catalog, table, CompactTarget::Blocks, false)
+            OptimizeTableAction::CompactBlocks(limit) => {
+                self.build_pipeline(catalog, table, CompactTarget::Blocks(limit), false)
                     .await
             }
             OptimizeTableAction::CompactSegments => {
@@ -99,7 +100,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 Ok(PipelineBuildResult::create())
             }
             OptimizeTableAction::All => {
-                self.build_pipeline(catalog, table, CompactTarget::Blocks, true)
+                self.build_pipeline(catalog, table, CompactTarget::Blocks(None), true)
                     .await
             }
         }
@@ -168,15 +169,21 @@ impl OptimizeTableInterpreter {
             )));
         }
 
-        if matches!(target, CompactTarget::Segments) {
-            table
-                .compact_segments(self.ctx.clone(), table_lock, self.plan.limit)
-                .await?;
-            return Ok(PipelineBuildResult::create());
-        }
+        let compaction_limits = match target {
+            CompactTarget::Segments => {
+                table
+                    .compact_segments(self.ctx.clone(), table_lock, self.plan.limit)
+                    .await?;
+                return Ok(PipelineBuildResult::create());
+            }
+            CompactTarget::Blocks(num_block_limit) => {
+                let segment_limit = self.plan.limit;
+                CompactionLimits::limits(segment_limit, num_block_limit)
+            }
+        };
 
         let res = table
-            .compact_blocks(self.ctx.clone(), self.plan.limit)
+            .compact_blocks(self.ctx.clone(), compaction_limits)
             .await?;
 
         let catalog_info = catalog.info();
@@ -240,6 +247,7 @@ impl OptimizeTableInterpreter {
                         mutator.remained_blocks,
                         mutator.removed_segment_indexes,
                         mutator.removed_segment_summary,
+                        self.plan.need_lock,
                     )?;
 
                     build_res =
@@ -251,7 +259,7 @@ impl OptimizeTableInterpreter {
                     let start = SystemTime::now();
                     build_res
                         .main_pipeline
-                        .set_on_finished(move |may_error| match may_error {
+                        .set_on_finished(move |(_profiles, may_error)| match may_error {
                             Ok(_) => InterpreterClusteringHistory::write_log(
                                 &ctx,
                                 start,
@@ -275,7 +283,7 @@ impl OptimizeTableInterpreter {
             } else {
                 build_res
                     .main_pipeline
-                    .set_on_finished(move |may_error| match may_error {
+                    .set_on_finished(move |(_profiles, may_error)| match may_error {
                         Ok(_) => GlobalIORuntime::instance()
                             .block_on(async move { purge(ctx, catalog, plan, None).await }),
                         Err(error_code) => Err(error_code.clone()),

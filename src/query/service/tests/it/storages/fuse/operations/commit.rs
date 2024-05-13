@@ -101,7 +101,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -121,6 +120,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -239,7 +239,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     let storage_prefix = storage_meta_data.root();
 
     let expected = format!("{}{}", storage_prefix, last_snapshot_location);
-    let content = operator.read(location.as_str()).await?;
+    let content = operator.read(location.as_str()).await?.to_vec();
 
     assert_eq!(content.as_slice(), expected.as_bytes());
 
@@ -276,7 +276,6 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 table.schema().as_ref().clone(),
                 Statistics::default(),
                 new_segments,
-                None,
                 None,
                 None,
             );
@@ -685,11 +684,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_need_compact_after_write(&self, _enable: bool) {
+    fn set_compaction_num_block_hint(&self, _enable: u64) {
         todo!()
     }
 
-    fn get_need_compact_after_write(&self) -> bool {
+    fn get_compaction_num_block_hint(&self) -> u64 {
         todo!()
     }
 
@@ -829,12 +828,8 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_by_info(table_info)
     }
 
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         self.cat.get_table_meta_by_id(table_id).await
-    }
-
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        self.cat.get_table_name_by_id(table_id).await
     }
 
     #[async_backtrace::framed]

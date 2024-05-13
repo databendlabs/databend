@@ -143,6 +143,8 @@ pub struct SelectStmt {
     pub hints: Option<Hint>,
     #[drive(skip)]
     pub distinct: bool,
+    #[drive(skip)]
+    pub top_n: Option<u64>,
     // Result set of current subquery
     pub select_list: Vec<SelectTarget>,
     // `FROM` clause, a list of table references.
@@ -170,6 +172,9 @@ impl Display for SelectStmt {
         }
         if self.distinct {
             write!(f, "DISTINCT ")?;
+        }
+        if let Some(topn) = &self.top_n {
+            write!(f, "TOP {} ", topn)?;
         }
         write_comma_separated_list(f, &self.select_list)?;
 

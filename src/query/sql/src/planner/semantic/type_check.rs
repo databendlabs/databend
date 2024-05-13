@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
@@ -23,6 +24,7 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
@@ -36,6 +38,7 @@ use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
@@ -43,11 +46,14 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_async_functions::resolve_async_function;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -79,6 +85,7 @@ use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
+use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
@@ -87,6 +94,7 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -99,6 +107,7 @@ use simsearch::SimSearch;
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::bind_values;
+use crate::binder::resolve_file_location;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::CteInfo;
@@ -913,6 +922,14 @@ impl<'a> TypeChecker<'a> {
                         }
                         _ => unreachable!(),
                     }
+                } else if ASYNC_FUNCTIONS.contains(&func_name) {
+                    let catalog = self.ctx.get_default_catalog()?;
+                    let tenant = self.ctx.get_tenant();
+                    let async_func =
+                        resolve_async_function(*span, tenant, catalog, func_name, &args).await?;
+
+                    let data_type = async_func.return_type.as_ref().clone();
+                    Box::new((async_func.into(), data_type))
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -2227,6 +2244,12 @@ impl<'a> TypeChecker<'a> {
                 continue;
             }
             let field_names: Vec<&str> = field_str.split(':').collect();
+            // if the field is JSON type, must specify the key path in the object
+            // for example:
+            // the field `info` has the value: `{"tags":{"id":10,"env":"prod","name":"test"}}`
+            // a query can be written like this `info.tags.env:prod`
+            let field_name = field_names[0].trim();
+            let sub_field_names: Vec<&str> = field_name.split('.').collect();
             let column_expr = Expr::ColumnRef {
                 span: query_scalar.span(),
                 column: ColumnRef {
@@ -2234,7 +2257,7 @@ impl<'a> TypeChecker<'a> {
                     table: None,
                     column: ColumnID::Name(Identifier::from_name(
                         query_scalar.span(),
-                        field_names[0].trim(),
+                        sub_field_names[0].trim(),
                     )),
                 },
             };
@@ -2342,6 +2365,7 @@ impl<'a> TypeChecker<'a> {
             index_schema: index_schema.unwrap(),
             query_fields,
             query_text: query_text.to_string(),
+            has_score: false,
         };
 
         self.bind_context
@@ -2877,7 +2901,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(user) => Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        value: Literal::String(user.identity().to_string()),
+                        value: Literal::String(user.identity().display().to_string()),
                     })
                     .await,
                 ),
@@ -3495,6 +3519,95 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
+    async fn resolve_wasm_file_location(&mut self, udf_definition: &UDFScript) -> Result<UDFType> {
+        let file_location = match udf_definition.code.strip_prefix('@') {
+            Some(location) => FileLocation::Stage(location.to_string()),
+            None => {
+                let uri = UriLocation::from_uri(
+                    udf_definition.code.clone(),
+                    "".to_string(),
+                    BTreeMap::default(),
+                )?;
+                FileLocation::Uri(uri)
+            }
+        };
+
+        let (stage_info, wasm_module_path) =
+            resolve_file_location(self.ctx.as_ref(), &file_location)
+                .await
+                .map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to resolve WASM code location {:#?}: {}",
+                        &udf_definition.code, err
+                    ))
+                })?;
+
+        let op = StageTable::get_op(&stage_info).map_err(|err| {
+            ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
+        })?;
+
+        let code_blob = op
+            .read(&wasm_module_path)
+            .await
+            .map_err(|err| {
+                ErrorCode::SemanticError(format!(
+                    "Failed to read WASM module {}: {}",
+                    wasm_module_path, err
+                ))
+            })?
+            .to_vec();
+
+        let compress_algo = CompressAlgorithm::from_path(&wasm_module_path);
+        log::trace!(
+            "Detecting compression algorithm for WASM module: {}",
+            &wasm_module_path
+        );
+        log::info!("Detected compression algorithm: {:#?}", &compress_algo);
+
+        let code_blob = match compress_algo {
+            Some(algo) => {
+                log::trace!("Decompressing WASM module using {:?} algorithm", algo);
+                let mut decoder = DecompressDecoder::new(algo);
+                decoder.decompress_all(&code_blob).map_err(|err| {
+                    let error_msg = format!(
+                        "Failed to decompress WASM module {}: {}",
+                        wasm_module_path, err
+                    );
+                    log::error!("{}", error_msg);
+                    ErrorCode::SemanticError(error_msg)
+                })?
+            }
+            None => {
+                let ext = match PathBuf::from(&wasm_module_path).extension() {
+                    Some(ext) => ext.to_string_lossy().to_string(),
+                    None => {
+                        let error_msg = format!(
+                            "WASM module path {} has no file extension",
+                            wasm_module_path
+                        );
+                        log::error!("{}", error_msg);
+                        return Err(ErrorCode::SemanticError(error_msg));
+                    }
+                };
+
+                if ext == "wasm" {
+                    log::trace!("WASM module is already uncompressed");
+                    code_blob
+                } else {
+                    let error_msg = format!("Invalid WASM module: {}", wasm_module_path);
+                    log::error!("{}", error_msg);
+                    return Err(ErrorCode::SemanticError(error_msg));
+                }
+            }
+        };
+
+        Ok(UDFType::WasmScript((
+            udf_definition.language.clone(),
+            udf_definition.runtime_version.clone(),
+            code_blob,
+        )))
+    }
+
     #[async_recursion::async_recursion]
     async fn resolve_udf_script(
         &mut self,
@@ -3513,6 +3626,16 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
+        let const_udf_type = if udf_definition.language.to_lowercase().as_str() == "wasm" {
+            self.resolve_wasm_file_location(&udf_definition).await?
+        } else {
+            UDFType::Script((
+                udf_definition.language,
+                udf_definition.runtime_version,
+                udf_definition.code,
+            ))
+        };
+
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
@@ -3525,11 +3648,7 @@ impl<'a> TypeChecker<'a> {
                 display_name,
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
-                udf_type: UDFType::Script((
-                    udf_definition.language,
-                    udf_definition.runtime_version,
-                    udf_definition.code,
-                )),
+                udf_type: const_udf_type,
                 arguments: args,
             }
             .into(),
@@ -3701,22 +3820,24 @@ impl<'a> TypeChecker<'a> {
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            let column_entry = self.metadata.read().column(column.index).clone();
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
-                column_entry
-            {
-                // Use data type from meta to get the field names of tuple type.
-                table_data_type = data_type.clone();
-                if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
-                    let box (inner_scalar, _inner_data_type) = self
-                        .resolve_tuple_map_access_pushdown(
-                            expr.span(),
-                            column.clone(),
-                            &mut table_data_type,
-                            &mut paths,
-                        )
-                        .await?;
-                    scalar = inner_scalar;
+            if column.index < self.metadata.read().columns().len() {
+                let column_entry = self.metadata.read().column(column.index).clone();
+                if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
+                    column_entry
+                {
+                    // Use data type from meta to get the field names of tuple type.
+                    table_data_type = data_type.clone();
+                    if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
+                        let box (inner_scalar, _inner_data_type) = self
+                            .resolve_tuple_map_access_pushdown(
+                                expr.span(),
+                                column.clone(),
+                                &mut table_data_type,
+                                &mut paths,
+                            )
+                            .await?;
+                        scalar = inner_scalar;
+                    }
                 }
             }
         }

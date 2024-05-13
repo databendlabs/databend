@@ -118,7 +118,7 @@ impl HashJoinBuildState {
     }
 
     pub(crate) fn merge_into_try_generate_matched_memory(&self) {
-        // generate macthed offsets memory.
+        // generate matched offsets memory.
         if self
             .hash_join_state
             .merge_into_need_target_partial_modified_scan()

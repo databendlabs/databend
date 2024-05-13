@@ -34,6 +34,8 @@ remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
+st_asbinary -> st_aswkb
+st_astext -> st_aswkt
 st_geom_point -> st_makegeompoint
 st_geometryfromewkb -> st_geometryfromwkb
 st_geometryfromewkt -> st_geometryfromwkt
@@ -113,12 +115,13 @@ Functions overloads:
 0 array() :: Array(Nothing)
 1 array FACTORY
 0 array_any FACTORY
-0 array_append(Array(T0), T0) :: Array(T0)
+0 array_append(Array(T0) NULL, T0) :: Array(T0)
 0 array_approx_count_distinct FACTORY
 0 array_avg FACTORY
-0 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)
-1 array_concat(Array(T0), Array(T0)) :: Array(T0)
-2 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
+1 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
+2 array_concat(Array(T0), Array(T0)) :: Array(T0)
+3 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_count FACTORY
 0 array_distinct(Array(Nothing)) :: Array(Nothing)
 1 array_distinct(Array(Nothing) NULL) :: Array(Nothing) NULL
@@ -133,7 +136,7 @@ Functions overloads:
 0 array_max FACTORY
 0 array_median FACTORY
 0 array_min FACTORY
-0 array_prepend(T0, Array(T0)) :: Array(T0)
+0 array_prepend(T0, Array(T0) NULL) :: Array(T0)
 0 array_remove_first(Array(Nothing)) :: Array(Nothing)
 1 array_remove_first(Array(Nothing) NULL) :: Array(Nothing) NULL
 2 array_remove_first(Array(T0)) :: Array(T0)
@@ -1186,7 +1189,7 @@ Functions overloads:
 25 contains(Array(Timestamp) NULL, Timestamp NULL) :: Boolean NULL
 26 contains(Array(Boolean), Boolean) :: Boolean
 27 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
-28 contains(Array(T0), T0) :: Boolean
+28 contains(Array(T0) NULL, T0) :: Boolean
 0 cos(Float64) :: Float64
 1 cos(Float64 NULL) :: Float64 NULL
 0 cosine_distance(Array(Float32), Array(Float32)) :: Float32
@@ -2433,9 +2436,19 @@ Functions overloads:
 1 map(Array(Nothing) NULL, Array(Nothing) NULL) :: Map(Nothing) NULL
 2 map(Array(T0), Array(T1)) :: Map(T0, T1)
 3 map(Array(T0) NULL, Array(T1) NULL) :: Map(T0, T1) NULL
+0 map_cat(Map(Nothing), Map(Nothing)) :: Map(Nothing)
+1 map_cat(Map(Nothing) NULL, Map(Nothing) NULL) :: Map(Nothing) NULL
+2 map_cat(Map(T0, T1), Map(T0, T1)) :: Map(T0, T1)
+3 map_cat(Map(T0, T1) NULL, Map(T0, T1) NULL) :: Map(T0, T1) NULL
+0 map_contains_key(Map(Nothing), T0) :: Boolean
+1 map_contains_key(Map(T0, T1), T0) :: Boolean
+2 map_contains_key(Map(T0, T1) NULL, T0 NULL) :: Boolean NULL
 0 map_keys(Map(Nothing)) :: Array(Nothing)
 1 map_keys(Map(T0, T1)) :: Array(T0)
 2 map_keys(Map(T0, T1) NULL) :: Array(T0) NULL
+0 map_size(Map(Nothing)) :: UInt8
+1 map_size(Map(T0, T1)) :: UInt64
+2 map_size(Map(T0, T1) NULL) :: UInt64 NULL
 0 map_values(Map(Nothing)) :: Array(Nothing)
 1 map_values(Map(T0, T1)) :: Array(T1)
 2 map_values(Map(T0, T1) NULL) :: Array(T1) NULL
@@ -3504,8 +3517,24 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
+0 st_asewkb(Geometry) :: Binary
+1 st_asewkb(Geometry NULL) :: Binary NULL
+0 st_asewkt(Geometry) :: String
+1 st_asewkt(Geometry NULL) :: String NULL
 0 st_asgeojson(Geometry) :: Variant
 1 st_asgeojson(Geometry NULL) :: Variant NULL
+0 st_aswkb(Geometry) :: Binary
+1 st_aswkb(Geometry NULL) :: Binary NULL
+0 st_aswkt(Geometry) :: String
+1 st_aswkt(Geometry NULL) :: String NULL
+0 st_dimension(Geometry) :: Int32 NULL
+1 st_dimension(Geometry NULL) :: Int32 NULL
+0 st_endpoint(Geometry) :: Geometry
+1 st_endpoint(Geometry NULL) :: Geometry NULL
+0 st_geohash(Geometry) :: String
+1 st_geohash(Geometry NULL) :: String NULL
+2 st_geohash(Geometry, Int32) :: String
+3 st_geohash(Geometry NULL, Int32 NULL) :: String NULL
 0 st_geometryfromwkb(String) :: Geometry
 1 st_geometryfromwkb(String NULL) :: Geometry NULL
 2 st_geometryfromwkb(Binary) :: Geometry
@@ -3528,6 +3557,18 @@ Functions overloads:
 1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_makepolygon(Geometry) :: Geometry
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
+0 st_pointn(Geometry, Int32) :: Geometry
+1 st_pointn(Geometry NULL, Int32 NULL) :: Geometry NULL
+0 st_srid(Geometry) :: Int32 NULL
+1 st_srid(Geometry NULL) :: Int32 NULL
+0 st_startpoint(Geometry) :: Geometry
+1 st_startpoint(Geometry NULL) :: Geometry NULL
+0 st_x(Geometry) :: Float64 NULL
+1 st_x(Geometry NULL) :: Float64 NULL
+0 st_xmax(Geometry) :: Float64 NULL
+1 st_xmax(Geometry NULL) :: Float64 NULL
+0 st_y(Geometry) :: Float64 NULL
+1 st_y(Geometry NULL) :: Float64 NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64
@@ -3678,6 +3719,18 @@ Functions overloads:
 23 to_float64(Float32 NULL) :: Float64 NULL
 24 to_float64(Boolean) :: Float64
 25 to_float64(Boolean NULL) :: Float64 NULL
+0 to_geometry(String) :: Geometry
+1 to_geometry(String NULL) :: Geometry NULL
+2 to_geometry(String, Int32) :: Geometry
+3 to_geometry(String NULL, Int32 NULL) :: Geometry NULL
+4 to_geometry(Binary) :: Geometry
+5 to_geometry(Binary NULL) :: Geometry NULL
+6 to_geometry(Binary, Int32) :: Geometry
+7 to_geometry(Binary NULL, Int32 NULL) :: Geometry NULL
+8 to_geometry(Variant) :: Geometry
+9 to_geometry(Variant NULL) :: Geometry NULL
+10 to_geometry(Variant, Int32) :: Geometry
+11 to_geometry(Variant NULL, Int32 NULL) :: Geometry NULL
 0 to_hex(String) :: String
 1 to_hex(String NULL) :: String NULL
 2 to_hex(Int64) :: String
@@ -4185,6 +4238,18 @@ Functions overloads:
 23 try_to_float64(Float32 NULL) :: Float64 NULL
 24 try_to_float64(Boolean) :: Float64 NULL
 25 try_to_float64(Boolean NULL) :: Float64 NULL
+0 try_to_geometry(Variant) :: Geometry NULL
+1 try_to_geometry(Variant NULL) :: Geometry NULL
+2 try_to_geometry(Variant, Int32) :: Geometry NULL
+3 try_to_geometry(Variant NULL, Int32 NULL) :: Geometry NULL
+4 try_to_geometry(String) :: Geometry NULL
+5 try_to_geometry(String NULL) :: Geometry NULL
+6 try_to_geometry(String, Int32) :: Geometry NULL
+7 try_to_geometry(String NULL, Int32 NULL) :: Geometry NULL
+8 try_to_geometry(Binary) :: Geometry NULL
+9 try_to_geometry(Binary NULL) :: Geometry NULL
+10 try_to_geometry(Binary, Int32) :: Geometry NULL
+11 try_to_geometry(Binary NULL, Int32 NULL) :: Geometry NULL
 0 try_to_int16(Variant) :: Int16 NULL
 1 try_to_int16(Variant NULL) :: Int16 NULL
 2 try_to_int16(String) :: Int16 NULL

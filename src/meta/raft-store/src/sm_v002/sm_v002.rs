@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::future;
 use std::io;
+use std::iter::repeat_with;
 use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
@@ -38,12 +39,11 @@ use databend_common_meta_types::UpsertKV;
 use futures::Stream;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use itertools::Itertools;
 use log::debug;
 use log::info;
 use log::warn;
 use openraft::RaftLogId;
-use tokio::io::AsyncBufReadExt;
-use tokio::io::BufReader;
 use tokio::sync::RwLock;
 
 use crate::applier::Applier;
@@ -64,6 +64,7 @@ use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::sm::BlockingConfig;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineSubscriber;
+use crate::utils::prefix_right_bound;
 
 /// A wrapper that implements KVApi **readonly** methods for the state machine.
 pub struct SMV002KVApi<'a> {
@@ -151,17 +152,58 @@ impl SMV002 {
 
         let mut importer = sm_v002::SMV002::new_importer();
 
-        let br = BufReader::new(data);
-        let mut lines = AsyncBufReadExt::lines(br);
+        let f = data.into_std().await;
 
-        while let Some(l) = lines.next_line().await? {
-            let ent: RaftStoreEntry = serde_json::from_str(&l)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let h = databend_common_base::runtime::spawn_blocking(move || {
+            // Create a worker pool to deserialize the entries.
 
-            importer.import(ent)?;
-        }
+            let queue_depth = 1024;
+            let n_workers = 16;
+            let (tx, rx) = ordq::new(queue_depth, repeat_with(|| Deserializer).take(n_workers));
 
-        let level_data = importer.commit();
+            // Spawn a thread to import the deserialized entries.
+
+            let import_th = databend_common_base::runtime::Thread::spawn(move || {
+                while let Some(res) = rx.recv() {
+                    let entries: Result<Vec<RaftStoreEntry>, io::Error> =
+                        res.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                    let entries = entries?;
+
+                    for ent in entries {
+                        importer.import(ent)?;
+                    }
+                }
+
+                let level_data = importer.commit();
+                Ok::<_, io::Error>(level_data)
+            });
+
+            // Feed input strings to the worker pool.
+            {
+                let mut br = io::BufReader::with_capacity(16 * 1024 * 1024, f);
+                let lines = io::BufRead::lines(&mut br);
+                for c in &lines.into_iter().chunks(1024) {
+                    let chunk = c.collect::<Result<Vec<_>, _>>()?;
+                    tx.send(chunk)
+                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+                }
+
+                // drop `tx` to notify the worker threads to exit.
+                tx.close()
+            }
+
+            let level_data = import_th
+                .join()
+                .map_err(|_e| io::Error::new(io::ErrorKind::Other, "import thread failure"))??;
+
+            Ok::<_, io::Error>(level_data)
+        });
+
+        let level_data = h
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))??;
+
         let new_last_applied = *level_data.last_applied_ref();
 
         {
@@ -241,7 +283,6 @@ impl SMV002 {
         let mut res = vec![];
 
         for ent in entries.into_iter() {
-            info!("apply: {}", *ent.get_log_id());
             let log_id = *ent.get_log_id();
             let r = applier
                 .apply(&ent)
@@ -267,7 +308,11 @@ impl SMV002 {
     pub async fn list_kv(&self, prefix: &str) -> Result<ResultStream<(String, SeqV)>, io::Error> {
         let p = prefix.to_string();
 
-        let strm = self.levels.str_map().range(p.clone()..).await?;
+        let strm = if let Some(right) = prefix_right_bound(&p) {
+            self.levels.str_map().range(p.clone()..right).await?
+        } else {
+            self.levels.str_map().range(p.clone()..).await?
+        };
 
         let strm = strm
             // Return only keys with the expected prefix
@@ -299,12 +344,26 @@ impl SMV002 {
         self.expire_cursor = ExpireKey::new(log_time_ms, 0);
     }
 
-    /// List expiration index by expiration time.
+    /// List expiration index by expiration time,
+    /// upto current time(exclusive) in milli seconds.
+    ///
+    /// Only records with expire time less than current time will be returned.
+    /// Expire time that equals to current time is not considered expired.
     pub(crate) async fn list_expire_index(
         &self,
+        curr_time_ms: u64,
     ) -> Result<impl Stream<Item = Result<(ExpireKey, String), io::Error>> + '_, io::Error> {
         let start = self.expire_cursor;
-        let strm = self.levels.expire_map().range(start..).await?;
+
+        // curr_time > expire_at => expired
+        let end = ExpireKey::new(curr_time_ms, 0);
+
+        // There is chance the raft leader produce smaller timestamp for later logs.
+        if start >= end {
+            return Ok(futures::stream::empty().boxed());
+        }
+
+        let strm = self.levels.expire_map().range(start..end).await?;
 
         let strm = strm
             // Return only non-deleted records
@@ -313,7 +372,7 @@ impl SMV002 {
                 future::ready(Ok(expire_entry))
             });
 
-        Ok(strm)
+        Ok(strm.boxed())
     }
 
     pub fn sys_data_ref(&self) -> &SysData {
@@ -449,5 +508,22 @@ impl SMV002 {
         }
 
         Ok(())
+    }
+}
+
+struct Deserializer;
+
+impl ordq::Work for Deserializer {
+    type I = Vec<String>;
+    type O = Result<Vec<RaftStoreEntry>, io::Error>;
+
+    fn run(&mut self, strings: Self::I) -> Self::O {
+        let mut res = Vec::with_capacity(strings.len());
+        for s in strings {
+            let ent: RaftStoreEntry = serde_json::from_str(&s)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            res.push(ent);
+        }
+        Ok(res)
     }
 }

@@ -114,6 +114,10 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::AddRowNumber(_) => self.build_add_row_number(s_expr, required).await,
             RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
+            RelOperator::AsyncFunction(async_func) => {
+                self.build_async_func(s_expr, async_func, required, stat_info)
+                    .await
+            }
         }
     }
 }

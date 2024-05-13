@@ -28,7 +28,6 @@ pub use block::MergeIOReadResult;
 pub use block::NativeReaderExt;
 pub use block::NativeSourceData;
 pub use bloom::BloomBlockFilterReader;
-pub use inverted_index::load_inverted_index_info;
 pub use inverted_index::InvertedIndexReader;
 pub use meta::CompactSegmentInfoReader;
 pub use meta::MetaReaders;

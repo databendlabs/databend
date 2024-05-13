@@ -44,6 +44,7 @@ use tonic::Streaming;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::KillInterpreter;
+use crate::interpreters::SetPriorityInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::servers::flight::request_builder::RequestGetter;
 use crate::servers::flight::v1::actions::FlightAction;
@@ -247,6 +248,19 @@ impl FlightService for DatabendQueryFlightService {
                     let ctx = session.create_query_context().await?;
 
                     let interpreter = KillInterpreter::from_flight(ctx, kill_query.packet)?;
+                    interpreter.execute2().await?;
+                    FlightResult { body: vec![] }
+                }
+                FlightAction::SetPriority(set_priority) => {
+                    let config = GlobalConfig::instance();
+                    let session_manager = SessionManager::instance();
+                    let settings = Settings::create(config.query.tenant_id.clone());
+                    let session =
+                        session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    let ctx = session.create_query_context().await?;
+
+                    let interpreter =
+                        SetPriorityInterpreter::from_flight(ctx, set_priority.packet)?;
                     interpreter.execute2().await?;
                     FlightResult { body: vec![] }
                 }

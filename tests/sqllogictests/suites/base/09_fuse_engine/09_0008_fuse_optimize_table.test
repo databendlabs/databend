@@ -743,50 +743,24 @@ select row_count from fuse_block('db_09_0008', 't13')
 7
 14
 
-statement ok
-DROP TABLE m
 
 statement ok
-DROP TABLE t
+create table test_abc(a string, b string, c string) cluster by ( substr(a, 1, 2), substr(b, 1, 3) );
 
 statement ok
-DROP TABLE t1
+create table test_abc_random(a string, b string, c string) engine = random;
 
 statement ok
-DROP TABLE t2
+insert into test_abc select * from test_abc_random limit 1000;
 
 statement ok
-DROP TABLE t3
+insert into test_abc select * from test_abc_random limit 1000;
 
 statement ok
-DROP TABLE t4
+insert into test_abc select * from test_abc_random limit 1000;
 
 statement ok
-DROP TABLE t5
-
-statement ok
-DROP TABLE t6
-
-statement ok
-DROP TABLE t7
-
-statement ok
-DROP TABLE t8
-
-statement ok
-DROP TABLE t9
-
-statement ok
-DROP TABLE t10
-
-statement ok
-DROP TABLE t11
-
-statement ok
-DROP TABLE t12
-
-statement ok
-DROP TABLE t13
+alter table test_abc recluster final;
 
 statement ok
 DROP DATABASE db_09_0008

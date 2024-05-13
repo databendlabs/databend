@@ -10,7 +10,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 memory-profiling = ["tempfile"]
@@ -25,6 +25,7 @@ databend-common-exception = { path = "../exception" }
 # Crates.io dependencies
 anyerror = { workspace = true }
 futures = { workspace = true }
+http = { workspace = true }
 log = { workspace = true }
 poem = { workspace = true }
 serde = { workspace = true }

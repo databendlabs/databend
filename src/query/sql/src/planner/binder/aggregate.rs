@@ -684,9 +684,12 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
+                ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
+
         for item in bind_context.aggregate_info.group_items.iter() {
             let mut finder = Finder::new(&f);
             finder.visit(&item.scalar)?;

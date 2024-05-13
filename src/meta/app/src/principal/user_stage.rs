@@ -487,6 +487,21 @@ pub struct CopyOptions {
     pub detailed_output: bool,
 }
 
+impl Display for CopyOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "OnErrorMode {}", self.on_error)?;
+        write!(f, "SizeLimit {}", self.size_limit)?;
+        write!(f, "MaxFiles {}", self.max_files)?;
+        write!(f, "SplitSize {}", self.split_size)?;
+        write!(f, "Purge {}", self.purge)?;
+        write!(f, "DisableVariantCheck {}", self.disable_variant_check)?;
+        write!(f, "ReturnFailedOnly {}", self.return_failed_only)?;
+        write!(f, "MaxFileSize {}", self.max_file_size)?;
+        write!(f, "Single {}", self.single)?;
+        write!(f, "DetailedOutput {}", self.detailed_output)
+    }
+}
+
 impl CopyOptions {
     pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
         if opts.is_empty() {

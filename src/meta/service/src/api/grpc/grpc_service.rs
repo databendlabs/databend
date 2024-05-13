@@ -61,7 +61,7 @@ use tokio_stream;
 use tokio_stream::Stream;
 use tonic::codegen::BoxStream;
 use tonic::metadata::MetadataMap;
-use tonic::transport::NamedService;
+use tonic::server::NamedService;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
@@ -184,7 +184,7 @@ impl MetaServiceImpl {
         let forward_res = self
             .meta_node
             .handle_forwardable_request(forward_req)
-            .info_elapsed(format!("TxnRequest: {:?}", txn))
+            .info_elapsed(format!("TxnRequest: {}", txn))
             .await;
 
         let (endpoint, txn_reply) = match forward_res {

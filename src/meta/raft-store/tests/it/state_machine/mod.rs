@@ -236,7 +236,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             "wow",
             MatchSeq::GE(0),
             "y",
-            Some(1000),
+            Some(5_000),
             None,
             Some((6, "y")),
             now_ms,

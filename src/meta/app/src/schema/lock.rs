@@ -23,8 +23,9 @@ use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KeyError;
 
+use crate::schema::TableLockIdent;
 use crate::tenant::Tenant;
-use crate::tenant::ToTenant;
+use crate::KeyWithTenant;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LockMeta {
@@ -49,8 +50,8 @@ impl LockType {
     pub fn revision_from_str(&self, s: &str) -> Result<u64, KeyError> {
         match self {
             LockType::TABLE => {
-                let key = TableLockKey::from_str_key(s)?;
-                Ok(key.revision)
+                let key = TableLockIdent::from_str_key(s)?;
+                Ok(key.revision())
             }
         }
     }
@@ -58,10 +59,10 @@ impl LockType {
     pub fn key_from_str(&self, s: &str) -> Result<LockKey, KeyError> {
         match self {
             LockType::TABLE => {
-                let key = TableLockKey::from_str_key(s)?;
+                let key = TableLockIdent::from_str_key(s)?;
                 Ok(LockKey::Table {
-                    tenant: key.tenant,
-                    table_id: key.table_id,
+                    tenant: key.tenant().clone(),
+                    table_id: key.table_id(),
                 })
             }
         }
@@ -104,19 +105,15 @@ impl LockKey {
     pub fn gen_prefix(&self) -> String {
         match self {
             LockKey::Table { tenant, table_id } => {
-                let ident = DirName::new(TableLockKey::new(tenant.clone(), *table_id, 0));
+                let ident = DirName::new(TableLockIdent::new(tenant.clone(), *table_id, 0));
                 ident.dir_name_with_slash()
             }
         }
     }
 
-    pub fn gen_key(&self, revision: u64) -> TableLockKey {
+    pub fn gen_key(&self, revision: u64) -> TableLockIdent {
         match self {
-            LockKey::Table { tenant, table_id } => TableLockKey {
-                tenant: tenant.clone(),
-                table_id: *table_id,
-                revision,
-            },
+            LockKey::Table { tenant, table_id } => TableLockIdent::new(tenant, *table_id, revision),
         }
     }
 }
@@ -135,7 +132,7 @@ pub struct ListLocksReq {
 
 impl ListLocksReq {
     pub fn create(tenant: &Tenant) -> Self {
-        let lock = TableLockKey::new(tenant, 0, 0);
+        let lock = TableLockIdent::new(tenant, 0, 0);
         let prefix = DirName::new_with_level(lock, 2).dir_name_with_slash();
         Self {
             prefixes: vec![prefix],
@@ -145,7 +142,7 @@ impl ListLocksReq {
     pub fn create_with_table_ids(tenant: &Tenant, table_ids: Vec<u64>) -> Self {
         let mut prefixes = Vec::new();
         for table_id in table_ids {
-            let lock = TableLockKey::new(tenant, table_id, 0);
+            let lock = TableLockIdent::new(tenant, table_id, 0);
             let prefix = DirName::new(lock).dir_name_with_slash();
             prefixes.push(prefix);
         }
@@ -158,6 +155,12 @@ pub struct ListLockRevReq {
     pub lock_key: LockKey,
 }
 
+impl ListLockRevReq {
+    pub fn new(lock_key: LockKey) -> Self {
+        Self { lock_key }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateLockRevReq {
     pub lock_key: LockKey,
@@ -167,7 +170,25 @@ pub struct CreateLockRevReq {
     pub query_id: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+impl CreateLockRevReq {
+    pub fn new(
+        lock_key: LockKey,
+        user: String,
+        node: String,
+        query_id: String,
+        expire_secs: u64,
+    ) -> Self {
+        Self {
+            lock_key,
+            user,
+            node,
+            query_id,
+            expire_secs,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateLockRevReply {
     pub revision: u64,
 }
@@ -180,75 +201,25 @@ pub struct ExtendLockRevReq {
     pub acquire_lock: bool,
 }
 
+impl ExtendLockRevReq {
+    pub fn new(lock_key: LockKey, revision: u64, expire_secs: u64, acquire_lock: bool) -> Self {
+        Self {
+            lock_key,
+            revision,
+            expire_secs,
+            acquire_lock,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeleteLockRevReq {
     pub lock_key: LockKey,
     pub revision: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TableLockKey {
-    pub tenant: Tenant,
-    pub table_id: u64,
-    pub revision: u64,
-}
-
-impl TableLockKey {
-    pub fn new(tenant: impl ToTenant, table_id: u64, revision: u64) -> Self {
-        Self {
-            tenant: tenant.to_tenant(),
-            table_id,
-            revision,
-        }
-    }
-
-    pub fn tenant(&self) -> &Tenant {
-        &self.tenant
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::schema::LockMeta;
-    use crate::schema::TableLockKey;
-    use crate::tenant::Tenant;
-
-    impl kvapi::KeyCodec for TableLockKey {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(self.tenant.tenant_name())
-                .push_u64(self.table_id)
-                .push_u64(self.revision)
-        }
-
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let tenant = p.next_nonempty()?;
-            let table_id = p.next_u64()?;
-            let revision = p.next_u64()?;
-
-            let tenant = Tenant::new_nonempty(tenant);
-            Ok(Self {
-                tenant,
-                table_id,
-                revision,
-            })
-        }
-    }
-
-    /// __fd_table_lock/<tenant>/table_id/revision -> LockMeta
-    impl kvapi::Key for TableLockKey {
-        const PREFIX: &'static str = "__fd_table_lock";
-
-        type ValueType = LockMeta;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-    }
-
-    impl kvapi::Value for LockMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
+impl DeleteLockRevReq {
+    pub fn new(lock_key: LockKey, revision: u64) -> Self {
+        Self { lock_key, revision }
     }
 }

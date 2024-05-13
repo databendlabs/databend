@@ -178,7 +178,7 @@ impl crate::plans::VacuumTemporaryFilesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![DataField::new(
             "Files",
-            DataType::String,
+            DataType::Number(NumberDataType::UInt64),
         )]))
     }
 }
@@ -216,7 +216,8 @@ impl OptimizeTablePlan {
 pub enum OptimizeTableAction {
     All,
     Purge(Option<NavigationPoint>),
-    CompactBlocks,
+    // Optionally, specify the limit on the number of blocks to be compacted.
+    CompactBlocks(Option<usize>),
     CompactSegments,
 }
 

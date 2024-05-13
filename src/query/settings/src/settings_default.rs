@@ -290,6 +290,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("disable_merge_into_join_reorder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable merge into join reorder optimization.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",
@@ -355,18 +361,6 @@ impl DefaultSettings {
                     desc: "Injects a custom 'sandbox_tenant' into this session. This is only for testing purposes and will take effect only when 'internal_enable_sandbox_tenant' is turned on.",
                     mode: SettingMode::Both,
                     range: None,
-                }),
-                ("parquet_uncompressed_buffer_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(2 * 1024 * 1024),
-                    desc: "Sets the byte size of the buffer used for reading Parquet files.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
-                ("enable_bushy_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables generating a bushy join plan with the optimizer.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_query_result_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -535,7 +529,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(50),
+                    value: UserSettingValue::UInt64(25),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -549,12 +543,6 @@ impl DefaultSettings {
                 ("enable_replace_into_partitioning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_replace_into_bloom_pruning", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enables bloom pruning for replace-into statement.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -579,12 +567,6 @@ impl DefaultSettings {
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets new columns to be nullable (1) or not (0) by default in table operations.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_query_profiling", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables recording query profile",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -624,6 +606,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("external_server_request_batch_rows", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(65536),
+                    desc: "Request batch rows to external server",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables parquet prewhere",
@@ -643,7 +631,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::String(vec!["rounding".into(), "truncating".into()])),
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "experiment setting disables stage and udf privilege check(disable by default).",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -731,11 +719,17 @@ impl DefaultSettings {
                     value: UserSettingValue::String("GeoJSON".to_owned()),
                     desc: "Display format for GEOMETRY values.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["WKT".into(), "WKB".into(), "EWKT".into(), "EWKB".into(), "GeoJSON".into()]))
+                    range: Some(SettingRange::String(vec!["WKT".into(), "WKB".into(), "EWKT".into(), "EWKB".into(), "GeoJSON".into()])),
                 }),
                 ("script_max_steps", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10000),
                     desc: "The maximum steps allowed in a single execution of script.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("max_vacuum_temp_files_after_query", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The maximum temp files will be removed after query. please enable vacuum feature. The default value is 0(all temp files)",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 })

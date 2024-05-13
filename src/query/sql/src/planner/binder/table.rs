@@ -608,6 +608,7 @@ impl Binder {
                 span: *span,
                 hints: None,
                 distinct: false,
+                top_n: None,
                 select_list: vec![SelectTarget::AliasedExpr {
                     expr: Box::new(databend_common_ast::ast::Expr::FunctionCall {
                         span: *span,
@@ -941,7 +942,7 @@ impl Binder {
                     schema,
                     stage_info,
                     files_info,
-                    files_to_copy: None,
+                    files_to_copy,
                     duplicated_files_detected: vec![],
                     is_select: true,
                     default_values: None,
@@ -976,7 +977,7 @@ impl Binder {
                     schema,
                     stage_info,
                     files_info,
-                    files_to_copy: None,
+                    files_to_copy,
                     duplicated_files_detected: vec![],
                     is_select: true,
                     default_values: None,

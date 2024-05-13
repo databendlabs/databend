@@ -162,11 +162,6 @@ impl Settings {
         }
     }
 
-    // Get parquet_uncompressed_buffer_size.
-    pub fn get_parquet_uncompressed_buffer_size(&self) -> Result<u64> {
-        self.try_get_u64("parquet_uncompressed_buffer_size")
-    }
-
     pub fn get_max_memory_usage(&self) -> Result<u64> {
         self.try_get_u64("max_memory_usage")
     }
@@ -230,10 +225,6 @@ impl Settings {
 
     pub fn get_enable_purge_duplicated_files_in_copy(&self) -> Result<bool> {
         Ok(self.try_get_u64("purge_duplicated_files_in_copy")? != 0)
-    }
-
-    pub fn get_enable_bushy_join(&self) -> Result<u64> {
-        self.try_get_u64("enable_bushy_join")
     }
 
     pub fn get_timezone(&self) -> Result<String> {
@@ -300,6 +291,10 @@ impl Settings {
 
     pub fn get_enforce_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
+    }
+
+    pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
@@ -492,10 +487,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_replace_into_partitioning")? != 0)
     }
 
-    pub fn get_enable_replace_into_bloom_pruning(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_replace_into_bloom_pruning")? != 0)
-    }
-
     pub fn get_replace_into_bloom_pruning_max_column_number(&self) -> Result<u64> {
         self.try_get_u64("replace_into_bloom_pruning_max_column_number")
     }
@@ -525,10 +516,6 @@ impl Settings {
         Ok(self.try_get_u64("ddl_column_type_nullable")? != 0)
     }
 
-    pub fn get_enable_query_profiling(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_query_profiling")? != 0)
-    }
-
     pub fn get_enable_parquet_page_index(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_parquet_page_index")? != 0)
     }
@@ -553,6 +540,10 @@ impl Settings {
         self.try_get_u64("external_server_request_timeout_secs")
     }
 
+    pub fn get_external_server_request_batch_rows(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_batch_rows")
+    }
+
     pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {
         Ok(self.try_get_u64("create_query_flight_client_with_current_rt")? != 0)
     }
@@ -574,19 +565,8 @@ impl Settings {
         Ok(self.try_get_u64("enable_refresh_virtual_column_after_write")? != 0)
     }
 
-    pub fn set_enable_refresh_virtual_column_after_write(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_refresh_virtual_column_after_write", u64::from(val))
-    }
-
     pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
-    }
-
-    pub fn set_enable_refresh_aggregating_index_after_write(&self, val: bool) -> Result<()> {
-        self.try_set_u64(
-            "enable_refresh_aggregating_index_after_write",
-            u64::from(val),
-        )
     }
 
     pub fn get_parse_datetime_ignore_remainder(&self) -> Result<bool> {
@@ -595,10 +575,6 @@ impl Settings {
 
     pub fn get_disable_variant_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_variant_check")? != 0)
-    }
-
-    pub fn set_disable_variant_check(&self, val: bool) -> Result<()> {
-        self.try_set_u64("disable_variant_check", u64::from(val))
     }
 
     pub fn get_cost_factor_hash_table_per_row(&self) -> Result<u64> {
@@ -615,10 +591,6 @@ impl Settings {
 
     pub fn get_enable_geo_create_table(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_geo_create_table")? != 0)
-    }
-
-    pub fn set_enable_geo_create_table(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_geo_create_table", u64::from(val))
     }
 
     pub fn get_idle_transaction_timeout_secs(&self) -> Result<u64> {
@@ -640,5 +612,9 @@ impl Settings {
 
     pub fn get_script_max_steps(&self) -> Result<u64> {
         self.try_get_u64("script_max_steps")
+    }
+
+    pub fn get_max_vacuum_temp_files_after_query(&self) -> Result<u64> {
+        self.try_get_u64("max_vacuum_temp_files_after_query")
     }
 }

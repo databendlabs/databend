@@ -17,9 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use arrow_schema::Schema as ArrowSchema;
-use chrono::NaiveDateTime;
-use chrono::TimeZone;
-use chrono::Utc;
+use chrono::DateTime;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -340,8 +338,8 @@ fn create_parquet_table_info(schema: &ArrowSchema, stage_info: &StageInfo) -> Re
         meta: TableMeta {
             schema: arrow_to_table_schema(schema)?.into(),
             engine: "SystemReadParquet".to_string(),
-            created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
-            updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            created_on: DateTime::from_timestamp(0, 0).unwrap(),
+            updated_on: DateTime::from_timestamp(0, 0).unwrap(),
             ..Default::default()
         },
         ..Default::default()

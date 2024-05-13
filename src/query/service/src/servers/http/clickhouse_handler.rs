@@ -35,6 +35,7 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use http::HeaderMap;
 use http::StatusCode;
 use log::debug;
@@ -216,6 +217,7 @@ async fn execute(
                 handle.await.expect("must")
             }
 
+            let stream = stream.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
             Ok(Body::from_bytes_stream(stream).with_content_type(format_typ.get_content_type()))
         }
     })?
@@ -356,9 +358,10 @@ pub async fn clickhouse_handler_post(
             .await
             .map_err(BadRequest)?;
 
-        let schema = plan.schema();
         let mut handle = None;
+        let output_schema = plan.schema();
         if let Plan::Insert(insert) = &mut plan {
+            let dest_schema = insert.dest_schema();
             if let InsertInputSource::StreamingWithFormat(format, start, input_context_ref) =
                 &mut insert.source
             {
@@ -368,7 +371,7 @@ pub async fn clickhouse_handler_post(
                     .await
                     .map_err(InternalServerError)?;
 
-                let table_schema = infer_table_schema(&schema)
+                let table_schema = infer_table_schema(&dest_schema)
                     .map_err(|err| err.display_with_sql(&sql))
                     .map_err(InternalServerError)?;
                 let input_context = Arc::new(
@@ -419,7 +422,7 @@ pub async fn clickhouse_handler_post(
                     .await
                     .map_err(InternalServerError)?;
 
-                let table_schema = infer_table_schema(&schema)
+                let table_schema = infer_table_schema(&dest_schema)
                     .map_err(|err| err.display_with_sql(&sql))
                     .map_err(InternalServerError)?;
                 let input_context = Arc::new(
@@ -468,7 +471,7 @@ pub async fn clickhouse_handler_post(
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;
 
-        execute(ctx, interpreter, schema, format, params, handle)
+        execute(ctx, interpreter, output_schema, format, params, handle)
             .await
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(InternalServerError)

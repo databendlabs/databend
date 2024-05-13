@@ -188,50 +188,6 @@ SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 
 
-# Test pruning status
-
-statement ok
-CREATE TABLE t_small_blocks (id int, content string) row_per_block=2
-
-statement ok
-CREATE INVERTED INDEX IF NOT EXISTS inverted_idx2 ON t_small_blocks(content) tokenizer = 'chinese'
-
-statement ok
-INSERT INTO t_small_blocks VALUES
-(1, 'The quick brown fox jumps over the lazy dog'),
-(2, 'A picture is worth a thousand words'),
-(3, 'The early bird catches the worm'),
-(4, 'Actions speak louder than words'),
-(5, 'Time flies like an arrow; fruit flies like a banana'),
-(6, 'Beauty is in the eye of the beholder'),
-(7, 'When life gives you lemons, make lemonade'),
-(8, 'Put all your eggs in one basket'),
-(9, 'You can not judge a book by its cover'),
-(10, 'An apple a day keeps the doctor away')
-
-query IT
-SELECT id, content FROM t_small_blocks WHERE query('content:"early bird"')
-----
-3 The early bird catches the worm
-
-query T
-EXPLAIN SELECT id, content FROM t_small_blocks WHERE query('content:"early bird"')
-----
-Filter
-├── output columns: [t_small_blocks.id (#0), t_small_blocks.content (#1)]
-├── filters: [t_small_blocks._search_matched (#2)]
-├── estimated rows: 10.00
-└── TableScan
-    ├── table: default.test_index.t_small_blocks
-    ├── output columns: [id (#0), content (#1), _search_matched (#2)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 5
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, inverted pruning: 5 to 1>]
-    ├── push downs: [filters: [t_small_blocks._search_matched (#2)], limit: NONE]
-    └── estimated rows: 10.00
-
 statement ok
 CREATE TABLE books(
   id int,
@@ -427,6 +383,41 @@ onlyif mysql
 statement error 1105
 SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 description:(学习 +神经网络)^1.1') ORDER BY score() DESC
 
+statement ok
+CREATE TABLE t1 (id int, body json)
+
+statement ok
+CREATE INVERTED INDEX IF NOT EXISTS idx ON t1(body) tokenizer = 'chinese'
+
+statement ok
+INSERT INTO t1 VALUES
+(1, '{"title":"The Psychology of Persuasion","metadata":{"author":"Oliver","publishedDate":"2021-06-15","tags":["psychology","persuasion","behavior"]}}'),
+(2, '{"title":"Sustainable Energy Solutions","metadata":{"author":"Pamela","publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]}}'),
+(3, '{"title":"The Future of Autonomous Vehicles","metadata":{"author":"Quincy","publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]}}'),
+(4, '{"title":"The Role of AI in Customer Service","metadata":{"author":"Rachel","publishedDate":"2021-09-20","tags":["AI","customer service","automation"]}}'),
+(5, '{"title":"Internet of Things Applications","metadata":{"author":"Samuel","publishedDate":"2023-12-15","tags":["IoT","applications","technology"]}}'),
+(6, '{"title":"人工智能与机器学习","metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]}}'),
+(7, '{"title":"区块链在金融行业的应用","metadata":{"author":"李四","publishedDate":"2023-09-18","tags":["区块链","金融行业","金融科技"]}}'),
+(8, '{"title":"物联网与智能家居","metadata":{"author":"王五","publishedDate":"2023-08-15","tags":["物联网","智能家居","生活"]}}'),
+(9, '{"title":"量子计算的未来","metadata":{"author":"赵六","publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]}}'),
+(10, '{"title":"网络安全与隐私保护","metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]}}')
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.title:energy')
+----
+2 3.2352333 {"metadata":{"author":"Pamela","publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]},"title":"Sustainable Energy Solutions"}
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:technology')
+----
+3 2.4057739 {"metadata":{"author":"Quincy","publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
+5 2.4057739 {"metadata":{"author":"Samuel","publishedDate":"2023-12-15","tags":["IoT","applications","technology"]},"title":"Internet of Things Applications"}
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:技术')
+----
+6 2.4057739 {"metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
+10 2.4057739 {"metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
 
 statement ok
 use default

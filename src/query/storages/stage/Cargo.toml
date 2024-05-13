@@ -9,7 +9,7 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
-test = false
+test = true
 
 [dependencies]
 databend-common-base = { path = "../../../common/base" }
@@ -32,6 +32,7 @@ bstr = "1.9.1"
 csv-core = "0.1.11"
 dashmap = { workspace = true }
 enum-as-inner = "0.6.0"
+futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }

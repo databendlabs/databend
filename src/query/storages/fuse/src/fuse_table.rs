@@ -27,6 +27,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
@@ -367,7 +368,8 @@ impl FuseTable {
                 let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
                 match self.operator.read(url).await {
                     Ok(data) => {
-                        let s = str::from_utf8(&data)?;
+                        let bs = data.to_vec();
+                        let s = str::from_utf8(&bs)?;
                         Ok(Some(s.to_string()))
                     }
                     Err(e) => {
@@ -384,7 +386,7 @@ impl FuseTable {
                     let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
                     let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
                     let snapshot_loc = {
-                        let hint_content = self.operator.read(&hint).await?;
+                        let hint_content = self.operator.read(&hint).await?.to_vec();
                         let snapshot_full_path = String::from_utf8(hint_content)?;
                         let operator_info = self.operator.info();
                         snapshot_full_path[operator_info.root().len()..].to_string()
@@ -556,7 +558,6 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_inverted_indexes = prev.as_ref().and_then(|v| v.inverted_indexes.clone());
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -575,7 +576,6 @@ impl Table for FuseTable {
             segments,
             cluster_key_meta,
             prev_statistics_location,
-            prev_inverted_indexes,
         );
 
         let mut table_info = self.table_info.clone();
@@ -611,7 +611,6 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_inverted_indexes = prev.as_ref().and_then(|v| v.inverted_indexes.clone());
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
@@ -631,7 +630,6 @@ impl Table for FuseTable {
             segments,
             None,
             prev_statistics_location,
-            prev_inverted_indexes,
         );
 
         let mut table_info = self.table_info.clone();
@@ -713,14 +711,14 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
-        limit: Option<usize>,
+        num_snapshot_limit: Option<usize>,
         keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         match self.navigate_for_purge(&ctx, instant).await {
             Ok((table, files)) => {
                 table
-                    .do_purge(&ctx, files, limit, keep_last_snapshot, dry_run)
+                    .do_purge(&ctx, files, num_snapshot_limit, keep_last_snapshot, dry_run)
                     .await
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
@@ -883,9 +881,9 @@ impl Table for FuseTable {
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        limit: Option<usize>,
+        limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        self.do_compact_blocks(ctx, limit).await
+        self.do_compact_blocks(ctx, limits).await
     }
 
     #[async_backtrace::framed]

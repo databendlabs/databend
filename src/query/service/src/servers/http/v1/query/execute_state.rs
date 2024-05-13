@@ -330,7 +330,7 @@ impl ExecuteState {
         block_sender: SizedChannelSender<DataBlock>,
         format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
     ) -> Result<()> {
-        info!("{}: http query prepare to plan sql", &ctx.get_id());
+        info!("http query prepare to plan sql");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, extras) = interpreter_plan_sql(ctx.clone(), &sql)
@@ -340,8 +340,7 @@ impl ExecuteState {
         let query_queue_manager = QueriesQueueManager::instance();
 
         info!(
-            "{}: http query preparing to acquire from query queue, length: {}",
-            &ctx.get_id(),
+            "http query preparing to acquire from query queue, length: {}",
             query_queue_manager.length()
         );
 
@@ -353,20 +352,26 @@ impl ExecuteState {
             *guard = Some(ctx.get_format_settings()?);
         }
         info!(
-            "{}: http query finished acquiring from queue, length: {}",
-            &ctx.get_id(),
+            "http query finished acquiring from queue, length: {}",
             query_queue_manager.length()
         );
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let has_result_set = plan.has_result_set();
+        let schema = if has_result_set {
+            // check has_result_set first for safety
+            QueryResponseField::from_schema(plan.schema())
+        } else {
+            vec![]
+        };
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
             queue_guard,
-            schema: QueryResponseField::from_schema(plan.schema()),
-            has_result_set: plan.has_result_set(),
+            schema,
+            has_result_set,
         };
-        info!("{}: http query change state to Running", &ctx.get_id());
+        info!("http query change state to Running");
         Executor::start_to_running(&executor, Running(running_state)).await;
 
         let executor_clone = executor.clone();

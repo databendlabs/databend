@@ -40,7 +40,6 @@ use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MergeInto;
 use databend_common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
-use databend_common_sql::executor::physical_plans::MergeIntoSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
@@ -69,7 +68,6 @@ use crate::stream::DataBlockStream;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = MAX as usize;
-const DUMMY_COL_INDEX: usize = MAX as usize;
 pub struct MergeIntoInterpreter {
     ctx: Arc<QueryContext>,
     plan: MergePlan,
@@ -94,6 +92,7 @@ impl Interpreter for MergeIntoInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let (physical_plan, _) = self.build_physical_plan().await?;
+
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
@@ -110,7 +109,7 @@ impl Interpreter for MergeIntoInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
-                "merge_into".to_owned(),
+                MutationKind::MergeInto,
                 true,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
@@ -166,12 +165,12 @@ impl MergeIntoInterpreter {
         // important flag:
         //      I. change join order: if true, target table as build side, if false, source as build side.
         //      II. distributed: this merge into is executed at a distributed stargety.
-        // 2.1 Left: there are macthed and not macthed, and change join order is true.
+        // 2.1 Left: there are matched and not matched, and change join order is true.
         // 2.2 Left Anti: change join order is true, but it's insert-only.
         // 2.3 Inner: this is matched only case.
         //      2.3.1 change join order is true, target table as build side,it's matched-only.
         //      2.3.2 change join order is false, source data as build side,it's matched-only.
-        // 2.4 Right: change join order is false, there are macthed and not macthed
+        // 2.4 Right: change join order is false, there are matched and not matched
         // 2.5 Right Anti: change join order is false, but it's insert-only.
         // distributed execution stargeties:
         // I. change join order is true, we use the `optimize_distributed_query`'s result.
@@ -221,8 +220,7 @@ impl MergeIntoInterpreter {
         };
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
-        // build source for MergeInto
-        let join_input = builder.build(&input, *columns_set.clone()).await?;
+        let mut join_input = builder.build(&input, *columns_set.clone()).await?;
 
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
@@ -242,7 +240,7 @@ impl MergeIntoInterpreter {
                 Some(row_id_idx) => row_id_idx,
             }
         } else {
-            DUMMY_COL_INDEX
+            DUMMY_COLUMN_INDEX
         };
 
         let mut found_row_id = false;
@@ -256,16 +254,15 @@ impl MergeIntoInterpreter {
         }
 
         // we use `merge_into_split_idx` to specify a column from target table to spilt a block
-        // from join into macthed part and unmacthed part.
-        let mut merge_into_split_idx = DUMMY_COLUMN_INDEX;
+        // from join into matched part and unmatched part.
+        let mut merge_into_split_idx = None;
         if matches!(merge_type, MergeIntoType::FullOperation) {
             for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
                 if *data_field.name() == split_idx.to_string() {
-                    merge_into_split_idx = idx;
+                    merge_into_split_idx = Some(idx);
                     break;
                 }
             }
-            assert!(merge_into_split_idx != DUMMY_COLUMN_INDEX);
         }
 
         if *distributed && !*change_join_order {
@@ -288,11 +285,8 @@ impl MergeIntoInterpreter {
         let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
-        // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
-        // datablocks.
-        let merge_into_source = if !*distributed && extract_exchange {
-            // if we doesn't support distributed merge into, we should give the exchange merge back.
-            let rollback_join_input = PhysicalPlan::Exchange(Exchange {
+        if !*distributed && extract_exchange {
+            join_input = PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: Box::new(join_input),
                 kind: FragmentKind::Merge,
@@ -300,21 +294,6 @@ impl MergeIntoInterpreter {
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
             });
-            PhysicalPlan::MergeIntoSource(MergeIntoSource {
-                input: Box::new(rollback_join_input),
-                row_id_idx: row_id_idx as u32,
-                merge_type: merge_type.clone(),
-                merge_into_split_idx: merge_into_split_idx as u32,
-                plan_id: u32::MAX,
-            })
-        } else {
-            PhysicalPlan::MergeIntoSource(MergeIntoSource {
-                input: Box::new(join_input),
-                row_id_idx: row_id_idx as u32,
-                merge_type: merge_type.clone(),
-                merge_into_split_idx: merge_into_split_idx as u32,
-                plan_id: u32::MAX,
-            })
         };
 
         // transform unmatched for insert
@@ -370,7 +349,7 @@ impl MergeIntoInterpreter {
             let update_list = if let Some(update_list) = &item.update {
                 // we don't need real col_indices here, just give a
                 // dummy index, that's ok.
-                let col_indices = vec![DUMMY_COL_INDEX];
+                let col_indices = vec![DUMMY_COLUMN_INDEX];
                 let (database, table) = match target_alias {
                     None => (Some(database.as_str()), table_name.clone()),
                     Some(alias) => (None, alias.name.to_string().to_lowercase()),
@@ -436,10 +415,8 @@ impl MergeIntoInterpreter {
             .collect();
 
         let commit_input = if !distributed {
-            // recv datablocks from matched upstream and unmatched upstream
-            // transform and append data
             PhysicalPlan::MergeInto(Box::new(MergeInto {
-                input: Box::new(merge_into_source),
+                input: Box::new(join_input.clone()),
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
                 unmatched,
@@ -454,10 +431,11 @@ impl MergeIntoInterpreter {
                 target_build_optimization,
                 can_try_update_column_only: *can_try_update_column_only,
                 plan_id: u32::MAX,
+                merge_into_split_idx,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
-                input: Box::new(merge_into_source.clone()),
+                input: Box::new(join_input.clone()),
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
                 unmatched: unmatched.clone(),
@@ -482,6 +460,7 @@ impl MergeIntoInterpreter {
                 target_build_optimization: false, // we don't support for distributed mode for now..
                 can_try_update_column_only: *can_try_update_column_only,
                 plan_id: u32::MAX,
+                merge_into_split_idx,
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation
@@ -503,7 +482,7 @@ impl MergeIntoInterpreter {
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
                 unmatched: unmatched.clone(),
-                input_schema: merge_into_source.output_schema()?,
+                input_schema: join_input.output_schema()?,
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 segments,

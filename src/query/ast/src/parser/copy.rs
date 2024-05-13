@@ -15,6 +15,7 @@
 use nom::branch::alt;
 use nom::combinator::map;
 
+use super::query::with;
 use crate::ast::CopyIntoLocationOption;
 use crate::ast::CopyIntoLocationSource;
 use crate::ast::CopyIntoLocationStmt;
@@ -50,14 +51,15 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
 
     map(
         rule! {
-            COPY
+            #with? ~ COPY
             ~ #hint?
             ~ INTO ~ #table_ref ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ ^FROM ~ ^#copy_into_table_source
             ~ #copy_into_table_option*
         },
-        |(_copy, opt_hints, _into, dst, dst_columns, _from, src, opts)| {
+        |(with, _copy, opt_hints, _into, dst, dst_columns, _from, src, opts)| {
             let mut copy_stmt = CopyIntoTableStmt {
+                with,
                 hints: opt_hints,
                 src,
                 dst,
@@ -93,14 +95,15 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
 
     map(
         rule! {
-            COPY
+            #with? ~ COPY
             ~ #hint?
             ~ INTO ~ #file_location
             ~ ^FROM ~ ^#copy_into_location_source
             ~ #copy_into_location_option*
         },
-        |(_copy, opt_hints, _into, dst, _from, src, opts)| {
+        |(with, _copy, opt_hints, _into, dst, _from, src, opts)| {
             let mut copy_stmt = CopyIntoLocationStmt {
+                with,
                 hints: opt_hints,
                 src,
                 dst,

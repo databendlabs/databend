@@ -1,46 +1,35 @@
---- force = false, purge = false
-f1.csv	2	0	NULL	NULL
-f3.csv	2	0	NULL	NULL
-4
-remain 3 files
-f2.csv	2	0	NULL	NULL
-6
-remain 3 files
-6
-remain 3 files
---- force = false, purge = true
-f1.csv	2	0	NULL	NULL
-f3.csv	2	0	NULL	NULL
-4
-remain 1 files
-f2.csv	2	0	NULL	NULL
-6
-remain 0 files
-6
-remain 0 files
---- force = true, purge = false
-f1.csv	2	0	NULL	NULL
-f3.csv	2	0	NULL	NULL
-4
-remain 3 files
-f1.csv	2	0	NULL	NULL
-f3.csv	2	0	NULL	NULL
-8
-remain 3 files
-f1.csv	2	0	NULL	NULL
-f3.csv	2	0	NULL	NULL
-12
-remain 3 files
---- force = true, purge = true
-f1.csv	2	0	NULL	NULL
-f3.csv	2	0	NULL	NULL
-4
-remain 1 files
-f2.csv	2	0	NULL	NULL
-6
-remain 0 files
-6
-remain 0 files
+--- force = false, purge = false, transform = false
+copied 2 files with 4 rows, remain 3 files
+copied 1 files with 6 rows, remain 3 files
+copied 0 files with 6 rows, remain 3 files
+--- force = false, purge = true, transform = false
+copied 2 files with 4 rows, remain 1 files
+copied 1 files with 6 rows, remain 0 files
+copied 0 files with 6 rows, remain 0 files
+--- force = true, purge = false, transform = false
+copied 2 files with 4 rows, remain 3 files
+copied 2 files with 8 rows, remain 3 files
+copied 2 files with 12 rows, remain 3 files
+--- force = true, purge = true, transform = false
+copied 2 files with 4 rows, remain 1 files
+copied 1 files with 6 rows, remain 0 files
+copied 0 files with 6 rows, remain 0 files
+--- force = false, purge = false, transform = true
+copied 2 files with 4 rows, remain 3 files
+copied 1 files with 6 rows, remain 3 files
+copied 0 files with 6 rows, remain 3 files
+--- force = false, purge = true, transform = true
+copied 2 files with 4 rows, remain 1 files
+copied 1 files with 6 rows, remain 0 files
+copied 0 files with 6 rows, remain 0 files
+--- force = true, purge = false, transform = true
+copied 2 files with 4 rows, remain 3 files
+copied 2 files with 8 rows, remain 3 files
+copied 2 files with 12 rows, remain 3 files
+--- force = true, purge = true, transform = true
+copied 2 files with 4 rows, remain 1 files
+copied 1 files with 6 rows, remain 0 files
+copied 0 files with 6 rows, remain 0 files
 >>>> drop table if exists test_max_files_limit
 >>>> create table test_max_files_limit (a int, b int)
 >>>> copy into test_max_files_limit from 'fs:///tmp/00_0004_2/' FILE_FORMAT = (type = CSV)

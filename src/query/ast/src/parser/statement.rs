@@ -29,6 +29,7 @@ use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
+use nom::combinator::not;
 use nom::combinator::value;
 use nom::Slice;
 
@@ -346,6 +347,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, kill_target, object_id)| Statement::KillStmt {
             kill_target,
             object_id,
+        },
+    );
+
+    let set_priority = map(
+        rule! {
+            SET ~ PRIORITY ~  #priority  ~ #parameter_to_string
+        },
+        |(_, _, priority, object_id)| Statement::SetPriority {
+            object_id,
+            priority,
         },
     );
 
@@ -2051,6 +2062,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
+            | #set_priority: "SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>"
         ),
         // database
         rule!(
@@ -2600,6 +2612,22 @@ pub fn hint(i: Input) -> IResult<Hint> {
         |_| Hint { hints_list: vec![] },
     );
     rule!(#hint|#invalid_hint)(i)
+}
+
+pub fn top_n(i: Input) -> IResult<u64> {
+    map(
+        rule! {
+            TOP
+            ~ ^#error_hint(
+                not(literal_u64),
+                "expecting a literal number after keyword `TOP`, if you were referring to a column with name `top`, \
+                        please quote it like `\"top\"`"
+            )
+            ~ ^#literal_u64
+            : "TOP <limit>"
+        },
+        |(_, _, n)| n,
+    )(i)
 }
 
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {
@@ -3616,6 +3644,14 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     alt((
         value(KillTarget::Query, rule! { QUERY }),
         value(KillTarget::Connection, rule! { CONNECTION }),
+    ))(i)
+}
+
+pub fn priority(i: Input) -> IResult<Priority> {
+    alt((
+        value(Priority::LOW, rule! { LOW }),
+        value(Priority::MEDIUM, rule! { MEDIUM }),
+        value(Priority::HIGH, rule! { HIGH }),
     ))(i)
 }
 

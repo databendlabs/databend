@@ -277,8 +277,8 @@ fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
         let mut columns_layout = Vec::with_capacity(columns.len());
 
         for column in columns.into_iter() {
-            let column = column.value.as_column().unwrap();
-            let column_data = serialize_column(column);
+            let column = column.to_column(data_block.num_rows());
+            let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
@@ -298,7 +298,7 @@ fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
             let mut write_bytes = 0;
             let mut writer = operator
                 .writer_with(&location)
-                .buffer(8 * 1024 * 1024)
+                .chunk(8 * 1024 * 1024)
                 .await?;
             for write_bucket_data in write_data.into_iter() {
                 for data in write_bucket_data.into_iter() {
@@ -398,8 +398,8 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
         let mut columns_layout = Vec::with_capacity(columns.len());
 
         for column in columns.into_iter() {
-            let column = column.value.as_column().unwrap();
-            let column_data = serialize_column(column);
+            let column = column.to_column(data_block.num_rows());
+            let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);
@@ -419,7 +419,7 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
             let mut write_bytes = 0;
             let mut writer = operator
                 .writer_with(&location)
-                .buffer(8 * 1024 * 1024)
+                .chunk(8 * 1024 * 1024)
                 .await?;
             for write_bucket_data in write_data.into_iter() {
                 for data in write_bucket_data.into_iter() {

@@ -81,8 +81,7 @@ impl CatalogInfoProvider {
                 catalog.list_databases(&tenant).await?
             };
             for db in dbs {
-                let db_name = db.name().to_string().into_boxed_str();
-                let db_name: &str = Box::leak(db_name);
+                let db_name = db.name();
                 let tables = match catalog.list_tables(&tenant, db_name).await {
                     Ok(tables) => tables,
                     Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => {

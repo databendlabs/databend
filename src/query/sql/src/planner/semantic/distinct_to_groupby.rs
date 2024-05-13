@@ -71,6 +71,7 @@ impl DistinctToGroupBy {
                             span: None,
                             hints: None,
                             distinct: false,
+                            top_n: None,
                             select_list: args
                                 .iter()
                                 .map(|arg| SelectTarget::AliasedExpr {
@@ -94,6 +95,7 @@ impl DistinctToGroupBy {
                     let new_stmt = SelectStmt {
                         span: None,
                         hints: None,
+                        top_n: None,
                         distinct: false,
                         select_list: vec![databend_common_ast::ast::SelectTarget::AliasedExpr {
                             expr: Box::new(Expr::FunctionCall {
