@@ -14988,10 +14988,33 @@ UNSET max_threads
 ---------- AST ------------
 UnSetVariable(
     UnSetStmt {
+        session_level: false,
         source: Var {
             variable: Identifier {
                 span: Some(
                     6..17,
+                ),
+                name: "max_threads",
+                quote: None,
+                is_hole: false,
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+UNSET session max_threads;
+---------- Output ---------
+UNSET SESSION max_threads
+---------- AST ------------
+UnSetVariable(
+    UnSetStmt {
+        session_level: true,
+        source: Var {
+            variable: Identifier {
+                span: Some(
+                    14..25,
                 ),
                 name: "max_threads",
                 quote: None,
@@ -15009,6 +15032,7 @@ UNSET (max_threads, sql_dialect)
 ---------- AST ------------
 UnSetVariable(
     UnSetStmt {
+        session_level: false,
         source: Vars {
             variables: [
                 Identifier {
@@ -15022,6 +15046,38 @@ UnSetVariable(
                 Identifier {
                     span: Some(
                         20..31,
+                    ),
+                    name: "sql_dialect",
+                    quote: None,
+                    is_hole: false,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+UNSET session (max_threads, sql_dialect);
+---------- Output ---------
+UNSET SESSION (max_threads, sql_dialect)
+---------- AST ------------
+UnSetVariable(
+    UnSetStmt {
+        session_level: true,
+        source: Vars {
+            variables: [
+                Identifier {
+                    span: Some(
+                        15..26,
+                    ),
+                    name: "max_threads",
+                    quote: None,
+                    is_hole: false,
+                },
+                Identifier {
+                    span: Some(
+                        28..39,
                     ),
                     name: "sql_dialect",
                     quote: None,

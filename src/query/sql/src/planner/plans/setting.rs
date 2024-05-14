@@ -26,5 +26,6 @@ pub struct SettingPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnSettingPlan {
+    pub session_level: bool,
     pub vars: Vec<String>,
 }
