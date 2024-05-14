@@ -132,11 +132,6 @@ function install_ziglang {
 
 function install_python3 {
 	PACKAGE_MANAGER=$1
-	if ! command -v git > /dev/null; then
-		install_pkg git "$PACKAGE_MANAGER"
-	fi
-	
-		PACKAGE_MANAGER=$1
 
 	echo "==> installing python3..."
 
@@ -165,27 +160,6 @@ function install_python3 {
 		exit 1
 		;;
 	esac
-	
-	echo "==> installing pyenv..."
-	curl https://pyenv.run | bash
-	# Check if pyenv is already initialized in the profile
-	if ! command -v pyenv >/dev/null; then
-		# Add PYENV_ROOT to the profile
-		echo 'export PYENV_ROOT="$HOME/.pyenv"' >> $HOME/.profile
-		# Check if pyenv is in the PATH
-		echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> $HOME/.profile
-		# Initialize pyenv in the profile
-		echo 'eval "$(pyenv init -)"' >> ~/.profile
-		echo "pyenv environment variables have been added to ~/.profile"
-	else
-		echo "pyenv is already set in the environment variables."
-	fi
-
-	# Source the profile to apply changes to the current session
-	source $HOME/.profile
-	pyenv install 3.12.2
-	pyenv global 3.12.2
-	pip install --upgrade pip setuptools wheel
 }
 
 function install_openssl {
@@ -684,18 +658,18 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		install_pkg graphviz "$PACKAGE_MANAGER"
 		install_pkg graphviz-dev "$PACKAGE_MANAGER"
 	fi
-	pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
+	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
 	# drivers
-	pip install --quiet pymysql sqlalchemy clickhouse_driver
+	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
-	pip install --quiet mysql-connector-python==8.0.30
+	python3 -m pip install --quiet mysql-connector-python==8.0.30
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
-	"${PRE_COMMAND[@]}" pip install --quiet coscmd PyYAML
+	"${PRE_COMMAND[@]}" python3 -m pip install --quiet coscmd PyYAML
 fi
 
 if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
