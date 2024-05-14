@@ -466,7 +466,6 @@ impl HttpQuery {
         let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
         let format_settings_clone = format_settings.clone();
         http_query_runtime_instance.runtime().try_spawn(
-            ctx.get_id(),
             async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(

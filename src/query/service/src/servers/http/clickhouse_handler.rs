@@ -153,7 +153,7 @@ async fn execute(
     //
     //  P.S. I think it will be better/more reasonable if we could avoid using pthread_join inside an async stack.
 
-    ctx.try_spawn(ctx.get_id(), {
+    ctx.try_spawn({
         let ctx = ctx.clone();
         async move {
             let mut data_stream = interpreter.execute(ctx.clone()).await?;
@@ -398,8 +398,7 @@ pub async fn clickhouse_handler_post(
                     .map_err(BadRequest)?;
                 let start = *start;
                 let sql_cloned = sql.clone();
-                let query_id = ctx.get_id();
-                handle = Some(ctx.spawn(query_id, async move {
+                handle = Some(ctx.spawn(async move {
                     gen_batches(
                         sql_cloned,
                         start,
@@ -451,8 +450,7 @@ pub async fn clickhouse_handler_post(
                     .map_err(BadRequest)?;
                 let start = *start;
                 let sql_cloned = sql.clone();
-                let query_id = ctx.get_id();
-                handle = Some(ctx.spawn(query_id, async move {
+                handle = Some(ctx.spawn(async move {
                     gen_batches(
                         sql_cloned,
                         start,
