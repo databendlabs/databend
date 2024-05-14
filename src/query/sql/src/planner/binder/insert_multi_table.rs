@@ -159,7 +159,6 @@ impl Binder {
             intos,
             target_tables: ordered_target_tables,
             meta_data: self.metadata.clone(),
-            bind_context: Box::new(bind_context),
         };
         Ok(Plan::InsertMultiTable(Box::new(plan)))
     }

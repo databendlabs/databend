@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::vec;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
