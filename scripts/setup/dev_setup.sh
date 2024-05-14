@@ -156,7 +156,8 @@ function install_python3 {
 	source $HOME/.profile
 	pyenv install 3.12.2
 	pyenv global 3.12.2
-	
+	curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+	python get-pip.py
 	pip install --upgrade pip setuptools
 }
 
@@ -656,18 +657,18 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		install_pkg graphviz "$PACKAGE_MANAGER"
 		install_pkg graphviz-dev "$PACKAGE_MANAGER"
 	fi
-	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
+	pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
 	# drivers
-	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
+	pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
-	python3 -m pip install --quiet mysql-connector-python==8.0.30
+	pip install --quiet mysql-connector-python==8.0.30
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
-	"${PRE_COMMAND[@]}" python3 -m pip install --quiet coscmd PyYAML
+	"${PRE_COMMAND[@]}" pip install --quiet coscmd PyYAML
 fi
 
 if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
