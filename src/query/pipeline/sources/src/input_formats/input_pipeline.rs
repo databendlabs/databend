@@ -117,7 +117,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let (split_tx, split_rx) = async_channel::bounded(ctx.num_prefetch_splits()?);
         Self::build_pipeline_with_aligner(&ctx, split_rx, pipeline)?;
 
-        GlobalIORuntime::instance().spawn(ctx.table_context.get_id(), async move {
+        GlobalIORuntime::instance().spawn(async move {
             let mut sender: Option<Sender<Result<Self::ReadBatch>>> = None;
             while let Some(batch_result) = input.recv().await {
                 match batch_result {
@@ -161,7 +161,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         Self::build_pipeline_with_aligner(&ctx, split_rx, pipeline)?;
 
         let ctx_clone = ctx.clone();
-        GlobalIORuntime::instance().spawn(ctx.table_context.get_id(), async move {
+        GlobalIORuntime::instance().spawn(async move {
             debug!("start copy splits feeder");
             for s in &ctx_clone.splits {
                 let (data_tx, data_rx) = tokio::sync::mpsc::channel(ctx.num_prefetch_per_split());

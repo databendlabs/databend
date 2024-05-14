@@ -21,7 +21,6 @@ use databend_common_base::base::tokio::net::TcpStream;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::future::AbortHandle;
@@ -110,7 +109,7 @@ impl MySQLHandler {
         keepalive: TcpKeepalive,
         tls: Option<Arc<ServerConfig>>,
     ) {
-        executor.spawn(GLOBAL_TASK, async move {
+        executor.spawn(async move {
             match sessions.create_session(SessionType::MySQL).await {
                 Err(error) => {
                     warn!("create session failed, {:?}", error);
