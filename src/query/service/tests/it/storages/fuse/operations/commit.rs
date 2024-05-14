@@ -489,6 +489,13 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_enable_sort_spill(&self) -> bool {
+        todo!()
+    }
+    fn set_enable_sort_spill(&self, _enable: bool) {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn get_query_str(&self) -> String {
