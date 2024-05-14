@@ -1308,6 +1308,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1358,6 +1359,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1408,6 +1410,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1455,6 +1458,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1537,6 +1541,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1619,6 +1624,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1764,6 +1770,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1916,6 +1923,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -2045,6 +2053,112 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a string, b string, inverted index idx1 (a,b) tokenizer='chinese');
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a STRING, b STRING, INVERTED INDEX idx1 (a, b) tokenizer = 'chinese')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: CreateIfNotExists,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    27..28,
+                ),
+                name: "a",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                29..30,
+            ),
+            name: "b",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                32..33,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                42..43,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+                Some(
+                    [
+                        InvertedIndexDefinition {
+                            index_name: Identifier {
+                                span: Some(
+                                    67..71,
+                                ),
+                                name: "idx1",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            columns: [
+                                Identifier {
+                                    span: Some(
+                                        73..74,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                Identifier {
+                                    span: Some(
+                                        75..76,
+                                    ),
+                                    name: "b",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ],
+                            sync_creation: true,
+                            index_options: {
+                                "tokenizer": "chinese",
+                            },
+                        },
+                    ],
+                ),
             ),
         ),
         engine: None,
@@ -2205,6 +2319,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -2278,6 +2393,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -2657,6 +2773,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -2800,6 +2917,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4203,6 +4321,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4282,6 +4401,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4342,6 +4462,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4400,6 +4521,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -11464,6 +11586,7 @@ CreateTable(
                         ),
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -17399,6 +17522,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         cluster_by: [],
@@ -17542,6 +17666,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         cluster_by: [
@@ -17726,6 +17851,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         cluster_by: [
@@ -17953,6 +18079,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         cluster_by: [

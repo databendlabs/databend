@@ -1470,11 +1470,17 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_create_table_source(&mut self, source: &'ast CreateTableSource) {
         match source {
-            CreateTableSource::Columns(columns) => {
+            CreateTableSource::Columns(columns, inverted_indexes) => {
                 let mut children = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     self.visit_column_definition(column);
                     children.push(self.children.pop().unwrap());
+                }
+                if let Some(inverted_indexes) = inverted_indexes {
+                    for inverted_index in inverted_indexes {
+                        self.visit_inverted_index_definition(inverted_index);
+                        children.push(self.children.pop().unwrap());
+                    }
                 }
                 let name = "ColumnsDefinition".to_string();
                 let format_ctx = AstFormatContext::with_children(name, children.len());
@@ -1504,6 +1510,26 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let name = format!("ColumnDefinition {}", column_definition.name);
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![type_node]);
+        self.children.push(node);
+    }
+
+    fn visit_inverted_index_definition(
+        &mut self,
+        inverted_index_definition: &'ast InvertedIndexDefinition,
+    ) {
+        let mut column_nodes = Vec::with_capacity(inverted_index_definition.columns.len());
+        for column in &inverted_index_definition.columns {
+            let column_name = format!("Column {}", column);
+            let column_format_ctx = AstFormatContext::new(column_name);
+            let column_node = FormatTreeNode::new(column_format_ctx);
+            column_nodes.push(column_node);
+        }
+        let name = format!(
+            "InvertedIndexDefinition {}",
+            inverted_index_definition.index_name
+        );
+        let format_ctx = AstFormatContext::with_children(name, column_nodes.len());
+        let node = FormatTreeNode::with_children(format_ctx, column_nodes);
         self.children.push(node);
     }
 
