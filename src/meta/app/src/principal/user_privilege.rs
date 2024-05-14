@@ -170,6 +170,9 @@ impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
             databend_common_ast::ast::UserPrivilegeType::CreateDatabase => {
                 UserPrivilegeType::CreateDatabase
             }
+            databend_common_ast::ast::UserPrivilegeType::CreateTask => {
+                UserPrivilegeType::CreateTask
+            }
             databend_common_ast::ast::UserPrivilegeType::Set => UserPrivilegeType::Set,
         }
     }

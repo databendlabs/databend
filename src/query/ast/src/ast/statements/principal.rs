@@ -156,6 +156,8 @@ pub enum UserPrivilegeType {
     Write,
     // Privilege to Create database
     CreateDatabase,
+    // Privilege to Create database
+    CreateTask,
     // Discard Privilege Type
     Set,
 }
@@ -184,6 +186,7 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",
             UserPrivilegeType::CreateDatabase => "CREATE DATABASE",
+            UserPrivilegeType::CreateTask => "CREATE TASK",
         })
     }
 }
