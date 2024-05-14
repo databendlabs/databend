@@ -14,6 +14,7 @@ test = true
 storage-hdfs = []
 
 [dependencies]
+databend-common-ast = { path = "../../query/ast" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-expression = { path = "../../query/expression" }
 databend-common-io = { path = "../../common/io" }

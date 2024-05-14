@@ -18,8 +18,6 @@ use std::fmt::Display;
 
 use databend_common_exception::Result;
 use databend_common_exception::Span;
-use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::UserIdentity;
 use itertools::Itertools;
 
 use crate::ast::*;
@@ -2000,11 +1998,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_create_user(&mut self, stmt: &'ast CreateUserStmt) {
         let mut children = Vec::new();
-        let user_name = format!("User {}", stmt.user.display());
+        let user_name = format!("User {}", stmt.user);
         let user_format_ctx = AstFormatContext::new(user_name);
         children.push(FormatTreeNode::new(user_format_ctx));
         if let Some(auth_type) = &stmt.auth_option.auth_type {
-            let auth_type_name = format!("AuthType {}", auth_type.to_str());
+            let auth_type_name = format!("AuthType {}", auth_type);
             let auth_type_format_ctx = AstFormatContext::new(auth_type_name);
             children.push(FormatTreeNode::new(auth_type_format_ctx));
         }
@@ -2039,13 +2037,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_alter_user(&mut self, stmt: &'ast AlterUserStmt) {
         let mut children = Vec::new();
         if let Some(user) = &stmt.user {
-            let user_name = format!("User {}", user.display());
+            let user_name = format!("User {}", user);
             let user_format_ctx = AstFormatContext::new(user_name);
             children.push(FormatTreeNode::new(user_format_ctx));
         }
         if let Some(auth_option) = &stmt.auth_option {
             if let Some(auth_type) = &auth_option.auth_type {
-                let auth_type_name = format!("AuthType {}", auth_type.to_str());
+                let auth_type_name = format!("AuthType {}", auth_type);
                 let auth_type_format_ctx = AstFormatContext::new(auth_type_name);
                 children.push(FormatTreeNode::new(auth_type_format_ctx));
             }
@@ -2079,7 +2077,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_drop_user(&mut self, _if_exists: bool, user: &'ast UserIdentity) {
-        let user_name = format!("User {}", user.display());
+        let user_name = format!("User {}", user);
         let user_format_ctx = AstFormatContext::new(user_name);
         let child = FormatTreeNode::new(user_format_ctx);
 
@@ -2144,7 +2142,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
         };
         let principal_name = match &grant.principal {
-            PrincipalIdentity::User(user) => format!("User {}", user.display()),
+            PrincipalIdentity::User(user) => format!("User {}", user),
             PrincipalIdentity::Role(role) => format!("Role {}", role),
         };
         let principal_format_ctx = AstFormatContext::new(principal_name);
@@ -2160,7 +2158,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let mut children = Vec::new();
         if let Some(principal) = &principal {
             let principal_name = match principal {
-                PrincipalIdentity::User(user) => format!("User {}", user.display()),
+                PrincipalIdentity::User(user) => format!("User {}", user),
                 PrincipalIdentity::Role(role) => format!("Role {}", role),
             };
             let principal_format_ctx = AstFormatContext::new(principal_name);
@@ -2198,7 +2196,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
         };
         let principal_name = match &revoke.principal {
-            PrincipalIdentity::User(user) => format!("User {}", user.display()),
+            PrincipalIdentity::User(user) => format!("User {}", user),
             PrincipalIdentity::Role(role) => format!("Role {}", role),
         };
         let principal_format_ctx = AstFormatContext::new(principal_name);

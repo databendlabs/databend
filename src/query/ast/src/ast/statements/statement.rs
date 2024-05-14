@@ -16,9 +16,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_io::escape_string_with_quote;
-use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
@@ -28,6 +25,7 @@ use super::*;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::task::CreateTaskStmt;
+use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -186,7 +184,6 @@ pub enum Statement {
     DropUser {
         #[drive(skip)]
         if_exists: bool,
-        #[drive(skip)]
         user: UserIdentity,
     },
     ShowRoles,
@@ -204,7 +201,6 @@ pub enum Statement {
     },
     Grant(GrantStmt),
     ShowGrants {
-        #[drive(skip)]
         principal: Option<PrincipalIdentity>,
     },
     Revoke(RevokeStmt),
@@ -251,7 +247,6 @@ pub enum Statement {
 
     // UserDefinedFileFormat
     CreateFileFormat {
-        #[drive(skip)]
         create_option: CreateOption,
         #[drive(skip)]
         name: String,
@@ -587,7 +582,7 @@ impl Display for Statement {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", user.display())?;
+                write!(f, " {}", user)?;
             }
             Statement::CreateRole {
                 if_not_exists,

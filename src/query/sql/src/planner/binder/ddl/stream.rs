@@ -67,7 +67,7 @@ impl Binder {
         };
 
         let plan = CreateStreamPlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             tenant,
             catalog,
             database,
