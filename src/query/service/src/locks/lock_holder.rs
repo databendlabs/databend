@@ -76,7 +76,7 @@ impl LockHolder {
         )
         .await?;
 
-        GlobalIORuntime::instance().spawn(query_id.clone(), {
+        GlobalIORuntime::instance().spawn({
             let self_clone = self.clone();
             async move {
                 let mut notified = Box::pin(self_clone.shutdown_notify.notified());

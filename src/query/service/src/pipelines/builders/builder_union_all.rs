@@ -62,7 +62,6 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(UnionReceiveSink::create(
                 Some(tx.clone()),
                 input_port,
-                self.ctx.clone(),
             )))
         })?;
 
