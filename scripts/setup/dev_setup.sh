@@ -154,9 +154,10 @@ function install_python3 {
 
 	# Source the profile to apply changes to the current session
 	source $HOME/.profile
-	# install python3.9
-	pyenv install 3.9
-	pyenv global 3.9
+	pyenv install 3.12.2
+	pyenv global 3.12.2
+	
+	pip install --upgrade pip setuptools
 }
 
 function install_openssl {
