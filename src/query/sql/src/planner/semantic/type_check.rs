@@ -3537,7 +3537,7 @@ impl<'a> TypeChecker<'a> {
                 .await
                 .map_err(|err| {
                     ErrorCode::SemanticError(format!(
-                        "Failed to resolve WASM code location {:#?}: {}",
+                        "Failed to resolve WASM code location {:?}: {}",
                         &udf_definition.code, err
                     ))
                 })?;

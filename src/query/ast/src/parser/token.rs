@@ -980,6 +980,8 @@ pub enum TokenKind {
     SET,
     #[token("UNSET", ignore(ascii_case))]
     UNSET,
+    #[token("SESSION", ignore(ascii_case))]
+    SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
     #[token("STAGES", ignore(ascii_case))]

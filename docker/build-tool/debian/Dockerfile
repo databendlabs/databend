@@ -1,4 +1,4 @@
-FROM debian:bullseye
+FROM python:3.12-bullseye
 
 ENV TERM=dumb
 ENV DEBIAN_FRONTEND=noninteractive

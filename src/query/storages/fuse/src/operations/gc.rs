@@ -181,10 +181,10 @@ impl FuseTable {
             {
                 read_snapshot_count += chunk.len();
                 let status = format!(
-                    "gc: read snapshot files:{}/{}, cost:{} sec",
+                    "gc: read snapshot files:{}/{}, cost:{:?}",
                     read_snapshot_count,
                     snapshot_files.len(),
-                    counter.start.elapsed().as_secs()
+                    counter.start.elapsed()
                 );
                 ctx.set_status_info(&status);
             }
@@ -461,10 +461,10 @@ impl FuseTable {
             {
                 count += chunk.len();
                 let status = format!(
-                    "gc: read purged segment files:{}/{}, cost:{} sec",
+                    "gc: read purged segment files:{}/{}, cost:{:?}",
                     count,
                     segment_locations.len(),
-                    counter.start.elapsed().as_secs()
+                    counter.start.elapsed()
                 );
                 ctx.set_status_info(&status);
             }
@@ -656,13 +656,13 @@ impl FuseTable {
         // 5. Refresh status.
         {
             let status = format!(
-                "gc: block files purged:{}, bloom files purged:{}, segment files purged:{}, table statistic files purged:{}, snapshots purged:{}, take:{} sec",
+                "gc: block files purged:{}, bloom files purged:{}, segment files purged:{}, table statistic files purged:{}, snapshots purged:{}, take:{:?}",
                 counter.blocks,
                 counter.blooms,
                 counter.segments,
                 counter.table_statistics,
                 counter.snapshots,
-                counter.start.elapsed().as_secs()
+                counter.start.elapsed()
             );
             ctx.set_status_info(&status);
         }

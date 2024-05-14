@@ -294,9 +294,9 @@ impl Table for ParquetRSTable {
         .await?;
         let elapsed = now.elapsed();
         log::info!(
-            "end read {} parquet file metas, use {} secs",
+            "end read {} parquet file metas, use {:?}",
             file_locations.len(),
-            elapsed.as_secs_f32()
+            elapsed
         );
 
         let provider = create_stats_provider(&metas, num_columns);

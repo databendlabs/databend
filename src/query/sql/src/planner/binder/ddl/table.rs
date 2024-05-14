@@ -697,7 +697,7 @@ impl Binder {
         // keep a copy of table data uri_location, will be used in "show create table"
         options.insert(
             OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
-            format!("{:#}", stmt.uri_location),
+            format!("{}", stmt.uri_location.mask()),
         );
 
         let mut uri = stmt.uri_location.clone();

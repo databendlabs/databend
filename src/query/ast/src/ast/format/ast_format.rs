@@ -1048,7 +1048,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt) {
-        let name = format!("UnSet {}", stmt);
+        let name = if stmt.session_level {
+            format!("UnSet SESSION {}", stmt)
+        } else {
+            format!("UnSet {}", stmt)
+        };
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
