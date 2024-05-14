@@ -180,7 +180,7 @@ impl Interpreter for ExplainInterpreter {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
                 let pipeline = match &self.plan {
-                    Plan::Query { .. } => {
+                    Plan::Query { .. } | Plan::MergeInto(_) => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
                         interpter.execute2().await?
