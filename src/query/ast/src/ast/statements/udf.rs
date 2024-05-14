@@ -15,11 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
+use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::TypeName;
@@ -102,7 +102,6 @@ impl Display for UDFDefinition {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateUDFStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub udf_name: Identifier,
     #[drive(skip)]

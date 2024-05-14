@@ -19,7 +19,6 @@ ignored = ["geos"]
 databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-io = { path = "../../common/io" }
-databend-common-meta-app = { path = "../../meta/app" }
 
 # Crates.io dependencies
 derive-visitor = { workspace = true }
