@@ -345,7 +345,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("load_file_metadata_expire_hours", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(24 * 7),
+                    value: UserSettingValue::UInt64(24),
                     desc: "Sets the hours that the metadata of files you load data from with COPY INTO will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
