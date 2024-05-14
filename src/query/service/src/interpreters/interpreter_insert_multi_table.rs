@@ -209,6 +209,8 @@ impl InsertMultiTableInterpreter {
             deduplicated_label: None,
             targets: deduplicated_serializable_tables,
         }));
+        let mut next_plan_id = 0;
+        root.adjust_plan_id(&mut next_plan_id);
         Ok(root)
     }
 
