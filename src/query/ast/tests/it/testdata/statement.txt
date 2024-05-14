@@ -2566,10 +2566,22 @@ CreateDatabase(
         options: [],
         from_share: Some(
             ShareNameIdent {
-                tenant: Tenant {
-                    tenant: "a",
+                tenant: Identifier {
+                    span: Some(
+                        29..30,
+                    ),
+                    name: "a",
+                    quote: None,
+                    is_hole: false,
                 },
-                name: "s",
+                share: Identifier {
+                    span: Some(
+                        31..32,
+                    ),
+                    name: "s",
+                    quote: None,
+                    is_hole: false,
+                },
             },
         ),
     },
@@ -14220,7 +14232,14 @@ GrantShareObject(
             is_hole: false,
         },
         object: Database(
-            "db1",
+            Identifier {
+                span: Some(
+                    24..27,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
         ),
         privilege: Usage,
     },
@@ -14243,8 +14262,22 @@ GrantShareObject(
             is_hole: false,
         },
         object: Table(
-            "db1",
-            "tb1",
+            Identifier {
+                span: Some(
+                    22..25,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
+            Identifier {
+                span: Some(
+                    26..29,
+                ),
+                name: "tb1",
+                quote: None,
+                is_hole: false,
+            },
         ),
         privilege: Select,
     },
@@ -14464,7 +14497,14 @@ RevokeShareObject(
             is_hole: false,
         },
         object: Database(
-            "db1",
+            Identifier {
+                span: Some(
+                    25..28,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
         ),
         privilege: Usage,
     },
@@ -14487,8 +14527,22 @@ RevokeShareObject(
             is_hole: false,
         },
         object: Table(
-            "db1",
-            "tb1",
+            Identifier {
+                span: Some(
+                    23..26,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
+            Identifier {
+                span: Some(
+                    27..30,
+                ),
+                name: "tb1",
+                quote: None,
+                is_hole: false,
+            },
         ),
         privilege: Select,
     },
@@ -14668,8 +14722,22 @@ SHOW GRANTS ON TABLE db1.tb1
 ShowObjectGrantPrivileges(
     ShowObjectGrantPrivilegesStmt {
         object: Table(
-            "db1",
-            "tb1",
+            Identifier {
+                span: Some(
+                    21..24,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
+            Identifier {
+                span: Some(
+                    25..28,
+                ),
+                name: "tb1",
+                quote: None,
+                is_hole: false,
+            },
         ),
     },
 )
@@ -14683,7 +14751,14 @@ SHOW GRANTS ON DATABASE db
 ShowObjectGrantPrivileges(
     ShowObjectGrantPrivilegesStmt {
         object: Database(
-            "db",
+            Identifier {
+                span: Some(
+                    24..26,
+                ),
+                name: "db",
+                quote: None,
+                is_hole: false,
+            },
         ),
     },
 )

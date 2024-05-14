@@ -16,10 +16,10 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::CreateOption;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -29,7 +29,6 @@ pub struct CreateConnectionStmt {
     pub storage_type: String,
     #[drive(skip)]
     pub storage_params: BTreeMap<String, String>,
-    #[drive(skip)]
     pub create_option: CreateOption,
 }
 

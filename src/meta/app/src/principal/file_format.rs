@@ -18,6 +18,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+use databend_common_ast::ast::FileFormatOptions;
+use databend_common_ast::ast::FileFormatValue;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
@@ -45,63 +47,6 @@ const NULL_FIELD_AS: &str = "null_field_as";
 const NULL_IF: &str = "null_if";
 const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
 const OPT_BINARY_FORMAT: &str = "binary_format";
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileFormatOptionsAst {
-    pub options: BTreeMap<String, String>,
-}
-
-impl FileFormatOptionsAst {
-    pub fn new(options: BTreeMap<String, String>) -> Self {
-        FileFormatOptionsAst { options }
-    }
-
-    fn take_string(&mut self, key: &str, default: String) -> String {
-        self.options.remove(key).unwrap_or(default)
-    }
-
-    fn take_type(&mut self) -> Result<StageFileFormatType> {
-        match (self.options.remove("type"), self.options.remove("format")) {
-            (Some(t), None) | (None, Some(t)) => {
-                StageFileFormatType::from_str(&t).map_err(ErrorCode::IllegalFileFormat)
-            }
-            (Some(_), Some(_)) => Err(ErrorCode::IllegalFileFormat(
-                "Invalid FILE_FORMAT options: both TYPE and FORMAT option are present. \
-                Please only use the TYPE to specify the file format type. The FORMAT option is deprecated.",
-            )),
-            (None, None) => Err(ErrorCode::IllegalFileFormat(
-                "Invalid FILE_FORMAT options: FILE_FORMAT must include at least one of the TYPE or NAME option. \
-                Currently, neither is specified.",
-            )),
-        }
-    }
-
-    fn take_compression(&mut self) -> Result<StageFileCompression> {
-        match self.options.remove("compression") {
-            Some(c) => StageFileCompression::from_str(&c).map_err(ErrorCode::IllegalFileFormat),
-            None => Ok(StageFileCompression::None),
-        }
-    }
-
-    fn take_u64(&mut self, key: &str, default: u64) -> Result<u64> {
-        match self.options.remove(key) {
-            Some(v) => Ok(u64::from_str(&v)?),
-            None => Ok(default),
-        }
-    }
-
-    fn take_bool(&mut self, key: &str, default: bool) -> Result<bool> {
-        match self.options.remove(key) {
-            Some(v) => Ok(bool::from_str(&v.to_lowercase()).map_err(|_| {
-                ErrorCode::IllegalFileFormat(format!(
-                    "Invalid boolean value {} for option {}.",
-                    v, key
-                ))
-            })?),
-            None => Ok(default),
-        }
-    }
-}
 
 /// File format parameters after checking and parsing.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -159,28 +104,27 @@ impl FileFormatParams {
         }
     }
 
-    pub fn try_from_ast(ast: FileFormatOptionsAst, old: bool) -> Result<Self> {
-        let mut ast = ast;
-        let typ = ast.take_type()?;
+    pub fn try_from_reader(mut reader: FileFormatOptionsReader, old: bool) -> Result<Self> {
+        let typ = reader.take_type()?;
         let params = match typ {
             StageFileFormatType::Xml => {
                 let default = XmlFileFormatParams::default();
-                let row_tag = ast.take_string(OPT_ROW_TAG, default.row_tag);
-                let compression = ast.take_compression()?;
+                let row_tag = reader.take_string(OPT_ROW_TAG, default.row_tag);
+                let compression = reader.take_compression()?;
                 FileFormatParams::Xml(XmlFileFormatParams {
                     compression,
                     row_tag,
                 })
             }
             StageFileFormatType::Json => {
-                let compression = ast.take_compression()?;
+                let compression = reader.take_compression()?;
                 FileFormatParams::Json(JsonFileFormatParams { compression })
             }
             StageFileFormatType::NdJson => {
-                let compression = ast.take_compression()?;
-                let missing_field_as = ast.options.remove(MISSING_FIELD_AS);
-                let null_field_as = ast.options.remove(NULL_FIELD_AS);
-                let null_if = ast.options.remove(NULL_IF);
+                let compression = reader.take_compression()?;
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                let null_field_as = reader.options.remove(NULL_FIELD_AS);
+                let null_if = reader.options.remove(NULL_IF);
                 let null_if = match null_if {
                     None => {
                         vec![]
@@ -201,39 +145,40 @@ impl FileFormatParams {
                 )?)
             }
             StageFileFormatType::Parquet => {
-                let missing_field_as = ast.options.remove(MISSING_FIELD_AS);
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
                 FileFormatParams::Parquet(ParquetFileFormatParams::try_create(
                     missing_field_as.as_deref(),
                 )?)
             }
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
-                let compression = ast.take_compression()?;
-                let headers = ast.take_u64(OPT_SKIP_HEADER, default.headers)?;
-                let field_delimiter = ast.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
+                let compression = reader.take_compression()?;
+                let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
+                let field_delimiter =
+                    reader.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
                 let record_delimiter =
-                    ast.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
-                let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);
-                let escape = ast.take_string(OPT_ESCAPE, default.escape);
-                let quote = ast.take_string(OPT_QUOTE, default.quote);
-                let null_display = ast.take_string(OPT_NULL_DISPLAY, default.null_display);
-                let empty_field_as = ast
+                    reader.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
+                let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
+                let escape = reader.take_string(OPT_ESCAPE, default.escape);
+                let quote = reader.take_string(OPT_QUOTE, default.quote);
+                let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let empty_field_as = reader
                     .options
                     .remove(OPT_EMPTY_FIELD_AS)
                     .map(|s| EmptyFieldAs::from_str(&s))
                     .transpose()?
                     .unwrap_or_default();
-                let binary_format = ast
+                let binary_format = reader
                     .options
                     .remove(OPT_BINARY_FORMAT)
                     .map(|s| BinaryFormat::from_str(&s))
                     .transpose()?
                     .unwrap_or_default();
-                let error_on_column_count_mismatch = ast.take_bool(
+                let error_on_column_count_mismatch = reader.take_bool(
                     OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
                     default.error_on_column_count_mismatch,
                 )?;
-                let output_header = ast.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
+                let output_header = reader.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
                 FileFormatParams::Csv(CsvFileFormatParams {
                     compression,
                     headers,
@@ -252,14 +197,15 @@ impl FileFormatParams {
             }
             StageFileFormatType::Tsv => {
                 let default = TsvFileFormatParams::default();
-                let compression = ast.take_compression()?;
-                let headers = ast.take_u64(OPT_SKIP_HEADER, default.headers)?;
-                let field_delimiter = ast.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
+                let compression = reader.take_compression()?;
+                let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
+                let field_delimiter =
+                    reader.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
                 let record_delimiter =
-                    ast.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
-                let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);
-                let escape = ast.take_string(OPT_ESCAPE, default.escape);
-                let quote = ast.take_string(OPT_QUOTE, default.quote);
+                    reader.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
+                let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
+                let escape = reader.take_string(OPT_ESCAPE, default.escape);
+                let quote = reader.take_string(OPT_QUOTE, default.quote);
                 FileFormatParams::Tsv(TsvFileFormatParams {
                     compression,
                     headers,
@@ -285,12 +231,12 @@ impl FileFormatParams {
                     params.get_type().to_string()
                 ))
             })?;
-            if ast.options.is_empty() {
+            if reader.options.is_empty() {
                 Ok(params)
             } else {
                 Err(ErrorCode::IllegalFileFormat(format!(
                     "Unsupported options for {:?}:  {:?}",
-                    typ, ast.options
+                    typ, reader.options
                 )))
             }
         }
@@ -342,11 +288,79 @@ impl Default for FileFormatParams {
     }
 }
 
-impl TryFrom<FileFormatOptionsAst> for FileFormatParams {
-    type Error = ErrorCode;
+pub struct FileFormatOptionsReader {
+    pub options: BTreeMap<String, String>,
+}
 
-    fn try_from(ast: FileFormatOptionsAst) -> Result<Self> {
-        FileFormatParams::try_from_ast(ast, false)
+impl FileFormatOptionsReader {
+    pub fn from_ast(options: &FileFormatOptions) -> Self {
+        let options = options
+            .options
+            .iter()
+            .map(|(k, v)| {
+                let v = match v {
+                    FileFormatValue::Keyword(v) => v.clone(),
+                    FileFormatValue::Bool(v) => v.to_string(),
+                    FileFormatValue::U64(v) => v.to_string(),
+                    FileFormatValue::String(v) => v.clone(),
+                    FileFormatValue::StringList(v) => serde_json::to_string(&v).unwrap(),
+                };
+
+                (k.clone(), v)
+            })
+            .collect();
+
+        FileFormatOptionsReader { options }
+    }
+
+    pub fn from_map(options: BTreeMap<String, String>) -> Self {
+        FileFormatOptionsReader { options }
+    }
+
+    fn take_string(&mut self, key: &str, default: String) -> String {
+        self.options.remove(key).unwrap_or(default)
+    }
+
+    fn take_type(&mut self) -> Result<StageFileFormatType> {
+        match (self.options.remove("type"), self.options.remove("format")) {
+            (Some(t), None) | (None, Some(t)) => {
+                StageFileFormatType::from_str(&t).map_err(ErrorCode::IllegalFileFormat)
+            }
+            (Some(_), Some(_)) => Err(ErrorCode::IllegalFileFormat(
+                "Invalid FILE_FORMAT options: both TYPE and FORMAT option are present. \
+                Please only use the TYPE to specify the file format type. The FORMAT option is deprecated.",
+            )),
+            (None, None) => Err(ErrorCode::IllegalFileFormat(
+                "Invalid FILE_FORMAT options: FILE_FORMAT must include at least one of the TYPE or NAME option. \
+                Currently, neither is specified.",
+            )),
+        }
+    }
+
+    fn take_compression(&mut self) -> Result<StageFileCompression> {
+        match self.options.remove("compression") {
+            Some(c) => StageFileCompression::from_str(&c).map_err(ErrorCode::IllegalFileFormat),
+            None => Ok(StageFileCompression::None),
+        }
+    }
+
+    fn take_u64(&mut self, key: &str, default: u64) -> Result<u64> {
+        match self.options.remove(key) {
+            Some(v) => Ok(u64::from_str(&v)?),
+            None => Ok(default),
+        }
+    }
+
+    fn take_bool(&mut self, key: &str, default: bool) -> Result<bool> {
+        match self.options.remove(key) {
+            Some(v) => Ok(bool::from_str(&v.to_lowercase()).map_err(|_| {
+                ErrorCode::IllegalFileFormat(format!(
+                    "Invalid boolean value {} for option {}.",
+                    v, key
+                ))
+            })?),
+            None => Ok(default),
+        }
     }
 }
 

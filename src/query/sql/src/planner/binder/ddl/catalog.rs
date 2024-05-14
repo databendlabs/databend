@@ -104,7 +104,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let meta = self
-            .try_create_meta_from_options(&self.ctx, *catalog_type, options)
+            .try_create_meta_from_options(&self.ctx, catalog_type.clone().into(), options)
             .await?;
 
         Ok(Plan::CreateCatalog(Box::new(CreateCatalogPlan {

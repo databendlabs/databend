@@ -73,7 +73,7 @@ impl Binder {
 
         Ok(Plan::CreateVirtualColumn(Box::new(
             CreateVirtualColumnPlan {
-                create_option: *create_option,
+                create_option: create_option.clone().into(),
                 catalog,
                 database,
                 table,

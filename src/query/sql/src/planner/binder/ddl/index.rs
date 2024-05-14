@@ -215,7 +215,7 @@ impl Binder {
         Self::rewrite_query_with_database(&mut query, table_entry.database());
 
         let plan = CreateIndexPlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             index_type: *index_type,
             index_name,
             original_query: original_query.to_string(),
@@ -414,7 +414,7 @@ impl Binder {
         let index_name = self.normalize_object_identifier(index_name);
 
         let plan = CreateTableIndexPlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             catalog,
             index_name,
             column_ids,

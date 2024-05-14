@@ -23,6 +23,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
@@ -117,7 +119,10 @@ impl Binder {
                 on_error_mode,
                 start,
             } => {
-                let params = settings.to_meta_ast().try_into()?;
+                let params = FileFormatParams::try_from_reader(
+                    FileFormatOptionsReader::from_ast(&settings),
+                    false,
+                )?;
                 Ok(InsertInputSource::StreamingWithFileFormat {
                     format: params,
                     start,
