@@ -288,7 +288,7 @@ pub struct AggregateQuantileTDigestFunction<T> {
 impl<T> Display for AggregateQuantileTDigestFunction<T>
 where T: Number + AsPrimitive<f64>
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }

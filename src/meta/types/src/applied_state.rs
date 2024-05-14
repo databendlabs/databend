@@ -47,7 +47,7 @@ pub enum AppliedState {
 }
 
 impl fmt::Display for AppliedState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "AppliedState: ")?;
         match self {
             AppliedState::Node { prev, result } => {

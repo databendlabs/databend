@@ -46,7 +46,7 @@ pub enum SpillerType {
 }
 
 impl Display for SpillerType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SpillerType::HashJoinBuild => write!(f, "HashJoinBuild"),
             SpillerType::HashJoinProbe => write!(f, "HashJoinProbe"),

@@ -33,7 +33,7 @@ pub struct HintItem {
 }
 
 impl Display for Hint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "/*+ ")?;
         for hint in &self.hints_list {
             write!(f, "SET_VAR(")?;

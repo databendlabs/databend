@@ -56,7 +56,7 @@ impl Node {
 }
 
 impl fmt::Display for Node {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let grpc_addr_display = if let Some(grpc_addr) = &self.grpc_api_advertise_address {
             grpc_addr.to_string()
         } else {

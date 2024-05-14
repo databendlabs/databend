@@ -83,7 +83,7 @@ impl SingletonType {
 }
 
 impl Debug for SingletonType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Singleton")
             .field("type", &match self {
                 Self::Production => "Production",

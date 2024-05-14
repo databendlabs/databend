@@ -39,7 +39,7 @@ impl DataType for NullType {
 }
 
 impl std::fmt::Debug for NullType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }

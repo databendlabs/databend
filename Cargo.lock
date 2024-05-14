@@ -2969,7 +2969,6 @@ name = "databend-common-ast"
 version = "0.1.0"
 dependencies = [
  "criterion",
- "databend-common-base",
  "databend-common-exception",
  "databend-common-io",
  "derive-visitor",

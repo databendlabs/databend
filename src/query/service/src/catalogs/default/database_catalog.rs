@@ -125,7 +125,7 @@ pub struct DatabaseCatalog {
 }
 
 impl Debug for DatabaseCatalog {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("DefaultCatalog").finish_non_exhaustive()
     }
 }

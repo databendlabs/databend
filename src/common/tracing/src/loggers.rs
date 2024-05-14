@@ -271,7 +271,7 @@ impl<'kvs> KvDisplay<'kvs> {
 }
 
 impl fmt::Display for KvDisplay<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut visitor = KvWriter { writer: f };
         self.kv.visit(&mut visitor).ok();
         Ok(())
