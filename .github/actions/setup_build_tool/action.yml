@@ -29,7 +29,7 @@ runs:
         #!/bin/bash
         script_name=\$(basename "\$0")
         export PYO3_PYTHON=python3.12
-        export PYO3_CROSS_PYTHON_VERSION=python3.12
+        export PYO3_CROSS_PYTHON_VERSION=3.12
         export INTERACTIVE=false
         export TARGET=${{ inputs.target }}
         export CARGO_INCREMENTAL=0
