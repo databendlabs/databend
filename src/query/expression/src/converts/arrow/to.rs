@@ -108,6 +108,7 @@ impl DataBlock {
         {
             let column = entry.value.to_owned().into_column().unwrap();
             let array = column.into_arrow_rs();
+
             // Adjust struct array names
             arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
         }

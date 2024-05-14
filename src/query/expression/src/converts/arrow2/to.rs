@@ -74,6 +74,8 @@ impl From<&DataField> for ArrowField {
     }
 }
 
+// Note: Arrow's data type is not nullable, so we need to explicitly
+// add nullable information to Arrow's field afterwards.
 fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
     match ty {
         TableDataType::Null => ArrowDataType::Null,
