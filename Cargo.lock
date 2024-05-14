@@ -2858,6 +2858,7 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-store",
  "databend-common-meta-types",
+ "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-enterprise-background-service",
