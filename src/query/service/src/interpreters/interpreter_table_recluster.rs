@@ -184,9 +184,8 @@ impl Interpreter for ReclusterTableInterpreter {
             // Status.
             {
                 let status = format!(
-                    "recluster: run recluster tasks:{} times, cost:{} sec",
-                    times,
-                    elapsed_time.as_secs()
+                    "recluster: run recluster tasks:{} times, cost:{:?}",
+                    times, elapsed_time
                 );
                 ctx.set_status_info(&status);
             }
@@ -197,8 +196,8 @@ impl Interpreter for ReclusterTableInterpreter {
 
             if elapsed_time >= timeout {
                 warn!(
-                    "Recluster stopped because the runtime was over {} secs",
-                    timeout.as_secs()
+                    "Recluster stopped because the runtime was over {:?}",
+                    timeout
                 );
                 break;
             }

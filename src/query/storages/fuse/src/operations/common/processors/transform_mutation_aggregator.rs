@@ -136,10 +136,10 @@ impl TableMutationAggregator {
         // Refresh status
         {
             let status = format!(
-                "{}: run tasks:{}, cost:{} sec",
+                "{}: run tasks:{}, cost:{:?}",
                 self.kind,
                 self.finished_tasks,
-                self.start_time.elapsed().as_secs()
+                self.start_time.elapsed()
             );
             self.ctx.set_status_info(&status);
         }
@@ -262,11 +262,11 @@ impl TableMutationAggregator {
                     {
                         count += chunk.len();
                         let status = format!(
-                            "{}: generate new segment files:{}/{}, cost:{} sec",
+                            "{}: generate new segment files:{}/{}, cost:{:?}",
                             self.kind,
                             count,
                             segment_indices.len(),
-                            start.elapsed().as_secs()
+                            start.elapsed()
                         );
                         self.ctx.set_status_info(&status);
                     }
