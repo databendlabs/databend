@@ -47,7 +47,7 @@ statement ok
 CREATE VIEW v1 AS SELECT * FROM t1
 
 onlyif http
-query VVVVV
+query TTTTT
 DESCRIBE VIEW v1
 ----
 a BIGINT YES NULL (empty)
@@ -58,7 +58,7 @@ e DATE NO '1970-01-01' (empty)
 f VARCHAR NO '' (empty)
 
 onlyif http
-query VVVVV
+query TTTTT
 DESC VIEW v1
 ----
 a BIGINT YES NULL (empty)
@@ -69,8 +69,8 @@ e DATE NO '1970-01-01' (empty)
 f VARCHAR NO '' (empty)
 
 
-query VVV
-select column_name, nullable, is_nullable from INFORMATION_SCHEMA.COLUMNS where table_name='tables_with_history' and column_name in ('num_rows', 'dropped_on') order by column_name
+query TTT
+select column_name, nullable, is_nullable from INFORMATION_SCHEMA.COLUMNS where table_schema='system' and table_name='tables_with_history' and column_name in ('num_rows', 'dropped_on') order by column_name
 ----
 dropped_on 1 YES
 num_rows 1 YES
@@ -115,21 +115,21 @@ statement ok
 CREATE VIEW v3 AS SELECT * FROM v2 UNION ALL select * from v1
 
 onlyif http
-query VVVVV
+query TTTTT
 DESC VIEW v1
 ----
 c1 VARCHAR YES NULL (empty)
 c2 VARCHAR YES NULL (empty)
 
 onlyif http
-query VVVVV
+query TTTTT
 DESC VIEW v2
 ----
 v2_c1 VARCHAR YES NULL (empty)
 v2_c2 VARCHAR YES NULL (empty)
 
 onlyif http
-query VVVVV
+query TTTTT
 DESC VIEW v3
 ----
 v2_c1 VARCHAR YES NULL (empty)
