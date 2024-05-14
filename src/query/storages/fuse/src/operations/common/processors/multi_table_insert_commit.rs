@@ -118,11 +118,6 @@ impl AsyncSink for CommitMultiTableInsert {
                 let mut backoff = set_backoff(None, None, None);
                 let mut retries = 0;
 
-                let target_table_names = self
-                    .tables
-                    .values()
-                    .map(|t| t.get_table_info().name.clone())
-                    .collect::<Vec<_>>();
                 loop {
                     let update_multi_table_meta_req = UpdateMultiTableMetaReq {
                         update_table_metas: update_table_meta_reqs.clone(),
@@ -137,17 +132,23 @@ impl AsyncSink for CommitMultiTableInsert {
                     if update_failed_tbls.is_empty() {
                         return Ok(());
                     }
+                    let update_failed_tbls_name: Vec<String> = update_failed_tbls
+                        .iter()
+                        .map(|tid| self.tables.get(tid).unwrap().get_table_info().name.clone())
+                        .collect();
                     match backoff.next_backoff() {
                         Some(duration) => {
                             retries += 1;
+
                             debug!(
-                                "The commit process of multi-table insert will be retried after {} ms, retrying {} times, target table names {:?}",
+                                "Failed to update tables: {:?}, the commit process of multi-table insert will be retried after {} ms, retrying {} times",
+                                update_failed_tbls_name,
                                 duration.as_millis(),
                                 retries,
-                                target_table_names
                             );
                             databend_common_base::base::tokio::time::sleep(duration).await;
-                            update_table_meta_reqs.clear();
+                            update_table_meta_reqs
+                                .retain(|req| !update_failed_tbls.contains(&req.table_id));
                             for tid in update_failed_tbls {
                                 let table = self.tables.get_mut(&tid).unwrap();
                                 *table = table.refresh(self.ctx.as_ref()).await?;
@@ -167,7 +168,7 @@ impl AsyncSink for CommitMultiTableInsert {
                                 Instant::now()
                                     .duration_since(backoff.start_time)
                                     .as_millis(),
-                                target_table_names,
+                                update_failed_tbls_name,
                             )));
                         }
                     }
