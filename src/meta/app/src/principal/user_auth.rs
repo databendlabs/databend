@@ -32,8 +32,9 @@ pub enum AuthType {
     JWT,
 }
 
-impl std::str::FromStr for AuthType {
+impl FromStr for AuthType {
     type Err = ErrorCode;
+
     fn from_str(s: &str) -> Result<Self> {
         match s {
             SHA256_PASSWORD_STR => Ok(AuthType::Sha256Password),
@@ -75,6 +76,17 @@ impl AuthType {
             AuthType::Sha256Password => Some(PasswordHashMethod::Sha256),
             AuthType::DoubleSha1Password => Some(PasswordHashMethod::DoubleSha1),
             _ => None,
+        }
+    }
+}
+
+impl From<databend_common_ast::ast::AuthType> for AuthType {
+    fn from(t: databend_common_ast::ast::AuthType) -> Self {
+        match t {
+            databend_common_ast::ast::AuthType::NoPassword => AuthType::NoPassword,
+            databend_common_ast::ast::AuthType::Sha256Password => AuthType::Sha256Password,
+            databend_common_ast::ast::AuthType::DoubleSha1Password => AuthType::DoubleSha1Password,
+            databend_common_ast::ast::AuthType::JWT => AuthType::JWT,
         }
     }
 }

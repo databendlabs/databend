@@ -80,7 +80,6 @@ impl ExchangeSink {
                 pipeline.try_resize(1)?;
                 assert_eq!(senders.len(), 1);
                 pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(
-                    ctx.clone(),
                     senders.remove(0),
                     params.ignore_exchange,
                     &params.destination_id,
@@ -98,7 +97,6 @@ impl ExchangeSink {
 
                 for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
                     items.push(create_writer_item(
-                        ctx.clone(),
                         sender,
                         false,
                         destination_id,

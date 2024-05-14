@@ -17,6 +17,7 @@ use std::convert::TryFrom;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::ast::UserOptionItem;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enumflags2::bitflags;
@@ -158,13 +159,9 @@ impl TryFrom<Vec<u8>> for UserInfo {
 #[serde(default)]
 pub struct UserOption {
     flags: BitFlags<UserOptionFlag>,
-
     default_role: Option<String>,
-
     network_policy: Option<String>,
-
     password_policy: Option<String>,
-
     disabled: Option<bool>,
 }
 
@@ -271,6 +268,24 @@ impl UserOption {
 
     pub fn has_option_flag(&self, flag: UserOptionFlag) -> bool {
         self.flags.contains(flag)
+    }
+
+    pub fn apply(&mut self, alter: &UserOptionItem) {
+        match alter {
+            UserOptionItem::TenantSetting(enabled) => {
+                if *enabled {
+                    self.flags.insert(UserOptionFlag::TenantSetting);
+                } else {
+                    self.flags.remove(UserOptionFlag::TenantSetting);
+                }
+            }
+            UserOptionItem::DefaultRole(v) => self.default_role = Some(v.clone()),
+            UserOptionItem::SetNetworkPolicy(v) => self.network_policy = Some(v.clone()),
+            UserOptionItem::UnsetNetworkPolicy => self.network_policy = None,
+            UserOptionItem::SetPasswordPolicy(v) => self.password_policy = Some(v.clone()),
+            UserOptionItem::UnsetPasswordPolicy => self.password_policy = None,
+            UserOptionItem::Disabled(v) => self.disabled = Some(*v),
+        }
     }
 }
 

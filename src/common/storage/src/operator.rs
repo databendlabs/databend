@@ -24,7 +24,6 @@ use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig;
@@ -136,7 +135,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add async backtrace
         .layer(AsyncBacktraceLayer)
         // Add logging
-        .layer(LoggingLayer::default())
+        .layer(LoggingLayer::default().with_backtrace_output(true))
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
@@ -467,7 +466,7 @@ impl DataOperator {
         // IO hang on reuse connection.
         let op = operator.clone();
         if let Err(cause) = GlobalIORuntime::instance()
-            .spawn(GLOBAL_TASK, async move {
+            .spawn(async move {
                 let res = op.stat("/").await;
                 match res {
                     Ok(_) => Ok(()),

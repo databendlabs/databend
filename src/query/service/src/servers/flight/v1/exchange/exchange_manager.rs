@@ -26,7 +26,6 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -193,7 +192,7 @@ impl DataExchangeManager {
             task.await
         } else {
             GlobalIORuntime::instance()
-                .spawn(GLOBAL_TASK, task)
+                .spawn(task)
                 .await
                 .expect("create client future must be joined successfully")
         }

@@ -548,7 +548,6 @@ impl ScheduleQueue {
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
             let process_future = proc.processor.async_process();
             executor.async_runtime.spawn(
-                query_id.as_ref().clone(),
                 ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
@@ -664,7 +663,6 @@ impl ScheduleQueue {
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
             let process_future = proc.processor.async_process();
             executor.async_runtime.spawn(
-                query_id.as_ref().clone(),
                 ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,

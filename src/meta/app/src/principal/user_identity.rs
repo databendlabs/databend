@@ -85,3 +85,9 @@ impl KeyCodec for UserIdentity {
         Self::parse(&s)
     }
 }
+
+impl From<databend_common_ast::ast::UserIdentity> for UserIdentity {
+    fn from(user: databend_common_ast::ast::UserIdentity) -> Self {
+        UserIdentity::new(user.username, user.hostname)
+    }
+}

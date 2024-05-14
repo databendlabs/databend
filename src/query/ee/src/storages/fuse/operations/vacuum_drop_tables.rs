@@ -74,10 +74,10 @@ pub async fn do_vacuum_drop_table(
         };
 
         info!(
-            "vacuum drop table {:?} dir {:?}, cost:{} sec",
+            "vacuum drop table {:?} dir {:?}, cost:{:?}",
             table_info.name,
             dir,
-            start.elapsed().as_secs()
+            start.elapsed()
         );
     }
     Ok(if dry_run_limit.is_some() {
@@ -150,9 +150,9 @@ pub async fn do_vacuum_drop_tables(
     };
 
     info!(
-        "do_vacuum_drop_tables {} tables, cost:{} sec",
+        "do_vacuum_drop_tables {} tables, cost:{:?}",
         tables_len,
-        start.elapsed().as_secs()
+        start.elapsed()
     );
 
     Ok(result)

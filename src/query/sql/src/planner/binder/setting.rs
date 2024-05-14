@@ -75,17 +75,24 @@ impl Binder {
         _bind_context: &BindContext,
         stmt: &UnSetStmt,
     ) -> Result<Plan> {
+        let session_level = stmt.session_level;
         match &stmt.source {
             UnSetSource::Var { variable } => {
                 let vars = vec![variable.name.to_lowercase()];
-                Ok(Plan::UnSetVariable(Box::new(UnSettingPlan { vars })))
+                Ok(Plan::UnSetVariable(Box::new(UnSettingPlan {
+                    session_level,
+                    vars,
+                })))
             }
             UnSetSource::Vars { variables } => {
                 let vars: Vec<String> = variables
                     .iter()
                     .map(|var| var.name.to_lowercase())
                     .collect();
-                Ok(Plan::UnSetVariable(Box::new(UnSettingPlan { vars })))
+                Ok(Plan::UnSetVariable(Box::new(UnSettingPlan {
+                    session_level,
+                    vars,
+                })))
             }
         }
     }
