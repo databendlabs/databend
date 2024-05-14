@@ -118,7 +118,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t_where_optimizer.s:1 (#2) > 0], limit: NONE]
+├── push downs: [filters: [t_where_optimizer.s:a (#2) > 0], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok

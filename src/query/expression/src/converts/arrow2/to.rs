@@ -134,13 +134,16 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
             Box::new(ArrowDataType::LargeBinary),
             None,
         ),
-        TableDataType::Tuple { fields_type, .. } => {
-            let fields = fields_type
+        TableDataType::Tuple {
+            fields_name,
+            fields_type,
+        } => {
+            let fields = fields_name
                 .iter()
-                .enumerate()
-                .map(|(i, ty)| {
+                .zip(fields_type)
+                .map(|(name, ty)| {
                     ArrowField::new(
-                        format!("{}", i + 1),
+                        name.as_str(),
                         table_type_to_arrow_type(ty),
                         ty.is_nullable(),
                     )

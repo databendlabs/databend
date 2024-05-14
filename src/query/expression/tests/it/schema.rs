@@ -63,10 +63,10 @@ fn test_project_schema_from_tuple() -> Result<()> {
     {
         let expect_fields = vec![
             TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::UInt64), 0),
-            TableField::new_from_column_id("b:1:1", TableDataType::Boolean, 1),
-            TableField::new_from_column_id("b:1:2", TableDataType::String, 2),
-            TableField::new_from_column_id("b:2", TableDataType::Number(NumberDataType::Int64), 3),
-            TableField::new_from_column_id("b:1", b1.clone(), 1),
+            TableField::new_from_column_id("b:b1:b11", TableDataType::Boolean, 1),
+            TableField::new_from_column_id("b:b1:b12", TableDataType::String, 2),
+            TableField::new_from_column_id("b:b2", TableDataType::Number(NumberDataType::Int64), 3),
+            TableField::new_from_column_id("b:b1", b1.clone(), 1),
             TableField::new_from_column_id("b", b.clone(), 1),
         ];
 
@@ -88,14 +88,14 @@ fn test_project_schema_from_tuple() -> Result<()> {
         {
             let expected_column_id_field = vec![
                 (0, "a"),
-                (1, "b:1:1"),
-                (2, "b:1:2"),
-                (3, "b:2"),
-                (1, "b:1:1"),
-                (2, "b:1:2"),
-                (1, "b:1:1"),
-                (2, "b:1:2"),
-                (3, "b:2"),
+                (1, "b:b1:b11"),
+                (2, "b:b1:b12"),
+                (3, "b:b2"),
+                (1, "b:b1:b11"),
+                (2, "b:b1:b12"),
+                (1, "b:b1:b11"),
+                (2, "b:b1:b12"),
+                (3, "b:b2"),
             ];
             let leaf_fields = project_schema.leaf_fields();
             for (i, leaf_field) in leaf_fields.iter().enumerate() {
@@ -149,10 +149,10 @@ fn test_project_schema_from_tuple() -> Result<()> {
         let expect_fields = vec![
             TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::UInt64), 0),
             TableField::new_from_column_id("c", TableDataType::Number(NumberDataType::UInt64), 4),
-            TableField::new_from_column_id("b:1:1", TableDataType::Boolean, 5),
-            TableField::new_from_column_id("b:1:2", TableDataType::String, 6),
-            TableField::new_from_column_id("b:2", TableDataType::Number(NumberDataType::Int64), 7),
-            TableField::new_from_column_id("b:1", b1.clone(), 5),
+            TableField::new_from_column_id("b:b1:b11", TableDataType::Boolean, 5),
+            TableField::new_from_column_id("b:b1:b12", TableDataType::String, 6),
+            TableField::new_from_column_id("b:b2", TableDataType::Number(NumberDataType::Int64), 7),
+            TableField::new_from_column_id("b:b1", b1.clone(), 5),
             TableField::new_from_column_id("b", b.clone(), 5),
         ];
         let project_schema = schema.inner_project(&path_indices);
@@ -182,13 +182,13 @@ fn test_project_schema_from_tuple() -> Result<()> {
         let expect_fields = vec![
             TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::UInt64), 0),
             TableField::new_from_column_id("c", TableDataType::Number(NumberDataType::UInt64), 4),
-            TableField::new_from_column_id("b:1:1", TableDataType::Boolean, 5),
-            TableField::new_from_column_id("b:1:2", TableDataType::String, 6),
-            TableField::new_from_column_id("b:2", TableDataType::Number(NumberDataType::Int64), 7),
-            TableField::new_from_column_id("b:1", b1, 5),
+            TableField::new_from_column_id("b:b1:b11", TableDataType::Boolean, 5),
+            TableField::new_from_column_id("b:b1:b12", TableDataType::String, 6),
+            TableField::new_from_column_id("b:b2", TableDataType::Number(NumberDataType::Int64), 7),
+            TableField::new_from_column_id("b:b1", b1, 5),
             TableField::new_from_column_id("b", b, 5),
-            TableField::new_from_column_id("d:1", TableDataType::Number(NumberDataType::Int64), 8),
-            TableField::new_from_column_id("d:2", TableDataType::Number(NumberDataType::Int64), 9),
+            TableField::new_from_column_id("d:d1", TableDataType::Number(NumberDataType::Int64), 8),
+            TableField::new_from_column_id("d:d2", TableDataType::Number(NumberDataType::Int64), 9),
             TableField::new_from_column_id("d", d, 8),
         ];
         let project_schema = schema.inner_project(&path_indices);
@@ -309,39 +309,42 @@ fn test_schema_from_struct() -> Result<()> {
     let expected_fields = vec![
         ("u64", TableDataType::Number(NumberDataType::UInt64)),
         (
-            "tuplearray:1:1",
+            "tuplearray:0:0",
             TableDataType::Number(NumberDataType::UInt64),
         ),
         (
-            "tuplearray:1:2",
+            "tuplearray:0:1",
             TableDataType::Number(NumberDataType::UInt64),
         ),
         (
-            "tuplearray:2:0",
+            "tuplearray:1:0",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+        (
+            "arraytuple:0:0",
             TableDataType::Number(NumberDataType::UInt64),
         ),
         (
             "arraytuple:0:1",
             TableDataType::Number(NumberDataType::UInt64),
         ),
+        ("nullarray:0", TableDataType::Number(NumberDataType::UInt64)),
         (
-            "arraytuple:0:2",
+            "maparray:key",
             TableDataType::Number(NumberDataType::UInt64),
         ),
-        ("nullarray:0", TableDataType::Number(NumberDataType::UInt64)),
-        ("maparray:1", TableDataType::Number(NumberDataType::UInt64)),
-        ("maparray:2", TableDataType::String),
+        ("maparray:value", TableDataType::String),
         (
             "nullu64",
             TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
         ),
         ("u64array:0", TableDataType::Number(NumberDataType::UInt64)),
         (
-            "tuplesimple:1",
+            "tuplesimple:a",
             TableDataType::Number(NumberDataType::Int32),
         ),
         (
-            "tuplesimple:2",
+            "tuplesimple:b",
             TableDataType::Number(NumberDataType::Int32),
         ),
     ];
@@ -402,18 +405,18 @@ fn test_schema_from_struct() -> Result<()> {
     {
         let expected_column_id_field = vec![
             (0, "u64"),
-            (1, "tuplearray:1:1"),
-            (2, "tuplearray:1:2"),
-            (3, "tuplearray:2:0"),
-            (4, "arraytuple:0:1"),
-            (5, "arraytuple:0:2"),
+            (1, "tuplearray:0:0"),
+            (2, "tuplearray:0:1"),
+            (3, "tuplearray:1:0"),
+            (4, "arraytuple:0:0"),
+            (5, "arraytuple:0:1"),
             (6, "nullarray:0"),
-            (7, "maparray:1"),
-            (8, "maparray:2"),
+            (7, "maparray:key"),
+            (8, "maparray:value"),
             (9, "nullu64"),
             (10, "u64array:0"),
-            (11, "tuplesimple:1"),
-            (12, "tuplesimple:2"),
+            (11, "tuplesimple:a"),
+            (12, "tuplesimple:b"),
         ];
         let leaf_fields = schema.leaf_fields();
         for (i, leaf_field) in leaf_fields.iter().enumerate() {
@@ -528,9 +531,9 @@ fn test_schema_modify_field() -> Result<()> {
         let expected_column_id_field = [
             (0, "a"),
             (2, "c"),
-            (3, "s:1:1"),
-            (4, "s:1:2"),
-            (5, "s:2"),
+            (3, "s:0:0"),
+            (4, "s:0:1"),
+            (5, "s:1"),
             (6, "ary:0:0"),
         ];
         let leaf_fields = schema.leaf_fields();
@@ -634,13 +637,13 @@ fn test_leaf_columns_of() -> Result<()> {
 
     assert_eq!(schema.leaf_columns_of(&"a".to_string()), vec![0]);
     assert_eq!(schema.leaf_columns_of(&"b".to_string()), vec![1, 2, 3]);
+    assert_eq!(schema.leaf_columns_of(&"b:b1".to_string()), vec![1, 2]);
     assert_eq!(schema.leaf_columns_of(&"b:1".to_string()), vec![1, 2]);
-    assert_eq!(schema.leaf_columns_of(&"b:1".to_string()), vec![1, 2]);
+    assert_eq!(schema.leaf_columns_of(&"b:b1:b11".to_string()), vec![1]);
     assert_eq!(schema.leaf_columns_of(&"b:1:1".to_string()), vec![1]);
-    assert_eq!(schema.leaf_columns_of(&"b:1:1".to_string()), vec![1]);
+    assert_eq!(schema.leaf_columns_of(&"b:b1:b12".to_string()), vec![2]);
     assert_eq!(schema.leaf_columns_of(&"b:1:2".to_string()), vec![2]);
-    assert_eq!(schema.leaf_columns_of(&"b:1:2".to_string()), vec![2]);
-    assert_eq!(schema.leaf_columns_of(&"b:2".to_string()), vec![3]);
+    assert_eq!(schema.leaf_columns_of(&"b:b2".to_string()), vec![3]);
     assert_eq!(schema.leaf_columns_of(&"b:2".to_string()), vec![3]);
     assert_eq!(schema.leaf_columns_of(&"c".to_string()), vec![4]);
     assert_eq!(schema.leaf_columns_of(&"d".to_string()), vec![5, 6]);

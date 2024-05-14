@@ -349,7 +349,11 @@ impl Metadata {
             };
 
             // TODO handle Tuple inside Array.
-            if let TableDataType::Tuple { fields_type, .. } = field.data_type().remove_nullable() {
+            if let TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = field.data_type().remove_nullable()
+            {
                 self.add_base_table_column(
                     field.name().clone(),
                     field.data_type().clone(),
@@ -361,12 +365,14 @@ impl Metadata {
                 );
 
                 let mut i = fields_type.len();
-                for inner_field_type in fields_type.iter().rev() {
+                for (inner_field_name, inner_field_type) in
+                    fields_name.iter().zip(fields_type.iter()).rev()
+                {
                     i -= 1;
                     let mut inner_indices = indices.clone();
                     inner_indices.push(i);
-                    // use field index as inner name.
-                    let inner_name = format!("{}:{}", field.name(), i + 1);
+                    // create tuple inner field
+                    let inner_name = format!("{}:{}", field.name(), inner_field_name);
                     let inner_field = TableField::new(&inner_name, inner_field_type.clone());
                     fields.push_front((inner_indices, inner_field));
                 }

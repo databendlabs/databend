@@ -154,10 +154,12 @@ fn column_name_paths(projection: &Projection, schema: &TableSchema) -> Vec<Vec<S
                 let mut ty = schema.fields[first_index].data_type().clone();
                 while idx < index_path.len() {
                     match ty.remove_nullable() {
-                        TableDataType::Tuple { fields_type, .. } => {
-                            // use field index as inner name.
+                        TableDataType::Tuple {
+                            fields_name,
+                            fields_type,
+                        } => {
                             let next_index = index_path[idx];
-                            name_path.push(format!("{}", next_index + 1));
+                            name_path.push(fields_name[next_index].clone());
                             ty = fields_type[next_index].clone();
                         }
                         _ => unreachable!(),

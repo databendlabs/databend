@@ -117,16 +117,16 @@ explain select * from t_where_optimizer where s:a > 0
 ----
 Filter
 ├── output columns: [t_where_optimizer.id (#0), t_where_optimizer.s (#1)]
-├── filters: [t_where_optimizer.s:1 (#2) > 0]
+├── filters: [t_where_optimizer.s:a (#2) > 0]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
-    ├── output columns: [id (#0), s (#1), s:1 (#2)]
+    ├── output columns: [id (#0), s (#1), s:a (#2)]
     ├── read rows: 0
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t_where_optimizer.s:1 (#2) > 0], limit: NONE]
+    ├── push downs: [filters: [t_where_optimizer.s:a (#2) > 0], limit: NONE]
     └── estimated rows: 0.00
 
 statement ok
