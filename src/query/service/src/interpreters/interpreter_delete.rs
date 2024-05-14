@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
@@ -129,7 +128,7 @@ impl Interpreter for DeleteInterpreter {
         // check mutability
         tbl.check_mutable()?;
 
-        let selection = if !self.plan.subquery_desc.is_empty() {
+        let selection = if let Some(subquery_desc) = &self.plan.subquery_desc {
             let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
                 return Err(ErrorCode::from_string(format!(
@@ -143,7 +142,7 @@ impl Interpreter for DeleteInterpreter {
             );
             let row_id_column_binding = ColumnBindingBuilder::new(
                 ROW_ID_COL_NAME.to_string(),
-                self.plan.subquery_desc[0].index,
+                subquery_desc.index,
                 Box::new(DataType::Number(NumberDataType::UInt64)),
                 Visibility::InVisible,
             )
@@ -151,21 +150,14 @@ impl Interpreter for DeleteInterpreter {
             .table_name(Some(self.plan.table_name.clone()))
             .table_index(table_index)
             .build();
-            let mut filters = VecDeque::new();
-            for subquery_desc in &self.plan.subquery_desc {
-                let filter = subquery_filter(
-                    self.ctx.clone(),
-                    self.plan.metadata.clone(),
-                    &row_id_column_binding,
-                    subquery_desc,
-                )
-                .await?;
-                filters.push_front(filter);
-            }
-            // Traverse `selection` and put `filters` into `selection`.
-            let mut selection = self.plan.selection.clone().unwrap();
-            replace_subquery(&mut filters, &mut selection)?;
-            Some(selection)
+            let filter = subquery_filter(
+                self.ctx.clone(),
+                self.plan.metadata.clone(),
+                &row_id_column_binding,
+                subquery_desc,
+            )
+            .await?;
+            Some(filter)
         } else {
             self.plan.selection.clone()
         };
@@ -182,13 +174,11 @@ impl Interpreter for DeleteInterpreter {
             }
 
             let mut used_columns = scalar.used_columns().clone();
-            let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
+            let col_indices: Vec<usize> = if let Some(subquery_desc) = &self.plan.subquery_desc {
                 // add scalar.used_columns() but ignore _row_id index
                 let mut col_indices = HashSet::new();
-                for subquery_desc in &self.plan.subquery_desc {
-                    col_indices.extend(subquery_desc.outer_columns.iter());
-                    used_columns.remove(&subquery_desc.index);
-                }
+                col_indices.extend(subquery_desc.outer_columns.iter());
+                used_columns.remove(&subquery_desc.index);
                 col_indices.extend(used_columns.iter());
                 col_indices.into_iter().collect()
             } else {
@@ -238,7 +228,7 @@ impl Interpreter for DeleteInterpreter {
             return Ok(build_res);
         };
 
-        let query_row_id_col = !self.plan.subquery_desc.is_empty();
+        let query_row_id_col = self.plan.subquery_desc.is_some();
         if col_indices.is_empty() && !query_row_id_col {
             // here the situation: filter_expr is not null, but col_indices in empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
@@ -448,58 +438,4 @@ pub async fn subquery_filter(
         params: vec![],
         arguments: vec![array_raw_expr, row_id_expr],
     }))
-}
-
-// return false means that doesnot replace a subquery with filter,
-// in this case we need to replace subquery's parent with filter.
-fn do_replace_subquery(
-    filters: &mut VecDeque<ScalarExpr>,
-    selection: &mut ScalarExpr,
-) -> Result<bool> {
-    let data_type = selection.data_type()?;
-    let mut replace_selection_with_filter = None;
-
-    match selection {
-        ScalarExpr::FunctionCall(func) => {
-            for arg in &mut func.arguments {
-                if !do_replace_subquery(filters, arg)? {
-                    replace_selection_with_filter = Some(filters.pop_back().unwrap());
-                    break;
-                }
-            }
-        }
-        ScalarExpr::UDFCall(udf) => {
-            for arg in &mut udf.arguments {
-                if !do_replace_subquery(filters, arg)? {
-                    replace_selection_with_filter = Some(filters.pop_back().unwrap());
-                    break;
-                }
-            }
-        }
-
-        ScalarExpr::SubqueryExpr { .. } => {
-            if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
-                let filter = filters.pop_back().unwrap();
-                *selection = filter;
-            } else {
-                return Ok(false);
-            }
-        }
-        _ => {}
-    }
-
-    if let Some(filter) = replace_selection_with_filter {
-        *selection = filter;
-        replace_subquery(filters, selection)?;
-    }
-    Ok(true)
-}
-
-pub fn replace_subquery(
-    filters: &mut VecDeque<ScalarExpr>,
-    selection: &mut ScalarExpr,
-) -> Result<()> {
-    let _ = do_replace_subquery(filters, selection)?;
-
-    Ok(())
 }
