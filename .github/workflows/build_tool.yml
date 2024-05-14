@@ -1,20 +1,12 @@
 name: Build Tool
 
-# on:
-  # push:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - "scripts/setup/**"
-  #     - "docker/build-tool/**"
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
+  push:
     branches:
       - main
+    paths:
+      - "scripts/setup/**"
+      - "docker/build-tool/**"
 
 permissions:
   id-token: write
