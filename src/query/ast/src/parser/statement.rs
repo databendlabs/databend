@@ -362,10 +362,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let unset_variable = map(
         rule! {
-            UNSET ~ #unset_source
+            UNSET ~ SESSION? ~ #unset_source
         },
-        |(_, unset_source)| {
+        |(_, opt_session_level, unset_source)| {
             Statement::UnSetVariable(UnSetStmt {
+                session_level: opt_session_level.is_some(),
                 source: unset_source,
             })
         },
