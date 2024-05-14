@@ -16,11 +16,11 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CatalogType;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_string_map;
+use crate::ast::CatalogType;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 

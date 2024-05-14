@@ -19,15 +19,10 @@ use std::fmt::Formatter;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::str::FromStr;
 
 use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_io::escape_string_with_quote;
-use databend_common_meta_app::principal::CopyOptions;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
-use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
@@ -104,36 +99,6 @@ impl CopyIntoTableStmt {
             CopyIntoTableOption::ReturnFailedOnly(v) => self.return_failed_only = v,
             CopyIntoTableOption::OnError(v) => self.on_error = v,
         }
-    }
-
-    pub fn apply_to_copy_option(
-        &self,
-        copy_options: &mut CopyOptions,
-    ) -> databend_common_exception::Result<()> {
-        copy_options.on_error =
-            OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
-
-        if self.size_limit != 0 {
-            copy_options.size_limit = self.size_limit;
-        }
-
-        copy_options.split_size = self.split_size;
-        copy_options.purge = self.purge;
-        copy_options.disable_variant_check = self.disable_variant_check;
-        copy_options.return_failed_only = self.return_failed_only;
-
-        if self.max_files != 0 {
-            copy_options.max_files = self.max_files;
-        }
-
-        if !(copy_options.purge && self.force) && copy_options.max_files > COPY_MAX_FILES_PER_COMMIT
-        {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "max_files {} is too large, max_files should be less than {COPY_MAX_FILES_PER_COMMIT}",
-                copy_options.max_files
-            )));
-        }
-        Ok(())
     }
 }
 
@@ -512,15 +477,6 @@ pub struct FileFormatOptions {
 impl FileFormatOptions {
     pub fn is_empty(&self) -> bool {
         self.options.is_empty()
-    }
-
-    pub fn to_meta_ast(&self) -> FileFormatOptionsAst {
-        let options = self
-            .options
-            .iter()
-            .map(|(k, v)| (k.clone(), v.to_meta_value()))
-            .collect();
-        FileFormatOptionsAst { options }
     }
 }
 
