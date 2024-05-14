@@ -133,6 +133,10 @@ function install_ziglang {
 function install_python3 {
 	PACKAGE_MANAGER=$1
 
+	if python3 --version; then
+		echo "==> python3 is already installed"
+		return
+	fi
 	echo "==> installing python3..."
 
 	case "$PACKAGE_MANAGER" in
