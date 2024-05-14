@@ -136,9 +136,38 @@ function install_python3 {
 		install_pkg git "$PACKAGE_MANAGER"
 	fi
 	
-	echo "==> installing python3 via pyenv..."
-	curl https://pyenv.run | bash
+		PACKAGE_MANAGER=$1
 
+	echo "==> installing python3..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg python3-all-dev "$PACKAGE_MANAGER"
+		install_pkg python3-setuptools "$PACKAGE_MANAGER"
+		install_pkg python3-pip "$PACKAGE_MANAGER"
+		install_pkg libcairo2-dev "$PACKAGE_MANAGER"
+		;;
+	apk)
+		install_pkg python3-dev "$PACKAGE_MANAGER"
+		install_pkg py3-pip "$PACKAGE_MANAGER"
+		install_pkg libffi-dev "$PACKAGE_MANAGER"
+		;;
+	brew | pacman)
+		install_pkg python3 "$PACKAGE_MANAGER"
+		install_pkg cairo "$PACKAGE_MANAGER"
+		;;
+	yum | dnf)
+		install_pkg python3-devel "$PACKAGE_MANAGER"
+		install_pkg cairo-devel "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install python3 with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+	
+	echo "==> installing pyenv..."
+	curl https://pyenv.run | bash
 	# Check if pyenv is already initialized in the profile
 	if ! command -v pyenv >/dev/null; then
 		# Add PYENV_ROOT to the profile
@@ -156,8 +185,6 @@ function install_python3 {
 	source $HOME/.profile
 	pyenv install 3.12.2
 	pyenv global 3.12.2
-	curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-	python get-pip.py
 	pip install --upgrade pip setuptools
 }
 
