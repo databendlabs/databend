@@ -572,23 +572,24 @@ impl TableSchema {
         ) {
             match (data_type.remove_nullable(), default_value) {
                 (TableDataType::Tuple { fields_type, .. }, Scalar::Tuple(vals)) => {
-                    let mut idx = 0;
                     for (ty, val) in fields_type.iter().zip_eq(vals.iter()) {
-                        let n = ty.num_leaf_columns();
                         collect_leaf_default_values(
                             val,
                             ty,
-                            &column_ids[idx..idx + n],
+                            column_ids,
                             index,
                             leaf_default_values,
                         );
-                        idx += n;
                     }
                 }
                 (
                     TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_),
                     _,
-                ) => {}
+                ) => {
+                    // ignore leaf columns
+                    let n = data_type.num_leaf_columns();
+                    *index += n;
+                }
                 _ => {
                     debug_assert!(!default_value.is_nested_scalar());
                     leaf_default_values.insert(column_ids[*index], default_value.to_owned());
