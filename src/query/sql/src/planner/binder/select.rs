@@ -49,7 +49,6 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
-use log::debug;
 use log::warn;
 
 use super::sort::OrderItem;
@@ -103,7 +102,6 @@ impl Binder {
         order_by: &[OrderByExpr],
         limit: usize,
     ) -> Result<(SExpr, BindContext)> {
-        debug!("1 bind_select_stmt: {:?}", stmt);
         if let Some(hints) = &stmt.hints {
             if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                 warn!(
@@ -114,18 +112,14 @@ impl Binder {
         }
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             let select_list = &stmt.select_list;
-            let ret = self.bind_one_table(bind_context, select_list).await;
-
-            ret?
+            self.bind_one_table(bind_context, select_list).await?
         } else {
-            debug!("1a bind_select_stmt: {:?}", stmt);
             let mut max_column_position = MaxColumnPosition::new();
             stmt.drive(&mut max_column_position);
             self.metadata
                 .write()
                 .set_max_column_position(max_column_position.max_pos);
 
-            debug!("1b bind_select_stmt: {:?}", stmt);
             let cross_joins = stmt
                 .from
                 .iter()
@@ -140,13 +134,10 @@ impl Binder {
                     },
                 })
                 .unwrap();
-            let ret = self.bind_table_reference(bind_context, &cross_joins).await;
-            debug!("1c bind_select_stmt: {:?}", stmt);
-
-            ret?
+            self.bind_table_reference(bind_context, &cross_joins)
+                .await?
         };
 
-        debug!("2 bind_select_stmt");
         let mut rewriter = SelectRewriter::new(
             from_context.all_column_bindings(),
             self.name_resolution_ctx.unquoted_ident_case_sensitive,
@@ -154,7 +145,6 @@ impl Binder {
         let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
-        debug!("3 bind_select_stmt");
         // Collect set returning functions
         let set_returning_functions = {
             let mut collector = SrfCollector::new();
@@ -171,7 +161,6 @@ impl Binder {
             .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
             .await?;
 
-        debug!("4 bind_select_stmt");
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
         self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
@@ -181,7 +170,6 @@ impl Binder {
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
-        debug!("5 bind_select_stmt");
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -190,7 +178,6 @@ impl Binder {
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
 
-        debug!("6 bind_select_stmt");
         // `analyze_window` should behind `analyze_aggregate_select`,
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
         self.analyze_window(&mut from_context, &mut select_list)?;
@@ -213,7 +200,6 @@ impl Binder {
             None
         };
 
-        debug!("7 bind_select_stmt");
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
         let (mut scalar_items, projections) = self.analyze_projection(
             &from_context.aggregate_info,
@@ -239,7 +225,6 @@ impl Binder {
             None
         };
 
-        debug!("8 bind_select_stmt");
         let order_items = self
             .analyze_order_items(
                 &mut from_context,
@@ -265,7 +250,6 @@ impl Binder {
             )?;
         }
 
-        debug!("9 bind_select_stmt");
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
         {
@@ -288,7 +272,6 @@ impl Binder {
                 .await?;
         }
 
-        debug!("10 bind_select_stmt");
         if stmt.distinct {
             s_expr = self.bind_distinct(
                 stmt.span,
@@ -311,15 +294,12 @@ impl Binder {
                 .await?;
         }
 
-        debug!("11 bind_select_stmt");
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        debug!("111 bind_select_stmt");
         // rewrite async function to async function plan
         let mut async_func_rewriter = AsyncFunctionRewriter::new();
         s_expr = async_func_rewriter.rewrite(&s_expr)?;
 
-        debug!("112 bind_select_stmt");
         // rewrite udf for interpreter udf
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
         s_expr = udf_rewriter.rewrite(&s_expr)?;
@@ -328,13 +308,11 @@ impl Binder {
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
         s_expr = udf_rewriter.rewrite(&s_expr)?;
 
-        debug!("113 bind_select_stmt");
         // rewrite variant inner fields as virtual columns
         let mut virtual_column_rewriter =
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
         s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
 
-        debug!("12 bind_select_stmt");
         // check inverted index license
         if !from_context.inverted_index_map.is_empty() {
             let license_manager = get_license_manager();
@@ -349,7 +327,6 @@ impl Binder {
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
 
-        debug!("13 bind_select_stmt");
         Ok((s_expr, output_context))
     }
 
@@ -389,12 +366,10 @@ impl Binder {
         bind_context: &mut BindContext,
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
-        debug!("1 bind_query: {:?}", query);
         if let Some(with) = &query.with {
             self.add_cte(with, bind_context)?;
         }
 
-        debug!("2 bind_query");
         let limit_empty = query.limit.is_empty();
         let (mut limit, offset) = if !limit_empty {
             if query.limit.len() == 1 {
@@ -408,7 +383,6 @@ impl Binder {
             (None, 0)
         };
 
-        debug!("3 bind_query");
         let mut contain_top_n = false;
         let (mut s_expr, bind_context) = match &query.body {
             SetExpr::Select(stmt) => {
@@ -450,7 +424,6 @@ impl Binder {
             }
         };
 
-        debug!("4 bind_query");
         if !query.limit.is_empty() || contain_top_n || query.offset.is_some() {
             s_expr = Self::bind_limit(s_expr, limit, offset);
         }
