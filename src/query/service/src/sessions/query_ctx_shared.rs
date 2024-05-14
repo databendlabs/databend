@@ -111,6 +111,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     pub(in crate::sessions) num_fragmented_block_hint: Arc<AtomicU64>,
+    pub(in crate::sessions) enable_sort_spill: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
 
@@ -166,6 +167,7 @@ impl QueryContextShared {
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             num_fragmented_block_hint: Arc::new(AtomicU64::new(0)),
+            enable_sort_spill: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),

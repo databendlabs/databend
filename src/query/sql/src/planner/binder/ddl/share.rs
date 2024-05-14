@@ -59,7 +59,7 @@ impl Binder {
         };
 
         let plan = CreateShareEndpointPlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             endpoint: ShareEndpointIdent::new(self.ctx.get_tenant(), endpoint),
             tenant,
             url: format!("{}://{}{}", url.protocol, url.name, url.path),
@@ -151,8 +151,8 @@ impl Binder {
 
         let plan = GrantShareObjectPlan {
             share,
-            object: object.clone(),
-            privilege: *privilege,
+            object: object.clone().into(),
+            privilege: privilege.clone().into(),
         };
         Ok(Plan::GrantShareObject(Box::new(plan)))
     }
@@ -172,8 +172,8 @@ impl Binder {
 
         let plan = RevokeShareObjectPlan {
             share,
-            object: object.clone(),
-            privilege: *privilege,
+            object: object.clone().into(),
+            privilege: privilege.clone().into(),
         };
         Ok(Plan::RevokeShareObject(Box::new(plan)))
     }
@@ -230,7 +230,7 @@ impl Binder {
         let ShowObjectGrantPrivilegesStmt { object } = stmt;
 
         let plan = ShowObjectGrantPrivilegesPlan {
-            object: object.clone(),
+            object: object.clone().into(),
         };
         Ok(Plan::ShowObjectGrantPrivileges(Box::new(plan)))
     }

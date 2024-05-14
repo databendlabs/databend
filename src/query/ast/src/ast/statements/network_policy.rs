@@ -15,13 +15,13 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::CreateOption;
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateNetworkPolicyStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     #[drive(skip)]
     pub name: String,

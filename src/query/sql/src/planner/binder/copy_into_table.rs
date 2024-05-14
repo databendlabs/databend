@@ -50,10 +50,12 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::EmptyFieldAs;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
+use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
@@ -239,10 +241,10 @@ impl<'a> Binder {
             resolve_stage_location(self.ctx.as_ref(), &attachment.location[1..]).await?;
 
         if let Some(ref options) = attachment.file_format_options {
-            let mut params = FileFormatOptionsAst {
-                options: options.clone(),
-            }
-            .try_into()?;
+            let mut params = FileFormatParams::try_from_reader(
+                FileFormatOptionsReader::from_map(options.clone()),
+                false,
+            )?;
             if let FileFormatParams::Csv(ref mut fmt) = &mut params {
                 // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
                 // CSV attachment is mainly used in Drivers for insert.
@@ -459,7 +461,33 @@ impl<'a> Binder {
         if !stmt.file_format.is_empty() {
             stage.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
-        stmt.apply_to_copy_option(&mut stage.copy_options)
+
+        stage.copy_options.on_error =
+            OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
+
+        if stmt.size_limit != 0 {
+            stage.copy_options.size_limit = stmt.size_limit;
+        }
+
+        stage.copy_options.split_size = stmt.split_size;
+        stage.copy_options.purge = stmt.purge;
+        stage.copy_options.disable_variant_check = stmt.disable_variant_check;
+        stage.copy_options.return_failed_only = stmt.return_failed_only;
+
+        if stmt.max_files != 0 {
+            stage.copy_options.max_files = stmt.max_files;
+        }
+
+        if !(stage.copy_options.purge && stmt.force)
+            && stage.copy_options.max_files > COPY_MAX_FILES_PER_COMMIT
+        {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "max_files {} is too large, max_files should be less than {COPY_MAX_FILES_PER_COMMIT}",
+                stage.copy_options.max_files
+            )));
+        }
+
+        Ok(())
     }
 
     #[async_backtrace::framed]
