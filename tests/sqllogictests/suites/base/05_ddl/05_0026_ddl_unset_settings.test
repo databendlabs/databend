@@ -56,7 +56,7 @@ set global load_file_metadata_expire_hours=12;
 query TT
 show settings like 'load_file_metadata_expire_hours';
 ----
-load_file_metadata_expire_hours 12 168 [0, 18446744073709551615] GLOBAL Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
+load_file_metadata_expire_hours 12 24 [0, 18446744073709551615] GLOBAL Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
 
 statement ok
 set load_file_metadata_expire_hours=13;
@@ -64,7 +64,7 @@ set load_file_metadata_expire_hours=13;
 query TTTTTTT
 show settings like 'load_file_metadata_expire_hours';
 ----
-load_file_metadata_expire_hours 13 168 [0, 18446744073709551615] SESSION Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
+load_file_metadata_expire_hours 13 24 [0, 18446744073709551615] SESSION Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
 
 statement ok
 unset session load_file_metadata_expire_hours;
@@ -72,7 +72,7 @@ unset session load_file_metadata_expire_hours;
 query TTTTTTT
 show settings like 'load_file_metadata_expire_hours';
 ----
-load_file_metadata_expire_hours 12 168 [0, 18446744073709551615] GLOBAL Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
+load_file_metadata_expire_hours 12 24 [0, 18446744073709551615] GLOBAL Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
 
 statement ok
 unset load_file_metadata_expire_hours
@@ -80,4 +80,5 @@ unset load_file_metadata_expire_hours
 query TTTTTTT
 show settings like 'load_file_metadata_expire_hours';
 ----
-load_file_metadata_expire_hours 168 168 [0, 18446744073709551615] DEFAULT Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
+load_file_metadata_expire_hours 24 24 [0, 18446744073709551615] DEFAULT Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
+
