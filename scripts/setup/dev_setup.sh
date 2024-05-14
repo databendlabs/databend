@@ -185,7 +185,7 @@ function install_python3 {
 	source $HOME/.profile
 	pyenv install 3.12.2
 	pyenv global 3.12.2
-	pip install --upgrade pip setuptools
+	pip install --upgrade pip setuptools wheel
 }
 
 function install_openssl {
