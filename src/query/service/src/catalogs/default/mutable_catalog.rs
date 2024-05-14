@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
@@ -511,7 +512,14 @@ impl Catalog for MutableCatalog {
                     table_info.desc,
                     req.copied_files.is_some()
                 );
-                Ok(self.ctx.meta.update_table_meta(req).await?)
+                let begin = Instant::now();
+                let res = self.ctx.meta.update_table_meta(req).await;
+                info!(
+                    "update table meta done. table id: {:?}, time used {:?}",
+                    table_info.ident,
+                    begin.elapsed()
+                );
+                Ok(res?)
             }
             DatabaseType::ShareDB(share_ident) => {
                 let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
@@ -523,7 +531,17 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn update_multi_table_meta(&self, reqs: UpdateMultiTableMetaReq) -> Result<()> {
-        Ok(self.ctx.meta.update_multi_table_meta(reqs).await?)
+        info!(
+            "updating multi table meta. number of tables: {}",
+            reqs.update_table_metas.len()
+        );
+        let begin = Instant::now();
+        let res = self.ctx.meta.update_multi_table_meta(reqs).await;
+        info!(
+            "update multi table meta done. time used {:?}",
+            begin.elapsed()
+        );
+        Ok(res?)
     }
 
     async fn set_table_column_mask_policy(
