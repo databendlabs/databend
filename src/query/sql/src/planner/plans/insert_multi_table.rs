@@ -19,6 +19,8 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use super::Plan;
+use crate::BindContext;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug)]
@@ -30,6 +32,9 @@ pub struct InsertMultiTable {
     pub opt_else: Option<Else>,
     pub intos: Vec<Into>,
     pub target_tables: Vec<(u64, (String, String))>, /* (table_id, (database, table)), statement returns result set in this order */
+    // used for explain
+    pub meta_data: MetadataRef,
+    pub bind_context: Box<BindContext>,
 }
 
 #[derive(Clone, Debug)]
