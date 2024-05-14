@@ -565,22 +565,30 @@ impl TableSchema {
     ) -> HashMap<ColumnId, Scalar> {
         fn collect_leaf_default_values(
             default_value: &Scalar,
+            data_type: &TableDataType,
             column_ids: &[ColumnId],
             index: &mut usize,
             leaf_default_values: &mut HashMap<ColumnId, Scalar>,
         ) {
-            match default_value {
-                Scalar::Tuple(s) => {
-                    s.iter().for_each(|default_val| {
+            match (data_type.remove_nullable(), default_value) {
+                (TableDataType::Tuple { fields_type, .. }, Scalar::Tuple(vals)) => {
+                    let mut idx = 0;
+                    for (ty, val) in fields_type.iter().zip_eq(vals.iter()) {
+                        let n = ty.num_leaf_columns();
                         collect_leaf_default_values(
-                            default_val,
-                            column_ids,
+                            val,
+                            ty,
+                            &column_ids[idx..idx + n],
                             index,
                             leaf_default_values,
-                        )
-                    });
+                        );
+                        idx += n;
+                    }
                 }
-                Scalar::Map(_) | Scalar::Array(_) => {}
+                (
+                    TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_),
+                    _,
+                ) => {}
                 _ => {
                     debug_assert!(!default_value.is_nested_scalar());
                     leaf_default_values.insert(column_ids[*index], default_value.to_owned());
@@ -590,13 +598,14 @@ impl TableSchema {
         }
 
         let mut leaf_default_values = HashMap::with_capacity(self.num_fields());
-        let leaf_field_column_ids = self.field_leaf_column_ids();
-        for (default_value, field_column_ids) in default_values.iter().zip_eq(leaf_field_column_ids)
-        {
+        for (default_value, field) in default_values.iter().zip_eq(self.fields()) {
             let mut index = 0;
+            let data_type = field.data_type();
+            let column_ids = field.leaf_column_ids();
             collect_leaf_default_values(
                 default_value,
-                &field_column_ids,
+                data_type,
+                &column_ids,
                 &mut index,
                 &mut leaf_default_values,
             );
