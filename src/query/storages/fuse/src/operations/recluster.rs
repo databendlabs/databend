@@ -146,10 +146,10 @@ impl FuseTable {
             {
                 segment_idx += chunk.len();
                 let status = format!(
-                    "recluster: read segment files:{}/{}, cost:{} sec",
+                    "recluster: read segment files:{}/{}, cost:{:?}",
                     segment_idx,
                     number_segments,
-                    start.elapsed().as_secs()
+                    start.elapsed()
                 );
                 ctx.set_status_info(&status);
             }
@@ -206,14 +206,14 @@ impl FuseTable {
         }
 
         {
-            let elapsed_time = start.elapsed().as_millis() as u64;
+            let elapsed_time = start.elapsed();
             ctx.set_status_info(&format!(
-                "recluster: end to build recluster tasks, recluster segments count: {}, blocks count: {}, cost:{} ms",
+                "recluster: end to build recluster tasks, recluster segments count: {}, blocks count: {}, cost:{:?}",
                 recluster_seg_num,
                 mutator.recluster_blocks_count,
                 elapsed_time,
             ));
-            metrics_inc_recluster_build_task_milliseconds(elapsed_time);
+            metrics_inc_recluster_build_task_milliseconds(elapsed_time.as_millis() as u64);
             metrics_inc_recluster_segment_nums_scheduled(recluster_seg_num as u64);
         }
         Ok(Some(mutator))
