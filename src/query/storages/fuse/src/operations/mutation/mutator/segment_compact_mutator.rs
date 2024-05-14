@@ -266,10 +266,10 @@ impl<'a> SegmentCompactor<'a> {
             // Status.
             {
                 let status = format!(
-                    "compact segment: read segment files:{}/{}, cost:{} sec",
+                    "compact segment: read segment files:{}/{}, cost:{:?}",
                     checked_end_at,
                     number_segments,
-                    start.elapsed().as_secs()
+                    start.elapsed()
                 );
                 info!("{}", &status);
                 (status_callback)(status);
