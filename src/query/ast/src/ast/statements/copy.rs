@@ -20,7 +20,6 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 
-use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_io::escape_string_with_quote;
 use derive_visitor::Drive;
@@ -314,6 +313,17 @@ impl Display for Connection {
     }
 }
 
+/// Mask a string by "******", but keep `unmask_len` of suffix.
+fn mask_string(s: &str, unmask_len: usize) -> String {
+    if s.len() <= unmask_len {
+        s.to_string()
+    } else {
+        let mut ret = "******".to_string();
+        ret.push_str(&s[(s.len() - unmask_len)..]);
+        ret
+    }
+}
+
 /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
 ///
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
@@ -400,16 +410,19 @@ impl UriLocation {
             connection: Connection::new(conns),
         })
     }
+
+    pub fn mask(&self) -> Self {
+        Self {
+            connection: self.connection.mask(),
+            ..self.clone()
+        }
+    }
 }
 
 impl Display for UriLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
-        if f.alternate() {
-            write!(f, "{}", self.connection.mask())?;
-        } else {
-            write!(f, "{}", self.connection)?;
-        }
+        write!(f, "{}", self.connection)?;
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
