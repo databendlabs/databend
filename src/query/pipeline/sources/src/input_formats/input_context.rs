@@ -139,7 +139,7 @@ pub struct InputContext {
 impl InputContext {}
 
 impl Debug for InputContext {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("InputContext")
             .field("plan", &self.plan)
             .field("block_compact_thresholds", &self.block_compact_thresholds)

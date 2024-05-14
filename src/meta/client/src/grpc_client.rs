@@ -368,7 +368,7 @@ pub struct MetaGrpcClient {
 }
 
 impl Debug for MetaGrpcClient {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut de = f.debug_struct("MetaGrpcClient");
         de.field("endpoints", &*self.endpoints.lock());
         de.field("auto_sync_interval", &self.auto_sync_interval);

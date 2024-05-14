@@ -31,7 +31,7 @@ pub enum QueryKind {
 }
 
 impl Display for QueryKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }

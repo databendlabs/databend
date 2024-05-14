@@ -62,7 +62,7 @@ impl FromStr for GeometryDataType {
 }
 
 impl Display for GeometryDataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let str = match self {
             GeometryDataType::WKB => "WKB".to_string(),
             GeometryDataType::WKT => "WKT".to_string(),

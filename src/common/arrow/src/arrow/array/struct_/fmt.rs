@@ -45,7 +45,7 @@ pub fn write_value<W: Write>(
 }
 
 impl Debug for StructArray {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = |f: &mut Formatter, index| write_value(self, index, "None", f);
 
         write!(f, "StructArray")?;

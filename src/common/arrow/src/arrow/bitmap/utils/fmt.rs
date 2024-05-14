@@ -22,7 +22,7 @@ pub fn fmt(
     bytes: &[u8],
     offset: usize,
     length: usize,
-    f: &mut std::fmt::Formatter<'_>,
+    f: &mut std::fmt::Formatter,
 ) -> std::fmt::Result {
     assert!(offset < 8);
 

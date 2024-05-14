@@ -128,7 +128,7 @@ pub enum ShareGrantObjectName {
 }
 
 impl Display for ShareGrantObjectName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ShareGrantObjectName::Database(db) => {
                 write!(f, "DATABASE {}", db)
@@ -379,7 +379,7 @@ pub struct ShareIdToName {
 }
 
 impl Display for ShareIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.share_id)
     }
 }
@@ -401,7 +401,7 @@ pub struct ShareEndpointIdToName {
 }
 
 impl Display for ShareEndpointIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.share_endpoint_id)
     }
 }
@@ -426,7 +426,7 @@ impl ShareGrantObject {
 }
 
 impl Display for ShareGrantObject {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ShareGrantObject::Database(db_id) => {
                 write!(f, "db/{}", *db_id)
@@ -560,7 +560,7 @@ impl ShareGrantEntry {
 }
 
 impl Display for ShareGrantEntry {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.object)
     }
 }

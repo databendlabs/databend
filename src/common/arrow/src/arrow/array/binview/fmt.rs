@@ -40,7 +40,7 @@ where
 }
 
 impl Debug for BinaryViewArray {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = |f: &mut Formatter, index| write_value(self, index, f);
         write!(f, "BinaryViewArray")?;
         write_vec(f, writer, self.validity(), self.len(), "None", false)
@@ -48,7 +48,7 @@ impl Debug for BinaryViewArray {
 }
 
 impl Debug for Utf8ViewArray {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = |f: &mut Formatter, index| write!(f, "{}", self.value(index));
         write!(f, "Utf8ViewArray")?;
         write_vec(f, writer, self.validity(), self.len(), "None", false)

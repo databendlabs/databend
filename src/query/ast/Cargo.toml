@@ -43,7 +43,6 @@ url = "2.3.1"
 
 [dev-dependencies]
 criterion = "0.4"
-databend-common-base = { path = "../../common/base" }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"
 regex = { workspace = true }

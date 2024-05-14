@@ -165,7 +165,7 @@ impl StorageParams {
 
 /// StorageParams will be displayed by `{protocol}://{key1=value1},{key2=value2}`
 impl Display for StorageParams {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             StorageParams::Azblob(v) => write!(
                 f,
@@ -242,7 +242,7 @@ pub struct StorageAzblobConfig {
 }
 
 impl Debug for StorageAzblobConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("StorageAzblobConfig")
             .field("endpoint_url", &self.endpoint_url)
             .field("container", &self.container)
@@ -289,7 +289,7 @@ impl Default for StorageFtpConfig {
 }
 
 impl Debug for StorageFtpConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("StorageFtpConfig")
             .field("endpoint", &self.endpoint)
             .field("root", &self.root)
@@ -322,7 +322,7 @@ impl Default for StorageGcsConfig {
 }
 
 impl Debug for StorageGcsConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("StorageGcsConfig")
             .field("endpoint", &self.endpoint_url)
             .field("bucket", &self.bucket)
@@ -398,7 +398,7 @@ impl Default for StorageS3Config {
 }
 
 impl Debug for StorageS3Config {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("StorageS3Config")
             .field("endpoint_url", &self.endpoint_url)
             .field("region", &self.region)
@@ -445,7 +445,7 @@ pub struct StorageObsConfig {
 }
 
 impl Debug for StorageObsConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("StorageObsConfig")
             .field("endpoint_url", &self.endpoint_url)
             .field("bucket", &self.bucket)
@@ -479,7 +479,7 @@ pub struct StorageOssConfig {
 }
 
 impl Debug for StorageOssConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("StorageOssConfig")
             .field("endpoint_url", &self.endpoint_url)
             .field("presign_endpoint_url", &self.presign_endpoint_url)
@@ -533,7 +533,7 @@ pub struct StorageWebhdfsConfig {
 }
 
 impl Debug for StorageWebhdfsConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut ds = f.debug_struct("StorageWebhdfsConfig");
 
         ds.field("endpoint_url", &self.endpoint_url)
@@ -555,7 +555,7 @@ pub struct StorageCosConfig {
 }
 
 impl Debug for StorageCosConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut ds = f.debug_struct("StorageCosConfig");
 
         ds.field("bucket", &self.bucket);
@@ -590,7 +590,7 @@ pub struct StorageHuggingfaceConfig {
 }
 
 impl Debug for StorageHuggingfaceConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut ds = f.debug_struct("StorageHuggingFaceConfig");
 
         ds.field("repo_id", &self.repo_id);

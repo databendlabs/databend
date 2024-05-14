@@ -1324,11 +1324,11 @@ pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     // Plus and Minus are parsed as binary op at first.
     alt((
         value(UnaryOperator::Not, rule! { NOT }),
-        value(UnaryOperator::Factorial, rule! { Factorial}),
-        value(UnaryOperator::SquareRoot, rule! { SquareRoot}),
-        value(UnaryOperator::BitwiseNot, rule! {BitWiseNot}),
-        value(UnaryOperator::CubeRoot, rule! { CubeRoot}),
-        value(UnaryOperator::Abs, rule! { Abs}),
+        value(UnaryOperator::Factorial, rule! { Factorial }),
+        value(UnaryOperator::SquareRoot, rule! { SquareRoot }),
+        value(UnaryOperator::BitwiseNot, rule! { BitWiseNot }),
+        value(UnaryOperator::CubeRoot, rule! { CubeRoot }),
+        value(UnaryOperator::Abs, rule! { Abs }),
     ))(i)
 }
 

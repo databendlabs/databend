@@ -63,7 +63,7 @@ impl AstFormatContext {
 }
 
 impl Display for AstFormatContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self.alias {
             Some(alias) => {
                 if self.children_num > 0 {

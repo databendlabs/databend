@@ -46,7 +46,7 @@ pub enum TableIndexType {
 }
 
 impl Display for TableIndexType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TableIndexType::Aggregating => {
                 write!(f, "AGGREGATING")
@@ -59,7 +59,7 @@ impl Display for TableIndexType {
 }
 
 impl Display for CreateIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -85,7 +85,7 @@ pub struct DropIndexStmt {
 }
 
 impl Display for DropIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP AGGREGATING INDEX")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -104,7 +104,7 @@ pub struct RefreshIndexStmt {
 }
 
 impl Display for RefreshIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "REFRESH AGGREGATING INDEX {index}", index = self.index)?;
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
@@ -131,7 +131,7 @@ pub struct CreateInvertedIndexStmt {
 }
 
 impl Display for CreateInvertedIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -177,7 +177,7 @@ pub struct DropInvertedIndexStmt {
 }
 
 impl Display for DropInvertedIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP INVERTED INDEX")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -207,7 +207,7 @@ pub struct RefreshInvertedIndexStmt {
 }
 
 impl Display for RefreshInvertedIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "REFRESH INVERTED INDEX")?;
         write!(f, " {}", self.index_name)?;
         write!(f, " ON ")?;

@@ -49,7 +49,7 @@ pub(crate) enum RemoveReason {
 }
 
 impl Display for RemoveReason {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", format!("{self:?}").to_lowercase())
     }
 }

@@ -34,7 +34,7 @@ pub struct CreateUserStmt {
 }
 
 impl Display for CreateUserStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, " OR REPLACE")?;
@@ -62,7 +62,7 @@ pub struct AuthOption {
 }
 
 impl Display for AuthOption {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(auth_type) = &self.auth_type {
             write!(f, "WITH {auth_type} ")?;
         }
@@ -84,7 +84,7 @@ pub struct AlterUserStmt {
 }
 
 impl Display for AlterUserStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER USER")?;
         if let Some(user) = &self.user {
             write!(f, " {}", user)?;
@@ -110,7 +110,7 @@ pub struct GrantStmt {
 }
 
 impl Display for GrantStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "GRANT")?;
         write!(f, "{}", self.source)?;
 
@@ -126,7 +126,7 @@ pub struct RevokeStmt {
 }
 
 impl Display for RevokeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "REVOKE")?;
         write!(f, "{}", self.source)?;
 
@@ -151,7 +151,7 @@ pub enum AccountMgrSource {
 }
 
 impl Display for AccountMgrSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AccountMgrSource::Role { role } => write!(f, " ROLE '{role}'")?,
             AccountMgrSource::Privs { privileges, level } => {
