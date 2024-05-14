@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::schema::CreateOption;
 use pretty::RcDoc;
 
 use super::expr::pretty_expr;
@@ -25,6 +24,7 @@ use crate::ast::AddColumnOption;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
+use crate::ast::CreateOption;
 use crate::ast::CreateStreamStmt;
 use crate::ast::CreateTableSource;
 use crate::ast::CreateTableStmt;

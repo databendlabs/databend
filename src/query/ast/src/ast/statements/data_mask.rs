@@ -15,10 +15,10 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::TypeName;
 
@@ -40,7 +40,6 @@ pub struct DataMaskPolicy {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDatamaskPolicyStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     #[drive(skip)]
     pub name: String,
