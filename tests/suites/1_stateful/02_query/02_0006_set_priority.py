@@ -19,7 +19,7 @@ mydb = mysql.connector.connect(
 )
 
 with NativeClient(name="client1>") as client1:
-# TODO: Enable this test after enable new queries executor
+    # TODO: Enable this test after enable new queries executor
     client1.expect(prompt)
 #     client1.expect("")
 #

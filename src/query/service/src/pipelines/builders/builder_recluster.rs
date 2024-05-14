@@ -170,6 +170,7 @@ impl PipelineBuilder {
                     })
                     .collect();
 
+                self.ctx.set_enable_sort_spill(false);
                 let sort_pipeline_builder =
                     SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
                         .with_partial_block_size(partial_block_size)

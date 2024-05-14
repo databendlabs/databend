@@ -808,7 +808,7 @@ impl DefaultSettings {
         let max_memory_usage = Self::max_memory_usage()?;
         // The sort merge consumes more than twice as much memory,
         // so the block size is set relatively conservatively here.
-        let recluster_block_size = max_memory_usage * 35 / 100;
+        let recluster_block_size = max_memory_usage * 32 / 100;
         Ok(recluster_block_size)
     }
 
