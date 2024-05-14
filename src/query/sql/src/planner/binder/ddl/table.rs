@@ -635,7 +635,7 @@ impl Binder {
         };
 
         let plan = CreateTablePlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
             catalog: catalog.clone(),
             database: database.clone(),
@@ -697,7 +697,7 @@ impl Binder {
         // keep a copy of table data uri_location, will be used in "show create table"
         options.insert(
             OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
-            format!("{:#}", stmt.uri_location),
+            format!("{}", stmt.uri_location.mask()),
         );
 
         let mut uri = stmt.uri_location.clone();

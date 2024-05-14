@@ -38,7 +38,7 @@ impl Binder {
         let sequence = self.normalize_object_identifier(sequence);
 
         let plan = CreateSequencePlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             ident: SequenceIdent::new(tenant, sequence),
             comment: comment.clone(),
         };

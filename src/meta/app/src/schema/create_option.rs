@@ -21,6 +21,20 @@ pub enum CreateOption {
     CreateOrReplace,
 }
 
+impl From<databend_common_ast::ast::CreateOption> for CreateOption {
+    fn from(create_option: databend_common_ast::ast::CreateOption) -> Self {
+        match create_option {
+            databend_common_ast::ast::CreateOption::Create => CreateOption::Create,
+            databend_common_ast::ast::CreateOption::CreateIfNotExists => {
+                CreateOption::CreateIfNotExists
+            }
+            databend_common_ast::ast::CreateOption::CreateOrReplace => {
+                CreateOption::CreateOrReplace
+            }
+        }
+    }
+}
+
 impl From<CreateOption> for MatchSeq {
     /// Convert `CreateOption` to `MatchSeq`.
     ///

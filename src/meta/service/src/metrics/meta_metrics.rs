@@ -34,6 +34,7 @@ pub mod server_metrics {
 
     use databend_common_meta_types::NodeId;
     use prometheus_client::metrics::counter::Counter;
+    use prometheus_client::metrics::family::Family;
     use prometheus_client::metrics::gauge::Gauge;
 
     use crate::metrics::registry::load_global_registry;
@@ -58,6 +59,7 @@ pub mod server_metrics {
         proposals_failed: Counter,
         read_failed: Counter,
         watchers: Gauge,
+        version: Family<Vec<(String, String)>, Gauge>,
     }
 
     impl ServerMetrics {
@@ -76,6 +78,7 @@ pub mod server_metrics {
                 proposals_failed: Counter::default(),
                 read_failed: Counter::default(),
                 watchers: Gauge::default(),
+                version: Family::default(),
             };
 
             let mut registry = load_global_registry();
@@ -132,6 +135,7 @@ pub mod server_metrics {
                 metrics.read_failed.clone(),
             );
             registry.register(key!("watchers"), "watchers", metrics.watchers.clone());
+            registry.register(key!("version"), "version", metrics.version.clone());
             metrics
         }
     }
@@ -200,6 +204,15 @@ pub mod server_metrics {
 
     pub fn incr_watchers(cnt: i64) {
         SERVER_METRICS.watchers.inc_by(cnt);
+    }
+
+    pub fn set_version(semver: String, sha: String) {
+        let labels = &vec![
+            ("component".to_string(), "metasrv".to_string()),
+            ("semver".to_string(), semver),
+            ("sha".to_string(), sha),
+        ];
+        SERVER_METRICS.version.get_or_create(labels).set(1);
     }
 }
 

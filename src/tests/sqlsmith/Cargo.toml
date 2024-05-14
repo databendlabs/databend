@@ -28,7 +28,6 @@ databend-common-expression = { path = "../../query/expression" }
 databend-common-formats = { path = "../../query/formats" }
 databend-common-functions = { path = "../../query/functions" }
 databend-common-io = { path = "../../common/io" }
-databend-common-meta-app = { path = "../../meta/app" }
 databend-common-sql = { path = "../../query/sql" }
 
 [[bin]]

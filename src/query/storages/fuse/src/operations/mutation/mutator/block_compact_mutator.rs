@@ -163,10 +163,10 @@ impl BlockCompactMutator {
             // Status.
             {
                 let status = format!(
-                    "compact: read segment files:{}/{}, cost:{} sec",
+                    "compact: read segment files:{}/{}, cost:{:?}",
                     segment_idx,
                     number_segments,
-                    start.elapsed().as_secs()
+                    start.elapsed()
                 );
                 self.ctx.set_status_info(&status);
             }
@@ -184,14 +184,14 @@ impl BlockCompactMutator {
         );
 
         // Status.
-        let elapsed_time = start.elapsed().as_millis() as u64;
+        let elapsed_time = start.elapsed();
         self.ctx.set_status_info(&format!(
-            "compact: end to build lazy compact parts:{}, segments to be compacted:{}, cost:{} ms",
+            "compact: end to build lazy compact parts:{}, segments to be compacted:{}, cost:{:?}",
             parts.len(),
             checker.compacted_segment_cnt,
             elapsed_time
         ));
-        metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time);
+        metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time.as_millis() as u64);
 
         let cluster = self.ctx.get_cluster();
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
@@ -281,13 +281,15 @@ impl BlockCompactMutator {
                 let parts = res.into_iter().flatten().collect::<Vec<_>>();
                 // Status.
                 {
-                    let elapsed_time = start.elapsed().as_millis() as u64;
+                    let elapsed_time = start.elapsed();
                     ctx.set_status_info(&format!(
-                        "compact: end to build compact parts:{}, cost:{} ms",
+                        "compact: end to build compact parts:{}, cost:{:?}",
                         parts.len(),
                         elapsed_time,
                     ));
-                    metrics_inc_compact_block_build_task_milliseconds(elapsed_time);
+                    metrics_inc_compact_block_build_task_milliseconds(
+                        elapsed_time.as_millis() as u64
+                    );
                 }
                 Ok(parts)
             }

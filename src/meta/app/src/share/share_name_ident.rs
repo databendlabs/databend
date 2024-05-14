@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::Result;
+
+use crate::tenant::Tenant;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
@@ -20,6 +23,8 @@ pub type ShareNameIdent = TIdent<Resource>;
 /// Share name as value.
 pub type ShareNameIdentRaw = TIdentRaw<Resource>;
 
+use anyerror::func_name;
+use databend_common_exception::ErrorCode;
 pub use kvapi_impl::Resource;
 
 impl TIdent<Resource> {
@@ -31,6 +36,15 @@ impl TIdent<Resource> {
 impl TIdentRaw<Resource> {
     pub fn share_name(&self) -> &str {
         self.name()
+    }
+}
+
+impl TryFrom<databend_common_ast::ast::ShareNameIdent> for ShareNameIdent {
+    type Error = ErrorCode;
+
+    fn try_from(ident: databend_common_ast::ast::ShareNameIdent) -> Result<Self> {
+        let tenant = Tenant::new_or_err(ident.tenant.name, func_name!())?;
+        Ok(ShareNameIdent::new(tenant, ident.share))
     }
 }
 

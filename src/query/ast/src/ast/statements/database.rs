@@ -15,16 +15,15 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::KeyWithTenant;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_dot_separated_list;
+use crate::ast::CreateOption;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
+use crate::ast::ShareNameIdent;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowDatabasesStmt {
@@ -69,12 +68,10 @@ impl Display for ShowCreateDatabaseStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateDatabaseStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub database: DatabaseRef,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
-    #[drive(skip)]
     pub from_share: Option<ShareNameIdent>,
 }
 
@@ -95,12 +92,7 @@ impl Display for CreateDatabaseStmt {
             write!(f, " ENGINE = {engine}")?;
         }
         if let Some(from_share) = &self.from_share {
-            write!(
-                f,
-                " FROM SHARE {}.{}",
-                from_share.tenant_name(),
-                from_share.name()
-            )?;
+            write!(f, " FROM SHARE {from_share}",)?;
         }
 
         // TODO(leiysky): display rest information

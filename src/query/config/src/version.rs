@@ -35,6 +35,18 @@ pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     }
 });
 
+pub static QUERY_GIT_SEMVER: LazyLock<String> =
+    LazyLock::new(|| match option_env!("DATABEND_GIT_SEMVER") {
+        Some(v) => v.to_string(),
+        None => "unknown".to_string(),
+    });
+
+pub static QUERY_GIT_SHA: LazyLock<String> =
+    LazyLock::new(|| match option_env!("VERGEN_GIT_SHA") {
+        Some(sha) => sha.to_string(),
+        None => "unknown".to_string(),
+    });
+
 pub static QUERY_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     //
     let build_semver = option_env!("DATABEND_GIT_SEMVER");

@@ -40,7 +40,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = CreatePasswordPolicyPlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             tenant,
             name: name.to_string(),
             set_options: set_options.clone(),

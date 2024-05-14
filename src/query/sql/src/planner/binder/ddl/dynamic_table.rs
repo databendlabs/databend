@@ -178,7 +178,7 @@ impl Binder {
         };
 
         let plan = CreateDynamicTablePlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
             catalog: catalog_name.clone(),
             database: database.clone(),

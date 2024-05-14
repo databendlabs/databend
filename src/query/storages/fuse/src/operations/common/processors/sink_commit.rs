@@ -430,12 +430,12 @@ where F: SnapshotGenerator + Send + 'static
                         }
                         metrics_inc_commit_mutation_success();
                         {
-                            let elapsed_time = self.start_time.elapsed().as_millis();
+                            let elapsed_time = self.start_time.elapsed();
                             let status = format!(
-                                "commit mutation success after {} retries, which took {} ms",
+                                "commit mutation success after {} retries, which took {:?}",
                                 self.retries, elapsed_time
                             );
-                            metrics_inc_commit_milliseconds(elapsed_time);
+                            metrics_inc_commit_milliseconds(elapsed_time.as_millis());
                             self.ctx.set_status_info(&status);
                         }
                         if let Some(files) = &self.copied_files {
