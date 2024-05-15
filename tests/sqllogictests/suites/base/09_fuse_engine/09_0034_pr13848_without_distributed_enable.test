@@ -6,6 +6,9 @@ statement ok
 drop table if exists merge_target_0;
 
 statement ok
+drop table if exists merge_source_0;
+
+statement ok
 create table merge_target_0(a int,b string) cluster by(a,b);
 
 statement ok
@@ -90,7 +93,13 @@ select * from merge_target_0 order by a,b;
 
 ### test copy into table unsupport
 statement ok
+drop table if exists copy_table_test0;
+
+statement ok
 create table copy_table_test0(a int,b string) cluster by(a,b);
+
+statement ok
+drop stage if exists parquet_table0;
 
 statement ok
 create stage parquet_table0 FILE_FORMAT = (TYPE = PARQUET);
@@ -113,3 +122,4 @@ copy into copy_table_test0 from (select t2.a,t3.b from @parquet_table0 as t ,@pa
 
 statement ok
 set enable_experimental_merge_into = 0;
+

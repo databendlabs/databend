@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod from;
-mod to;
+mod block_builder;
+mod format;
+mod separator;
 
-pub const EXTENSION_KEY: &str = "Extension";
-
-pub use to::table_schema_to_arrow_schema;
+pub use format::TsvInputFormat;

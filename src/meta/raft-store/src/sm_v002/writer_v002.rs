@@ -30,6 +30,15 @@ use crate::sm_v002::SnapshotStoreV002;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 
+/// A write entry sent to snapshot writer.
+///
+/// A `Commit` entry will flush the writer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WriteEntry<T> {
+    Data(T),
+    Commit,
+}
+
 /// Write json lines snapshot data to [`SnapshotStoreV002`].
 pub struct WriterV002<'a> {
     /// The temp path to write to, which will be renamed to the final path.
@@ -137,13 +146,35 @@ impl<'a> WriterV002<'a> {
     /// Returns the count of entries
     pub fn write_entries_sync(
         &mut self,
-        mut entries_rx: tokio::sync::mpsc::Receiver<RaftStoreEntry>,
+        mut entries_rx: tokio::sync::mpsc::Receiver<WriteEntry<RaftStoreEntry>>,
     ) -> Result<usize, io::Error> {
+        fn log_progress(c: usize) {
+            if c >= 10_000_000 {
+                info!(
+                    "Snapshot Writer has written {} million entries",
+                    c / 1_000_000
+                )
+            } else {
+                info!("Snapshot Writer has written {} kilo entries", c / 1_000)
+            }
+        }
+
         let mut cnt = 0;
         let data_version = self.snapshot_store.data_version();
 
         while let Some(ent) = entries_rx.blocking_recv() {
             debug!(entry :? =(&ent); "write {} entry", data_version);
+
+            let ent = match ent {
+                WriteEntry::Data(ent) => ent,
+                WriteEntry::Commit => {
+                    info!(
+                        "received Commit entry, written {} entries, quit and about to commit",
+                        cnt
+                    );
+                    return Ok(cnt);
+                }
+            };
 
             if let RaftStoreEntry::StateMachineMeta {
                 key: StateMachineMetaKey::LastApplied,
@@ -174,12 +205,22 @@ impl<'a> WriterV002<'a> {
                 std::thread::sleep(Duration::from_millis(1));
             }
 
-            if cnt % 10_000 == 0 {
-                info!("Snapshot Writer has written {} kilo entries", cnt / 1000)
+            #[allow(clippy::collapsible_else_if)]
+            if cnt < 1_000_000 {
+                if cnt % 10_000 == 0 {
+                    log_progress(cnt);
+                }
+            } else {
+                if cnt % 100_000 == 0 {
+                    log_progress(cnt);
+                }
             }
         }
 
-        Ok(cnt)
+        Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "input channel is closed",
+        ))
     }
 
     /// Commit the snapshot so that it is visible to the readers.
