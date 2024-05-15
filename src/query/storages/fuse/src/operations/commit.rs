@@ -159,15 +159,18 @@ impl FuseTable {
             None,
         )
         .await;
+
         if need_to_save_statistics {
             let table_statistics_location: String = table_statistics_location.unwrap();
-            if res.is_ok() {
-                TableSnapshotStatistics::cache().put(
+            match &res {
+                Ok(_) => TableSnapshotStatistics::cache().put(
                     table_statistics_location,
                     Arc::new(table_statistics.unwrap()),
-                )
+                ),
+                Err(e) => info!("update_table_meta failed. {}", e),
             }
         }
+
         res
     }
 

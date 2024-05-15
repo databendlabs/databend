@@ -93,6 +93,7 @@ pub async fn read_metadata_async(
         None => operator.stat(path).await?.content_length(),
         Some(n) => n,
     };
+
     check_footer_size(file_size)?;
 
     // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
