@@ -31,6 +31,11 @@ CREATE TABLE b(
 statement ok
 INSERT INTO b VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
+statement ok
+drop table if exists c;
+
+statement ok
+drop table if exists d;
 
 statement ok
 CREATE TABLE c(
@@ -53,3 +58,4 @@ LEFT JOIN c ON b.b13 = c.c1
 
 statement ok
 set max_block_size = 65536;
+
