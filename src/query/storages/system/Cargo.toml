@@ -58,3 +58,6 @@ typetag = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { path = "../../../common/building" }
+
+[package.metadata.cargo-machete]
+ignored = ["md-5"]
