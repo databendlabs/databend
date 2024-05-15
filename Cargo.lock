@@ -4229,7 +4229,6 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
