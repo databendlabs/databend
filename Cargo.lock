@@ -4418,6 +4418,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
+ "databend-common-io",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
