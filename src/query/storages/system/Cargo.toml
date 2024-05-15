@@ -50,11 +50,11 @@ regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = "0.1.9"
+sha2 = "0.10.6"
 snailquote = "0.3.1"
 tikv-jemalloc-ctl = { workspace = true }
 
 typetag = { workspace = true }
-sha2 = "0.10.6"
 
 [build-dependencies]
 databend-common-building = { path = "../../../common/building" }
