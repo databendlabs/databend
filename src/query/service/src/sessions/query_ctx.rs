@@ -518,9 +518,21 @@ impl TableContext for QueryContext {
         self.shared.attach_query_str(kind, query);
     }
 
+    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
+        self.shared.attach_query_hash(text_hash, parameterized_hash);
+    }
+
     /// Get the session running query.
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
+        self.shared.get_query_parameterized_hash()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        self.shared.get_query_text_hash()
     }
 
     fn get_fragment_id(&self) -> usize {
