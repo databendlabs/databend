@@ -69,12 +69,11 @@ e DATE NO '1970-01-01' (empty)
 f VARCHAR NO '' (empty)
 
 
-## FLAKY TEST BY dropped table
-## query VVV
-## select column_name, nullable, is_nullable from INFORMATION_SCHEMA.COLUMNS where table_name='tables_with_history' and column_name in ('num_rows', 'dropped_on') order by column_name
-## ----
-## dropped_on 1 YES
-## num_rows 1 YES
+query VVV
+select column_name, nullable, is_nullable from INFORMATION_SCHEMA.COLUMNS where table_name='tables_with_history' and column_name in ('num_rows', 'dropped_on') order by column_name
+----
+dropped_on 1 YES
+num_rows 1 YES
 
 statement ok
 DROP VIEW IF EXISTS v
