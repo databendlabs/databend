@@ -33,6 +33,7 @@ use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDa
 use databend_common_meta_raft_store::sm_v002::SnapshotStoreError;
 use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use databend_common_meta_raft_store::sm_v002::SnapshotViewV002;
+use databend_common_meta_raft_store::sm_v002::WriteEntry;
 use databend_common_meta_raft_store::sm_v002::SMV002;
 use databend_common_meta_raft_store::state::RaftState;
 use databend_common_meta_raft_store::state::RaftStateKey;
@@ -268,14 +269,16 @@ impl StoreInner {
             .await
             .map_err(|e| StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e))?
         {
-            tx.send(ent).await.map_err(|e| {
+            tx.send(WriteEntry::Data(ent)).await.map_err(|e| {
                 let e = StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e);
                 StorageError::from(e)
             })?;
         }
 
-        // Close the channel tx so that the io thread `th` can be finished.
-        drop(tx);
+        { tx }.send(WriteEntry::Commit).await.map_err(|e| {
+            let e = StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e);
+            StorageError::from(e)
+        })?;
 
         let (ss_store, snapshot_id, snapshot_size) = th
             .await
