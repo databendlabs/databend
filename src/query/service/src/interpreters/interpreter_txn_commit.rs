@@ -57,11 +57,14 @@ impl Interpreter for CommitInterpreter {
             let catalog = self.ctx.get_default_catalog()?;
             let req = self.ctx.txn_mgr().lock().req();
             let mismatched_tids = catalog.update_multi_table_meta(req).await?;
-            if !mismatched_tids.is_empty() {
-                return Err(ErrorCode::TableVersionMismatched(format!(
-                    "Table version mismatched in multi statement transaction, tids: {:?}",
-                    mismatched_tids
-                )));
+            match &mismatched_tids {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(ErrorCode::TableVersionMismatched(format!(
+                        "Table version mismatched in multi statement transaction, tids: {:?}",
+                        e.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+                    )));
+                }
             }
             let need_purge_files = self.ctx.txn_mgr().lock().need_purge_files();
             for (stage_info, files) in need_purge_files {

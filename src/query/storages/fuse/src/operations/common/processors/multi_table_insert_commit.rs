@@ -125,13 +125,13 @@ impl AsyncSink for CommitMultiTableInsert {
                         update_stream_metas: self.update_stream_meta.clone(),
                         deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
                     };
-                    let update_failed_tbls = self
+                    let update_meta_result = self
                         .catalog
                         .update_multi_table_meta(update_multi_table_meta_req)
                         .await?;
-                    if update_failed_tbls.is_empty() {
+                    let Err(update_failed_tbls) = update_meta_result else {
                         return Ok(());
-                    }
+                    };
                     let update_failed_tbls_name: Vec<String> = update_failed_tbls
                         .iter()
                         .map(|(tid, _, _)| {

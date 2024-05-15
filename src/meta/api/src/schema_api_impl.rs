@@ -170,6 +170,7 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -2823,7 +2824,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn update_multi_table_meta(
         &self,
         req: UpdateMultiTableMetaReq,
-    ) -> Result<Vec<(u64, u64, TableMeta)>, KVAppError> {
+    ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             update_table_metas,
             copied_files,
@@ -2868,7 +2869,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         if !mismatched_tbs.is_empty() {
-            return Ok(mismatched_tbs);
+            return Ok(std::result::Result::Err(mismatched_tbs));
         }
 
         for (req, (tb_meta_seq, _)) in update_table_metas.iter().zip(tb_meta_vec.iter()) {
@@ -2953,7 +2954,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
         let (succ, responses) = send_txn(self, txn_req).await?;
         if succ {
-            return Ok(vec![]);
+            return Ok(std::result::Result::Ok(()));
         }
         let mut mismatched_tbs = vec![];
         for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
@@ -2985,7 +2986,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             )))
         } else {
             // up layer will retry
-            Ok(mismatched_tbs)
+            Ok(std::result::Result::Err(mismatched_tbs))
         }
     }
 
