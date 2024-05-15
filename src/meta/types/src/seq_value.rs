@@ -119,7 +119,7 @@ impl<V> SeqValue<V> for Option<SeqV<V>> {
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for SeqV<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut de = f.debug_struct("SeqV");
         de.field("seq", &self.seq);
         de.field("meta", &self.meta);

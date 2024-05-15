@@ -35,7 +35,7 @@ pub fn write_value<O: Offset, W: Write>(
 }
 
 impl<O: Offset> Debug for ListArray<O> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = |f: &mut Formatter, index| write_value(self, index, "None", f);
 
         let head = if O::IS_LARGE {

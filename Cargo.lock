@@ -2839,6 +2839,7 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-store",
  "databend-common-meta-types",
+ "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-enterprise-background-service",
@@ -2949,7 +2950,6 @@ name = "databend-common-ast"
 version = "0.1.0"
 dependencies = [
  "criterion",
- "databend-common-base",
  "databend-common-exception",
  "databend-common-io",
  "derive-visitor",

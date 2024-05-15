@@ -29,7 +29,7 @@ pub fn write_value<W: Write>(array: &FixedSizeBinaryArray, index: usize, f: &mut
 }
 
 impl Debug for FixedSizeBinaryArray {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = |f: &mut Formatter, index| write_value(self, index, f);
 
         write!(f, "{:?}", self.data_type)?;

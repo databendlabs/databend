@@ -46,6 +46,7 @@ databend-common-meta-raft-store = { path = "../meta/raft-store" }
 databend-common-meta-sled-store = { path = "../meta/sled-store" }
 databend-common-meta-store = { path = "../meta/store" }
 databend-common-meta-types = { path = "../meta/types" }
+databend-common-metrics = { path = "../common/metrics" }
 databend-common-storage = { path = "../common/storage" }
 databend-common-tracing = { path = "../common/tracing" }
 databend-enterprise-query = { path = "../query/ee" }

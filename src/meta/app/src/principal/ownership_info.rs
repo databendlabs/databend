@@ -33,7 +33,7 @@ pub struct OwnershipInfoSerdeError {
 }
 
 impl Display for OwnershipInfoSerdeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         write!(f, "{} cause: {}", self.message, self.source)
     }
 }

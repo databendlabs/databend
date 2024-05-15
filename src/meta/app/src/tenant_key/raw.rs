@@ -49,7 +49,7 @@ where
     R: TenantResource,
     N: Debug,
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         // If there is a specified type name for this alias, use it.
         // Otherwise use the default name
         let type_name = if R::TYPE.is_empty() {

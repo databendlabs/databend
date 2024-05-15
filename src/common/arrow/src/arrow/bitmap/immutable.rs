@@ -82,7 +82,7 @@ pub struct Bitmap {
 }
 
 impl std::fmt::Debug for Bitmap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let (bytes, offset, len) = self.as_slice();
         fmt(bytes, offset, len, f)
     }

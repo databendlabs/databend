@@ -46,7 +46,7 @@ pub struct CreateStageStmt {
 }
 
 impl Display for CreateStageStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, " OR REPLACE")?;
@@ -145,7 +145,7 @@ impl SelectStageOptions {
 // [ ENABLE_VIRTUAL_HOST_STYLE => true|false ]
 // )]
 impl Display for SelectStageOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, " (")?;
 
         if let Some(files) = self.files.as_ref() {

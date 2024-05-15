@@ -32,7 +32,7 @@ pub struct IndexIdToName {
 }
 
 impl Display for IndexIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.index_id)
     }
 }
@@ -49,7 +49,7 @@ impl IndexId {
 }
 
 impl Display for IndexId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.index_id)
     }
 }
@@ -71,7 +71,7 @@ pub enum IndexType {
 }
 
 impl Display for IndexType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             IndexType::AGGREGATING => write!(f, "AGGREGATING"),
             IndexType::JOIN => write!(f, "JOIN"),
@@ -118,7 +118,7 @@ pub struct CreateIndexReq {
 }
 
 impl Display for CreateIndexReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self.create_option {
             CreateOption::Create => {
                 write!(
@@ -156,7 +156,7 @@ pub struct DropIndexReq {
 }
 
 impl Display for DropIndexReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "drop_index(if_exists={}):{}/{}",
@@ -176,7 +176,7 @@ pub struct GetIndexReq {
 }
 
 impl Display for GetIndexReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "get_index:{}/{}",

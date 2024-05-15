@@ -34,7 +34,7 @@ pub struct CreatePipeStmt {
 }
 
 impl Display for CreatePipeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE PIPE")?;
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
@@ -63,7 +63,7 @@ pub struct DropPipeStmt {
 }
 
 impl Display for DropPipeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP PIPE")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -79,7 +79,7 @@ pub struct DescribePipeStmt {
 }
 
 impl Display for DescribePipeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE PIPE {}", self.name)
     }
 }
@@ -110,7 +110,7 @@ pub enum AlterPipeOptions {
 }
 
 impl Display for AlterPipeOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AlterPipeOptions::Set {
                 execution_paused,
@@ -142,7 +142,7 @@ impl Display for AlterPipeOptions {
 }
 
 impl Display for AlterPipeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER PIPE")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;

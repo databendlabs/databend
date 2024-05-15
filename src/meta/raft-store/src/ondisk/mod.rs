@@ -64,7 +64,7 @@ pub struct OnDisk {
 }
 
 impl fmt::Display for OnDisk {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "header: {:?}, data-dir: {}",

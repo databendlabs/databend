@@ -21,10 +21,13 @@ use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::Commands;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_config::QUERY_GIT_SEMVER;
+use databend_common_config::QUERY_GIT_SHA;
 use databend_common_config::QUERY_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
 use databend_enterprise_background_service::get_background_service_handler;
@@ -184,6 +187,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
     // Metric API service.
     {
+        set_system_version("query", QUERY_GIT_SEMVER.as_str(), QUERY_GIT_SHA.as_str());
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv.start(address.parse()?).await?;
