@@ -1,4 +1,7 @@
 statement ok
+drop table if exists test all
+
+statement ok
 CREATE TABLE test (a double) ENGINE=Memory
 
 statement ok

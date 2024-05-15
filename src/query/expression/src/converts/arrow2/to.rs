@@ -63,14 +63,9 @@ impl From<&DataSchema> for ArrowSchema {
 
 impl From<&TableField> for ArrowField {
     fn from(f: &TableField) -> Self {
-        let ty = table_type_to_arrow_type(&f.data_type, false, false);
+        let ty = table_type_to_arrow_type(&f.data_type);
         ArrowField::new(f.name(), ty, f.is_nullable())
     }
-}
-
-pub fn table_field_to_arrow2_field_ignore_inside_nullable(f: &TableField) -> ArrowField {
-    let ty = table_type_to_arrow_type(&f.data_type, false, true);
-    ArrowField::new(f.name(), ty, f.is_nullable())
 }
 
 impl From<&DataField> for ArrowField {
@@ -81,11 +76,7 @@ impl From<&DataField> for ArrowField {
 
 // Note: Arrow's data type is not nullable, so we need to explicitly
 // add nullable information to Arrow's field afterwards.
-fn table_type_to_arrow_type(
-    ty: &TableDataType,
-    inside_nullable: bool,
-    ignore_inside_nullable: bool,
-) -> ArrowDataType {
+fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
     match ty {
         TableDataType::Null => ArrowDataType::Null,
         TableDataType::EmptyArray => ArrowDataType::Extension(
@@ -112,12 +103,9 @@ fn table_type_to_arrow_type(
         }
         TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
         TableDataType::Date => ArrowDataType::Date32,
-        TableDataType::Nullable(ty) => {
-            table_type_to_arrow_type(ty.as_ref(), true, ignore_inside_nullable)
-        }
+        TableDataType::Nullable(ty) => table_type_to_arrow_type(ty.as_ref()),
         TableDataType::Array(ty) => {
-            let arrow_ty =
-                table_type_to_arrow_type(ty.as_ref(), inside_nullable, ignore_inside_nullable);
+            let arrow_ty = table_type_to_arrow_type(ty.as_ref());
             ArrowDataType::LargeList(Box::new(ArrowField::new(
                 "_array",
                 arrow_ty,
@@ -130,16 +118,8 @@ fn table_type_to_arrow_type(
                     fields_name: _fields_name,
                     fields_type,
                 } => {
-                    let key_ty = table_type_to_arrow_type(
-                        &fields_type[0],
-                        inside_nullable,
-                        ignore_inside_nullable,
-                    );
-                    let val_ty = table_type_to_arrow_type(
-                        &fields_type[1],
-                        inside_nullable,
-                        ignore_inside_nullable,
-                    );
+                    let key_ty = table_type_to_arrow_type(&fields_type[0]);
+                    let val_ty = table_type_to_arrow_type(&fields_type[1]);
                     let key_field = ArrowField::new("key", key_ty, fields_type[0].is_nullable());
                     let val_field = ArrowField::new("value", val_ty, fields_type[1].is_nullable());
                     ArrowDataType::Struct(vec![key_field, val_field])
@@ -166,8 +146,8 @@ fn table_type_to_arrow_type(
                 .map(|(name, ty)| {
                     ArrowField::new(
                         name.as_str(),
-                        table_type_to_arrow_type(ty, inside_nullable, ignore_inside_nullable),
-                        ty.is_nullable() || (inside_nullable && !ignore_inside_nullable),
+                        table_type_to_arrow_type(ty),
+                        ty.is_nullable(),
                     )
                 })
                 .collect();
@@ -427,37 +407,9 @@ pub fn set_validities(
     arrow_array: Box<dyn databend_common_arrow::arrow::array::Array>,
     validity: &Bitmap,
 ) -> Box<dyn databend_common_arrow::arrow::array::Array> {
-    // merge Struct validity with the inner fields validity
-    let validity = match arrow_array.validity() {
-        Some(inner_validity) => inner_validity & validity,
-        None => validity.clone(),
-    };
-
     match arrow_array.data_type() {
         ArrowDataType::Null => arrow_array.clone(),
         ArrowDataType::Extension(_, t, _) if **t == ArrowDataType::Null => arrow_array.clone(),
-        ArrowDataType::Struct(_) => {
-            let struct_array = arrow_array
-                .as_any()
-                .downcast_ref::<databend_common_arrow::arrow::array::StructArray>()
-                .expect("fail to read from arrow: array should be `StructArray`");
-            let fields = struct_array
-                .values()
-                .iter()
-                .map(|array| {
-                    let array = set_validities(array.clone(), &validity);
-                    array.clone()
-                })
-                .collect::<Vec<_>>();
-            Box::new(
-                databend_common_arrow::arrow::array::StructArray::try_new(
-                    arrow_array.data_type().clone(),
-                    fields,
-                    Some(validity),
-                )
-                .unwrap(),
-            )
-        }
-        _ => arrow_array.with_validity(Some(validity)),
+        _ => arrow_array.with_validity(Some(validity.clone())),
     }
 }
