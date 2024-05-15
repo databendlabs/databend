@@ -26,11 +26,11 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use md5::Digest;
+use md5::Md5;
 use serde::Serialize;
 use serde::Serializer;
 use serde_repr::Serialize_repr;
-use sha2::Digest;
-use sha2::Sha256;
 
 use crate::SystemLogElement;
 use crate::SystemLogQueue;
@@ -375,7 +375,7 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.query_text.clone()).as_ref());
-        let query_hash = format!("{:x}", Sha256::digest(&self.query_text));
+        let query_hash = format!("{:x}", Md5::digest(&self.query_text));
         columns
             .next()
             .unwrap()
@@ -384,7 +384,7 @@ impl SystemLogElement for QueryLogElement {
         let query_parameterized_hash = parse_sql(&tokens, Dialect::PostgreSQL)
             .ok()
             .and_then(|(stmt, _)| format_statement(stmt, true).ok())
-            .map(|format_ast| format!("{:x}", Sha256::digest(format_ast)))
+            .map(|format_ast| format!("{:x}", Md5::digest(format_ast)))
             .unwrap_or_default();
         columns
             .next()

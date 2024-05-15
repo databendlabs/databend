@@ -43,6 +43,7 @@ chrono-tz = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
+md-5 = "0.10.5"
 once_cell = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
@@ -50,7 +51,6 @@ regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = "0.1.9"
-sha2 = "0.10.6"
 snailquote = "0.3.1"
 tikv-jemalloc-ctl = { workspace = true }
 
