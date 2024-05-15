@@ -60,6 +60,7 @@ use databend_common_meta_types::StorageIOError;
 use databend_common_meta_types::Vote;
 use futures::TryStreamExt;
 use log::debug;
+use log::error;
 use log::info;
 use log::warn;
 
@@ -101,6 +102,8 @@ pub struct StoreInner {
 
     /// The current snapshot.
     pub current_snapshot: RwLock<Option<StoredSnapshot>>,
+
+    pub key_num: RwLock<Option<usize>>,
 }
 
 impl AsRef<StoreInner> for StoreInner {
@@ -164,6 +167,7 @@ impl StoreInner {
             info!("No snapshot, skip rebuilding state machine");
             (Default::default(), None)
         };
+        let key_num = RwLock::new(Self::calculate_key_num(&stored_snapshot, config.clone()).await);
 
         Ok(Self {
             id: raft_state.id,
@@ -174,7 +178,53 @@ impl StoreInner {
             log: RwLock::new(log),
             state_machine: sm,
             current_snapshot: RwLock::new(stored_snapshot),
+            key_num,
         })
+    }
+
+    pub async fn key_num(&self) -> Option<usize> {
+        let key_num = self.key_num.read().await;
+        *key_num
+    }
+
+    async fn calculate_key_num(
+        snapshot: &Option<StoredSnapshot>,
+        config: RaftConfig,
+    ) -> Option<usize> {
+        if let Some(s) = snapshot {
+            let meta = &s.meta;
+
+            let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, config);
+            match snapshot_store.load_snapshot(&meta.snapshot_id).await {
+                Err(e) => {
+                    error!("calculate_key_num error: {:?}", e);
+                    None
+                }
+                Ok(f) => {
+                    let bf = BufReader::new(f);
+                    let mut lines = AsyncBufReadExt::lines(bf);
+
+                    let mut count = 0;
+                    loop {
+                        let l = lines.next_line().await;
+                        if let Err(e) = l {
+                            error!("calculate_key_num async read line error: {:?}", e);
+                            return None;
+                        } else if let Ok(l) = l {
+                            if l.is_some() {
+                                count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+
+                    Some(count)
+                }
+            }
+        } else {
+            None
+        }
     }
 
     /// Return a snapshot store of this instance.
@@ -295,12 +345,17 @@ impl StoreInner {
         snapshot_meta.snapshot_id = snapshot_id.to_string();
 
         {
-            let snapshot = StoredSnapshot {
+            let snapshot = Some(StoredSnapshot {
                 meta: snapshot_meta.clone(),
-            };
+            });
+
+            if let Some(num) = Self::calculate_key_num(&snapshot, self.config.clone()).await {
+                let mut key_num = self.key_num.write().await;
+                *key_num = Some(num);
+            }
 
             let mut current_snapshot = self.current_snapshot.write().await;
-            *current_snapshot = Some(snapshot);
+            *current_snapshot = snapshot;
         }
 
         let r = ss_store
