@@ -55,7 +55,7 @@ impl Replace {
 }
 
 impl std::fmt::Debug for Replace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Replace")
             .field("catalog", &self.catalog)
             .field("database", &self.database)

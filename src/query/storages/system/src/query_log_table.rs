@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::NaiveDateTime;
+use chrono::DateTime;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::NumberDataType;
@@ -60,25 +60,28 @@ impl LogType {
 }
 
 impl std::fmt::Debug for LogType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.as_string())
     }
 }
 
 fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    let t = NaiveDateTime::from_timestamp_opt(i64::from(*dt) * 24 * 3600, 0).unwrap();
+    let t = DateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0)
+        .unwrap()
+        .naive_utc();
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
 fn datetime_str<S>(dt: &i64, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    let t = NaiveDateTime::from_timestamp_opt(
+    let t = DateTime::from_timestamp(
         dt / 1_000_000,
         TryFrom::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
         // u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
     )
-    .unwrap();
+    .unwrap()
+    .naive_utc();
     s.serialize_str(t.format("%Y-%m-%d %H:%M:%S%.6f").to_string().as_str())
 }
 

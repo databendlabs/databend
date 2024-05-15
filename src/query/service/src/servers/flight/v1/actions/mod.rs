@@ -18,12 +18,14 @@ mod execute_query_fragments;
 mod flight_actions;
 mod kill_query;
 mod new_flight_actions;
+mod set_priority;
 mod truncate_table;
 
 pub use flight_actions::FlightAction;
 pub use flight_actions::InitNodesChannel;
 pub use flight_actions::InitQueryFragmentsPlan;
 pub use flight_actions::KillQuery;
+pub use flight_actions::SetPriority;
 pub use flight_actions::TruncateTable;
 pub use new_flight_actions::flight_actions;
 pub use new_flight_actions::FlightActions;

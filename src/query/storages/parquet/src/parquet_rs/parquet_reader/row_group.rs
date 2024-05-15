@@ -253,7 +253,7 @@ impl<'a> InMemoryRowGroup<'a> {
                                 .read_with(&location)
                                 .range(range.clone())
                                 .call()?;
-                            Ok::<_, ErrorCode>((range, Bytes::from(data)))
+                            Ok::<_, ErrorCode>((range, data.to_bytes()))
                         })
                         .collect::<Result<_>>()
                 };
@@ -266,7 +266,7 @@ impl<'a> InMemoryRowGroup<'a> {
                     let fut_read = self.op.read_with(self.location);
                     handles.push(async move {
                         let data = fut_read.range(range.start..range.end).await?;
-                        Ok::<_, ErrorCode>((range, Bytes::from(data)))
+                        Ok::<_, ErrorCode>((range, data.to_bytes()))
                     });
                 }
                 let chunk_data = futures::future::try_join_all(handles).await?;

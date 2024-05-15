@@ -186,7 +186,7 @@ impl<K: DictionaryKey, M: MutableArray> ValueMap<K, M> {
 }
 
 impl<K: DictionaryKey, M: MutableArray> Debug for ValueMap<K, M> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.values.fmt(f)
     }
 }

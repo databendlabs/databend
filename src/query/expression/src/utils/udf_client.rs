@@ -40,6 +40,7 @@ const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
     inner: FlightServiceClient<Channel>,
+    batch_rows: u64,
 }
 
 impl UDFFlightClient {
@@ -48,6 +49,7 @@ impl UDFFlightClient {
         addr: &str,
         conn_timeout: u64,
         request_timeout: u64,
+        batch_rows: u64,
     ) -> Result<UDFFlightClient> {
         let endpoint = Endpoint::from_shared(addr.to_string())
             .map_err(|err| {
@@ -69,7 +71,7 @@ impl UDFFlightClient {
             })?
             .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
 
-        Ok(UDFFlightClient { inner })
+        Ok(UDFFlightClient { inner, batch_rows })
     }
 
     fn make_request<T>(&self, t: T) -> Request<T> {
@@ -135,9 +137,16 @@ impl UDFFlightClient {
         input_batch: RecordBatch,
     ) -> Result<RecordBatch> {
         let descriptor = FlightDescriptor::new_path(vec![func_name.to_string()]);
+        let batch_rows = self.batch_rows as usize;
+        let batches = (0..input_batch.num_rows())
+            .step_by(batch_rows)
+            .map(move |start| {
+                Ok(input_batch.slice(start, batch_rows.min(input_batch.num_rows() - start)))
+            });
+
         let flight_data_stream = FlightDataEncoderBuilder::new()
             .with_flight_descriptor(Some(descriptor))
-            .build(stream::iter(vec![Ok(input_batch)]))
+            .build(stream::iter(batches))
             .map(|data| data.unwrap());
         let request = self.make_request(flight_data_stream);
         let flight_data_stream = self.inner.do_exchange(request).await?.into_inner();

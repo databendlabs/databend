@@ -15,19 +15,18 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
+use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateVirtualColumnStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -37,7 +36,7 @@ pub struct CreateVirtualColumnStmt {
 }
 
 impl Display for CreateVirtualColumnStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -72,7 +71,7 @@ pub struct AlterVirtualColumnStmt {
 }
 
 impl Display for AlterVirtualColumnStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER VIRTUAL COLUMN ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -101,7 +100,7 @@ pub struct DropVirtualColumnStmt {
 }
 
 impl Display for DropVirtualColumnStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP VIRTUAL COLUMN ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;

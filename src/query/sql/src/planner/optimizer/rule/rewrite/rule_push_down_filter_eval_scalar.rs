@@ -22,21 +22,13 @@ use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
-use crate::plans::AggregateFunction;
-use crate::plans::CastExpr;
+use crate::plans::walk_expr_mut;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
-use crate::plans::FunctionCall;
-use crate::plans::LagLeadFunction;
-use crate::plans::LambdaFunc;
-use crate::plans::NthValueFunction;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::plans::UDFCall;
-use crate::plans::WindowFunc;
-use crate::plans::WindowFuncType;
-use crate::plans::WindowOrderBy;
+use crate::plans::VisitorMut;
 
 pub struct RulePushDownFilterEvalScalar {
     id: RuleID,
@@ -64,164 +56,28 @@ impl RulePushDownFilterEvalScalar {
 
     // Replace predicate with children scalar items
     fn replace_predicate(predicate: &ScalarExpr, items: &[ScalarItem]) -> Result<ScalarExpr> {
-        match predicate {
-            ScalarExpr::BoundColumnRef(column) => {
-                for item in items {
-                    if item.index == column.column.index {
-                        return Ok(item.scalar.clone());
-                    }
-                }
-                Ok(predicate.clone())
-            }
-            ScalarExpr::WindowFunction(window) => {
-                let func = match &window.func {
-                    WindowFuncType::Aggregate(agg) => {
-                        let args = agg
-                            .args
-                            .iter()
-                            .map(|arg| Self::replace_predicate(arg, items))
-                            .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                        WindowFuncType::Aggregate(AggregateFunction {
-                            func_name: agg.func_name.clone(),
-                            distinct: agg.distinct,
-                            params: agg.params.clone(),
-                            args,
-                            return_type: agg.return_type.clone(),
-                            display_name: agg.display_name.clone(),
-                        })
-                    }
-                    WindowFuncType::LagLead(ll) => {
-                        let new_arg = Self::replace_predicate(&ll.arg, items)?;
-                        let new_default = match ll
-                            .default
-                            .clone()
-                            .map(|d| Self::replace_predicate(&d, items))
-                        {
-                            None => None,
-                            Some(d) => Some(Box::new(d?)),
-                        };
-                        WindowFuncType::LagLead(LagLeadFunction {
-                            is_lag: ll.is_lag,
-                            arg: Box::new(new_arg),
-                            offset: ll.offset,
-                            default: new_default,
-                            return_type: ll.return_type.clone(),
-                        })
-                    }
-                    WindowFuncType::NthValue(func) => {
-                        let new_arg = Self::replace_predicate(&func.arg, items)?;
-                        WindowFuncType::NthValue(NthValueFunction {
-                            n: func.n,
-                            arg: Box::new(new_arg),
-                            return_type: func.return_type.clone(),
-                        })
-                    }
-                    func => func.clone(),
-                };
-
-                let partition_by = window
-                    .partition_by
-                    .iter()
-                    .map(|arg| Self::replace_predicate(arg, items))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                let order_by = window
-                    .order_by
-                    .iter()
-                    .map(|arg| {
-                        Ok(WindowOrderBy {
-                            asc: arg.asc,
-                            nulls_first: arg.nulls_first,
-                            expr: Self::replace_predicate(&arg.expr, items)?,
-                        })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                Ok(ScalarExpr::WindowFunction(WindowFunc {
-                    span: window.span,
-                    display_name: window.display_name.clone(),
-                    func,
-                    partition_by,
-                    order_by,
-                    frame: window.frame.clone(),
-                }))
-            }
-            ScalarExpr::AggregateFunction(agg_func) => {
-                let args = agg_func
-                    .args
-                    .iter()
-                    .map(|arg| Self::replace_predicate(arg, items))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                Ok(ScalarExpr::AggregateFunction(AggregateFunction {
-                    func_name: agg_func.func_name.clone(),
-                    distinct: agg_func.distinct,
-                    params: agg_func.params.clone(),
-                    args,
-                    return_type: agg_func.return_type.clone(),
-                    display_name: agg_func.display_name.clone(),
-                }))
-            }
-            ScalarExpr::FunctionCall(func) => {
-                let arguments = func
-                    .arguments
-                    .iter()
-                    .map(|arg| Self::replace_predicate(arg, items))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                Ok(ScalarExpr::FunctionCall(FunctionCall {
-                    span: func.span,
-                    params: func.params.clone(),
-                    arguments,
-                    func_name: func.func_name.clone(),
-                }))
-            }
-            ScalarExpr::LambdaFunction(lambda_func) => {
-                let args = lambda_func
-                    .args
-                    .iter()
-                    .map(|arg| Self::replace_predicate(arg, items))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
-                    span: lambda_func.span,
-                    func_name: lambda_func.func_name.clone(),
-                    args,
-                    lambda_expr: lambda_func.lambda_expr.clone(),
-                    lambda_display: lambda_func.lambda_display.clone(),
-                    return_type: lambda_func.return_type.clone(),
-                }))
-            }
-            ScalarExpr::CastExpr(cast) => {
-                let arg = Self::replace_predicate(&cast.argument, items)?;
-                Ok(ScalarExpr::CastExpr(CastExpr {
-                    span: cast.span,
-                    is_try: cast.is_try,
-                    argument: Box::new(arg),
-                    target_type: cast.target_type.clone(),
-                }))
-            }
-            ScalarExpr::UDFCall(udf) => {
-                let arguments = udf
-                    .arguments
-                    .iter()
-                    .map(|arg| Self::replace_predicate(arg, items))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                Ok(ScalarExpr::UDFCall(UDFCall {
-                    span: udf.span,
-                    name: udf.name.clone(),
-                    func_name: udf.func_name.clone(),
-                    display_name: udf.display_name.clone(),
-                    udf_type: udf.udf_type.clone(),
-                    arg_types: udf.arg_types.clone(),
-                    return_type: udf.return_type.clone(),
-                    arguments,
-                }))
-            }
-            _ => Ok(predicate.clone()),
+        struct PredicateVisitor<'a> {
+            items: &'a [ScalarItem],
         }
+        impl<'a> VisitorMut<'a> for PredicateVisitor<'a> {
+            fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+                if let ScalarExpr::BoundColumnRef(column) = expr {
+                    for item in self.items {
+                        if item.index == column.column.index {
+                            *expr = item.scalar.clone();
+                            return Ok(());
+                        }
+                    }
+                    return Ok(());
+                };
+                walk_expr_mut(self, expr)
+            }
+        }
+
+        let mut visitor = PredicateVisitor { items };
+        let mut predicate = predicate.clone();
+        visitor.visit(&mut predicate)?;
+        Ok(predicate.clone())
     }
 }
 

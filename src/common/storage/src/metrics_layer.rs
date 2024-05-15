@@ -14,16 +14,11 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::io;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
-use async_trait::async_trait;
-use bytes::Bytes;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_histogram_family;
 use databend_common_base::runtime::metrics::FamilyCounter;
@@ -31,9 +26,9 @@ use databend_common_base::runtime::metrics::FamilyHistogram;
 use futures::FutureExt;
 use futures::TryFutureExt;
 use opendal::raw::oio;
-use opendal::raw::Accessor;
+use opendal::raw::Access;
 use opendal::raw::Layer;
-use opendal::raw::LayeredAccessor;
+use opendal::raw::LayeredAccess;
 use opendal::raw::OpBatch;
 use opendal::raw::OpCreateDir;
 use opendal::raw::OpDelete;
@@ -51,6 +46,7 @@ use opendal::raw::RpPresign;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
+use opendal::Buffer;
 use opendal::ErrorKind;
 use opendal::Scheme;
 use prometheus_client::metrics::histogram::exponential_buckets;
@@ -128,10 +124,10 @@ pub struct MetricsLayer {
     metrics: Arc<MetricsRecorder>,
 }
 
-impl<A: Accessor> Layer<A> for MetricsLayer {
-    type LayeredAccessor = MetricsLayerAccessor<A>;
+impl<A: Access> Layer<A> for MetricsLayer {
+    type LayeredAccess = MetricsLayerAccessor<A>;
 
-    fn layer(&self, inner: A) -> Self::LayeredAccessor {
+    fn layer(&self, inner: A) -> Self::LayeredAccess {
         let meta = inner.info();
         let scheme = meta.scheme();
 
@@ -144,23 +140,21 @@ impl<A: Accessor> Layer<A> for MetricsLayer {
 }
 
 #[derive(Clone)]
-pub struct MetricsLayerAccessor<A: Accessor> {
+pub struct MetricsLayerAccessor<A: Access> {
     inner: A,
     scheme: Scheme,
     metrics: Arc<MetricsRecorder>,
 }
 
-impl<A: Accessor> Debug for MetricsLayerAccessor<A> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl<A: Access> Debug for MetricsLayerAccessor<A> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("MetricsAccessor")
             .field("inner", &self.inner)
             .finish_non_exhaustive()
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(? Send))]
-impl<A: Accessor> LayeredAccessor for MetricsLayerAccessor<A> {
+impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
     type Inner = A;
     type Reader = OperatorMetricsWrapper<A::Reader>;
     type BlockingReader = OperatorMetricsWrapper<A::BlockingReader>;
@@ -483,8 +477,6 @@ pub struct OperatorMetricsWrapper<R> {
     op: Operation,
     metrics: Arc<MetricsRecorder>,
     scheme: Scheme,
-    bytes_total: usize,
-    start_time: Instant,
 }
 
 impl<R> OperatorMetricsWrapper<R> {
@@ -494,103 +486,65 @@ impl<R> OperatorMetricsWrapper<R> {
             op,
             metrics,
             scheme,
-            bytes_total: 0,
-            start_time: Instant::now(),
         }
     }
 }
 
 impl<R: oio::Read> oio::Read for OperatorMetricsWrapper<R> {
-    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<opendal::Result<usize>> {
-        self.inner.poll_read(cx, buf).map(|res| match res {
-            Ok(bytes) => {
-                self.bytes_total += bytes;
-                Ok(bytes)
-            }
-            Err(e) => {
-                self.metrics
-                    .increment_errors_total(self.scheme, self.op, e.kind());
-                Err(e)
-            }
-        })
-    }
+    async fn read_at(&self, offset: u64, limit: usize) -> opendal::Result<Buffer> {
+        let start = Instant::now();
 
-    fn poll_seek(&mut self, cx: &mut Context<'_>, pos: io::SeekFrom) -> Poll<opendal::Result<u64>> {
-        self.inner.poll_seek(cx, pos).map(|res| match res {
-            Ok(n) => Ok(n),
-            Err(e) => {
+        self.inner
+            .read_at(offset, limit)
+            .await
+            .map(|res| {
                 self.metrics
-                    .increment_errors_total(self.scheme, self.op, e.kind());
-                Err(e)
-            }
-        })
-    }
-
-    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<opendal::Result<Bytes>>> {
-        self.inner.poll_next(cx).map(|res| match res {
-            Some(Ok(bytes)) => {
-                self.bytes_total += bytes.len();
-                Some(Ok(bytes))
-            }
-            Some(Err(e)) => {
+                    .observe_bytes_total(self.scheme, self.op, res.len());
                 self.metrics
-                    .increment_errors_total(self.scheme, self.op, e.kind());
-                Some(Err(e))
-            }
-            None => None,
-        })
+                    .observe_request_duration(self.scheme, self.op, start.elapsed());
+                res
+            })
+            .map_err(|err| {
+                self.metrics
+                    .increment_errors_total(self.scheme, self.op, err.kind());
+                err
+            })
     }
 }
 
 impl<R: oio::BlockingRead> oio::BlockingRead for OperatorMetricsWrapper<R> {
-    fn read(&mut self, buf: &mut [u8]) -> opendal::Result<usize> {
+    fn read_at(&self, offset: u64, limit: usize) -> opendal::Result<Buffer> {
+        let start = Instant::now();
+
         self.inner
-            .read(buf)
-            .map(|n| {
-                self.bytes_total += n;
-                n
-            })
-            .map_err(|e| {
+            .read_at(offset, limit)
+            .map(|res| {
                 self.metrics
-                    .increment_errors_total(self.scheme, self.op, e.kind());
-                e
-            })
-    }
-
-    fn seek(&mut self, pos: io::SeekFrom) -> opendal::Result<u64> {
-        self.inner.seek(pos).map_err(|err| {
-            self.metrics
-                .increment_errors_total(self.scheme, self.op, err.kind());
-            err
-        })
-    }
-
-    fn next(&mut self) -> Option<opendal::Result<Bytes>> {
-        self.inner.next().map(|res| match res {
-            Ok(bytes) => {
-                self.bytes_total += bytes.len();
-                Ok(bytes)
-            }
-            Err(e) => {
+                    .observe_bytes_total(self.scheme, self.op, res.len());
                 self.metrics
-                    .increment_errors_total(self.scheme, self.op, e.kind());
-                Err(e)
-            }
-        })
+                    .observe_request_duration(self.scheme, self.op, start.elapsed());
+                res
+            })
+            .map_err(|err| {
+                self.metrics
+                    .increment_errors_total(self.scheme, self.op, err.kind());
+                err
+            })
     }
 }
 
 impl<R: oio::Write> oio::Write for OperatorMetricsWrapper<R> {
-    fn poll_write(
-        &mut self,
-        cx: &mut Context<'_>,
-        bs: &dyn oio::WriteBuf,
-    ) -> Poll<opendal::Result<usize>> {
+    async fn write(&mut self, bs: Buffer) -> opendal::Result<usize> {
+        let start = Instant::now();
+
         self.inner
-            .poll_write(cx, bs)
-            .map_ok(|n| {
-                self.bytes_total += n;
-                n
+            .write(bs)
+            .await
+            .map(|res| {
+                self.metrics.observe_bytes_total(self.scheme, self.op, res);
+                self.metrics
+                    .observe_request_duration(self.scheme, self.op, start.elapsed());
+                res
             })
             .map_err(|err| {
                 self.metrics
@@ -599,16 +553,16 @@ impl<R: oio::Write> oio::Write for OperatorMetricsWrapper<R> {
             })
     }
 
-    fn poll_abort(&mut self, cx: &mut Context<'_>) -> Poll<opendal::Result<()>> {
-        self.inner.poll_abort(cx).map_err(|err| {
+    async fn close(&mut self) -> opendal::Result<()> {
+        self.inner.close().await.map_err(|err| {
             self.metrics
                 .increment_errors_total(self.scheme, self.op, err.kind());
             err
         })
     }
 
-    fn poll_close(&mut self, cx: &mut Context<'_>) -> Poll<opendal::Result<()>> {
-        self.inner.poll_close(cx).map_err(|err| {
+    async fn abort(&mut self) -> opendal::Result<()> {
+        self.inner.abort().await.map_err(|err| {
             self.metrics
                 .increment_errors_total(self.scheme, self.op, err.kind());
             err
@@ -617,12 +571,16 @@ impl<R: oio::Write> oio::Write for OperatorMetricsWrapper<R> {
 }
 
 impl<R: oio::BlockingWrite> oio::BlockingWrite for OperatorMetricsWrapper<R> {
-    fn write(&mut self, bs: &dyn oio::WriteBuf) -> opendal::Result<usize> {
+    fn write(&mut self, bs: Buffer) -> opendal::Result<usize> {
+        let start = Instant::now();
+
         self.inner
             .write(bs)
-            .map(|n| {
-                self.bytes_total += n;
-                n
+            .map(|res| {
+                self.metrics.observe_bytes_total(self.scheme, self.op, res);
+                self.metrics
+                    .observe_request_duration(self.scheme, self.op, start.elapsed());
+                res
             })
             .map_err(|err| {
                 self.metrics
@@ -637,14 +595,5 @@ impl<R: oio::BlockingWrite> oio::BlockingWrite for OperatorMetricsWrapper<R> {
                 .increment_errors_total(self.scheme, self.op, err.kind());
             err
         })
-    }
-}
-
-impl<R> Drop for OperatorMetricsWrapper<R> {
-    fn drop(&mut self) {
-        self.metrics
-            .observe_bytes_total(self.scheme, self.op, self.bytes_total);
-        self.metrics
-            .observe_request_duration(self.scheme, self.op, self.start_time.elapsed());
     }
 }

@@ -15,17 +15,6 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use databend_common_meta_app::principal::AuthType;
-use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::schema::CatalogType;
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::ShareGrantObjectName;
-use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::tenant::Tenant;
-use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -350,6 +339,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let set_priority = map(
+        rule! {
+            SET ~ PRIORITY ~  #priority  ~ #parameter_to_string
+        },
+        |(_, _, priority, object_id)| Statement::SetPriority {
+            object_id,
+            priority,
+        },
+    );
+
     let set_variable = map(
         rule! {
             SET ~ GLOBAL? ~ #ident ~ "=" ~ #subexpr(0)
@@ -363,10 +362,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let unset_variable = map(
         rule! {
-            UNSET ~ #unset_source
+            UNSET ~ SESSION? ~ #unset_source
         },
-        |(_, unset_source)| {
+        |(_, opt_session_level, unset_source)| {
             Statement::UnSetVariable(UnSetStmt {
+                session_level: opt_session_level.is_some(),
                 source: unset_source,
             })
         },
@@ -2052,6 +2052,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
+            | #set_priority: "SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>"
         ),
         // database
         rule!(
@@ -2857,7 +2858,7 @@ pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
         rule! {
             DATABASE ~ #ident
         },
-        |(_, database)| ShareGrantObjectName::Database(database.to_string()),
+        |(_, database)| ShareGrantObjectName::Database(database),
     );
 
     // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
@@ -2865,9 +2866,7 @@ pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
         rule! {
             TABLE ~  #ident ~ "." ~ #ident
         },
-        |(_, database, _, table)| {
-            ShareGrantObjectName::Table(database.to_string(), table.to_string())
-        },
+        |(_, database, _, table)| ShareGrantObjectName::Table(database, table),
     );
 
     rule!(
@@ -3636,6 +3635,14 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
+pub fn priority(i: Input) -> IResult<Priority> {
+    alt((
+        value(Priority::LOW, rule! { LOW }),
+        value(Priority::MEDIUM, rule! { MEDIUM }),
+        value(Priority::HIGH, rule! { HIGH }),
+    ))(i)
+}
+
 pub fn limit_where(i: Input) -> IResult<ShowLimit> {
     map(
         rule! {
@@ -3743,16 +3750,12 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map_res(
+    let share_from = map(
         rule! {
             FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
-        |(_, _, tenant, _, share_name)| {
-            Tenant::new_or_err(tenant.to_string(), func_name!())
-                .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
-                .map(|tenant| {
-                    CreateDatabaseOption::FromShare(ShareNameIdent::new(tenant, share_name))
-                })
+        |(_, _, tenant, _, share)| {
+            CreateDatabaseOption::FromShare(ShareNameIdent { tenant, share })
         },
     );
 

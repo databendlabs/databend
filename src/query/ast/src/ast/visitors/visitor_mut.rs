@@ -13,11 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Span;
-use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::schema::CreateOption;
 
-use crate::ast::visitors::walk_column_id_mut;
 use crate::ast::*;
 
 #[deprecated = "Use derive_visitor::VisitorMut instead"]
@@ -845,4 +841,5 @@ pub trait VisitorMut: Sized {
 
     fn visit_create_sequence(&mut self, _stmt: &mut CreateSequenceStmt) {}
     fn visit_drop_sequence(&mut self, _stmt: &mut DropSequenceStmt) {}
+    fn visit_set_priority(&mut self, _priority: &mut Priority, _object_id: &mut String) {}
 }

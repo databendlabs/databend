@@ -159,6 +159,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 mutator.remained_blocks,
                 mutator.removed_segment_indexes,
                 mutator.removed_segment_summary,
+                true,
             )?;
 
             let mut build_res =
@@ -183,9 +184,8 @@ impl Interpreter for ReclusterTableInterpreter {
             // Status.
             {
                 let status = format!(
-                    "recluster: run recluster tasks:{} times, cost:{} sec",
-                    times,
-                    elapsed_time.as_secs()
+                    "recluster: run recluster tasks:{} times, cost:{:?}",
+                    times, elapsed_time
                 );
                 ctx.set_status_info(&status);
             }
@@ -196,8 +196,8 @@ impl Interpreter for ReclusterTableInterpreter {
 
             if elapsed_time >= timeout {
                 warn!(
-                    "Recluster stopped because the runtime was over {} secs",
-                    timeout.as_secs()
+                    "Recluster stopped because the runtime was over {:?}",
+                    timeout
                 );
                 break;
             }
@@ -222,6 +222,7 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_recluster_physical_plan(
     tasks: Vec<ReclusterTask>,
     table_info: TableInfo,
@@ -230,6 +231,7 @@ pub fn build_recluster_physical_plan(
     remained_blocks: Vec<Arc<BlockMeta>>,
     removed_segment_indexes: Vec<usize>,
     removed_segment_summary: Statistics,
+    need_lock: bool,
 ) -> Result<PhysicalPlan> {
     let is_distributed = tasks.len() > 1;
     let mut root = PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
@@ -258,6 +260,7 @@ pub fn build_recluster_physical_plan(
         removed_segment_indexes,
         removed_segment_summary,
         plan_id: u32::MAX,
+        need_lock,
     }));
     plan.adjust_plan_id(&mut 0);
     Ok(plan)

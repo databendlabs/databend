@@ -69,70 +69,70 @@ statement ok
 DROP FUNCTION IF EXISTS split_and_join;
 
 statement ok
-CREATE FUNCTION add_signed (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815'
+CREATE OR REPLACE FUNCTION add_signed (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815'
 
 statement ok
-CREATE FUNCTION add_unsigned (TINYINT UNSIGNED, SMALLINT UNSIGNED, INT UNSIGNED, BIGINT UNSIGNED) RETURNS BIGINT UNSIGNED LANGUAGE python HANDLER = 'add_unsigned' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION add_unsigned (TINYINT UNSIGNED, SMALLINT UNSIGNED, INT UNSIGNED, BIGINT UNSIGNED) RETURNS BIGINT UNSIGNED LANGUAGE python HANDLER = 'add_unsigned' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION add_float (FLOAT, DOUBLE) RETURNS DOUBLE LANGUAGE python HANDLER = 'add_float' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION add_float (FLOAT, DOUBLE) RETURNS DOUBLE LANGUAGE python HANDLER = 'add_float' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION bool_select (BOOLEAN, BIGINT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'bool_select' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION bool_select (BOOLEAN, BIGINT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'bool_select' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION split_and_join (VARCHAR, VARCHAR, VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'split_and_join' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION split_and_join (VARCHAR, VARCHAR, VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'split_and_join' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION decimal_div (DECIMAL(36, 18), DECIMAL(36, 18)) RETURNS DECIMAL(72, 28) LANGUAGE python HANDLER = 'decimal_div' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION decimal_div (DECIMAL(36, 18), DECIMAL(36, 18)) RETURNS DECIMAL(72, 28) LANGUAGE python HANDLER = 'decimal_div' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION hex_to_dec (VARCHAR) RETURNS DECIMAL(36, 18) LANGUAGE python HANDLER = 'hex_to_dec' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION hex_to_dec (VARCHAR) RETURNS DECIMAL(36, 18) LANGUAGE python HANDLER = 'hex_to_dec' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION add_days_py (DATE, INT) RETURNS DATE LANGUAGE python HANDLER = 'add_days_py' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION add_days_py (DATE, INT) RETURNS DATE LANGUAGE python HANDLER = 'add_days_py' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION add_hours_py (TIMESTAMP, INT) RETURNS TIMESTAMP LANGUAGE python HANDLER = 'add_hours_py' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION add_hours_py (TIMESTAMP, INT) RETURNS TIMESTAMP LANGUAGE python HANDLER = 'add_hours_py' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION array_access (ARRAY(VARCHAR), INT) RETURNS VARCHAR LANGUAGE python HANDLER = 'array_access' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION array_access (ARRAY(VARCHAR), INT) RETURNS VARCHAR LANGUAGE python HANDLER = 'array_access' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION array_index_of (ARRAY(BIGINT NULL), BIGINT) RETURNS INT NOT NULL LANGUAGE python HANDLER = 'array_index_of' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION array_index_of (ARRAY(BIGINT NULL), BIGINT) RETURNS INT NOT NULL LANGUAGE python HANDLER = 'array_index_of' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION map_access (MAP(VARCHAR, VARCHAR), VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'map_access' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION map_access (MAP(VARCHAR, VARCHAR), VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'map_access' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION json_access (VARIANT, VARCHAR) RETURNS VARIANT LANGUAGE python HANDLER = 'json_access' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION json_access (VARIANT, VARCHAR) RETURNS VARIANT LANGUAGE python HANDLER = 'json_access' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION json_concat (ARRAY(VARIANT)) RETURNS VARIANT LANGUAGE python HANDLER = 'json_concat' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION json_concat (ARRAY(VARIANT)) RETURNS VARIANT LANGUAGE python HANDLER = 'json_concat' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION tuple_access (TUPLE(ARRAY(VARIANT NULL), INT, VARCHAR), INT, INT) RETURNS TUPLE(VARIANT NULL, VARIANT NULL) LANGUAGE python HANDLER = 'tuple_access' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION tuple_access (TUPLE(ARRAY(VARIANT NULL), INT, VARCHAR), INT, INT) RETURNS TUPLE(VARIANT NULL, VARIANT NULL) LANGUAGE python HANDLER = 'tuple_access' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION return_all (BOOLEAN, TINYINT, SMALLINT, INT, BIGINT, TINYINT UNSIGNED, SMALLINT UNSIGNED, INT UNSIGNED, BIGINT UNSIGNED, FLOAT, DOUBLE, DATE, TIMESTAMP, VARCHAR, VARIANT) RETURNS TUPLE(BOOLEAN NULL, TINYINT NULL, SMALLINT NULL, INT NULL, BIGINT NULL, TINYINT UNSIGNED NULL, SMALLINT UNSIGNED NULL, INT UNSIGNED NULL, BIGINT UNSIGNED NULL, FLOAT NULL, DOUBLE NULL, DATE NULL, TIMESTAMP NULL, VARCHAR NULL, VARIANT NULL) LANGUAGE python HANDLER = 'return_all' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION return_all (BOOLEAN, TINYINT, SMALLINT, INT, BIGINT, TINYINT UNSIGNED, SMALLINT UNSIGNED, INT UNSIGNED, BIGINT UNSIGNED, FLOAT, DOUBLE, DATE, TIMESTAMP, VARCHAR, VARIANT) RETURNS TUPLE(BOOLEAN NULL, TINYINT NULL, SMALLINT NULL, INT NULL, BIGINT NULL, TINYINT UNSIGNED NULL, SMALLINT UNSIGNED NULL, INT UNSIGNED NULL, BIGINT UNSIGNED NULL, FLOAT NULL, DOUBLE NULL, DATE NULL, TIMESTAMP NULL, VARCHAR NULL, VARIANT NULL) LANGUAGE python HANDLER = 'return_all' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION return_all_arrays (ARRAY(BOOLEAN), ARRAY(TINYINT), ARRAY(SMALLINT), ARRAY(INT), ARRAY(BIGINT), ARRAY(TINYINT UNSIGNED), ARRAY(SMALLINT UNSIGNED), ARRAY(INT UNSIGNED), ARRAY(BIGINT UNSIGNED), ARRAY(FLOAT), ARRAY(DOUBLE), ARRAY(DATE), ARRAY(TIMESTAMP), ARRAY(VARCHAR), ARRAY(VARIANT)) RETURNS TUPLE(ARRAY(BOOLEAN), ARRAY(TINYINT), ARRAY(SMALLINT), ARRAY(INT), ARRAY(BIGINT), ARRAY(TINYINT UNSIGNED), ARRAY(SMALLINT UNSIGNED), ARRAY(INT UNSIGNED), ARRAY(BIGINT UNSIGNED), ARRAY(FLOAT), ARRAY(DOUBLE), ARRAY(DATE), ARRAY(TIMESTAMP), ARRAY(VARCHAR), ARRAY(VARIANT)) LANGUAGE python HANDLER = 'return_all_arrays' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION return_all_arrays (ARRAY(BOOLEAN), ARRAY(TINYINT), ARRAY(SMALLINT), ARRAY(INT), ARRAY(BIGINT), ARRAY(TINYINT UNSIGNED), ARRAY(SMALLINT UNSIGNED), ARRAY(INT UNSIGNED), ARRAY(BIGINT UNSIGNED), ARRAY(FLOAT), ARRAY(DOUBLE), ARRAY(DATE), ARRAY(TIMESTAMP), ARRAY(VARCHAR), ARRAY(VARIANT)) RETURNS TUPLE(ARRAY(BOOLEAN), ARRAY(TINYINT), ARRAY(SMALLINT), ARRAY(INT), ARRAY(BIGINT), ARRAY(TINYINT UNSIGNED), ARRAY(SMALLINT UNSIGNED), ARRAY(INT UNSIGNED), ARRAY(BIGINT UNSIGNED), ARRAY(FLOAT), ARRAY(DOUBLE), ARRAY(DATE), ARRAY(TIMESTAMP), ARRAY(VARCHAR), ARRAY(VARIANT)) LANGUAGE python HANDLER = 'return_all_arrays' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION return_all_non_nullable (BOOLEAN NOT NULL, TINYINT NOT NULL, SMALLINT NOT NULL, INT NOT NULL, BIGINT NOT NULL, TINYINT UNSIGNED NOT NULL, SMALLINT UNSIGNED NOT NULL, INT UNSIGNED NOT NULL, BIGINT UNSIGNED NOT NULL, FLOAT NOT NULL, DOUBLE NOT NULL, DATE NOT NULL, TIMESTAMP NOT NULL, VARCHAR NOT NULL, VARIANT NOT NULL) RETURNS TUPLE(BOOLEAN, TINYINT, SMALLINT, INT, BIGINT, TINYINT UNSIGNED, SMALLINT UNSIGNED, INT UNSIGNED, BIGINT UNSIGNED, FLOAT, DOUBLE, DATE, TIMESTAMP, VARCHAR, VARIANT) LANGUAGE python HANDLER = 'return_all_non_nullable' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION return_all_non_nullable (BOOLEAN NOT NULL, TINYINT NOT NULL, SMALLINT NOT NULL, INT NOT NULL, BIGINT NOT NULL, TINYINT UNSIGNED NOT NULL, SMALLINT UNSIGNED NOT NULL, INT UNSIGNED NOT NULL, BIGINT UNSIGNED NOT NULL, FLOAT NOT NULL, DOUBLE NOT NULL, DATE NOT NULL, TIMESTAMP NOT NULL, VARCHAR NOT NULL, VARIANT NOT NULL) RETURNS TUPLE(BOOLEAN, TINYINT, SMALLINT, INT, BIGINT, TINYINT UNSIGNED, SMALLINT UNSIGNED, INT UNSIGNED, BIGINT UNSIGNED, FLOAT, DOUBLE, DATE, TIMESTAMP, VARCHAR, VARIANT) LANGUAGE python HANDLER = 'return_all_non_nullable' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION wait (INT) RETURNS INT LANGUAGE python HANDLER = 'wait' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION wait (INT) RETURNS INT LANGUAGE python HANDLER = 'wait' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE FUNCTION wait_concurrent (INT) RETURNS INT LANGUAGE python HANDLER = 'wait_concurrent' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION wait_concurrent (INT) RETURNS INT LANGUAGE python HANDLER = 'wait_concurrent' ADDRESS = 'http://0.0.0.0:8815';
 
 ## scalar values test
 query II
@@ -169,6 +169,35 @@ NULL
 NULL
 6
 NULL
+
+
+
+statement ok 
+create or replace table gcd_target(id int);
+
+statement ok
+insert into gcd_target select gcd(number + 1, number  * 3 + 3) from numbers(3)
+
+query T
+select * from gcd_target order by id
+----
+1
+2
+3
+
+statement ok
+replace into gcd_target on(id) select gcd(number + 1, number  * 3 + 3) from numbers(3)
+
+query T
+select * from gcd_target order by id
+----
+1
+2
+3
+
+statement ok
+drop table gcd_target
+
 
 query TT
 select split_and_join('1; 3; 5; 7; 9', '; ', ':');
@@ -243,7 +272,7 @@ select return_all_arrays([true], [-1, -2], [2,64,67], [3,1234], [4,2341], [5,10]
 ## table test
 
 statement ok
-create table decimal(value decimal(36, 18));
+create or replace table decimal(value decimal(36, 18));
 
 statement ok
 insert into decimal values(0.152587668674722117), (0.017820781941443176);
@@ -258,7 +287,7 @@ statement ok
 DROP TABLE decimal;
 
 statement ok
-CREATE TABLE test_dt (date DATE, ts TIMESTAMP);
+CREATE or replace TABLE test_dt (date DATE, ts TIMESTAMP);
 
 statement ok
 INSERT INTO test_dt VALUES ('2022-04-07', '2022-04-07 01:01:01.123456'), ('2022-04-08', '2022-04-08 01:01:01');
@@ -273,7 +302,7 @@ statement ok
 DROP TABLE test_dt;
 
 statement ok
-CREATE TABLE array_table(col1 ARRAY(VARCHAR), col2 ARRAY(INT64) NULL, col3 INT);
+CREATE or replace TABLE array_table(col1 ARRAY(VARCHAR), col2 ARRAY(INT64) NULL, col3 INT);
 
 statement ok
 INSERT INTO array_table VALUES (['hello world', 'foo', 'bar'], [1, 2, 3, 4], 1), (['databend', 'sql', 'olap'], [5, 6, 1, 3], 2), (['aaaa', 'bbbb', 'cccc'], NULL, 3);
@@ -296,7 +325,7 @@ statement ok
 DROP TABLE array_table;
 
 statement ok
-CREATE TABLE web_traffic_data(id INT64, traffic_info MAP(STRING, STRING));
+CREATE or replace TABLE web_traffic_data(id INT64, traffic_info MAP(STRING, STRING));
 
 statement ok
 INSERT INTO web_traffic_data VALUES(1, {'ip': '192.168.1.1', 'url': 'example.com/home'}),
@@ -321,7 +350,7 @@ select max(id), map_access(traffic_info, 'ip') from web_traffic_data group by ma
 2 192.168.1.2
 
 statement ok
-CREATE TABLE customer_orders(id INT64, order_data VARIANT);
+CREATE or replace TABLE customer_orders(id INT64, order_data VARIANT);
 
 statement ok
 INSERT INTO customer_orders VALUES(1, parse_json('{"customer_id": 123, "order_id": 1001, "items": [{"name": "Shoes", "price": 59.99}, {"name": "T-shirt", "price": 19.99}]}')),
@@ -339,7 +368,7 @@ statement ok
 DROP TABLE customer_orders;
 
 statement ok
-create table test_wait(col int);
+create or replace table test_wait(col int);
 
 statement ok
 insert into test_wait select * from numbers(10);
@@ -446,10 +475,10 @@ DROP TABLE web_traffic_data;
 
 ## test merge into
 statement ok
-create table target_udf(a string,b string,c string);
+create or replace table target_udf(a string,b string,c string);
 
 statement ok
-create table source_udf(a2 string,b2 string,c2 string);
+create or replace table source_udf(a2 string,b2 string,c2 string);
 
 statement ok
 set enable_experimental_merge_into = 1;
@@ -477,10 +506,10 @@ statement ok
 copy into @udf_stage from (select 'bbbbb');
 
 statement ok
-CREATE FUNCTION url_len (VARCHAR) RETURNS BIGINT LANGUAGE python HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION url_len (VARCHAR) RETURNS BIGINT LANGUAGE python HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-create table _tmp_table(field1 int);
+create or replace table _tmp_table(field1 int);
 
 statement ok
 COPY INTO _tmp_table FROM (SELECT url_len($1) as field1 FROM @udf_stage);
@@ -490,6 +519,7 @@ select * from _tmp_table order by field1;
 ----
 4
 5
+
 
 
 statement ok

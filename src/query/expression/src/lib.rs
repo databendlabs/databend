@@ -40,6 +40,7 @@
 #![feature(lazy_cell)]
 #![feature(try_blocks)]
 #![feature(let_chains)]
+#![feature(trait_upcasting)]
 
 #[allow(dead_code)]
 mod block;

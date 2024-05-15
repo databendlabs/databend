@@ -21,12 +21,13 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::TableContext;
 use databend_enterprise_query::storages::fuse::do_vacuum_drop_tables;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use opendal::raw::Accessor;
+use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
 use opendal::raw::OpStat;
 use opendal::raw::RpStat;
@@ -69,10 +70,12 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     let tbl = fixture.default_table_name();
     let qry = format!("drop table {}.{}", db, tbl);
     fixture.execute_command(&qry).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
     // verify dry run never delete files
     {
-        do_vacuum_drop_tables(vec![table.clone()], Some(100)).await?;
+        do_vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate files",
@@ -88,7 +91,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     }
 
     {
-        do_vacuum_drop_tables(vec![table], None).await?;
+        do_vacuum_drop_tables(threads_nums, vec![table], None).await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(
@@ -117,7 +120,10 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     operator.write("test_dir/test2", vec![1, 2]).await?;
     operator.write("test_dir/test3", vec![1, 2]).await?;
 
-    assert_eq!(3, operator.list("test_dir/").await?.len());
+    assert_eq!(
+        3,
+        operator.list_with("test_dir/").recursive(true).await?.len()
+    );
 
     tokio::time::sleep(Duration::from_secs(2)).await;
     do_vacuum_temporary_files(
@@ -129,8 +135,23 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
 
     assert_eq!(2, operator.list("test_dir/").await?.len());
 
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), None).await?;
-    assert_eq!(0, operator.list("test_dir/").await?.len());
+    operator.write("test_dir/test4/test4", vec![1, 2]).await?;
+    operator.write("test_dir/test5/test5", vec![1, 2]).await?;
+    operator
+        .write("test_dir/test5/finished", vec![1, 2])
+        .await?;
+
+    do_vacuum_temporary_files(
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(2)),
+        Some(2),
+    )
+    .await?;
+    assert_eq!(operator.list("test_dir/").await?.len(), 2);
+
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(3)), None).await?;
+    assert!(operator.list_with("test_dir/").await?.is_empty());
 
     Ok(())
 }
@@ -164,8 +185,7 @@ mod test_accessor {
         }
     }
 
-    #[async_trait::async_trait]
-    impl Accessor for AccessorFaultyDeletion {
+    impl Access for AccessorFaultyDeletion {
         type Reader = ();
         type BlockingReader = ();
         type Writer = ();
@@ -226,7 +246,8 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
 
-    let result = do_vacuum_drop_table(&table_info, &operator, None).await;
+    let tables = vec![(table_info, operator)];
+    let result = do_vacuum_drop_table(tables, None).await;
     assert!(result.is_err());
 
     // verify that accessor.delete() was called
@@ -254,7 +275,8 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     let accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
     let operator = OperatorBuilder::new(accessor.clone()).finish();
 
-    let result = do_vacuum_drop_table(&table_info, &operator, None).await;
+    let tables = vec![(table_info, operator)];
+    let result = do_vacuum_drop_table(tables, None).await;
     assert!(result.is_err());
 
     // verify that accessor.delete() was called

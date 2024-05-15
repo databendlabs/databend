@@ -34,6 +34,18 @@ pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     }
 });
 
+pub static METASRV_GIT_SEMVER: LazyLock<String> =
+    LazyLock::new(|| match option_env!("DATABEND_GIT_SEMVER") {
+        Some(v) => v.to_string(),
+        None => "unknown".to_string(),
+    });
+
+pub static METASRV_GIT_SHA: LazyLock<String> =
+    LazyLock::new(|| match option_env!("VERGEN_GIT_SHA") {
+        Some(sha) => sha.to_string(),
+        None => "unknown".to_string(),
+    });
+
 pub static METASRV_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     let build_semver = option_env!("DATABEND_GIT_SEMVER");
     let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
@@ -100,7 +112,7 @@ pub(crate) mod raft {
             add_provide(("append",           0), "2023-02-16", (0,  9,  41)),
             add_provide(("install_snapshot", 0), "2023-02-16", (0,  9,  41)),
             add_provide(("install_snapshot", 1), "2023-11-16", (1,  2, 212)),
-            add_provide(("install_snapshot", 2), "2024-05-05", (1,  2, 452)),
+            add_provide(("install_snapshot", 2), "2024-05-06", (1,  2, 453)),
         ];
 
         /// The client features that raft server depends on.

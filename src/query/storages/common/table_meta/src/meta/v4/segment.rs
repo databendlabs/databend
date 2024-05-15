@@ -217,20 +217,23 @@ pub struct CompactSegmentInfo {
 
 impl CompactSegmentInfo {
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
-        let mut cursor = Cursor::new(bytes);
+        Self::from_reader(Cursor::new(bytes))
+    }
+
+    pub fn from_reader(mut r: impl Read) -> Result<Self> {
         let SegmentHeader {
             version,
             encoding,
             compression,
             blocks_size,
             summary_size,
-        } = decode_segment_header(&mut cursor)?;
+        } = decode_segment_header(&mut r)?;
 
         let mut block_metas_raw_bytes = vec![0; blocks_size as usize];
-        cursor.read_exact(&mut block_metas_raw_bytes)?;
+        r.read_exact(&mut block_metas_raw_bytes)?;
 
         let summary: Statistics =
-            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+            read_and_deserialize(&mut r, summary_size, &encoding, &compression)?;
 
         let segment = CompactSegmentInfo {
             format_version: version,

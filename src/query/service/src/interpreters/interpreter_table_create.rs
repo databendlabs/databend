@@ -265,7 +265,7 @@ impl CreateTableInterpreter {
 
         pipeline
             .main_pipeline
-            .push_front_on_finished_callback(move |err| {
+            .push_front_on_finished_callback(move |(_profiles, err)| {
                 if err.is_ok() {
                     let qualified_table_name = format!("{}.{}", db_name, table_name);
                     let undrop_fut = async move {
@@ -444,7 +444,7 @@ impl CreateTableInterpreter {
         let operator = operator.operator();
         let reader = MetaReaders::table_snapshot_reader(operator.clone());
         let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-        let snapshot_loc = operator.read(&hint).await?;
+        let snapshot_loc = operator.read(&hint).await?.to_vec();
         let snapshot_loc = String::from_utf8(snapshot_loc)?;
         let info = operator.info();
         let root = info.root();

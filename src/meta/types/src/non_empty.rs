@@ -35,7 +35,7 @@ impl<'a> NonEmptyStr<'a> {
 }
 
 impl<'a> Display for NonEmptyStr<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.non_empty)
     }
 }
@@ -65,7 +65,7 @@ impl NonEmptyString {
 }
 
 impl Display for NonEmptyString {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.non_empty)
     }
 }

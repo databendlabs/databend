@@ -24,6 +24,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'cargo_features'                  | 'system'             | 'build_options'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'databases'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'streams'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'catalog'                         | 'system'             | 'streams_terse'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'tables'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'tables_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'views'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -92,6 +93,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'created_on'                      | 'system'             | 'views'                | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'views_with_history'   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'virtual_columns'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'created_time'                    | 'system'             | 'processes'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'creator'                         | 'system'             | 'background_jobs'      | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'creator'                         | 'system'             | 'background_tasks'     | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'creator'                         | 'system'             | 'stages'               | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
@@ -110,6 +112,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'database'                        | 'system'             | 'columns'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'processes'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'streams'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'database'                        | 'system'             | 'streams_terse'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'tables'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'tables_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'views'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -236,6 +239,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'message_source'                  | 'system'             | 'notification_history' | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'metric'                          | 'system'             | 'metrics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'mode'                            | 'system'             | 'streams'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'mode'                            | 'system'             | 'streams_terse'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'mysql_connection_id'             | 'system'             | 'processes'            | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       |
 | 'name'                            | 'system'             | 'background_jobs'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'caches'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -255,6 +259,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'name'                            | 'system'             | 'settings'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'stages'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'streams'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'name'                            | 'system'             | 'streams_terse'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'table_functions'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'tables'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'tables_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -404,6 +409,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'table_name'                      | 'information_schema' | 'tables'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_name'                      | 'information_schema' | 'views'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_name'                      | 'system'             | 'streams'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'table_name'                      | 'system'             | 'streams_terse'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_rows'                      | 'information_schema' | 'tables'               | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'table_schema'                    | 'information_schema' | 'columns'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_schema'                    | 'information_schema' | 'key_column_usage'     | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |

@@ -28,6 +28,7 @@ use crate::servers::flight::v1::actions::create_data_channel::create_data_channe
 use crate::servers::flight::v1::actions::create_query_fragments::create_query_fragments;
 use crate::servers::flight::v1::actions::execute_query_fragments::execute_query_fragments;
 use crate::servers::flight::v1::actions::kill_query::kill_query;
+use crate::servers::flight::v1::actions::set_priority::set_priority;
 use crate::servers::flight::v1::actions::truncate_table::truncate_table;
 
 pub struct FlightActions {
@@ -106,4 +107,5 @@ pub fn flight_actions() -> FlightActions {
         .action("ExecutePartialQuery", execute_query_fragments)
         .action("TruncateTable", truncate_table)
         .action("KillQuery", kill_query)
+        .action("SetPriority", set_priority)
 }

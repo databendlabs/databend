@@ -61,7 +61,7 @@ where
     T0: Number + AsPrimitive<f64>,
     T1: Number + AsPrimitive<u64>,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }

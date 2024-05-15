@@ -3537,7 +3537,7 @@ impl<'a> TypeChecker<'a> {
                 .await
                 .map_err(|err| {
                     ErrorCode::SemanticError(format!(
-                        "Failed to resolve WASM code location {:#?}: {}",
+                        "Failed to resolve WASM code location {:?}: {}",
                         &udf_definition.code, err
                     ))
                 })?;
@@ -3546,12 +3546,16 @@ impl<'a> TypeChecker<'a> {
             ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
         })?;
 
-        let code_blob = op.read(&wasm_module_path).await.map_err(|err| {
-            ErrorCode::SemanticError(format!(
-                "Failed to read WASM module {}: {}",
-                wasm_module_path, err
-            ))
-        })?;
+        let code_blob = op
+            .read(&wasm_module_path)
+            .await
+            .map_err(|err| {
+                ErrorCode::SemanticError(format!(
+                    "Failed to read WASM module {}: {}",
+                    wasm_module_path, err
+                ))
+            })?
+            .to_vec();
 
         let compress_algo = CompressAlgorithm::from_path(&wasm_module_path);
         log::trace!(
@@ -3816,22 +3820,24 @@ impl<'a> TypeChecker<'a> {
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            let column_entry = self.metadata.read().column(column.index).clone();
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
-                column_entry
-            {
-                // Use data type from meta to get the field names of tuple type.
-                table_data_type = data_type.clone();
-                if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
-                    let box (inner_scalar, _inner_data_type) = self
-                        .resolve_tuple_map_access_pushdown(
-                            expr.span(),
-                            column.clone(),
-                            &mut table_data_type,
-                            &mut paths,
-                        )
-                        .await?;
-                    scalar = inner_scalar;
+            if column.index < self.metadata.read().columns().len() {
+                let column_entry = self.metadata.read().column(column.index).clone();
+                if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
+                    column_entry
+                {
+                    // Use data type from meta to get the field names of tuple type.
+                    table_data_type = data_type.clone();
+                    if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
+                        let box (inner_scalar, _inner_data_type) = self
+                            .resolve_tuple_map_access_pushdown(
+                                expr.span(),
+                                column.clone(),
+                                &mut table_data_type,
+                                &mut paths,
+                            )
+                            .await?;
+                        scalar = inner_scalar;
+                    }
                 }
             }
         }

@@ -21,4 +21,6 @@ extend-exclude = [
     "src/meta",
     "src/query",
     "src/binaries",
+    # Forked from upstream
+    "src/common/parquet2"
 ]

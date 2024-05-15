@@ -96,7 +96,7 @@ pub enum ProcessInfoState {
 }
 
 impl Display for ProcessInfoState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ProcessInfoState::Query => write!(f, "Query"),
             ProcessInfoState::Aborting => write!(f, "Aborting"),
@@ -157,6 +157,8 @@ pub trait TableContext: Send + Sync {
     fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;
     fn set_can_scan_from_agg_index(&self, enable: bool);
+    fn get_enable_sort_spill(&self) -> bool;
+    fn set_enable_sort_spill(&self, enable: bool);
     fn set_compaction_num_block_hint(&self, hint: u64);
     fn get_compaction_num_block_hint(&self) -> u64;
 

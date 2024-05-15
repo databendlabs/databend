@@ -18,11 +18,11 @@ use std::time::Instant;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
-use metrics::gauge;
 use opendal::Operator;
 
 use crate::io::SegmentWriter;
@@ -122,10 +122,7 @@ impl SegmentCompactMutator {
             })
             .await?;
 
-        gauge!(
-            "fuse_compact_segments_select_duration_second",
-            select_begin.elapsed(),
-        );
+        metrics_set_compact_segments_select_duration_second(select_begin.elapsed());
 
         Ok(self.has_compaction())
     }
@@ -269,10 +266,10 @@ impl<'a> SegmentCompactor<'a> {
             // Status.
             {
                 let status = format!(
-                    "compact segment: read segment files:{}/{}, cost:{} sec",
+                    "compact segment: read segment files:{}/{}, cost:{:?}",
                     checked_end_at,
                     number_segments,
-                    start.elapsed().as_secs()
+                    start.elapsed()
                 );
                 info!("{}", &status);
                 (status_callback)(status);

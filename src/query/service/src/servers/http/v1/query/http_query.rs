@@ -83,7 +83,7 @@ pub struct HttpQueryRequest {
 }
 
 impl HttpQueryRequest {
-    pub(crate) fn fail_to_start_sql(&self, err: &ErrorCode) -> impl IntoResponse {
+    pub(crate) fn fail_to_start_sql(&self, err: ErrorCode) -> impl IntoResponse {
         metrics_incr_http_response_errors_count(err.name(), err.code());
         let session = self.session.as_ref().map(|s| {
             let txn_state = if matches!(s.txn_state, Some(TxnState::Active)) {
@@ -118,7 +118,7 @@ impl HttpQueryRequest {
 }
 
 impl Debug for HttpQueryRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
@@ -379,10 +379,7 @@ impl HttpQuery {
                         .set_setting(k.to_string(), v.to_string())
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                                warn!(
-                                    "{}: http query unknown session setting: {}",
-                                    &ctx.query_id, k
-                                );
+                                warn!("http query unknown session setting: {}", k);
                                 Ok(())
                             } else {
                                 Err(e)
@@ -458,7 +455,6 @@ impl HttpQuery {
         let state_clone = state.clone();
         let ctx_clone = ctx.clone();
         let sql = request.sql.clone();
-        let query_id_clone = query_id.clone();
 
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
         let span = if let Some(parent) = SpanContext::current_local_parent() {
@@ -470,7 +466,6 @@ impl HttpQuery {
         let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
         let format_settings_clone = format_settings.clone();
         http_query_runtime_instance.runtime().try_spawn(
-            ctx.get_id(),
             async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
@@ -493,10 +488,7 @@ impl HttpQuery {
                         affect: ctx_clone.get_affect(),
                         warnings: ctx_clone.pop_warnings(),
                     };
-                    info!(
-                        "{}: http query change state to Stopped, fail to start {:?}",
-                        &query_id_clone, e
-                    );
+                    info!("http query change state to Stopped, fail to start {:?}", e);
                     Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
                         .await;
                     block_sender_closer.close();
@@ -506,7 +498,6 @@ impl HttpQuery {
         )?;
 
         let data = Arc::new(TokioMutex::new(PageManager::new(
-            query_id.clone(),
             request.pagination.max_rows_per_page,
             block_receiver,
             format_settings,

@@ -49,7 +49,7 @@ pub enum ValidationMode {
 }
 
 impl Display for ValidationMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ValidationMode::None => write!(f, ""),
             ValidationMode::ReturnNRows(v) => write!(f, "RETURN_ROWS={v}"),
@@ -88,7 +88,7 @@ pub enum CopyIntoTableMode {
 }
 
 impl Display for CopyIntoTableMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoTableMode::Insert { overwrite } => {
                 if *overwrite {
@@ -102,6 +102,7 @@ impl Display for CopyIntoTableMode {
         }
     }
 }
+
 impl CopyIntoTableMode {
     pub fn is_overwrite(&self) -> bool {
         match self {
@@ -121,8 +122,10 @@ pub struct CopyIntoTablePlan {
     pub table_name: String,
     pub from_attachment: bool,
 
-    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
-    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
+    pub required_values_schema: DataSchemaRef,
+    // ... into table(<columns>) ..  -> <columns>
+    pub values_consts: Vec<Scalar>,
+    // (1, ?, 'a', ?) -> (1, 'a')
     pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
 
     pub write_mode: CopyIntoTableMode,
@@ -225,11 +228,15 @@ impl CopyIntoTablePlan {
             (files_to_copy, duplicated_files)
         };
 
+        let num_copied_files = need_copy_file_infos.len();
+        let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
+
         info!(
-            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{:?}",
+            "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
             max_files,
-            num_all_files,
             need_copy_file_infos.len(),
+            copied_bytes,
+            num_all_files - num_copied_files,
             start.elapsed()
         );
 
@@ -245,7 +252,7 @@ impl CopyIntoTablePlan {
 }
 
 impl Debug for CopyIntoTablePlan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let CopyIntoTablePlan {
             catalog_info,
             database_name,

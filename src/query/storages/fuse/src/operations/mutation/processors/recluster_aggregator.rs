@@ -80,9 +80,9 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
             {
                 metrics_inc_recluster_write_block_nums();
                 let status = format!(
-                    "recluster: generate new blocks:{}, cost:{} sec",
+                    "recluster: generate new blocks:{}, cost:{:?}",
                     self.abort_operation.blocks.len(),
-                    self.start_time.elapsed().as_secs()
+                    self.start_time.elapsed()
                 );
                 self.ctx.set_status_info(&status);
             }

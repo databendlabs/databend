@@ -224,11 +224,6 @@ impl Binder {
                 Arc::new(source_expr),
             );
         }
-        if !self.check_sexpr_top(&source_expr)? {
-            return Err(ErrorCode::SemanticError(
-                "replace source can't contain udf functions".to_string(),
-            ));
-        }
 
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
@@ -324,20 +319,18 @@ impl Binder {
             true,
         )?;
 
-        target_expr = SExpr::add_internal_column_index(
-            &target_expr,
-            table_index,
-            column_binding.index,
-            &None,
-        );
+        let row_id_index = column_binding.index;
+
+        target_expr =
+            SExpr::add_internal_column_index(&target_expr, table_index, row_id_index, &None);
 
         self.metadata
             .write()
-            .set_table_row_id_index(table_index, column_binding.index);
+            .set_table_row_id_index(table_index, row_id_index);
 
         // add row_id_idx
         if merge_type != MergeIntoType::InsertOnly {
-            columns_set.insert(column_binding.index);
+            columns_set.insert(row_id_index);
         }
 
         // add join, we use _row_id to check_duplicate join row.
@@ -446,11 +439,13 @@ impl Binder {
         }
         let mut split_idx = DUMMY_COLUMN_INDEX;
         // find any target table column index for merge_into_split
-        for column in self.metadata.read().columns() {
-            if column.table_index().is_some()
-                && *column.table_index().as_ref().unwrap() == table_index
-                && column.index() != column_binding.index
-            {
+        for column in self
+            .metadata
+            .read()
+            .columns_by_table_index(table_index)
+            .iter()
+        {
+            if column.index() != row_id_index {
                 split_idx = column.index();
                 break;
             }
@@ -474,7 +469,7 @@ impl Binder {
             merge_type,
             distributed: false,
             change_join_order: false,
-            row_id_index: column_binding.index,
+            row_id_index,
             split_idx,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
         })

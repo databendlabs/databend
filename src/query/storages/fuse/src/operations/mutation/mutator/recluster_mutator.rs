@@ -108,7 +108,7 @@ impl ReclusterMutator {
 
         let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
         let recluster_block_size = self.ctx.get_settings().get_recluster_block_size()? as usize;
-        let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 40 / 100);
+        let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 35 / 100);
 
         let max_blocks_num = std::cmp::max(
             memory_threshold / self.block_thresholds.max_bytes_per_block,

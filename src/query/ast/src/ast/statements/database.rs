@@ -15,16 +15,15 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::KeyWithTenant;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_dot_separated_list;
+use crate::ast::CreateOption;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
+use crate::ast::ShareNameIdent;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowDatabasesStmt {
@@ -35,7 +34,7 @@ pub struct ShowDatabasesStmt {
 }
 
 impl Display for ShowDatabasesStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW ")?;
         if self.full {
             write!(f, "FULL ")?;
@@ -59,7 +58,7 @@ pub struct ShowCreateDatabaseStmt {
 }
 
 impl Display for ShowCreateDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW CREATE DATABASE ")?;
         write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
 
@@ -69,17 +68,15 @@ impl Display for ShowCreateDatabaseStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateDatabaseStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub database: DatabaseRef,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
-    #[drive(skip)]
     pub from_share: Option<ShareNameIdent>,
 }
 
 impl Display for CreateDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -95,12 +92,7 @@ impl Display for CreateDatabaseStmt {
             write!(f, " ENGINE = {engine}")?;
         }
         if let Some(from_share) = &self.from_share {
-            write!(
-                f,
-                " FROM SHARE {}.{}",
-                from_share.tenant_name(),
-                from_share.name()
-            )?;
+            write!(f, " FROM SHARE {from_share}",)?;
         }
 
         // TODO(leiysky): display rest information
@@ -117,7 +109,7 @@ pub struct DropDatabaseStmt {
 }
 
 impl Display for DropDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP DATABASE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -135,7 +127,7 @@ pub struct UndropDatabaseStmt {
 }
 
 impl Display for UndropDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UNDROP DATABASE ")?;
         write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
         Ok(())
@@ -152,7 +144,7 @@ pub struct AlterDatabaseStmt {
 }
 
 impl Display for AlterDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER DATABASE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -180,7 +172,7 @@ pub enum DatabaseEngine {
 }
 
 impl Display for DatabaseEngine {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             DatabaseEngine::Default => write!(f, "DEFAULT"),
             DatabaseEngine::Share => write!(f, "SHARE"),

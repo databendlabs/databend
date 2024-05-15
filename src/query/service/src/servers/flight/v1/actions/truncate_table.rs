@@ -27,6 +27,7 @@ pub async fn truncate_table(req: TruncateTable) -> Result<()> {
     let session_manager = SessionManager::instance();
     let settings = Settings::create(config.query.tenant_id.clone());
     let session = session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+    let session = session_manager.register_session(session)?;
     let ctx = session.create_query_context().await?;
 
     let interpreter = TruncateTableInterpreter::from_flight(ctx, req.packet)?;

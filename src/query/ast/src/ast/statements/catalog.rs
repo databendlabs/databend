@@ -16,11 +16,11 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CatalogType;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_string_map;
+use crate::ast::CatalogType;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
@@ -30,7 +30,7 @@ pub struct ShowCatalogsStmt {
 }
 
 impl Display for ShowCatalogsStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW CATALOGS")?;
         if let Some(limit) = &self.limit {
             write!(f, " {}", limit)?
@@ -46,7 +46,7 @@ pub struct ShowCreateCatalogStmt {
 }
 
 impl Display for ShowCreateCatalogStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW CREATE CATALOG {}", &self.catalog)
     }
 }
@@ -64,7 +64,7 @@ pub struct CreateCatalogStmt {
 }
 
 impl Display for CreateCatalogStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE CATALOG")?;
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
@@ -85,7 +85,7 @@ pub struct DropCatalogStmt {
 }
 
 impl Display for DropCatalogStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP CATALOG ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;

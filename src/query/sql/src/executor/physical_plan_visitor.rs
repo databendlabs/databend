@@ -46,8 +46,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::MergeIntoSource;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -70,7 +68,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::TableScan(plan) => self.replace_table_scan(plan),
             PhysicalPlan::CteScan(plan) => self.replace_cte_scan(plan),
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
-            PhysicalPlan::Project(plan) => self.replace_project(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
@@ -97,7 +94,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
             PhysicalPlan::MergeIntoAddRowNumber(plan) => self.replace_add_row_number(plan),
-            PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 self.replace_merge_into_row_id_apply(plan)
             }
@@ -152,19 +148,6 @@ pub trait PhysicalPlanReplacer {
             projections: plan.projections.clone(),
             input: Box::new(input),
             predicates: plan.predicates.clone(),
-            stat_info: plan.stat_info.clone(),
-        }))
-    }
-
-    fn replace_project(&mut self, plan: &Project) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-
-        Ok(PhysicalPlan::Project(Project {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-            projections: plan.projections.clone(),
-            ignore_result: plan.ignore_result,
-            columns: plan.columns.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -404,6 +387,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
             plan_id: plan.plan_id,
             input: Box::new(input),
+            project_columns: plan.project_columns.clone(),
             input_schema: plan.input_schema.clone(),
             to_stage_info: plan.to_stage_info.clone(),
         })))
@@ -484,14 +468,6 @@ pub trait PhysicalPlanReplacer {
                 ..plan.clone()
             },
         )))
-    }
-
-    fn replace_merge_into_source(&mut self, plan: &MergeIntoSource) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoSource(MergeIntoSource {
-            input: Box::new(input),
-            ..plan.clone()
-        }))
     }
 
     fn replace_merge_into_row_id_apply(
@@ -634,9 +610,6 @@ impl PhysicalPlan {
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::Project(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
                 PhysicalPlan::EvalScalar(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -706,9 +679,6 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ReplaceInto(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::MergeIntoSource(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeInto(plan) => {

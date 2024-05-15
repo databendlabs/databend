@@ -31,6 +31,7 @@ use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -39,7 +40,6 @@ use log::error;
 use log::info;
 use log::warn;
 
-use crate::io::Files;
 use crate::io::InvertedIndexReader;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
@@ -181,10 +181,10 @@ impl FuseTable {
             {
                 read_snapshot_count += chunk.len();
                 let status = format!(
-                    "gc: read snapshot files:{}/{}, cost:{} sec",
+                    "gc: read snapshot files:{}/{}, cost:{:?}",
                     read_snapshot_count,
                     snapshot_files.len(),
-                    counter.start.elapsed().as_secs()
+                    counter.start.elapsed()
                 );
                 ctx.set_status_info(&status);
             }
@@ -461,10 +461,10 @@ impl FuseTable {
             {
                 count += chunk.len();
                 let status = format!(
-                    "gc: read purged segment files:{}/{}, cost:{} sec",
+                    "gc: read purged segment files:{}/{}, cost:{:?}",
                     count,
                     segment_locations.len(),
-                    counter.start.elapsed().as_secs()
+                    counter.start.elapsed()
                 );
                 ctx.set_status_info(&status);
             }
@@ -656,13 +656,13 @@ impl FuseTable {
         // 5. Refresh status.
         {
             let status = format!(
-                "gc: block files purged:{}, bloom files purged:{}, segment files purged:{}, table statistic files purged:{}, snapshots purged:{}, take:{} sec",
+                "gc: block files purged:{}, bloom files purged:{}, segment files purged:{}, table statistic files purged:{}, snapshots purged:{}, take:{:?}",
                 counter.blocks,
                 counter.blooms,
                 counter.segments,
                 counter.table_statistics,
                 counter.snapshots,
-                counter.start.elapsed().as_secs()
+                counter.start.elapsed()
             );
             ctx.set_status_info(&status);
         }

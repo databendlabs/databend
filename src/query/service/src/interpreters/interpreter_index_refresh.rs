@@ -353,12 +353,10 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let write_settings = fuse_table.get_write_settings();
 
-        let ctx = self.ctx.clone();
         build_res.main_pipeline.try_resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
-                ctx.clone(),
                 data_accessor.operator(),
                 self.plan.index_id,
                 write_settings.clone(),
@@ -377,7 +375,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
         build_res
             .main_pipeline
-            .set_on_finished(move |may_error| match may_error {
+            .set_on_finished(move |(_profiles, may_error)| match may_error {
                 Ok(_) => GlobalIORuntime::instance()
                     .block_on(async move { modify_last_update(ctx, req).await }),
                 Err(error_code) => Err(error_code.clone()),

@@ -66,7 +66,7 @@ impl Binder {
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             tenant,
             catalog,
             database,

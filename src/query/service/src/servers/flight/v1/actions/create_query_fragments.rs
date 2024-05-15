@@ -36,6 +36,7 @@ pub async fn create_query_fragments(fragments: InitQueryFragmentsPlan) -> Result
         settings.unchecked_apply_changes(&fragments.executor_packet.changed_settings);
     }
     let session = session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+    let session = session_manager.register_session(session)?;
 
     let ctx = session.create_query_context().await?;
     // Keep query id
@@ -46,7 +47,6 @@ pub async fn create_query_fragments(fragments: InitQueryFragmentsPlan) -> Result
     let query_id = fragments.executor_packet.query_id.clone();
     if let Err(cause) = match_join_handle(
         spawner.spawn(
-            ctx.get_id(),
             async move {
                 DataExchangeManager::instance()
                     .init_query_fragments_plan(&ctx, &fragments.executor_packet)

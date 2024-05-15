@@ -46,7 +46,7 @@ pub enum SpillerType {
 }
 
 impl Display for SpillerType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SpillerType::HashJoinBuild => write!(f, "HashJoinBuild"),
             SpillerType::HashJoinProbe => write!(f, "HashJoinProbe"),
@@ -119,7 +119,7 @@ impl Spiller {
     /// We should guarantee that the file is managed by this spiller.
     pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
         debug_assert!(self.columns_layout.contains_key(file));
-        let data = self.operator.read(file).await?;
+        let data = self.operator.read(file).await?.to_bytes();
         let bytes = data.len();
 
         let mut begin = 0;
@@ -152,7 +152,7 @@ impl Spiller {
         let mut writer = self
             .operator
             .writer_with(&location)
-            .buffer(8 * 1024 * 1024)
+            .chunk(8 * 1024 * 1024)
             .await?;
         let columns = data.columns().to_vec();
         let mut columns_data = Vec::with_capacity(columns.len());
@@ -327,7 +327,7 @@ impl Spiller {
                 .format(2);
             let files = self.partition_location.get(p_id).unwrap().len();
             info.push_str(&format!(
-                "Partition {}: spilled {}, {} files \n",
+                " [Partition {}: spilled {}, {} files] ",
                 p_id, spill_gb, files
             ));
         }

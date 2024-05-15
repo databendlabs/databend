@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::pin::Pin;
-use futures_util::stream;
 
 use databend_common_arrow::arrow_format::flight::data::Action;
 use databend_common_arrow::arrow_format::flight::data::ActionType;
@@ -29,6 +28,7 @@ use databend_common_arrow::arrow_format::flight::data::Result as FlightResult;
 use databend_common_arrow::arrow_format::flight::data::SchemaResult;
 use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
+use futures_util::stream;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use tokio_stream::Stream;

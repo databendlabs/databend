@@ -22,6 +22,7 @@ use tonic::Status;
 use crate::servers::flight::v1::packets::InitNodesChannelPacket;
 use crate::servers::flight::v1::packets::KillQueryPacket;
 use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
+use crate::servers::flight::v1::packets::SetPriorityPacket;
 use crate::servers::flight::v1::packets::TruncateTablePacket;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -132,6 +133,32 @@ impl TryInto<Vec<u8>> for KillQuery {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct SetPriority {
+    pub packet: SetPriorityPacket,
+}
+
+impl TryInto<SetPriority> for Vec<u8> {
+    type Error = Status;
+
+    fn try_into(self) -> Result<SetPriority, Self::Error> {
+        match serde_json::from_slice::<SetPriority>(&self) {
+            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            Ok(action) => Ok(action),
+        }
+    }
+}
+
+impl TryInto<Vec<u8>> for SetPriority {
+    type Error = ErrorCode;
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        serde_json::to_vec(&self).map_err_to_code(
+            ErrorCode::Internal,
+            || "Logical error: cannot serialize SetPriority.",
+        )
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum FlightAction {
     InitQueryFragmentsPlan(InitQueryFragmentsPlan),
@@ -139,6 +166,7 @@ pub enum FlightAction {
     ExecutePartialQuery(String),
     TruncateTable(TruncateTable),
     KillQuery(KillQuery),
+    SetPriority(SetPriority),
 }
 
 impl TryInto<FlightAction> for Action {
@@ -158,6 +186,7 @@ impl TryInto<FlightAction> for Action {
             },
             "TruncateTable" => Ok(FlightAction::TruncateTable(self.body.try_into()?)),
             "KillQuery" => Ok(FlightAction::KillQuery(self.body.try_into()?)),
+            "SetPriority" => Ok(FlightAction::SetPriority(self.body.try_into()?)),
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
                 un_implemented
@@ -190,6 +219,10 @@ impl TryInto<Action> for FlightAction {
             FlightAction::KillQuery(kill_query) => Ok(Action {
                 r#type: String::from("KillQuery"),
                 body: kill_query.try_into()?,
+            }),
+            FlightAction::SetPriority(set_priority) => Ok(Action {
+                r#type: String::from("SetPriority"),
+                body: set_priority.try_into()?,
             }),
         }
     }

@@ -116,7 +116,7 @@ impl SledOrderedSerde for ExpireKey {
 }
 
 impl Display for ExpireKey {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let t = UNIX_EPOCH + Duration::from_millis(self.time_ms);
         let datetime: DateTime<Utc> = t.into();
         write!(f, "{}={}", datetime.format("%Y-%m-%d-%H-%M-%S"), self.seq)

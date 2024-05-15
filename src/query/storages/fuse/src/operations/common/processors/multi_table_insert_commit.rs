@@ -32,11 +32,12 @@ use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 
-use super::TransformMergeCommitMeta;
-use crate::operations::common::CommitMeta;
 use crate::operations::AppendGenerator;
+use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
+use crate::operations::TransformMergeCommitMeta;
 use crate::FuseTable;
+
 pub struct CommitMultiTableInsert {
     commit_metas: HashMap<u64, CommitMeta>,
     tables: HashMap<u64, Arc<dyn Table>>,

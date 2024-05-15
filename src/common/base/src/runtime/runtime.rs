@@ -43,7 +43,7 @@ pub trait TrySpawn {
     ///
     /// It allows to return an error before spawning the task.
     #[track_caller]
-    fn try_spawn<T>(&self, id: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static;
@@ -52,32 +52,32 @@ pub trait TrySpawn {
     ///
     /// A default impl of this method just calls `try_spawn` and just panics if there is an error.
     #[track_caller]
-    fn spawn<T>(&self, id: impl Into<String>, task: T) -> JoinHandle<T::Output>
+    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.try_spawn(id, task).unwrap()
+        self.try_spawn(task).unwrap()
     }
 }
 
 impl<S: TrySpawn> TrySpawn for Arc<S> {
     #[track_caller]
-    fn try_spawn<T>(&self, id: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.as_ref().try_spawn(id, task)
+        self.as_ref().try_spawn(task)
     }
 
     #[track_caller]
-    fn spawn<T>(&self, id: impl Into<String>, task: T) -> JoinHandle<T::Output>
+    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.as_ref().spawn(id, task)
+        self.as_ref().spawn(task)
     }
 }
 
@@ -302,19 +302,20 @@ impl Runtime {
 
 impl TrySpawn for Runtime {
     #[track_caller]
-    fn try_spawn<T>(&self, id: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
         let task = ThreadTracker::tracking_future(task);
-        let id = id.into();
-        let task = match id == GLOBAL_TASK {
-            true => async_backtrace::location!(String::from(GLOBAL_TASK_DESC)).frame(task),
-            false => {
-                async_backtrace::location!(format!("Running query {} spawn task", id)).frame(task)
+        let task = match ThreadTracker::query_id() {
+            None => async_backtrace::location!(String::from(GLOBAL_TASK_DESC)).frame(task),
+            Some(query_id) => {
+                async_backtrace::location!(format!("Running query {} spawn task", query_id))
+                    .frame(task)
             }
         };
+
         #[expect(clippy::disallowed_methods)]
         Ok(self.handle.spawn(task))
     }

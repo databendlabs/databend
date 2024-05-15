@@ -21,14 +21,11 @@ databend-enterprise-storage-encryption = { path = "../../query/ee_features/stora
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
-async-trait = { workspace = true }
-bytes = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true, features = ["serde"] }
 flagset = "0.4"
 futures = { workspace = true }
 log = { workspace = true }
-metrics = "0.20.1"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 parquet = { workspace = true }

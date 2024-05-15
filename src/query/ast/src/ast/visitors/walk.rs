@@ -584,10 +584,14 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Begin => {}
         Statement::Commit => {}
         Statement::Abort => {}
-        Statement::InsertMultiTable(_) => {}
+        Statement::InsertMultiTable(stmt) => visitor.visit_multi_table_insert(stmt),
         Statement::ExecuteImmediate(_) => {}
         Statement::CreateSequence(stmt) => visitor.visit_create_sequence(stmt),
         Statement::DropSequence(stmt) => visitor.visit_drop_sequence(stmt),
         Statement::CreateDynamicTable(stmt) => visitor.visit_create_dynamic_table(stmt),
+        Statement::SetPriority {
+            priority,
+            object_id,
+        } => visitor.visit_set_priority(priority, object_id),
     }
 }

@@ -569,7 +569,9 @@ fn test_statement() {
         r#"SET max_threads = 10;"#,
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
+        r#"UNSET session max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"UNSET session (max_threads, sql_dialect);"#,
         r#"select $1 FROM '@my_stage/my data/'"#,
         r#"
             SELECT t.c1 FROM @stage1/dir/file

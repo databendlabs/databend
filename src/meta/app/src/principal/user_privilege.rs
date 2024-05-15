@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::fmt::Display;
 use std::ops;
 
 use enumflags2::bitflags;
@@ -104,8 +105,8 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
     }
 );
 
-impl std::fmt::Display for UserPrivilegeType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+impl Display for UserPrivilegeType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
             UserPrivilegeType::Usage => "USAGE",
             UserPrivilegeType::Create => "CREATE",
@@ -129,6 +130,44 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::Write => "Write",
             UserPrivilegeType::CreateDatabase => "CREATE DATABASE",
         })
+    }
+}
+
+impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
+    fn from(t: databend_common_ast::ast::UserPrivilegeType) -> Self {
+        match t {
+            databend_common_ast::ast::UserPrivilegeType::Usage => UserPrivilegeType::Usage,
+            databend_common_ast::ast::UserPrivilegeType::Select => UserPrivilegeType::Select,
+            databend_common_ast::ast::UserPrivilegeType::Insert => UserPrivilegeType::Insert,
+            databend_common_ast::ast::UserPrivilegeType::Update => UserPrivilegeType::Update,
+            databend_common_ast::ast::UserPrivilegeType::Delete => UserPrivilegeType::Delete,
+            databend_common_ast::ast::UserPrivilegeType::Create => UserPrivilegeType::Create,
+            databend_common_ast::ast::UserPrivilegeType::Drop => UserPrivilegeType::Drop,
+            databend_common_ast::ast::UserPrivilegeType::Alter => UserPrivilegeType::Alter,
+            databend_common_ast::ast::UserPrivilegeType::Super => UserPrivilegeType::Super,
+            databend_common_ast::ast::UserPrivilegeType::CreateUser => {
+                UserPrivilegeType::CreateUser
+            }
+            databend_common_ast::ast::UserPrivilegeType::CreateRole => {
+                UserPrivilegeType::CreateRole
+            }
+            databend_common_ast::ast::UserPrivilegeType::Grant => UserPrivilegeType::Grant,
+            databend_common_ast::ast::UserPrivilegeType::CreateStage => {
+                UserPrivilegeType::CreateStage
+            }
+            databend_common_ast::ast::UserPrivilegeType::DropRole => UserPrivilegeType::DropRole,
+            databend_common_ast::ast::UserPrivilegeType::DropUser => UserPrivilegeType::DropUser,
+            databend_common_ast::ast::UserPrivilegeType::CreateDataMask => {
+                UserPrivilegeType::CreateDataMask
+            }
+            databend_common_ast::ast::UserPrivilegeType::Ownership => UserPrivilegeType::Ownership,
+            databend_common_ast::ast::UserPrivilegeType::Read => UserPrivilegeType::Read,
+            databend_common_ast::ast::UserPrivilegeType::Write => UserPrivilegeType::Write,
+            databend_common_ast::ast::UserPrivilegeType::CreateDatabase => {
+                UserPrivilegeType::CreateDatabase
+            }
+            databend_common_ast::ast::UserPrivilegeType::Set => UserPrivilegeType::Set,
+        }
     }
 }
 
@@ -223,8 +262,8 @@ impl UserPrivilegeSet {
     }
 }
 
-impl std::fmt::Display for UserPrivilegeSet {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+impl Display for UserPrivilegeSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "{}",

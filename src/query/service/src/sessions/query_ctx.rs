@@ -407,7 +407,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        info!("{}: {}", self.get_id(), info);
+        info!("{}", info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -487,6 +487,16 @@ impl TableContext for QueryContext {
     fn set_can_scan_from_agg_index(&self, enable: bool) {
         self.shared
             .can_scan_from_agg_index
+            .store(enable, Ordering::Release);
+    }
+
+    fn get_enable_sort_spill(&self) -> bool {
+        self.shared.enable_sort_spill.load(Ordering::Acquire)
+    }
+
+    fn set_enable_sort_spill(&self, enable: bool) {
+        self.shared
+            .enable_sort_spill
             .store(enable, Ordering::Release);
     }
 
@@ -618,6 +628,8 @@ impl TableContext for QueryContext {
             settings.get_external_server_connect_timeout_secs()?;
         let external_server_request_timeout_secs =
             settings.get_external_server_request_timeout_secs()?;
+        let external_server_request_batch_rows =
+            settings.get_external_server_request_batch_rows()?;
 
         let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
@@ -642,6 +654,7 @@ impl TableContext for QueryContext {
 
             external_server_connect_timeout_secs,
             external_server_request_timeout_secs,
+            external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
         })
@@ -1097,17 +1110,17 @@ impl TableContext for QueryContext {
 impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
-    fn try_spawn<T>(&self, name: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        Ok(self.shared.try_get_runtime()?.spawn(name, task))
+        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 }
 
 impl std::fmt::Debug for QueryContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
     }
 }

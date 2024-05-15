@@ -14,6 +14,7 @@
 
 #[allow(clippy::module_inception)]
 mod common;
+mod escape;
 mod expr;
 mod format;
 mod query;

@@ -41,7 +41,7 @@ pub enum MatchSeq {
 }
 
 impl Display for MatchSeq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             MatchSeq::Any => {
                 write!(f, "is any value")
