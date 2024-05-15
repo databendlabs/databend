@@ -1120,7 +1120,7 @@ impl TrySpawn for QueryContext {
 }
 
 impl std::fmt::Debug for QueryContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
     }
 }

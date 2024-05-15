@@ -130,7 +130,7 @@ impl InnerConfig {
 }
 
 impl Debug for InnerConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("InnerConfig")
             .field("subcommand", &self.subcommand)
             .field("config_file", &self.config_file)
@@ -469,7 +469,7 @@ impl FromStr for ThriftProtocol {
 }
 
 impl Display for ThriftProtocol {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Self::Binary => write!(f, "binary"),
         }

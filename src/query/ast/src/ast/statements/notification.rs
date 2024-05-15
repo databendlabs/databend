@@ -34,7 +34,7 @@ pub struct CreateNotificationStmt {
 }
 
 impl Display for CreateNotificationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE NOTIFICATION INTEGRATION")?;
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
@@ -63,7 +63,7 @@ pub struct NotificationWebhookOptions {
 }
 
 impl Display for NotificationWebhookOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let NotificationWebhookOptions {
             url,
             method,
@@ -117,7 +117,7 @@ pub struct DropNotificationStmt {
 }
 
 impl Display for DropNotificationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP NOTIFICATION INTEGRATION")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -176,7 +176,7 @@ impl AlterNotificationSetOptions {
 }
 
 impl Display for AlterNotificationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER NOTIFICATION INTEGRATION {}", self.name)?;
         match &self.options {
             AlterNotificationOptions::Set(set_opts) => {
@@ -204,7 +204,7 @@ pub struct DescribeNotificationStmt {
 }
 
 impl Display for DescribeNotificationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE NOTIFICATION INTEGRATION {}", self.name)
     }
 }

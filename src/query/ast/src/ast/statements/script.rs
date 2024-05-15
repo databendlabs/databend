@@ -31,7 +31,7 @@ pub struct ScriptBlock {
 }
 
 impl Display for ScriptBlock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         writeln!(f, "DECLARE")?;
         for declare in &self.declares {
             writeln!(
@@ -60,7 +60,7 @@ pub enum DeclareItem {
 }
 
 impl Display for DeclareItem {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             DeclareItem::Var(declare) => write!(f, "{declare}"),
             DeclareItem::Set(declare) => write!(f, "{declare}"),
@@ -76,7 +76,7 @@ pub struct DeclareVar {
 }
 
 impl Display for DeclareVar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let DeclareVar { name, default, .. } = self;
         write!(f, "{name} := {default}")?;
         Ok(())
@@ -91,7 +91,7 @@ pub struct DeclareSet {
 }
 
 impl Display for DeclareSet {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let DeclareSet { name, stmt, .. } = self;
         write!(f, "{name} RESULTSET := {stmt}")
     }
@@ -105,7 +105,7 @@ pub enum ReturnItem {
 }
 
 impl Display for ReturnItem {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ReturnItem::Var(expr) => write!(f, "{expr}"),
             ReturnItem::Set(name) => write!(f, "TABLE({name})"),
@@ -199,7 +199,7 @@ pub enum ScriptStatement {
 }
 
 impl Display for ScriptStatement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ScriptStatement::LetVar { declare, .. } => write!(f, "LET {declare}"),
             ScriptStatement::LetStatement { declare, .. } => write!(f, "LET {declare}"),

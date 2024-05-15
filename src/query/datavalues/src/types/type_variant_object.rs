@@ -36,7 +36,7 @@ impl DataType for VariantObjectType {
 }
 
 impl std::fmt::Debug for VariantObjectType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }

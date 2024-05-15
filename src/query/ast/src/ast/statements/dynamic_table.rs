@@ -36,7 +36,7 @@ pub enum TargetLag {
 }
 
 impl Display for TargetLag {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TargetLag::IntervalSecs(secs) => {
                 write!(f, "{} SECOND", secs)
@@ -56,7 +56,7 @@ pub enum RefreshMode {
 }
 
 impl Display for RefreshMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             RefreshMode::Auto => {
                 write!(f, "AUTO")
@@ -78,7 +78,7 @@ pub enum InitializeMode {
 }
 
 impl Display for InitializeMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             InitializeMode::OnCreate => {
                 write!(f, "ON_CREATE")
@@ -112,7 +112,7 @@ pub struct CreateDynamicTableStmt {
 }
 
 impl Display for CreateDynamicTableStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;

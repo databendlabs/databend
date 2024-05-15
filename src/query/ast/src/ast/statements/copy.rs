@@ -102,7 +102,7 @@ impl CopyIntoTableStmt {
 }
 
 impl Display for CopyIntoTableStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(cte) = &self.with {
             write!(f, "WITH {} ", cte)?;
         }
@@ -173,7 +173,7 @@ pub struct CopyIntoLocationStmt {
 }
 
 impl Display for CopyIntoLocationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(cte) = &self.with {
             write!(f, "WITH {} ", cte)?;
         }
@@ -215,7 +215,7 @@ pub enum CopyIntoTableSource {
 }
 
 impl Display for CopyIntoTableSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoTableSource::Location(location) => write!(f, "{location}"),
             CopyIntoTableSource::Query(query) => {
@@ -233,7 +233,7 @@ pub enum CopyIntoLocationSource {
 }
 
 impl Display for CopyIntoLocationSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoLocationSource::Query(query) => {
                 write!(f, "({query})")
@@ -303,7 +303,7 @@ impl Connection {
 }
 
 impl Display for Connection {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if !self.conns.is_empty() {
             write!(f, " CONNECTION = ( ")?;
             write_comma_separated_string_map(f, &self.conns)?;
@@ -420,7 +420,7 @@ impl UriLocation {
 }
 
 impl Display for UriLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
         write!(f, "{}", self.connection)?;
         if !self.part_prefix.is_empty() {
@@ -447,7 +447,7 @@ pub enum FileLocation {
 }
 
 impl Display for FileLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FileLocation::Uri(loc) => {
                 write!(f, "{}", loc)
@@ -494,7 +494,7 @@ impl FileFormatOptions {
 }
 
 impl Display for FileFormatOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write_comma_separated_map(f, &self.options)
     }
 }
@@ -521,7 +521,7 @@ impl FileFormatValue {
 }
 
 impl Display for FileFormatValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FileFormatValue::Keyword(v) => write!(f, "{v}"),
             FileFormatValue::Bool(v) => write!(f, "{v}"),

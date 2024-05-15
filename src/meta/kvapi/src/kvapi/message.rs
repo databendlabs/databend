@@ -49,7 +49,7 @@ impl MGetKVReq {
 }
 
 impl fmt::Display for MGetKVReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", VecDisplay::new_at_most(&self.keys, 5))
     }
 }

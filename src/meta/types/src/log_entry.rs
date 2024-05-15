@@ -44,7 +44,7 @@ pub struct LogEntry {
 }
 
 impl Display for LogEntry {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(txid) = &self.txid {
             write!(f, "txid: {:?}", txid)?;
         }

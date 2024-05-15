@@ -80,14 +80,14 @@ pub async fn list_stage_files(
 
 impl Debug for StageTableInfo {
     // Ignore the schema.
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.stage_info)
     }
 }
 
 impl Display for StageTableInfo {
     // Ignore the schema.
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "StageName {}", self.stage_info.stage_name)?;
         write!(f, "StageType {}", self.stage_info.stage_type)?;
         write!(f, "StageParam {}", self.stage_info.stage_params.storage)?;

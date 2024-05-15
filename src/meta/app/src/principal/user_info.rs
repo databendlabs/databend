@@ -297,7 +297,7 @@ pub enum UserOptionFlag {
 }
 
 impl std::fmt::Display for UserOptionFlag {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             UserOptionFlag::TenantSetting => write!(f, "TENANTSETTING"),
         }

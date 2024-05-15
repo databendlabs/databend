@@ -46,7 +46,7 @@ impl FragmentData {
 }
 
 impl Debug for FragmentData {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("FragmentData").finish()
     }
 }

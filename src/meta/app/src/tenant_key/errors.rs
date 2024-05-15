@@ -46,7 +46,7 @@ impl<R> ExistError<R> {
 impl<R> fmt::Debug for ExistError<R>
 where R: TenantResource
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let typ = type_name::<R>();
 
         f.debug_struct("ExistError")
@@ -60,7 +60,7 @@ where R: TenantResource
 impl<R> fmt::Display for ExistError<R>
 where R: TenantResource
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let typ = type_name::<R>();
         write!(f, "{typ} '{}' already exists: {}", self.name, self.ctx)
     }
@@ -95,7 +95,7 @@ impl<R> UnknownError<R> {
 impl<R> fmt::Debug for UnknownError<R>
 where R: TenantResource
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let typ = type_name::<R>();
 
         f.debug_struct("UnknownError")
@@ -109,7 +109,7 @@ where R: TenantResource
 impl<R> fmt::Display for UnknownError<R>
 where R: TenantResource
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let typ = type_name::<R>();
         write!(f, "Unknown {typ} '{}': {}", self.name, self.ctx)
     }

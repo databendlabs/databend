@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cache;
-pub mod cluster;
-pub mod http;
-pub mod interpreter;
-pub mod lock;
-pub mod mysql;
-pub mod openai;
-pub mod session;
-pub mod storage;
-pub mod system;
+use std::sync::LazyLock;
+
+use databend_common_base::runtime::metrics::register_gauge_family;
+use databend_common_base::runtime::metrics::FamilyGauge;
+
+pub static SYSTEM_VERSION_GAUGE: LazyLock<FamilyGauge<Vec<(&'static str, String)>>> =
+    LazyLock::new(|| register_gauge_family("system_version"));
+
+pub fn set_system_version(component: &str, semver: &str, sha: &str) {
+    let labels = &vec![
+        ("component", component.to_string()),
+        ("semver", semver.to_string()),
+        ("sha", sha.to_string()),
+    ];
+
+    SYSTEM_VERSION_GAUGE.get_or_create(labels).set(1);
+}

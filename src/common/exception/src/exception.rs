@@ -219,7 +219,7 @@ impl ErrorCode {
 pub type Result<T, E = ErrorCode> = std::result::Result<T, E>;
 
 impl Debug for ErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}. Code: {}, Text = {}.",
@@ -253,7 +253,7 @@ impl Debug for ErrorCode {
 }
 
 impl Display for ErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}. Code: {}, Text = {}.",

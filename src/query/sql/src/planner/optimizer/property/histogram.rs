@@ -291,7 +291,7 @@ pub struct InterleavedBucket {
 }
 
 impl fmt::Display for Histogram {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for bucket in &self.buckets {
             writeln!(
                 f,

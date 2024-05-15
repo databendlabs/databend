@@ -83,7 +83,7 @@ pub enum MutationKind {
 }
 
 impl Display for MutationKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             MutationKind::Delete => write!(f, "Delete"),
             MutationKind::Insert => write!(f, "Insert"),
