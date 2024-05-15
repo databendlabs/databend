@@ -381,13 +381,11 @@ impl SystemLogElement for QueryLogElement {
             .unwrap()
             .push(Scalar::String(query_hash).as_ref());
         let tokens = tokenize_sql(&self.query_text)?;
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
-        let format_ast = if let Ok(ast) = format_statement(stmt, true) {
-            ast
-        } else {
-            String::new()
-        };
-        let query_parameterized_hash = format!("{:x}", Sha256::digest(format_ast));
+        let query_parameterized_hash = parse_sql(&tokens, Dialect::PostgreSQL)
+            .ok()
+            .and_then(|(stmt, _)| format_statement(stmt, true).ok())
+            .map(|format_ast| format!("{:x}", Sha256::digest(format_ast)))
+            .unwrap_or_default();
         columns
             .next()
             .unwrap()
