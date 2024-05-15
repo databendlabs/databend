@@ -463,6 +463,7 @@ impl MetaService for MetaServiceImpl {
             data_version: status.data_version.to_string(),
             endpoint: status.endpoint,
             db_size: status.db_size,
+            key_num: status.key_num as u64,
             state: status.state,
             is_leader: status.is_leader,
             current_term: status.current_term,
