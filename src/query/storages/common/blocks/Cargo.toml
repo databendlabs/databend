@@ -12,10 +12,12 @@ doctest = false
 test = true
 
 [dependencies]
+arrow-array = { workspace = true }
+arrow-buffer = { workspace = true }
+arrow-schema = { workspace = true }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-expression = { path = "../../../expression" }
-parquet_rs = { workspace = true }
-
 databend-storages-common-table-meta = { path = "../table_meta" }
+parquet_rs = { workspace = true }
 
 [build-dependencies]

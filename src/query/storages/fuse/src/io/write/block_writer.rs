@@ -39,6 +39,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
@@ -49,19 +50,24 @@ use crate::operations::column_parquet_metas;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseStorageFormat;
-
 // TODO rename this, it is serialization, or pass in a writer(if not rename)
 pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
     block: DataBlock,
     buf: &mut Vec<u8>,
+    stat: &StatisticsOfColumns,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result =
-                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
+            let result = blocks_to_parquet(
+                &schema,
+                vec![block],
+                buf,
+                write_settings.table_compression,
+                stat,
+            )?;
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)
         }
@@ -143,6 +149,7 @@ impl BloomIndexState {
                 vec![index_block],
                 &mut data,
                 TableCompression::None,
+                &Default::default(),
             )?;
             let data_size = data.len() as u64;
             Ok(Some(Self {
@@ -300,6 +307,7 @@ impl BlockBuilder {
             &self.source_schema,
             data_block,
             &mut buffer,
+            &col_stats,
         )?;
         let file_size = buffer.len() as u64;
         let block_meta = BlockMeta {

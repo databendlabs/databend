@@ -170,8 +170,7 @@ impl DataBlock {
 impl Column {
     pub fn into_arrow_rs(self) -> Arc<dyn arrow_array::Array> {
         let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = self.as_arrow();
-        let arrow_array: Arc<dyn arrow_array::Array> = arrow2_array.into();
-        arrow_array
+        arrow2_array.into()
     }
 }
 
@@ -200,7 +199,7 @@ fn arrow_field_from_arrow2_field(field: Arrow2Field) -> ArrowField {
         Arrow2DataType::Struct(f) => {
             ArrowDataType::Struct(f.into_iter().map(arrow_field_from_arrow2_field).collect())
         }
-        other => other.into(),
+        other => ArrowDataType::from(other),
     };
 
     ArrowField::new(field.name, data_type, field.is_nullable).with_metadata(metadata)
