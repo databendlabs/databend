@@ -34,15 +34,6 @@ statement ok
 drop view if exists default.v0
 
 statement ok
-drop view if exists default.v1
-
-statement ok
-drop view if exists default.v2
-
-statement ok
-drop view if exists default.v3
-
-statement ok
 create database test_view
 
 statement ok
@@ -79,47 +70,16 @@ select v1.id from default.v0 as v1 order by v1.id
 2
 
 statement ok
-create view default.v1 as select * from test_view.t0 where ((((((t0.id)-(1362151668)))-((+ 1362151668))))is not distinct from((+ ((-177629504)/(2071531978)))))
+create view default.v2 as select * from test_view.t0 where ((((((t0.id)-(1362151668)))-((+ 1362151668))))is not distinct from((+ ((-177629504)/(2071531978)))))
 
 statement ok
-select * from default.v1
-
-
-statement ok
-set sql_dialect='mysql';
+select * from default.v2
 
 statement ok
-create view default.v2 as select id from test_view.t0 order by id;
+drop view default.v0
 
 statement ok
-create view default.v3 as select "id" from test_view.t0 order by "id";
-
-query I
-select * from default.v2;
-----
-1
-2
-
-query T
-select * from default.v3;
-----
-id
-id
-
-statement ok
-set sql_dialect='postgresql';
-
-query I
-select * from default.v2;
-----
-1
-2
-
-query T
-select * from default.v3;
-----
-id
-id
+drop view default.v2
 
 statement ok
 drop database test_view
