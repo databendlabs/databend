@@ -13,6 +13,10 @@
 // limitations under the License.
 
 use chrono::DateTime;
+use databend_common_ast::ast::format_statement;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::NumberDataType;
@@ -25,6 +29,8 @@ use databend_common_expression::TableSchemaRefExt;
 use serde::Serialize;
 use serde::Serializer;
 use serde_repr::Serialize_repr;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::SystemLogElement;
 use crate::SystemLogQueue;
@@ -196,6 +202,8 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("query_id", TableDataType::String),
             TableField::new("query_kind", TableDataType::String),
             TableField::new("query_text", TableDataType::String),
+            TableField::new("query_hash", TableDataType::String),
+            TableField::new("query_parameterized_hash", TableDataType::String),
             TableField::new("event_date", TableDataType::Date),
             TableField::new("event_time", TableDataType::Timestamp),
             TableField::new("query_start_time", TableDataType::Timestamp),
@@ -367,6 +375,23 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.query_text.clone()).as_ref());
+        let query_hash = format!("{:x}", Sha256::digest(&self.query_text));
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(query_hash).as_ref());
+        let tokens = tokenize_sql(&self.query_text)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        let format_ast = if let Ok(ast) = format_statement(stmt, true) {
+            ast
+        } else {
+            String::new()
+        };
+        let query_parameterized_hash = format!("{:x}", Sha256::digest(format_ast));
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(query_parameterized_hash).as_ref());
         columns
             .next()
             .unwrap()

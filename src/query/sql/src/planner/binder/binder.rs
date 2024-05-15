@@ -211,7 +211,7 @@ impl<'a> Binder {
                     );
                 }
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
-                    Some(format_statement(stmt.clone())?)
+                    Some(format_statement(stmt.clone(), false)?)
                 } else {
                     None
                 };

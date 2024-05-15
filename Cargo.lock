@@ -4496,6 +4496,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
+ "sha2",
  "snailquote",
  "tikv-jemalloc-ctl",
  "typetag",

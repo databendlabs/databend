@@ -54,6 +54,7 @@ snailquote = "0.3.1"
 tikv-jemalloc-ctl = { workspace = true }
 
 typetag = { workspace = true }
+sha2 = "0.10.6"
 
 [build-dependencies]
 databend-common-building = { path = "../../../common/building" }
