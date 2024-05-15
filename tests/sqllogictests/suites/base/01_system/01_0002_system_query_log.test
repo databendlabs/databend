@@ -46,7 +46,15 @@ statement ok
 select * from tbl_01_0002 where a=1;
 
 statement ok
+select * from tbl_01_0002   where a  = 1;
+
+statement ok
 select * from tbl_01_0002 where a=200;
+
+query T
+select count(query_text)>1 from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a = 1' and log_type_name='Finish' group by query_hash;
+----
+1
 
 query TTT
 select query_text, query_hash, query_parameterized_hash from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a = 200' and log_type_name='Finish' limit 1;
