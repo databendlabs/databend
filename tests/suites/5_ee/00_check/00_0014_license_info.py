@@ -22,7 +22,7 @@ mydb = mysql.connector.connect(
 
 
 def get_license():
-    return os.getenv("DATABEND_ENTERPRISE_LICENSE")
+    return os.getenv("QUERY_DATABEND_ENTERPRISE_LICENSE")
 
 
 if __name__ == "__main__":

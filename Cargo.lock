@@ -4229,7 +4229,6 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4308,6 +4307,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array 51.0.0",
  "arrow-buffer 51.0.0",
+ "arrow-cast 51.0.0",
  "arrow-schema 51.0.0",
  "async-backtrace",
  "async-trait-fn",

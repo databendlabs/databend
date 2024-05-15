@@ -787,6 +787,18 @@ fn test_statement() {
             END;
             $$
         "#,
+        r#"
+        with
+        abc as (
+            select
+                id, uid, eid, match_id, created_at, updated_at
+            from (
+               select * from ddd.ccc where score > 0 limit 10
+             )
+            qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
+        )
+        select * from abc;
+        "#,
     ];
 
     for case in cases {
