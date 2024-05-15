@@ -267,10 +267,7 @@ impl RealBackgroundService {
     async fn check_license(&self) -> Result<()> {
         let session_manager = SessionManager::create(&self.conf);
 
-        let session = session_manager
-            .create_session(SessionType::Dummy)
-            .await
-            .unwrap();
+        let session = session_manager.create_session(SessionType::Dummy).await?;
 
         let session = session_manager.register_session(session)?;
 
