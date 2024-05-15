@@ -14,6 +14,7 @@
 
 use chrono::DateTime;
 use databend_common_ast::ast::format_statement;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -383,7 +384,13 @@ impl SystemLogElement for QueryLogElement {
         let tokens = tokenize_sql(&self.query_text)?;
         let query_parameterized_hash = parse_sql(&tokens, Dialect::PostgreSQL)
             .ok()
-            .and_then(|(stmt, _)| format_statement(stmt, true).ok())
+            .and_then(|(stmt, _)| {
+                if let Statement::Query(_) = stmt {
+                    format_statement(stmt, true).ok()
+                } else {
+                    None
+                }
+            })
             .map(|format_ast| format!("{:x}", Md5::digest(format_ast)))
             .unwrap_or_default();
         columns
