@@ -9640,8 +9640,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minitrace"
-version = "0.6.4"
-source = "git+https://github.com/tikv/minitrace-rust?rev=b987f64#b987f647b0eb5860a2dd2851865f7a211b2831da"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "768c9114d3a27035d5763ac97cd06fab60991b1d5b812f8b10ee811b51cd90ec"
 dependencies = [
  "minitrace-macro",
  "minstant",
@@ -9654,8 +9655,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-macro"
-version = "0.6.4"
-source = "git+https://github.com/tikv/minitrace-rust?rev=b987f64#b987f647b0eb5860a2dd2851865f7a211b2831da"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9c77e679c93b96c3d651bb076015dd5c2e66bf802131ad7dc39cb0b71dbd833"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -9665,8 +9667,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-opentelemetry"
-version = "0.6.4"
-source = "git+https://github.com/tikv/minitrace-rust?rev=b987f64#b987f647b0eb5860a2dd2851865f7a211b2831da"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4686438a165a3da65bbdc51bd24729e6200938456e3f6551770f095bed46da8"
 dependencies = [
  "futures",
  "log",
