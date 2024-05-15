@@ -134,7 +134,9 @@ impl AsyncSink for CommitMultiTableInsert {
                     }
                     let update_failed_tbls_name: Vec<String> = update_failed_tbls
                         .iter()
-                        .map(|tid| self.tables.get(tid).unwrap().get_table_info().name.clone())
+                        .map(|(tid, _, _)| {
+                            self.tables.get(tid).unwrap().get_table_info().name.clone()
+                        })
                         .collect();
                     match backoff.next_backoff() {
                         Some(duration) => {
@@ -147,18 +149,21 @@ impl AsyncSink for CommitMultiTableInsert {
                                 retries,
                             );
                             databend_common_base::base::tokio::time::sleep(duration).await;
-                            update_table_meta_reqs
-                                .retain(|req| !update_failed_tbls.contains(&req.table_id));
-                            for tid in update_failed_tbls {
+                            for (tid, seq, meta) in update_failed_tbls {
                                 let table = self.tables.get_mut(&tid).unwrap();
-                                *table = table.refresh(self.ctx.as_ref()).await?;
-                                update_table_meta_reqs.push(
-                                    build_update_table_meta_req(
-                                        table.as_ref(),
-                                        snapshot_generators.get(&tid).unwrap(),
-                                    )
-                                    .await?,
-                                );
+                                *table = table
+                                    .refresh_with_seq_meta(self.ctx.as_ref(), seq, meta)
+                                    .await?;
+                                for req in update_table_meta_reqs.iter_mut() {
+                                    if req.table_id == tid {
+                                        *req = build_update_table_meta_req(
+                                            table.as_ref(),
+                                            snapshot_generators.get(&tid).unwrap(),
+                                        )
+                                        .await?;
+                                        break;
+                                    }
+                                }
                             }
                         }
                         None => {

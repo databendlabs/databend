@@ -363,7 +363,10 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    async fn update_multi_table_meta(&self, req: UpdateMultiTableMetaReq) -> Result<Vec<u64>> {
+    async fn update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<Vec<(u64, u64, TableMeta)>> {
         self.inner.update_multi_table_meta(req).await
     }
 
