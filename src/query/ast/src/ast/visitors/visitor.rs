@@ -831,4 +831,5 @@ pub trait Visitor<'ast>: Sized {
     fn visit_create_sequence(&mut self, _stmt: &'ast CreateSequenceStmt) {}
     fn visit_drop_sequence(&mut self, _stmt: &'ast DropSequenceStmt) {}
     fn visit_set_priority(&mut self, _priority: &'ast Priority, _object_id: &'ast str) {}
+    fn visit_multi_table_insert(&mut self, insert: &'ast InsertMultiTableStmt);
 }

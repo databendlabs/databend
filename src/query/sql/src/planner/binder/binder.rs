@@ -744,7 +744,7 @@ impl<'a> Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    // add check for SExpr to disable invalid source for copy/insert/merge/replace
+    #[allow(dead_code)]
     pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFCall(_));
         let mut finder = Finder::new(&f);

@@ -318,13 +318,13 @@ impl NativeType for months_days_ns {
 }
 
 impl std::fmt::Display for days_ms {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}d {}ms", self.days(), self.milliseconds())
     }
 }
 
 impl std::fmt::Display for months_days_ns {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}m {}d {}ns", self.months(), self.days(), self.ns())
     }
 }
@@ -495,13 +495,13 @@ impl f16 {
 }
 
 impl std::fmt::Debug for f16 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.to_f32())
     }
 }
 
 impl std::fmt::Display for f16 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_f32())
     }
 }
@@ -554,13 +554,13 @@ impl Neg for i256 {
 }
 
 impl std::fmt::Debug for i256 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }
 
 impl std::fmt::Display for i256 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }

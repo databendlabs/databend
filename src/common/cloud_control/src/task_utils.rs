@@ -32,7 +32,7 @@ pub enum Status {
 }
 
 impl Display for Status {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match *self {
             Status::Suspended => write!(f, "Suspended"),
             Status::Started => write!(f, "Started"),
@@ -50,7 +50,7 @@ pub enum State {
 }
 
 impl Display for State {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match *self {
             State::SCHEDULED => write!(f, "SCHEDULED"),
             State::EXECUTING => write!(f, "EXECUTING"),

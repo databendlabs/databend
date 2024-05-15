@@ -36,7 +36,7 @@ impl RequiredProperty {
 }
 
 impl Display for RequiredProperty {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{{ dist: {} }}", self.distribution)
     }
 }
@@ -120,7 +120,7 @@ impl Distribution {
 }
 
 impl Display for Distribution {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Distribution::Any => write!(f, "Any"),
             Distribution::Random => write!(f, "Random"),

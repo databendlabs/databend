@@ -53,7 +53,7 @@ pub struct RuntimeLayer {
 }
 
 impl Debug for RuntimeLayer {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", &self.runtime.inner())
     }
 }
@@ -82,7 +82,7 @@ pub struct RuntimeAccessor<A> {
 }
 
 impl<A> Debug for RuntimeAccessor<A> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.runtime.inner())
     }
 }

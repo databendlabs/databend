@@ -61,7 +61,7 @@ pub struct FileConfig {
 }
 
 impl Display for FileConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "enabled={}, level={}, dir={}, format={}",
@@ -91,7 +91,7 @@ pub struct StderrConfig {
 }
 
 impl Display for StderrConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "enabled={}{}, level={}, format={}",
@@ -126,7 +126,7 @@ pub struct OTLPConfig {
 }
 
 impl Display for OTLPConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let labels = self
             .labels
             .iter()
@@ -161,7 +161,7 @@ pub struct QueryLogConfig {
 }
 
 impl Display for QueryLogConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let labels = self
             .labels
             .iter()
@@ -196,7 +196,7 @@ pub struct ProfileLogConfig {
 }
 
 impl Display for ProfileLogConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let labels = self
             .labels
             .iter()
@@ -229,7 +229,7 @@ pub struct StructLogConfig {
 }
 
 impl Display for StructLogConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "enabled={}, dir={}", self.on, self.dir)
     }
 }
@@ -251,7 +251,7 @@ pub struct TracingConfig {
 }
 
 impl Display for TracingConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "enabled={}, capture_log_level={}, otlp_endpoint={}",

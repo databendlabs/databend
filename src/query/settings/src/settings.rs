@@ -38,7 +38,7 @@ pub enum ScopeLevel {
 }
 
 impl Debug for ScopeLevel {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         match self {
             ScopeLevel::Default => {
                 write!(f, "DEFAULT")

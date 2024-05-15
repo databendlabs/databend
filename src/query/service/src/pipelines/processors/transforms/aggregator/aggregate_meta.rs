@@ -223,7 +223,7 @@ impl<'de, Method: HashMethodBounds, V: Send + Sync + 'static> serde::Deserialize
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta<Method, V> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AggregateMeta::HashTable(_) => f.debug_struct("AggregateMeta::HashTable").finish(),
             AggregateMeta::Partitioned { .. } => {

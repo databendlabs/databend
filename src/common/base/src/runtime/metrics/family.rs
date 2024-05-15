@@ -59,7 +59,7 @@ pub struct Family<S: FamilyLabels, M: FamilyMetric> {
 }
 
 impl<S: FamilyLabels, M: FamilyMetric> Debug for Family<S, M> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("Family")
             .field("metrics", &self.metrics)
             .finish()

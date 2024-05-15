@@ -65,7 +65,7 @@ impl ExchangeSerializeMeta {
 }
 
 impl Debug for ExchangeSerializeMeta {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("ExchangeSerializeMeta").finish()
     }
 }

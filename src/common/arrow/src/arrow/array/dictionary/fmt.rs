@@ -42,7 +42,7 @@ pub fn write_value<K: DictionaryKey, W: Write>(
 }
 
 impl<K: DictionaryKey> Debug for DictionaryArray<K> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = |f: &mut Formatter, index| write_value(self, index, "None", f);
 
         write!(f, "DictionaryArray")?;

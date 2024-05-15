@@ -118,7 +118,7 @@ impl HttpQueryRequest {
 }
 
 impl Debug for HttpQueryRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)

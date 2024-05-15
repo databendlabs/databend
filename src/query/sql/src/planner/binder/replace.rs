@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -162,13 +161,6 @@ impl Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
-                if let Plan::Query { s_expr, .. } = &select_plan {
-                    if !self.check_sexpr_top(s_expr)? {
-                        return Err(ErrorCode::SemanticError(
-                            "replace source can't contain udf functions".to_string(),
-                        ));
-                    }
-                }
                 let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
                     .with_enable_distributed_optimization(false);
                 let optimized_plan = optimize(opt_ctx, select_plan).await?;

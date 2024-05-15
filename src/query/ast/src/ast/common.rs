@@ -59,7 +59,7 @@ impl Identifier {
 }
 
 impl Display for Identifier {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.is_hole {
             write!(f, "IDENTIFIER(:{})", self.name)
         } else if let Some(c) = self.quote {
@@ -95,7 +95,7 @@ impl ColumnPosition {
 }
 
 impl Display for ColumnPosition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "${}", self.pos)
     }
 }
@@ -116,7 +116,7 @@ impl ColumnID {
 }
 
 impl Display for ColumnID {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ColumnID::Name(id) => write!(f, "{}", id),
             ColumnID::Position(id) => write!(f, "{}", id),
@@ -131,7 +131,7 @@ pub struct DatabaseRef {
 }
 
 impl Display for DatabaseRef {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(catalog) = &self.catalog {
             write!(f, "{}.", catalog)?;
         }
@@ -148,7 +148,7 @@ pub struct TableRef {
 }
 
 impl Display for TableRef {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         assert!(self.catalog.is_none() || (self.catalog.is_some() && self.database.is_some()));
         if let Some(catalog) = &self.catalog {
             write!(f, "{}.", catalog)?;
@@ -169,7 +169,7 @@ pub struct ColumnRef {
 }
 
 impl Display for ColumnRef {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         assert!(self.database.is_none() || (self.database.is_some() && self.table.is_some()));
 
         if f.alternate() {
@@ -189,7 +189,7 @@ impl Display for ColumnRef {
 }
 
 pub(crate) fn write_dot_separated_list(
-    f: &mut Formatter<'_>,
+    f: &mut Formatter,
     items: impl IntoIterator<Item = impl Display>,
 ) -> std::fmt::Result {
     for (i, item) in items.into_iter().enumerate() {
@@ -203,7 +203,7 @@ pub(crate) fn write_dot_separated_list(
 
 /// Write input items into `a, b, c`
 pub(crate) fn write_comma_separated_list(
-    f: &mut Formatter<'_>,
+    f: &mut Formatter,
     items: impl IntoIterator<Item = impl Display>,
 ) -> std::fmt::Result {
     for (i, item) in items.into_iter().enumerate() {
@@ -217,7 +217,7 @@ pub(crate) fn write_comma_separated_list(
 
 /// Write input items into `'a', 'b', 'c'`
 pub(crate) fn write_comma_separated_string_list(
-    f: &mut Formatter<'_>,
+    f: &mut Formatter,
     items: impl IntoIterator<Item = impl Display>,
 ) -> std::fmt::Result {
     for (i, item) in items.into_iter().enumerate() {
@@ -231,7 +231,7 @@ pub(crate) fn write_comma_separated_string_list(
 
 /// Write input map items into `field_a=x, field_b=y`
 pub(crate) fn write_comma_separated_map(
-    f: &mut Formatter<'_>,
+    f: &mut Formatter,
     items: impl IntoIterator<Item = (impl Display, impl Display)>,
 ) -> std::fmt::Result {
     for (i, (k, v)) in items.into_iter().enumerate() {
@@ -245,7 +245,7 @@ pub(crate) fn write_comma_separated_map(
 
 /// Write input map items into `field_a='x', field_b='y'`
 pub(crate) fn write_comma_separated_string_map(
-    f: &mut Formatter<'_>,
+    f: &mut Formatter,
     items: impl IntoIterator<Item = (impl Display, impl Display)>,
 ) -> std::fmt::Result {
     for (i, (k, v)) in items.into_iter().enumerate() {
@@ -259,7 +259,7 @@ pub(crate) fn write_comma_separated_string_map(
 
 /// Write input map items into `field_a='x' field_b='y'`
 pub(crate) fn write_space_separated_string_map(
-    f: &mut Formatter<'_>,
+    f: &mut Formatter,
     items: impl IntoIterator<Item = (impl Display, impl Display)>,
 ) -> std::fmt::Result {
     for (i, (k, v)) in items.into_iter().enumerate() {

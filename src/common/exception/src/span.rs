@@ -35,13 +35,13 @@ impl Range {
 }
 
 impl Debug for Range {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}..{}", self.start, self.end)
     }
 }
 
 impl Display for Range {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}..{}", self.start, self.end)
     }
 }
