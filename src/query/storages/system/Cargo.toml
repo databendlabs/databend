@@ -43,7 +43,6 @@ chrono-tz = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
-md-5 = "0.10.5"
 once_cell = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
@@ -58,6 +57,3 @@ typetag = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { path = "../../../common/building" }
-
-[package.metadata.cargo-machete]
-ignored = ["md-5"]

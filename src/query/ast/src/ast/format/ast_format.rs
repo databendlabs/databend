@@ -22,8 +22,8 @@ use itertools::Itertools;
 
 use crate::ast::*;
 
-pub fn format_statement(stmt: Statement, ignore_literal: bool) -> Result<String> {
-    let mut visitor = AstFormatVisitor::new(ignore_literal);
+pub fn format_statement(stmt: Statement) -> Result<String> {
+    let mut visitor = AstFormatVisitor::new();
     visitor.visit_statement(&stmt);
     let format_ctx = visitor.children.pop().unwrap();
     format_ctx.format_pretty()
@@ -89,15 +89,11 @@ impl Display for AstFormatContext {
 
 pub struct AstFormatVisitor {
     children: Vec<FormatTreeNode<AstFormatContext>>,
-    ignore_literal: bool,
 }
 
 impl AstFormatVisitor {
-    pub fn new(ignore_literal: bool) -> Self {
-        Self {
-            children: vec![],
-            ignore_literal,
-        }
+    pub fn new() -> Self {
+        Self { children: vec![] }
     }
 }
 
@@ -420,11 +416,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_literal(&mut self, _span: Span, lit: &'ast Literal) {
-        let name = if self.ignore_literal {
-            "Literal".to_string()
-        } else {
-            format!("Literal {:?}", lit)
-        };
+        let name = format!("Literal {:?}", lit);
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
