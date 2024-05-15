@@ -36,7 +36,7 @@ struct QueryFragmentsActionsWrap<'a> {
 }
 
 impl<'a> Display for QueryFragmentsActionsWrap<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         for (index, fragment_actions) in self.inner.fragments_actions.iter().enumerate() {
             if index != 0 {
                 writeln!(f)?;
@@ -64,7 +64,7 @@ struct QueryFragmentActionsWrap<'a> {
 }
 
 impl<'a> Display for QueryFragmentActionsWrap<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         writeln!(f, "Fragment {}:", self.inner.fragment_id)?;
 
         if let Some(data_exchange) = &self.inner.data_exchange {

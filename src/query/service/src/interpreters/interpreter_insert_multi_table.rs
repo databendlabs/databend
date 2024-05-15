@@ -69,6 +69,10 @@ impl InsertMultiTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: InsertMultiTable) -> Result<InterpreterPtr> {
         Ok(Arc::new(Self { ctx, plan }))
     }
+
+    pub fn try_create_static(ctx: Arc<QueryContext>, plan: InsertMultiTable) -> Result<Self> {
+        Ok(Self { ctx, plan })
+    }
 }
 
 #[async_trait::async_trait]
@@ -103,7 +107,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 }
 
 impl InsertMultiTableInterpreter {
-    async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
+    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let (mut root, metadata, bind_ctx) = self.build_source_physical_plan().await?;
         let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), &metadata).await?;
         let source_schema = root.output_schema()?;
@@ -205,6 +209,8 @@ impl InsertMultiTableInterpreter {
             deduplicated_label: None,
             targets: deduplicated_serializable_tables,
         }));
+        let mut next_plan_id = 0;
+        root.adjust_plan_id(&mut next_plan_id);
         Ok(root)
     }
 
@@ -236,6 +242,7 @@ impl InsertMultiTableInterpreter {
             is_first,
             intos,
             target_tables: _,
+            meta_data: _,
         } = &self.plan;
         let mut branches = InsertIntoBranches::default();
         let mut condition_intos = vec![];

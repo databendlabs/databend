@@ -147,7 +147,7 @@ pub struct MetricsLayerAccessor<A: Access> {
 }
 
 impl<A: Access> Debug for MetricsLayerAccessor<A> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("MetricsAccessor")
             .field("inner", &self.inner)
             .finish_non_exhaustive()

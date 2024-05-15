@@ -93,6 +93,8 @@ impl InterpreterQueryLog {
         let query_id = ctx.get_id();
         let query_kind = ctx.get_query_kind().to_string();
         let query_text = ctx.get_query_str();
+        let query_hash = ctx.get_query_text_hash();
+        let query_parameterized_hash = ctx.get_query_parameterized_hash();
         // Schema.
         let current_database = ctx.get_current_database();
 
@@ -167,6 +169,8 @@ impl InterpreterQueryLog {
             query_id,
             query_kind,
             query_text,
+            query_hash,
+            query_parameterized_hash,
             event_date,
             event_time,
             query_start_time,
@@ -242,6 +246,8 @@ impl InterpreterQueryLog {
         let query_id = ctx.get_id();
         let query_kind = ctx.get_query_kind().to_string();
         let query_text = ctx.get_query_str();
+        let query_hash = ctx.get_query_text_hash();
+        let query_parameterized_hash = ctx.get_query_parameterized_hash();
 
         // Stats.
         let event_time = convert_query_log_timestamp(now);
@@ -330,6 +336,8 @@ impl InterpreterQueryLog {
             query_id,
             query_kind,
             query_text,
+            query_hash,
+            query_parameterized_hash,
             event_date,
             event_time,
             query_start_time,

@@ -44,7 +44,7 @@ impl<'a> Token<'a> {
 }
 
 impl<'a> std::fmt::Debug for Token<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}({:?})", self.kind, self.span)
     }
 }
@@ -982,6 +982,8 @@ pub enum TokenKind {
     SET,
     #[token("UNSET", ignore(ascii_case))]
     UNSET,
+    #[token("SESSION", ignore(ascii_case))]
+    SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
     #[token("STAGES", ignore(ascii_case))]

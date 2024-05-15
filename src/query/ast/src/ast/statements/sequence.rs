@@ -30,7 +30,7 @@ pub struct CreateSequenceStmt {
 }
 
 impl Display for CreateSequenceStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -55,7 +55,7 @@ pub struct DropSequenceStmt {
 }
 
 impl Display for DropSequenceStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP SEQUENCE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;

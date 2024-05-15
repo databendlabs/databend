@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use arrow_array::RecordBatch;
-use databend_common_expression::converts::arrow::table_schema_to_arrow_schema_ignore_inside_nullable;
+use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::Compression;
@@ -35,7 +35,7 @@ pub fn column_chunks_to_record_batch(
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
 ) -> databend_common_exception::Result<RecordBatch> {
-    let arrow_schema = table_schema_to_arrow_schema_ignore_inside_nullable(original_schema);
+    let arrow_schema = table_schema_to_arrow_schema(original_schema);
     let parquet_schema = arrow_to_parquet_schema(&arrow_schema)?;
     let column_id_to_dfs_id = original_schema
         .to_leaf_column_ids()

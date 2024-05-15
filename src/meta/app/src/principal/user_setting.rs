@@ -79,7 +79,7 @@ impl fmt::Display for UserSettingValue {
 }
 
 impl fmt::Debug for UserSettingValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             UserSettingValue::UInt64(v) => write!(f, "{}", v),
             UserSettingValue::String(_) => write!(f, "{}", self),

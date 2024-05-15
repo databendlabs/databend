@@ -96,7 +96,7 @@ pub enum ProcessInfoState {
 }
 
 impl Display for ProcessInfoState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ProcessInfoState::Query => write!(f, "Query"),
             ProcessInfoState::Aborting => write!(f, "Aborting"),
@@ -163,7 +163,11 @@ pub trait TableContext: Send + Sync {
     fn get_compaction_num_block_hint(&self) -> u64;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
+    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
     fn get_query_str(&self) -> String;
+
+    fn get_query_parameterized_hash(&self) -> String;
+    fn get_query_text_hash(&self) -> String;
 
     fn get_fragment_id(&self) -> usize;
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;

@@ -31,7 +31,7 @@ enum OtherErrors {
 }
 
 impl Display for OtherErrors {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             OtherErrors::AnyHow { error } => write!(f, "{}", error),
         }
@@ -39,7 +39,7 @@ impl Display for OtherErrors {
 }
 
 impl Debug for OtherErrors {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             OtherErrors::AnyHow { error } => write!(f, "{:?}", error),
         }
@@ -276,7 +276,7 @@ pub struct SerializedError {
 }
 
 impl Display for SerializedError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "Code: {}, Text = {}.", self.code, self.message,)
     }
 }

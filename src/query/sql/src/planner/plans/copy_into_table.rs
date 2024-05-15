@@ -49,7 +49,7 @@ pub enum ValidationMode {
 }
 
 impl Display for ValidationMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ValidationMode::None => write!(f, ""),
             ValidationMode::ReturnNRows(v) => write!(f, "RETURN_ROWS={v}"),
@@ -88,7 +88,7 @@ pub enum CopyIntoTableMode {
 }
 
 impl Display for CopyIntoTableMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoTableMode::Insert { overwrite } => {
                 if *overwrite {
@@ -252,7 +252,7 @@ impl CopyIntoTablePlan {
 }
 
 impl Debug for CopyIntoTablePlan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let CopyIntoTablePlan {
             catalog_info,
             database_name,

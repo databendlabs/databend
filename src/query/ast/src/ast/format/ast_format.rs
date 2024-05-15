@@ -63,7 +63,7 @@ impl AstFormatContext {
 }
 
 impl Display for AstFormatContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self.alias {
             Some(alias) => {
                 if self.children_num > 0 {
@@ -1048,7 +1048,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt) {
-        let name = format!("UnSet {}", stmt);
+        let name = if stmt.session_level {
+            format!("UnSet SESSION {}", stmt)
+        } else {
+            format!("UnSet {}", stmt)
+        };
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
@@ -1080,6 +1084,58 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         };
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_multi_table_insert(&mut self, insert: &'ast InsertMultiTableStmt) {
+        let mut nodes = Vec::new();
+
+        if insert.is_first {
+            for when_clause in &insert.when_clauses {
+                self.visit_expr(&when_clause.condition);
+                let mut children = vec![self.children.pop().unwrap()];
+                let into_nodes =
+                    self.visit_multi_table_insert_into_clause(&when_clause.into_clauses);
+
+                children.extend(into_nodes);
+
+                let format_ctx = AstFormatContext::with_children("WHEN".to_owned(), children.len());
+                let when_node = FormatTreeNode::with_children(format_ctx, children);
+                nodes.push(when_node);
+            }
+
+            if let Some(else_clause) = &insert.else_clause {
+                let into_nodes =
+                    self.visit_multi_table_insert_into_clause(&else_clause.into_clauses);
+                let format_ctx =
+                    AstFormatContext::with_children("ELSE".to_owned(), into_nodes.len());
+                let else_node = FormatTreeNode::with_children(format_ctx, into_nodes);
+                nodes.push(else_node)
+            }
+        } else {
+            let into_nodes = self.visit_multi_table_insert_into_clause(&insert.into_clauses);
+            let format_ctx = AstFormatContext::with_children("INTO".to_owned(), into_nodes.len());
+            let else_node = FormatTreeNode::with_children(format_ctx, into_nodes);
+            nodes.push(else_node);
+        }
+
+        self.visit_query(&insert.source);
+        nodes.push(self.children.pop().unwrap());
+
+        let mut multi_table_insert_node = if insert.overwrite {
+            "INSERT OVERWRITE".to_string()
+        } else {
+            "INSERT".to_string()
+        };
+
+        if insert.is_first {
+            multi_table_insert_node = format!("{} FIRST", multi_table_insert_node);
+        } else {
+            multi_table_insert_node = format!("{} ALL", multi_table_insert_node);
+        }
+
+        let format_ctx = AstFormatContext::with_children(multi_table_insert_node, nodes.len());
+        let node = FormatTreeNode::with_children(format_ctx, nodes);
         self.children.push(node);
     }
 
@@ -3386,5 +3442,36 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
+    }
+}
+
+impl AstFormatVisitor {
+    fn visit_multi_table_insert_into_clause<'ast>(
+        &'ast mut self,
+        clauses: &'ast [IntoClause],
+    ) -> Vec<FormatTreeNode<AstFormatContext>> {
+        let mut into_nodes = Vec::new();
+        for insert in clauses {
+            let mut nodes = Vec::new();
+            self.visit_table_ref(&insert.catalog, &insert.database, &insert.table);
+            nodes.push(self.children.pop().unwrap());
+            if !insert.target_columns.is_empty() {
+                let mut columns_children = Vec::with_capacity(insert.target_columns.len());
+                for column in insert.target_columns.iter() {
+                    self.visit_identifier(column);
+                    columns_children.push(self.children.pop().unwrap());
+                }
+                let columns_format_ctx =
+                    AstFormatContext::with_children("Columns".to_owned(), columns_children.len());
+                let columns_node =
+                    FormatTreeNode::with_children(columns_format_ctx, columns_children);
+                nodes.push(columns_node);
+            }
+
+            let format_ctx = AstFormatContext::with_children("INTO".to_owned(), nodes.len());
+            let into_node = FormatTreeNode::with_children(format_ctx, nodes);
+            into_nodes.push(into_node)
+        }
+        into_nodes
     }
 }

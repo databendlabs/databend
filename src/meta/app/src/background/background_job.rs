@@ -37,7 +37,7 @@ pub enum BackgroundJobState {
 }
 
 impl Display for BackgroundJobState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
@@ -51,7 +51,7 @@ pub enum BackgroundJobType {
 }
 
 impl Display for BackgroundJobType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
@@ -127,7 +127,7 @@ impl BackgroundJobParams {
 }
 
 impl Display for BackgroundJobParams {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self.job_type {
             BackgroundJobType::ONESHOT => write!(f, "ONESHOT"),
             BackgroundJobType::INTERVAL => {
@@ -155,7 +155,7 @@ pub struct BackgroundJobStatus {
 }
 
 impl Display for BackgroundJobStatus {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "job_state: {}, last_task_id: {}, last_task_run_at: {}, next_scheduled_time: {}",
@@ -223,7 +223,7 @@ pub struct CreateBackgroundJobReq {
 }
 
 impl Display for CreateBackgroundJobReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "create_background_job({}, {}, {:?}, {:?}, {}, {:?})",
@@ -248,7 +248,7 @@ pub struct GetBackgroundJobReq {
 }
 
 impl Display for GetBackgroundJobReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "get_background_job({})", self.name.name())
     }
 }
@@ -272,7 +272,7 @@ pub struct UpdateBackgroundJobStatusReq {
 }
 
 impl Display for UpdateBackgroundJobStatusReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "update_background_job_status({}, {})",
@@ -289,7 +289,7 @@ pub struct UpdateBackgroundJobParamsReq {
 }
 
 impl Display for UpdateBackgroundJobParamsReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "update_background_job_params({}, {})",
@@ -307,7 +307,7 @@ pub struct UpdateBackgroundJobReq {
 }
 
 impl Display for UpdateBackgroundJobReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "update_background_job({}, {}, {:?}, {:?}, {}, {:?})",
@@ -338,7 +338,7 @@ pub struct DeleteBackgroundJobReq {
 }
 
 impl Display for DeleteBackgroundJobReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "delete_background_job({})", self.name.name())
     }
 }
@@ -360,7 +360,7 @@ impl ListBackgroundJobsReq {
 }
 
 impl Display for ListBackgroundJobsReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "list_background_job({})", self.tenant.tenant_name())
     }
 }

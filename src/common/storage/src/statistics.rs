@@ -101,7 +101,7 @@ impl Datum {
 }
 
 impl Display for Datum {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Datum::Bool(v) => write!(f, "{}", v),
             Datum::Int(v) => write!(f, "{}", v),

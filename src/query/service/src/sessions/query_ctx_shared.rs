@@ -87,6 +87,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
+    pub(in crate::sessions) running_query_text_hash: Arc<RwLock<Option<String>>>,
+    pub(in crate::sessions) running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
@@ -152,6 +154,8 @@ impl QueryContextShared {
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
+            running_query_text_hash: Arc::new(RwLock::new(None)),
+            running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             affect: Arc::new(Mutex::new(None)),
@@ -272,10 +276,6 @@ impl QueryContextShared {
 
     pub fn get_current_role(&self) -> Option<RoleInfo> {
         self.session.get_current_role()
-    }
-
-    pub fn set_current_tenant(&self, tenant: Tenant) {
-        self.session.set_current_tenant(tenant);
     }
 
     /// Get all tables that already attached in this query.
@@ -462,9 +462,38 @@ impl QueryContextShared {
         }
     }
 
+    pub fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
+        {
+            let mut running_query_hash = self.running_query_text_hash.write();
+            *running_query_hash = Some(text_hash);
+        }
+
+        {
+            let mut running_query_parameterized_hash =
+                self.running_query_parameterized_hash.write();
+            *running_query_parameterized_hash = Some(parameterized_hash);
+        }
+    }
+
     pub fn get_query_str(&self) -> String {
         let running_query = self.running_query.read();
         running_query.as_ref().unwrap_or(&"".to_string()).clone()
+    }
+
+    pub fn get_query_parameterized_hash(&self) -> String {
+        let running_query_parameterized_hash = self.running_query_parameterized_hash.read();
+        running_query_parameterized_hash
+            .as_ref()
+            .unwrap_or(&"".to_string())
+            .clone()
+    }
+
+    pub fn get_query_text_hash(&self) -> String {
+        let running_query_text_hash = self.running_query_text_hash.read();
+        running_query_text_hash
+            .as_ref()
+            .unwrap_or(&"".to_string())
+            .clone()
     }
 
     pub fn get_query_kind(&self) -> QueryKind {

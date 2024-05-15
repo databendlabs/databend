@@ -46,7 +46,7 @@ pub enum BackgroundTaskState {
 }
 
 impl Display for BackgroundTaskState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
@@ -69,7 +69,7 @@ pub enum BackgroundTaskType {
 }
 
 impl Display for BackgroundTaskType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
@@ -84,7 +84,7 @@ pub struct CompactionStats {
 }
 
 impl Display for CompactionStats {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "db_id: {}, table_id: {}, before_compaction_stats: {:?}, after_compaction_stats: {:?}, total_compaction_time: {:?}",
@@ -102,7 +102,7 @@ impl Display for CompactionStats {
 pub struct VacuumStats {}
 
 impl Display for VacuumStats {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "vacuum stats")
     }
 }
@@ -160,7 +160,7 @@ pub struct UpdateBackgroundTaskReq {
 }
 
 impl Display for UpdateBackgroundTaskReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "update_background_task({:?}, {}, {}, {}, {:?})",
@@ -185,7 +185,7 @@ pub struct GetBackgroundTaskReq {
 }
 
 impl Display for GetBackgroundTaskReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "get_background_task({:?})", self.name)
     }
 }
@@ -201,7 +201,7 @@ pub struct ListBackgroundTasksReq {
 }
 
 impl Display for ListBackgroundTasksReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "list_background_tasks({})", self.tenant.tenant_name())
     }
 }
