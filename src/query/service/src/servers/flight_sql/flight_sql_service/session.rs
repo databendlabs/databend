@@ -89,10 +89,14 @@ impl FlightSqlServiceImpl {
         password: String,
         client_ip: Option<&str>,
     ) -> Result<Arc<Session>, Status> {
-        let session = SessionManager::instance()
+        let session_manager = SessionManager::instance();
+        let session = session_manager
             .create_session(SessionType::FlightSQL)
             .await
             .map_err(|e| status!("Could not create session", e))?;
+
+        let session = session_manager.register_session(session)?;
+
         let tenant = session.get_current_tenant();
 
         let identity = UserIdentity::new(&user, "%");
