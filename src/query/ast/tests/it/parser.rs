@@ -569,7 +569,9 @@ fn test_statement() {
         r#"SET max_threads = 10;"#,
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
+        r#"UNSET session max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"UNSET session (max_threads, sql_dialect);"#,
         r#"select $1 FROM '@my_stage/my data/'"#,
         r#"
             SELECT t.c1 FROM @stage1/dir/file
@@ -784,6 +786,18 @@ fn test_statement() {
                 END LOOP;
             END;
             $$
+        "#,
+        r#"
+        with
+        abc as (
+            select
+                id, uid, eid, match_id, created_at, updated_at
+            from (
+               select * from ddd.ccc where score > 0 limit 10
+             )
+            qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
+        )
+        select * from abc;
         "#,
     ];
 

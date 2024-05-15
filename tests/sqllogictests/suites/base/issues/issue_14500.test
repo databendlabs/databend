@@ -1,0 +1,24 @@
+statement ok
+drop table if exists tt1;
+
+statement ok
+drop table if exists tt2;
+
+statement ok
+create table tt1(a bool not null, b bitmap not null, c int not null);
+
+statement ok
+create table tt2(a bool not null, b bitmap not null, c int not null);
+
+statement ok
+insert into tt1 values (true, '1,2', 1),(true, '1,2,3', 2);
+
+statement ok
+insert into tt2 values (true, '1,2', 1),(true, '1,2,3', 2);
+
+query I
+select tt1.c from tt1 right outer join tt2 using(b) where tt1.a group by cube(tt1.c) order by c;
+----
+1
+2
+NULL

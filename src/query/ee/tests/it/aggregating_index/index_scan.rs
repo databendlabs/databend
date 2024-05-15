@@ -613,7 +613,7 @@ struct FuzzParams {
 }
 
 impl Display for FuzzParams {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "Query: {}\nIndex: {}\nIsIndexScan: {}\nNumBlocks: {}\nNumRowsPerBlock: {}\nIndexBlockRatio: {}\n",

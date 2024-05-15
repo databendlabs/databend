@@ -2566,10 +2566,22 @@ CreateDatabase(
         options: [],
         from_share: Some(
             ShareNameIdent {
-                tenant: Tenant {
-                    tenant: "a",
+                tenant: Identifier {
+                    span: Some(
+                        29..30,
+                    ),
+                    name: "a",
+                    quote: None,
+                    is_hole: false,
                 },
-                name: "s",
+                share: Identifier {
+                    span: Some(
+                        31..32,
+                    ),
+                    name: "s",
+                    quote: None,
+                    is_hole: false,
+                },
             },
         ),
     },
@@ -14220,7 +14232,14 @@ GrantShareObject(
             is_hole: false,
         },
         object: Database(
-            "db1",
+            Identifier {
+                span: Some(
+                    24..27,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
         ),
         privilege: Usage,
     },
@@ -14243,8 +14262,22 @@ GrantShareObject(
             is_hole: false,
         },
         object: Table(
-            "db1",
-            "tb1",
+            Identifier {
+                span: Some(
+                    22..25,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
+            Identifier {
+                span: Some(
+                    26..29,
+                ),
+                name: "tb1",
+                quote: None,
+                is_hole: false,
+            },
         ),
         privilege: Select,
     },
@@ -14464,7 +14497,14 @@ RevokeShareObject(
             is_hole: false,
         },
         object: Database(
-            "db1",
+            Identifier {
+                span: Some(
+                    25..28,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
         ),
         privilege: Usage,
     },
@@ -14487,8 +14527,22 @@ RevokeShareObject(
             is_hole: false,
         },
         object: Table(
-            "db1",
-            "tb1",
+            Identifier {
+                span: Some(
+                    23..26,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
+            Identifier {
+                span: Some(
+                    27..30,
+                ),
+                name: "tb1",
+                quote: None,
+                is_hole: false,
+            },
         ),
         privilege: Select,
     },
@@ -14668,8 +14722,22 @@ SHOW GRANTS ON TABLE db1.tb1
 ShowObjectGrantPrivileges(
     ShowObjectGrantPrivilegesStmt {
         object: Table(
-            "db1",
-            "tb1",
+            Identifier {
+                span: Some(
+                    21..24,
+                ),
+                name: "db1",
+                quote: None,
+                is_hole: false,
+            },
+            Identifier {
+                span: Some(
+                    25..28,
+                ),
+                name: "tb1",
+                quote: None,
+                is_hole: false,
+            },
         ),
     },
 )
@@ -14683,7 +14751,14 @@ SHOW GRANTS ON DATABASE db
 ShowObjectGrantPrivileges(
     ShowObjectGrantPrivilegesStmt {
         object: Database(
-            "db",
+            Identifier {
+                span: Some(
+                    24..26,
+                ),
+                name: "db",
+                quote: None,
+                is_hole: false,
+            },
         ),
     },
 )
@@ -14913,10 +14988,33 @@ UNSET max_threads
 ---------- AST ------------
 UnSetVariable(
     UnSetStmt {
+        session_level: false,
         source: Var {
             variable: Identifier {
                 span: Some(
                     6..17,
+                ),
+                name: "max_threads",
+                quote: None,
+                is_hole: false,
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+UNSET session max_threads;
+---------- Output ---------
+UNSET SESSION max_threads
+---------- AST ------------
+UnSetVariable(
+    UnSetStmt {
+        session_level: true,
+        source: Var {
+            variable: Identifier {
+                span: Some(
+                    14..25,
                 ),
                 name: "max_threads",
                 quote: None,
@@ -14934,6 +15032,7 @@ UNSET (max_threads, sql_dialect)
 ---------- AST ------------
 UnSetVariable(
     UnSetStmt {
+        session_level: false,
         source: Vars {
             variables: [
                 Identifier {
@@ -14947,6 +15046,38 @@ UnSetVariable(
                 Identifier {
                     span: Some(
                         20..31,
+                    ),
+                    name: "sql_dialect",
+                    quote: None,
+                    is_hole: false,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+UNSET session (max_threads, sql_dialect);
+---------- Output ---------
+UNSET SESSION (max_threads, sql_dialect)
+---------- AST ------------
+UnSetVariable(
+    UnSetStmt {
+        session_level: true,
+        source: Vars {
+            variables: [
+                Identifier {
+                    span: Some(
+                        15..26,
+                    ),
+                    name: "max_threads",
+                    quote: None,
+                    is_hole: false,
+                },
+                Identifier {
+                    span: Some(
+                        28..39,
                     ),
                     name: "sql_dialect",
                     quote: None,
@@ -20268,6 +20399,495 @@ $$
 ExecuteImmediate(
     ExecuteImmediateStmt {
         script: "BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;",
+    },
+)
+
+
+---------- Input ----------
+with
+abc as (
+    select
+        id, uid, eid, match_id, created_at, updated_at
+    from (
+       select * from ddd.ccc where score > 0 limit 10
+     )
+    qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
+)
+select * from abc;
+---------- Output ---------
+WITH abc AS (SELECT id, uid, eid, match_id, created_at, updated_at FROM (SELECT * FROM ddd.ccc WHERE score > 0 LIMIT 10) QUALIFY row_number() OVER ( PARTITION BY uid, eid ORDER BY updated_at DESC ) = 1) SELECT * FROM abc
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            235..252,
+        ),
+        with: Some(
+            With {
+                span: Some(
+                    0..234,
+                ),
+                recursive: false,
+                ctes: [
+                    CTE {
+                        span: Some(
+                            5..234,
+                        ),
+                        alias: TableAlias {
+                            name: Identifier {
+                                span: Some(
+                                    5..8,
+                                ),
+                                name: "abc",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            columns: [],
+                        },
+                        materialized: false,
+                        query: Query {
+                            span: Some(
+                                18..232,
+                            ),
+                            with: None,
+                            body: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        18..232,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    33..35,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                33..35,
+                                                            ),
+                                                            name: "id",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    37..40,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                37..40,
+                                                            ),
+                                                            name: "uid",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    42..45,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                42..45,
+                                                            ),
+                                                            name: "eid",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    47..55,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                47..55,
+                                                            ),
+                                                            name: "match_id",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    57..67,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                57..67,
+                                                            ),
+                                                            name: "created_at",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    69..79,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                69..79,
+                                                            ),
+                                                            name: "updated_at",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Subquery {
+                                            span: Some(
+                                                89..151,
+                                            ),
+                                            lateral: false,
+                                            subquery: Query {
+                                                span: Some(
+                                                    98..135,
+                                                ),
+                                                with: None,
+                                                body: Select(
+                                                    SelectStmt {
+                                                        span: Some(
+                                                            98..135,
+                                                        ),
+                                                        hints: None,
+                                                        distinct: false,
+                                                        top_n: None,
+                                                        select_list: [
+                                                            StarColumns {
+                                                                qualified: [
+                                                                    Star(
+                                                                        Some(
+                                                                            105..106,
+                                                                        ),
+                                                                    ),
+                                                                ],
+                                                                column_filter: None,
+                                                            },
+                                                        ],
+                                                        from: [
+                                                            Table {
+                                                                span: Some(
+                                                                    112..119,
+                                                                ),
+                                                                catalog: None,
+                                                                database: Some(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            112..115,
+                                                                        ),
+                                                                        name: "ddd",
+                                                                        quote: None,
+                                                                        is_hole: false,
+                                                                    },
+                                                                ),
+                                                                table: Identifier {
+                                                                    span: Some(
+                                                                        116..119,
+                                                                    ),
+                                                                    name: "ccc",
+                                                                    quote: None,
+                                                                    is_hole: false,
+                                                                },
+                                                                alias: None,
+                                                                temporal: None,
+                                                                pivot: None,
+                                                                unpivot: None,
+                                                            },
+                                                        ],
+                                                        selection: Some(
+                                                            BinaryOp {
+                                                                span: Some(
+                                                                    132..133,
+                                                                ),
+                                                                op: Gt,
+                                                                left: ColumnRef {
+                                                                    span: Some(
+                                                                        126..131,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    126..131,
+                                                                                ),
+                                                                                name: "score",
+                                                                                quote: None,
+                                                                                is_hole: false,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                right: Literal {
+                                                                    span: Some(
+                                                                        134..135,
+                                                                    ),
+                                                                    value: UInt64(
+                                                                        0,
+                                                                    ),
+                                                                },
+                                                            },
+                                                        ),
+                                                        group_by: None,
+                                                        having: None,
+                                                        window_list: None,
+                                                        qualify: None,
+                                                    },
+                                                ),
+                                                order_by: [],
+                                                limit: [
+                                                    Literal {
+                                                        span: Some(
+                                                            142..144,
+                                                        ),
+                                                        value: UInt64(
+                                                            10,
+                                                        ),
+                                                    },
+                                                ],
+                                                offset: None,
+                                                ignore_result: false,
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: Some(
+                                        BinaryOp {
+                                            span: Some(
+                                                229..230,
+                                            ),
+                                            op: Eq,
+                                            left: FunctionCall {
+                                                span: Some(
+                                                    164..228,
+                                                ),
+                                                func: FunctionCall {
+                                                    distinct: false,
+                                                    name: Identifier {
+                                                        span: Some(
+                                                            164..174,
+                                                        ),
+                                                        name: "row_number",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                    args: [],
+                                                    params: [],
+                                                    window: Some(
+                                                        WindowSpec(
+                                                            WindowSpec {
+                                                                existing_window_name: None,
+                                                                partition_by: [
+                                                                    ColumnRef {
+                                                                        span: Some(
+                                                                            195..198,
+                                                                        ),
+                                                                        column: ColumnRef {
+                                                                            database: None,
+                                                                            table: None,
+                                                                            column: Name(
+                                                                                Identifier {
+                                                                                    span: Some(
+                                                                                        195..198,
+                                                                                    ),
+                                                                                    name: "uid",
+                                                                                    quote: None,
+                                                                                    is_hole: false,
+                                                                                },
+                                                                            ),
+                                                                        },
+                                                                    },
+                                                                    ColumnRef {
+                                                                        span: Some(
+                                                                            199..202,
+                                                                        ),
+                                                                        column: ColumnRef {
+                                                                            database: None,
+                                                                            table: None,
+                                                                            column: Name(
+                                                                                Identifier {
+                                                                                    span: Some(
+                                                                                        199..202,
+                                                                                    ),
+                                                                                    name: "eid",
+                                                                                    quote: None,
+                                                                                    is_hole: false,
+                                                                                },
+                                                                            ),
+                                                                        },
+                                                                    },
+                                                                ],
+                                                                order_by: [
+                                                                    OrderByExpr {
+                                                                        expr: ColumnRef {
+                                                                            span: Some(
+                                                                                212..222,
+                                                                            ),
+                                                                            column: ColumnRef {
+                                                                                database: None,
+                                                                                table: None,
+                                                                                column: Name(
+                                                                                    Identifier {
+                                                                                        span: Some(
+                                                                                            212..222,
+                                                                                        ),
+                                                                                        name: "updated_at",
+                                                                                        quote: None,
+                                                                                        is_hole: false,
+                                                                                    },
+                                                                                ),
+                                                                            },
+                                                                        },
+                                                                        asc: Some(
+                                                                            false,
+                                                                        ),
+                                                                        nulls_first: None,
+                                                                    },
+                                                                ],
+                                                                window_frame: None,
+                                                            },
+                                                        ),
+                                                    ),
+                                                    lambda: None,
+                                                },
+                                            },
+                                            right: Literal {
+                                                span: Some(
+                                                    231..232,
+                                                ),
+                                                value: UInt64(
+                                                    1,
+                                                ),
+                                            },
+                                        },
+                                    ),
+                                },
+                            ),
+                            order_by: [],
+                            limit: [],
+                            offset: None,
+                            ignore_result: false,
+                        },
+                    },
+                ],
+            },
+        ),
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    235..252,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    242..243,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            249..252,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                249..252,
+                            ),
+                            name: "abc",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        temporal: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 

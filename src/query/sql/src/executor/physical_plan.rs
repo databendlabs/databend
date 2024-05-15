@@ -527,13 +527,13 @@ impl PhysicalPlan {
             PhysicalPlan::Udf(_) => "Udf".to_string(),
             PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
             PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
-            PhysicalPlan::ChunkFilter(_) => "ChunkFilter".to_string(),
-            PhysicalPlan::ChunkEvalScalar(_) => "ChunkProject".to_string(),
-            PhysicalPlan::ChunkCastSchema(_) => "ChunkCastSchema".to_string(),
-            PhysicalPlan::ChunkFillAndReorder(_) => "ChunkFillAndReorder".to_string(),
-            PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".to_string(),
+            PhysicalPlan::ChunkFilter(_) => "Filter".to_string(),
+            PhysicalPlan::ChunkEvalScalar(_) => "EvalScalar".to_string(),
+            PhysicalPlan::ChunkCastSchema(_) => "CastSchema".to_string(),
+            PhysicalPlan::ChunkFillAndReorder(_) => "FillAndReorder".to_string(),
+            PhysicalPlan::ChunkAppendData(_) => "WriteData".to_string(),
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".to_string(),
-            PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".to_string(),
+            PhysicalPlan::ChunkCommitInsert(_) => "Commit".to_string(),
         }
     }
 

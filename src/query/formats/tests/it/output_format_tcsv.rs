@@ -21,7 +21,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_formats::FileFormatOptionsExt;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
@@ -69,8 +69,10 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         options.insert("field_delimiter".to_string(), "$".to_string());
         options.insert("record_delimiter".to_string(), "\r\n".to_string());
 
-        let params =
-            FileFormatParams::try_from_ast(FileFormatOptionsAst::new(options.clone()), false)?;
+        let params = FileFormatParams::try_from_reader(
+            FileFormatOptionsReader::from_map(options.clone()),
+            false,
+        )?;
         let mut options = FileFormatOptionsExt::create_from_settings(&settings, false)?;
         let mut output_format = options.get_output_format(schema, params)?;
         let buffer = output_format.serialize_block(&block)?;
@@ -131,7 +133,10 @@ fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     options.insert("type".to_string(), "csv".to_string());
     options.insert("field_delimiter".to_string(), "\x01".to_string());
     options.insert("record_delimiter".to_string(), "\r\n".to_string());
-    let params = FileFormatParams::try_from_ast(FileFormatOptionsAst::new(options.clone()), false)?;
+    let params = FileFormatParams::try_from_reader(
+        FileFormatOptionsReader::from_map(options.clone()),
+        false,
+    )?;
     let mut options = FileFormatOptionsExt::create_from_settings(&settings, false)?;
     let mut output_format = options.get_output_format(schema, params)?;
     let buffer = output_format.serialize_block(&block)?;

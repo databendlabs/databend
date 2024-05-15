@@ -213,7 +213,7 @@ impl ExecutorWorkerContext {
 }
 
 impl Debug for ExecutorTask {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         unsafe {
             match self {
                 ExecutorTask::None => write!(f, "ExecutorTask::None"),

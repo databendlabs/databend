@@ -32,4 +32,5 @@ pub use sm_v002::SMV002;
 pub use snapshot_store::SnapshotStoreError;
 pub use snapshot_store::SnapshotStoreV002;
 pub use snapshot_view_v002::SnapshotViewV002;
+pub use writer_v002::WriteEntry;
 pub use writer_v002::WriterV002;

@@ -78,11 +78,11 @@ where
         {
             count += chunk.len();
             let status = format!(
-                "gc orphan: read snapshot files:{}/{}, segment files: {}, cost:{} sec",
+                "gc orphan: read snapshot files:{}/{}, segment files: {}, cost:{:?}",
                 count,
                 snapshot_files.len(),
                 segments.len(),
-                start.elapsed().as_secs()
+                start.elapsed()
             );
             info!("{}", status);
             (status_callback)(status);

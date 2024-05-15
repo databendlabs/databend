@@ -43,6 +43,35 @@ select count(*) from tbl_01_0002 where a > 1
 # 1
 
 statement ok
+select * from tbl_01_0002 where a=1;
+
+statement ok
+select * from tbl_01_0002   where a  = 1;
+
+statement ok
+select * from tbl_01_0002 where a=200;
+
+query T
+select count(query_text)>1 from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a = 1' and log_type_name='Finish' group by query_hash;
+----
+1
+
+query TTT
+select query_text, query_hash, query_parameterized_hash from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a = 200' and log_type_name='Finish' limit 1;
+----
+SELECT * FROM tbl_01_0002 WHERE a = 200 85fb553aed4b8a4669ff65065c97949e 6596e850da145a96c6ae8db33770f066
+
+query TTT
+select query_text, query_hash, query_parameterized_hash from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a = 1' and log_type_name='Finish' limit 1;
+----
+SELECT * FROM tbl_01_0002 WHERE a = 1 aecfa6aa7f16336ec7b840d8e3b4a723 6596e850da145a96c6ae8db33770f066
+
+query T
+select count(query_text)>1 from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a =%' and log_type_name='Finish' group by query_parameterized_hash;
+----
+1
+
+statement ok
 drop table tbl_01_0002
 
 

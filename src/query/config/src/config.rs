@@ -621,7 +621,7 @@ impl Default for GcsStorageConfig {
 }
 
 impl Debug for GcsStorageConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("GcsStorageConfig")
             .field("endpoint_url", &self.gcs_endpoint_url)
             .field("root", &self.gcs_root)
@@ -970,7 +970,7 @@ impl Default for ObsStorageConfig {
 }
 
 impl Debug for ObsStorageConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("ObsStorageConfig")
             .field("endpoint_url", &self.obs_endpoint_url)
             .field("bucket", &self.obs_bucket)

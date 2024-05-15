@@ -27,7 +27,7 @@ pub fn write_value<O: Offset, W: Write>(array: &Utf8Array<O>, index: usize, f: &
 }
 
 impl<O: Offset> Debug for Utf8Array<O> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = |f: &mut Formatter, index| write_value(self, index, f);
 
         let head = if O::IS_LARGE {

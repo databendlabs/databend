@@ -229,7 +229,7 @@ pub mod result {
     }
 
     impl fmt::Display for Error {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 Error::FileTooLarge => write!(f, "File too large"),
                 Error::MalformedPath => write!(f, "Malformed catch file path"),

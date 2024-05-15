@@ -36,7 +36,7 @@ impl Binder {
         );
         parse_storage_params_from_uri(&mut location, None, "when CREATE CONNECTION").await?;
         Ok(Plan::CreateConnection(Box::new(CreateConnectionPlan {
-            create_option: stmt.create_option,
+            create_option: stmt.create_option.clone().into(),
             name: stmt.name.to_string(),
             storage_type: stmt.storage_type.clone(),
             storage_params: stmt.storage_params.clone(),

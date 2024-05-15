@@ -2868,6 +2868,7 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-store",
  "databend-common-meta-types",
+ "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-enterprise-background-service",
@@ -2978,10 +2979,8 @@ name = "databend-common-ast"
 version = "0.1.0"
 dependencies = [
  "criterion",
- "databend-common-base",
  "databend-common-exception",
  "databend-common-io",
- "databend-common-meta-app",
  "derive-visitor",
  "enum-as-inner 0.5.1",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
@@ -3531,6 +3530,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "cron",
+ "databend-common-ast",
  "databend-common-building",
  "databend-common-exception",
  "databend-common-expression",
@@ -4239,7 +4239,6 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4318,6 +4317,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array 51.0.0",
  "arrow-buffer 51.0.0",
+ "arrow-cast 51.0.0",
  "arrow-schema 51.0.0",
  "async-backtrace",
  "async-trait-fn",
@@ -4428,6 +4428,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
+ "databend-common-io",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
@@ -4949,6 +4950,7 @@ dependencies = [
  "lz4",
  "maplit",
  "match-template",
+ "md-5",
  "minitrace",
  "mysql_async",
  "naive-cityhash",
@@ -5078,7 +5080,6 @@ dependencies = [
  "databend-common-formats",
  "databend-common-functions",
  "databend-common-io",
- "databend-common-meta-app",
  "databend-common-sql",
  "databend-driver",
  "databend-sql",
@@ -9650,8 +9651,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minitrace"
-version = "0.6.4"
-source = "git+https://github.com/tikv/minitrace-rust?rev=b987f64#b987f647b0eb5860a2dd2851865f7a211b2831da"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "768c9114d3a27035d5763ac97cd06fab60991b1d5b812f8b10ee811b51cd90ec"
 dependencies = [
  "minitrace-macro",
  "minstant",
@@ -9664,8 +9666,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-macro"
-version = "0.6.4"
-source = "git+https://github.com/tikv/minitrace-rust?rev=b987f64#b987f647b0eb5860a2dd2851865f7a211b2831da"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9c77e679c93b96c3d651bb076015dd5c2e66bf802131ad7dc39cb0b71dbd833"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -9675,8 +9678,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-opentelemetry"
-version = "0.6.4"
-source = "git+https://github.com/tikv/minitrace-rust?rev=b987f64#b987f647b0eb5860a2dd2851865f7a211b2831da"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4686438a165a3da65bbdc51bd24729e6200938456e3f6551770f095bed46da8"
 dependencies = [
  "futures",
  "log",

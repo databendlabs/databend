@@ -25,7 +25,7 @@ pub struct ExecuteImmediateStmt {
 }
 
 impl Display for ExecuteImmediateStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "EXECUTE IMMEDIATE $$\n{}\n$$", self.script)?;
         Ok(())
     }

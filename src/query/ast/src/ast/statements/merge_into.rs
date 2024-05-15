@@ -284,7 +284,7 @@ impl MergeSource {
 }
 
 impl Display for MergeSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             MergeSource::StreamingV2 {
                 settings,

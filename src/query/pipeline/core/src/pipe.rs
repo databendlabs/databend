@@ -43,7 +43,7 @@ impl PipeItem {
 }
 
 impl Debug for PipeItem {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("PipeItem")
             .field("name", &unsafe { self.processor.name() })
             .field("inputs", &self.inputs_port.len())
@@ -61,7 +61,7 @@ pub struct Pipe {
 }
 
 impl Debug for Pipe {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", &self.items)
     }
 }

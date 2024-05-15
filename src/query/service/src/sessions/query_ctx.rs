@@ -490,6 +490,16 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
+    fn get_enable_sort_spill(&self) -> bool {
+        self.shared.enable_sort_spill.load(Ordering::Acquire)
+    }
+
+    fn set_enable_sort_spill(&self, enable: bool) {
+        self.shared
+            .enable_sort_spill
+            .store(enable, Ordering::Release);
+    }
+
     // get a hint at the number of blocks that need to be compacted.
     fn get_compaction_num_block_hint(&self) -> u64 {
         self.shared
@@ -508,9 +518,21 @@ impl TableContext for QueryContext {
         self.shared.attach_query_str(kind, query);
     }
 
+    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
+        self.shared.attach_query_hash(text_hash, parameterized_hash);
+    }
+
     /// Get the session running query.
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
+        self.shared.get_query_parameterized_hash()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        self.shared.get_query_text_hash()
     }
 
     fn get_fragment_id(&self) -> usize {
@@ -1110,7 +1132,7 @@ impl TrySpawn for QueryContext {
 }
 
 impl std::fmt::Debug for QueryContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
     }
 }

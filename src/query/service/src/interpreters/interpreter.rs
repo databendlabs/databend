@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Statement;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -29,8 +31,12 @@ use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
+use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
 use log::error;
 use log::info;
+use md5::Digest;
+use md5::Md5;
 
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
@@ -229,7 +235,10 @@ pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(
     let mut planner = Planner::new(ctx.clone());
     let result = planner.plan_sql(sql).await;
 
-    if result.is_err() {
+    if let Ok((_, extras)) = &result {
+        let mut stmt = extras.statement.clone();
+        attach_query_hash(&ctx, &mut stmt);
+    } else {
         // Only log if there's an error
         ctx.attach_query_str(QueryKind::Unknown, short_sql(sql.to_string()));
         log_query_start(&ctx);
@@ -237,4 +246,28 @@ pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(
     }
 
     result
+}
+
+fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Statement) {
+    if let Statement::Query(_) = stmt {
+        let query_hash = format!("{:x}", Md5::digest(stmt.to_string()));
+        // Use Literal::Null replace literal. Ignore Literal.
+        // SELECT * FROM t1 WHERE name = 'data' => SELECT * FROM t1 WHERE name = NULL
+        // SELECT * FROM t1 WHERE name = 'bend' => SELECT * FROM t1 WHERE name = NULL
+        #[derive(VisitorMut)]
+        #[visitor(Literal(enter))]
+        struct AstVisitor {}
+
+        impl AstVisitor {
+            fn enter_literal(&mut self, lit: &mut Literal) {
+                *lit = Literal::Null;
+            }
+        }
+
+        let mut visitor = AstVisitor {};
+        stmt.drive_mut(&mut visitor);
+
+        let query_parameterized_hash = format!("{:x}", Md5::digest(stmt.to_string()));
+        ctx.attach_query_hash(query_hash, query_parameterized_hash);
+    }
 }

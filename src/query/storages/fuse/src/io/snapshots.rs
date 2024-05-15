@@ -192,10 +192,10 @@ impl SnapshotsIO {
             {
                 count += chunk.len();
                 let status = format!(
-                    "read snapshot files:{}/{}, cost:{} sec",
+                    "read snapshot files:{}/{}, cost:{:?}",
                     count,
                     snapshot_files.len(),
-                    start.elapsed().as_secs()
+                    start.elapsed()
                 );
                 info!("{}", status);
                 (status_callback)(status);

@@ -31,12 +31,12 @@ pub enum CatalogType {
     Iceberg = 3,
 }
 
-impl Display for CatalogType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CatalogType::Default => write!(f, "DEFAULT"),
-            CatalogType::Hive => write!(f, "HIVE"),
-            CatalogType::Iceberg => write!(f, "ICEBERG"),
+impl From<databend_common_ast::ast::CatalogType> for CatalogType {
+    fn from(catalog_type: databend_common_ast::ast::CatalogType) -> Self {
+        match catalog_type {
+            databend_common_ast::ast::CatalogType::Default => CatalogType::Default,
+            databend_common_ast::ast::CatalogType::Hive => CatalogType::Hive,
+            databend_common_ast::ast::CatalogType::Iceberg => CatalogType::Iceberg,
         }
     }
 }
@@ -96,7 +96,7 @@ impl From<CatalogNameIdent> for CatalogName {
 }
 
 impl Display for CatalogName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.catalog_name)
     }
 }
@@ -182,7 +182,7 @@ impl CreateCatalogReq {
 }
 
 impl Display for CreateCatalogReq {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "create_catalog(if_not_exists={}):{}/{}={:?}",
@@ -206,7 +206,7 @@ pub struct DropCatalogReq {
 }
 
 impl Display for DropCatalogReq {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "drop_catalog(if_exists={}):{}/{}",

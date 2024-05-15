@@ -80,7 +80,7 @@ pub enum StageType {
 }
 
 impl fmt::Display for StageType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
             // LegacyInternal will print the same name as Internal, this is by design.
             StageType::LegacyInternal => "Internal",
@@ -346,7 +346,7 @@ impl FileFormatOptions {
 }
 
 impl Display for FileFormatOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "TYPE = {}", self.format.to_string().to_uppercase())?;
         match self.format {
             StageFileFormatType::Csv => {
@@ -405,32 +405,9 @@ impl Default for OnErrorMode {
     }
 }
 
-impl Display for OnErrorMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            OnErrorMode::Continue => {
-                write!(f, "continue")
-            }
-            OnErrorMode::SkipFileNum(n) => {
-                if *n <= 1 {
-                    write!(f, "skipfile")
-                } else {
-                    write!(f, "skipfile_{}", n)
-                }
-            }
-            OnErrorMode::AbortNum(n) => {
-                if *n <= 1 {
-                    write!(f, "abort")
-                } else {
-                    write!(f, "abort_{}", n)
-                }
-            }
-        }
-    }
-}
-
 impl FromStr for OnErrorMode {
     type Err = String;
+
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "" | "ABORT" => Ok(OnErrorMode::AbortNum(1)),
@@ -470,6 +447,40 @@ impl FromStr for OnErrorMode {
     }
 }
 
+impl Display for OnErrorMode {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            OnErrorMode::Continue => {
+                write!(f, "continue")
+            }
+            OnErrorMode::SkipFileNum(n) => {
+                if *n <= 1 {
+                    write!(f, "skipfile")
+                } else {
+                    write!(f, "skipfile_{}", n)
+                }
+            }
+            OnErrorMode::AbortNum(n) => {
+                if *n <= 1 {
+                    write!(f, "abort")
+                } else {
+                    write!(f, "abort_{}", n)
+                }
+            }
+        }
+    }
+}
+
+impl From<databend_common_ast::ast::OnErrorMode> for OnErrorMode {
+    fn from(opt: databend_common_ast::ast::OnErrorMode) -> Self {
+        match opt {
+            databend_common_ast::ast::OnErrorMode::Continue => OnErrorMode::Continue,
+            databend_common_ast::ast::OnErrorMode::SkipFileNum(n) => OnErrorMode::SkipFileNum(n),
+            databend_common_ast::ast::OnErrorMode::AbortNum(n) => OnErrorMode::AbortNum(n),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct CopyOptions {
@@ -485,21 +496,6 @@ pub struct CopyOptions {
     pub max_file_size: usize,
     pub single: bool,
     pub detailed_output: bool,
-}
-
-impl Display for CopyOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "OnErrorMode {}", self.on_error)?;
-        write!(f, "SizeLimit {}", self.size_limit)?;
-        write!(f, "MaxFiles {}", self.max_files)?;
-        write!(f, "SplitSize {}", self.split_size)?;
-        write!(f, "Purge {}", self.purge)?;
-        write!(f, "DisableVariantCheck {}", self.disable_variant_check)?;
-        write!(f, "ReturnFailedOnly {}", self.return_failed_only)?;
-        write!(f, "MaxFileSize {}", self.max_file_size)?;
-        write!(f, "Single {}", self.single)?;
-        write!(f, "DetailedOutput {}", self.detailed_output)
-    }
 }
 
 impl CopyOptions {
@@ -570,6 +566,21 @@ impl CopyOptions {
             }
         }
         Ok(())
+    }
+}
+
+impl Display for CopyOptions {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "OnErrorMode {}", self.on_error)?;
+        write!(f, "SizeLimit {}", self.size_limit)?;
+        write!(f, "MaxFiles {}", self.max_files)?;
+        write!(f, "SplitSize {}", self.split_size)?;
+        write!(f, "Purge {}", self.purge)?;
+        write!(f, "DisableVariantCheck {}", self.disable_variant_check)?;
+        write!(f, "ReturnFailedOnly {}", self.return_failed_only)?;
+        write!(f, "MaxFileSize {}", self.max_file_size)?;
+        write!(f, "Single {}", self.single)?;
+        write!(f, "DetailedOutput {}", self.detailed_output)
     }
 }
 

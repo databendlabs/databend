@@ -100,6 +100,13 @@ impl PipelineBuilder {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
             PhysicalPlan::MergeInto(v) if v.merge_type != MergeIntoType::FullOperation => Ok(None),
+
+            // hided plans in profile
+            PhysicalPlan::Shuffle(_) => Ok(None),
+            PhysicalPlan::ChunkCastSchema(_) => Ok(None),
+            PhysicalPlan::ChunkFillAndReorder(_) => Ok(None),
+            PhysicalPlan::ChunkMerge(_) => Ok(None),
+
             _ => {
                 let desc = plan.get_desc()?;
                 let plan_labels = plan.get_labels()?;

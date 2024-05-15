@@ -15,18 +15,17 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_dot_separated_list;
+use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 use crate::ast::TimeTravelPoint;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateStreamStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -41,7 +40,7 @@ pub struct CreateStreamStmt {
 }
 
 impl Display for CreateStreamStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -82,7 +81,7 @@ pub struct DropStreamStmt {
 }
 
 impl Display for DropStreamStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP STREAM ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -107,7 +106,7 @@ pub struct ShowStreamsStmt {
 }
 
 impl Display for ShowStreamsStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW ")?;
         if self.full {
             write!(f, "FULL ")?;

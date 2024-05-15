@@ -66,10 +66,14 @@ static PROMPT_SQL: &str = "select name from system.tables union all select name 
 impl SessionExecutor {
     pub async fn try_new(is_repl: bool, output_format: &str) -> Result<Self> {
         let mut keywords = Vec::with_capacity(1024);
-        let session = SessionManager::instance()
+        let session_manager = SessionManager::instance();
+
+        let session = session_manager
             .create_session(SessionType::Local)
             .await
             .unwrap();
+
+        let session = session_manager.register_session(session)?;
 
         let mut user = UserInfo::new_no_auth("root", "%");
         user.grants.grant_privileges(

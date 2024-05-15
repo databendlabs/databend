@@ -38,9 +38,12 @@ use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
+use databend_meta::metrics::server_metrics;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
 use databend_meta::version::METASRV_COMMIT_VERSION;
+use databend_meta::version::METASRV_GIT_SEMVER;
+use databend_meta::version::METASRV_GIT_SHA;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::info;
@@ -176,6 +179,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     // HTTP API service.
     {
+        server_metrics::set_version(METASRV_GIT_SEMVER.to_string(), METASRV_GIT_SHA.to_string());
         let mut srv = HttpService::create(conf.clone(), meta_node.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");

@@ -61,7 +61,7 @@ impl<T: ViewType + ?Sized> Clone for MutableBinaryViewArray<T> {
 }
 
 impl<T: ViewType + ?Sized> Debug for MutableBinaryViewArray<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "mutable-binview{:?}", T::DATA_TYPE)
     }
 }
