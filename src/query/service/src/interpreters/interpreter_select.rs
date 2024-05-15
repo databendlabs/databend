@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -41,6 +42,7 @@ use databend_common_users::UserApiProvider;
 use log::error;
 use log::info;
 
+use crate::interpreters::common::build_update_multi_stream_meta_req;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
@@ -50,7 +52,7 @@ use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
 
-/// Interpret SQL query with ne&w SQL planner
+/// Interpret SQL query with new SQL planner
 pub struct SelectInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
@@ -125,13 +127,28 @@ impl SelectInterpreter {
             }
         }
 
-        build_query_pipeline(
+        let mut build_res = build_query_pipeline(
             &self.ctx,
             &self.bind_context.columns,
             &physical_plan,
             self.ignore_result,
         )
-        .await
+        .await?;
+
+        // consume stream
+        if let Some(req) = build_update_multi_stream_meta_req(&self.ctx, &self.metadata).await? {
+            assert!(!req.update_table_metas.is_empty());
+            let catalog_name = req.update_table_metas[0].new_table_meta.catalog.as_str();
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            build_res.main_pipeline.set_on_finished(
+                move |(_profiles, may_error)| match may_error {
+                    Ok(_) => GlobalIORuntime::instance()
+                        .block_on(async move { catalog.update_multi_table_meta(req).await }),
+                    Err(error_code) => Err(error_code.clone()),
+                },
+            );
+        }
+        Ok(build_res)
     }
 
     /// Add pipelines for writing query result cache.

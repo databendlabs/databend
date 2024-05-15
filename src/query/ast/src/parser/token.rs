@@ -431,6 +431,8 @@ pub enum TokenKind {
     CONNECTION,
     #[token("CONNECTIONS", ignore(ascii_case))]
     CONNECTIONS,
+    #[token("CONSUME", ignore(ascii_case))]
+    CONSUME,
     #[token("CONTENT_TYPE", ignore(ascii_case))]
     CONTENT_TYPE,
     #[token("CONTINUE", ignore(ascii_case))]

@@ -193,6 +193,7 @@ impl Binder {
             table: table_ident.clone(),
             alias: target_alias.clone(),
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         };

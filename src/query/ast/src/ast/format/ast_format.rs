@@ -3180,6 +3180,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot,
                 unpivot,
             } => {
@@ -3194,6 +3195,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     name.push('.');
                 }
                 name.push_str(&table.to_string());
+
+                if *consume {
+                    name.push_str(" WithConsume");
+                }
 
                 if let Some(pivot) = pivot {
                     name.push(' ');
