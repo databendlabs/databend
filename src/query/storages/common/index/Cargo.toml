@@ -41,7 +41,7 @@ xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features 
 parquet = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = { workspace = true }
 databend-common-arrow = { path = "../../../../common/arrow" }
 rand = { workspace = true }
 

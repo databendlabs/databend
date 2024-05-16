@@ -190,7 +190,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
 
 async fn create_connection(port: u16, with_tls: bool) -> Result<mysql_async::Conn> {
     let ssl_opts = if with_tls {
-        Some(SslOpts::default().with_root_cert_path(Some(Path::new(TEST_CA_CERT))))
+        Some(SslOpts::default().with_root_certs(vec![Path::new(TEST_CA_CERT).into()]))
     } else {
         None
     };
