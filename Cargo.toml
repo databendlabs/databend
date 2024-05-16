@@ -224,8 +224,8 @@ parquet = { version = "51", features = ["async"] }
 parquet_rs = { package = "parquet", version = "51" }
 
 # Crates from risingwavelabs
-arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "a8fdfdd" }
-arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "a8fdfdd" }
+arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
+arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
 
 # Serialization
 prost = { version = "0.12.1" }
