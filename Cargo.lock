@@ -887,6 +887,8 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
+ "zstd 0.13.0",
+ "zstd-safe 7.0.0",
 ]
 
 [[package]]
@@ -2857,11 +2859,12 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.9.5"
+version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5af35e29bef4d4f89028a6b1251c5674df66a77f70cb6996c6e48bdfe5407c59"
+checksum = "f58c84efb71c8ddf1e15aa2416d06c6a18f1e62d700be54bcda90741a704ae09"
 dependencies = [
- "http 0.2.11",
+ "async-trait",
+ "log",
  "once_cell",
  "percent-encoding",
  "reqwest 0.11.24",
@@ -4549,18 +4552,22 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.9.5"
+version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "279f4710b5f2823947816c6f69d5fb28cfa666cdb2b0d5df987ba40e6a921790"
+checksum = "29a460b36d0aa992c726c675fd425be16b2407568e45fb023a7d9adb566c8ecb"
 dependencies = [
  "arrow 47.0.0",
+ "async-compression 0.4.6",
  "async-trait",
  "chrono",
+ "csv",
  "databend-client",
  "databend-driver-macros",
  "databend-sql",
  "dyn-clone",
  "glob",
+ "log",
+ "once_cell",
  "percent-encoding",
  "serde_json",
  "tokio",
@@ -4570,9 +4577,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.9.5"
+version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b29e376c68885384a683728534946db643bc5928af6f359844cd89a3d81581f"
+checksum = "5a41cf5abc2f2dd1a1ecf7e2114000a646a3ac2023984e25cd57ec79279edbf9"
 dependencies = [
  "quote",
  "syn 2.0.52",
@@ -4988,16 +4995,20 @@ dependencies = [
 
 [[package]]
 name = "databend-sql"
-version = "0.9.5"
+version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1fa89f7e5ec45d5c3acef5b6f2ddab438f310f94fc09c42d333cce5cb44d68b"
+checksum = "6e0364fd4ac5b04baa571cbb1af8d33b96c23989a4e8b78612eaccff04d6811d"
 dependencies = [
  "arrow 47.0.0",
  "chrono",
  "databend-client",
+ "geozero",
  "glob",
- "itertools 0.11.0",
+ "hex",
+ "itertools 0.12.1",
  "jsonb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lexical-core",
+ "memchr",
  "roaring",
  "serde",
  "serde_json",
@@ -6576,8 +6587,9 @@ dependencies = [
 
 [[package]]
 name = "geozero"
-version = "0.11.0"
-source = "git+https://github.com/georust/geozero?rev=1d78b36#1d78b3604ea6d082980092c2931170287e13de9e"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61d25cc15c7e5b86cd8dadea56bb78c46f346d4fb09022e7cbba0839c890d0a1"
 dependencies = [
  "geo-types",
  "geojson",
