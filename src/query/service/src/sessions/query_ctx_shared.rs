@@ -583,18 +583,21 @@ impl Drop for QueryContextShared {
 pub fn short_sql(sql: String) -> String {
     use unicode_segmentation::UnicodeSegmentation;
     let query = sql.trim_start();
-    if query.as_bytes().len() >= 64 && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT") {
-        // keep first 64 graphemes
-        String::from_utf8(
-            query
-                .graphemes(true)
-                .take(64)
-                .flat_map(|g| g.as_bytes().iter())
-                .copied() // copied converts &u8 into u8
-                .chain(b"...".iter().copied())
-                .collect::<Vec<u8>>(),
-        )
-        .unwrap() // by construction, this cannot panic as we extracted unicode grapheme
+    if query.as_bytes().len() > 10240 && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT") {
+        // keep first 10KB (10,240 bytes)
+        let mut result = Vec::new();
+        let mut bytes_taken = 0;
+        for grapheme in query.graphemes(true) {
+            let grapheme_bytes = grapheme.as_bytes();
+            if bytes_taken + grapheme_bytes.len() <= 10240 {
+                result.extend_from_slice(grapheme_bytes);
+                bytes_taken += grapheme_bytes.len();
+            } else {
+                break;
+            }
+        }
+        result.extend_from_slice(b"...");
+        String::from_utf8(result).unwrap() // by construction, this cannot panic as we extracted unicode graphemes
     } else {
         sql
     }
