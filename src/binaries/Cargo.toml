@@ -61,7 +61,7 @@ log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 poem = { workspace = true }
-sentry = { version = "0.32.2", default-features = false, features = [
+sentry = { version = "0.32.3", default-features = false, features = [
     "backtrace",
     "contexts",
     "panic",
