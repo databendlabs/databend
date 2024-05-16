@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::UserApiProvider;
+use itertools::Itertools;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -60,10 +61,15 @@ impl AsyncSystemTable for RolesTable {
             .iter()
             .map(|x| x.grants.roles().len() as u64)
             .collect();
+        let inherited_roles_names: Vec<String> = roles
+            .iter()
+            .map(|x| x.grants.roles().iter().sorted().join(", ").to_string())
+            .collect();
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             UInt64Type::from_data(inherited_roles),
+            StringType::from_data(inherited_roles_names),
         ]))
     }
 }
@@ -76,6 +82,7 @@ impl RolesTable {
                 "inherited_roles",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
+            TableField::new("inherited_roles_name", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

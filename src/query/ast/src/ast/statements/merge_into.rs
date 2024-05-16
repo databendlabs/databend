@@ -276,6 +276,7 @@ impl MergeSource {
                 table: table.clone(),
                 alias: alias.clone(),
                 temporal: None,
+                consume: false,
                 pivot: None,
                 unpivot: None,
             },

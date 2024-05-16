@@ -506,10 +506,7 @@ where F: SnapshotGenerator + Send + 'static
             State::AbortOperation(e) => {
                 let duration = self.start_time.elapsed();
                 metrics_inc_commit_aborts();
-                // todo: use histogram when it ready
                 metrics_inc_commit_milliseconds(duration.as_millis());
-                let op = self.abort_operation.clone();
-                op.abort(self.ctx.clone(), self.dal.clone()).await?;
                 error!(
                     "transaction aborted after {} retries, which took {} ms, cause: {:?}",
                     self.retries,

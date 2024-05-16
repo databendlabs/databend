@@ -62,6 +62,7 @@ impl Dataframe {
             catalog: None,
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         };
@@ -92,6 +93,7 @@ impl Dataframe {
                 database.to_string(),
                 table_meta,
                 None,
+                false,
                 false,
                 false,
                 false,
@@ -478,6 +480,7 @@ impl Dataframe {
                 catalog: None,
                 alias: None,
                 temporal: None,
+                consume: false,
                 pivot: None,
                 unpivot: None,
             };

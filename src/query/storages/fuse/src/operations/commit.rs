@@ -159,6 +159,7 @@ impl FuseTable {
             None,
         )
         .await;
+
         if need_to_save_statistics {
             let table_statistics_location: String = table_statistics_location.unwrap();
             match &res {
@@ -166,13 +167,10 @@ impl FuseTable {
                     table_statistics_location,
                     Arc::new(table_statistics.unwrap()),
                 ),
-                Err(e) => {
-                    if Self::no_side_effects_in_meta_store(e) {
-                        let _ = operator.delete(&table_statistics_location).await;
-                    }
-                }
+                Err(e) => info!("update_table_meta failed. {}", e),
             }
         }
+
         res
     }
 
@@ -235,30 +233,13 @@ impl FuseTable {
         };
 
         // 3. let's roll
-        let reply = catalog.update_table_meta(table_info, req).await;
-        match reply {
-            Ok(_) => {
-                TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
-                // try keep a hit file of last snapshot
-                Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
-                    .await;
-                Ok(())
-            }
-            Err(e) => {
-                // commit snapshot to meta server failed.
-                // figure out if the un-committed snapshot is safe to be removed.
-                if Self::no_side_effects_in_meta_store(&e) {
-                    // currently, only in this case (TableVersionMismatched),  we are SURE about
-                    // that the table state insides meta store has NOT been changed.
-                    info!(
-                        "removing uncommitted table snapshot at location {}, of table {}, {}",
-                        snapshot_location, table_info.desc, table_info.ident
-                    );
-                    let _ = operator.delete(&snapshot_location).await;
-                }
-                Err(e)
-            }
-        }
+        catalog.update_table_meta(table_info, req).await?;
+
+        // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
+        TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
+        Self::write_last_snapshot_hint(operator, location_generator, snapshot_location).await;
+
+        Ok(())
     }
 
     // Left a hint file which indicates the location of the latest snapshot

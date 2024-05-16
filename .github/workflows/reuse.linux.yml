@@ -239,7 +239,7 @@ jobs:
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 10
         env:
-          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -260,7 +260,6 @@ jobs:
       - uses: ./.github/actions/test_ee_standalone_background_linux
         timeout-minutes: 10
         env:
-          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()
@@ -282,7 +281,6 @@ jobs:
       - uses: ./.github/actions/test_ee_management_mode_linux
         timeout-minutes: 10
         env:
-          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()

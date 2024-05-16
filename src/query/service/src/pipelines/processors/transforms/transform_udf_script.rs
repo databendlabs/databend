@@ -20,6 +20,8 @@ use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
+use databend_common_expression::converts::arrow2::ARROW_EXT_TYPE_VARIANT;
 use databend_common_expression::variant_transform::contains_variant;
 use databend_common_expression::variant_transform::transform_variant;
 use databend_common_expression::BlockEntry;
@@ -46,7 +48,13 @@ impl ScriptRuntime {
     pub fn try_create(lang: &str, code: Option<Vec<u8>>) -> Result<Self, ErrorCode> {
         match lang {
             "javascript" => arrow_udf_js::Runtime::new()
-                .map(|runtime| ScriptRuntime::JavaScript(Arc::new(RwLock::new(runtime))))
+                .map(|mut runtime| {
+                    runtime.converter.set_arrow_extension_key(EXTENSION_KEY);
+                    runtime
+                        .converter
+                        .set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
+                    ScriptRuntime::JavaScript(Arc::new(RwLock::new(runtime)))
+                })
                 .map_err(|err| {
                     ErrorCode::UDFDataError(format!("Cannot create js runtime: {}", err))
                 }),
@@ -72,7 +80,7 @@ impl ScriptRuntime {
     pub fn add_function_with_handler(
         &self,
         func: &UdfFunctionDesc,
-        code: &str,
+        code: &[u8],
     ) -> Result<(), ErrorCode> {
         let tmp_schema =
             DataSchema::new(vec![DataField::new("tmp", func.data_type.as_ref().clone())]);
@@ -80,10 +88,14 @@ impl ScriptRuntime {
 
         match self {
             ScriptRuntime::JavaScript(runtime) => {
+                let code = std::str::from_utf8(code)?;
                 let mut runtime = runtime.write();
                 runtime.add_function_with_handler(
                     &func.name,
-                    arrow_schema.field(0).data_type().clone(),
+                    // we pass the field instead of the data type because arrow-udf-js
+                    // now takes the field as an argument here so that it can get any
+                    // metadata associated with the field
+                    arrow_schema.field(0).clone(),
                     arrow_udf_js::CallMode::ReturnNullOnNullInput,
                     code,
                     &func.func_name,
@@ -174,9 +186,7 @@ impl Transform for TransformUdfScript {
 impl TransformUdfScript {
     fn get_runtime_key(func: &UdfFunctionDesc) -> Result<String, ErrorCode> {
         let (lang, func_name) = match &func.udf_type {
-            UDFType::Script((lang, _, _)) | UDFType::WasmScript((lang, _, _)) => {
-                (lang, &func.func_name)
-            }
+            UDFType::Script((lang, _, _)) => (lang, &func.func_name),
             _ => {
                 return Err(ErrorCode::UDFDataError(format!(
                     "Unsupported UDFType variant for function '{}'",
@@ -198,7 +208,6 @@ impl TransformUdfScript {
         for func in funcs {
             let (lang, code_opt) = match &func.udf_type {
                 UDFType::Script((lang, _, _code)) => (lang, None),
-                UDFType::WasmScript((lang, _, code)) => (lang, Some(code.clone())),
                 _ => continue,
             };
 

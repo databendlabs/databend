@@ -85,7 +85,6 @@ impl FileFormatParams {
             StageFileFormatType::Json => {
                 Ok(FileFormatParams::Json(JsonFileFormatParams::default()))
             }
-            StageFileFormatType::Xml => Ok(FileFormatParams::Xml(XmlFileFormatParams::default())),
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -270,9 +269,6 @@ impl FileFormatParams {
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
                 check_option!(p, nan_display)?;
-            }
-            FileFormatParams::Xml(p) => {
-                check_option!(p, row_tag)?;
             }
             _ => {}
         }

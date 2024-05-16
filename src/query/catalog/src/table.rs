@@ -30,6 +30,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MetaId;
@@ -309,8 +310,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
+        consume: bool,
     ) -> Result<String> {
-        let (_, _, _) = (ctx, database_name, table_name);
+        let (_, _, _, _) = (ctx, database_name, table_name, consume);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",
@@ -421,9 +423,22 @@ pub trait TableExt: Table {
             AppError::from(err)
         })?;
 
+        self.refresh_with_seq_meta(ctx, seqv.seq, seqv.data).await
+    }
+
+    async fn refresh_with_seq_meta(
+        &self,
+        ctx: &dyn TableContext,
+        seq: u64,
+        meta: TableMeta,
+    ) -> Result<Arc<dyn Table>> {
+        let table_info = self.get_table_info();
+        let tid = table_info.ident.table_id;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
+
         let table_info = TableInfo {
-            ident: TableIdent::new(tid, seqv.seq),
-            meta: seqv.data,
+            ident: TableIdent::new(tid, seq),
+            meta,
             ..table_info.clone()
         };
         catalog.get_table_by_info(&table_info)
