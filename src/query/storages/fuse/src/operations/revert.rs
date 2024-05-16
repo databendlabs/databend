@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -26,11 +28,13 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn do_revert_to(
         &self,
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         navigation_descriptor: NavigationDescriptor,
     ) -> Result<()> {
         // 1. try navigate to the point
-        let table = self.navigate_to_point(&navigation_descriptor.point).await?;
+        let table = self
+            .navigate_to_point(&navigation_descriptor.point, ctx.clone().get_aborting())
+            .await?;
         let table_reverting_to = FuseTable::try_from_table(table.as_ref())?;
         let table_info = table_reverting_to.get_table_info();
 

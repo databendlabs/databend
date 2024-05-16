@@ -27,6 +27,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Aborting;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -175,6 +176,10 @@ pub trait TableContext: Send + Sync {
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<()>;
+    fn get_aborting(self: Arc<Self>) -> Aborting
+    where Self: 'static {
+        Arc::new(Box::new(move || self.check_aborting().is_err()))
+    }
     fn get_error(&self) -> Option<ErrorCode>;
     fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;

@@ -84,7 +84,14 @@ impl Dataframe {
             let database = "system";
             let tenant = query_ctx.get_tenant();
             let table_meta: Arc<dyn Table> = binder
-                .resolve_data_source(tenant.tenant_name(), catalog, database, "one", None)
+                .resolve_data_source(
+                    tenant.tenant_name(),
+                    catalog,
+                    database,
+                    "one",
+                    None,
+                    query_ctx.clone().get_aborting(),
+                )
                 .await?;
 
             let table_index = metadata.write().add_table(
