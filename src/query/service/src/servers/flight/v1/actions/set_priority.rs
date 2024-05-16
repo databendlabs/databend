@@ -17,11 +17,13 @@ use databend_common_settings::Settings;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::SetPriorityInterpreter;
-use crate::servers::flight::v1::actions::SetPriority;
+use crate::servers::flight::v1::packets::SetPriorityPacket;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
-pub async fn set_priority(req: SetPriority) -> databend_common_exception::Result<()> {
+pub static SET_PRIORITY: &str = "/actions/set_priority";
+
+pub async fn set_priority(req: SetPriorityPacket) -> databend_common_exception::Result<()> {
     let config = GlobalConfig::instance();
     let session_manager = SessionManager::instance();
 
@@ -30,7 +32,7 @@ pub async fn set_priority(req: SetPriority) -> databend_common_exception::Result
     let session = session_manager.register_session(session)?;
 
     let ctx = session.create_query_context().await?;
-    let interpreter = SetPriorityInterpreter::from_flight(ctx, req.packet)?;
+    let interpreter = SetPriorityInterpreter::from_flight(ctx, req)?;
     interpreter.execute2().await?;
 
     Ok(())

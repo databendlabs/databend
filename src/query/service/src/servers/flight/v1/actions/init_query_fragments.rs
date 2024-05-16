@@ -22,39 +22,41 @@ use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
 
-use crate::servers::flight::v1::actions::InitQueryFragmentsPlan;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
-pub async fn create_query_fragments(fragments: InitQueryFragmentsPlan) -> Result<()> {
+pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
+
+pub async fn create_query_fragments(fragments: QueryFragmentsPlanPacket) -> Result<()> {
     let config = GlobalConfig::instance();
     let session_manager = SessionManager::instance();
     let settings = Settings::create(config.query.tenant_id.clone());
     unsafe {
         // Keep settings
-        settings.unchecked_apply_changes(&fragments.executor_packet.changed_settings);
+        settings.unchecked_apply_changes(&fragments.changed_settings);
     }
     let session = session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
     let session = session_manager.register_session(session)?;
 
     let ctx = session.create_query_context().await?;
     // Keep query id
-    ctx.set_id(fragments.executor_packet.query_id.clone());
-    ctx.attach_query_str(fragments.executor_packet.query_kind, "".to_string());
+    ctx.set_id(fragments.query_id.clone());
+    ctx.attach_query_str(fragments.query_kind, "".to_string());
 
     let spawner = ctx.clone();
-    let query_id = fragments.executor_packet.query_id.clone();
-    if let Err(cause) = match_join_handle(
-        spawner.spawn(
-            async move {
-                DataExchangeManager::instance()
-                    .init_query_fragments_plan(&ctx, &fragments.executor_packet)
-            }
-            .in_span(Span::enter_with_local_parent(full_name!())),
-        ),
-    )
-    .await
+    let query_id = fragments.query_id.clone();
+    if let Err(cause) =
+        match_join_handle(
+            spawner.spawn(
+                async move {
+                    DataExchangeManager::instance().init_query_fragments_plan(&ctx, &fragments)
+                }
+                .in_span(Span::enter_with_local_parent(full_name!())),
+            ),
+        )
+        .await
     {
         DataExchangeManager::instance().on_finished_query(&query_id);
         return Err(cause);

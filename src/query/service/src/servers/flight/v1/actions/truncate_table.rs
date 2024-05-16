@@ -18,11 +18,13 @@ use databend_common_settings::Settings;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::TruncateTableInterpreter;
-use crate::servers::flight::v1::actions::TruncateTable;
+use crate::servers::flight::v1::packets::TruncateTablePacket;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
-pub async fn truncate_table(req: TruncateTable) -> Result<()> {
+pub static TRUNCATE_TABLE: &str = "/actions/truncate_table";
+
+pub async fn truncate_table(req: TruncateTablePacket) -> Result<()> {
     let config = GlobalConfig::instance();
     let session_manager = SessionManager::instance();
     let settings = Settings::create(config.query.tenant_id.clone());
@@ -30,7 +32,7 @@ pub async fn truncate_table(req: TruncateTable) -> Result<()> {
     let session = session_manager.register_session(session)?;
     let ctx = session.create_query_context().await?;
 
-    let interpreter = TruncateTableInterpreter::from_flight(ctx, req.packet)?;
+    let interpreter = TruncateTableInterpreter::from_flight(ctx, req)?;
     interpreter.execute2().await?;
     Ok(())
 }

@@ -16,7 +16,9 @@ use databend_common_exception::Result;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 
-pub async fn execute_query_fragments(id: String) -> Result<()> {
+pub static START_PREPARED_QUERY: &str = "/actions/start_prepared_query";
+
+pub async fn start_prepared_query(id: String) -> Result<()> {
     if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&id) {
         DataExchangeManager::instance().on_finished_query(&id);
         return Err(cause);

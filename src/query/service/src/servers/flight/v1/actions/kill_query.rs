@@ -18,18 +18,20 @@ use databend_common_settings::Settings;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::KillInterpreter;
-use crate::servers::flight::v1::actions::KillQuery;
+use crate::servers::flight::v1::packets::KillQueryPacket;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
-pub async fn kill_query(req: KillQuery) -> Result<()> {
+pub static KILL_QUERY: &str = "/actions/kill_query";
+
+pub async fn kill_query(req: KillQueryPacket) -> Result<()> {
     let config = GlobalConfig::instance();
     let session_manager = SessionManager::instance();
     let settings = Settings::create(config.query.tenant_id.clone());
     let session = session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
     let session = session_manager.register_session(session)?;
     let ctx = session.create_query_context().await?;
-    let interpreter = KillInterpreter::from_flight(ctx, req.packet)?;
+    let interpreter = KillInterpreter::from_flight(ctx, req)?;
     interpreter.execute2().await?;
     Ok(())
 }

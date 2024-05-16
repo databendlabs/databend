@@ -12,218 +12,106 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryInto;
+use std::collections::HashMap;
+use std::future::Future;
+use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::data::Action;
+use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::ToErrorCode;
-use tonic::Status;
+use databend_common_exception::Result;
+use futures_util::future::BoxFuture;
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::servers::flight::v1::packets::InitNodesChannelPacket;
-use crate::servers::flight::v1::packets::KillQueryPacket;
-use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
-use crate::servers::flight::v1::packets::SetPriorityPacket;
-use crate::servers::flight::v1::packets::TruncateTablePacket;
+use crate::servers::flight::v1::actions::init_query_env::init_query_env;
+use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
+use crate::servers::flight::v1::actions::init_query_fragments::create_query_fragments;
+use crate::servers::flight::v1::actions::kill_query::kill_query;
+use crate::servers::flight::v1::actions::set_priority::set_priority;
+use crate::servers::flight::v1::actions::set_priority::SET_PRIORITY;
+use crate::servers::flight::v1::actions::start_prepared_query::start_prepared_query;
+use crate::servers::flight::v1::actions::truncate_table::truncate_table;
+use crate::servers::flight::v1::actions::truncate_table::TRUNCATE_TABLE;
+use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
+use crate::servers::flight::v1::actions::KILL_QUERY;
+use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct InitQueryFragmentsPlan {
-    pub executor_packet: QueryFragmentsPlanPacket,
+pub struct FlightActions {
+    #[allow(clippy::type_complexity)]
+    actions: HashMap<
+        String,
+        Box<dyn Fn(&[u8]) -> BoxFuture<'static, Result<Vec<u8>>> + Send + Sync + 'static>,
+    >,
 }
 
-impl TryInto<InitQueryFragmentsPlan> for Vec<u8> {
-    type Error = Status;
-
-    fn try_into(self) -> Result<InitQueryFragmentsPlan, Self::Error> {
-        match serde_json::from_slice::<InitQueryFragmentsPlan>(&self) {
-            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(action) => Ok(action),
+impl FlightActions {
+    pub fn create() -> FlightActions {
+        FlightActions {
+            actions: HashMap::new(),
         }
     }
-}
 
-impl TryInto<Vec<u8>> for InitQueryFragmentsPlan {
-    type Error = ErrorCode;
+    pub fn action<Req, Res, Fut, F>(mut self, path: impl Into<String>, t: F) -> Self
+    where
+        Req: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+        Res: Serialize + for<'de> Deserialize<'de>,
+        Fut: Future<Output = Result<Res>> + Send + 'static,
+        F: Fn(Req) -> Fut + Send + Sync + 'static,
+    {
+        let path = path.into();
+        let t = Arc::new(t);
+        self.actions.insert(
+            path.clone(),
+            Box::new(move |request| {
+                let request = serde_json::from_slice::<Req>(request).map_err(|cause| {
+                    ErrorCode::BadArguments(format!(
+                        "Cannot parse request for {}, cause: {:?}",
+                        path, cause
+                    ))
+                });
 
-    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(
-            ErrorCode::Internal,
-            || "Logical error: cannot serialize InitQueryFragmentsPlan.",
-        )
+                let path = path.clone();
+                let t = t.clone();
+                Box::pin(async move {
+                    let request = request?;
+
+                    let future = catch_unwind(move || t(request))?;
+
+                    let future = CatchUnwindFuture::create(future);
+                    match future.await.flatten() {
+                        Ok(v) => serde_json::to_vec(&v).map_err(|cause| {
+                            ErrorCode::BadBytes(format!(
+                                "Cannot serialize response for {}, cause: {:?}",
+                                path, cause
+                            ))
+                        }),
+                        Err(err) => Err(err),
+                    }
+                })
+            }),
+        );
+
+        self
     }
-}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct InitNodesChannel {
-    pub init_nodes_channel_packet: InitNodesChannelPacket,
-}
-
-impl TryInto<InitNodesChannel> for Vec<u8> {
-    type Error = Status;
-
-    fn try_into(self) -> Result<InitNodesChannel, Self::Error> {
-        match serde_json::from_slice::<InitNodesChannel>(&self) {
-            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(action) => Ok(action),
-        }
-    }
-}
-
-impl TryInto<Vec<u8>> for InitNodesChannel {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(
-            ErrorCode::Internal,
-            || "Logical error: cannot serialize PreparePublisher.",
-        )
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct TruncateTable {
-    pub packet: TruncateTablePacket,
-}
-
-impl TryInto<TruncateTable> for Vec<u8> {
-    type Error = Status;
-
-    fn try_into(self) -> Result<TruncateTable, Self::Error> {
-        match serde_json::from_slice::<TruncateTable>(&self) {
-            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(action) => Ok(action),
-        }
-    }
-}
-
-impl TryInto<Vec<u8>> for TruncateTable {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(
-            ErrorCode::Internal,
-            || "Logical error: cannot serialize PreparePublisher.",
-        )
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct KillQuery {
-    pub packet: KillQueryPacket,
-}
-
-impl TryInto<KillQuery> for Vec<u8> {
-    type Error = Status;
-
-    fn try_into(self) -> Result<KillQuery, Self::Error> {
-        match serde_json::from_slice::<KillQuery>(&self) {
-            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(action) => Ok(action),
-        }
-    }
-}
-
-impl TryInto<Vec<u8>> for KillQuery {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(
-            ErrorCode::Internal,
-            || "Logical error: cannot serialize KillPacket.",
-        )
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct SetPriority {
-    pub packet: SetPriorityPacket,
-}
-
-impl TryInto<SetPriority> for Vec<u8> {
-    type Error = Status;
-
-    fn try_into(self) -> Result<SetPriority, Self::Error> {
-        match serde_json::from_slice::<SetPriority>(&self) {
-            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(action) => Ok(action),
-        }
-    }
-}
-
-impl TryInto<Vec<u8>> for SetPriority {
-    type Error = ErrorCode;
-    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        serde_json::to_vec(&self).map_err_to_code(
-            ErrorCode::Internal,
-            || "Logical error: cannot serialize SetPriority.",
-        )
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum FlightAction {
-    InitQueryFragmentsPlan(InitQueryFragmentsPlan),
-    InitNodesChannel(InitNodesChannel),
-    ExecutePartialQuery(String),
-    TruncateTable(TruncateTable),
-    KillQuery(KillQuery),
-    SetPriority(SetPriority),
-}
-
-impl TryInto<FlightAction> for Action {
-    type Error = Status;
-
-    fn try_into(self) -> Result<FlightAction, Self::Error> {
-        match self.r#type.as_str() {
-            "InitQueryFragmentsPlan" => {
-                Ok(FlightAction::InitQueryFragmentsPlan(self.body.try_into()?))
-            }
-            "InitNodesChannel" => Ok(FlightAction::InitNodesChannel(self.body.try_into()?)),
-            "ExecutePartialQuery" => unsafe {
-                let (buf, length, capacity) = self.body.into_raw_parts();
-                Ok(FlightAction::ExecutePartialQuery(String::from_raw_parts(
-                    buf, length, capacity,
-                )))
-            },
-            "TruncateTable" => Ok(FlightAction::TruncateTable(self.body.try_into()?)),
-            "KillQuery" => Ok(FlightAction::KillQuery(self.body.try_into()?)),
-            "SetPriority" => Ok(FlightAction::SetPriority(self.body.try_into()?)),
-            un_implemented => Err(Status::unimplemented(format!(
-                "UnImplement action {}",
-                un_implemented
+    pub async fn do_action(&self, path: &str, data: &[u8]) -> Result<Vec<u8>> {
+        match self.actions.get(path) {
+            Some(fun) => fun(data).await,
+            None => Err(ErrorCode::Unimplemented(format!(
+                "{} action is unimplemented in flight service",
+                path
             ))),
         }
     }
 }
 
-impl TryInto<Action> for FlightAction {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<Action, Self::Error> {
-        match self {
-            FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => Ok(Action {
-                r#type: String::from("InitQueryFragmentsPlan"),
-                body: init_query_fragments_plan.try_into()?,
-            }),
-            FlightAction::InitNodesChannel(init_nodes_channel) => Ok(Action {
-                r#type: String::from("InitNodesChannel"),
-                body: init_nodes_channel.try_into()?,
-            }),
-            FlightAction::ExecutePartialQuery(query_id) => Ok(Action {
-                r#type: String::from("ExecutePartialQuery"),
-                body: serde_json::to_vec(&query_id).unwrap(),
-            }),
-            FlightAction::TruncateTable(truncate_table) => Ok(Action {
-                r#type: String::from("TruncateTable"),
-                body: truncate_table.try_into()?,
-            }),
-            FlightAction::KillQuery(kill_query) => Ok(Action {
-                r#type: String::from("KillQuery"),
-                body: kill_query.try_into()?,
-            }),
-            FlightAction::SetPriority(set_priority) => Ok(Action {
-                r#type: String::from("SetPriority"),
-                body: set_priority.try_into()?,
-            }),
-        }
-    }
+pub fn flight_actions() -> FlightActions {
+    FlightActions::create()
+        .action(INIT_QUERY_ENV, init_query_env)
+        .action(INIT_QUERY_FRAGMENTS, create_query_fragments)
+        .action(START_PREPARED_QUERY, start_prepared_query)
+        .action(TRUNCATE_TABLE, truncate_table)
+        .action(KILL_QUERY, kill_query)
+        .action(SET_PRIORITY, set_priority)
 }
