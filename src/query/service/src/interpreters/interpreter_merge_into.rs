@@ -265,7 +265,8 @@ impl MergeIntoInterpreter {
             }
         }
 
-        if *distributed && !*change_join_order {
+        if *distributed && !*change_join_order && !matches!(merge_type, MergeIntoType::MatechedOnly)
+        {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
@@ -276,7 +277,11 @@ impl MergeIntoInterpreter {
             ));
         }
 
-        if *distributed && row_number_idx.is_none() && !*change_join_order {
+        if *distributed
+            && row_number_idx.is_none()
+            && !*change_join_order
+            && !matches!(merge_type, MergeIntoType::MatechedOnly)
+        {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx when running merge into",
             ));
@@ -444,16 +449,17 @@ impl MergeIntoInterpreter {
                 row_id_idx,
                 segments: segments.clone(),
                 distributed: true,
-                output_schema: match *change_join_order {
-                    false => DataSchemaRef::new(DataSchema::new(vec![
-                        join_output_schema.fields[row_number_idx.unwrap()].clone(),
-                    ])),
-                    true => DataSchemaRef::new(DataSchema::new(vec![DataField::new(
+                output_schema: if let Some(row_number_idx) = row_number_idx {
+                    DataSchemaRef::new(DataSchema::new(vec![
+                        join_output_schema.fields[row_number_idx].clone(),
+                    ]))
+                } else {
+                    DataSchemaRef::new(DataSchema::new(vec![DataField::new(
                         ROW_ID_COL_NAME,
                         databend_common_expression::types::DataType::Number(
                             databend_common_expression::types::NumberDataType::UInt64,
                         ),
-                    )])),
+                    )]))
                 },
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,

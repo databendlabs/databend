@@ -414,6 +414,8 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
 
     if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
+        // Inner join shouldn't add `RowNumber` node.
+        let mut distributed = true;
         if matches!(join_op.join_type, JoinType::RightAnti | JoinType::Right)
             && merge_source_optimizer
                 .merge_source_matcher
@@ -421,11 +423,14 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             && !non_equal_join
         {
             join_s_expr = merge_source_optimizer.optimize(&join_s_expr)?;
-        };
+        } else {
+            // The join is not distributed, its children has `Exchange::Merge` operator.
+            distributed = false;
+        }
 
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: Box::new(join_s_expr),
-            distributed: true,
+            distributed,
             change_join_order,
             columns_set: new_columns_set.clone(),
             ..*plan
