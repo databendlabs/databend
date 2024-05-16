@@ -131,7 +131,11 @@ impl Index for Xor8Filter {
         let inner_type = data_type.remove_nullable();
         matches!(
             inner_type,
-            DataType::Number(_) | DataType::String | DataType::Timestamp | DataType::Date
+            DataType::Number(_)
+                | DataType::String
+                | DataType::Variant
+                | DataType::Timestamp
+                | DataType::Date
         )
     }
 }

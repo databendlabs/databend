@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_expression::converts::datavalues::scalar_to_datavalue;
 use databend_common_expression::eval_function;
+use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MapType;
@@ -34,12 +35,14 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -219,14 +222,51 @@ impl BloomIndex {
                     });
                     let column = Column::concat_columns(source_columns_iter)?;
 
-                    if Self::check_large_string(&column) {
-                        continue;
+                    // Extract JSON value of string type to create bloom index,
+                    // other types of JSON value will be ignored.
+                    if val_type.remove_nullable() == DataType::Variant {
+                        let mut builder =
+                            ColumnBuilder::with_capacity(&DataType::String, column.len());
+                        for val in column.iter() {
+                            if let ScalarRef::Variant(v) = val {
+                                if let Ok(str_val) = jsonb::to_str(v) {
+                                    builder.push(ScalarRef::String(str_val.as_str()));
+                                    continue;
+                                }
+                            }
+                            builder.push_default();
+                        }
+                        let str_column = match column {
+                            Column::Nullable(nullable_column) => {
+                                Column::Nullable(Box::new(NullableColumn {
+                                    column: builder.build(),
+                                    validity: nullable_column.validity.clone(),
+                                }))
+                            }
+                            _ => builder.build(),
+                        };
+                        if Self::check_large_string(&str_column) {
+                            continue;
+                        }
+                        let str_type = if val_type.is_nullable() {
+                            DataType::Nullable(Box::new(DataType::String))
+                        } else {
+                            DataType::String
+                        };
+                        (str_column, str_type)
+                    } else {
+                        if Self::check_large_string(&column) {
+                            continue;
+                        }
+                        (column, val_type)
                     }
-
-                    (column, val_type)
                 }
                 _ => {
                     if !Xor8Filter::supported_type(field_type) {
+                        continue;
+                    }
+                    // TODO: Extract the values of the leaf nodes of the JOSN value and create bloom index.
+                    if field_type.remove_nullable() == DataType::Variant {
                         continue;
                     }
                     let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
@@ -556,7 +596,11 @@ fn visit_expr_column_eq_constant(
                 }
             }
             [
-                Expr::FunctionCall { id, args, .. },
+                Expr::FunctionCall { id, args, .. }
+                | Expr::Cast {
+                    expr: box Expr::FunctionCall { id, args, .. },
+                    ..
+                },
                 Expr::Constant {
                     scalar,
                     data_type: scalar_type,
@@ -569,7 +613,11 @@ fn visit_expr_column_eq_constant(
                     data_type: scalar_type,
                     ..
                 },
-                Expr::FunctionCall { id, args, .. },
+                Expr::FunctionCall { id, args, .. }
+                | Expr::Cast {
+                    expr: box Expr::FunctionCall { id, args, .. },
+                    ..
+                },
             ] => {
                 if id.name() == "get" {
                     if let Some(new_expr) =
@@ -620,8 +668,15 @@ fn visit_map_column(
                     DataType::Tuple(kv_tys) => kv_tys[1].clone(),
                     _ => unreachable!(),
                 };
-                debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
-                return visitor(span, id, scalar, &val_type, return_type);
+                // Only JSON value of string type have bloom index.
+                if val_type.remove_nullable() == DataType::Variant {
+                    if scalar_type.remove_nullable() != DataType::String {
+                        return Ok(None);
+                    }
+                } else {
+                    debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
+                }
+                return visitor(span, id, scalar, scalar_type, return_type);
             }
         }
         _ => {}

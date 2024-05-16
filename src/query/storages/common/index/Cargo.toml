@@ -26,6 +26,7 @@ anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
 crc32fast = "1.3.2"
 log = { workspace = true }
+jsonb = { workspace = true }
 match-template = { workspace = true }
 minitrace = { workspace = true }
 serde = { workspace = true }
