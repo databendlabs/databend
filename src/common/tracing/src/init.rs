@@ -294,17 +294,5 @@ pub fn init_logging(
         return Vec::new();
     }
 
-    #[cfg(feature = "console")]
-    init_tokio_console();
-
     guards
-}
-
-#[cfg(feature = "console")]
-fn init_tokio_console() {
-    use tracing_subscriber::prelude::*;
-
-    let subscriber = tracing_subscriber::registry::Registry::default();
-    let subscriber = subscriber.with(console_subscriber::spawn());
-    tracing::subscriber::set_global_default(subscriber).ok();
 }

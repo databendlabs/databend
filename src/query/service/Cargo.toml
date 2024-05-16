@@ -18,7 +18,6 @@ simd = ["databend-common-arrow/simd"]
 z3-prove = ["databend-common-sql/z3-prove"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 
-tokio-console = ["databend-common-tracing/console", "databend-common-base/tracing"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 io-uring = [
