@@ -80,7 +80,7 @@ impl ScriptRuntime {
     pub fn add_function_with_handler(
         &self,
         func: &UdfFunctionDesc,
-        code: &str,
+        code: &[u8],
     ) -> Result<(), ErrorCode> {
         let tmp_schema =
             DataSchema::new(vec![DataField::new("tmp", func.data_type.as_ref().clone())]);
@@ -88,6 +88,7 @@ impl ScriptRuntime {
 
         match self {
             ScriptRuntime::JavaScript(runtime) => {
+                let code = std::str::from_utf8(code)?;
                 let mut runtime = runtime.write();
                 runtime.add_function_with_handler(
                     &func.name,
@@ -185,9 +186,7 @@ impl Transform for TransformUdfScript {
 impl TransformUdfScript {
     fn get_runtime_key(func: &UdfFunctionDesc) -> Result<String, ErrorCode> {
         let (lang, func_name) = match &func.udf_type {
-            UDFType::Script((lang, _, _)) | UDFType::WasmScript((lang, _, _)) => {
-                (lang, &func.func_name)
-            }
+            UDFType::Script((lang, _, _)) => (lang, &func.func_name),
             _ => {
                 return Err(ErrorCode::UDFDataError(format!(
                     "Unsupported UDFType variant for function '{}'",
@@ -209,7 +208,6 @@ impl TransformUdfScript {
         for func in funcs {
             let (lang, code_opt) = match &func.udf_type {
                 UDFType::Script((lang, _, _code)) => (lang, None),
-                UDFType::WasmScript((lang, _, code)) => (lang, Some(code.clone())),
                 _ => continue,
             };
 

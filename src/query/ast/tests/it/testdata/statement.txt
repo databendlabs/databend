@@ -20343,6 +20343,47 @@ CreateUDF(
 
 
 ---------- Input ----------
+create or replace function addone(int)
+returns int
+language python
+handler = 'addone_py'
+as '@data/abc/a.py';
+---------- Output ---------
+CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
+@data/abc/a.py
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            span: Some(
+                27..33,
+            ),
+            name: "addone",
+            quote: None,
+            is_hole: false,
+        },
+        description: None,
+        definition: UDFScript {
+            arg_types: [
+                Nullable(
+                    Int32,
+                ),
+            ],
+            return_type: Nullable(
+                Int32,
+            ),
+            code: "@data/abc/a.py",
+            handler: "addone_py",
+            language: "python",
+            runtime_version: "",
+        },
+    },
+)
+
+
+---------- Input ----------
 DROP FUNCTION binary_reverse;
 ---------- Output ---------
 DROP FUNCTION binary_reverse
