@@ -177,6 +177,7 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
+        consume: bool,
     ) -> Result<(SExpr, BindContext)> {
         let (catalog, database, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
@@ -259,6 +260,12 @@ impl Binder {
             }
         };
 
+        if consume && table_meta.engine() != "STREAM" {
+            return Err(ErrorCode::StorageUnsupported(
+                "WITH CONSUME only support in STREAM",
+            ));
+        }
+
         if navigation.is_some_and(|n| matches!(n, TimeNavigation::Changes { .. }))
             || table_meta.engine() == "STREAM"
         {
@@ -272,6 +279,7 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
+                    consume,
                 );
                 let (s_expr, mut bind_context) = self
                     .bind_base_table(bind_context, database.as_str(), table_index, change_type)
@@ -284,7 +292,12 @@ impl Binder {
             }
 
             let query = table_meta
-                .generage_changes_query(self.ctx.clone(), database.as_str(), table_name.as_str())
+                .generage_changes_query(
+                    self.ctx.clone(),
+                    database.as_str(),
+                    table_name.as_str(),
+                    consume,
+                )
                 .await?;
 
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
@@ -342,6 +355,7 @@ impl Binder {
                         false,
                         false,
                         false,
+                        false,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query).await?;
@@ -373,6 +387,7 @@ impl Binder {
                     table_alias_name,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
+                    false,
                     false,
                 );
 
@@ -706,6 +721,7 @@ impl Binder {
                 false,
                 false,
                 false,
+                false,
             );
 
             let (s_expr, mut bind_context) = self
@@ -732,6 +748,7 @@ impl Binder {
                 "system".to_string(),
                 table.clone(),
                 table_alias_name,
+                false,
                 false,
                 false,
                 false,
@@ -832,6 +849,7 @@ impl Binder {
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot: _,
                 unpivot: _,
             } => {
@@ -843,6 +861,7 @@ impl Binder {
                     table,
                     alias,
                     temporal,
+                    *consume,
                 )
                 .await
             }
@@ -1006,6 +1025,7 @@ impl Binder {
             false,
             false,
             true,
+            false,
         );
 
         let (s_expr, mut bind_context) = self

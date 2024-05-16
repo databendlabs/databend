@@ -832,6 +832,7 @@ impl Table for FuseTable {
         _ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
+        _consume: bool,
     ) -> Result<String> {
         let Some(ChangesDesc {
             seq,

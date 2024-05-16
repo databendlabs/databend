@@ -286,14 +286,20 @@ impl Table for StreamTable {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
+        consume: bool,
     ) -> Result<String> {
         let table = self.source_table(ctx).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let table_desc = if consume {
+            format!("{}.{} with consume", database_name, table_name)
+        } else {
+            format!("{}.{}", database_name, table_name)
+        };
         fuse_table
             .get_changes_query(
                 &self.mode,
                 &self.snapshot_location,
-                format!("{}.{}", database_name, table_name),
+                table_desc,
                 self.offset(),
             )
             .await
