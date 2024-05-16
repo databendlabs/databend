@@ -16,7 +16,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 
-use crate::operations::AbortOperation;
 use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
 use crate::operations::SnapshotChanges;
@@ -93,26 +92,6 @@ impl TransformMergeCommitMeta {
                 r.conflict_resolve_context,
                 default_cluster_key_id,
             ),
-            abort_operation: AbortOperation {
-                segments: l
-                    .abort_operation
-                    .segments
-                    .into_iter()
-                    .chain(r.abort_operation.segments)
-                    .collect(),
-                blocks: l
-                    .abort_operation
-                    .blocks
-                    .into_iter()
-                    .chain(r.abort_operation.blocks)
-                    .collect(),
-                bloom_filter_indexes: l
-                    .abort_operation
-                    .bloom_filter_indexes
-                    .into_iter()
-                    .chain(r.abort_operation.bloom_filter_indexes)
-                    .collect(),
-            },
             table_id: l.table_id,
         }
     }

@@ -37,7 +37,6 @@ use log::info;
 use opendal::Operator;
 
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::AbortOperation;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::statistics::StatisticsAccumulator;
@@ -200,12 +199,6 @@ impl Processor for TransformSerializeSegment {
                     segment_cache.put(location.clone(), Arc::new(segment.as_ref().try_into()?));
                 }
 
-                let mut abort_operation = AbortOperation::default();
-                for block_meta in &segment.blocks {
-                    abort_operation.add_block(block_meta);
-                }
-                abort_operation.add_segment(location.clone());
-
                 let format_version = SegmentInfo::VERSION;
 
                 // emit log entry.
@@ -214,7 +207,6 @@ impl Processor for TransformSerializeSegment {
                     entries: vec![MutationLogEntry::AppendSegment {
                         segment_location: location.clone(),
                         format_version,
-                        abort_operation,
                         summary: segment.summary.clone(),
                     }],
                 };
