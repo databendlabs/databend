@@ -40,7 +40,6 @@ const OPT_NAN_DISPLAY: &str = "nan_display";
 const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
-const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
@@ -85,7 +84,6 @@ impl FileFormatParams {
             StageFileFormatType::Json => {
                 Ok(FileFormatParams::Json(JsonFileFormatParams::default()))
             }
-            StageFileFormatType::Xml => Ok(FileFormatParams::Xml(XmlFileFormatParams::default())),
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -107,15 +105,6 @@ impl FileFormatParams {
     pub fn try_from_reader(mut reader: FileFormatOptionsReader, old: bool) -> Result<Self> {
         let typ = reader.take_type()?;
         let params = match typ {
-            StageFileFormatType::Xml => {
-                let default = XmlFileFormatParams::default();
-                let row_tag = reader.take_string(OPT_ROW_TAG, default.row_tag);
-                let compression = reader.take_compression()?;
-                FileFormatParams::Xml(XmlFileFormatParams {
-                    compression,
-                    row_tag,
-                })
-            }
             StageFileFormatType::Json => {
                 let compression = reader.take_compression()?;
                 FileFormatParams::Json(JsonFileFormatParams { compression })
@@ -270,9 +259,6 @@ impl FileFormatParams {
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
                 check_option!(p, nan_display)?;
-            }
-            FileFormatParams::Xml(p) => {
-                check_option!(p, row_tag)?;
             }
             _ => {}
         }
