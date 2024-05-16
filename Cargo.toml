@@ -158,7 +158,6 @@ chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
-ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 feature-set = { version = "0.1.1" }
 geo = { version = "0.27.0", features = ["use-serde"] }
 geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
@@ -228,6 +227,7 @@ arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-ex
 arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
 
 # Serialization
+ethnum = "1.5.0"
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
@@ -295,7 +295,7 @@ rpath = false
 [patch.crates-io]
 arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
-micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" }
+ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
