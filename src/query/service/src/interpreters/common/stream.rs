@@ -35,7 +35,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 use crate::sessions::QueryContext;
 
-pub async fn build_update_stream_meta_req(
+pub async fn dml_build_update_stream_req(
     ctx: Arc<QueryContext>,
     metadata: &MetadataRef,
 ) -> Result<Vec<UpdateStreamMetaReq>> {
@@ -95,7 +95,7 @@ where F: Fn(&TableEntry) -> bool {
     Ok(streams)
 }
 
-pub async fn build_update_multi_stream_meta_req(
+pub async fn query_build_update_stream_req(
     ctx: &Arc<QueryContext>,
     metadata: &MetadataRef,
 ) -> Result<Option<UpdateMultiTableMetaReq>> {

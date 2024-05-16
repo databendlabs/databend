@@ -42,7 +42,7 @@ use databend_common_users::UserApiProvider;
 use log::error;
 use log::info;
 
-use crate::interpreters::common::build_update_multi_stream_meta_req;
+use crate::interpreters::common::query_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
@@ -136,13 +136,18 @@ impl SelectInterpreter {
         .await?;
 
         // consume stream
-        if let Some(req) = build_update_multi_stream_meta_req(&self.ctx, &self.metadata).await? {
+        if let Some(req) = query_build_update_stream_req(&self.ctx, &self.metadata).await? {
             assert!(!req.update_table_metas.is_empty());
             let catalog_name = req.update_table_metas[0].new_table_meta.catalog.as_str();
             let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let query_id = self.ctx.get_id();
             build_res.main_pipeline.set_on_finished(
                 move |(_profiles, may_error)| match may_error {
                     Ok(_) => GlobalIORuntime::instance().block_on(async move {
+                        info!(
+                            "Updating the stream meta to consume data, query_id: {}",
+                            query_id
+                        );
                         catalog.update_multi_table_meta(req).await.map(|_| ())
                     }),
                     Err(error_code) => Err(error_code.clone()),
