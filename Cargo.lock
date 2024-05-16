@@ -2963,7 +2963,7 @@ dependencies = [
  "dyn-clone",
  "either",
  "env_logger",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "fallible-streaming-iterator",
  "flate2",
  "foreign_vec",
@@ -3003,7 +3003,7 @@ dependencies = [
  "databend-common-io",
  "derive-visitor",
  "enum-as-inner 0.5.1",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "fast-float",
  "geos",
  "goldenfile",
@@ -3274,7 +3274,7 @@ dependencies = [
  "databend-common-io",
  "educe",
  "enum-as-inner 0.5.1",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "futures",
  "geo",
  "geos",
@@ -3362,7 +3362,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-openai",
  "databend-common-vector",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "geo",
  "geo-types",
  "geohash",
@@ -3422,7 +3422,7 @@ dependencies = [
  "cfg-if",
  "databend-common-arrow",
  "databend-common-base",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "ordered-float 4.2.0",
  "rand 0.8.5",
 ]
@@ -3455,7 +3455,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "databend-common-exception",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "geo",
  "geos",
  "geozero",
@@ -4356,7 +4356,7 @@ dependencies = [
  "databend-common-storage",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "futures",
  "log",
  "opendal",
@@ -4953,7 +4953,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "databend-storages-common-txn",
  "derive-visitor",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "futures",
  "futures-util",
  "goldenfile",
@@ -5109,7 +5109,7 @@ dependencies = [
  "databend-common-sql",
  "databend-driver",
  "databend-sql",
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
  "rand 0.8.5",
@@ -5873,12 +5873,6 @@ name = "error-code"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0474425d51df81997e2f90a21591180b38eccf27292d755f3e30750225c175b"
-
-[[package]]
-name = "ethnum"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b90ca2580b73ab6a1f724b76ca11ab632df820fd6040c336200d2c1df7b3c82c"
 
 [[package]]
 name = "ethnum"
@@ -9687,16 +9681,17 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6793011b42fc5acf43fd594545720a69df9a81be80352d57304abf93f3865e9"
 dependencies = [
- "ethnum 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethnum",
  "ordered-float 3.9.2",
 ]
 
 [[package]]
 name = "micromarshal"
 version = "0.5.0"
-source = "git+https://github.com/ariesdevil/opensrv?rev=6c96813#6c96813099b49e63719740c216914e2f252321bc"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08733443a65b4436ce073095a798c81ffcd4644fc7e0733da7375d62b1a4cc44"
 dependencies = [
- "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
+ "ethnum",
  "ordered-float 4.2.0",
 ]
 
