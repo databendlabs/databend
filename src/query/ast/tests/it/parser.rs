@@ -775,6 +775,13 @@ fn test_statement() {
             return i+1
             $$;
         "#,
+        r#"
+            create or replace function addone(int)
+            returns int
+            language python
+            handler = 'addone_py'
+            as '@data/abc/a.py';
+        "#,
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
         r#"

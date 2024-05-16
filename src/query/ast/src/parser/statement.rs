@@ -3973,7 +3973,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ RETURNS ~ #udf_arg_type
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ AS ~ ^#code_string
+            ~ AS ~ ^(#code_string | #literal_string)
         },
         |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
             UDFDefinition::UDFScript {
