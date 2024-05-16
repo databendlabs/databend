@@ -12,61 +12,141 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_config::InnerConfig;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
+use log::debug;
+use petgraph::dot::Dot;
+use petgraph::graph::NodeIndex;
+use petgraph::Graph;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
 use crate::servers::flight::v1::packets::packet::create_client;
-use crate::servers::flight::v1::packets::Packet;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ConnectionInfo {
-    pub source: Arc<NodeInfo>,
-    pub fragments: Vec<usize>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Edge {
+    Statistics,
+    Fragment(usize),
 }
 
-impl ConnectionInfo {
-    pub fn create(source: Arc<NodeInfo>, fragments: Vec<usize>) -> ConnectionInfo {
-        ConnectionInfo { source, fragments }
+#[derive(Serialize, Deserialize)]
+pub struct DataflowDiagram {
+    graph: Graph<Arc<NodeInfo>, Edge>,
+}
+
+impl Deref for DataflowDiagram {
+    type Target = Graph<Arc<NodeInfo>, Edge>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.graph
+    }
+}
+
+impl Debug for DataflowDiagram {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", &Dot::new(&self.graph))
+    }
+}
+
+pub struct DataflowDiagramBuilder {
+    nodes: HashMap<String, NodeIndex>,
+    graph: Graph<Arc<NodeInfo>, Edge>,
+}
+
+impl DataflowDiagramBuilder {
+    pub fn create(nodes: Vec<Arc<NodeInfo>>) -> DataflowDiagramBuilder {
+        let mut nodes_index = HashMap::with_capacity(nodes.len());
+        let mut graph = Graph::with_capacity(nodes.len(), nodes.len() * 2);
+
+        for node in nodes {
+            let node_id = node.id.clone();
+            let node_index = graph.add_node(node);
+            nodes_index.insert(node_id, node_index);
+        }
+
+        DataflowDiagramBuilder {
+            graph,
+            nodes: nodes_index,
+        }
+    }
+
+    pub fn add_data_edge(&mut self, source: &str, destination: &str, v: usize) -> Result<()> {
+        if source != destination {
+            // avoid local to local
+            let source = self
+                .nodes
+                .get(source)
+                .ok_or_else(|| ErrorCode::NotFoundClusterNode(""))?;
+            let destination = self
+                .nodes
+                .get(destination)
+                .ok_or_else(|| ErrorCode::NotFoundClusterNode(""))?;
+
+            self.graph
+                .add_edge(*source, *destination, Edge::Fragment(v));
+        }
+
+        Ok(())
+    }
+
+    pub fn add_statistics_edge(&mut self, source: &str, destination: &str) -> Result<()> {
+        if source != destination {
+            // avoid local to local
+            let source = self
+                .nodes
+                .get(source)
+                .ok_or_else(|| ErrorCode::NotFoundClusterNode(""))?;
+            let destination = self
+                .nodes
+                .get(destination)
+                .ok_or_else(|| ErrorCode::NotFoundClusterNode(""))?;
+
+            self.graph.add_edge(*source, *destination, Edge::Statistics);
+        }
+
+        Ok(())
+    }
+
+    pub fn build(self) -> DataflowDiagram {
+        DataflowDiagram { graph: self.graph }
     }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct InitNodesChannelPacket {
+pub struct QueryEnv {
     pub query_id: String,
-    pub executor: Arc<NodeInfo>,
-    pub fragment_connections_info: Vec<ConnectionInfo>,
-    pub statistics_connections_info: Vec<ConnectionInfo>,
+    pub dataflow_diagram: Arc<DataflowDiagram>,
     pub create_rpc_clint_with_current_rt: bool,
 }
 
-impl InitNodesChannelPacket {
-    pub fn create(
-        query_id: String,
-        executor: Arc<NodeInfo>,
-        fragment_connections_info: Vec<ConnectionInfo>,
-        statistics_connections_info: Vec<ConnectionInfo>,
-        create_rpc_clint_with_current_rt: bool,
-    ) -> InitNodesChannelPacket {
-        InitNodesChannelPacket {
-            query_id,
-            executor,
-            fragment_connections_info,
-            statistics_connections_info,
-            create_rpc_clint_with_current_rt,
-        }
-    }
-}
+impl QueryEnv {
+    pub async fn init(&self, timeout: u64) -> Result<()> {
+        debug!("Dataflow diagram {:?}", self.dataflow_diagram);
 
-#[async_trait::async_trait]
-impl Packet for InitNodesChannelPacket {
-    #[async_backtrace::framed]
-    async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
-        let executor_info = &self.executor;
-        let mut conn = create_client(config, &executor_info.flight_address).await?;
-        conn.do_action(INIT_QUERY_ENV, self.clone(), timeout).await
+        let mut futures = Vec::with_capacity(self.dataflow_diagram.node_count());
+        for x in self.dataflow_diagram.node_weights() {
+            futures.push({
+                let x = x.clone();
+                let query_env = self.clone();
+                let config = GlobalConfig::instance();
+                async move {
+                    let mut conn = create_client(&config, &x.flight_address).await?;
+                    conn.do_action::<_, ()>(INIT_QUERY_ENV, query_env, timeout)
+                        .await
+                }
+            });
+        }
+
+        let _ = futures::future::try_join_all(futures).await?;
+        Ok(())
     }
 }

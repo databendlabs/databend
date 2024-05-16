@@ -15,18 +15,12 @@
 use databend_common_exception::Result;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
-use crate::servers::flight::v1::packets::InitNodesChannelPacket;
+use crate::servers::flight::v1::packets::QueryEnv;
+pub static INIT_QUERY_ENV: &str = "/actions/new_init_query_env";
 
-pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
-
-pub async fn init_query_env(channel_info: InitNodesChannelPacket) -> Result<()> {
-    let publisher_packet = &channel_info;
-    if let Err(cause) = DataExchangeManager::instance()
-        .init_nodes_channel(publisher_packet)
-        .await
-    {
-        let query_id = &channel_info.query_id;
-        DataExchangeManager::instance().on_finished_query(query_id);
+pub async fn init_query_env(env: QueryEnv) -> Result<()> {
+    if let Err(cause) = DataExchangeManager::instance().init_query_env(&env).await {
+        DataExchangeManager::instance().on_finished_query(&env.query_id);
         return Err(cause);
     }
 

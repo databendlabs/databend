@@ -149,7 +149,7 @@ opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"
-petgraph = "0.6.2"
+petgraph = { version = "0.6.2", features = ["serde-1"] }
 pin-project-lite = "0.2.9"
 poem = { workspace = true }
 prost = { workspace = true }
