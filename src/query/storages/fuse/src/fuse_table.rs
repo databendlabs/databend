@@ -33,7 +33,7 @@ use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Aborting;
+use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
@@ -807,7 +807,7 @@ impl Table for FuseTable {
     async fn navigate_to(
         &self,
         navigation: &TimeNavigation,
-        abort_checker: Aborting,
+        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         match navigation {
             TimeNavigation::TimeTravel(point) => {

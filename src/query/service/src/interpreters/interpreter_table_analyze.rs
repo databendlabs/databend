@@ -93,7 +93,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                         &NavigationPoint::SnapshotID(
                             table_statistics.snapshot_id.simple().to_string(),
                         ),
-                        self.ctx.clone().get_aborting(),
+                        self.ctx.clone().get_abort_checker(),
                     )
                     .await
                     .is_err();

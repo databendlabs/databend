@@ -31,7 +31,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal128Type;
-use databend_common_expression::{Aborting, FromData};
+use databend_common_expression::AbortChecker;
+use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
@@ -63,11 +64,14 @@ impl FuseTable {
         append_only: bool,
         desc: String,
         navigation: Option<&NavigationPoint>,
-        abort_checker: Aborting,
+        abort_checker: AbortChecker,
     ) -> Result<ChangesDesc> {
         // To support analyze table, we move the change tracking check out of the function.
         let source = if let Some(point) = navigation {
-            self.navigate_to_point(point, abort_checker).await?.as_ref().clone()
+            self.navigate_to_point(point, abort_checker)
+                .await?
+                .as_ref()
+                .clone()
         } else {
             self.clone()
         };

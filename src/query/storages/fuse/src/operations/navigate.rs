@@ -21,7 +21,7 @@ use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Aborting;
+use databend_common_expression::AbortChecker;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_storages_common_cache::LoadParams;
@@ -46,7 +46,7 @@ impl FuseTable {
     pub async fn navigate_to_point(
         &self,
         point: &NavigationPoint,
-        abort_checker: Aborting,
+        abort_checker: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
         match point {
             NavigationPoint::SnapshotID(snapshot_id) => {
@@ -97,7 +97,7 @@ impl FuseTable {
         &self,
         location: String,
         time_point: DateTime<Utc>,
-        aborting: Aborting,
+        aborting: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
         self.find(location, aborting, |snapshot| {
             if let Some(ts) = snapshot.timestamp {
@@ -113,7 +113,7 @@ impl FuseTable {
     pub async fn navigate_to_snapshot(
         &self,
         snapshot_id: &str,
-        abort_checker: Aborting,
+        abort_checker: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
         let Some(location) = self.snapshot_loc().await? else {
             return Err(ErrorCode::TableHistoricalDataNotFound(
@@ -136,7 +136,7 @@ impl FuseTable {
     pub async fn find<P>(
         &self,
         location: String,
-        abort_checker: Aborting,
+        abort_checker: AbortChecker,
         mut pred: P,
     ) -> Result<Arc<FuseTable>>
     where
@@ -155,9 +155,7 @@ impl FuseTable {
         // Find the instant which matches the given `time_point`.
         let mut instant = None;
         while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
-            if abort_checker() {
-                break;
-            }
+            abort_checker.try_check_aborting()?;
             if pred(snapshot_with_version.0.as_ref()) {
                 instant = Some(snapshot_with_version);
                 break;
@@ -249,7 +247,7 @@ impl FuseTable {
         }?;
 
         let table = self
-            .navigate_to_time_point(location, time_point, ctx.clone().get_aborting())
+            .navigate_to_time_point(location, time_point, ctx.clone().get_abort_checker())
             .await?;
 
         Ok((table, files))

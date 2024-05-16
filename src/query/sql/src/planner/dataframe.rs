@@ -90,7 +90,7 @@ impl Dataframe {
                     database,
                     "one",
                     None,
-                    query_ctx.clone().get_aborting(),
+                    query_ctx.clone().get_abort_checker(),
                 )
                 .await?;
 

@@ -107,7 +107,7 @@ async fn test_fuse_navigate() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
     let tbl = fuse_table
-        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_aborting())
+        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker())
         .await?;
 
     // check we got the snapshot of the first insertion
@@ -121,7 +121,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
     let res = fuse_table
-        .navigate_to_time_point(loc, instant, ctx.get_aborting())
+        .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
         .await;
     match res {
         Ok(_) => panic!("historical data should not exist"),

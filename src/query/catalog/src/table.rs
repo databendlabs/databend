@@ -20,7 +20,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Aborting;
+use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
@@ -297,7 +297,7 @@ pub trait Table: Sync + Send {
     async fn navigate_to(
         &self,
         navigation: &TimeNavigation,
-        abort_checker: Aborting,
+        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         let _ = navigation;
         let _ = abort_checker;
