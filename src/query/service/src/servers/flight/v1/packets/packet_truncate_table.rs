@@ -18,8 +18,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
-use crate::servers::flight::v1::actions::FlightAction;
-use crate::servers::flight::v1::actions::TruncateTable;
+use crate::servers::flight::v1::actions::TRUNCATE_TABLE;
 use crate::servers::flight::v1::packets::packet::create_client;
 use crate::servers::flight::v1::packets::Packet;
 
@@ -53,9 +52,7 @@ impl Packet for TruncateTablePacket {
     async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         let executor_info = &self.executor;
         let mut conn = create_client(config, &executor_info.flight_address).await?;
-        let action = FlightAction::TruncateTable(TruncateTable {
-            packet: self.clone(),
-        });
-        conn.execute_action(action, timeout).await
+
+        conn.do_action(TRUNCATE_TABLE, self.clone(), timeout).await
     }
 }

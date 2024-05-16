@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_actions;
-mod init_query_env;
-mod init_query_fragments;
-mod kill_query;
-mod set_priority;
-mod start_prepared_query;
-mod truncate_table;
+use databend_common_exception::Result;
 
-pub use flight_actions::flight_actions;
-pub use flight_actions::FlightActions;
-pub use init_query_env::INIT_QUERY_ENV;
-pub use init_query_fragments::INIT_QUERY_FRAGMENTS;
-pub use kill_query::KILL_QUERY;
-pub use set_priority::SET_PRIORITY;
-pub use start_prepared_query::START_PREPARED_QUERY;
-pub use truncate_table::TRUNCATE_TABLE;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::packets::QueryEnv;
+pub static INIT_QUERY_ENV: &str = "/actions/new_init_query_env";
+
+pub async fn init_query_env(env: QueryEnv) -> Result<()> {
+    if let Err(cause) = DataExchangeManager::instance().init_query_env(&env).await {
+        DataExchangeManager::instance().on_finished_query(&env.query_id);
+        return Err(cause);
+    }
+
+    Ok(())
+}
