@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+use std::hash::RandomState;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
@@ -138,6 +140,24 @@ impl SelectInterpreter {
         // consume stream
         if let Some(req) = query_build_update_stream_req(&self.ctx, &self.metadata).await? {
             assert!(!req.update_table_metas.is_empty());
+
+            // defensively checks that all catalog names are identical
+            {
+                let mut iter = req
+                    .update_table_metas
+                    .iter()
+                    .map(|item| item.new_table_meta.catalog.as_str());
+                let first = iter.next().unwrap();
+                let all_of_the_same_catalog = iter.all(|item| item == first);
+                if !all_of_the_same_catalog {
+                    let cats: HashSet<&str, RandomState> = HashSet::from_iter(iter);
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Consuming streams of different catalogs are not support. catalogs are {:?}",
+                        cats
+                    )));
+                }
+            }
+
             let catalog_name = req.update_table_metas[0].new_table_meta.catalog.as_str();
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             let query_id = self.ctx.get_id();
