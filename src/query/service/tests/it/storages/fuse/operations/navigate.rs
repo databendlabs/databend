@@ -121,12 +121,26 @@ async fn test_fuse_navigate() -> Result<()> {
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
     let res = fuse_table
-        .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
+        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker())
         .await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND),
     };
+
+    // navigation should abort if query killed
+    ctx.get_current_session()
+        .force_kill_query(ErrorCode::AbortedQuery("mission aborted"));
+    let checker = ctx.clone().get_abort_checker();
+    assert!(checker.is_aborting());
+    let res = fuse_table
+        .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
+        .await;
+
+    assert!(matches!(res, Err(_)));
+    if let Err(e) = res {
+        assert_eq!(e.code(), ErrorCode::ABORTED_QUERY);
+    }
 
     Ok(())
 }
