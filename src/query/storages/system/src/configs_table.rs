@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::mask_string;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::Config;
@@ -48,7 +47,11 @@ impl SyncSystemTable for ConfigsTable {
     }
 
     fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let config = GlobalConfig::instance().as_ref().clone().into_config();
+        let config = GlobalConfig::instance()
+            .as_ref()
+            .clone()
+            .into_config()
+            .with_mask();
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut groups: Vec<String> = vec![];
@@ -58,8 +61,6 @@ impl SyncSystemTable for ConfigsTable {
 
         // Obsolete.
         let query_config_value = Self::remove_obsolete_configs(serde_json::to_value(query_config)?);
-        // Mask.
-        let query_config_value = Self::mask_configs(query_config_value);
 
         ConfigsTable::extract_config(
             &mut names,
@@ -103,27 +104,7 @@ impl SyncSystemTable for ConfigsTable {
             cache_config_value,
         );
 
-        // Clone storage config to avoid change it's value.
-        //
-        // TODO(xuanwo):
-        // Refactor into config so that config can  decide which value needs mask.
-        let mut storage_config = config.storage;
-        storage_config.s3.access_key_id = mask_string(&storage_config.s3.access_key_id, 3);
-        storage_config.s3.secret_access_key = mask_string(&storage_config.s3.secret_access_key, 3);
-        storage_config.oss.oss_access_key_id =
-            mask_string(&storage_config.oss.oss_access_key_id, 3);
-        storage_config.oss.oss_access_key_secret =
-            mask_string(&storage_config.oss.oss_access_key_secret, 3);
-        storage_config.oss.oss_server_side_encryption =
-            mask_string(&storage_config.oss.oss_server_side_encryption, 3);
-        storage_config.oss.oss_server_side_encryption_key_id =
-            mask_string(&storage_config.oss.oss_server_side_encryption_key_id, 3);
-        storage_config.gcs.credential = mask_string(&storage_config.gcs.credential, 3);
-        storage_config.azblob.account_name = mask_string(&storage_config.azblob.account_name, 3);
-        storage_config.azblob.account_key = mask_string(&storage_config.azblob.account_key, 3);
-        storage_config.webhdfs.webhdfs_delegation =
-            mask_string(&storage_config.webhdfs.webhdfs_delegation, 3);
-
+        let storage_config = config.storage;
         let storage_config_value = serde_json::to_value(storage_config)?;
         ConfigsTable::extract_config(
             &mut names,
@@ -296,21 +277,6 @@ impl ConfigsTable {
             Value::Object(mut config_json_obj) => {
                 for key in Config::obsoleted_option_keys().iter() {
                     config_json_obj.remove(*key);
-                }
-                JsonValue::Object(config_json_obj)
-            }
-            _ => config_json,
-        }
-    }
-
-    fn mask_configs(config_json: JsonValue) -> JsonValue {
-        match config_json {
-            Value::Object(mut config_json_obj) => {
-                for key in Config::mask_option_keys().iter() {
-                    if let Some(_value) = config_json_obj.get(*key) {
-                        config_json_obj
-                            .insert(key.to_string(), Value::String("******".to_string()));
-                    }
                 }
                 JsonValue::Object(config_json_obj)
             }

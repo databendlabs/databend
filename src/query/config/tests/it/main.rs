@@ -12,18 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_config::GlobalConfig;
-use poem::web::Json;
-use poem::IntoResponse;
-
-#[poem::handler]
-#[async_backtrace::framed]
-pub async fn config_handler() -> poem::Result<impl IntoResponse> {
-    Ok(Json(
-        GlobalConfig::instance()
-            .as_ref()
-            .clone()
-            .into_config()
-            .with_mask(),
-    ))
-}
+mod config;
