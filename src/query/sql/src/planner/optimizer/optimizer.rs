@@ -46,6 +46,7 @@ use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
+use crate::plans::JoinType;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
@@ -427,16 +428,17 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
     if opt_ctx.enable_distributed_optimization {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
-    let join_op = Join::try_from(plan.input.plan().clone())?;
+    let old_left_conditions = Join::try_from(plan.input.plan().clone())?.left_conditions;
     let mut join_s_expr = optimize_query(opt_ctx.clone(), *plan.input.clone()).await?;
     if let &RelOperator::Exchange(_) = join_s_expr.plan() {
         join_s_expr = join_s_expr.child(0)?.clone();
     }
     let left_conditions = Join::try_from(join_s_expr.plan().clone())?.left_conditions;
     let mut change_join_order = false;
-    if join_op.left_conditions != left_conditions {
+    if old_left_conditions != left_conditions {
         change_join_order = true;
     }
+    let join_op = Join::try_from(join_s_expr.plan().clone())?;
     let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
@@ -470,20 +472,18 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
 
     if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
-        let mut distributed = false;
-        if !change_join_order
+        if matches!(join_op.join_type, JoinType::RightAnti | JoinType::Right)
             && merge_source_optimizer
                 .merge_source_matcher
                 .matches(&join_s_expr)
             && !non_equal_join
         {
             join_s_expr = merge_source_optimizer.optimize(&join_s_expr)?;
-            distributed = true;
         };
 
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: Box::new(join_s_expr),
-            distributed,
+            distributed: true,
             change_join_order,
             columns_set: new_columns_set.clone(),
             ..*plan
