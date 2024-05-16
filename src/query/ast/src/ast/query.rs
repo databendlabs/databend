@@ -235,6 +235,9 @@ impl Display for SelectStmt {
             write_comma_separated_list(f, windows)?;
         }
 
+        if let Some(quailfy) = &self.qualify {
+            write!(f, " QUALIFY {quailfy}")?;
+        }
         Ok(())
     }
 }

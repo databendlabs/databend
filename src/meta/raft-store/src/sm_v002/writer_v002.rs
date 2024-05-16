@@ -148,6 +148,17 @@ impl<'a> WriterV002<'a> {
         &mut self,
         mut entries_rx: tokio::sync::mpsc::Receiver<WriteEntry<RaftStoreEntry>>,
     ) -> Result<usize, io::Error> {
+        fn log_progress(c: usize) {
+            if c >= 10_000_000 {
+                info!(
+                    "Snapshot Writer has written {} million entries",
+                    c / 1_000_000
+                )
+            } else {
+                info!("Snapshot Writer has written {} kilo entries", c / 1_000)
+            }
+        }
+
         let mut cnt = 0;
         let data_version = self.snapshot_store.data_version();
 
@@ -157,7 +168,10 @@ impl<'a> WriterV002<'a> {
             let ent = match ent {
                 WriteEntry::Data(ent) => ent,
                 WriteEntry::Commit => {
-                    info!("received Commit entry, quit and about to commit");
+                    info!(
+                        "received Commit entry, written {} entries, quit and about to commit",
+                        cnt
+                    );
                     return Ok(cnt);
                 }
             };
@@ -191,8 +205,15 @@ impl<'a> WriterV002<'a> {
                 std::thread::sleep(Duration::from_millis(1));
             }
 
-            if cnt % 10_000 == 0 {
-                info!("Snapshot Writer has written {} kilo entries", cnt / 1000)
+            #[allow(clippy::collapsible_else_if)]
+            if cnt < 1_000_000 {
+                if cnt % 10_000 == 0 {
+                    log_progress(cnt);
+                }
+            } else {
+                if cnt % 100_000 == 0 {
+                    log_progress(cnt);
+                }
             }
         }
 

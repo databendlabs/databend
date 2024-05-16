@@ -759,19 +759,20 @@ dependencies = [
 [[package]]
 name = "arrow-udf-js"
 version = "0.2.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf?rev=a8fdfdd#a8fdfdd3622facb7d836a8da42a8a1c2d318f817"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=d0a21f0#d0a21f0fde330a0e5f658a55b58e0405d8372844"
 dependencies = [
  "anyhow",
  "arrow-array 51.0.0",
  "arrow-buffer 51.0.0",
  "arrow-schema 51.0.0",
+ "atomic-time",
  "rquickjs",
 ]
 
 [[package]]
 name = "arrow-udf-wasm"
 version = "0.2.2"
-source = "git+https://github.com/datafuse-extras/arrow-udf?rev=a8fdfdd#a8fdfdd3622facb7d836a8da42a8a1c2d318f817"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=d0a21f0#d0a21f0fde330a0e5f658a55b58e0405d8372844"
 dependencies = [
  "anyhow",
  "arrow-array 51.0.0",
@@ -1079,6 +1080,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
 dependencies = [
  "critical-section",
+]
+
+[[package]]
+name = "atomic-time"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3424654267706036b8c23c0abadc4e0412416b9d0208d7ebe1e6978c8c31fec0"
+dependencies = [
+ "portable-atomic",
 ]
 
 [[package]]
@@ -4229,7 +4239,6 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4308,6 +4317,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array 51.0.0",
  "arrow-buffer 51.0.0",
+ "arrow-cast 51.0.0",
  "arrow-schema 51.0.0",
  "async-backtrace",
  "async-trait-fn",
@@ -4418,6 +4428,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
+ "databend-common-io",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
@@ -4938,6 +4949,7 @@ dependencies = [
  "lz4",
  "maplit",
  "match-template",
+ "md-5",
  "minitrace",
  "mysql_async",
  "naive-cityhash",

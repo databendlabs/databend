@@ -138,6 +138,7 @@ jwt-simple = "0.11.0"
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = { workspace = true }
+md-5 = "0.10.5"
 minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
 num_cpus = "1.16.0"
@@ -202,4 +203,4 @@ wiremock = "0.5.14"
 databend-common-building = { path = "../../common/building" }
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "md-5"]

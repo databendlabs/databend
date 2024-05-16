@@ -191,6 +191,9 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 0
 
 statement ok
+drop table if exists test all
+
+statement ok
 create table test (a int, b string);
 
 statement ok
@@ -206,6 +209,9 @@ b
 # merge into use materialized cte.
 statement ok
 set enable_experimental_merge_into = 1;
+
+statement ok
+drop table if exists target_table;
 
 statement ok
 create table target_table(a int, b string);

@@ -565,22 +565,31 @@ impl TableSchema {
     ) -> HashMap<ColumnId, Scalar> {
         fn collect_leaf_default_values(
             default_value: &Scalar,
+            data_type: &TableDataType,
             column_ids: &[ColumnId],
             index: &mut usize,
             leaf_default_values: &mut HashMap<ColumnId, Scalar>,
         ) {
-            match default_value {
-                Scalar::Tuple(s) => {
-                    s.iter().for_each(|default_val| {
+            match (data_type.remove_nullable(), default_value) {
+                (TableDataType::Tuple { fields_type, .. }, Scalar::Tuple(vals)) => {
+                    for (ty, val) in fields_type.iter().zip_eq(vals.iter()) {
                         collect_leaf_default_values(
-                            default_val,
+                            val,
+                            ty,
                             column_ids,
                             index,
                             leaf_default_values,
-                        )
-                    });
+                        );
+                    }
                 }
-                Scalar::Map(_) | Scalar::Array(_) => {}
+                (
+                    TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_),
+                    _,
+                ) => {
+                    // ignore leaf columns
+                    let n = data_type.num_leaf_columns();
+                    *index += n;
+                }
                 _ => {
                     debug_assert!(!default_value.is_nested_scalar());
                     leaf_default_values.insert(column_ids[*index], default_value.to_owned());
@@ -590,13 +599,14 @@ impl TableSchema {
         }
 
         let mut leaf_default_values = HashMap::with_capacity(self.num_fields());
-        let leaf_field_column_ids = self.field_leaf_column_ids();
-        for (default_value, field_column_ids) in default_values.iter().zip_eq(leaf_field_column_ids)
-        {
+        for (default_value, field) in default_values.iter().zip_eq(self.fields()) {
             let mut index = 0;
+            let data_type = field.data_type();
+            let column_ids = field.leaf_column_ids();
             collect_leaf_default_values(
                 default_value,
-                &field_column_ids,
+                data_type,
+                &column_ids,
                 &mut index,
                 &mut leaf_default_values,
             );
@@ -841,11 +851,9 @@ impl TableSchema {
         fn collect_in_field(
             field: &TableField,
             fields: &mut Vec<TableField>,
-            is_nullable: bool,
             next_column_id: &mut ColumnId,
         ) {
             let ty = field.data_type();
-            let is_nullable = ty.is_nullable() || is_nullable;
             match ty.remove_nullable() {
                 TableDataType::Tuple {
                     fields_type,
@@ -859,7 +867,6 @@ impl TableSchema {
                                 *next_column_id,
                             ),
                             fields,
-                            is_nullable,
                             next_column_id,
                         );
                     }
@@ -872,7 +879,6 @@ impl TableSchema {
                             *next_column_id,
                         ),
                         fields,
-                        is_nullable,
                         next_column_id,
                     );
                 }
@@ -884,17 +890,12 @@ impl TableSchema {
                             *next_column_id,
                         ),
                         fields,
-                        is_nullable,
                         next_column_id,
                     );
                 }
                 _ => {
                     *next_column_id += 1;
-                    let mut field = field.clone();
-                    if is_nullable {
-                        field.data_type = field.data_type.wrap_nullable();
-                    }
-                    fields.push(field)
+                    fields.push(field.clone())
                 }
             }
         }
@@ -906,7 +907,7 @@ impl TableSchema {
                 continue;
             }
             let mut next_column_id = field.column_id;
-            collect_in_field(field, &mut fields, false, &mut next_column_id);
+            collect_in_field(field, &mut fields, &mut next_column_id);
         }
         fields
     }

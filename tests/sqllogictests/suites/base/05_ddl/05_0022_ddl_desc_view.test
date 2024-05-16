@@ -68,7 +68,6 @@ d SMALLINT NO 0 (empty)
 e DATE NO '1970-01-01' (empty)
 f VARCHAR NO '' (empty)
 
-
 query VVV
 select column_name, nullable, is_nullable from INFORMATION_SCHEMA.COLUMNS where table_name='tables_with_history' and column_name in ('num_rows', 'dropped_on') order by column_name
 ----

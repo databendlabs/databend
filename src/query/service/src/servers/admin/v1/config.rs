@@ -20,6 +20,10 @@ use poem::IntoResponse;
 #[async_backtrace::framed]
 pub async fn config_handler() -> poem::Result<impl IntoResponse> {
     Ok(Json(
-        GlobalConfig::instance().as_ref().clone().into_config(),
+        GlobalConfig::instance()
+            .as_ref()
+            .clone()
+            .into_config()
+            .with_mask(),
     ))
 }

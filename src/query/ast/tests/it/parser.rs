@@ -775,6 +775,13 @@ fn test_statement() {
             return i+1
             $$;
         "#,
+        r#"
+            create or replace function addone(int)
+            returns int
+            language python
+            handler = 'addone_py'
+            as '@data/abc/a.py';
+        "#,
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
         r#"
@@ -786,6 +793,18 @@ fn test_statement() {
                 END LOOP;
             END;
             $$
+        "#,
+        r#"
+        with
+        abc as (
+            select
+                id, uid, eid, match_id, created_at, updated_at
+            from (
+               select * from ddd.ccc where score > 0 limit 10
+             )
+            qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
+        )
+        select * from abc;
         "#,
     ];
 
