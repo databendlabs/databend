@@ -1510,7 +1510,7 @@ pub fn at_string(i: Input) -> IResult<String> {
         let AtString(s) = token
             .text()
             .parse()
-            .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid @string")))?;
+            .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid at string")))?;
         Ok(s)
     })(i)
 }

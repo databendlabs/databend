@@ -55,7 +55,7 @@ impl FromStr for QuotedIdent<String> {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut chars = s.chars();
-
+        
         let quote = chars.next().ok_or(())?;
 
         if chars.next_back().ok_or(())? != quote {
