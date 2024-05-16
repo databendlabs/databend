@@ -191,6 +191,103 @@ SELECT a, b FROM t order by a
 statement error 3902
 SELECT * FROM t WITH CONSUME
 
+
+# stream should not be consumed if query goes wrong
+
+statement ok
+create or replace table t1(c int);
+
+statement ok
+create or replace stream s1 on table t1 APPEND_ONLY=true;
+
+statement ok
+insert into t1 values (1);
+
+# single table
+
+statement error 1006
+select c/0 from s1 with consume;
+
+# stream s1 should not be consumed
+query I
+SELECT c FROM s1;
+----
+1
+
+# multiple tables
+
+statement ok
+create or replace table t1(c int);
+
+statement ok
+create or replace table t2(c int);
+
+statement ok
+create or replace stream s1 on table t1 APPEND_ONLY=true;
+
+statement ok
+create or replace stream s2 on table t2 APPEND_ONLY=true;
+
+statement ok
+insert into t1 values (1);
+
+statement ok
+insert into t2 values (2);
+
+
+statement error 1006
+select c from s1 with consume union select c/0 from s2 with consume;
+
+# stream s1, s2 should not be consumed
+query I
+SELECT c FROM s1;
+----
+1
+
+query I
+SELECT c FROM s2;
+----
+2
+
+
+# stream can be consumed individually
+
+statement ok
+create or replace table t1(c int);
+
+statement ok
+create or replace table t2(c int);
+
+statement ok
+create or replace stream s1 on table t1 APPEND_ONLY=true;
+
+statement ok
+create or replace stream s2 on table t2 APPEND_ONLY=true;
+
+statement ok
+insert into t1 values (1);
+
+statement ok
+insert into t2 values (2);
+
+# only consume s2
+query I
+select c from s1 union select c from s2 with consume order by c;
+----
+1
+2
+
+# stream s1 should not be consumed
+query I
+SELECT c FROM s1;
+----
+1
+
+# stream s2 should be consumed
+query I
+SELECT c FROM s2;
+----
+
 statement ok
 drop database test_txn_stream;
 
