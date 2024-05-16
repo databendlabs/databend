@@ -4925,7 +4925,6 @@ dependencies = [
  "futures",
  "futures-util",
  "goldenfile",
- "h2 0.3.26",
  "headers",
  "hex",
  "highway",
