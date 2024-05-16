@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use itertools::Itertools;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -72,7 +73,7 @@ impl AsyncSystemTable for UsersTable {
             .collect();
         let mut roles: Vec<String> = users
             .iter()
-            .map(|user| user.grants.roles().join(", ").to_string())
+            .map(|user| user.grants.roles().iter().sorted().join(", ").to_string())
             .collect();
 
         let configured_users = UserApiProvider::instance().get_configured_users();
