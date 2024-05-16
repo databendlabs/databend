@@ -165,7 +165,7 @@ geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
 geozero = { version = "0.11.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 itertools = "0.10.5"
 match-template = "0.0.1"
-mysql_async = { version = "0.33", default-features = false, features = ["rustls-tls"] }
+mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
 ordered-float = { version = "4.1.0", default-features = false }
 poem = { version = "3.0", features = ["rustls", "multipart", "compression"] }
 prometheus-client = "0.22"
@@ -190,6 +190,7 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 derive-visitor = "0.3.0"
 http = "1"
+criterion = "0.5"
 
 # Synchronization
 dashmap = "5.4.0"
@@ -232,7 +233,7 @@ prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
-tonic-build = { version = "0.10.2" }
+tonic-build = { version = "0.11" }
 
 # Memory management
 bumpalo = "3.12.0"
