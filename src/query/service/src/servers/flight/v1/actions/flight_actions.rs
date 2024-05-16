@@ -26,7 +26,7 @@ use serde::Serialize;
 
 use crate::servers::flight::v1::actions::init_query_env::init_query_env;
 use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
-use crate::servers::flight::v1::actions::init_query_fragments::create_query_fragments;
+use crate::servers::flight::v1::actions::init_query_fragments::init_query_fragments;
 use crate::servers::flight::v1::actions::kill_query::kill_query;
 use crate::servers::flight::v1::actions::set_priority::set_priority;
 use crate::servers::flight::v1::actions::set_priority::SET_PRIORITY;
@@ -109,7 +109,7 @@ impl FlightActions {
 pub fn flight_actions() -> FlightActions {
     FlightActions::create()
         .action(INIT_QUERY_ENV, init_query_env)
-        .action(INIT_QUERY_FRAGMENTS, create_query_fragments)
+        .action(INIT_QUERY_FRAGMENTS, init_query_fragments)
         .action(START_PREPARED_QUERY, start_prepared_query)
         .action(TRUNCATE_TABLE, truncate_table)
         .action(KILL_QUERY, kill_query)

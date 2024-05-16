@@ -29,7 +29,7 @@ use crate::sessions::SessionType;
 
 pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 
-pub async fn create_query_fragments(fragments: QueryFragmentsPlanPacket) -> Result<()> {
+pub async fn init_query_fragments(fragments: QueryFragmentsPlanPacket) -> Result<()> {
     let config = GlobalConfig::instance();
     let session_manager = SessionManager::instance();
     let settings = Settings::create(config.query.tenant_id.clone());
