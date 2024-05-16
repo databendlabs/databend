@@ -162,7 +162,7 @@ ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 feature-set = { version = "0.1.1" }
 geo = { version = "0.27.0", features = ["use-serde"] }
 geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
-geozero = { version = "0.11.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
+geozero = { version = "0.12.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 itertools = "0.10.5"
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
@@ -300,5 +300,4 @@ micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" 
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
-geozero = { git = "https://github.com/georust/geozero", rev = "1d78b36" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }
