@@ -137,7 +137,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
         .await;
 
-    assert!(matches!(res, Err(_)));
+    assert!(res.is_err());
     if let Err(e) = res {
         assert_eq!(e.code(), ErrorCode::ABORTED_QUERY);
     }
