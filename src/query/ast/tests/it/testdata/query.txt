@@ -500,6 +500,216 @@ Query {
 
 
 ---------- Input ----------
+select * from customer changes(information => default) at (stream => s) order by a, b
+---------- Output ---------
+SELECT * FROM customer CHANGES (INFORMATION => DEFAULT) AT (STREAM => s) ORDER BY a, b
+---------- AST ------------
+Query {
+    span: Some(
+        0..71,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..71,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..71,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            14..22,
+                        ),
+                        name: "customer",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    alias: None,
+                    temporal: Some(
+                        Changes(
+                            ChangesInterval {
+                                append_only: false,
+                                at_point: Stream {
+                                    catalog: None,
+                                    database: None,
+                                    name: Identifier {
+                                        span: Some(
+                                            69..70,
+                                        ),
+                                        name: "s",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                },
+                                end_point: None,
+                            },
+                        ),
+                    ),
+                    consume: false,
+                    pivot: None,
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    81..82,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                81..82,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    84..85,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                84..85,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from customer with consume as s
+---------- Output ---------
+SELECT * FROM customer WITH CONSUME AS s
+---------- AST ------------
+Query {
+    span: Some(
+        0..40,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..40,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..40,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            14..22,
+                        ),
+                        name: "customer",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                span: Some(
+                                    39..40,
+                                ),
+                                name: "s",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            columns: [],
+                        },
+                    ),
+                    temporal: None,
+                    consume: true,
+                    pivot: None,
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
 select * from customer inner join orders
 ---------- Output ---------
 SELECT * FROM customer INNER JOIN orders
