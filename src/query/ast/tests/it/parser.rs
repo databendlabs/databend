@@ -16,12 +16,12 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::quote::ident_needs_quote;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
-use databend_common_ast::parser::quote::quote_ident;
-use databend_common_ast::parser::quote::unquote_ident;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::script::script_stmt;
 use databend_common_ast::parser::statement::insert_stmt;
@@ -795,16 +795,16 @@ fn test_statement() {
             $$
         "#,
         r#"
-        with
-        abc as (
-            select
-                id, uid, eid, match_id, created_at, updated_at
-            from (
-               select * from ddd.ccc where score > 0 limit 10
-             )
-            qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
-        )
-        select * from abc;
+            with
+            abc as (
+                select
+                    id, uid, eid, match_id, created_at, updated_at
+                from (
+                    select * from ddd.ccc where score > 0 limit 10
+                )
+                qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
+            )
+            select * from abc;
         "#,
     ];
 
@@ -1326,6 +1326,7 @@ fn test_quote() {
         ("_abc12", "_abc12"),
         ("_12a", "_12a"),
         ("12a", "\"12a\""),
+        ("a\\\"b", "\"a\\\"\"b\""),
         ("12", "\"12\""),
         ("🍣", "\"🍣\""),
         ("価格", "\"価格\""),
@@ -1335,10 +1336,17 @@ fn test_quote() {
         ("'''", "\"'''\""),
         ("name\"with\"quote", "\"name\"\"with\"\"quote\""),
     ];
-    for (input, want) in cases {
-        let quoted = quote_ident(input, '"', false);
-        assert_eq!(quoted, *want);
-        let unquoted = unquote_ident(&quoted, '"');
-        assert_eq!(unquoted, *input, "unquote({}) got {}", quoted, unquoted);
+
+    for (input, expected) in cases {
+        if ident_needs_quote(input) {
+            let quoted = QuotedIdent(input, '"').to_string();
+            assert_eq!(quoted, *expected);
+
+            let QuotedIdent(ident, quote) = quoted.parse().unwrap();
+            assert_eq!(ident, *input);
+            assert_eq!(quote, '"');
+        } else {
+            assert_eq!(input, expected);
+        };
     }
 }
