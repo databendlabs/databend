@@ -142,8 +142,9 @@ impl SelectInterpreter {
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             build_res.main_pipeline.set_on_finished(
                 move |(_profiles, may_error)| match may_error {
-                    Ok(_) => GlobalIORuntime::instance()
-                        .block_on(async move { catalog.update_multi_table_meta(req).await }),
+                    Ok(_) => GlobalIORuntime::instance().block_on(async move {
+                        catalog.update_multi_table_meta(req).await.map(|_| ())
+                    }),
                     Err(error_code) => Err(error_code.clone()),
                 },
             );

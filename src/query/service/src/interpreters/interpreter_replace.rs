@@ -47,7 +47,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::RwLock;
 
-use crate::interpreters::common::build_update_stream_meta_seq;
+use crate::interpreters::common::build_update_stream_meta_req;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::HookOperator;
@@ -431,7 +431,7 @@ impl ReplaceInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
+        let update_stream_meta = build_update_stream_meta_req(self.ctx.clone(), metadata).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             ctx.clone(),

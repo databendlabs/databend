@@ -36,7 +36,7 @@ use databend_common_storages_stage::StageTable;
 use log::debug;
 use log::info;
 
-use crate::interpreters::common::build_update_stream_meta_seq;
+use crate::interpreters::common::build_update_stream_meta_req;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
@@ -77,7 +77,7 @@ impl CopyIntoTableInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
+        let update_stream_meta = build_update_stream_meta_req(self.ctx.clone(), metadata).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),

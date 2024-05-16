@@ -35,7 +35,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 use crate::sessions::QueryContext;
 
-pub async fn build_update_stream_meta_seq(
+pub async fn build_update_stream_meta_req(
     ctx: Arc<QueryContext>,
     metadata: &MetadataRef,
 ) -> Result<Vec<UpdateStreamMetaReq>> {
@@ -112,15 +112,9 @@ pub async fn build_update_multi_stream_meta_req(
         .check_enterprise_enabled(ctx.get_license_key(), Feature::Stream)?;
 
     let mut update_table_metas = Vec::with_capacity(streams.len());
-    let mut streams_ids = HashSet::new();
     for table in streams.into_iter() {
         let stream = StreamTable::try_from_table(table.as_ref())?;
         let stream_info = stream.get_table_info();
-        let table_id = stream_info.ident.table_id;
-        if streams_ids.contains(&table_id) {
-            continue;
-        }
-        streams_ids.insert(table_id);
 
         let source_table = stream.source_table(ctx.clone()).await?;
         let inner_fuse = FuseTable::try_from_table(source_table.as_ref())?;
@@ -136,7 +130,7 @@ pub async fn build_update_multi_stream_meta_req(
         new_table_meta.updated_on = Utc::now();
 
         update_table_metas.push(UpdateTableMetaReq {
-            table_id,
+            table_id: stream_info.ident.table_id,
             seq: MatchSeq::Exact(stream_info.ident.seq),
             new_table_meta,
             copied_files: None,
