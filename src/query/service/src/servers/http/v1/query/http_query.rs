@@ -338,7 +338,13 @@ impl HttpQuery {
                             "last query on the session not finished",
                         ));
                     }
-                    let _ = http_query_manager.remove_query(&query_id, RemoveReason::Canceled);
+                    let _ = http_query_manager
+                        .remove_query(
+                            &query_id,
+                            RemoveReason::Canceled,
+                            ErrorCode::ClosedQuery("closed by next query"),
+                        )
+                        .await;
                 }
                 // wait for Arc<QueryContextShared> to drop and detach itself from session
                 // should not take too long
