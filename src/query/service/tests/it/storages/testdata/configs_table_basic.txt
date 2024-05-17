@@ -115,7 +115,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'openai_api_completion_model'              | 'gpt-3.5-turbo'                                                | ''       |
 | 'query'   | 'openai_api_embedding_base_url'            | 'https://api.openai.com/v1/'                                   | ''       |
 | 'query'   | 'openai_api_embedding_model'               | 'text-embedding-ada-002'                                       | ''       |
-| 'query'   | 'openai_api_key'                           | '******'                                                       | ''       |
+| 'query'   | 'openai_api_key'                           | ''                                                             | ''       |
 | 'query'   | 'openai_api_version'                       | ''                                                             | ''       |
 | 'query'   | 'parquet_fast_read_bytes'                  | 'null'                                                         | ''       |
 | 'query'   | 'quota'                                    | 'null'                                                         | ''       |

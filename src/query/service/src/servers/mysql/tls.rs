@@ -17,12 +17,12 @@ use std::io::BufReader;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use rustls::Certificate;
-use rustls::PrivateKey;
+use itertools::Itertools;
 use rustls::ServerConfig;
 use rustls_pemfile::certs;
 use rustls_pemfile::pkcs8_private_keys;
 use rustls_pemfile::rsa_private_keys;
+use rustls_pki_types::PrivateKeyDer;
 
 #[derive(Default)]
 pub struct MySQLTlsConfig {
@@ -48,19 +48,23 @@ impl MySQLTlsConfig {
         }
 
         let cert = certs(&mut BufReader::new(File::open(&self.cert_path)?))
-            .map_err(|err| ErrorCode::TLSConfigurationFailure(err.to_string()))
-            .map(|mut certs| certs.drain(..).map(Certificate).collect())?;
+            .try_collect()
+            .map_err(|err| ErrorCode::TLSConfigurationFailure(err.to_string()))?;
 
         let key = {
-            let mut pkcs8 = pkcs8_private_keys(&mut BufReader::new(File::open(&self.key_path)?))
-                .map_err(|err| ErrorCode::TLSConfigurationFailure(err.to_string()))?;
-            if !pkcs8.is_empty() {
-                PrivateKey(pkcs8.remove(0))
-            } else {
-                let mut rsa = rsa_private_keys(&mut BufReader::new(File::open(&self.key_path)?))
+            let mut pkcs8: Vec<_> =
+                pkcs8_private_keys(&mut BufReader::new(File::open(&self.key_path)?))
+                    .try_collect()
                     .map_err(|err| ErrorCode::TLSConfigurationFailure(err.to_string()))?;
+            if !pkcs8.is_empty() {
+                PrivateKeyDer::Pkcs8(pkcs8.remove(0))
+            } else {
+                let mut rsa: Vec<_> =
+                    rsa_private_keys(&mut BufReader::new(File::open(&self.key_path)?))
+                        .try_collect()
+                        .map_err(|err| ErrorCode::TLSConfigurationFailure(err.to_string()))?;
                 if !rsa.is_empty() {
-                    PrivateKey(rsa.remove(0))
+                    PrivateKeyDer::Pkcs1(rsa.remove(0))
                 } else {
                     return Err(ErrorCode::TLSConfigurationFailure(
                         "invalid key".to_string(),
@@ -70,7 +74,6 @@ impl MySQLTlsConfig {
         };
 
         let config = ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
             .with_single_cert(cert, key)
             .map_err(|err| ErrorCode::TLSConfigurationFailure(err.to_string()))?;

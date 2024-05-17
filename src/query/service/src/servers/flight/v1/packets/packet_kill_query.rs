@@ -18,8 +18,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
-use crate::servers::flight::v1::actions::FlightAction;
-use crate::servers::flight::v1::actions::KillQuery;
+use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::servers::flight::v1::packets::packet::create_client;
 use crate::servers::flight::v1::packets::Packet;
 
@@ -46,9 +45,6 @@ impl Packet for KillQueryPacket {
     async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         let executor_info = &self.executor;
         let mut conn = create_client(config, &executor_info.flight_address).await?;
-        let action = FlightAction::KillQuery(KillQuery {
-            packet: self.clone(),
-        });
-        conn.execute_action(action, timeout).await
+        conn.do_action(KILL_QUERY, self.clone(), timeout).await
     }
 }

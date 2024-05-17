@@ -3892,6 +3892,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 columns: vec![],
             }),
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -3910,6 +3911,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -3971,7 +3973,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ RETURNS ~ #udf_arg_type
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ AS ~ ^#code_string
+            ~ AS ~ ^(#code_string | #literal_string)
         },
         |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
             UDFDefinition::UDFScript {

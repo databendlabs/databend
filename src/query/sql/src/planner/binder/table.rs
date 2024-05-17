@@ -58,6 +58,7 @@ use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::AbortChecker;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
@@ -177,6 +178,7 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
+        consume: bool,
     ) -> Result<(SExpr, BindContext)> {
         let (catalog, database, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
@@ -219,6 +221,7 @@ impl Binder {
                 database.as_str(),
                 table_name.as_str(),
                 navigation.as_ref(),
+                self.ctx.clone().get_abort_checker(),
             )
             .await
         {
@@ -259,6 +262,12 @@ impl Binder {
             }
         };
 
+        if consume && table_meta.engine() != "STREAM" {
+            return Err(ErrorCode::StorageUnsupported(
+                "WITH CONSUME only support in STREAM",
+            ));
+        }
+
         if navigation.is_some_and(|n| matches!(n, TimeNavigation::Changes { .. }))
             || table_meta.engine() == "STREAM"
         {
@@ -272,6 +281,7 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
+                    consume,
                 );
                 let (s_expr, mut bind_context) = self
                     .bind_base_table(bind_context, database.as_str(), table_index, change_type)
@@ -284,7 +294,12 @@ impl Binder {
             }
 
             let query = table_meta
-                .generage_changes_query(self.ctx.clone(), database.as_str(), table_name.as_str())
+                .generage_changes_query(
+                    self.ctx.clone(),
+                    database.as_str(),
+                    table_name.as_str(),
+                    consume,
+                )
                 .await?;
 
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
@@ -342,6 +357,7 @@ impl Binder {
                         false,
                         false,
                         false,
+                        false,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query).await?;
@@ -373,6 +389,7 @@ impl Binder {
                     table_alias_name,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
+                    false,
                     false,
                 );
 
@@ -706,6 +723,7 @@ impl Binder {
                 false,
                 false,
                 false,
+                false,
             );
 
             let (s_expr, mut bind_context) = self
@@ -732,6 +750,7 @@ impl Binder {
                 "system".to_string(),
                 table.clone(),
                 table_alias_name,
+                false,
                 false,
                 false,
                 false,
@@ -832,6 +851,7 @@ impl Binder {
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot: _,
                 unpivot: _,
             } => {
@@ -843,6 +863,7 @@ impl Binder {
                     table,
                     alias,
                     temporal,
+                    *consume,
                 )
                 .await
             }
@@ -1006,6 +1027,7 @@ impl Binder {
             false,
             false,
             true,
+            false,
         );
 
         let (s_expr, mut bind_context) = self
@@ -1322,6 +1344,7 @@ impl Binder {
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
+        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with ctx
         // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
@@ -1333,7 +1356,7 @@ impl Binder {
             .await?;
 
         if let Some(desc) = navigation {
-            table_meta = table_meta.navigate_to(desc).await?;
+            table_meta = table_meta.navigate_to(desc, abort_checker).await?;
         }
         Ok(table_meta)
     }

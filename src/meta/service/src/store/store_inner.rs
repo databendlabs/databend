@@ -66,6 +66,7 @@ use log::info;
 use log::warn;
 
 use crate::export::vec_kv_to_json;
+use crate::metrics;
 use crate::Opened;
 
 /// This is the inner store that provides support utilities for implementing the raft storage API.
@@ -168,7 +169,8 @@ impl StoreInner {
             info!("No snapshot, skip rebuilding state machine");
             (Default::default(), None)
         };
-        let key_num = RwLock::new(Self::calculate_key_num(&stored_snapshot, config.clone()).await);
+        let key_num = Self::calculate_key_num(&stored_snapshot, config.clone()).await;
+        metrics::server_metrics::set_snapshot_key_num(key_num.unwrap_or_default());
 
         Ok(Self {
             id: raft_state.id,
@@ -179,7 +181,7 @@ impl StoreInner {
             log: RwLock::new(log),
             state_machine: sm,
             current_snapshot: RwLock::new(stored_snapshot),
-            key_num,
+            key_num: RwLock::new(key_num),
         })
     }
 
@@ -355,6 +357,7 @@ impl StoreInner {
             if let Some(num) = Self::calculate_key_num(&snapshot, self.config.clone()).await {
                 let mut key_num = self.key_num.write().await;
                 *key_num = Some(num);
+                metrics::server_metrics::set_snapshot_key_num(num);
             }
 
             let mut current_snapshot = self.current_snapshot.write().await;

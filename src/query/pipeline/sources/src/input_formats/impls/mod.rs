@@ -16,10 +16,8 @@ mod input_format_csv;
 mod input_format_ndjson;
 mod input_format_parquet;
 mod input_format_tsv;
-mod input_format_xml;
 
 pub use input_format_csv::InputFormatCSV;
 pub use input_format_ndjson::InputFormatNDJson;
 pub use input_format_parquet::InputFormatParquet;
 pub use input_format_tsv::InputFormatTSV;
-pub use input_format_xml::InputFormatXML;
