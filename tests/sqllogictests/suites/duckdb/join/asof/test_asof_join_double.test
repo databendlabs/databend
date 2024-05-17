@@ -25,10 +25,10 @@ FROM
 	range(0,10) p(ts)
 JOIN (
 	SELECT value, begin, 
-		LEAD(begin, 1, '999'::DOUBLE) OVER (ORDER BY begin ASC) AS end
+		LEAD(begin, 1, '999'::DOUBLE) OVER (ORDER BY begin ASC) AS ed
 	FROM events0
 ) e
-ON p.ts >= e.begin AND p.ts < e.end
+ON p.ts >= e.begin AND p.ts < e.ed
 ORDER BY p.ts ASC
 ----
 1	0
@@ -88,10 +88,10 @@ FROM
 	probes p
 JOIN (
 	SELECT key, value, begin, 
-		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (PARTITION BY key ORDER BY begin ASC) AS end
+		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (PARTITION BY key ORDER BY begin ASC) AS ed
 	FROM events
 ) e
-ON p.key = e.key AND p.ts >= e.begin AND p.ts < e.end
+ON p.key = e.key AND p.ts >= e.begin AND p.ts < e.ed
 ORDER BY 1, 2 ASC
 ----
 1	1	0
