@@ -347,8 +347,8 @@ impl Binder {
         let (join_sexpr, mut bind_ctx) = self
             .bind_merge_into_join(
                 bind_context,
-                &target_context.columns,
-                &source_context.columns,
+                target_context,
+                source_context,
                 target_expr,
                 source_expr,
                 &join,

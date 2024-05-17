@@ -108,17 +108,19 @@ impl Binder {
 
         let build_side_cache_info = self.expression_scan_context.generate_cache_info(cache_idx);
 
+        let join_type = join_type(&join.op);
         let s_expr = self
             .bind_join_with_type(
-                join_type(&join.op),
+                join_type.clone(),
                 join_conditions,
                 left_child,
                 right_child,
                 build_side_cache_info,
             )
             .await?;
+        let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
 
-        Ok((s_expr, bind_context.clone()))
+        Ok((s_expr, bind_context))
     }
 
     // TODO: unify this function with bind_join
@@ -127,13 +129,13 @@ impl Binder {
     pub(crate) async fn bind_merge_into_join(
         &mut self,
         bind_context: &mut BindContext,
-        left_column_bindings: &[ColumnBinding],
-        right_column_bindings: &[ColumnBinding],
+        left_context: BindContext,
+        right_context: BindContext,
         left_child: SExpr,
         right_child: SExpr,
         join: &databend_common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
-        self.check_table_name_and_condition(left_column_bindings, right_column_bindings, join)?;
+        self.check_table_name_and_condition(&left_context.columns, &right_context.columns, join)?;
 
         let mut bind_context = bind_context.replace();
 
@@ -141,22 +143,24 @@ impl Binder {
             .generate_join_condition(
                 &mut bind_context,
                 join,
-                left_column_bindings,
-                right_column_bindings,
+                &left_context.columns,
+                &right_context.columns,
             )
             .await?;
 
+        let join_type = join_type(&join.op);
         let s_expr = self
             .bind_join_with_type(
-                join_type(&join.op),
+                join_type.clone(),
                 join_conditions,
                 left_child,
                 right_child,
                 None,
             )
             .await?;
+        let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
 
-        Ok((s_expr, bind_context.clone()))
+        Ok((s_expr, bind_context))
     }
 
     async fn generate_join_condition(
@@ -910,5 +914,18 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::RightSemi => JoinType::RightSemi,
         JoinOperator::LeftAnti => JoinType::LeftAnti,
         JoinOperator::RightAnti => JoinType::RightAnti,
+    }
+}
+
+fn join_bind_context(
+    join_type: &JoinType,
+    bind_context: BindContext,
+    left_context: BindContext,
+    right_context: BindContext,
+) -> BindContext {
+    match join_type {
+        JoinType::LeftSemi | JoinType::LeftAnti => left_context,
+        JoinType::RightSemi | JoinType::RightAnti => right_context,
+        _ => bind_context,
     }
 }
