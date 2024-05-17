@@ -24,7 +24,7 @@ query III
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin > e.begin
-ORDER BY ALL ASC
+ORDER BY 1,2 ASC
 ----
 2023-03-21 14:00:00	2023-03-21 13:00:00	0
 2023-03-21 15:00:00	2023-03-21 14:00:00	1
@@ -44,7 +44,7 @@ query III
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin <= e.begin
-ORDER BY ALL ASC
+ORDER BY 1,2 ASC
 ----
 2023-03-21 12:00:00	2023-03-21 13:00:00	0
 2023-03-21 13:00:00	2023-03-21 13:00:00	0
@@ -61,7 +61,7 @@ query III
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin < e.begin
-ORDER BY ALL ASC
+ORDER BY 1,2 ASC
 ----
 2023-03-21 12:00:00	2023-03-21 13:00:00	0
 2023-03-21 13:00:00	2023-03-21 14:00:00	1
