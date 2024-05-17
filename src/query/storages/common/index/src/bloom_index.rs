@@ -202,9 +202,12 @@ impl BloomIndex {
                         DataType::Tuple(kv_tys) => kv_tys[1].clone(),
                         _ => unreachable!(),
                     };
-                    if !Xor8Filter::supported_type(&val_type) {
+                    if !Xor8Filter::supported_type(&val_type)
+                        && val_type.remove_nullable() != DataType::Variant
+                    {
                         continue;
                     }
+
                     let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
                         let value = &block.get_by_offset(index).value;
                         let column = value.convert_to_full_column(field_type, block.num_rows());
@@ -263,10 +266,6 @@ impl BloomIndex {
                 }
                 _ => {
                     if !Xor8Filter::supported_type(field_type) {
-                        continue;
-                    }
-                    // TODO: Extract the values of the leaf nodes of the JOSN value and create bloom index.
-                    if field_type.remove_nullable() == DataType::Variant {
                         continue;
                     }
                     let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
@@ -529,7 +528,8 @@ impl BloomIndex {
         if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
             match inner_ty {
                 DataType::Tuple(kv_tys) => {
-                    return Xor8Filter::supported_type(&kv_tys[1]);
+                    return Xor8Filter::supported_type(&kv_tys[1])
+                        || kv_tys[1].remove_nullable() == DataType::Variant;
                 }
                 _ => unreachable!(),
             };
