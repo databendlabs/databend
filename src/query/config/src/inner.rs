@@ -130,7 +130,7 @@ impl InnerConfig {
 }
 
 impl Debug for InnerConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("InnerConfig")
             .field("subcommand", &self.subcommand)
             .field("config_file", &self.config_file)
@@ -469,7 +469,7 @@ impl FromStr for ThriftProtocol {
 }
 
 impl Display for ThriftProtocol {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Self::Binary => write!(f, "binary"),
         }
@@ -541,8 +541,8 @@ pub struct CacheConfig {
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     pub table_bloom_index_filter_size: u64,
 
-    /// Max number of cached inverted index info objects. Set it to 0 to disable it.
-    pub inverted_index_info_count: u64,
+    /// Max number of cached inverted index meta objects. Set it to 0 to disable it.
+    pub inverted_index_meta_count: u64,
 
     /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
     pub inverted_index_filter_size: u64,
@@ -636,7 +636,7 @@ impl Default for CacheConfig {
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,
             table_bloom_index_filter_size: 2147483648,
-            inverted_index_info_count: 3000,
+            inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,

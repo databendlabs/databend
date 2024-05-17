@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -47,6 +48,17 @@ pub enum ValidationMode {
     ReturnAllErrors,
 }
 
+impl Display for ValidationMode {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ValidationMode::None => write!(f, ""),
+            ValidationMode::ReturnNRows(v) => write!(f, "RETURN_ROWS={v}"),
+            ValidationMode::ReturnErrors => write!(f, "RETURN_ERRORS"),
+            ValidationMode::ReturnAllErrors => write!(f, "RETURN_ALL_ERRORS"),
+        }
+    }
+}
+
 impl FromStr for ValidationMode {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, String> {
@@ -75,6 +87,22 @@ pub enum CopyIntoTableMode {
     Copy,
 }
 
+impl Display for CopyIntoTableMode {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            CopyIntoTableMode::Insert { overwrite } => {
+                if *overwrite {
+                    write!(f, "INSERT OVERWRITE")
+                } else {
+                    write!(f, "INSERT")
+                }
+            }
+            CopyIntoTableMode::Replace => write!(f, "REPLACE"),
+            CopyIntoTableMode::Copy => write!(f, "COPY"),
+        }
+    }
+}
+
 impl CopyIntoTableMode {
     pub fn is_overwrite(&self) -> bool {
         match self {
@@ -94,8 +122,10 @@ pub struct CopyIntoTablePlan {
     pub table_name: String,
     pub from_attachment: bool,
 
-    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
-    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
+    pub required_values_schema: DataSchemaRef,
+    // ... into table(<columns>) ..  -> <columns>
+    pub values_consts: Vec<Scalar>,
+    // (1, ?, 'a', ?) -> (1, 'a')
     pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
 
     pub write_mode: CopyIntoTableMode,
@@ -198,11 +228,15 @@ impl CopyIntoTablePlan {
             (files_to_copy, duplicated_files)
         };
 
+        let num_copied_files = need_copy_file_infos.len();
+        let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
+
         info!(
-            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{:?}",
+            "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
             max_files,
-            num_all_files,
             need_copy_file_infos.len(),
+            copied_bytes,
+            num_all_files - num_copied_files,
             start.elapsed()
         );
 
@@ -218,7 +252,7 @@ impl CopyIntoTablePlan {
 }
 
 impl Debug for CopyIntoTablePlan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let CopyIntoTablePlan {
             catalog_info,
             database_name,

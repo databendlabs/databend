@@ -192,10 +192,10 @@ impl SnapshotsIO {
             {
                 count += chunk.len();
                 let status = format!(
-                    "read snapshot files:{}/{}, cost:{} sec",
+                    "read snapshot files:{}/{}, cost:{:?}",
                     count,
                     snapshot_files.len(),
-                    start.elapsed().as_secs()
+                    start.elapsed()
                 );
                 info!("{}", status);
                 (status_callback)(status);
@@ -375,7 +375,7 @@ impl SnapshotsIO {
                     }
                 },
                 _ => {
-                    warn!("found not snapshot file in {:}, found: {:?}", prefix, de);
+                    warn!("non-file entry found in {:}, the entry: {:?}", prefix, de);
                     continue;
                 }
             }

@@ -9,7 +9,7 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
-test = false
+test = true
 
 [dependencies]
 databend-common-arrow = { path = "../../../common/arrow" }
@@ -27,6 +27,7 @@ databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
+arrow-cast = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }

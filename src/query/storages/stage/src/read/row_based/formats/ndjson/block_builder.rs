@@ -51,9 +51,7 @@ impl NdJsonDecoder {
         null_if: &[&str],
     ) -> std::result::Result<(), FileParseError> {
         let mut json: serde_json::Value =
-            serde_json::from_reader(buf).map_err(|e| FileParseError::InvalidNDJsonRow {
-                message: e.to_string(),
-            })?;
+            serde_json::from_reader(buf).map_err(|e| map_json_error(e, buf))?;
         // todo: this is temporary
         if self.field_decoder.is_select {
             self.field_decoder
@@ -195,5 +193,66 @@ impl RowDecoder for NdJsonDecoder {
             }
         }
         Ok(vec![])
+    }
+}
+
+// The origin JSON error format "{} at line {} column {}" is misleading for NDJSON.
+// - rm `line {}`
+// - rename `column {}` to `pos {}`, 1-based to 0 based
+// - add info for size and next byte
+//
+// Use test in case of changes of serde_json.
+fn map_json_error(err: serde_json::Error, data: &[u8]) -> FileParseError {
+    let pos = if err.column() > 0 {
+        err.column() - 1
+    } else {
+        err.column()
+    };
+    let len = data.len();
+
+    let mut message = err.to_string();
+    if let Some(p) = message.rfind(" at line") {
+        message = message[..p].to_string()
+    }
+    message = format!("{message} at pos {pos} of size {len}");
+    if err.column() < len {
+        message = format!("{message}, next byte is '{}'", data[pos] as char)
+    }
+    FileParseError::InvalidNDJsonRow { message }
+}
+
+#[cfg(test)]
+mod test {
+    use super::map_json_error;
+    use super::FileParseError;
+
+    fn decode_err(data: &str) -> String {
+        serde_json::from_slice::<serde_json::Value>(data.as_bytes())
+            .map_err(|e| {
+                let e = map_json_error(e, data.as_bytes());
+                if let FileParseError::InvalidNDJsonRow { message } = e {
+                    message
+                } else {
+                    unreachable!()
+                }
+            })
+            .err()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_json_decode_error() {
+        assert_eq!(
+            decode_err("{").as_str(),
+            "EOF while parsing an object at pos 0 of size 1"
+        );
+        assert_eq!(
+            decode_err("").as_str(),
+            "EOF while parsing a value at pos 0 of size 0"
+        );
+        assert_eq!(
+            decode_err("{\"k\"-}").as_str(),
+            "expected `:` at pos 4 of size 6, next byte is '-'"
+        );
     }
 }

@@ -19,15 +19,9 @@ use std::fmt::Formatter;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::str::FromStr;
 
-use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_io::escape_string_with_quote;
-use databend_common_meta_app::principal::CopyOptions;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
-use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
@@ -105,40 +99,10 @@ impl CopyIntoTableStmt {
             CopyIntoTableOption::OnError(v) => self.on_error = v,
         }
     }
-
-    pub fn apply_to_copy_option(
-        &self,
-        copy_options: &mut CopyOptions,
-    ) -> databend_common_exception::Result<()> {
-        copy_options.on_error =
-            OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
-
-        if self.size_limit != 0 {
-            copy_options.size_limit = self.size_limit;
-        }
-
-        copy_options.split_size = self.split_size;
-        copy_options.purge = self.purge;
-        copy_options.disable_variant_check = self.disable_variant_check;
-        copy_options.return_failed_only = self.return_failed_only;
-
-        if self.max_files != 0 {
-            copy_options.max_files = self.max_files;
-        }
-
-        if !(copy_options.purge && self.force) && copy_options.max_files > COPY_MAX_FILES_PER_COMMIT
-        {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "max_files {} is too large, max_files should be less than {COPY_MAX_FILES_PER_COMMIT}",
-                copy_options.max_files
-            )));
-        }
-        Ok(())
-    }
 }
 
 impl Display for CopyIntoTableStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(cte) = &self.with {
             write!(f, "WITH {} ", cte)?;
         }
@@ -209,7 +173,7 @@ pub struct CopyIntoLocationStmt {
 }
 
 impl Display for CopyIntoLocationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(cte) = &self.with {
             write!(f, "WITH {} ", cte)?;
         }
@@ -251,7 +215,7 @@ pub enum CopyIntoTableSource {
 }
 
 impl Display for CopyIntoTableSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoTableSource::Location(location) => write!(f, "{location}"),
             CopyIntoTableSource::Query(query) => {
@@ -269,7 +233,7 @@ pub enum CopyIntoLocationSource {
 }
 
 impl Display for CopyIntoLocationSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoLocationSource::Query(query) => {
                 write!(f, "({query})")
@@ -339,13 +303,24 @@ impl Connection {
 }
 
 impl Display for Connection {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if !self.conns.is_empty() {
             write!(f, " CONNECTION = ( ")?;
             write_comma_separated_string_map(f, &self.conns)?;
             write!(f, " )")?;
         }
         Ok(())
+    }
+}
+
+/// Mask a string by "******", but keep `unmask_len` of suffix.
+fn mask_string(s: &str, unmask_len: usize) -> String {
+    if s.len() <= unmask_len {
+        s.to_string()
+    } else {
+        let mut ret = "******".to_string();
+        ret.push_str(&s[(s.len() - unmask_len)..]);
+        ret
     }
 }
 
@@ -435,16 +410,19 @@ impl UriLocation {
             connection: Connection::new(conns),
         })
     }
+
+    pub fn mask(&self) -> Self {
+        Self {
+            connection: self.connection.mask(),
+            ..self.clone()
+        }
+    }
 }
 
 impl Display for UriLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
-        if f.alternate() {
-            write!(f, "{}", self.connection.mask())?;
-        } else {
-            write!(f, "{}", self.connection)?;
-        }
+        write!(f, "{}", self.connection)?;
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
@@ -469,7 +447,7 @@ pub enum FileLocation {
 }
 
 impl Display for FileLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FileLocation::Uri(loc) => {
                 write!(f, "{}", loc)
@@ -513,19 +491,10 @@ impl FileFormatOptions {
     pub fn is_empty(&self) -> bool {
         self.options.is_empty()
     }
-
-    pub fn to_meta_ast(&self) -> FileFormatOptionsAst {
-        let options = self
-            .options
-            .iter()
-            .map(|(k, v)| (k.clone(), v.to_meta_value()))
-            .collect();
-        FileFormatOptionsAst { options }
-    }
 }
 
 impl Display for FileFormatOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write_comma_separated_map(f, &self.options)
     }
 }
@@ -552,7 +521,7 @@ impl FileFormatValue {
 }
 
 impl Display for FileFormatValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FileFormatValue::Keyword(v) => write!(f, "{v}"),
             FileFormatValue::Bool(v) => write!(f, "{v}"),

@@ -37,7 +37,7 @@ pub enum DataVersion {
 }
 
 impl fmt::Debug for DataVersion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::V0 => write!(
                 f,
@@ -53,7 +53,7 @@ impl fmt::Debug for DataVersion {
 }
 
 impl fmt::Display for DataVersion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::V0 => write!(f, "V0"),
             Self::V001 => write!(f, "V001"),

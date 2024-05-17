@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-
 use crate::principal::UserIdentity;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -24,7 +22,7 @@ pub enum PrincipalIdentity {
 
 impl PrincipalIdentity {
     pub fn user(name: String, host: String) -> Self {
-        PrincipalIdentity::User(UserIdentity::new(&name, &host))
+        PrincipalIdentity::User(UserIdentity::new(name, host))
     }
 
     pub fn role(name: String) -> Self {
@@ -32,11 +30,15 @@ impl PrincipalIdentity {
     }
 }
 
-impl fmt::Display for PrincipalIdentity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        match self {
-            PrincipalIdentity::User(u) => write!(f, " USER {u}"),
-            PrincipalIdentity::Role(r) => write!(f, " ROLE '{r}'"),
+impl From<databend_common_ast::ast::PrincipalIdentity> for PrincipalIdentity {
+    fn from(p: databend_common_ast::ast::PrincipalIdentity) -> Self {
+        match p {
+            databend_common_ast::ast::PrincipalIdentity::User(user) => {
+                PrincipalIdentity::User(user.into())
+            }
+            databend_common_ast::ast::PrincipalIdentity::Role(name) => {
+                PrincipalIdentity::Role(name)
+            }
         }
     }
 }

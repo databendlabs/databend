@@ -48,7 +48,6 @@ pub struct ResponseData {
 }
 
 pub struct PageManager {
-    query_id: String,
     max_rows_per_page: usize,
     total_rows: usize,
     total_pages: usize,
@@ -62,13 +61,11 @@ pub struct PageManager {
 
 impl PageManager {
     pub fn new(
-        query_id: String,
         max_rows_per_page: usize,
         block_receiver: SizedChannelReceiver<DataBlock>,
         format_settings: Arc<RwLock<Option<FormatSettings>>>,
     ) -> PageManager {
         PageManager {
-            query_id,
             total_rows: 0,
             last_page: None,
             total_pages: 0,
@@ -173,19 +170,15 @@ impl PageManager {
                     let d = *t - now;
                     match tokio::time::timeout(d, self.block_receiver.recv()).await {
                         Ok(Some(block)) => {
-                            debug!(
-                                "http query {}: got new block with {} rows",
-                                &self.query_id,
-                                block.num_rows()
-                            );
+                            debug!("http query got new block with {} rows", block.num_rows());
                             self.append_block(&mut res, block, remain)?;
                         }
                         Ok(None) => {
-                            info!("{}: http query reach end of blocks", &self.query_id);
+                            info!("http query reach end of blocks");
                             break;
                         }
                         Err(_) => {
-                            debug!("{}: http query long pulling timeout", &self.query_id);
+                            debug!("http query long pulling timeout");
                             break;
                         }
                     }

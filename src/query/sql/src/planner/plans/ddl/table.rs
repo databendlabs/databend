@@ -28,6 +28,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
@@ -55,6 +56,7 @@ pub struct CreateTablePlan {
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
+    pub inverted_indexes: Option<BTreeMap<String, TableIndex>>,
 }
 
 impl CreateTablePlan {
@@ -178,7 +180,7 @@ impl crate::plans::VacuumTemporaryFilesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![DataField::new(
             "Files",
-            DataType::String,
+            DataType::Number(NumberDataType::UInt64),
         )]))
     }
 }

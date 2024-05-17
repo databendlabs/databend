@@ -341,7 +341,11 @@ macro_rules! impl_interval_year_month {
             ) -> Result<i64, String> {
                 let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
-                check_timestamp(NaiveDateTime::new(new_ts, ts.time()).timestamp_micros())
+                check_timestamp(
+                    NaiveDateTime::new(new_ts, ts.time())
+                        .and_utc()
+                        .timestamp_micros(),
+                )
             }
         }
     };

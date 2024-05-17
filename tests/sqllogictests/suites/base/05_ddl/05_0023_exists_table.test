@@ -7,20 +7,28 @@ CREATE DATABASE db_05_0023_v2
 statement ok
 USE db_05_0023_v2
 
-statement ok
+query I
 EXISTS TABLE t
+----
+0
 
-statement ok
+query I
 EXISTS TABLE db_05_0023_v2.t
+----
+0
 
 statement ok
 CREATE TABLE t(c1 int) ENGINE = Fuse
 
-statement ok
+query I
 EXISTS TABLE t
+----
+1
 
-statement ok
+query I
 EXISTS TABLE db_05_0023_v2.t
+----
+1
 
 statement ok
 DROP TABLE t ALL
@@ -28,9 +36,10 @@ DROP TABLE t ALL
 statement ok
 EXISTS TABLE db_05_0023_v2.t
 
-statement ok
+query I
 EXISTS TABLE t
+----
+0
 
 statement ok
 DROP database db_05_0023_v2
-

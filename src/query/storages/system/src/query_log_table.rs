@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::NaiveDateTime;
+use chrono::DateTime;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::NumberDataType;
@@ -60,25 +60,28 @@ impl LogType {
 }
 
 impl std::fmt::Debug for LogType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.as_string())
     }
 }
 
 fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    let t = NaiveDateTime::from_timestamp_opt(i64::from(*dt) * 24 * 3600, 0).unwrap();
+    let t = DateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0)
+        .unwrap()
+        .naive_utc();
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
 fn datetime_str<S>(dt: &i64, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    let t = NaiveDateTime::from_timestamp_opt(
+    let t = DateTime::from_timestamp(
         dt / 1_000_000,
         TryFrom::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
         // u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
     )
-    .unwrap();
+    .unwrap()
+    .naive_utc();
     s.serialize_str(t.format("%Y-%m-%d %H:%M:%S%.6f").to_string().as_str())
 }
 
@@ -104,6 +107,8 @@ pub struct QueryLogElement {
     pub query_id: String,
     pub query_kind: String,
     pub query_text: String,
+    pub query_hash: String,
+    pub query_parameterized_hash: String,
 
     #[serde(serialize_with = "date_str")]
     pub event_date: i32,
@@ -193,6 +198,8 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("query_id", TableDataType::String),
             TableField::new("query_kind", TableDataType::String),
             TableField::new("query_text", TableDataType::String),
+            TableField::new("query_hash", TableDataType::String),
+            TableField::new("query_parameterized_hash", TableDataType::String),
             TableField::new("event_date", TableDataType::Date),
             TableField::new("event_time", TableDataType::Timestamp),
             TableField::new("query_start_time", TableDataType::Timestamp),
@@ -364,6 +371,14 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.query_text.clone()).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.query_hash.clone()).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.query_parameterized_hash.clone()).as_ref());
         columns
             .next()
             .unwrap()

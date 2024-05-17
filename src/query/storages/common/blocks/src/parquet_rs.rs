@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::converts::arrow::table_schema_to_arrow_schema_ignore_inside_nullable;
+use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -46,9 +46,7 @@ pub fn blocks_to_parquet(
         .into_iter()
         .map(|block| block.to_record_batch(table_schema))
         .collect::<Result<Vec<_>>>()?;
-    let arrow_schema = Arc::new(table_schema_to_arrow_schema_ignore_inside_nullable(
-        table_schema,
-    ));
+    let arrow_schema = Arc::new(table_schema_to_arrow_schema(table_schema));
     let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema, Some(props))?;
     for batch in batches {
         writer.write(&batch)?;

@@ -43,7 +43,7 @@ struct OptionDisplay<'a, T: Display> {
 }
 
 impl<'a, T: Display> Display for OptionDisplay<'a, T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self.t {
             None => {
                 write!(f, "None")
@@ -53,17 +53,40 @@ impl<'a, T: Display> Display for OptionDisplay<'a, T> {
     }
 }
 
-struct VecDisplay<'a, T: Display> {
+pub struct VecDisplay<'a, T: Display> {
+    at_most: Option<usize>,
     vec: &'a Vec<T>,
 }
 
+impl<'a, T> VecDisplay<'a, T>
+where T: Display
+{
+    pub fn new(vec: &'a Vec<T>) -> Self {
+        VecDisplay { at_most: None, vec }
+    }
+
+    pub fn new_at_most(vec: &'a Vec<T>, at_most: usize) -> Self {
+        VecDisplay {
+            at_most: Some(at_most),
+            vec,
+        }
+    }
+}
+
 impl<'a, T: Display> Display for VecDisplay<'a, T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "[")?;
 
         for (i, t) in self.vec.iter().enumerate() {
             if i > 0 {
                 write!(f, ",")?;
+            }
+
+            if let Some(at_most) = self.at_most {
+                if i >= at_most {
+                    write!(f, "...")?;
+                    break;
+                }
             }
 
             write!(f, "{}", t)?;
@@ -74,23 +97,19 @@ impl<'a, T: Display> Display for VecDisplay<'a, T> {
 }
 
 impl Display for TxnRequest {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "TxnRequest{{ if:{} then:{} else:{} }}",
-            VecDisplay {
-                vec: &self.condition
-            },
-            VecDisplay { vec: &self.if_then },
-            VecDisplay {
-                vec: &self.else_then
-            },
+            VecDisplay::new_at_most(&self.condition, 5),
+            VecDisplay::new_at_most(&self.if_then, 5),
+            VecDisplay::new_at_most(&self.else_then, 5),
         )
     }
 }
 
 impl Display for TxnCondition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let expect: ConditionResult = FromPrimitive::from_i32(self.expected).unwrap();
 
         write!(f, "{} {} {}", self.key, expect, OptionDisplay {
@@ -100,7 +119,7 @@ impl Display for TxnCondition {
 }
 
 impl Display for ConditionResult {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let x = match self {
             ConditionResult::Eq => "==",
             ConditionResult::Gt => ">",
@@ -114,13 +133,13 @@ impl Display for ConditionResult {
 }
 
 impl Display for TxnOp {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", OptionDisplay { t: &self.request })
     }
 }
 
 impl Display for txn_op::Request {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Request::Get(r) => {
                 write!(f, "Get({})", r)
@@ -139,13 +158,13 @@ impl Display for txn_op::Request {
 }
 
 impl Display for TxnGetRequest {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Get key={}", self.key)
     }
 }
 
 impl Display for TxnPutRequest {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Put key={}", self.key)?;
         if let Some(expire_at) = self.expire_at {
             let t = SystemTime::UNIX_EPOCH + Duration::from_millis(expire_at);
@@ -159,19 +178,19 @@ impl Display for TxnPutRequest {
 }
 
 impl Display for TxnDeleteRequest {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Delete key={}", self.key)
     }
 }
 
 impl Display for TxnDeleteByPrefixRequest {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "TxnDeleteByPrefixRequest prefix={}", self.prefix)
     }
 }
 
 impl Display for Target {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Target::Value(_) => {
                 write!(f, "value(...)",)
@@ -184,27 +203,25 @@ impl Display for Target {
 }
 
 impl Display for TxnReply {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "TxnReply{{ success: {}, responses: {}, error: {}}}",
             self.success,
-            VecDisplay {
-                vec: &self.responses
-            },
+            VecDisplay::new_at_most(&self.responses, 5),
             self.error
         )
     }
 }
 
 impl Display for TxnOpResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "TxnOpResponse: {}", OptionDisplay { t: &self.response })
     }
 }
 
 impl Display for Response {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Response::Get(r) => {
                 write!(f, "Get: {}", r)
@@ -223,7 +240,7 @@ impl Display for Response {
 }
 
 impl Display for TxnGetResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "Get-resp: key={}, prev_seq={:?}",
@@ -233,7 +250,7 @@ impl Display for TxnGetResponse {
     }
 }
 impl Display for TxnPutResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "Put-resp: key={}, prev_seq={:?}",
@@ -243,7 +260,7 @@ impl Display for TxnPutResponse {
     }
 }
 impl Display for TxnDeleteResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "Delete-resp: success: {}, key={}, prev_seq={:?}",
@@ -255,11 +272,37 @@ impl Display for TxnDeleteResponse {
 }
 
 impl Display for TxnDeleteByPrefixResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "TxnDeleteByPrefixResponse prefix={},count={}",
             self.prefix, self.count
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_vec_display() {
+        assert_eq!(
+            format!("{}", super::VecDisplay::new(&vec![1, 2, 3])),
+            "[1,2,3]"
+        );
+
+        assert_eq!(
+            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3], 3)),
+            "[1,2,3]"
+        );
+
+        assert_eq!(
+            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3, 4], 3)),
+            "[1,2,3,...]"
+        );
+
+        assert_eq!(
+            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3, 4], 0)),
+            "[...]"
+        );
     }
 }

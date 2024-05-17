@@ -73,7 +73,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -86,6 +85,7 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -95,6 +95,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use dyn_clone::DynClone;
 
 use crate::database::Database;
@@ -195,11 +196,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
-    // Get the table meta by meta id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
-
-    // Get the table name by meta id.
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String>;
+    /// Get the table meta by table id.
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>>;
 
     // List the tables name by meta ids.
     async fn mget_table_names_by_ids(
@@ -286,7 +284,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply>;
 
-    async fn update_multi_table_meta(&self, _req: UpdateMultiTableMetaReq) -> Result<()> {
+    async fn update_multi_table_meta(
+        &self,
+        _req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
         Err(ErrorCode::Unimplemented(
             "'update_multi_table_meta' not implemented",
         ))

@@ -16,10 +16,8 @@ ignored = ["geos"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-io = { path = "../../common/io" }
-databend-common-meta-app = { path = "../../meta/app" }
 
 # Crates.io dependencies
 derive-visitor = { workspace = true }
@@ -44,8 +42,7 @@ unindent = "0.2.3"
 url = "2.3.1"
 
 [dev-dependencies]
-criterion = "0.4"
-databend-common-base = { path = "../../common/base" }
+criterion = { workspace = true }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"
 regex = { workspace = true }

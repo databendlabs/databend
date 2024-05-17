@@ -14,7 +14,6 @@
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use poem::async_trait;
 use poem::Endpoint;
 use poem::IntoResponse;
 use poem::Middleware;
@@ -36,7 +35,6 @@ impl<E: Endpoint> Middleware<E> for SharingAuth {
 
 pub struct SharingAuthImpl<E>(E);
 
-#[async_trait]
 impl<E: Endpoint> Endpoint for SharingAuthImpl<E> {
     type Output = Response;
 

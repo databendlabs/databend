@@ -173,6 +173,7 @@ message ClusterStatus {
   repeated string voters = 15;
   repeated string non_voters = 16;
   uint64 last_seq = 17;
+  uint64 key_num = 18;
 }
 
 message ClientInfo {
@@ -198,7 +199,7 @@ message SnapshotChunkRequest {
 
   // json serialized meta data, including vote and snapshot_meta.
   // ```text
-  // { vote: Vote, meta: SnapshotMeta }
+  // (Vote, SnapshotMeta)
   // ```
   string rpc_meta = 10;
 
@@ -209,6 +210,25 @@ message SnapshotChunkV1 {
   uint64 offset = 10;
   bool done = 11;
   bytes data = 12;
+}
+
+// The item of snapshot chunk stream.
+//
+// The first item contains `rpc_meta`,
+// including the application defined format of this snapshot data,
+// the leader vote and snapshot-meta.
+//
+// Since the second item, the `rpc_meta` should be empty and will be ignored by the receiving end.
+message SnapshotChunkRequestV2 {
+
+  // json serialized meta data, including vote and snapshot_meta.
+  // ```text
+  // (SnapshotFormat, Vote, SnapshotMeta)
+  // ```
+  optional string rpc_meta = 10;
+
+  // Snapshot data chunk
+  bytes chunk = 20;
 }
 
 service RaftService {
@@ -225,6 +245,7 @@ service RaftService {
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshot(RaftRequest) returns (RaftReply);
   rpc InstallSnapshotV1(SnapshotChunkRequest) returns (RaftReply);
+  rpc InstallSnapshotV2(stream SnapshotChunkRequestV2) returns (RaftReply);
   rpc Vote(RaftRequest) returns (RaftReply);
 }
 

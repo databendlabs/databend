@@ -1439,10 +1439,43 @@ EvalScalar
 
 
 statement ok
+drop table if exists t3;
+
+statement ok
+CREATE TABLE t3(a int, b map(string, string) null);
+
+statement ok
+INSERT INTO t3 VALUES (1, {'k1':'a', 'k2':'b'}), (2, null), (3, {'k3':'z'});
+
+statement ok
+INSERT INTO t3 VALUES (4, {'k1':'a', 'k2':'m'}), (5, null), (6, {'k3':'z'});
+
+query I
+EXPLAIN SELECT * FROM t3 WHERE b['k2'] = 'm';
+----
+Filter
+├── output columns: [t3.a (#0), t3.b (#1)]
+├── filters: [is_true(get(t3.b (#1), 'k2') = 'm')]
+├── estimated rows: 1.20
+└── TableScan
+    ├── table: default.default.t3
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+    ├── push downs: [filters: [is_true(get(t3.b (#1), 'k2') = 'm')], limit: NONE]
+    └── estimated rows: 6.00
+
+statement ok
 drop table t1;
 
 statement ok
 drop table t2;
+
+statement ok
+drop table t3;
 
 statement ok
 CREATE TABLE customers AS SELECT
@@ -1703,16 +1736,17 @@ Filter
 query T
 explain insert into t2 select * from t1;
 ----
-Insert
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1), c (#2)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [], limit: NONE]
-└── estimated rows: 0.00
+InsertPlan (subquery):
+├── table: default.default.t2
+├── inserted columns: [t2.a (#0),t2.b (#1),t2.c (#2)]
+├── overwrite: false
+└── EvalScalar
+    ├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t1.c (#2) AS (#2)]
+    └── Scan
+        ├── table: default.t1
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
 
 
 statement ok
@@ -1811,3 +1845,114 @@ TableScan
 ├── partitions scanned: 152587890626
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 10000000000000000.00
+
+
+
+statement ok
+CREATE OR REPLACE TABLE orders_placed (order_id INT, customer_id INT, order_amount FLOAT, order_date DATE);
+
+query T
+EXPLAIN AST
+INSERT FIRST
+WHEN order_amount > 1000 THEN INTO cat.db1.t1(order_id, update_note) VALUES (order_id, 'PriorityHandling')
+WHEN order_amount > 500 THEN INTO cat2.db2.t2 VALUES (order_id, 'ExpressHandling')
+WHEN order_amount > 100 THEN
+   INTO cat3.db3.t3 VALUES (order_id, 'StandardHandling')
+   INTO cat3.db3.t4 VALUES (order_id, 'StandardHandling')
+ELSE INTO processing_updates VALUES (order_id, 'ReviewNeeded')
+SELECT order_id, order_amount FROM orders_placed;
+----
+INSERT FIRST (children 5)
+├── WHEN (children 2)
+│   ├── Function > (children 2)
+│   │   ├── ColumnIdentifier order_amount
+│   │   └── Literal UInt64(1000)
+│   └── INTO (children 2)
+│       ├── TableIdentifier cat.db1.t1
+│       └── Columns (children 2)
+│           ├── Identifier order_id
+│           └── Identifier update_note
+├── WHEN (children 2)
+│   ├── Function > (children 2)
+│   │   ├── ColumnIdentifier order_amount
+│   │   └── Literal UInt64(500)
+│   └── INTO (children 1)
+│       └── TableIdentifier cat2.db2.t2
+├── WHEN (children 3)
+│   ├── Function > (children 2)
+│   │   ├── ColumnIdentifier order_amount
+│   │   └── Literal UInt64(100)
+│   ├── INTO (children 1)
+│   │   └── TableIdentifier cat3.db3.t3
+│   └── INTO (children 1)
+│       └── TableIdentifier cat3.db3.t4
+├── ELSE (children 1)
+│   └── INTO (children 1)
+│       └── TableIdentifier processing_updates
+└── Query (children 1)
+    └── QueryBody (children 1)
+        └── SelectQuery (children 2)
+            ├── SelectList (children 2)
+            │   ├── Target (children 1)
+            │   │   └── ColumnIdentifier order_id
+            │   └── Target (children 1)
+            │       └── ColumnIdentifier order_amount
+            └── TableList (children 1)
+                └── TableIdentifier orders_placed
+
+query T
+EXPLAIN ast
+INSERT ALL
+   INTO cat.db1.t1 VALUES (order_id, 'PriorityHandling')
+   INTO cat3.db3.t3 VALUES (order_id, 'StandardHandling')
+   INTO cat3.db3.t4 VALUES (order_id, 'StandardHandling')
+SELECT order_id, order_amount FROM orders_placed;
+----
+INSERT ALL (children 2)
+├── INTO (children 3)
+│   ├── INTO (children 1)
+│   │   └── TableIdentifier cat.db1.t1
+│   ├── INTO (children 1)
+│   │   └── TableIdentifier cat3.db3.t3
+│   └── INTO (children 1)
+│       └── TableIdentifier cat3.db3.t4
+└── Query (children 1)
+    └── QueryBody (children 1)
+        └── SelectQuery (children 2)
+            ├── SelectList (children 2)
+            │   ├── Target (children 1)
+            │   │   └── ColumnIdentifier order_id
+            │   └── Target (children 1)
+            │       └── ColumnIdentifier order_amount
+            └── TableList (children 1)
+                └── TableIdentifier orders_placed
+
+query T
+EXPLAIN ast
+INSERT OVERWRITE ALL
+   INTO cat.db1.t1 VALUES (order_id, 'PriorityHandling')
+   INTO cat3.db3.t3 VALUES (order_id, 'StandardHandling')
+   INTO cat3.db3.t4 VALUES (order_id, 'StandardHandling')
+SELECT order_id, order_amount FROM orders_placed;
+----
+INSERT OVERWRITE ALL (children 2)
+├── INTO (children 3)
+│   ├── INTO (children 1)
+│   │   └── TableIdentifier cat.db1.t1
+│   ├── INTO (children 1)
+│   │   └── TableIdentifier cat3.db3.t3
+│   └── INTO (children 1)
+│       └── TableIdentifier cat3.db3.t4
+└── Query (children 1)
+    └── QueryBody (children 1)
+        └── SelectQuery (children 2)
+            ├── SelectList (children 2)
+            │   ├── Target (children 1)
+            │   │   └── ColumnIdentifier order_id
+            │   └── Target (children 1)
+            │       └── ColumnIdentifier order_amount
+            └── TableList (children 1)
+                └── TableIdentifier orders_placed
+
+statement ok
+drop table  orders_placed

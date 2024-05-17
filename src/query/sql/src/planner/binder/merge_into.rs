@@ -71,7 +71,7 @@ pub enum MergeIntoType {
 // for now we think right source table is small table in default.
 // 1. insert only:
 //      right anti join
-// 2. (macthed and unmatched)
+// 2. (matched and unmatched)
 //      right outer
 // 3. matched only:
 //      inner join
@@ -193,6 +193,7 @@ impl Binder {
             table: table_ident.clone(),
             alias: target_alias.clone(),
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         };
@@ -225,11 +226,6 @@ impl Binder {
                 Arc::new(cte_s_expr.clone()),
                 Arc::new(source_expr),
             );
-        }
-        if !self.check_sexpr_top(&source_expr)? {
-            return Err(ErrorCode::SemanticError(
-                "replace source can't contain udf functions".to_string(),
-            ));
         }
 
         // add all left source columns for read
@@ -325,20 +321,18 @@ impl Binder {
             true,
         )?;
 
-        target_expr = SExpr::add_internal_column_index(
-            &target_expr,
-            table_index,
-            column_binding.index,
-            &None,
-        );
+        let row_id_index = column_binding.index;
+
+        target_expr =
+            SExpr::add_internal_column_index(&target_expr, table_index, row_id_index, &None);
 
         self.metadata
             .write()
-            .set_table_row_id_index(table_index, column_binding.index);
+            .set_table_row_id_index(table_index, row_id_index);
 
         // add row_id_idx
         if merge_type != MergeIntoType::InsertOnly {
-            columns_set.insert(column_binding.index);
+            columns_set.insert(row_id_index);
         }
 
         // add join, we use _row_id to check_duplicate join row.
@@ -366,13 +360,28 @@ impl Binder {
             columns_set = columns_set.union(&join_column_set).cloned().collect();
         }
 
+        // If the table alias is not None, after the binding phase, the bound columns will have
+        // a database of 'None' and the table named as the alias.
+        // Thus, we adjust them accordingly.
+        let target_name = if let Some(target_identify) = target_alias {
+            normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
+                .name
+                .clone()
+        } else {
+            table_name.clone()
+        };
+
         let has_update = self.has_update(&matched_clauses);
         let update_row_version = if table.change_tracking_enabled() && has_update {
             Some(Self::update_row_version(
                 table.schema_with_stream(),
                 &bind_ctx.columns,
-                Some(&database_name),
-                Some(&table_name),
+                if target_alias.is_none() {
+                    Some(&database_name)
+                } else {
+                    None
+                },
+                Some(&target_name),
             )?)
         } else {
             None
@@ -400,14 +409,6 @@ impl Binder {
                 field_index_map.insert(idx, used_idx.to_string());
             }
         }
-
-        let target_name = if let Some(target_identify) = target_alias {
-            normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
-                .name
-                .clone()
-        } else {
-            table_name.clone()
-        };
 
         // bind matched clause columns and add update fields and exprs
         for clause in &matched_clauses {
@@ -440,11 +441,13 @@ impl Binder {
         }
         let mut split_idx = DUMMY_COLUMN_INDEX;
         // find any target table column index for merge_into_split
-        for column in self.metadata.read().columns() {
-            if column.table_index().is_some()
-                && *column.table_index().as_ref().unwrap() == table_index
-                && column.index() != column_binding.index
-            {
+        for column in self
+            .metadata
+            .read()
+            .columns_by_table_index(table_index)
+            .iter()
+        {
+            if column.index() != row_id_index {
                 split_idx = column.index();
                 break;
             }
@@ -468,7 +471,7 @@ impl Binder {
             merge_type,
             distributed: false,
             change_join_order: false,
-            row_id_index: column_binding.index,
+            row_id_index,
             split_idx,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
         })
@@ -492,7 +495,7 @@ impl Binder {
 
             if !self.check_allowed_scalar_expr(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "matched clause's condition can't contain subquery|window|aggregate|udf functions"
+                    "matched clause's condition can't contain subquery|window|aggregate|udf functions|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -722,7 +725,7 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
         Ok(MergeIntoType::FullOperation)
     } else {
         Err(ErrorCode::SemanticError(
-            "we must have macthed or unmatched clause at least one",
+            "we must have matched or unmatched clause at least one",
         ))
     }
 }

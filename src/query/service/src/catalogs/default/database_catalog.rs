@@ -80,7 +80,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -93,6 +92,7 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -103,6 +103,7 @@ use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
@@ -125,7 +126,7 @@ pub struct DatabaseCatalog {
 }
 
 impl Debug for DatabaseCatalog {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("DefaultCatalog").finish_non_exhaustive()
     }
 }
@@ -261,24 +262,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         let res = self.immutable_catalog.get_table_meta_by_id(table_id).await;
 
         if let Ok(x) = res {
             Ok(x)
         } else {
             self.mutable_catalog.get_table_meta_by_id(table_id).await
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        let res = self.immutable_catalog.get_table_name_by_id(table_id).await;
-
-        if let Ok(x) = res {
-            Ok(x)
-        } else {
-            self.mutable_catalog.get_table_name_by_id(table_id).await
         }
     }
 
@@ -576,7 +566,10 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_multi_table_meta(&self, reqs: UpdateMultiTableMetaReq) -> Result<()> {
+    async fn update_multi_table_meta(
+        &self,
+        reqs: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
         self.mutable_catalog.update_multi_table_meta(reqs).await
     }
 

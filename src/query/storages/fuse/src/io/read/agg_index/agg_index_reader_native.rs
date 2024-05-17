@@ -28,8 +28,15 @@ use crate::FuseBlockPartInfo;
 
 impl AggIndexReader {
     pub fn sync_read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
-        match self.reader.operator.blocking().reader(loc) {
-            Ok(mut reader) => {
+        match self.reader.operator.blocking().stat(loc) {
+            Ok(meta) => {
+                let mut reader = self
+                    .reader
+                    .operator
+                    .blocking()
+                    .reader(loc)
+                    .ok()?
+                    .into_std_read(0..meta.content_length());
                 let metadata = nread::reader::read_meta(&mut reader)
                     .inspect_err(|e| {
                         debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
@@ -75,14 +82,16 @@ impl AggIndexReader {
     }
 
     pub async fn read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
-        match self.reader.operator.reader(loc).await {
-            Ok(mut reader) => {
-                let metadata = nread::reader::read_meta_async(&mut reader, None)
-                    .await
-                    .inspect_err(|e| {
-                        debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
-                    })
-                    .ok()?;
+        match self.reader.operator.stat(loc).await {
+            Ok(meta) => {
+                let reader = self.reader.operator.reader(loc).await.ok()?;
+                let metadata =
+                    nread::reader::read_meta_async(reader, meta.content_length() as usize)
+                        .await
+                        .inspect_err(|e| {
+                            debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
+                        })
+                        .ok()?;
                 if metadata.is_empty() {
                     debug!("Aggregating index `{loc}` is empty");
                     return None;

@@ -126,6 +126,7 @@ use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::RevokeShareObjectPlan;
 use crate::plans::SetOptionsPlan;
+use crate::plans::SetPriorityPlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SetSecondaryRolesPlan;
 use crate::plans::SettingPlan;
@@ -303,6 +304,7 @@ pub enum Plan {
     SetVariable(Box<SettingPlan>),
     UnSetVariable(Box<UnSettingPlan>),
     Kill(Box<KillPlan>),
+    SetPriority(Box<SetPriorityPlan>),
 
     // Share
     CreateShareEndpoint(Box<CreateShareEndpointPlan>),
@@ -422,7 +424,7 @@ impl Plan {
 }
 
 impl Display for Plan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.kind())
     }
 }
@@ -479,49 +481,11 @@ impl Plan {
             Plan::ExecuteImmediate(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
 
-            other => {
-                debug_assert!(!other.has_result_set());
-                Arc::new(DataSchema::empty())
-            }
+            _ => Arc::new(DataSchema::empty()),
         }
     }
 
     pub fn has_result_set(&self) -> bool {
-        matches!(
-            self,
-            Plan::Query { .. }
-                | Plan::Explain { .. }
-                | Plan::ExplainAst { .. }
-                | Plan::ExplainSyntax { .. }
-                | Plan::ExplainAnalyze { .. }
-                | Plan::ShowCreateDatabase(_)
-                | Plan::ShowCreateTable(_)
-                | Plan::ShowCreateCatalog(_)
-                | Plan::ShowFileFormats(_)
-                | Plan::ShowRoles(_)
-                | Plan::DescShare(_)
-                | Plan::ShowShares(_)
-                | Plan::ShowShareEndpoint(_)
-                | Plan::ShowObjectGrantPrivileges(_)
-                | Plan::ShowGrantTenantsOfShare(_)
-                | Plan::DescribeTable(_)
-                | Plan::ShowGrants(_)
-                | Plan::Presign(_)
-                | Plan::VacuumTable(_)
-                | Plan::VacuumDropTable(_)
-                | Plan::DescDatamaskPolicy(_)
-                | Plan::DescNetworkPolicy(_)
-                | Plan::ShowNetworkPolicies(_)
-                | Plan::DescPasswordPolicy(_)
-                | Plan::CopyIntoTable(_)
-                | Plan::CopyIntoLocation(_)
-                | Plan::ShowTasks(_)
-                | Plan::DescribeTask(_)
-                | Plan::DescConnection(_)
-                | Plan::ShowConnections(_)
-                | Plan::MergeInto(_)
-                | Plan::ExecuteImmediate(_)
-                | Plan::InsertMultiTable(_)
-        )
+        !self.schema().fields().is_empty()
     }
 }

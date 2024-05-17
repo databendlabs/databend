@@ -54,7 +54,6 @@ select number, gcd(number * 3, number * 6) from numbers(5) where number > 0 orde
 statement ok
 DROP FUNCTION gcd
 
-
 statement ok
 CREATE OR REPLACE FUNCTION check_idcard (String) RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'validateIdCard' AS $$
         export function validateIdCard(idCard) {
@@ -107,3 +106,84 @@ select check_idcard('360781199308240205'), check_idcard('310110198812071013');
 
 statement ok
 DROP FUNCTION check_idcard
+
+## test js udf with variant
+statement ok
+CREATE FUNCTION variant_udf_test (VARIANT) RETURNS VARIANT LANGUAGE javascript HANDLER = 'transform_variant' AS $$
+	export function transform_variant(v) {
+		v["added_key"] = "yes";
+		return v;
+	}
+$$;
+
+query BC
+select variant_udf_test(json_object('some_key', [1, 2]));
+----
+{"added_key":"yes","some_key":[1,2]}
+
+statement ok
+DROP FUNCTION variant_udf_test
+
+statement ok
+CREATE OR REPLACE FUNCTION decimal128_add (Decimal(19, 5), Decimal(19, 5)) RETURNS Decimal(19, 5) language javascript HANDLER = 'decimal128_add' AS $$
+	export function decimal128_add(a, b) {
+		return a + b + BigDecimal('0.001');
+	}
+$$;
+
+query BD
+select decimal128_add(10.1, 10.000000000485);
+----
+20.10100
+
+statement ok
+DROP FUNCTION decimal128_add
+
+statement ok
+CREATE OR REPLACE FUNCTION decimal256_add (Decimal(42, 5), Decimal(42, 5)) RETURNS Decimal(42, 5) language javascript HANDLER = 'decimal256_add' AS $$
+	export function decimal256_add(a, b) {
+		return a + b + BigDecimal('0.001');
+	}
+$$;
+
+query BE
+select decimal256_add('1000000000000000000000000000000000000.1', '10.0000000004');
+----
+1000000000000000000000000000000000010.10100
+
+statement ok
+DROP FUNCTION decimal256_add
+
+statement ok
+CREATE OR REPLACE FUNCTION timestamp_add_days (Timestamp, int16) RETURNS Timestamp language javascript HANDLER = 'timestamp_add_days' AS $$
+	export function timestamp_add_days(date, days) {
+		date.setDate(date.getDate() + days);
+		return date;
+	}
+$$;
+
+query BF
+select timestamp_add_days(to_timestamp('2022-01-02T01:12:00'), 12);
+----
+2022-01-14 01:12:00.000000
+
+
+statement ok
+DROP FUNCTION timestamp_add_days
+
+statement ok
+CREATE OR REPLACE FUNCTION date_add_days (Date, int16) RETURNS Date language javascript HANDLER = 'date_add_days' AS $$
+	export function date_add_days(date, days) {
+		date.setDate(date.getDate() + days);
+		return date;
+	}
+$$;
+
+query BG
+select date_add_days(to_date('2022-01-02T01:12:00'), 12);
+----
+2022-01-14
+
+
+statement ok
+DROP FUNCTION date_add_days;

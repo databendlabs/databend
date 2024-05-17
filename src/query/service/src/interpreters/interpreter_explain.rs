@@ -32,12 +32,12 @@ use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
-use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
 
+use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use super::UpdateInterpreter;
 use crate::interpreters::Interpreter;
@@ -97,25 +97,7 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_query(s_expr, metadata, bind_context, formatted_ast)
                         .await?
                 }
-                Plan::Insert(insert_plan) => {
-                    let mut res = self.explain_plan(&self.plan)?;
-                    if let InsertInputSource::SelectPlan(plan) = &insert_plan.source {
-                        if let Plan::Query {
-                            s_expr,
-                            metadata,
-                            bind_context,
-                            formatted_ast,
-                            ..
-                        } = &**plan
-                        {
-                            let query = self
-                                .explain_query(s_expr, metadata, bind_context, formatted_ast)
-                                .await?;
-                            res.extend(query);
-                        }
-                    }
-                    vec![DataBlock::concat(&res)?]
-                }
+                Plan::Insert(insert_plan) => insert_plan.explain(self.config.verbose).await?,
                 Plan::CreateTable(plan) => match &plan.as_select {
                     Some(box Plan::Query {
                         s_expr,
@@ -136,6 +118,16 @@ impl Interpreter for ExplainInterpreter {
                     }
                     _ => self.explain_plan(&self.plan)?,
                 },
+                Plan::InsertMultiTable(plan) => {
+                    let physical_plan = InsertMultiTableInterpreter::try_create_static(
+                        self.ctx.clone(),
+                        *plan.clone(),
+                    )?
+                    .build_physical_plan()
+                    .await?;
+                    self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
+                        .await?
+                }
                 Plan::MergeInto(plan) => {
                     let mut res = self.explain_plan(&self.plan)?;
                     let input = self
@@ -557,6 +549,18 @@ impl ExplainInterpreter {
             result.extend(input);
         }
 
+        if result.is_empty() {
+            let table_name = format!(
+                "{}.{}.{}",
+                delete.catalog_name, delete.database_name, delete.table_name
+            );
+            let children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+            let formatted_plan = FormatTreeNode::with_children("DeletePlan:".to_string(), children)
+                .format_pretty()?;
+            let line_split_result: Vec<&str> = formatted_plan.lines().collect();
+            let formatted_plan = StringType::from_data(line_split_result);
+            result.push(DataBlock::new_from_columns(vec![formatted_plan]));
+        }
         Ok(vec![DataBlock::concat(&result)?])
     }
 }

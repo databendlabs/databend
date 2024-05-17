@@ -72,7 +72,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -85,6 +84,7 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -94,6 +94,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use databend_storages_common_txn::TxnManagerRef;
 use databend_storages_common_txn::TxnState;
 
@@ -225,34 +226,18 @@ impl Catalog for SessionCatalog {
     }
 
     // Get the table meta by meta id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         let state = self.txn_mgr.lock().state();
         match state {
             TxnState::Active => {
                 let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
                 if let Some(t) = mutated_table {
-                    Ok((t.ident, Arc::new(t.meta.clone())))
+                    Ok(Some(SeqV::new(t.ident.seq, t.meta.clone())))
                 } else {
                     self.inner.get_table_meta_by_id(table_id).await
                 }
             }
             _ => self.inner.get_table_meta_by_id(table_id).await,
-        }
-    }
-
-    // Get the table name by meta id.
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::Active => {
-                let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
-                if let Some(t) = mutated_table {
-                    Ok(t.name.clone())
-                } else {
-                    self.inner.get_table_name_by_id(table_id).await
-                }
-            }
-            _ => self.inner.get_table_name_by_id(table_id).await,
         }
     }
 
@@ -379,7 +364,10 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    async fn update_multi_table_meta(&self, req: UpdateMultiTableMetaReq) -> Result<()> {
+    async fn update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
         self.inner.update_multi_table_meta(req).await
     }
 

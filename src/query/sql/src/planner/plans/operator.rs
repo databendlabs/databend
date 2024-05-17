@@ -35,6 +35,7 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::materialized_cte::MaterializedCte;
+use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
@@ -100,6 +101,7 @@ pub enum RelOp {
     CacheScan,
     AddRowNumber,
     Udf,
+    AsyncFunction,
 
     // Pattern
     Pattern,
@@ -127,6 +129,7 @@ pub enum RelOperator {
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
     Udf(Udf),
+    AsyncFunction(AsyncFunction),
 }
 
 impl Operator for RelOperator {
@@ -151,6 +154,7 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.rel_op(),
             RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
+            RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -175,6 +179,7 @@ impl Operator for RelOperator {
             RelOperator::ExpressionScan(rel_op) => rel_op.arity(),
             RelOperator::CacheScan(rel_op) => rel_op.arity(),
             RelOperator::Udf(rel_op) => rel_op.arity(),
+            RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
         }
     }
 
@@ -199,6 +204,7 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -223,6 +229,7 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -247,6 +254,7 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
 
@@ -315,6 +323,9 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
+            RelOperator::AsyncFunction(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
         }
     }
 
@@ -380,6 +391,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::Udf(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::AsyncFunction(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
         }
@@ -686,6 +700,26 @@ impl TryFrom<RelOperator> for Udf {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast RelOperator to Udf"))
+        }
+    }
+}
+
+impl From<AsyncFunction> for RelOperator {
+    fn from(value: AsyncFunction) -> Self {
+        Self::AsyncFunction(value)
+    }
+}
+
+impl TryFrom<RelOperator> for AsyncFunction {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::AsyncFunction(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast RelOperator to AsyncFunction",
+            ))
         }
     }
 }

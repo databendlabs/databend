@@ -32,6 +32,9 @@ use databend_common_io::parse_to_ewkb;
 use databend_common_io::parse_to_subtype;
 use databend_common_io::read_ewkb_srid;
 use databend_common_io::GeometryDataType;
+use geo::dimensions::Dimensions;
+use geo::BoundingRect;
+use geo::HasDimensions;
 use geo::MultiPoint;
 use geo::Point;
 use geo_types::Polygon;
@@ -52,6 +55,7 @@ use geozero::ToWkb;
 use geozero::ToWkt;
 use jsonb::parse_value;
 use jsonb::to_string;
+use num_traits::AsPrimitive;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
@@ -217,6 +221,153 @@ pub fn register(registry: &mut FunctionRegistry) {
             };
             builder.commit_row();
         }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+        "st_endpoint",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                Ok(geo) => geo,
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(geo) {
+                Ok(line_string) => line_string.points().last().unwrap(),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            match geo_types::Geometry::from(point).to_wkb(CoordDimensions::xy()) {
+                Ok(binary) => builder.put_slice(binary.as_slice()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            };
+
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
+        "st_pointn",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, Int32Type, GeometryType>(
+            |geometry, index, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.commit_row();
+                        return;
+                    }
+                };
+
+                let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(geo) {
+                    Ok(line_string) => {
+                        let len = line_string.0.len() as i32;
+                        if index >= -len && index < len && index != 0 {
+                            Point(
+                                line_string.0
+                                    [if index < 0 { len + index } else { index - 1 } as usize],
+                            )
+                        } else {
+                            ctx.set_error(
+                                builder.len(),
+                                ErrorCode::GeometryError(format!(
+                                    "Index { } is out of bounds",
+                                    index
+                                ))
+                                .to_string(),
+                            );
+                            builder.commit_row();
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.commit_row();
+                        return;
+                    }
+                };
+
+                match geo_types::Geometry::from(point).to_wkb(CoordDimensions::xy()) {
+                    Ok(binary) => builder.put_slice(binary.as_slice()),
+                    Err(e) => ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    ),
+                };
+
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
+        "st_dimension",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<Int32Type>>(
+            |ewkb, output, ctx| {
+                let geo: geo_types::Geometry = match Ewkb(ewkb).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        output.push_null();
+                        return;
+                    }
+                };
+
+                let dimension: Option<i32> = match geo.dimensions() {
+                    Dimensions::Empty => None,
+                    Dimensions::ZeroDimensional => Some(0),
+                    Dimensions::OneDimensional => Some(1),
+                    Dimensions::TwoDimensional => Some(2),
+                };
+
+                match dimension {
+                    Some(dimension) => output.push(dimension),
+                    None => output.push_null(),
+                }
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
@@ -712,6 +863,181 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ),
                 }
                 builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+        "st_startpoint",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                Ok(geo) => geo,
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(geo) {
+                Ok(line_string) => line_string.points().next().unwrap(),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
+
+            match geo_types::Geometry::from(point).to_wkb(CoordDimensions::xy()) {
+                Ok(binary) => builder.put_slice(binary.as_slice()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            };
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_x",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.push_null();
+                        return;
+                    }
+                };
+
+                match <geo_types::Geometry as TryInto<Point>>::try_into(geo) {
+                    Ok(point) => builder.push(F64::from(AsPrimitive::<f64>::as_(point.x()))),
+                    Err(e) => ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    ),
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_y",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.push_null();
+                        return;
+                    }
+                };
+
+                match <geo_types::Geometry as TryInto<Point>>::try_into(geo) {
+                    Ok(point) => builder.push(F64::from(AsPrimitive::<f64>::as_(point.y()))),
+                    Err(e) => ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    ),
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
+        "st_srid",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<Int32Type>>(
+            |geometry, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match read_ewkb_srid(&mut io::Cursor::new(&geometry)) {
+                    Ok(srid) => {
+                        output.push(srid.unwrap_or(4326));
+                    }
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        output.push(0);
+                    }
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_xmax",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.push_null();
+                        return;
+                    }
+                };
+
+                match st_xmax(&geo) {
+                    None => builder.push_null(),
+                    Some(x_max) => builder.push(F64::from(AsPrimitive::<f64>::as_(x_max))),
+                };
             },
         ),
     );
@@ -1280,5 +1606,70 @@ fn point_to_geohash(
     match hash {
         Ok(hash) => Ok(hash),
         Err(e) => Err(ErrorCode::GeometryError(e.to_string())),
+    }
+}
+
+fn st_xmax(geometry: &geo_types::Geometry<f64>) -> Option<f64> {
+    match geometry {
+        geo_types::Geometry::Point(point) => Some(point.x()),
+        geo_types::Geometry::MultiPoint(multi_point) => {
+            let mut xmax: Option<f64> = None;
+            for point in multi_point {
+                if let Some(x) = st_xmax(&geo_types::Geometry::Point(*point)) {
+                    if let Some(existing_xmax) = xmax {
+                        xmax = Some(existing_xmax.max(x));
+                    } else {
+                        xmax = Some(x);
+                    }
+                }
+            }
+            xmax
+        }
+        geo_types::Geometry::Line(line) => Some(line.bounding_rect().max().x),
+        geo_types::Geometry::MultiLineString(multi_line) => {
+            let mut xmax: Option<f64> = None;
+            for line in multi_line {
+                if let Some(x) = st_xmax(&geo_types::Geometry::LineString(line.clone())) {
+                    if let Some(existing_xmax) = xmax {
+                        xmax = Some(existing_xmax.max(x));
+                    } else {
+                        xmax = Some(x);
+                    }
+                }
+            }
+            xmax
+        }
+        geo_types::Geometry::Polygon(polygon) => Some(polygon.bounding_rect().unwrap().max().x),
+        geo_types::Geometry::MultiPolygon(multi_polygon) => {
+            let mut xmax: Option<f64> = None;
+            for polygon in multi_polygon {
+                if let Some(x) = st_xmax(&geo_types::Geometry::Polygon(polygon.clone())) {
+                    if let Some(existing_xmax) = xmax {
+                        xmax = Some(existing_xmax.max(x));
+                    } else {
+                        xmax = Some(x);
+                    }
+                }
+            }
+            xmax
+        }
+        geo_types::Geometry::GeometryCollection(geometry_collection) => {
+            let mut xmax: Option<f64> = None;
+            for geometry in geometry_collection {
+                if let Some(x) = st_xmax(geometry) {
+                    if let Some(existing_xmax) = xmax {
+                        xmax = Some(existing_xmax.max(x));
+                    } else {
+                        xmax = Some(x);
+                    }
+                }
+            }
+            xmax
+        }
+        geo_types::Geometry::LineString(line_string) => {
+            line_string.bounding_rect().map(|rect| rect.max().x)
+        }
+        geo_types::Geometry::Rect(rect) => Some(rect.max().x),
+        geo_types::Geometry::Triangle(triangle) => Some(triangle.bounding_rect().max().x),
     }
 }

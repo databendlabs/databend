@@ -98,7 +98,7 @@ impl MemStat {
         let mut used = self.used.fetch_add(batch_memory_used, Ordering::Relaxed);
 
         used += batch_memory_used;
-        self.peak_used.fetch_max(used, Ordering::Relaxed);
+        let old_peak_used = self.peak_used.fetch_max(used, Ordering::Relaxed);
 
         for (idx, parent_memory_stat) in self.parent_memory_stat.iter().enumerate() {
             if let Err(cause) = parent_memory_stat
@@ -107,6 +107,11 @@ impl MemStat {
                 if NEED_ROLLBACK {
                     // We only roll back the memory that alloc failed
                     self.used.fetch_sub(current_memory_alloc, Ordering::Relaxed);
+
+                    if used > old_peak_used {
+                        self.peak_used
+                            .fetch_sub(current_memory_alloc, Ordering::Relaxed);
+                    }
 
                     for index in 0..idx {
                         self.parent_memory_stat[index].rollback(current_memory_alloc);
@@ -119,6 +124,11 @@ impl MemStat {
 
         if let Err(cause) = self.check_limit(used) {
             if NEED_ROLLBACK {
+                if used > old_peak_used {
+                    self.peak_used
+                        .fetch_sub(current_memory_alloc, Ordering::Relaxed);
+                }
+
                 // NOTE: we cannot rollback peak_used of parent mem stat in this case
                 // self.peak_used.store(peak_used, Ordering::Relaxed);
                 self.rollback(current_memory_alloc);
@@ -214,7 +224,7 @@ impl<V> OutOfLimit<V> {
 }
 
 impl Debug for OutOfLimit<i64> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "memory usage {}({}) exceeds limit {}({})",

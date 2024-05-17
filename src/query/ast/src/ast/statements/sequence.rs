@@ -15,15 +15,14 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::CreateOption;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateSequenceStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub sequence: Identifier,
     #[drive(skip)]
@@ -31,7 +30,7 @@ pub struct CreateSequenceStmt {
 }
 
 impl Display for CreateSequenceStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -56,7 +55,7 @@ pub struct DropSequenceStmt {
 }
 
 impl Display for DropSequenceStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP SEQUENCE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;

@@ -194,6 +194,7 @@ impl SubqueryRewriter {
         is_conjunctive_predicate: bool,
     ) -> Result<(ScalarExpr, SExpr)> {
         match scalar {
+            ScalarExpr::AsyncFunctionCall(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::WindowFunction(_) => Ok((scalar.clone(), s_expr.clone())),

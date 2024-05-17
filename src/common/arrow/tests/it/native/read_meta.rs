@@ -16,7 +16,6 @@ use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::datatypes::Schema;
 use databend_common_arrow::arrow::error::Result;
 use databend_common_arrow::native::read::reader::read_meta;
-use databend_common_arrow::native::read::reader::read_meta_async;
 use databend_common_arrow::native::write::NativeWriter;
 use databend_common_arrow::native::write::WriteOptions;
 use databend_common_arrow::native::ColumnMeta;
@@ -64,28 +63,22 @@ fn test_read_meta() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_read_meta_async() -> Result<()> {
-    async_std::task::block_on(test_read_meta_async_impl())
-}
-
-async fn test_read_meta_async_impl() -> Result<()> {
-    let mut buf: Vec<u8> = Vec::new();
-    let expected_meta = write_data(&mut buf);
-    let len = buf.len();
-
-    let mut reader = async_std::io::Cursor::new(buf);
-
-    {
-        // Without `total_len`.
-        let meta = read_meta_async(&mut reader, None).await?;
-        assert_eq!(expected_meta, meta);
-    }
-
-    {
-        // With `total_len`.
-        let meta = read_meta_async(&mut reader, Some(len)).await?;
-        assert_eq!(expected_meta, meta);
-    }
-    Ok(())
-}
+// TODO(xuanwo): bring this test back when we extract trait for ReadAt.
+//
+// #[test]
+// fn test_read_meta_async() -> Result<()> {
+//     async_std::task::block_on(test_read_meta_async_impl())
+// }
+//
+// async fn test_read_meta_async_impl() -> Result<()> {
+//     let mut buf: Vec<u8> = Vec::new();
+//     let expected_meta = write_data(&mut buf);
+//     let len = buf.len();
+//
+//     let mut reader = async_std::io::Cursor::new(buf);
+//
+//     // With `total_len`.
+//     let meta = read_meta_async(&mut reader, len).await?;
+//     assert_eq!(expected_meta, meta);
+//     Ok(())
+// }

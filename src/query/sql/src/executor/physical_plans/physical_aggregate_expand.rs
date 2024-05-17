@@ -52,7 +52,7 @@ impl AggregateExpand {
             // All group by columns will wrap nullable.
             let i = input_schema.index_of(&group_by.to_string())?;
             let f = &mut output_fields[i];
-            debug_assert_eq!(f.data_type(), ty);
+            debug_assert!(f.data_type() == ty || f.data_type().wrap_nullable() == *ty);
             *f = DataField::new(f.name(), f.data_type().wrap_nullable());
             let new_field = DataField::new(&actual.to_string(), ty.clone());
             output_fields.push(new_field);

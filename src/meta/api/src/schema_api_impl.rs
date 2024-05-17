@@ -64,8 +64,8 @@ use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
-use databend_common_meta_app::schema::CatalogId;
-use databend_common_meta_app::schema::CatalogIdToName;
+use databend_common_meta_app::schema::CatalogIdIdent;
+use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -170,6 +170,7 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -226,6 +227,7 @@ use crate::get_share_table_info;
 use crate::get_u64_value;
 use crate::is_db_need_to_be_remove;
 use crate::kv_app_error::KVAppError;
+use crate::kv_pb_api::KVPbApi;
 use crate::list_keys;
 use crate::list_u64_value;
 use crate::remove_db_from_share;
@@ -1555,6 +1557,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 .collect::<Vec<_>>()
         };
 
+        if !req.table_meta.indexes.is_empty() {
+            // check the index column id exists and not be duplicated.
+            let mut index_column_ids = HashSet::new();
+            for (_, index) in req.table_meta.indexes.iter() {
+                for column_id in &index.column_ids {
+                    if req.table_meta.schema.is_column_deleted(*column_id) {
+                        return Err(KVAppError::AppError(AppError::IndexColumnIdNotFound(
+                            IndexColumnIdNotFound::new(*column_id, &index.name),
+                        )));
+                    }
+                    if index_column_ids.contains(column_id) {
+                        return Err(KVAppError::AppError(AppError::DuplicatedIndexColumnId(
+                            DuplicatedIndexColumnId::new(*column_id, &index.name),
+                        )));
+                    }
+                    index_column_ids.insert(column_id);
+                }
+            }
+        }
+
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -2235,46 +2257,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
-    ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError> {
+    ) -> Result<Option<SeqV<TableMeta>>, MetaError> {
         debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
 
-        let tbid = TableId { table_id };
+        let id = TableId { table_id };
 
-        let (tb_meta_seq, table_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-
-        debug!(ident :% =(&tbid); "get_table_by_id");
-
-        if tb_meta_seq == 0 || table_meta.is_none() {
-            return Err(KVAppError::AppError(AppError::UnknownTableId(
-                UnknownTableId::new(table_id, "get_table_by_id"),
-            )));
-        }
-
-        Ok((
-            TableIdent::new(table_id, tb_meta_seq),
-            Arc::new(table_meta.unwrap()),
-        ))
-    }
-
-    #[logcall::logcall("debug")]
-    #[minitrace::trace]
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError> {
-        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
-
-        let table_id_to_name_key = TableIdToName { table_id };
-
-        let (tb_meta_seq, table_name): (_, Option<DBIdTableName>) =
-            get_pb_value(self, &table_id_to_name_key).await?;
-
-        debug!(ident :% =(&table_id_to_name_key); "get_table_name_by_id");
-
-        if tb_meta_seq == 0 || table_name.is_none() {
-            return Err(KVAppError::AppError(AppError::UnknownTableId(
-                UnknownTableId::new(table_id, "get_table_name_by_id"),
-            )));
-        }
-
-        Ok(table_name.unwrap().table_name)
+        let seq_table_meta = self.get_pb(&id).await?;
+        Ok(seq_table_meta)
     }
 
     #[logcall::logcall("debug")]
@@ -2855,48 +2844,70 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn update_multi_table_meta(
         &self,
         req: UpdateMultiTableMetaReq,
-    ) -> Result<(), KVAppError> {
+    ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             update_table_metas,
             copied_files,
             update_stream_metas,
             deduplicated_labels,
         } = req;
+
         let mut tbl_seqs = HashMap::new();
         let mut txn_req = TxnRequest {
             condition: vec![],
             if_then: vec![],
             else_then: vec![],
         };
-        for req in update_table_metas {
+        let mut mismatched_tbs = vec![];
+        let tid_vec = update_table_metas
+            .iter()
+            .map(|req| {
+                TableId {
+                    table_id: req.table_id,
+                }
+                .to_string_key()
+            })
+            .collect::<Vec<_>>();
+        let mut tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(self, &tid_vec).await?;
+        for (req, (tb_meta_seq, table_meta)) in
+            update_table_metas.iter().zip(tb_meta_vec.iter_mut())
+        {
+            let req_seq = req.seq;
+
+            if *tb_meta_seq == 0 || table_meta.is_none() {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
+                )));
+            }
+            if req_seq.match_seq(*tb_meta_seq).is_err() {
+                mismatched_tbs.push((
+                    req.table_id,
+                    *tb_meta_seq,
+                    std::mem::take(table_meta).unwrap(),
+                ));
+            }
+        }
+
+        if !mismatched_tbs.is_empty() {
+            return Ok(std::result::Result::Err(mismatched_tbs));
+        }
+
+        for (req, (tb_meta_seq, _)) in update_table_metas.iter().zip(tb_meta_vec.iter()) {
             let tbid = TableId {
                 table_id: req.table_id,
             };
-            let req_seq = req.seq;
-
-            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &tbid).await?;
-
-            if tb_meta_seq == 0 || table_meta.is_none() {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "update_table_meta"),
-                )));
-            }
-            if req_seq.match_seq(tb_meta_seq).is_err() {
-                return Err(KVAppError::AppError(AppError::from(
-                    TableVersionMismatched::new(
-                        req.table_id,
-                        req.seq,
-                        tb_meta_seq,
-                        "update_table_meta",
-                    ),
-                )));
-            }
-            tbl_seqs.insert(req.table_id, tb_meta_seq);
-            txn_req.condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
+            tbl_seqs.insert(req.table_id, *tb_meta_seq);
+            txn_req
+                .condition
+                .push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
             txn_req
                 .if_then
                 .push(txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?));
+            txn_req.else_then.push(TxnOp {
+                request: Some(Request::Get(TxnGetRequest {
+                    key: tbid.to_string_key(),
+                })),
+            });
         }
         for (tbid, req) in copied_files {
             let tbid = TableId { table_id: tbid };
@@ -2910,16 +2921,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             txn_req.if_then.extend(match_operations)
         }
 
-        for req in &update_stream_metas {
+        let sid_vec = update_stream_metas
+            .iter()
+            .map(|req| {
+                TableId {
+                    table_id: req.stream_id,
+                }
+                .to_string_key()
+            })
+            .collect::<Vec<_>>();
+        let stream_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(self, &sid_vec).await?;
+        for (req, (stream_meta_seq, stream_meta)) in
+            update_stream_metas.iter().zip(stream_meta_vec.into_iter())
+        {
             let stream_id = TableId {
                 table_id: req.stream_id,
             };
-            let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &stream_id).await?;
 
             if stream_meta_seq == 0 || stream_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownStreamId(
-                    UnknownStreamId::new(req.stream_id, "update_table_meta"),
+                    UnknownStreamId::new(req.stream_id, "update_multi_table_meta"),
                 )));
             }
 
@@ -2929,7 +2950,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         req.stream_id,
                         req.seq,
                         stream_meta_seq,
-                        "update_table_meta",
+                        "update_multi_table_meta",
                     ),
                 )));
             }
@@ -2951,14 +2972,42 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 .if_then
                 .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
-        let (succ, _) = send_txn(self, txn_req).await?;
-
+        let (succ, responses) = send_txn(self, txn_req).await?;
         if succ {
-            return Ok(());
+            return Ok(std::result::Result::Ok(()));
         }
-        Err(KVAppError::AppError(AppError::from(
-            MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
-        )))
+        let mut mismatched_tbs = vec![];
+        for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
+            let Some(Response::Get(get_resp)) = &resp.response else {
+                unreachable!(
+                    "internal error: expect some TxnGetResponseGet, but got {:?}",
+                    resp.response
+                )
+            };
+            // deserialize table version info
+            let (tb_meta_seq, table_meta): (_, TableMeta) = if let Some(seq_v) = &get_resp.value {
+                (seq_v.seq, deserialize_struct(&seq_v.data)?)
+            } else {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
+                )));
+            };
+
+            // check table version
+            if req.seq.match_seq(tb_meta_seq).is_err() {
+                mismatched_tbs.push((req.table_id, tb_meta_seq, table_meta));
+            }
+        }
+
+        if mismatched_tbs.is_empty() {
+            // if all table version does match, but tx failed, we don't know why, just return error
+            Err(KVAppError::AppError(AppError::from(
+                MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
+            )))
+        } else {
+            // up layer will retry
+            Ok(std::result::Result::Err(mismatched_tbs))
+        }
     }
 
     #[logcall::logcall("debug")]
@@ -3701,8 +3750,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (catalog_id) -> catalog_meta
             // (catalog_id) -> (tenant, catalog_name)
             let catalog_id = fetch_id(self, IdGenerator::catalog_id()).await?;
-            let id_key = CatalogId { catalog_id };
-            let id_to_name_key = CatalogIdToName { catalog_id };
+            let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
+            let id_to_name_key = CatalogIdToNameIdent::new(name_key.tenant(), catalog_id);
 
             debug!(catalog_id = catalog_id, name_key :? =(name_key); "new catalog id");
 
@@ -3750,7 +3799,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             get_catalog_or_err(self, name_key, "get_catalog").await?;
 
         let catalog = CatalogInfo {
-            id: CatalogId { catalog_id }.into(),
+            id: CatalogIdIdent::new(name_key.tenant(), catalog_id).into(),
             name_ident: name_key.clone().into(),
             meta: catalog_meta,
         };
@@ -3793,8 +3842,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (tenant, catalog_name) -> catalog_id
             // (catalog_id) -> catalog_meta
             // (catalog_id) -> (tenant, catalog_name)
-            let id_key = CatalogId { catalog_id };
-            let id_to_name_key = CatalogIdToName { catalog_id };
+            let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
+            let id_to_name_key = CatalogIdToNameIdent::new(name_key.tenant(), catalog_id);
 
             debug!(
                 catalog_id = catalog_id,
@@ -3843,7 +3892,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant = req.tenant;
-        let name_key = CatalogNameIdent::new(tenant, "");
+        let name_key = CatalogNameIdent::new(&tenant, "");
 
         // Pairs of catalog-name and catalog_id with seq
         let (tenant_catalog_names, catalog_ids) = list_u64_value(self, &name_key).await?;
@@ -3852,10 +3901,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut kv_keys = Vec::with_capacity(catalog_ids.len());
 
         for catalog_id in catalog_ids.iter() {
-            let k = CatalogId {
-                catalog_id: *catalog_id,
-            }
-            .to_string_key();
+            let k = CatalogIdIdent::new(&tenant, *catalog_id).to_string_key();
             kv_keys.push(k);
         }
 
@@ -3870,10 +3916,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let catalog_meta: CatalogMeta = deserialize_struct(&seq_meta.data)?;
 
                 let catalog_info = CatalogInfo {
-                    id: CatalogId {
-                        catalog_id: catalog_ids[i],
-                    }
-                    .into(),
+                    id: CatalogIdIdent::new(&tenant, catalog_ids[i]).into(),
                     name_ident: CatalogNameIdent::new(
                         name_key.tenant().clone(),
                         tenant_catalog_names[i].name(),
@@ -5199,7 +5242,7 @@ pub(crate) async fn get_catalog_or_err(
     let (catalog_id_seq, catalog_id) = get_u64_value(kv_api, name_key).await?;
     catalog_has_to_exist(catalog_id_seq, name_key, &msg)?;
 
-    let id_key = CatalogId { catalog_id };
+    let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
 
     let (catalog_meta_seq, catalog_meta) = get_pb_value(kv_api, &id_key).await?;
     catalog_has_to_exist(catalog_meta_seq, name_key, msg)?;

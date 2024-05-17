@@ -112,7 +112,7 @@ impl MapApiRO<String> for Level {
 
         if vec.len() > 1000 {
             warn!(
-                "Level::<ExpireKey>::range() returns big range of len={}",
+                "Level::<String>::range() returns big range of len={}",
                 vec.len()
             );
         }

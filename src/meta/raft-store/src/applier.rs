@@ -84,7 +84,7 @@ impl<'a> Applier<'a> {
         let log_id = &entry.log_id;
         let log_time_ms = Self::get_log_time(entry);
 
-        info!("apply: entry: {}, log_time_ms: {}", entry, log_time_ms);
+        debug!("apply: entry: {}, log_time_ms: {}", entry, log_time_ms);
 
         self.cmd_ctx = CmdContext::from_millis(log_time_ms);
 
@@ -94,7 +94,7 @@ impl<'a> Applier<'a> {
 
         let applied_state = match entry.payload {
             EntryPayload::Blank => {
-                info!("apply: blank");
+                info!("apply: blank: {}", log_id);
 
                 AppliedState::None
             }
@@ -105,7 +105,7 @@ impl<'a> Applier<'a> {
                 self.apply_cmd(&data.cmd).await?
             }
             EntryPayload::Membership(ref mem) => {
-                info!("apply: membership: {:?}", mem);
+                info!("apply: membership: {} {:?}", log_id, mem);
 
                 *self.sm.sys_data_mut().last_membership_mut() =
                     StoredMembership::new(Some(*log_id), mem.clone());
@@ -146,7 +146,7 @@ impl<'a> Applier<'a> {
             Cmd::Transaction(txn) => self.apply_txn(txn).await?,
         };
 
-        info!("apply_result: cmd: {}; res: {}", cmd, res);
+        debug!("apply_result: cmd: {}; res: {}", cmd, res);
 
         Ok(res)
     }

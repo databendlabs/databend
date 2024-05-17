@@ -39,7 +39,7 @@ pub enum LogMetaValue {
 }
 
 impl fmt::Display for LogMetaKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             LogMetaKey::LastPurged => {
                 write!(f, "last-purged")

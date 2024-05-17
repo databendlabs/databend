@@ -21,6 +21,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_storages_fuse::TableContext;
+use itertools::Itertools;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -73,12 +74,17 @@ impl Interpreter for ShowRolesInterpreter {
             .iter()
             .map(|x| x.grants.roles().len() as u64)
             .collect();
+        let inherited_roles_names: Vec<String> = roles
+            .iter()
+            .map(|x| x.grants.roles().iter().sorted().join(", ").to_string())
+            .collect();
         let is_currents: Vec<bool> = roles.iter().map(|r| r.name == current_role_name).collect();
         let is_defaults: Vec<bool> = roles.iter().map(|r| r.name == default_role_name).collect();
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             UInt64Type::from_data(inherited_roles),
+            StringType::from_data(inherited_roles_names),
             BooleanType::from_data(is_currents),
             BooleanType::from_data(is_defaults),
         ])])

@@ -18,17 +18,16 @@ use std::time::Instant;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
-use metrics::gauge;
 use opendal::Operator;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::AbortOperation;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
@@ -122,10 +121,7 @@ impl SegmentCompactMutator {
             })
             .await?;
 
-        gauge!(
-            "fuse_compact_segments_select_duration_second",
-            select_begin.elapsed(),
-        );
+        metrics_set_compact_segments_select_duration_second(select_begin.elapsed());
 
         Ok(self.has_compaction())
     }
@@ -136,11 +132,6 @@ impl SegmentCompactMutator {
             // defensive checking
             return Ok(());
         }
-
-        let abort_action = AbortOperation {
-            segments: self.compaction.new_segment_paths.clone(),
-            ..Default::default()
-        };
 
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
@@ -154,7 +145,6 @@ impl SegmentCompactMutator {
                 self.compact_params.base_snapshot.clone(),
                 &self.compaction.segments_locations,
                 statistics,
-                abort_action,
                 None,
             )
             .await
@@ -269,10 +259,10 @@ impl<'a> SegmentCompactor<'a> {
             // Status.
             {
                 let status = format!(
-                    "compact segment: read segment files:{}/{}, cost:{} sec",
+                    "compact segment: read segment files:{}/{}, cost:{:?}",
                     checked_end_at,
                     number_segments,
-                    start.elapsed().as_secs()
+                    start.elapsed()
                 );
                 info!("{}", &status);
                 (status_callback)(status);

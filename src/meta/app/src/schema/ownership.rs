@@ -43,7 +43,7 @@ impl Default for Ownership {
 }
 
 impl Display for Ownership {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "OwnerRoleName: {}, UpdatedOn: {:?}",

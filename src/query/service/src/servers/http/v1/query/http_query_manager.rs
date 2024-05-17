@@ -49,7 +49,7 @@ pub(crate) enum RemoveReason {
 }
 
 impl Display for RemoveReason {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", format!("{self:?}").to_lowercase())
     }
 }
@@ -135,7 +135,7 @@ impl HttpQueryManager {
         // it may cannot destroy with final or kill when we hold ref of Arc<HttpQuery>
         let http_query_weak = Arc::downgrade(&query);
 
-        GlobalIORuntime::instance().spawn(query_id, async move {
+        GlobalIORuntime::instance().spawn(async move {
             loop {
                 let expire_res = match http_query_weak.upgrade() {
                     None => {
@@ -210,7 +210,7 @@ impl HttpQueryManager {
         let deleter = {
             let self_clone = self.clone();
             let last_query_id_clone = last_query_id.clone();
-            GlobalIORuntime::instance().spawn(last_query_id.clone(), async move {
+            GlobalIORuntime::instance().spawn(async move {
                 sleep(Duration::from_secs(timeout_secs)).await;
                 if self_clone.get_txn(&last_query_id_clone).is_some() {
                     log::info!(

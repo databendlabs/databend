@@ -28,6 +28,11 @@ CREATE TABLE b(
 statement ok
 INSERT INTO b VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
+statement ok
+drop table if exists c;
+
+statement ok
+drop table if exists d;
 
 statement ok
 CREATE TABLE c(

@@ -19,6 +19,7 @@ use databend_common_ast::ast::FileFormatOptions;
 use databend_common_ast::ast::UriLocation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::StageInfo;
@@ -115,7 +116,7 @@ impl Binder {
         }
 
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
             stage_info,
         })))
@@ -126,11 +127,11 @@ impl Binder {
         &self,
         options: &FileFormatOptions,
     ) -> Result<FileFormatParams> {
-        let options = options.to_meta_ast();
-        if let Some(name) = options.options.get("format_name") {
+        let reader = FileFormatOptionsReader::from_ast(options);
+        if let Some(name) = reader.options.get("format_name") {
             self.ctx.get_file_format(name).await
         } else {
-            FileFormatParams::try_from(options)
+            FileFormatParams::try_from_reader(reader, false)
         }
     }
 }

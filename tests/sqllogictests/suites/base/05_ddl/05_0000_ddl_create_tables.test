@@ -361,7 +361,7 @@ statement ok
 create table t_with_bloom_index(a int, b int) bloom_index_columns='b'
 
 statement ok
-drop table if exists t_with_bloom_index;
+drop table if exists t_row_per_block;
 
 statement error 1301
 create table t_row_per_block(a int) row_per_block = 100000000000;
@@ -390,6 +390,9 @@ c ARRAY(INT32) YES NULL (empty)
 d MAP(STRING, INT32) YES NULL (empty)
 e MAP(STRING, STRING) YES NULL (empty)
 f TUPLE(1 INT32, 2 STRING, 3 ARRAY(INT32), 4 ARRAY(STRING)) YES NULL (empty)
+
+statement ok
+drop table if exists replace_test;
 
 statement ok
 create table replace_test(a int);

@@ -263,6 +263,7 @@ impl DPhpy {
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
             | RelOperator::CteScan(_)
+            | RelOperator::AsyncFunction(_)
             | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }

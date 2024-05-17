@@ -35,6 +35,7 @@ use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -53,7 +54,7 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 17] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 18] = [
     "catalogs",
     "columns",
     "databases",
@@ -63,6 +64,7 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 17] = [
     "views_with_history",
     "password_policies",
     "streams",
+    "streams_terse",
     "virtual_columns",
     "users",
     "roles",
@@ -196,7 +198,7 @@ impl PrivilegeAccess {
                                 privileges,
                                 catalog_name,
                                 db_name,
-                                &current_user.identity(),
+                                &current_user.identity().display(),
                                 roles_name,
                             )));
                         }
@@ -294,7 +296,7 @@ impl PrivilegeAccess {
                                         catalog_name,
                                         db_name,
                                         table_name,
-                                        &current_user.identity(),
+                                        &current_user.identity().display(),
                                         roles_name,
                                     )));
                                 }
@@ -398,7 +400,7 @@ impl PrivilegeAccess {
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]",
                         privilege,
                         grant_object,
-                        &current_user.identity(),
+                        &current_user.identity().display(),
                         roles_name,
                     ))),
                 }
@@ -476,7 +478,7 @@ impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let user = self.ctx.get_current_user()?;
-        let (identity, grant_set) = (user.identity().to_string(), user.grants);
+        let (identity, grant_set) = (user.identity().display().to_string(), user.grants);
 
         let enable_experimental_rbac_check = self
             .ctx
@@ -618,12 +620,48 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?;
             }
             Plan::UndropDatabase(_)
-            | Plan::DropUDF(_)
             | Plan::DropIndex(_)
             | Plan::DropTableIndex(_) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop)
                     .await?;
+            }
+            Plan::DropUDF(plan) => {
+                let udf_name = &plan.udf;
+                if !UserApiProvider::instance().exists_udf(&tenant, udf_name).await? && plan.if_exists {
+                    return Ok(());
+                }
+                if enable_experimental_rbac_check {
+                    let udf = HashSet::from([udf_name]);
+                    self.validate_udf_access(udf).await?;
+                } else {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop)
+                                        .await?;
+                }
+            }
+            Plan::DropStage(plan) => {
+                match UserApiProvider::instance().get_stage(&tenant, &plan.name).await {
+                    Ok(stage) => {
+                        if enable_experimental_rbac_check {
+                            let privileges = vec![UserPrivilegeType::Read, UserPrivilegeType::Write];
+                            for privilege in privileges {
+                                self.validate_stage_access(&stage, privilege).await?;
+                            }
+                        } else {
+                            self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
+                                .await?;
+                        }
+                    }
+                    Err(e) => {
+                        match e.code() {
+                            ErrorCode::UNKNOWN_STAGE if plan.if_exists =>
+                                {
+                                    return Ok(());
+                                }
+                            _ => return Err(e.add_message("error on validating stage access")),
+                        }
+                    }
+                }
             }
             Plan::UseDatabase(plan) => {
                 let session = self.ctx.get_current_session();
@@ -951,7 +989,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant)
                     .await?;
             }
-            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) => {
+            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) | Plan::SetPriority(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
                     .await?;
             }
@@ -1017,7 +1055,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
             | Plan::CreateStage(_)
-            | Plan::DropStage(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)

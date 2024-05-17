@@ -239,11 +239,11 @@ async fn test_heavy_actions() -> Result<()> {
             add_to_queue: false,
         },
         Query {
-            sql: "select * from system.queries_queue", // SYSTEM
+            sql: "select * from system.one", // SYSTEM
             add_to_queue: false,
         },
         Query {
-            sql: "explain select * from system.queries_queue", // EXPLAIN SYSTEM
+            sql: "explain select * from system.one", // EXPLAIN SYSTEM
             add_to_queue: false,
         },
         Query {
@@ -272,6 +272,30 @@ async fn test_heavy_actions() -> Result<()> {
         },
         Query {
             sql: "replace into t1 on(a) values(1)", // REPLACE INTO
+            add_to_queue: true,
+        },
+        Query {
+            sql: "optimize table t1 compact",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "vacuum table t",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "vacuum temporary files",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "truncate table t",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "drop table t",
+            add_to_queue: false,
+        },
+        Query {
+            sql: "drop table t all",
             add_to_queue: true,
         },
         Query {

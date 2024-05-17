@@ -20,7 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
-use crate::servers::flight::v1::actions::FlightAction;
+use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 use crate::servers::flight::v1::packets::packet::create_client;
 use crate::servers::flight::v1::packets::Packet;
 
@@ -60,7 +60,7 @@ impl Packet for ExecutePartialQueryPacket {
 
         let executor = &self.executors_info[&self.executor];
         let mut conn = create_client(config, &executor.flight_address).await?;
-        let action = FlightAction::ExecutePartialQuery(self.query_id.clone());
-        conn.execute_action(action, timeout).await
+        conn.do_action(START_PREPARED_QUERY, self.query_id.clone(), timeout)
+            .await
     }
 }

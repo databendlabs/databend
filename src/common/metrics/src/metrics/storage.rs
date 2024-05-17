@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::sync::LazyLock;
+use std::time::Duration;
 
 use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use databend_common_base::runtime::metrics::Counter;
+use databend_common_base::runtime::metrics::Gauge;
 use databend_common_base::runtime::metrics::Histogram;
 
 // Common metrics.
@@ -144,6 +147,22 @@ static BLOCK_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_block_index_write_milliseconds"));
 static BLOCK_INDEX_READ_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_index_read_bytes"));
+static BLOCK_INVERTED_INDEX_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_inverted_index_write_nums"));
+static BLOCK_INVERTED_INDEX_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_inverted_index_write_bytes"));
+static BLOCK_INVERTED_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_write_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_GENERATE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_generate_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_READ_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_read_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_inverted_index_search_milliseconds")
+});
 static COMPACT_BLOCK_READ_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_compact_block_read_nums"));
 static COMPACT_BLOCK_READ_BYTES: LazyLock<Counter> =
@@ -156,6 +175,9 @@ static COMPACT_BLOCK_BUILD_TASK_MILLISECONDS: LazyLock<Histogram> = LazyLock::ne
 static COMPACT_BLOCK_BUILD_LAZY_PART_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_in_milliseconds("fuse_compact_block_build_lazy_part_milliseconds")
 });
+static COMPACT_SEGMENTS_SELECT_DURATION_SECOND: LazyLock<Gauge> =
+    LazyLock::new(|| register_gauge("fuse_compact_segments_select_duration_second"));
+
 static RECLUSTER_BUILD_TASK_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_recluster_build_task_milliseconds"));
 static RECLUSTER_SEGMENT_NUMS_SCHEDULED: LazyLock<Counter> =
@@ -400,12 +422,12 @@ pub fn metrics_inc_merge_into_split_milliseconds(c: u64) {
     MERGE_INTO_SPLIT_MILLISECONDS.observe(c as f64);
 }
 
-// after merge_source_split, record the time of not macthed clauses (processor_merge_into_not_matched)
+// after merge_source_split, record the time of not matched clauses (processor_merge_into_not_matched)
 pub fn merge_into_not_matched_operation_milliseconds(c: u64) {
     MERGE_INTO_NOT_MATCHED_OPERATION_MILLISECONDS.observe(c as f64);
 }
 
-// after merge_source_split, record the time of macthed clauses (processor_merge_into_matched_and_split)
+// after merge_source_split, record the time of matched clauses (processor_merge_into_matched_and_split)
 pub fn merge_into_matched_operation_milliseconds(c: u64) {
     MERGE_INTO_MATCHED_OPERATION_MILLISECONDS.observe(c as f64);
 }
@@ -496,6 +518,30 @@ pub fn metrics_inc_block_index_write_milliseconds(c: u64) {
     BLOCK_INDEX_WRITE_MILLISECONDS.observe(c as f64);
 }
 
+pub fn metrics_inc_block_inverted_index_write_nums(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_NUMS.inc_by(c);
+}
+
+pub fn metrics_inc_block_inverted_index_write_bytes(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_BYTES.inc_by(c);
+}
+
+pub fn metrics_inc_block_inverted_index_write_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_generate_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_GENERATE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_read_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_READ_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_block_inverted_index_search_milliseconds(c: u64) {
+    BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS.observe(c as f64);
+}
+
 pub fn metrics_inc_block_index_read_bytes(c: u64) {
     BLOCK_INDEX_READ_BYTES.inc_by(c);
 }
@@ -519,6 +565,10 @@ pub fn metrics_inc_compact_block_build_task_milliseconds(c: u64) {
 
 pub fn metrics_inc_compact_block_build_lazy_part_milliseconds(c: u64) {
     COMPACT_BLOCK_BUILD_LAZY_PART_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_set_compact_segments_select_duration_second(c: Duration) {
+    COMPACT_SEGMENTS_SELECT_DURATION_SECOND.set(c.as_secs() as i64);
 }
 
 /// Pruning metrics.

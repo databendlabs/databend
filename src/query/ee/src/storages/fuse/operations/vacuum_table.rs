@@ -177,11 +177,11 @@ pub async fn do_gc_orphan_files(
         None => return Ok(()),
     };
     let status = format!(
-        "gc orphan: read referenced files:{},{},{}, cost:{} sec",
+        "gc orphan: read referenced files:{},{},{}, cost:{:?}",
         referenced_files.segments.len(),
         referenced_files.blocks.len(),
         referenced_files.blocks_index.len(),
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -191,9 +191,9 @@ pub async fn do_gc_orphan_files(
         get_orphan_files_to_be_purged(fuse_table, referenced_files.segments, retention_time)
             .await?;
     let status = format!(
-        "gc orphan: read segment_locations_to_be_purged:{}, cost:{} sec, retention_time: {}",
+        "gc orphan: read segment_locations_to_be_purged:{}, cost:{:?}, retention_time: {}",
         segment_locations_to_be_purged.len(),
-        start.elapsed().as_secs(),
+        start.elapsed(),
         retention_time
     );
     ctx.set_status_info(&status);
@@ -207,9 +207,9 @@ pub async fn do_gc_orphan_files(
         )
         .await?;
     let status = format!(
-        "gc orphan: purged segment files:{}, cost:{} sec",
+        "gc orphan: purged segment files:{}, cost:{:?}",
         purged_file_num,
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -218,9 +218,9 @@ pub async fn do_gc_orphan_files(
     let block_locations_to_be_purged =
         get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks, retention_time).await?;
     let status = format!(
-        "gc orphan: read block_locations_to_be_purged:{}, cost:{} sec",
+        "gc orphan: read block_locations_to_be_purged:{}, cost:{:?}",
         block_locations_to_be_purged.len(),
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -233,9 +233,9 @@ pub async fn do_gc_orphan_files(
         )
         .await?;
     let status = format!(
-        "gc orphan: purged block files:{}, cost:{} sec",
+        "gc orphan: purged block files:{}, cost:{:?}",
         purged_file_num,
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -245,9 +245,9 @@ pub async fn do_gc_orphan_files(
         get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks_index, retention_time)
             .await?;
     let status = format!(
-        "gc orphan: read index_locations_to_be_purged:{}, cost:{} sec",
+        "gc orphan: read index_locations_to_be_purged:{}, cost:{:?}",
         index_locations_to_be_purged.len(),
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -260,9 +260,9 @@ pub async fn do_gc_orphan_files(
         )
         .await?;
     let status = format!(
-        "gc orphan: purged block index files:{}, cost:{} sec",
+        "gc orphan: purged block index files:{}, cost:{:?}",
         purged_file_num,
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -284,11 +284,11 @@ pub async fn do_dry_run_orphan_files(
         None => return Ok(()),
     };
     let status = format!(
-        "dry_run orphan: read referenced files:{},{},{}, cost:{} sec",
+        "dry_run orphan: read referenced files:{},{},{}, cost:{:?}",
         referenced_files.segments.len(),
         referenced_files.blocks.len(),
         referenced_files.blocks_index.len(),
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -297,9 +297,9 @@ pub async fn do_dry_run_orphan_files(
         get_orphan_files_to_be_purged(fuse_table, referenced_files.segments, retention_time)
             .await?;
     let status = format!(
-        "dry_run orphan: read segment_locations_to_be_purged:{}, cost:{} sec",
+        "dry_run orphan: read segment_locations_to_be_purged:{}, cost:{:?}",
         segment_locations_to_be_purged.len(),
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -312,9 +312,9 @@ pub async fn do_dry_run_orphan_files(
     let block_locations_to_be_purged =
         get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks, retention_time).await?;
     let status = format!(
-        "dry_run orphan: read block_locations_to_be_purged:{}, cost:{} sec",
+        "dry_run orphan: read block_locations_to_be_purged:{}, cost:{:?}",
         block_locations_to_be_purged.len(),
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
     purge_files.extend(block_locations_to_be_purged);
@@ -327,9 +327,9 @@ pub async fn do_dry_run_orphan_files(
         get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks_index, retention_time)
             .await?;
     let status = format!(
-        "dry_run orphan: read index_locations_to_be_purged:{}, cost:{} sec",
+        "dry_run orphan: read index_locations_to_be_purged:{}, cost:{:?}",
         index_locations_to_be_purged.len(),
-        start.elapsed().as_secs()
+        start.elapsed()
     );
     ctx.set_status_info(&status);
 
@@ -352,10 +352,7 @@ pub async fn do_vacuum(
     let purge_files_opt = fuse_table
         .purge(ctx.clone(), instant, dry_run_limit, true, dry_run)
         .await?;
-    let status = format!(
-        "do_vacuum: purged table, cost:{} sec",
-        start.elapsed().as_secs()
-    );
+    let status = format!("do_vacuum: purged table, cost:{:?}", start.elapsed());
     ctx.set_status_info(&status);
     let retention = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
     // use min(now - get_retention_period(), retention_time) as gc orphan files retention time

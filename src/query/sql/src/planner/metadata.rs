@@ -298,6 +298,7 @@ impl Metadata {
         source_of_view: bool,
         source_of_index: bool,
         source_of_stage: bool,
+        consume: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
 
@@ -313,6 +314,7 @@ impl Metadata {
             source_of_view,
             source_of_index,
             source_of_stage,
+            consume,
         };
         self.tables.push(table_entry);
         let table_schema = table_meta.schema_with_stream();
@@ -425,10 +427,13 @@ pub struct TableEntry {
 
     source_of_stage: bool,
     table: Arc<dyn Table>,
+
+    /// If this table need to be consumed.
+    consume: bool,
 }
 
 impl Debug for TableEntry {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("TableEntry")
             .field("catalog", &self.catalog)
             .field("database", &self.database)
@@ -457,6 +462,7 @@ impl TableEntry {
             source_of_view: false,
             source_of_index: false,
             source_of_stage: false,
+            consume: false,
         }
     }
 
@@ -503,6 +509,11 @@ impl TableEntry {
     /// Return true if it is bound for an index.
     pub fn is_source_of_index(&self) -> bool {
         self.source_of_index
+    }
+
+    /// Return true if this table need to be consumed.
+    pub fn is_consume(&self) -> bool {
+        self.consume
     }
 }
 

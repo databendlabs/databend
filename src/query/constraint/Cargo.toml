@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [lib]
-test = false
+test = true
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
@@ -16,7 +16,7 @@ test = false
 z3 = { version = "0.12.1", features = ["bundled"] }
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = { workspace = true }
 databend-common-ast = { path = "../ast" }
 goldenfile = "1.4"
 

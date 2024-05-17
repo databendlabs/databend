@@ -1,0 +1,27 @@
+statement ok
+DROP TABLE IF EXISTS tmp;
+
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE tmp(a int, b uint64, c int);
+
+query T
+explain INSERT INTO tmp select 10,nextval(seq),20 from numbers(3);
+----
+InsertPlan (subquery):                                              
+├── table: default.default.tmp                                     
+├── inserted columns: [tmp.a (#0),tmp.b (#1),tmp.c (#2)]          
+├── overwrite: false                                             
+└── EvalScalar                                                    
+  ├── scalars: [10 AS (#1), nextval(seq) (#2) AS (#2), 20 AS (#3)] 
+  └── AsyncFunction: nextval(seq)                                 
+      └── Scan                                                   
+          ├── table: system.numbers                             
+          ├── filters: []                                      
+          ├── order by: []                                    
+          └── limit: NONE                                    

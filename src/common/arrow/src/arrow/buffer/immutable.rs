@@ -75,7 +75,7 @@ impl<T: PartialEq> PartialEq for Buffer<T> {
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Buffer<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Debug::fmt(&**self, f)
     }
 }
@@ -162,7 +162,7 @@ impl<T> Buffer<T> {
 
     /// Slices this buffer starting at `offset`.
     /// # Panics
-    /// Panics iff `offset` is larger than `len`.
+    /// Panics iff `offset + length` is larger than `len`.
     #[inline]
     pub fn slice(&mut self, offset: usize, length: usize) {
         assert!(

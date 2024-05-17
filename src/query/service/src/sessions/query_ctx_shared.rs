@@ -87,6 +87,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
+    pub(in crate::sessions) running_query_text_hash: Arc<RwLock<Option<String>>>,
+    pub(in crate::sessions) running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
@@ -111,6 +113,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     pub(in crate::sessions) num_fragmented_block_hint: Arc<AtomicU64>,
+    pub(in crate::sessions) enable_sort_spill: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
 
@@ -151,6 +154,8 @@ impl QueryContextShared {
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
+            running_query_text_hash: Arc::new(RwLock::new(None)),
+            running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             affect: Arc::new(Mutex::new(None)),
@@ -166,6 +171,7 @@ impl QueryContextShared {
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             num_fragmented_block_hint: Arc::new(AtomicU64::new(0)),
+            enable_sort_spill: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
@@ -270,10 +276,6 @@ impl QueryContextShared {
 
     pub fn get_current_role(&self) -> Option<RoleInfo> {
         self.session.get_current_role()
-    }
-
-    pub fn set_current_tenant(&self, tenant: Tenant) {
-        self.session.set_current_tenant(tenant);
     }
 
     /// Get all tables that already attached in this query.
@@ -460,9 +462,38 @@ impl QueryContextShared {
         }
     }
 
+    pub fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
+        {
+            let mut running_query_hash = self.running_query_text_hash.write();
+            *running_query_hash = Some(text_hash);
+        }
+
+        {
+            let mut running_query_parameterized_hash =
+                self.running_query_parameterized_hash.write();
+            *running_query_parameterized_hash = Some(parameterized_hash);
+        }
+    }
+
     pub fn get_query_str(&self) -> String {
         let running_query = self.running_query.read();
         running_query.as_ref().unwrap_or(&"".to_string()).clone()
+    }
+
+    pub fn get_query_parameterized_hash(&self) -> String {
+        let running_query_parameterized_hash = self.running_query_parameterized_hash.read();
+        running_query_parameterized_hash
+            .as_ref()
+            .unwrap_or(&"".to_string())
+            .clone()
+    }
+
+    pub fn get_query_text_hash(&self) -> String {
+        let running_query_text_hash = self.running_query_text_hash.read();
+        running_query_text_hash
+            .as_ref()
+            .unwrap_or(&"".to_string())
+            .clone()
     }
 
     pub fn get_query_kind(&self) -> QueryKind {
@@ -528,6 +559,12 @@ impl QueryContextShared {
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
         &self.query_cache_metrics
     }
+
+    pub fn set_priority(&self, priority: u8) {
+        if let Some(executor) = self.executor.read().upgrade() {
+            executor.change_priority(priority)
+        }
+    }
 }
 
 impl Drop for QueryContextShared {
@@ -546,18 +583,21 @@ impl Drop for QueryContextShared {
 pub fn short_sql(sql: String) -> String {
     use unicode_segmentation::UnicodeSegmentation;
     let query = sql.trim_start();
-    if query.as_bytes().len() >= 64 && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT") {
-        // keep first 64 graphemes
-        String::from_utf8(
-            query
-                .graphemes(true)
-                .take(64)
-                .flat_map(|g| g.as_bytes().iter())
-                .copied() // copied converts &u8 into u8
-                .chain(b"...".iter().copied())
-                .collect::<Vec<u8>>(),
-        )
-        .unwrap() // by construction, this cannot panic as we extracted unicode grapheme
+    if query.as_bytes().len() > 10240 && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT") {
+        // keep first 10KB (10,240 bytes)
+        let mut result = Vec::new();
+        let mut bytes_taken = 0;
+        for grapheme in query.graphemes(true) {
+            let grapheme_bytes = grapheme.as_bytes();
+            if bytes_taken + grapheme_bytes.len() <= 10240 {
+                result.extend_from_slice(grapheme_bytes);
+                bytes_taken += grapheme_bytes.len();
+            } else {
+                break;
+            }
+        }
+        result.extend_from_slice(b"...");
+        String::from_utf8(result).unwrap() // by construction, this cannot panic as we extracted unicode graphemes
     } else {
         sql
     }

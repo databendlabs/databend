@@ -173,6 +173,29 @@ impl TestFixture {
         .await
     }
 
+    /// Create a non-shared dummy session.
+    pub async fn create_dummy_session() -> Session {
+        let session_manager = SessionManager::instance();
+        let session = session_manager
+            .create_session(SessionType::Dummy)
+            .await
+            .unwrap();
+
+        let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        });
+
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_global(),
+        );
+
+        session.set_authed_user(user_info, None).await.unwrap();
+        session.get_settings().set_max_threads(8).unwrap();
+        session
+    }
+
     async fn create_session(session_type: SessionType) -> Result<Arc<Session>> {
         let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
@@ -184,14 +207,16 @@ impl TestFixture {
             UserPrivilegeSet::available_privileges_on_global(),
         );
 
-        let dummy_session = SessionManager::instance()
-            .create_session(session_type)
-            .await?;
+        let session_manager = SessionManager::instance();
 
-        dummy_session.set_authed_user(user_info, None).await?;
-        dummy_session.get_settings().set_max_threads(8)?;
+        let dummy_session = session_manager.create_session(session_type).await?;
 
-        Ok(dummy_session)
+        let session = session_manager.register_session(dummy_session)?;
+
+        session.set_authed_user(user_info, None).await?;
+        session.get_settings().set_max_threads(8)?;
+
+        Ok(session)
     }
 
     /// Setup the test environment.
@@ -322,6 +347,7 @@ impl TestFixture {
             field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
+            inverted_indexes: None,
         }
     }
 
@@ -347,6 +373,7 @@ impl TestFixture {
             field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: None,
+            inverted_indexes: None,
         }
     }
 
@@ -383,6 +410,7 @@ impl TestFixture {
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
+            inverted_indexes: None,
         }
     }
 
@@ -419,6 +447,7 @@ impl TestFixture {
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
+            inverted_indexes: None,
         }
     }
 
@@ -464,6 +493,7 @@ impl TestFixture {
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
+            inverted_indexes: None,
         }
     }
 
@@ -550,8 +580,8 @@ impl TestFixture {
             TableField::new("t", TableDataType::Tuple {
                 fields_name: vec!["a".to_string(), "b".to_string()],
                 fields_type: vec![
-                    TableDataType::Number(NumberDataType::Int32),
-                    TableDataType::Number(NumberDataType::Int32),
+                    TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
+                    TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
                 ],
             }),
         ]);
@@ -571,15 +601,17 @@ impl TestFixture {
                         .take(rows_per_block)
                         .collect::<Vec<i32>>(),
                     );
-                    let column1 = Int32Type::from_data(
+                    let column1 = Int32Type::from_opt_data(
                         std::iter::repeat_with(|| (idx as i32 + start) * 2)
                             .take(rows_per_block)
-                            .collect::<Vec<i32>>(),
+                            .map(Some)
+                            .collect::<Vec<Option<i32>>>(),
                     );
-                    let column2 = Int32Type::from_data(
+                    let column2 = Int32Type::from_opt_data(
                         std::iter::repeat_with(|| (idx as i32 + start) * 3)
                             .take(rows_per_block)
-                            .collect::<Vec<i32>>(),
+                            .map(Some)
+                            .collect::<Vec<Option<i32>>>(),
                     );
                     let tuple_inner_columns = vec![column1, column2];
                     let tuple_column = Column::Tuple(tuple_inner_columns);

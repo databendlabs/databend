@@ -61,7 +61,7 @@ impl From<u64> for DatabaseId {
 }
 
 impl Display for DatabaseId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.db_id)
     }
 }
@@ -72,7 +72,7 @@ pub struct DatabaseIdToName {
 }
 
 impl Display for DatabaseIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.db_id)
     }
 }
@@ -116,7 +116,7 @@ impl Default for DatabaseMeta {
 }
 
 impl Display for DatabaseMeta {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "Engine: {}={:?}, Options: {:?}, CreatedOn: {:?}",
@@ -168,7 +168,7 @@ impl DbIdList {
 }
 
 impl Display for DbIdList {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "DB id list: {:?}", self.id_list)
     }
 }
@@ -181,7 +181,7 @@ pub struct CreateDatabaseReq {
 }
 
 impl Display for CreateDatabaseReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self.create_option {
             CreateOption::Create => write!(
                 f,
@@ -223,7 +223,7 @@ pub struct RenameDatabaseReq {
 }
 
 impl Display for RenameDatabaseReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "rename_database:{}/{}=>{}",
@@ -244,7 +244,7 @@ pub struct DropDatabaseReq {
 }
 
 impl Display for DropDatabaseReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "drop_db(if_exists={}):{}/{}",
@@ -266,7 +266,7 @@ pub struct UndropDatabaseReq {
 }
 
 impl Display for UndropDatabaseReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "undrop_db:{}/{}",

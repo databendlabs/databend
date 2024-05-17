@@ -34,7 +34,6 @@ use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::FillAndReorder;
 use databend_common_sql::executor::physical_plans::MultiInsertEvalScalar;
-use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
@@ -44,10 +43,11 @@ use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 
-use crate::interpreters::common::build_update_stream_meta_seq;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
@@ -68,6 +68,10 @@ pub struct InsertMultiTableInterpreter {
 impl InsertMultiTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: InsertMultiTable) -> Result<InterpreterPtr> {
         Ok(Arc::new(Self { ctx, plan }))
+    }
+
+    pub fn try_create_static(ctx: Arc<QueryContext>, plan: InsertMultiTable) -> Result<Self> {
+        Ok(Self { ctx, plan })
     }
 }
 
@@ -103,9 +107,9 @@ impl Interpreter for InsertMultiTableInterpreter {
 }
 
 impl InsertMultiTableInterpreter {
-    async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let (mut root, metadata) = self.build_source_physical_plan().await?;
-        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), &metadata).await?;
+    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
+        let (mut root, metadata, bind_ctx) = self.build_source_physical_plan().await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), &metadata).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
         let serializable_tables = branches
@@ -150,6 +154,7 @@ impl InsertMultiTableInterpreter {
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
             input: Box::new(root),
+            project_columns: bind_ctx.columns.clone(),
             n: branches.len(),
         }));
 
@@ -204,10 +209,14 @@ impl InsertMultiTableInterpreter {
             deduplicated_label: None,
             targets: deduplicated_serializable_tables,
         }));
+        let mut next_plan_id = 0;
+        root.adjust_plan_id(&mut next_plan_id);
         Ok(root)
     }
 
-    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
+    async fn build_source_physical_plan(
+        &self,
+    ) -> Result<(PhysicalPlan, MetadataRef, Box<BindContext>)> {
         match &self.plan.input_source {
             Plan::Query {
                 s_expr,
@@ -218,21 +227,7 @@ impl InsertMultiTableInterpreter {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
-                let input_schema = input_source.output_schema()?;
-                let mut projections = Vec::with_capacity(input_schema.num_fields());
-                for col in &bind_context.columns {
-                    let index = col.index;
-                    projections.push(input_schema.index_of(index.to_string().as_str())?);
-                }
-                let rendered_input_source = PhysicalPlan::Project(Project {
-                    plan_id: 0,
-                    input: Box::new(input_source),
-                    projections,
-                    ignore_result: false,
-                    columns: Default::default(),
-                    stat_info: None,
-                });
-                Ok((rendered_input_source, metadata.clone()))
+                Ok((input_source, metadata.clone(), bind_context.clone()))
             }
             _ => unreachable!(),
         }
@@ -247,6 +242,7 @@ impl InsertMultiTableInterpreter {
             is_first,
             intos,
             target_tables: _,
+            meta_data: _,
         } = &self.plan;
         let mut branches = InsertIntoBranches::default();
         let mut condition_intos = vec![];

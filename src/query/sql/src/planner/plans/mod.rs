@@ -14,6 +14,7 @@
 
 mod add_row_number;
 mod aggregate;
+mod async_function;
 mod cache_scan;
 mod call;
 mod constant_table_scan;
@@ -46,6 +47,7 @@ mod replace;
 mod revert_table;
 mod scalar_expr;
 mod scan;
+mod set_priority;
 mod setting;
 pub mod share;
 mod sort;
@@ -55,6 +57,7 @@ mod window;
 
 pub use add_row_number::AddRowNumber;
 pub use aggregate::*;
+pub use async_function::AsyncFunction;
 pub use cache_scan::*;
 pub use call::CallPlan;
 pub use constant_table_scan::ConstantTableScan;
@@ -92,6 +95,7 @@ pub use replace::Replace;
 pub use revert_table::RevertTablePlan;
 pub use scalar_expr::*;
 pub use scan::*;
+pub use set_priority::SetPriorityPlan;
 pub use setting::*;
 pub use share::*;
 pub use sort::*;

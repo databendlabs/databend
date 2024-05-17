@@ -15,9 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use chrono::NaiveDateTime;
-use chrono::TimeZone;
-use chrono::Utc;
+use chrono::DateTime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -95,10 +93,8 @@ impl TaskDependentsTable {
                 engine: String::from(table_func_name),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
-                created_on: Utc
-                    .from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
-                updated_on: Utc
-                    .from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+                created_on: DateTime::from_timestamp(0, 0).unwrap(),
+                updated_on: DateTime::from_timestamp(0, 0).unwrap(),
                 ..Default::default()
             },
             ..Default::default()
@@ -259,7 +255,12 @@ impl AsyncSource for TaskDependentsSource {
         }
         let cloud_api = CloudControlApiProvider::instance();
         let tenant = self.ctx.get_tenant();
-        let user = self.ctx.get_current_user()?.identity().to_string();
+        let user = self
+            .ctx
+            .get_current_user()?
+            .identity()
+            .display()
+            .to_string();
         let query_id = self.ctx.get_id();
 
         let cfg = build_client_config(

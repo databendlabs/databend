@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -38,41 +37,43 @@ pub struct SessionContext {
     settings: Arc<Settings>,
     current_catalog: RwLock<String>,
     current_database: RwLock<String>,
-    // The current tenant can be determined by databend-query's config file, or by X-DATABEND-TENANT
-    // if it's in management mode. If databend-query is not in management mode, the current tenant
-    // can not be modified at runtime.
-    current_tenant: RwLock<Option<Tenant>>,
-    // The current user is determined by the authentication phase on each connection. It will not be
-    // changed during a session.
+
+    /// The current tenant can be determined by databend-query's config file, or by X-DATABEND-TENANT
+    /// if it's in management mode.
+    /// If databend-query is not in management mode, the current tenant can **NOT** be modified at runtime.
+    current_tenant: Option<Tenant>,
+
+    /// The current user is determined by the authentication phase on each connection. It will not be
+    /// changed during a session.
     current_user: RwLock<Option<UserInfo>>,
-    // Each session has a current role, by default all the users' granted roles will take effect,
-    // and the current role will become the owner of the database/table that the user created.
-    // The user can switch to another available role by `SET ROLE`. If the current_role is not set,
-    // it takes the user's default role.
+    /// Each session has a current role, by default all the users' granted roles will take effect,
+    /// and the current role will become the owner of the database/table that the user created.
+    /// The user can switch to another available role by `SET ROLE`. If the current_role is not set,
+    /// it takes the user's default role.
     current_role: RwLock<Option<RoleInfo>>,
-    // When an user comes from an external authenticator, the session is usually mapped to a single role.
+    /// When an user comes from an external authenticator, the session is usually mapped to a single role.
     auth_role: RwLock<Option<String>>,
-    // To SET SECONDARY ROLES ALL, the session will have all the roles take effect. On the other hand,
-    // SET SEONCDARY ROLES NONE will disable all the roles except the current role.
-    // By default, the SECONDARY ROLES is ALL, which is None here. There're a few cases that the SECONDARY
-    // ROLES is preferred to be empty, which is Some([]) here:
-    // 1. The user comes from an external authenticator, which maps to a single role.
-    // 2. The role is intentionally restricted by the sql client, to run SQLs with a restricted privileges.
+    /// To SET SECONDARY ROLES ALL, the session will have all the roles take effect. On the other hand,
+    /// SET SEONCDARY ROLES NONE will disable all the roles except the current role.
+    /// By default, the SECONDARY ROLES is ALL, which is None here. There're a few cases that the SECONDARY
+    /// ROLES is preferred to be empty, which is Some([]) here:
+    /// 1. The user comes from an external authenticator, which maps to a single role.
+    /// 2. The role is intentionally restricted by the sql client, to run SQLs with a restricted privileges.
     secondary_roles: RwLock<Option<Vec<String>>>,
-    // The client IP from the client.
-    client_host: RwLock<Option<SocketAddr>>,
+    /// The client IP from the client.
+    client_host: RwLock<Option<String>>,
     io_shutdown_tx: RwLock<Option<Box<dyn FnOnce() + Send + Sync + 'static>>>,
     query_context_shared: RwLock<Weak<QueryContextShared>>,
-    // We store `query_id -> query_result_cache_key` to session context, so that we can fetch
-    // query result through previous query_id easily.
+    /// We store `query_id -> query_result_cache_key` to session context, so that we can fetch
+    /// query result through previous query_id easily.
     query_ids_results: RwLock<Vec<(String, Option<String>)>>,
     typ: SessionType,
     txn_mgr: Mutex<TxnManagerRef>,
 }
 
 impl SessionContext {
-    pub fn try_create(settings: Arc<Settings>, typ: SessionType) -> Result<Arc<Self>> {
-        Ok(Arc::new(SessionContext {
+    pub fn try_create(settings: Arc<Settings>, typ: SessionType) -> Result<Self> {
+        Ok(SessionContext {
             settings,
             abort: Default::default(),
             current_user: Default::default(),
@@ -88,7 +89,7 @@ impl SessionContext {
             query_ids_results: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
-        }))
+        })
     }
 
     // Get abort status.
@@ -162,8 +163,7 @@ impl SessionContext {
         }
 
         if conf.query.management_mode || self.typ == SessionType::Local {
-            let lock = self.current_tenant.read();
-            if let Some(tenant) = &*lock {
+            if let Some(tenant) = &self.current_tenant {
                 return tenant.clone();
             }
         }
@@ -171,9 +171,8 @@ impl SessionContext {
         conf.query.tenant_id.clone()
     }
 
-    pub fn set_current_tenant(&self, tenant: Tenant) {
-        let mut lock = self.current_tenant.write();
-        *lock = Some(tenant);
+    pub(in crate::sessions) fn set_current_tenant(&mut self, tenant: Tenant) {
+        self.current_tenant = Some(tenant);
     }
 
     // Get current user
@@ -200,12 +199,12 @@ impl SessionContext {
         *lock = secondary_roles;
     }
 
-    pub fn get_client_host(&self) -> Option<SocketAddr> {
+    pub fn get_client_host(&self) -> Option<String> {
         let lock = self.client_host.read();
-        *lock
+        lock.clone()
     }
 
-    pub fn set_client_host(&self, sock: Option<SocketAddr>) {
+    pub fn set_client_host(&self, sock: Option<String>) {
         let mut lock = self.client_host.write();
         *lock = sock
     }

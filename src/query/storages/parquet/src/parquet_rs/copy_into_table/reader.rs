@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::compute::cast::can_cast_types;
-use databend_common_arrow::arrow::datatypes::Field as ArrowField;
+use arrow_cast::can_cast_types;
+use arrow_schema::Field;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
@@ -106,8 +106,8 @@ impl RowGroupReaderForCopy {
                     if from_field.data_type == to_field.data_type {
                         expr
                     } else if can_cast_types(
-                        ArrowField::from(from_field).data_type(),
-                        ArrowField::from(to_field).data_type(),
+                        Field::from(from_field).data_type(),
+                        Field::from(to_field).data_type(),
                     ) {
                         check_cast(
                             None,

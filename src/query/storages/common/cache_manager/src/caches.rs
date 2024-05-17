@@ -28,9 +28,9 @@ use databend_storages_common_cache::InMemoryItemCacheHolder;
 use databend_storages_common_cache::NamedCache;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
-use databend_storages_common_index::InvertedIndexDirectory;
+use databend_storages_common_index::InvertedIndexFile;
+use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -53,9 +53,9 @@ pub type BloomIndexFilterCache =
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 
-pub type InvertedIndexInfoCache = NamedCache<InMemoryItemCacheHolder<IndexInfo>>;
-pub type InvertedIndexFilterCache = NamedCache<
-    InMemoryItemCacheHolder<InvertedIndexDirectory, DefaultHashBuilder, InvertedIndexFilterMeter>,
+pub type InvertedIndexMetaCache = NamedCache<InMemoryItemCacheHolder<InvertedIndexMeta>>;
+pub type InvertedIndexFileCache = NamedCache<
+    InMemoryItemCacheHolder<InvertedIndexFile, DefaultHashBuilder, InvertedIndexFileMeter>,
 >;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
@@ -144,12 +144,19 @@ impl CachedObject<FileMetaData> for FileMetaData {
     }
 }
 
-impl CachedObject<InvertedIndexDirectory, DefaultHashBuilder, InvertedIndexFilterMeter>
-    for InvertedIndexDirectory
+impl CachedObject<InvertedIndexFile, DefaultHashBuilder, InvertedIndexFileMeter>
+    for InvertedIndexFile
 {
-    type Cache = InvertedIndexFilterCache;
+    type Cache = InvertedIndexFileCache;
     fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_inverted_index_filter_cache()
+        CacheManager::instance().get_inverted_index_file_cache()
+    }
+}
+
+impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
+    type Cache = InvertedIndexMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_inverted_index_meta_cache()
     }
 }
 
@@ -183,12 +190,12 @@ impl Meter<String, Arc<Xor8Filter>> for BloomIndexFilterMeter {
     }
 }
 
-pub struct InvertedIndexFilterMeter;
+pub struct InvertedIndexFileMeter;
 
-impl Meter<String, Arc<InvertedIndexDirectory>> for InvertedIndexFilterMeter {
+impl Meter<String, Arc<InvertedIndexFile>> for InvertedIndexFileMeter {
     type Measure = usize;
 
-    fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<InvertedIndexDirectory>) -> Self::Measure {
-        std::mem::size_of::<InvertedIndexDirectory>() + value.size()
+    fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<InvertedIndexFile>) -> Self::Measure {
+        std::mem::size_of::<InvertedIndexFile>() + value.data.len()
     }
 }

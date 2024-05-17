@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use highway::HighwayHash;
+use http::StatusCode;
 use log::error;
 use log::info;
 use log::warn;
@@ -26,7 +27,6 @@ use minitrace::prelude::*;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
-use poem::http::StatusCode;
 use poem::post;
 use poem::web::Json;
 use poem::web::Path;
@@ -77,7 +77,7 @@ pub struct QueryError {
 }
 
 impl QueryError {
-    pub(crate) fn from_error_code(e: &ErrorCode) -> Self {
+    pub(crate) fn from_error_code(e: ErrorCode) -> Self {
         QueryError {
             code: e.code(),
             message: e.display_text(),
@@ -201,7 +201,7 @@ impl QueryResponse {
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
             kill_uri: Some(make_kill_uri(&id)),
-            error: r.state.error.as_ref().map(QueryError::from_error_code),
+            error: r.state.error.map(QueryError::from_error_code),
             has_result_set: r.state.has_result_set,
         })
         .with_header(HEADER_QUERY_ID, id.clone())
@@ -220,7 +220,6 @@ impl QueryResponse {
 /// 1. check `next_uri` before refer to other fields of the response.
 ///
 /// the client in sql logic tests should follow this.
-
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
@@ -381,14 +380,14 @@ pub(crate) async fn query_handler(
                 Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
             }
             Err(e) => {
-                error!("{}: http query fail to start sql, error: {:?}", &ctx.query_id, e);
+                error!("http query fail to start sql, error: {:?}", e);
                 ctx.set_fail();
-                Ok(req.fail_to_start_sql(&e).into_response())
+                Ok(req.fail_to_start_sql(e).into_response())
             }
         }
     }
-    .in_span(root)
-    .await
+        .in_span(root)
+        .await
 }
 
 pub fn query_route() -> Route {
@@ -420,6 +419,7 @@ fn query_id_removed(query_id: &str, remove_reason: RemoveReason) -> PoemError {
         StatusCode::BAD_REQUEST,
     )
 }
+
 fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
     PoemError::from_string(
         format!("query id {query_id} not found on {node_id}"),
@@ -437,7 +437,6 @@ fn query_id_to_trace_id(query_id: &str) -> TraceId {
 /// log it.
 struct SlowRequestLogTracker {
     started_at: std::time::Instant,
-    query_id: String,
     method: String,
     uri: String,
 }
@@ -446,7 +445,6 @@ impl SlowRequestLogTracker {
     fn new(ctx: &HttpQueryContext) -> Self {
         Self {
             started_at: std::time::Instant::now(),
-            query_id: ctx.query_id.clone(),
             method: ctx.http_method.clone(),
             uri: ctx.uri.clone(),
         }
@@ -459,8 +457,7 @@ impl Drop for SlowRequestLogTracker {
             let elapsed = self.started_at.elapsed();
             if elapsed.as_secs_f64() > 60.0 {
                 warn!(
-                    "{}: slow http query request on {} {}, elapsed: {:.2}s",
-                    self.query_id,
+                    "slow http query request on {} {}, elapsed: {:.2}s",
                     self.method,
                     self.uri,
                     elapsed.as_secs_f64()

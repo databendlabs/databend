@@ -23,6 +23,9 @@ statement error 2603
 CREATE FUNCTION isnotempty_with_desc AS(p) -> not(is_null(p)) DESC = 'This is a description'
 
 statement ok
+DROP FUNCTION IF EXISTS with_lambda
+
+statement ok
 CREATE FUNCTION with_lambda AS(list) -> array_filter(list, x -> x > 2)
 
 statement ok

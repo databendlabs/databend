@@ -17,18 +17,17 @@ use std::default::Default;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
+use crate::ast::CreateOption;
 use crate::ast::FileFormatOptions;
 use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateStageStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     #[drive(skip)]
     pub stage_name: String,
@@ -47,7 +46,7 @@ pub struct CreateStageStmt {
 }
 
 impl Display for CreateStageStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, " OR REPLACE")?;
@@ -146,7 +145,7 @@ impl SelectStageOptions {
 // [ ENABLE_VIRTUAL_HOST_STYLE => true|false ]
 // )]
 impl Display for SelectStageOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, " (")?;
 
         if let Some(files) = self.files.as_ref() {

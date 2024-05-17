@@ -32,7 +32,7 @@ pub enum ShowLimit {
 }
 
 impl Display for ShowLimit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ShowLimit::Like { pattern } => write!(f, "LIKE '{pattern}'"),
             ShowLimit::Where { selection } => write!(f, "WHERE {selection}"),
@@ -48,7 +48,7 @@ pub struct ShowOptions {
 }
 
 impl Display for ShowOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(limit_option) = self.show_limit.clone() {
             write!(f, "{}", limit_option)?;
         }

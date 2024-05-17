@@ -8,7 +8,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [dependencies] # In alphabetical order
 databend-common-arrow = { path = "../arrow" }
@@ -25,14 +25,14 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145
 bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
-http = "0.2"
+http = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tantivy = "0.21.1"
+tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 

@@ -16,6 +16,7 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -102,9 +103,11 @@ async fn test_fuse_navigate() -> Result<()> {
         .timestamp
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
+
+    let ctx = fixture.new_query_ctx().await?;
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
     let tbl = fuse_table
-        .navigate_to_time_point(loc.clone(), instant)
+        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker())
         .await?;
 
     // check we got the snapshot of the first insertion
@@ -117,11 +120,27 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
-    let res = fuse_table.navigate_to_time_point(loc, instant).await;
+    let res = fuse_table
+        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker())
+        .await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND),
     };
+
+    // navigation should abort if query killed
+    ctx.get_current_session()
+        .force_kill_query(ErrorCode::AbortedQuery("mission aborted"));
+    let checker = ctx.clone().get_abort_checker();
+    assert!(checker.is_aborting());
+    let res = fuse_table
+        .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
+        .await;
+
+    assert!(res.is_err());
+    if let Err(e) = res {
+        assert_eq!(e.code(), ErrorCode::ABORTED_QUERY);
+    }
 
     Ok(())
 }

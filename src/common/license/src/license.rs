@@ -24,6 +24,20 @@ pub struct ComputeQuota {
     memory_usage: Option<usize>,
 }
 
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct StorageQuota {
+    pub storage_usage: Option<usize>,
+}
+
+/// We allow user to use upto 1TiB storage size.
+impl Default for StorageQuota {
+    fn default() -> Self {
+        Self {
+            storage_usage: Some(1024 * 1024 * 1024 * 1024),
+        }
+    }
+}
+
 // All enterprise features are defined here.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Feature {
@@ -51,13 +65,14 @@ pub enum Feature {
     Stream,
     #[serde(alias = "compute_quota", alias = "COMPUTE_QUOTA")]
     ComputeQuota(ComputeQuota),
-
+    #[serde(alias = "storage_quota", alias = "STORAGE_QUOTA")]
+    StorageQuota(StorageQuota),
     #[serde(other)]
     Unknown,
 }
 
 impl Display for Feature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Feature::LicenseInfo => write!(f, "license_info"),
             Feature::Vacuum => write!(f, "vacuum"),
@@ -83,6 +98,14 @@ impl Display for Feature {
                     Some(memory_usage) => write!(f, "memory_usage: {}", memory_usage),
                 }
             }
+            Feature::StorageQuota(v) => {
+                write!(f, "storage_quota(")?;
+
+                match v.storage_usage {
+                    None => write!(f, "storage_usage: unlimited,"),
+                    Some(storage_usage) => write!(f, "storage_usage: {}", storage_usage),
+                }
+            }
             Feature::Unknown => write!(f, "unknown"),
         }
     }
@@ -100,6 +123,15 @@ impl Feature {
 
                 if let Some(max_memory_usage) = c.memory_usage {
                     if max_memory_usage <= v.memory_usage.unwrap_or(usize::MAX) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+            (Feature::StorageQuota(c), Feature::StorageQuota(v)) => {
+                if let Some(max_storage_usage) = c.storage_usage {
+                    if max_storage_usage <= v.storage_usage.unwrap_or(usize::MAX) {
                         return false;
                     }
                 }
@@ -149,12 +181,29 @@ impl LicenseInfo {
             .collect::<Vec<_>>()
             .join(",")
     }
+
+    /// Get Storage Quota from given license info.
+    ///
+    /// Returns the default storage quota if the storage quota is not licensed.
+    pub fn get_storage_quota(&self) -> StorageQuota {
+        let Some(features) = self.features.as_ref() else {
+            return StorageQuota::default();
+        };
+
+        features
+            .iter()
+            .find_map(|f| match f {
+                Feature::StorageQuota(v) => Some(v),
+                _ => None,
+            })
+            .cloned()
+            .unwrap_or_default()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::license::ComputeQuota;
-    use crate::license::Feature;
+    use super::*;
 
     #[test]
     fn test_deserialize_feature_from_string() {
@@ -219,6 +268,13 @@ mod tests {
                 memory_usage: Some(1),
             }),
             serde_json::from_str::<Feature>("{\"ComputeQuota\":{\"memory_usage\":1}}").unwrap()
+        );
+
+        assert_eq!(
+            Feature::StorageQuota(StorageQuota {
+                storage_usage: Some(1),
+            }),
+            serde_json::from_str::<Feature>("{\"StorageQuota\":{\"storage_usage\":1}}").unwrap()
         );
 
         assert_eq!(

@@ -44,7 +44,7 @@ impl<'a> Token<'a> {
 }
 
 impl<'a> std::fmt::Debug for Token<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}({:?})", self.kind, self.span)
     }
 }
@@ -431,6 +431,8 @@ pub enum TokenKind {
     CONNECTION,
     #[token("CONNECTIONS", ignore(ascii_case))]
     CONNECTIONS,
+    #[token("CONSUME", ignore(ascii_case))]
+    CONSUME,
     #[token("CONTENT_TYPE", ignore(ascii_case))]
     CONTENT_TYPE,
     #[token("CONTINUE", ignore(ascii_case))]
@@ -637,6 +639,8 @@ pub enum TokenKind {
     GZIP,
     #[token("HAVING", ignore(ascii_case))]
     HAVING,
+    #[token("HIGH", ignore(ascii_case))]
+    HIGH,
     #[token("HISTORY", ignore(ascii_case))]
     HISTORY,
     #[token("HIVE", ignore(ascii_case))]
@@ -736,6 +740,8 @@ pub enum TokenKind {
     LIMIT,
     #[token("LIST", ignore(ascii_case))]
     LIST,
+    #[token("LOW", ignore(ascii_case))]
+    LOW,
     #[token("LZO", ignore(ascii_case))]
     LZO,
     #[token("MASKING", ignore(ascii_case))]
@@ -746,6 +752,8 @@ pub enum TokenKind {
     MAX_FILE_SIZE,
     #[token("MASTER_KEY", ignore(ascii_case))]
     MASTER_KEY,
+    #[token("MEDIUM", ignore(ascii_case))]
+    MEDIUM,
     #[token("MEMO", ignore(ascii_case))]
     MEMO,
     #[token("MEMORY", ignore(ascii_case))]
@@ -862,6 +870,8 @@ pub enum TokenKind {
     POSITION,
     #[token("PROCESSLIST", ignore(ascii_case))]
     PROCESSLIST,
+    #[token("PRIORITY", ignore(ascii_case))]
+    PRIORITY,
     #[token("PURGE", ignore(ascii_case))]
     PURGE,
     #[token("QUARTER", ignore(ascii_case))]
@@ -972,6 +982,8 @@ pub enum TokenKind {
     SET,
     #[token("UNSET", ignore(ascii_case))]
     UNSET,
+    #[token("SESSION", ignore(ascii_case))]
+    SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
     #[token("STAGES", ignore(ascii_case))]

@@ -72,6 +72,7 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::CacheScan(_) => "CacheScan".to_string(),
         RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
         RelOperator::Udf(_) => "Udf".to_string(),
+        RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
     }
 }
 

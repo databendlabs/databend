@@ -136,7 +136,6 @@ pub async fn read_block(
     reader: &BlockReader,
     block_meta: &BlockMeta,
     read_settings: &ReadSettings,
-    query_id: String,
 ) -> Result<DataBlock> {
     let merged_io_read_result = reader
         .read_columns_data_by_merge_io(
@@ -153,7 +152,7 @@ pub async fn read_block(
     let reader = reader.clone();
 
     GlobalIORuntime::instance()
-        .spawn(query_id, async move {
+        .spawn(async move {
             let column_chunks = merged_io_read_result.columns_chunks()?;
             reader.deserialize_chunks(
                 block_meta_ptr.location.0.as_str(),

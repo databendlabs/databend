@@ -240,17 +240,32 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<NullableType<EmptyArrayType>, NullableType<EmptyArrayType>, EmptyArrayType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, EmptyArrayType, _, _>(
         "array_concat",
         |_, _, _| FunctionDomain::Full,
-        |_, _, _| Value::Scalar(()),
+        |_, _, _| (),
     );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
         "array_concat",
-        |_, _, _| FunctionDomain::Full,
+        |_, domain1, domain2| {
+            FunctionDomain::Domain(
+                match (domain1, domain2) {
+                    (Some(domain1), Some(domain2)) => Some(domain1.merge(domain2)),
+                    (Some(domain1), None) => Some(domain1).cloned(),
+                    (None, Some(domain2)) => Some(domain2).cloned(),
+                    (None, None) => None,
+                }
+            )
+        },
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
-            |lhs, rhs, output, _| {
+            |lhs, rhs, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
                 output.builder.append_column(&lhs);
                 output.builder.append_column(&rhs);
                 output.commit_row()
@@ -261,15 +276,15 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry
         .register_passthrough_nullable_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>, _, _>(
             "array_flatten",
-            |_, _| FunctionDomain::Full,
+            |_, domain| FunctionDomain::Domain(domain.clone().flatten()),
             vectorize_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>(
-            |a, b| {
-                let mut builder = ColumnBuilder::with_capacity(&b.generics[0], a.len());
-                for a in a.iter() {
-                    builder.append_column(&a);
+                |arr, ctx| {
+                    let mut builder = ColumnBuilder::with_capacity(&ctx.generics[0], arr.len());
+                    for v in arr.iter() {
+                        builder.append_column(&v);
+                    }
+                    builder.build()
                 }
-                builder.build()
-            }
             ),
         );
 
@@ -278,7 +293,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             "array_to_string",
             |_, _, _| FunctionDomain::Full,
             vectorize_with_builder_2_arg::<ArrayType<StringType>, StringType, StringType>(
-                |lhs, rhs, output, _| {
+                |lhs, rhs, output, ctx| {
+                    if let Some(validity) = &ctx.validity {
+                        if !validity.get_bit(output.len()) {
+                            output.commit_row();
+                            return;
+                        }
+                    }
                     for (i, d) in lhs.iter().enumerate() {
                         if i != 0 {
                             output.put_str(rhs);
@@ -407,28 +428,56 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+    registry.register_2_arg_core::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>, _, _>(
         "array_prepend",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|val, arr, _| {
-            let data_type = arr.data_type();
-            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
-            builder.push(val);
-            builder.append_column(&arr);
-            builder.build()
-        }),
+        |_, item_domain, array_domain| {
+            let domain = array_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|inner_domain| inner_domain.merge(item_domain))
+                        .unwrap_or(item_domain.clone())
+                });
+            FunctionDomain::Domain(domain)
+        },
+        vectorize_with_builder_2_arg::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>(
+            |val, arr, output, _| {
+                output.put_item(val);
+                if let Some(arr) = arr {
+                    for item in arr.iter() {
+                        output.put_item(item);
+                    }
+                }
+                output.commit_row()
+        })
     );
 
-    registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>, _, _>(
+    registry.register_2_arg_core::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, ArrayType<GenericType<0>>, _, _>(
         "array_append",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>>(|arr, val, _| {
-            let data_type = arr.data_type();
-            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
-            builder.append_column(&arr);
-            builder.push(val);
-            builder.build()
-        }),
+        |_, array_domain, item_domain| {
+            let domain = array_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|inner_domain| inner_domain.merge(item_domain))
+                        .unwrap_or(item_domain.clone())
+                });
+            FunctionDomain::Domain(domain)
+        },
+        vectorize_with_builder_2_arg::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, ArrayType<GenericType<0>>>(
+            |arr, val, output, _| {
+                if let Some(arr) = arr {
+                    for item in arr.iter() {
+                        output.put_item(item);
+                    }
+                }
+                output.put_item(val);
+                output.commit_row()
+        })
     );
 
     fn eval_contains<T: ArgType>(
@@ -494,11 +543,11 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<StringType>, StringType, BooleanType, _, _>(
         "contains",
-         |_, lhs, rhs| {
-                        lhs.as_ref().map(|lhs| {
-                            lhs.domain_contains(rhs)
-                        }).unwrap_or(FunctionDomain::Full)
-                    },
+        |_, lhs, rhs| {
+            lhs.as_ref().map(|lhs| {
+                lhs.domain_contains(rhs)
+            }).unwrap_or(FunctionDomain::Full)
+        },
         |lhs, rhs, _| {
             match lhs {
                 ValueRef::Scalar(array) => {
@@ -551,15 +600,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<TimestampType>, TimestampType, BooleanType, _, _>(
-            "contains",
-            |_, lhs, rhs| {
-                let has_true = lhs.is_some_and(|lhs| !(lhs.min > rhs.max || lhs.max < rhs.min));
-                FunctionDomain::Domain(BooleanDomain {
-                    has_false: true,
-                    has_true,
-                })
-            },
-            |lhs, rhs, _| eval_contains::<TimestampType>(lhs, rhs)
+        "contains",
+        |_, lhs, rhs| {
+            let has_true = lhs.is_some_and(|lhs| !(lhs.min > rhs.max || lhs.max < rhs.min));
+            FunctionDomain::Domain(BooleanDomain {
+                has_false: true,
+                has_true,
+            })
+        },
+        |lhs, rhs, _| eval_contains::<TimestampType>(lhs, rhs)
     );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<BooleanType>, BooleanType, BooleanType, _, _>(
@@ -613,12 +662,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     );
 
-    registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, BooleanType, _, _>(
+    registry.register_2_arg_core::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, BooleanType, _, _>(
         "contains",
         |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, BooleanType>(|lhs, rhs, _| {
-            lhs.iter().contains(&rhs)
-        }),
+        vectorize_2_arg::<NullableType<ArrayType<GenericType<0>>>, GenericType<0>, BooleanType>(
+            |lhs, rhs, _| {
+                lhs.map(|col| col.iter().contains(&rhs)).unwrap_or(false)
+            }
+        )
     );
 
     registry.register_passthrough_nullable_1_arg::<EmptyArrayType, UInt64Type, _, _>(
@@ -657,7 +708,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
         "array_distinct",
-        |_, _| FunctionDomain::Full,
+        |_, domain| FunctionDomain::Domain(domain.clone()),
         vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
             if arr.len() > 0 {
                 let data_type = arr.data_type();

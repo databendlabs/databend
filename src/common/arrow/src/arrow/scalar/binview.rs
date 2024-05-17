@@ -27,7 +27,7 @@ pub struct BinaryViewScalar<T: ViewType + ?Sized> {
 }
 
 impl<T: ViewType + ?Sized> Debug for BinaryViewScalar<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Scalar({:?})", self.value)
     }
 }

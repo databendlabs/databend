@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 
+use bytes::Buf;
 use databend_common_exception::Result;
 use databend_common_meta_app::share::TableInfoMap;
 use databend_common_storages_share::share_table_info_location;
@@ -29,7 +30,7 @@ impl SharingAccessor {
         let share_table_meta_loc =
             share_table_info_location(&sharing_accessor.config.tenant, &input.share_name);
         let data = sharing_accessor.op.read(&share_table_meta_loc).await?;
-        let share_table_map: TableInfoMap = serde_json::from_slice(data.as_slice())?;
+        let share_table_map: TableInfoMap = serde_json::from_reader(data.reader())?;
 
         if input.request_tables.is_empty() {
             Ok(share_table_map)

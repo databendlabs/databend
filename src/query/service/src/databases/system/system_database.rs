@@ -35,6 +35,7 @@ use databend_common_storages_system::ContributorsTable;
 use databend_common_storages_system::CreditsTable;
 use databend_common_storages_system::DatabasesTable;
 use databend_common_storages_system::EnginesTable;
+use databend_common_storages_system::FullStreamsTable;
 use databend_common_storages_system::FunctionsTable;
 use databend_common_storages_system::IndexesTable;
 use databend_common_storages_system::LocksTable;
@@ -47,20 +48,18 @@ use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::ProcessorProfileTable;
-use databend_common_storages_system::QueriesQueueTable;
 use databend_common_storages_system::QueryCacheTable;
 use databend_common_storages_system::QueryLogTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::SettingsTable;
 use databend_common_storages_system::StagesTable;
-use databend_common_storages_system::StreamsTable;
 use databend_common_storages_system::TableFunctionsTable;
 use databend_common_storages_system::TablesTableWithHistory;
 use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
-use databend_common_storages_system::TracingTable;
+use databend_common_storages_system::TerseStreamsTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::ViewsTableWithHistory;
@@ -99,10 +98,9 @@ impl SystemDatabase {
             TablesTableWithHistory::create(sys_db_meta.next_table_id()),
             ClustersTable::create(sys_db_meta.next_table_id()),
             DatabasesTable::create(sys_db_meta.next_table_id()),
-            StreamsTable::create(sys_db_meta.next_table_id()),
-            Arc::new(TracingTable::create(sys_db_meta.next_table_id())),
+            FullStreamsTable::create(sys_db_meta.next_table_id()),
+            TerseStreamsTable::create(sys_db_meta.next_table_id()),
             ProcessesTable::create(sys_db_meta.next_table_id()),
-            QueriesQueueTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),
             MetricsTable::create(sys_db_meta.next_table_id()),
             MallocStatsTable::create(sys_db_meta.next_table_id()),

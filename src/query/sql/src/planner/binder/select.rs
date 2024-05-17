@@ -50,6 +50,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::plans::Visitor as _;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Visibility;
@@ -68,6 +69,343 @@ pub struct SelectItem<'a> {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_select_stmt(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &SelectStmt,
+        order_by: &[OrderByExpr],
+        limit: usize,
+    ) -> Result<(SExpr, BindContext)> {
+        if let Some(hints) = &stmt.hints {
+            if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                warn!(
+                    "In SELECT resolve optimize hints {:?} failed, err: {:?}",
+                    hints, e
+                );
+            }
+        }
+        let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
+            let select_list = &stmt.select_list;
+            self.bind_one_table(bind_context, select_list).await?
+        } else {
+            let mut max_column_position = MaxColumnPosition::new();
+            stmt.drive(&mut max_column_position);
+            self.metadata
+                .write()
+                .set_max_column_position(max_column_position.max_pos);
+
+            let cross_joins = stmt
+                .from
+                .iter()
+                .cloned()
+                .reduce(|left, right| TableReference::Join {
+                    span: None,
+                    join: Join {
+                        op: JoinOperator::CrossJoin,
+                        condition: JoinCondition::None,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    },
+                })
+                .unwrap();
+            self.bind_table_reference(bind_context, &cross_joins)
+                .await?
+        };
+
+        let mut rewriter = SelectRewriter::new(
+            from_context.all_column_bindings(),
+            self.name_resolution_ctx.unquoted_ident_case_sensitive,
+        );
+        let new_stmt = rewriter.rewrite(stmt)?;
+        let stmt = new_stmt.as_ref().unwrap_or(stmt);
+
+        // Collect set returning functions
+        let set_returning_functions = {
+            let mut collector = SrfCollector::new();
+            stmt.select_list.iter().for_each(|item| {
+                if let SelectTarget::AliasedExpr { expr, .. } = item {
+                    collector.visit(expr);
+                }
+            });
+            collector.into_srfs()
+        };
+
+        // Bind set returning functions
+        s_expr = self
+            .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
+            .await?;
+
+        // Try put window definitions into bind context.
+        // This operation should be before `normalize_select_list` because window functions can be used in select list.
+        self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
+
+        // Generate a analyzed select list with from context
+        let mut select_list = self
+            .normalize_select_list(&mut from_context, &stmt.select_list)
+            .await?;
+
+        // This will potentially add some alias group items to `from_context` if find some.
+        if let Some(group_by) = stmt.group_by.as_ref() {
+            self.analyze_group_items(&mut from_context, &select_list, group_by)
+                .await?;
+        }
+
+        self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
+
+        // `analyze_window` should behind `analyze_aggregate_select`,
+        // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
+        self.analyze_window(&mut from_context, &mut select_list)?;
+
+        let aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
+
+        // To support using aliased column in `WHERE` clause,
+        // we should bind where after `select_list` is rewritten.
+        let where_scalar = if let Some(expr) = &stmt.selection {
+            let (new_expr, scalar) = self
+                .bind_where(&mut from_context, &aliases, expr, s_expr)
+                .await?;
+            s_expr = new_expr;
+            Some(scalar)
+        } else {
+            None
+        };
+
+        // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
+        let (mut scalar_items, projections) = self.analyze_projection(
+            &from_context.aggregate_info,
+            &from_context.windows,
+            &select_list,
+        )?;
+
+        let having = if let Some(having) = &stmt.having {
+            Some(
+                self.analyze_aggregate_having(&mut from_context, &aliases, having)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
+        let qualify = if let Some(qualify) = &stmt.qualify {
+            Some(
+                self.analyze_window_qualify(&mut from_context, &aliases, qualify)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
+        let order_items = self
+            .analyze_order_items(
+                &mut from_context,
+                &mut scalar_items,
+                &aliases,
+                &projections,
+                order_by,
+                stmt.distinct,
+            )
+            .await?;
+
+        // After all analysis is done.
+        if set_returning_functions.is_empty() {
+            // Ignore SRFs.
+            self.analyze_lazy_materialization(
+                &from_context,
+                stmt,
+                &scalar_items,
+                &select_list,
+                &where_scalar,
+                &order_items.items,
+                limit,
+            )?;
+        }
+
+        if !from_context.aggregate_info.aggregate_functions.is_empty()
+            || !from_context.aggregate_info.group_items.is_empty()
+        {
+            s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
+        }
+
+        if let Some(having) = having {
+            s_expr = self.bind_having(&mut from_context, having, s_expr).await?;
+        }
+
+        // bind window
+        // window run after the HAVING clause but before the ORDER BY clause.
+        for window_info in &from_context.windows.window_functions {
+            s_expr = self.bind_window_function(window_info, s_expr).await?;
+        }
+
+        if let Some(qualify) = qualify {
+            s_expr = self
+                .bind_qualify(&mut from_context, qualify, s_expr)
+                .await?;
+        }
+
+        if stmt.distinct {
+            s_expr = self.bind_distinct(
+                stmt.span,
+                &from_context,
+                &projections,
+                &mut scalar_items,
+                s_expr,
+            )?;
+        }
+
+        if !order_by.is_empty() {
+            s_expr = self
+                .bind_order_by(
+                    &from_context,
+                    order_items,
+                    &select_list,
+                    &mut scalar_items,
+                    s_expr,
+                )
+                .await?;
+        }
+
+        s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+
+        // rewrite async function to async function plan
+        let mut async_func_rewriter = AsyncFunctionRewriter::new();
+        s_expr = async_func_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite variant inner fields as virtual columns
+        let mut virtual_column_rewriter =
+            VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
+        s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
+
+        // check inverted index license
+        if !from_context.inverted_index_map.is_empty() {
+            let license_manager = get_license_manager();
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        }
+        // add internal column binding into expr
+        s_expr = from_context.add_internal_column_into_expr(s_expr)?;
+
+        let mut output_context = BindContext::new();
+        output_context.parent = from_context.parent;
+        output_context.columns = from_context.columns;
+
+        Ok((s_expr, output_context))
+    }
+
+    #[async_recursion]
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_set_expr(
+        &mut self,
+        bind_context: &mut BindContext,
+        set_expr: &SetExpr,
+        order_by: &[OrderByExpr],
+        limit: usize,
+    ) -> Result<(SExpr, BindContext)> {
+        match set_expr {
+            SetExpr::Select(stmt) => {
+                self.bind_select_stmt(bind_context, stmt, order_by, limit)
+                    .await
+            }
+            SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
+            SetExpr::SetOperation(set_operation) => {
+                self.bind_set_operator(
+                    bind_context,
+                    &set_operation.left,
+                    &set_operation.right,
+                    &set_operation.op,
+                    &set_operation.all,
+                )
+                .await
+            }
+            SetExpr::Values { span, values } => self.bind_values(bind_context, *span, values).await,
+        }
+    }
+
+    #[async_recursion]
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_query(
+        &mut self,
+        bind_context: &mut BindContext,
+        query: &Query,
+    ) -> Result<(SExpr, BindContext)> {
+        if let Some(with) = &query.with {
+            self.add_cte(with, bind_context)?;
+        }
+
+        let limit_empty = query.limit.is_empty();
+        let (mut limit, offset) = if !limit_empty {
+            if query.limit.len() == 1 {
+                Self::analyze_limit(Some(&query.limit[0]), &query.offset)?
+            } else {
+                Self::analyze_limit(Some(&query.limit[1]), &Some(query.limit[0].clone()))?
+            }
+        } else if query.offset.is_some() {
+            Self::analyze_limit(None, &query.offset)?
+        } else {
+            (None, 0)
+        };
+
+        let mut contain_top_n = false;
+        let (mut s_expr, bind_context) = match &query.body {
+            SetExpr::Select(stmt) => {
+                if !limit_empty && stmt.top_n.is_some() {
+                    return Err(ErrorCode::SemanticError(
+                        "Duplicate LIMIT: TopN and Limit cannot be used together",
+                    ));
+                } else if let Some(n) = stmt.top_n {
+                    contain_top_n = true;
+                    limit = Some(n as usize);
+                }
+                self.bind_set_expr(
+                    bind_context,
+                    &query.body,
+                    &query.order_by,
+                    limit.unwrap_or_default(),
+                )
+                .await?
+            }
+            SetExpr::Query(_) => {
+                self.bind_set_expr(
+                    bind_context,
+                    &query.body,
+                    &query.order_by,
+                    limit.unwrap_or_default(),
+                )
+                .await?
+            }
+            SetExpr::SetOperation(_) | SetExpr::Values { .. } => {
+                let (mut s_expr, mut bind_context) = self
+                    .bind_set_expr(bind_context, &query.body, &[], limit.unwrap_or_default())
+                    .await?;
+                if !query.order_by.is_empty() {
+                    s_expr = self
+                        .bind_order_by_for_set_operation(&mut bind_context, s_expr, &query.order_by)
+                        .await?;
+                }
+                (s_expr, bind_context)
+            }
+        };
+
+        if !query.limit.is_empty() || contain_top_n || query.offset.is_some() {
+            s_expr = Self::bind_limit(s_expr, limit, offset);
+        }
+
+        Ok((s_expr, bind_context))
+    }
+
     #[async_backtrace::framed]
     pub async fn bind_where(
         &mut self,
@@ -93,7 +431,9 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
+                ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
 

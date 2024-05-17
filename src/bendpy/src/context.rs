@@ -45,7 +45,8 @@ impl PySessionContext {
     #[pyo3(signature = (tenant = None))]
     fn new(tenant: Option<&str>, py: Python) -> PyResult<Self> {
         let session = RUNTIME.block_on(async {
-            let session = SessionManager::instance()
+            let session_manager = SessionManager::instance();
+            let mut session = session_manager
                 .create_session(SessionType::Local)
                 .await
                 .unwrap();
@@ -60,12 +61,14 @@ impl PySessionContext {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Error: {}", e))
             })?;
 
+            session.set_current_tenant(tenant.clone());
+
+            let session = session_manager.register_session(session).unwrap();
+
             let config = GlobalConfig::instance();
             UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
                 .await
                 .unwrap();
-
-            session.set_current_tenant(tenant);
 
             let mut user = UserInfo::new_no_auth("root", "%");
             user.grants.grant_privileges(

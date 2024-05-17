@@ -102,7 +102,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -122,6 +121,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -186,14 +186,6 @@ impl Catalog for FakedCatalog {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         self.cat.get_table_by_info(table_info)
-    }
-
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
-        self.cat.get_table_meta_by_id(table_id).await
-    }
-
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        self.cat.get_table_name_by_id(table_id).await
     }
 
     async fn mget_table_names_by_ids(
@@ -419,6 +411,10 @@ impl Catalog for FakedCatalog {
     async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
     }
+
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
+        self.cat.get_table_meta_by_id(table_id).await
+    }
 }
 
 struct CtxDelegation {
@@ -552,9 +548,27 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_enable_sort_spill(&self) -> bool {
+        todo!()
+    }
+    fn set_enable_sort_spill(&self, _enable: bool) {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
+    fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
+        todo!()
+    }
 
     fn get_query_str(&self) -> String {
+        todo!()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        todo!()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
         todo!()
     }
 

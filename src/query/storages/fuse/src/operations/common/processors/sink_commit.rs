@@ -37,7 +37,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::LockGuard;
 use databend_storages_common_table_meta::meta::ClusterKey;
-use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -48,10 +48,10 @@ use log::warn;
 use opendal::Operator;
 
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::AbortOperation;
-use crate::operations::common::CommitMeta;
-use crate::operations::common::SnapshotGenerator;
 use crate::operations::set_backoff;
+use crate::operations::AppendGenerator;
+use crate::operations::CommitMeta;
+use crate::operations::SnapshotGenerator;
 use crate::operations::TruncateGenerator;
 use crate::operations::TruncateMode;
 use crate::FuseTable;
@@ -71,7 +71,7 @@ enum State {
         snapshot: TableSnapshot,
         table_info: TableInfo,
     },
-    AbortOperation,
+    Abort(ErrorCode),
     Finish,
 }
 
@@ -93,7 +93,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     max_retry_elapsed: Option<Duration>,
     backoff: ExponentialBackoff,
 
-    abort_operation: AbortOperation,
+    new_segment_locs: Vec<Location>,
     lock_guard: Option<LockGuard>,
     lock: Option<Arc<dyn Lock>>,
     start_time: Instant,
@@ -129,13 +129,13 @@ where F: SnapshotGenerator + Send + 'static
             table: Arc::new(table.clone()),
             copied_files,
             snapshot_gen,
-            abort_operation: AbortOperation::default(),
             lock_guard: None,
             purge,
             backoff: ExponentialBackoff::default(),
             retries: 0,
             max_retry_elapsed,
             input,
+            new_segment_locs: vec![],
             lock,
             start_time: Instant::now(),
             prev_snapshot_id,
@@ -173,7 +173,7 @@ where F: SnapshotGenerator + Send + 'static
         let meta = CommitMeta::downcast_from(input_meta)
             .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
 
-        self.abort_operation = meta.abort_operation;
+        self.new_segment_locs = meta.new_segment_locs;
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
@@ -205,6 +205,13 @@ where F: SnapshotGenerator + Send + 'static
             .downcast_ref::<TruncateGenerator>()
             .is_some_and(|gen| !matches!(gen.mode(), TruncateMode::Delete))
     }
+
+    fn is_append_only_txn(&self) -> bool {
+        self.snapshot_gen
+            .as_any()
+            .downcast_ref::<AppendGenerator>()
+            .is_some()
+    }
 }
 
 #[async_trait::async_trait]
@@ -220,16 +227,16 @@ where F: SnapshotGenerator + Send + 'static
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(&self.state, State::GenerateSnapshot { .. }) {
+        if matches!(
+            &self.state,
+            State::GenerateSnapshot { .. } | State::Abort(_)
+        ) {
             return Ok(Event::Sync);
         }
 
         if matches!(
             &self.state,
-            State::FillDefault
-                | State::TryCommit { .. }
-                | State::RefreshTable
-                | State::AbortOperation
+            State::FillDefault | State::TryCommit { .. } | State::RefreshTable
         ) {
             return Ok(Event::Async);
         }
@@ -259,35 +266,64 @@ where F: SnapshotGenerator + Send + 'static
                 cluster_key_meta,
                 table_info,
             } => {
-                if !self.change_tracking && self.table.change_tracking_enabled() {
-                    // If change tracing is disabled when the txn start, but is enabled when commit,
+                let change_tracking_enabled_during_commit = {
+                    let no_change_tracking_at_beginning = !self.change_tracking;
+                    // note that `self.table` might be refreshed if commit retried
+                    let change_tracking_enabled_now = self.table.change_tracking_enabled();
+
+                    no_change_tracking_at_beginning && change_tracking_enabled_now
+                };
+
+                if !self.is_append_only_txn() && change_tracking_enabled_during_commit {
+                    // If change tracking is not enabled when the txn start, but is enabled when committing,
                     // then the txn should be aborted.
-                    error!("commit mutation failed cause change tracking is enabled when commit");
-                    self.state = State::AbortOperation;
-                } else {
-                    let schema = self.table.schema().as_ref().clone();
-                    match self.snapshot_gen.generate_new_snapshot(
-                        schema,
-                        cluster_key_meta,
-                        previous,
-                        Some(table_info.ident.seq),
-                    ) {
-                        Ok(snapshot) => {
-                            self.state = State::TryCommit {
-                                data: snapshot.to_bytes()?,
-                                snapshot,
-                                table_info,
-                            };
-                        }
-                        Err(e) => {
-                            error!(
-                                "commit mutation failed after {} retries, error: {:?}",
-                                self.retries, e,
-                            );
-                            self.state = State::AbortOperation;
-                        }
+                    // For mutations other than append-only, stream column values (like _origin_block_id)
+                    // must be properly generated. If not, CDC will not function as expected.
+                    self.state = State::Abort(ErrorCode::StorageOther(
+                        "commit failed because change tracking was enabled during the commit process",
+                    ));
+                    return Ok(());
+                }
+
+                // now:
+                // - either current txn IS append-only
+                //    even if this is a conflict txn T (in the meaning of table version) has been
+                // commited, which has changed the change-tracking state from disabled to enabled,
+                // merging with transaction T is still safe, since the CDC mechanism allows it.
+                // - or change-tracking state is NOT changed.
+                //    in this case, we only need standard conflict resolution.
+                // therefore, we can safely proceed.
+
+                let schema = self.table.schema().as_ref().clone();
+                match self.snapshot_gen.generate_new_snapshot(
+                    schema,
+                    cluster_key_meta,
+                    previous,
+                    Some(table_info.ident.seq),
+                ) {
+                    Ok(snapshot) => {
+                        self.state = State::TryCommit {
+                            data: snapshot.to_bytes()?,
+                            snapshot,
+                            table_info,
+                        };
+                    }
+                    Err(e) => {
+                        self.state = State::Abort(e);
                     }
                 }
+            }
+            State::Abort(e) => {
+                let duration = self.start_time.elapsed();
+                metrics_inc_commit_aborts();
+                metrics_inc_commit_milliseconds(duration.as_millis());
+                error!(
+                    "transaction aborted after {} retries, which took {} ms, cause: {:?}",
+                    self.retries,
+                    duration.as_millis(),
+                    e
+                );
+                return Err(e);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -312,9 +348,10 @@ where F: SnapshotGenerator + Send + 'static
                         .map_or(true, |previous| previous.snapshot_id != prev_snapshot_id)
                 });
                 if snapshot_has_changed {
-                    error!("commit mutation failed cause snapshot has changed when commit");
                     // if snapshot has changed abort operation
-                    self.state = State::AbortOperation;
+                    self.state = State::Abort(ErrorCode::StorageOther(
+                        "commit failed because the snapshot had changed during the commit process",
+                    ));
                 } else {
                     self.snapshot_gen
                         .fill_default_values(schema, &previous)
@@ -333,11 +370,7 @@ where F: SnapshotGenerator + Send + 'static
                     self.state = State::FillDefault;
                 }
                 Err(e) => {
-                    error!(
-                        "commit mutation failed cause get lock failed, error: {:?}",
-                        e
-                    );
-                    self.state = State::AbortOperation;
+                    self.state = State::Abort(e);
                 }
             },
             State::TryCommit {
@@ -381,8 +414,8 @@ where F: SnapshotGenerator + Send + 'static
                             let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             warn!(
-                                "table detected, purging historical data. ({})",
-                                tbl.table_info.ident
+                                "purging historical data. table: {}, ident: {}",
+                                tbl.table_info.name, tbl.table_info.ident
                             );
 
                             let keep_last_snapshot = true;
@@ -408,22 +441,19 @@ where F: SnapshotGenerator + Send + 'static
                         }
                         metrics_inc_commit_mutation_success();
                         {
-                            let elapsed_time = self.start_time.elapsed().as_millis();
+                            let elapsed_time = self.start_time.elapsed();
                             let status = format!(
-                                "commit mutation success after {} retries, which took {} ms",
+                                "commit mutation success after {} retries, which took {:?}",
                                 self.retries, elapsed_time
                             );
-                            metrics_inc_commit_milliseconds(elapsed_time);
+                            metrics_inc_commit_milliseconds(elapsed_time.as_millis());
                             self.ctx.set_status_info(&status);
                         }
                         if let Some(files) = &self.copied_files {
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
-                        for segment in self.abort_operation.segments.iter() {
-                            self.ctx.add_segment_location((
-                                segment.to_string(),
-                                SegmentInfo::VERSION,
-                            ))?;
+                        for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
+                            self.ctx.add_segment_location(segment_loc)?;
                         }
                         self.state = State::Finish;
                     }
@@ -448,7 +478,7 @@ where F: SnapshotGenerator + Send + 'static
                                 if FuseTable::no_side_effects_in_meta_store(&e) {
                                     // if we are sure that table state inside metastore has not been
                                     // modified by this operation, abort this operation.
-                                    self.state = State::AbortOperation;
+                                    self.state = State::Abort(e);
                                 } else {
                                     return Err(ErrorCode::OCCRetryFailure(format!(
                                         "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
@@ -480,19 +510,6 @@ where F: SnapshotGenerator + Send + 'static
                     cluster_key_meta,
                     table_info: fuse_table.table_info.clone(),
                 };
-            }
-            State::AbortOperation => {
-                let duration = self.start_time.elapsed();
-                metrics_inc_commit_aborts();
-                // todo: use histogram when it ready
-                metrics_inc_commit_milliseconds(duration.as_millis());
-                let op = self.abort_operation.clone();
-                op.abort(self.ctx.clone(), self.dal.clone()).await?;
-                return Err(ErrorCode::StorageOther(format!(
-                    "transaction aborted after {} retries, which took {} ms",
-                    self.retries,
-                    duration.as_millis()
-                )));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

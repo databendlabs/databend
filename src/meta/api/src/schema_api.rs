@@ -76,7 +76,6 @@ use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -89,6 +88,7 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -96,7 +96,9 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 
 use crate::kv_app_error::KVAppError;
 
@@ -203,17 +205,17 @@ pub trait SchemaApi: Send + Sync {
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
-    async fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-    ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError>;
+    /// Return TableMeta by table_id.
+    ///
+    /// It returns None instead of KVAppError, if table_id does not exist
+    async fn get_table_by_id(&self, table_id: MetaId)
+    -> Result<Option<SeqV<TableMeta>>, MetaError>;
 
     async fn mget_table_names_by_ids(
         &self,
         table_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>, KVAppError>;
 
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError>;
     async fn mget_database_names_by_ids(
         &self,
         db_ids: &[MetaId],
@@ -239,8 +241,10 @@ pub trait SchemaApi: Send + Sync {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError>;
 
-    async fn update_multi_table_meta(&self, req: UpdateMultiTableMetaReq)
-    -> Result<(), KVAppError>;
+    async fn update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult, KVAppError>;
 
     async fn set_table_column_mask_policy(
         &self,

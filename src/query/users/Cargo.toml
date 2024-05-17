@@ -8,7 +8,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 io-uring = ["databend-common-meta-store/io-uring"]

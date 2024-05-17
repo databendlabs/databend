@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
@@ -46,6 +45,7 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_async_functions::resolve_async_function;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -84,6 +84,7 @@ use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
+use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
@@ -920,6 +921,14 @@ impl<'a> TypeChecker<'a> {
                         }
                         _ => unreachable!(),
                     }
+                } else if ASYNC_FUNCTIONS.contains(&func_name) {
+                    let catalog = self.ctx.get_default_catalog()?;
+                    let tenant = self.ctx.get_tenant();
+                    let async_func =
+                        resolve_async_function(*span, tenant, catalog, func_name, &args).await?;
+
+                    let data_type = async_func.return_type.as_ref().clone();
+                    Box::new((async_func.into(), data_type))
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -2355,6 +2364,7 @@ impl<'a> TypeChecker<'a> {
             index_schema: index_schema.unwrap(),
             query_fields,
             query_text: query_text.to_string(),
+            has_score: false,
         };
 
         self.bind_context
@@ -2890,7 +2900,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(user) => Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        value: Literal::String(user.identity().to_string()),
+                        value: Literal::String(user.identity().display().to_string()),
                     })
                     .await,
                 ),
@@ -3508,7 +3518,7 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
-    async fn resolve_wasm_file_location(&mut self, udf_definition: &UDFScript) -> Result<UDFType> {
+    async fn resolve_udf_with_stage(&mut self, udf_definition: &UDFScript) -> Result<UDFType> {
         let file_location = match udf_definition.code.strip_prefix('@') {
             Some(location) => FileLocation::Stage(location.to_string()),
             None => {
@@ -3516,77 +3526,64 @@ impl<'a> TypeChecker<'a> {
                     udf_definition.code.clone(),
                     "".to_string(),
                     BTreeMap::default(),
-                )?;
-                FileLocation::Uri(uri)
+                );
+
+                match uri {
+                    Ok(uri) => FileLocation::Uri(uri),
+                    Err(_) => {
+                        // fallback to use the code as real code
+                        return Ok(UDFType::Script((
+                            udf_definition.language.clone(),
+                            udf_definition.runtime_version.clone(),
+                            udf_definition.code.clone().into(),
+                        )));
+                    }
+                }
             }
         };
 
-        let (stage_info, wasm_module_path) =
-            resolve_file_location(self.ctx.as_ref(), &file_location)
-                .await
-                .map_err(|err| {
-                    ErrorCode::SemanticError(format!(
-                        "Failed to resolve WASM code location {:#?}: {}",
-                        &udf_definition.code, err
-                    ))
-                })?;
+        let (stage_info, module_path) = resolve_file_location(self.ctx.as_ref(), &file_location)
+            .await
+            .map_err(|err| {
+                ErrorCode::SemanticError(format!(
+                    "Failed to resolve code location {:?}: {}",
+                    &udf_definition.code, err
+                ))
+            })?;
 
         let op = StageTable::get_op(&stage_info).map_err(|err| {
             ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
         })?;
 
-        let code_blob = op.read(&wasm_module_path).await.map_err(|err| {
-            ErrorCode::SemanticError(format!(
-                "Failed to read WASM module {}: {}",
-                wasm_module_path, err
-            ))
-        })?;
+        let code_blob = op
+            .read(&module_path)
+            .await
+            .map_err(|err| {
+                ErrorCode::SemanticError(format!("Failed to read module {}: {}", module_path, err))
+            })?
+            .to_vec();
 
-        let compress_algo = CompressAlgorithm::from_path(&wasm_module_path);
+        let compress_algo = CompressAlgorithm::from_path(&module_path);
         log::trace!(
-            "Detecting compression algorithm for WASM module: {}",
-            &wasm_module_path
+            "Detecting compression algorithm for module: {}",
+            &module_path
         );
         log::info!("Detected compression algorithm: {:#?}", &compress_algo);
 
         let code_blob = match compress_algo {
             Some(algo) => {
-                log::trace!("Decompressing WASM module using {:?} algorithm", algo);
+                log::trace!("Decompressing module using {:?} algorithm", algo);
                 let mut decoder = DecompressDecoder::new(algo);
                 decoder.decompress_all(&code_blob).map_err(|err| {
-                    let error_msg = format!(
-                        "Failed to decompress WASM module {}: {}",
-                        wasm_module_path, err
-                    );
+                    let error_msg = format!("Failed to decompress module {}: {}", module_path, err);
                     log::error!("{}", error_msg);
                     ErrorCode::SemanticError(error_msg)
                 })?
             }
-            None => {
-                let ext = match PathBuf::from(&wasm_module_path).extension() {
-                    Some(ext) => ext.to_string_lossy().to_string(),
-                    None => {
-                        let error_msg = format!(
-                            "WASM module path {} has no file extension",
-                            wasm_module_path
-                        );
-                        log::error!("{}", error_msg);
-                        return Err(ErrorCode::SemanticError(error_msg));
-                    }
-                };
-
-                if ext == "wasm" {
-                    log::trace!("WASM module is already uncompressed");
-                    code_blob
-                } else {
-                    let error_msg = format!("Invalid WASM module: {}", wasm_module_path);
-                    log::error!("{}", error_msg);
-                    return Err(ErrorCode::SemanticError(error_msg));
-                }
-            }
+            None => code_blob,
         };
 
-        Ok(UDFType::WasmScript((
+        Ok(UDFType::Script((
             udf_definition.language.clone(),
             udf_definition.runtime_version.clone(),
             code_blob,
@@ -3611,15 +3608,7 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        let const_udf_type = if udf_definition.language.to_lowercase().as_str() == "wasm" {
-            self.resolve_wasm_file_location(&udf_definition).await?
-        } else {
-            UDFType::Script((
-                udf_definition.language,
-                udf_definition.runtime_version,
-                udf_definition.code,
-            ))
-        };
+        let const_udf_type = self.resolve_udf_with_stage(&udf_definition).await?;
 
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
@@ -3805,22 +3794,24 @@ impl<'a> TypeChecker<'a> {
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            let column_entry = self.metadata.read().column(column.index).clone();
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
-                column_entry
-            {
-                // Use data type from meta to get the field names of tuple type.
-                table_data_type = data_type.clone();
-                if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
-                    let box (inner_scalar, _inner_data_type) = self
-                        .resolve_tuple_map_access_pushdown(
-                            expr.span(),
-                            column.clone(),
-                            &mut table_data_type,
-                            &mut paths,
-                        )
-                        .await?;
-                    scalar = inner_scalar;
+            if column.index < self.metadata.read().columns().len() {
+                let column_entry = self.metadata.read().column(column.index).clone();
+                if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
+                    column_entry
+                {
+                    // Use data type from meta to get the field names of tuple type.
+                    table_data_type = data_type.clone();
+                    if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
+                        let box (inner_scalar, _inner_data_type) = self
+                            .resolve_tuple_map_access_pushdown(
+                                expr.span(),
+                                column.clone(),
+                                &mut table_data_type,
+                                &mut paths,
+                            )
+                            .await?;
+                        scalar = inner_scalar;
+                    }
                 }
             }
         }

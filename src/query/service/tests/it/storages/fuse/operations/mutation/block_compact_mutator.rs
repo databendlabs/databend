@@ -217,7 +217,6 @@ async fn test_safety() -> Result<()> {
             locations.clone(),
             None,
             None,
-            None,
         );
 
         let limit: usize = rand.gen_range(1..15);

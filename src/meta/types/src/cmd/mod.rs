@@ -73,7 +73,7 @@ pub struct UpsertKV {
 }
 
 impl fmt::Display for Cmd {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Cmd::AddNode {
                 node_id,
@@ -100,7 +100,7 @@ impl fmt::Display for Cmd {
 }
 
 impl fmt::Display for UpsertKV {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "{}({:?}) = {:?} ({:?})",

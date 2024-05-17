@@ -93,6 +93,7 @@ pub async fn read_metadata_async(
         None => operator.stat(path).await?.content_length(),
         Some(n) => n,
     };
+
     check_footer_size(file_size)?;
 
     // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
@@ -100,7 +101,8 @@ pub async fn read_metadata_async(
     let buffer = operator
         .read_with(path)
         .range((file_size - default_end_len)..file_size)
-        .await?;
+        .await?
+        .to_vec();
     let buffer_len = buffer.len();
     let metadata_len = decode_footer(
         &buffer[(buffer_len - FOOTER_SIZE as usize)..]
@@ -122,7 +124,8 @@ pub async fn read_metadata_async(
         let mut metadata = operator
             .read_with(path)
             .range((file_size - footer_len)..(file_size - buffer_len as u64))
-            .await?;
+            .await?
+            .to_vec();
         metadata.extend(buffer);
         Ok(decode_metadata(&metadata)?)
     }

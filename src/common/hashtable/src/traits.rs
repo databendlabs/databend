@@ -556,7 +556,7 @@ pub trait HashJoinHashtableLike {
     /// 3. `vec_ptr` is RowPtr Array, we use this one to record the matched row in chunks
     /// 4. `occupied` is the length for vec_ptr
     /// 5. `capacity` is the capacity of vec_ptr
-    /// 6. return macthed rows count and next ptr which need to test in the future.
+    /// 6. return matched rows count and next ptr which need to test in the future.
     /// if the capacity is enough, the next ptr is zero, otherwise next ptr is valid.
     fn next_probe(
         &self,

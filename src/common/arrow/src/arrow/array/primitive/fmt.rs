@@ -162,7 +162,7 @@ pub fn get_write_value<'a, T: NativeType, F: Write>(
 }
 
 impl<T: NativeType> Debug for PrimitiveArray<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let writer = get_write_value(self);
 
         write!(f, "{:?}", self.data_type())?;

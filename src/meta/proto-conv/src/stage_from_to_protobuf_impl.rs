@@ -21,10 +21,10 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app as mt;
 use databend_common_protos::pb;
+use mt::principal::FileFormatOptionsReader;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;
-use crate::stage_from_to_protobuf_impl::mt::principal::FileFormatOptionsAst;
 use crate::FromToProto;
 use crate::FromToProtoEnum;
 use crate::Incompatible;
@@ -185,8 +185,8 @@ impl FromToProto for mt::principal::StageInfo {
             },
             (None, Some(p)) => {
                 let options = mt::principal::FileFormatOptions::from_pb(p)?;
-                let options = FileFormatOptionsAst{options: options.to_map()};
-                mt::principal::FileFormatParams::try_from_ast(options, true).map_err(|e| Incompatible {
+                let reader = FileFormatOptionsReader::from_map(options.to_map());
+                mt::principal::FileFormatParams::try_from_reader(reader, true).map_err(|e| Incompatible {
                     reason: format!("fail to convert StageInfo.file_format_options to StageInfo.file_format_params: {e:?}"),
                 })?
             },

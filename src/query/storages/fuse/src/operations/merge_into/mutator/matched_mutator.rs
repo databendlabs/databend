@@ -167,7 +167,7 @@ impl MatchedAggregator {
                 {
                     // we can get duplicated partial unmodified blocks,this is not an error
                     // |----------------------------block----------------------------------------|
-                    // |----partial-unmodified----|-----macthed------|----partial-unmodified-----|
+                    // |----partial-unmodified----|-----matched------|----partial-unmodified-----|
                     info!(
                         "duplicated block: segment_idx: {}, block_idx: {}",
                         meta_index.segment_idx, meta_index.block_idx
@@ -335,8 +335,7 @@ impl MatchedAggregator {
                 ));
             }
 
-            let query_id = aggregation_ctx.ctx.get_id();
-            let handle = io_runtime.spawn(query_id, async move {
+            let handle = io_runtime.spawn(async move {
                 let mutation_log_entry = aggregation_ctx
                     .apply_update_and_deletion_to_data_block(
                         segment_idx,
@@ -397,7 +396,6 @@ impl AggregationContext {
             &self.block_reader,
             block_meta,
             &self.read_settings,
-            self.ctx.get_id(),
         )
         .await?;
         let origin_num_rows = origin_data_block.num_rows();
@@ -439,17 +437,17 @@ impl AggregationContext {
         let origin_stats = block_meta.cluster_stats.clone();
 
         let serialized = GlobalIORuntime::instance()
-            .spawn(self.ctx.get_id(), async move {
-                block_builder.build(res_block, |block, generator| {
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    info!(
-                        "serialize block after get cluster_stats:\n {:?}",
-                        cluster_stats
-                    );
-                    Ok((cluster_stats, block))
-                })
-            })
+            .spawn(async move {
+                            block_builder.build(res_block, |block, generator| {
+                                let cluster_stats =
+                                    generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                                info!(
+                                    "serialize block after get cluster_stats:\n {:?}",
+                                    cluster_stats
+                                );
+                                Ok((cluster_stats, block))
+                            })
+                        })
             .await
             .map_err(|e| {
                 ErrorCode::Internal(

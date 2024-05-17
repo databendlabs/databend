@@ -387,6 +387,18 @@ impl QueryEntry {
                 return true;
             }
 
+            // DDL: Heavy actions.
+            Plan::OptimizeTable(_)
+            | Plan::VacuumTable(_)
+            | Plan::VacuumTemporaryFiles(_)
+            | Plan::RefreshIndex(_)
+            | Plan::TruncateTable(_) => {
+                return true;
+            }
+            Plan::DropTable(v) if v.all => {
+                return true;
+            }
+
             // Light actions.
             _ => {
                 return false;

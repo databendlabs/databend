@@ -53,7 +53,7 @@ pub struct Query {
 }
 
 impl Display for Query {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         // CTE, with clause
         if let Some(with) = &self.with {
             write!(f, "WITH {with} ")?;
@@ -93,7 +93,7 @@ pub struct With {
 }
 
 impl Display for With {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.recursive {
             write!(f, "RECURSIVE ")?;
         }
@@ -114,7 +114,7 @@ pub struct CTE {
 }
 
 impl Display for CTE {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} AS ", self.alias)?;
         if self.materialized {
             write!(f, "MATERIALIZED ")?;
@@ -164,7 +164,7 @@ pub struct SelectStmt {
 }
 
 impl Display for SelectStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         // SELECT clause
         write!(f, "SELECT ")?;
         if let Some(hints) = &self.hints {
@@ -235,6 +235,9 @@ impl Display for SelectStmt {
             write_comma_separated_list(f, windows)?;
         }
 
+        if let Some(quailfy) = &self.qualify {
+            write!(f, " QUALIFY {quailfy}")?;
+        }
         Ok(())
     }
 }
@@ -272,7 +275,7 @@ pub enum SetExpr {
 }
 
 impl Display for SetExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SetExpr::Select(select_stmt) => {
                 write!(f, "{select_stmt}")?;
@@ -334,7 +337,7 @@ pub struct OrderByExpr {
 }
 
 impl Display for OrderByExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.expr)?;
         if let Some(asc) = self.asc {
             if asc {
@@ -416,7 +419,7 @@ impl SelectTarget {
 }
 
 impl Display for SelectTarget {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SelectTarget::AliasedExpr { expr, alias } => {
                 write!(f, "{expr}")?;
@@ -483,7 +486,7 @@ pub enum Indirection {
 }
 
 impl Display for Indirection {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Indirection::Identifier(ident) => {
                 write!(f, "{ident}")?;
@@ -510,7 +513,7 @@ pub enum TimeTravelPoint {
 }
 
 impl Display for TimeTravelPoint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TimeTravelPoint::Snapshot(sid) => {
                 write!(f, "(SNAPSHOT => '{sid}')")?;
@@ -547,7 +550,7 @@ pub struct Pivot {
 }
 
 impl Display for Pivot {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
         write_comma_separated_list(f, &self.values)?;
         write!(f, "))")?;
@@ -563,7 +566,7 @@ pub struct Unpivot {
 }
 
 impl Display for Unpivot {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "UNPIVOT({} FOR {} IN (",
@@ -584,7 +587,7 @@ pub struct ChangesInterval {
 }
 
 impl Display for ChangesInterval {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CHANGES (INFORMATION => ")?;
         if self.append_only {
             write!(f, "APPEND_ONLY")?;
@@ -606,7 +609,7 @@ pub enum TemporalClause {
 }
 
 impl Display for TemporalClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TemporalClause::TimeTravel(point) => {
                 write!(f, "AT {}", point)?;
@@ -631,6 +634,9 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
+        /// whether consume the table
+        #[drive(skip)]
+        consume: bool,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -694,7 +700,7 @@ impl TableReference {
 }
 
 impl Display for TableReference {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TableReference::Table {
                 span: _,
@@ -703,6 +709,7 @@ impl Display for TableReference {
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot,
                 unpivot,
             } => {
@@ -713,6 +720,10 @@ impl Display for TableReference {
 
                 if let Some(temporal) = temporal {
                     write!(f, " {temporal}")?;
+                }
+
+                if *consume {
+                    write!(f, " WITH CONSUME")?;
                 }
 
                 if let Some(alias) = alias {
@@ -840,7 +851,7 @@ pub struct TableAlias {
 }
 
 impl Display for TableAlias {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", &self.name)?;
         if !self.columns.is_empty() {
             write!(f, "(")?;

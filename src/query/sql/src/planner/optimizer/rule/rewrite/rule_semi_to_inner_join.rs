@@ -131,6 +131,7 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         | RelOperator::Udf(_)
         | RelOperator::Scan(_)
         | RelOperator::CteScan(_)
+        | RelOperator::AsyncFunction(_)
         | RelOperator::Join(_) => {}
     }
     Ok(())

@@ -170,6 +170,7 @@ impl PipelineBuilder {
                     })
                     .collect();
 
+                self.ctx.set_enable_sort_spill(false);
                 let sort_pipeline_builder =
                     SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
                         .with_partial_block_size(partial_block_size)
@@ -228,7 +229,13 @@ impl PipelineBuilder {
 
         let snapshot_gen =
             MutationGenerator::new(recluster_sink.snapshot.clone(), MutationKind::Recluster);
-        let lock = LockManager::create_table_lock(recluster_sink.table_info.clone())?;
+        let lock = if recluster_sink.need_lock {
+            Some(LockManager::create_table_lock(
+                recluster_sink.table_info.clone(),
+            )?)
+        } else {
+            None
+        };
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -238,7 +245,7 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                Some(lock.clone()),
+                lock.clone(),
                 None,
                 None,
             )

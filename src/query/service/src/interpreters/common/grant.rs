@@ -67,7 +67,7 @@ pub async fn validate_grant_object_exists(
         GrantObject::TableById(catalog_name, db_id, table_id) => {
             let catalog = ctx.get_catalog(catalog_name).await?;
 
-            if catalog.get_table_name_by_id(*table_id).await.is_err() {
+            if catalog.get_table_meta_by_id(*table_id).await?.is_none() {
                 return Err(databend_common_exception::ErrorCode::UnknownTableId(
                     format!(
                         "table id `{}`.`{}` not exists in catalog '{}'",
@@ -78,9 +78,9 @@ pub async fn validate_grant_object_exists(
         }
         GrantObject::UDF(udf) => {
             if !UserApiProvider::instance().exists_udf(&tenant, udf).await? {
-                return Err(databend_common_exception::ErrorCode::UnknownStage(format!(
-                    "udf {udf} not exists"
-                )));
+                return Err(databend_common_exception::ErrorCode::UnknownFunction(
+                    format!("udf {udf} not exists"),
+                ));
             }
         }
         GrantObject::Stage(stage) => {

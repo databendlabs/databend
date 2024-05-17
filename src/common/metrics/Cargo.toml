@@ -8,17 +8,13 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
-
-[features]
-enable-histogram = ["metrics/enable-histogram"]
+test = true
 
 [dependencies]
 # Workspace dependencies
 databend-common-base = { path = "../base" }
 
 # Crates.io dependencies
-metrics = { workspace = true }
 prometheus-client = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]

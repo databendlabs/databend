@@ -33,9 +33,10 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
-use log::info;
 use log::warn;
 
 use super::Finder;
@@ -127,7 +128,10 @@ impl<'a> Binder {
         let mut bind_context = BindContext::new();
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
         self.bind_query_index(&mut bind_context, &plan).await?;
-        info!("bind stmt to plan, time used: {:?}", start.elapsed());
+        self.ctx.set_status_info(&format!(
+            "bind stmt to plan done, time used: {:?}",
+            start.elapsed()
+        ));
         Ok(plan)
     }
 
@@ -286,9 +290,9 @@ impl<'a> Binder {
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
             Statement::DropUser { if_exists, user } => Plan::DropUser(Box::new(DropUserPlan {
                 if_exists: *if_exists,
-                user: user.clone(),
+                user: user.clone().into(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
@@ -329,10 +333,17 @@ impl<'a> Binder {
             Statement::DropStage {
                 stage_name,
                 if_exists,
-            } => Plan::DropStage(Box::new(DropStagePlan {
+            } => {
+                // Check user stage.
+                if stage_name == "~" {
+                    return Err(ErrorCode::StagePermissionDenied(
+                        "user stage is not allowed to be dropped",
+                    ));
+                }
+                Plan::DropStage(Box::new(DropStagePlan {
                 if_exists: *if_exists,
                 name: stage_name.clone(),
-            })),
+            }))},
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
@@ -384,7 +395,7 @@ impl<'a> Binder {
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
             Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
-                principal: principal.clone(),
+                principal: principal.clone().map(Into::into),
             })),
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
@@ -396,9 +407,9 @@ impl<'a> Binder {
                     )));
                 }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
-                    create_option: *create_option,
+                    create_option: create_option.clone().into(),
                     name: name.clone(),
-                    file_format_params: file_format_options.to_meta_ast().try_into()?,
+                    file_format_params: FileFormatParams::try_from_reader( FileFormatOptionsReader::from_ast(file_format_options), false)?,
                 }))
             }
             Statement::DropFileFormat {
@@ -596,7 +607,10 @@ impl<'a> Binder {
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
-            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?
+            Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?,
+            Statement::SetPriority {priority, object_id} => {
+                self.bind_set_priority(priority, object_id).await?
+            },
         };
         Ok(plan)
     }
@@ -721,6 +735,7 @@ impl<'a> Binder {
                     | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         let mut finder = Finder::new(&f);
@@ -728,7 +743,7 @@ impl<'a> Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    // add check for SExpr to disable invalid source for copy/insert/merge/replace
+    #[allow(dead_code)]
     pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFCall(_));
         let mut finder = Finder::new(&f);
@@ -840,7 +855,9 @@ impl<'a> Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+                ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
             )
         };
         let mut finder = Finder::new(&f);
@@ -857,6 +874,7 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
                     | ScalarExpr::UDFCall(_)
             )
         };

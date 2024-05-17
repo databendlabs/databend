@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -24,6 +25,7 @@ use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -70,11 +72,15 @@ impl SyncSystemTable for ProcessesTable {
         let mut processes_scan_progress_read_bytes = Vec::with_capacity(processes_info.len());
         let mut processes_mysql_connection_id = Vec::with_capacity(processes_info.len());
         let mut processes_time = Vec::with_capacity(processes_info.len());
+        let mut processes_created_time = Vec::with_capacity(processes_info.len());
         let mut processes_status = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
             let data_metrics = &process_info.data_metrics;
             let scan_progress = process_info.scan_progress_value.clone().unwrap_or_default();
+
+            let created_time: DateTime<Utc> = process_info.created_time.into();
+            let created_time = created_time.timestamp_micros();
             let time = process_info
                 .created_time
                 .elapsed()
@@ -86,7 +92,7 @@ impl SyncSystemTable for ProcessesTable {
             processes_type.push(process_info.typ.clone());
             processes_state.push(process_info.state.to_string());
             processes_database.push(process_info.database.clone());
-            processes_host.push(ProcessesTable::process_host(&process_info.client_address));
+            processes_host.push(process_info.client_address.clone());
             processes_user
                 .push(ProcessesTable::process_option_value(process_info.user.clone()).name);
             processes_extra_info.push(ProcessesTable::process_option_value(
@@ -97,6 +103,7 @@ impl SyncSystemTable for ProcessesTable {
             processes_scan_progress_read_bytes.push(scan_progress.bytes as u64);
             processes_mysql_connection_id.push(process_info.mysql_connection_id);
             processes_time.push(time);
+            processes_created_time.push(created_time);
 
             if let Some(data_metrics) = data_metrics {
                 processes_data_read_bytes.push(data_metrics.get_read_bytes() as u64);
@@ -126,6 +133,7 @@ impl SyncSystemTable for ProcessesTable {
             UInt64Type::from_data(processes_scan_progress_read_bytes),
             UInt32Type::from_opt_data(processes_mysql_connection_id),
             UInt64Type::from_data(processes_time),
+            TimestampType::from_data(processes_created_time),
             StringType::from_data(processes_status),
         ]))
     }
@@ -167,6 +175,7 @@ impl ProcessesTable {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt32))),
             ),
             TableField::new("time", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("created_time", TableDataType::Timestamp),
             TableField::new("status", TableDataType::String),
         ]);
 
@@ -184,10 +193,6 @@ impl ProcessesTable {
         };
 
         SyncOneBlockSystemTable::create(ProcessesTable { table_info })
-    }
-
-    fn process_host(client_address: &Option<SocketAddr>) -> Option<String> {
-        client_address.as_ref().map(|s| s.to_string())
     }
 
     fn process_option_value<T>(opt: Option<T>) -> T

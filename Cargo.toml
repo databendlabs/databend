@@ -29,8 +29,10 @@ members = [
     "src/common/storage",
     "src/common/vector",
     "src/common/license",
+    "src/common/parquet2",
     # Query
     "src/query/ast",
+    "src/query/async_functions",
     "src/query/codegen",
     "src/query/config",
     "src/query/constraint",
@@ -53,6 +55,7 @@ members = [
     "src/query/storages/common/cache",
     "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
+    "src/query/storages/common/io",
     "src/query/storages/common/pruner",
     "src/query/storages/common/table_meta",
     "src/query/storages/delta",
@@ -78,6 +81,7 @@ members = [
     "src/query/ee_features/data_mask",
     "src/query/ee_features/storage_encryption",
     "src/query/ee_features/stream_handler",
+    "src/query/ee_features/storage_quota",
     # databend-query
     "src/query/service",
     # enterprise
@@ -110,19 +114,29 @@ members = [
 # databend maintains
 jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "3fe3acd" }
 
-opendal = { version = "0.45.1", features = [
+opendal = { version = "0.46.0", features = [
     "layers-minitrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
+    "services-s3",
+    "services-fs",
+    "services-gcs",
+    "services-cos",
+    "services-obs",
+    "services-oss",
+    "services-azblob",
+    "services-azdls",
     "services-ipfs",
+    "services-http",
     "services-moka",
+    "services-webhdfs",
     "services-huggingface",
 ] }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 # openraft for debugging
 #openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
-openraft = { version = "0.9.7", features = [
+openraft = { version = "0.9.9", features = [
     "serde",
     "tracing-log",
     "generic-snapshot-data",
@@ -131,6 +145,7 @@ openraft = { version = "0.9.7", features = [
 ] }
 
 # Core crates and utilities
+base64 = "0.22"
 async-backtrace = "0.2"
 async-trait = { version = "0.1.77", package = "async-trait-fn" }
 bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
@@ -141,44 +156,47 @@ byteorder = "1.4.3"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
-dashmap = "5.4.0"
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
-ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
+ethnum = { version = "1.5.0" }
 feature-set = { version = "0.1.1" }
 geo = { version = "0.27.0", features = ["use-serde"] }
 geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
-geozero = { version = "0.11.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
+geozero = { version = "0.12.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 itertools = "0.10.5"
-log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
-logcall = "0.1.5"
 match-template = "0.0.1"
-metrics = "0.20.1"
-minitrace = { version = "0.6", features = ["enable"] }
-mysql_async = { version = "0.33", default-features = false, features = ["rustls-tls"] }
-once_cell = "1.15.0"
+mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
 ordered-float = { version = "4.1.0", default-features = false }
-parking_lot = "0.12.1"
-poem = { version = "~1.3.57", features = ["rustls", "multipart", "compression"] }
+poem = { version = "3.0", features = ["rustls", "multipart", "compression"] }
 prometheus-client = "0.22"
 rand = { version = "0.8.5", features = ["small_rng"] }
 regex = "1.8.1"
-reqwest = { version = "0.11.19", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "json",
+    "http2",
     "rustls-tls",
     "rustls-tls-native-roots",
 ] }
-reqwest-hickory-resolver = "0.0.2"
+reqwest-hickory-resolver = "0.1"
 semver = "1.0.14"
 serfig = "0.1.0"
+tantivy = "0.22.0"
 tokio = { version = "1.35.0", features = ["full"] }
 tokio-stream = "0.1.11"
-tonic = { version = "0.10.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
-tonic-reflection = { version = "0.10.2" }
+tonic = { version = "0.11.0", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tonic-reflection = { version = "0.11.0" }
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 derive-visitor = "0.3.0"
+http = "1"
+criterion = "0.5"
+
+# Synchronization
+dashmap = "5.4.0"
+once_cell = "1.15.0"
+ordq = "0.2.0"
+parking_lot = "0.12.1"
 
 # Future and async
 futures = "0.3.24"
@@ -192,34 +210,48 @@ anyhow = { version = "1.0.65" }
 thiserror = { version = "1" }
 
 # Crates from arrow-rs
-arrow = { version = "50" }
-arrow-array = { version = "50" }
-arrow-buffer = { version = "50" }
-arrow-cast = { version = "50", features = ["prettyprint"] }
-arrow-data = { version = "50" }
-arrow-flight = { version = "50", features = ["flight-sql-experimental", "tls"] }
+arrow = { version = "51" }
+arrow-array = { version = "51" }
+arrow-buffer = { version = "51" }
+arrow-cast = { version = "51", features = ["prettyprint"] }
+arrow-data = { version = "51" }
+arrow-flight = { version = "51", features = ["flight-sql-experimental", "tls"] }
 arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
-arrow-ipc = { version = "50" }
-arrow-ord = { version = "50" }
-arrow-schema = { version = "50", features = ["serde"] }
-arrow-select = { version = "50" }
-parquet = { version = "50", features = ["async"] }
-parquet_rs = { package = "parquet", version = "50" }
+arrow-ipc = { version = "51" }
+arrow-ord = { version = "51" }
+arrow-schema = { version = "51", features = ["serde"] }
+arrow-select = { version = "51" }
+parquet = { version = "51", features = ["async"] }
+parquet_rs = { package = "parquet", version = "51" }
+# Must use the same version with arrow-ipc
+flatbuffers = { version = "23" }
 
 # Crates from risingwavelabs
-arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "0d1a13c" }
-arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "0d1a13c" }
+arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
+arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
 
 # Serialization
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
-tonic-build = { version = "0.10.2" }
+tonic-build = { version = "0.11" }
 
 # Memory management
 bumpalo = "3.12.0"
 tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
+
+# Observability
+log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
+logcall = "0.1.5"
+minitrace = { version = "0.6.5", features = ["enable"] }
+minitrace-opentelemetry = "0.6.5"
+opentelemetry = { version = "0.22", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.15", features = ["trace", "logs", "grpc-tonic"] }
+opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
+tracing = "0.1.40"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 [profile.release]
 debug = 1
@@ -262,18 +294,12 @@ debug-assertions = true
 overflow-checks = true
 rpath = false
 
-[patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
-arrow-format = { git = "https://github.com/everpcpc/arrow-format", rev = "ad8f2dd" }
-parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545" }
-metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
-icelake = { git = "https://github.com/icelake-io/icelake", rev = "54fd72f" }
-micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" }
+[patch.crates-io]
+arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
+icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
+ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
-geozero = { git = "https://github.com/georust/geozero", rev = "1d78b36" }
-# Hot fix for cos, remove this during opendal 0.46 upgrade.
-opendal = { git = "https://github.com/apache/opendal", rev = "53377ca" }
-reqsign = { git = "https://github.com/Xuanwo/reqsign", rev = "122dc12" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }

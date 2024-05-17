@@ -15,9 +15,12 @@
 use std::fmt;
 
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::KeyBuilder;
+use databend_common_meta_kvapi::kvapi::KeyCodec;
+use databend_common_meta_kvapi::kvapi::KeyError;
+use databend_common_meta_kvapi::kvapi::KeyParser;
 
-use crate::tenant::Tenant;
-
+/// Uniquely identifies a user with a username and a hostname.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash, Default)]
 pub struct UserIdentity {
     pub username: String,
@@ -27,7 +30,7 @@ pub struct UserIdentity {
 impl UserIdentity {
     const ESCAPE_CHARS: [u8; 2] = [b'\'', b'@'];
 
-    pub fn new(name: &str, host: &str) -> Self {
+    pub fn new(name: impl ToString, host: impl ToString) -> Self {
         Self {
             username: name.to_string(),
             hostname: host.to_string(),
@@ -51,12 +54,19 @@ impl UserIdentity {
 
         Ok(UserIdentity { username, hostname })
     }
-}
 
-impl fmt::Display for UserIdentity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        write!(
-            f,
+    /// Encode the user identity into a string for building a meta-service key.
+    pub fn encode(&self) -> String {
+        format!(
+            "'{}'@'{}'",
+            kvapi::KeyBuilder::escape_specified(&self.username, &Self::ESCAPE_CHARS),
+            kvapi::KeyBuilder::escape_specified(&self.hostname, &Self::ESCAPE_CHARS),
+        )
+    }
+
+    /// Display should have a different implementation from encode(), one for human readable and the other for machine readable.
+    pub fn display(&self) -> impl fmt::Display {
+        format!(
             "'{}'@'{}'",
             kvapi::KeyBuilder::escape_specified(&self.username, &Self::ESCAPE_CHARS),
             kvapi::KeyBuilder::escape_specified(&self.hostname, &Self::ESCAPE_CHARS),
@@ -64,125 +74,20 @@ impl fmt::Display for UserIdentity {
     }
 }
 
-/// A user identity belonging to a tenant.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TenantUserIdent {
-    pub tenant: Tenant,
-    pub user: UserIdentity,
-}
-
-impl TenantUserIdent {
-    pub fn new(tenant: Tenant, user: UserIdentity) -> Self {
-        Self { tenant, user }
+impl KeyCodec for UserIdentity {
+    fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+        b.push_str(&self.encode())
     }
 
-    pub fn new_user_host(tenant: Tenant, user: &str, host: &str) -> Self {
-        Self {
-            tenant,
-            user: UserIdentity::new(user, host),
-        }
+    fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
+    where Self: Sized {
+        let s = parser.next_str()?;
+        Self::parse(&s)
     }
 }
 
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
-    use databend_common_meta_kvapi::kvapi::KeyParser;
-
-    use crate::principal::user_identity::TenantUserIdent;
-    use crate::principal::UserIdentity;
-    use crate::principal::UserInfo;
-    use crate::tenant::Tenant;
-    use crate::KeyWithTenant;
-
-    impl kvapi::KeyCodec for TenantUserIdent {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_str(self.tenant_name())
-                .push_str(&self.user.to_string())
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
-            let tenant = parser.next_nonempty()?;
-            let user_str = parser.next_str()?;
-
-            let user = UserIdentity::parse(&user_str)?;
-
-            Ok(Self {
-                tenant: Tenant::new_nonempty(tenant),
-                user,
-            })
-        }
-    }
-
-    impl kvapi::Key for TenantUserIdent {
-        const PREFIX: &'static str = "__fd_users";
-        type ValueType = UserInfo;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-    }
-
-    impl KeyWithTenant for TenantUserIdent {
-        fn tenant(&self) -> &Tenant {
-            &self.tenant
-        }
-    }
-
-    impl kvapi::Value for UserInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
-
-    use crate::principal::user_identity::TenantUserIdent;
-    use crate::principal::UserIdentity;
-    use crate::tenant::Tenant;
-
-    fn test_format_parse(user: &str, host: &str, expect: &str) {
-        let tenant = Tenant::new_literal("test_tenant");
-        let user_ident = UserIdentity::new(user, host);
-        let tenant_user_ident = TenantUserIdent {
-            tenant,
-            user: user_ident,
-        };
-
-        let key = tenant_user_ident.to_string_key();
-        assert_eq!(key, expect, "'{user}' '{host}' '{expect}'");
-
-        let tenant_user_ident_parsed = TenantUserIdent::from_str_key(&key).unwrap();
-        assert_eq!(
-            tenant_user_ident, tenant_user_ident_parsed,
-            "'{user}' '{host}' '{expect}'"
-        );
-    }
-
-    #[test]
-    fn test_tenant_user_ident_as_kvapi_key() {
-        test_format_parse("user", "%", "__fd_users/test_tenant/%27user%27%40%27%25%27");
-        test_format_parse(
-            "user'",
-            "%",
-            "__fd_users/test_tenant/%27user%2527%27%40%27%25%27",
-        );
-
-        // With correct encoding the following two pair should not be encoded into the same string.
-
-        test_format_parse(
-            "u'@'h",
-            "h",
-            "__fd_users/test_tenant/%27u%2527%2540%2527h%27%40%27h%27",
-        );
-        test_format_parse(
-            "u",
-            "h'@'h",
-            "__fd_users/test_tenant/%27u%27%40%27h%2527%2540%2527h%27",
-        );
+impl From<databend_common_ast::ast::UserIdentity> for UserIdentity {
+    fn from(user: databend_common_ast::ast::UserIdentity) -> Self {
+        UserIdentity::new(user.username, user.hostname)
     }
 }

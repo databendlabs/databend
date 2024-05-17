@@ -17,6 +17,7 @@
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::non_canonical_partial_ord_impl)]
+#![allow(dead_code)]
 
 //#[macro_use]
 // mod errors;

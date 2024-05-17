@@ -18,6 +18,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+use databend_common_ast::ast::FileFormatOptions;
+use databend_common_ast::ast::FileFormatValue;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
@@ -46,14 +48,269 @@ const NULL_IF: &str = "null_if";
 const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
 const OPT_BINARY_FORMAT: &str = "binary_format";
 
+/// File format parameters after checking and parsing.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileFormatOptionsAst {
+#[serde(tag = "type")]
+pub enum FileFormatParams {
+    Csv(CsvFileFormatParams),
+    Tsv(TsvFileFormatParams),
+    NdJson(NdJsonFileFormatParams),
+    Json(JsonFileFormatParams),
+    Xml(XmlFileFormatParams),
+    Parquet(ParquetFileFormatParams),
+}
+
+impl FileFormatParams {
+    pub fn get_type(&self) -> StageFileFormatType {
+        match self {
+            FileFormatParams::Csv(_) => StageFileFormatType::Csv,
+            FileFormatParams::Tsv(_) => StageFileFormatType::Tsv,
+            FileFormatParams::NdJson(_) => StageFileFormatType::NdJson,
+            FileFormatParams::Json(_) => StageFileFormatType::Json,
+            FileFormatParams::Xml(_) => StageFileFormatType::Xml,
+            FileFormatParams::Parquet(_) => StageFileFormatType::Parquet,
+        }
+    }
+
+    pub fn default_by_type(format_type: StageFileFormatType) -> Result<Self> {
+        match format_type {
+            StageFileFormatType::Parquet => {
+                Ok(FileFormatParams::Parquet(ParquetFileFormatParams::default()))
+            }
+            StageFileFormatType::Csv => Ok(FileFormatParams::Csv(CsvFileFormatParams::default())),
+            StageFileFormatType::Tsv => Ok(FileFormatParams::Tsv(TsvFileFormatParams::default())),
+            StageFileFormatType::NdJson => {
+                Ok(FileFormatParams::NdJson(NdJsonFileFormatParams::default()))
+            }
+            StageFileFormatType::Json => {
+                Ok(FileFormatParams::Json(JsonFileFormatParams::default()))
+            }
+            _ => Err(ErrorCode::IllegalFileFormat(format!(
+                "Unsupported file format type: {:?}",
+                format_type
+            ))),
+        }
+    }
+
+    pub fn compression(&self) -> StageFileCompression {
+        match self {
+            FileFormatParams::Csv(v) => v.compression,
+            FileFormatParams::Tsv(v) => v.compression,
+            FileFormatParams::NdJson(v) => v.compression,
+            FileFormatParams::Json(v) => v.compression,
+            FileFormatParams::Xml(v) => v.compression,
+            FileFormatParams::Parquet(_) => StageFileCompression::None,
+        }
+    }
+
+    pub fn try_from_reader(mut reader: FileFormatOptionsReader, old: bool) -> Result<Self> {
+        let typ = reader.take_type()?;
+        let params = match typ {
+            StageFileFormatType::Xml => {
+                let default = XmlFileFormatParams::default();
+                let row_tag = reader.take_string(OPT_ROW_TAG, default.row_tag);
+                let compression = reader.take_compression()?;
+                FileFormatParams::Xml(XmlFileFormatParams {
+                    compression,
+                    row_tag,
+                })
+            }
+            StageFileFormatType::Json => {
+                let compression = reader.take_compression()?;
+                FileFormatParams::Json(JsonFileFormatParams { compression })
+            }
+            StageFileFormatType::NdJson => {
+                let compression = reader.take_compression()?;
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                let null_field_as = reader.options.remove(NULL_FIELD_AS);
+                let null_if = reader.options.remove(NULL_IF);
+                let null_if = match null_if {
+                    None => {
+                        vec![]
+                    }
+                    Some(s) => {
+                        let values: Vec<String> = serde_json::from_str(&s).map_err(|_|
+                            ErrorCode::InvalidArgument(format!(
+                            "Invalid option value: NULL_IF is currently set to {s} (in JSON). The valid values are a list of strings."
+                            )))?;
+                        values
+                    }
+                };
+                FileFormatParams::NdJson(NdJsonFileFormatParams::try_create(
+                    compression,
+                    missing_field_as.as_deref(),
+                    null_field_as.as_deref(),
+                    null_if,
+                )?)
+            }
+            StageFileFormatType::Parquet => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::Parquet(ParquetFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
+            StageFileFormatType::Csv => {
+                let default = CsvFileFormatParams::default();
+                let compression = reader.take_compression()?;
+                let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
+                let field_delimiter =
+                    reader.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
+                let record_delimiter =
+                    reader.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
+                let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
+                let escape = reader.take_string(OPT_ESCAPE, default.escape);
+                let quote = reader.take_string(OPT_QUOTE, default.quote);
+                let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let empty_field_as = reader
+                    .options
+                    .remove(OPT_EMPTY_FIELD_AS)
+                    .map(|s| EmptyFieldAs::from_str(&s))
+                    .transpose()?
+                    .unwrap_or_default();
+                let binary_format = reader
+                    .options
+                    .remove(OPT_BINARY_FORMAT)
+                    .map(|s| BinaryFormat::from_str(&s))
+                    .transpose()?
+                    .unwrap_or_default();
+                let error_on_column_count_mismatch = reader.take_bool(
+                    OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
+                    default.error_on_column_count_mismatch,
+                )?;
+                let output_header = reader.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
+                FileFormatParams::Csv(CsvFileFormatParams {
+                    compression,
+                    headers,
+                    field_delimiter,
+                    record_delimiter,
+                    null_display,
+                    nan_display,
+                    escape,
+                    quote,
+                    error_on_column_count_mismatch,
+                    empty_field_as,
+                    binary_format,
+                    output_header,
+                    geometry_format: std::default::Default::default(),
+                })
+            }
+            StageFileFormatType::Tsv => {
+                let default = TsvFileFormatParams::default();
+                let compression = reader.take_compression()?;
+                let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
+                let field_delimiter =
+                    reader.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
+                let record_delimiter =
+                    reader.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
+                let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
+                let escape = reader.take_string(OPT_ESCAPE, default.escape);
+                let quote = reader.take_string(OPT_QUOTE, default.quote);
+                FileFormatParams::Tsv(TsvFileFormatParams {
+                    compression,
+                    headers,
+                    field_delimiter,
+                    record_delimiter,
+                    nan_display,
+                    quote,
+                    escape,
+                })
+            }
+            _ => {
+                return Err(ErrorCode::IllegalFileFormat(format!(
+                    "Unsupported file format {typ:?}"
+                )));
+            }
+        };
+        if old {
+            Ok(params)
+        } else {
+            params.check().map_err(|msg| {
+                ErrorCode::BadArguments(format!(
+                    "Invalid {} option value: {msg}",
+                    params.get_type().to_string()
+                ))
+            })?;
+            if reader.options.is_empty() {
+                Ok(params)
+            } else {
+                Err(ErrorCode::IllegalFileFormat(format!(
+                    "Unsupported options for {:?}:  {:?}",
+                    typ, reader.options
+                )))
+            }
+        }
+    }
+
+    pub fn check(&self) -> std::result::Result<(), String> {
+        macro_rules! check_option {
+            ($params:expr, $option_name:ident) => {{
+                let v = &$params.$option_name;
+                paste! { let check_fn  = [<check_$option_name>]; }
+                check_fn(v).map_err(|msg| {
+                    format!(
+                        "{} is currently set to '{v}'. {msg}",
+                        stringify!($option_name).to_ascii_uppercase(),
+                    )
+                })
+            }};
+        }
+
+        match self {
+            FileFormatParams::Tsv(p) => {
+                check_option!(p, field_delimiter)?;
+                check_option!(p, record_delimiter)?;
+                check_option!(p, quote)?;
+                check_option!(p, escape)?;
+                check_option!(p, nan_display)?;
+            }
+            FileFormatParams::Csv(p) => {
+                check_option!(p, field_delimiter)?;
+                check_option!(p, record_delimiter)?;
+                check_option!(p, quote)?;
+                check_option!(p, escape)?;
+                check_option!(p, nan_display)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
+impl Default for FileFormatParams {
+    fn default() -> Self {
+        FileFormatParams::Parquet(ParquetFileFormatParams {
+            missing_field_as: NullAs::Error,
+        })
+    }
+}
+
+pub struct FileFormatOptionsReader {
     pub options: BTreeMap<String, String>,
 }
 
-impl FileFormatOptionsAst {
-    pub fn new(options: BTreeMap<String, String>) -> Self {
-        FileFormatOptionsAst { options }
+impl FileFormatOptionsReader {
+    pub fn from_ast(options: &FileFormatOptions) -> Self {
+        let options = options
+            .options
+            .iter()
+            .map(|(k, v)| {
+                let v = match v {
+                    FileFormatValue::Keyword(v) => v.clone(),
+                    FileFormatValue::Bool(v) => v.to_string(),
+                    FileFormatValue::U64(v) => v.to_string(),
+                    FileFormatValue::String(v) => v.clone(),
+                    FileFormatValue::StringList(v) => serde_json::to_string(&v).unwrap(),
+                };
+
+                (k.clone(), v)
+            })
+            .collect();
+
+        FileFormatOptionsReader { options }
+    }
+
+    pub fn from_map(options: BTreeMap<String, String>) -> Self {
+        FileFormatOptionsReader { options }
     }
 
     fn take_string(&mut self, key: &str, default: String) -> String {
@@ -100,253 +357,6 @@ impl FileFormatOptionsAst {
             })?),
             None => Ok(default),
         }
-    }
-}
-
-/// File format parameters after checking and parsing.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum FileFormatParams {
-    Csv(CsvFileFormatParams),
-    Tsv(TsvFileFormatParams),
-    NdJson(NdJsonFileFormatParams),
-    Json(JsonFileFormatParams),
-    Xml(XmlFileFormatParams),
-    Parquet(ParquetFileFormatParams),
-}
-
-impl FileFormatParams {
-    pub fn get_type(&self) -> StageFileFormatType {
-        match self {
-            FileFormatParams::Csv(_) => StageFileFormatType::Csv,
-            FileFormatParams::Tsv(_) => StageFileFormatType::Tsv,
-            FileFormatParams::NdJson(_) => StageFileFormatType::NdJson,
-            FileFormatParams::Json(_) => StageFileFormatType::Json,
-            FileFormatParams::Xml(_) => StageFileFormatType::Xml,
-            FileFormatParams::Parquet(_) => StageFileFormatType::Parquet,
-        }
-    }
-
-    pub fn default_by_type(format_type: StageFileFormatType) -> Result<Self> {
-        match format_type {
-            StageFileFormatType::Parquet => {
-                Ok(FileFormatParams::Parquet(ParquetFileFormatParams::default()))
-            }
-            StageFileFormatType::Csv => Ok(FileFormatParams::Csv(CsvFileFormatParams::default())),
-            StageFileFormatType::Tsv => Ok(FileFormatParams::Tsv(TsvFileFormatParams::default())),
-            StageFileFormatType::NdJson => {
-                Ok(FileFormatParams::NdJson(NdJsonFileFormatParams::default()))
-            }
-            StageFileFormatType::Json => {
-                Ok(FileFormatParams::Json(JsonFileFormatParams::default()))
-            }
-            StageFileFormatType::Xml => Ok(FileFormatParams::Xml(XmlFileFormatParams::default())),
-            _ => Err(ErrorCode::IllegalFileFormat(format!(
-                "Unsupported file format type: {:?}",
-                format_type
-            ))),
-        }
-    }
-
-    pub fn compression(&self) -> StageFileCompression {
-        match self {
-            FileFormatParams::Csv(v) => v.compression,
-            FileFormatParams::Tsv(v) => v.compression,
-            FileFormatParams::NdJson(v) => v.compression,
-            FileFormatParams::Json(v) => v.compression,
-            FileFormatParams::Xml(v) => v.compression,
-            FileFormatParams::Parquet(_) => StageFileCompression::None,
-        }
-    }
-
-    pub fn try_from_ast(ast: FileFormatOptionsAst, old: bool) -> Result<Self> {
-        let mut ast = ast;
-        let typ = ast.take_type()?;
-        let params = match typ {
-            StageFileFormatType::Xml => {
-                let default = XmlFileFormatParams::default();
-                let row_tag = ast.take_string(OPT_ROW_TAG, default.row_tag);
-                let compression = ast.take_compression()?;
-                FileFormatParams::Xml(XmlFileFormatParams {
-                    compression,
-                    row_tag,
-                })
-            }
-            StageFileFormatType::Json => {
-                let compression = ast.take_compression()?;
-                FileFormatParams::Json(JsonFileFormatParams { compression })
-            }
-            StageFileFormatType::NdJson => {
-                let compression = ast.take_compression()?;
-                let missing_field_as = ast.options.remove(MISSING_FIELD_AS);
-                let null_field_as = ast.options.remove(NULL_FIELD_AS);
-                let null_if = ast.options.remove(NULL_IF);
-                let null_if = match null_if {
-                    None => {
-                        vec![]
-                    }
-                    Some(s) => {
-                        let values: Vec<String> = serde_json::from_str(&s).map_err(|_|
-                            ErrorCode::InvalidArgument(format!(
-                            "Invalid option value: NULL_IF is currently set to {s} (in JSON). The valid values are a list of strings."
-                            )))?;
-                        values
-                    }
-                };
-                FileFormatParams::NdJson(NdJsonFileFormatParams::try_create(
-                    compression,
-                    missing_field_as.as_deref(),
-                    null_field_as.as_deref(),
-                    null_if,
-                )?)
-            }
-            StageFileFormatType::Parquet => {
-                let missing_field_as = ast.options.remove(MISSING_FIELD_AS);
-                FileFormatParams::Parquet(ParquetFileFormatParams::try_create(
-                    missing_field_as.as_deref(),
-                )?)
-            }
-            StageFileFormatType::Csv => {
-                let default = CsvFileFormatParams::default();
-                let compression = ast.take_compression()?;
-                let headers = ast.take_u64(OPT_SKIP_HEADER, default.headers)?;
-                let field_delimiter = ast.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
-                let record_delimiter =
-                    ast.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
-                let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);
-                let escape = ast.take_string(OPT_ESCAPE, default.escape);
-                let quote = ast.take_string(OPT_QUOTE, default.quote);
-                let null_display = ast.take_string(OPT_NULL_DISPLAY, default.null_display);
-                let empty_field_as = ast
-                    .options
-                    .remove(OPT_EMPTY_FIELD_AS)
-                    .map(|s| EmptyFieldAs::from_str(&s))
-                    .transpose()?
-                    .unwrap_or_default();
-                let binary_format = ast
-                    .options
-                    .remove(OPT_BINARY_FORMAT)
-                    .map(|s| BinaryFormat::from_str(&s))
-                    .transpose()?
-                    .unwrap_or_default();
-                let error_on_column_count_mismatch = ast.take_bool(
-                    OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
-                    default.error_on_column_count_mismatch,
-                )?;
-                let output_header = ast.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
-                FileFormatParams::Csv(CsvFileFormatParams {
-                    compression,
-                    headers,
-                    field_delimiter,
-                    record_delimiter,
-                    null_display,
-                    nan_display,
-                    escape,
-                    quote,
-                    error_on_column_count_mismatch,
-                    empty_field_as,
-                    binary_format,
-                    output_header,
-                    geometry_format: std::default::Default::default(),
-                })
-            }
-            StageFileFormatType::Tsv => {
-                let default = TsvFileFormatParams::default();
-                let compression = ast.take_compression()?;
-                let headers = ast.take_u64(OPT_SKIP_HEADER, default.headers)?;
-                let field_delimiter = ast.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
-                let record_delimiter =
-                    ast.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
-                let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);
-                let escape = ast.take_string(OPT_ESCAPE, default.escape);
-                let quote = ast.take_string(OPT_QUOTE, default.quote);
-                FileFormatParams::Tsv(TsvFileFormatParams {
-                    compression,
-                    headers,
-                    field_delimiter,
-                    record_delimiter,
-                    nan_display,
-                    quote,
-                    escape,
-                })
-            }
-            _ => {
-                return Err(ErrorCode::IllegalFileFormat(format!(
-                    "Unsupported file format {typ:?}"
-                )));
-            }
-        };
-        if old {
-            Ok(params)
-        } else {
-            params.check().map_err(|msg| {
-                ErrorCode::BadArguments(format!(
-                    "Invalid {} option value: {msg}",
-                    params.get_type().to_string()
-                ))
-            })?;
-            if ast.options.is_empty() {
-                Ok(params)
-            } else {
-                Err(ErrorCode::IllegalFileFormat(format!(
-                    "Unsupported options for {:?}:  {:?}",
-                    typ, ast.options
-                )))
-            }
-        }
-    }
-
-    pub fn check(&self) -> std::result::Result<(), String> {
-        macro_rules! check_option {
-            ($params:expr, $option_name:ident) => {{
-                let v = &$params.$option_name;
-                paste! { let check_fn  = [<check_$option_name>]; }
-                check_fn(v).map_err(|msg| {
-                    format!(
-                        "{} is currently set to '{v}'. {msg}",
-                        stringify!($option_name).to_ascii_uppercase(),
-                    )
-                })
-            }};
-        }
-
-        match self {
-            FileFormatParams::Tsv(p) => {
-                check_option!(p, field_delimiter)?;
-                check_option!(p, record_delimiter)?;
-                check_option!(p, quote)?;
-                check_option!(p, escape)?;
-                check_option!(p, nan_display)?;
-            }
-            FileFormatParams::Csv(p) => {
-                check_option!(p, field_delimiter)?;
-                check_option!(p, record_delimiter)?;
-                check_option!(p, quote)?;
-                check_option!(p, escape)?;
-                check_option!(p, nan_display)?;
-            }
-            FileFormatParams::Xml(p) => {
-                check_option!(p, row_tag)?;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-}
-
-impl Default for FileFormatParams {
-    fn default() -> Self {
-        FileFormatParams::Parquet(ParquetFileFormatParams {
-            missing_field_as: NullAs::Error,
-        })
-    }
-}
-
-impl TryFrom<FileFormatOptionsAst> for FileFormatParams {
-    type Error = ErrorCode;
-
-    fn try_from(ast: FileFormatOptionsAst) -> Result<Self> {
-        FileFormatParams::try_from_ast(ast, false)
     }
 }
 
@@ -498,7 +508,7 @@ impl FromStr for EmptyFieldAs {
 }
 
 impl Display for EmptyFieldAs {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Self::FieldDefault => write!(f, "FILED_DEFAULT"),
             Self::Null => write!(f, "NULL"),
@@ -533,7 +543,7 @@ impl FromStr for NullAs {
 }
 
 impl Display for NullAs {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             NullAs::Error => write!(f, "ERROR"),
             NullAs::Null => write!(f, "NULL"),
@@ -564,7 +574,7 @@ impl FromStr for BinaryFormat {
 }
 
 impl Display for BinaryFormat {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Self::Hex => write!(f, "hex"),
             Self::Base64 => write!(f, "base64"),
@@ -658,7 +668,7 @@ impl ParquetFileFormatParams {
 }
 
 impl Display for FileFormatParams {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FileFormatParams::Csv(params) => {
                 write!(

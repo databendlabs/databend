@@ -210,6 +210,11 @@ impl SortPipelineBuilder {
     }
 
     fn get_memory_settings(&self, num_threads: usize) -> Result<(usize, usize)> {
+        let enable_sort_spill = self.ctx.get_enable_sort_spill();
+        if !enable_sort_spill {
+            return Ok((0, 0));
+        }
+
         let settings = self.ctx.get_settings();
         let memory_ratio = settings.get_sort_spilling_memory_ratio()?;
         let bytes_limit_per_proc = settings.get_sort_spilling_bytes_threshold_per_proc()?;
@@ -283,8 +288,10 @@ impl SortPipelineBuilder {
 
         if may_spill {
             let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
-            let config =
-                SpillerConfig::create(query_spill_prefix(self.ctx.get_tenant().tenant_name()));
+            let config = SpillerConfig::create(query_spill_prefix(
+                self.ctx.get_tenant().tenant_name(),
+                &self.ctx.get_id(),
+            ));
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
                 let spiller =
