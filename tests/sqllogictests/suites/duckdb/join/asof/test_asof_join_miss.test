@@ -79,7 +79,7 @@ WITH build AS (
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
+FROM probe p ASOF JOIN build b on p.k=b.k and p.t>=b.t;
 ----
 3528
 
@@ -93,7 +93,7 @@ WITH build AS (
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
+FROM probe p ASOF JOIN build b on p.k=b.k and p.t>=b.t;
 ----
 14553
 
@@ -107,7 +107,7 @@ WITH build AS (
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
+FROM probe p ASOF JOIN build b on p.k=b.k and p.t>=b.t;
 ----
 121275
 
@@ -121,7 +121,7 @@ WITH build AS (
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
+FROM probe p ASOF JOIN build b on p.k=b.k and p.t>=b.t;
 ----
 1495503
 
@@ -135,7 +135,7 @@ WITH build AS (
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
+FROM probe p ASOF JOIN build b on p.k=b.k and p.t>=b.t;
 ----
 12462525
 
@@ -149,7 +149,7 @@ WITH build AS (
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
+FROM probe p ASOF JOIN build b on p.k=b.k and p.t>=b.t;
 ----
 1249625025
 
