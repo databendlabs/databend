@@ -4953,6 +4953,7 @@ dependencies = [
  "databend-storages-common-txn",
  "derive-visitor",
  "ethnum",
+ "flatbuffers",
  "futures",
  "futures-util",
  "goldenfile",
