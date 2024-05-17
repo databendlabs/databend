@@ -43,6 +43,7 @@ use crate::optimizer::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::plans::ScalarExpr;
+use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
 use crate::UdfRewriter;
 use crate::VirtualColumnRewriter;
@@ -262,6 +263,10 @@ impl Binder {
         }
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+
+        // rewrite async function to async function plan
+        let mut async_func_rewriter = AsyncFunctionRewriter::new();
+        s_expr = async_func_rewriter.rewrite(&s_expr)?;
 
         // rewrite udf for interpreter udf
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
