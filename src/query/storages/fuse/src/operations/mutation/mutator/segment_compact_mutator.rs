@@ -28,7 +28,6 @@ use opendal::Operator;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::AbortOperation;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
@@ -134,11 +133,6 @@ impl SegmentCompactMutator {
             return Ok(());
         }
 
-        let abort_action = AbortOperation {
-            segments: self.compaction.new_segment_paths.clone(),
-            ..Default::default()
-        };
-
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -151,7 +145,6 @@ impl SegmentCompactMutator {
                 self.compact_params.base_snapshot.clone(),
                 &self.compaction.segments_locations,
                 statistics,
-                abort_action,
                 None,
             )
             .await

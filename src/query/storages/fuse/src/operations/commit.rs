@@ -56,7 +56,6 @@ use opendal::Operator;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::AbortOperation;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
@@ -83,8 +82,7 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc =
-                TransformSerializeSegment::new(ctx.clone(), input, output, self, block_thresholds);
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 
@@ -281,7 +279,6 @@ impl FuseTable {
         base_snapshot: Arc<TableSnapshot>,
         base_segments: &[Location],
         base_summary: Statistics,
-        abort_operation: AbortOperation,
         max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
@@ -369,9 +366,6 @@ impl FuseTable {
                                 concurrently_appended_segment_locations =
                                     &latest_snapshot.segments[range_of_newly_append];
                             } else {
-                                abort_operation
-                                    .abort(ctx.clone(), self.operator.clone())
-                                    .await?;
                                 metrics_inc_commit_mutation_unresolvable_conflict();
                                 break Err(ErrorCode::UnresolvableConflict(
                                     "segment compact conflict with other operations",
@@ -383,13 +377,10 @@ impl FuseTable {
                             continue;
                         }
                         None => {
-                            // Commit not fulfilled. try to abort the operations.
+                            // Commit not fulfilled, abort.
                             //
                             // Note that, here the last error we have seen is TableVersionMismatched,
                             // otherwise we should have been returned, thus it is safe to abort the operation here.
-                            abort_operation
-                                .abort(ctx.clone(), self.operator.clone())
-                                .await?;
                             break Err(ErrorCode::StorageOther(format!(
                                 "commit mutation failed after {} retries",
                                 retries

@@ -7,7 +7,7 @@
 ---------- Input ----------
 $$ab$cd$$  $$ab$$
 ---------- Output ---------
-[(CodeString, "$$ab$cd$$", 0..9), (CodeString, "$$ab$$", 11..17), (EOI, "", 17..17)]
+[(LiteralCodeString, "$$ab$cd$$", 0..9), (LiteralCodeString, "$$ab$$", 11..17), (EOI, "", 17..17)]
 
 
 ---------- Input ----------
@@ -19,13 +19,13 @@ x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '
 ---------- Input ----------
 '中文' '日本語'
 ---------- Output ---------
-[(QuotedString, "'中文'", 0..8), (QuotedString, "'日本語'", 9..20), (EOI, "", 20..20)]
+[(LiteralString, "'中文'", 0..8), (LiteralString, "'日本語'", 9..20), (EOI, "", 20..20)]
 
 
 ---------- Input ----------
 @abc 123
 ---------- Output ---------
-[(AtString, "@abc", 0..4), (LiteralInteger, "123", 5..8), (EOI, "", 8..8)]
+[(LiteralAtString, "@abc", 0..4), (LiteralInteger, "123", 5..8), (EOI, "", 8..8)]
 
 
 ---------- Input ----------
@@ -67,18 +67,18 @@ select /*++  */ /*++ abc x*/ /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;
 ---------- Input ----------
 select /* the user name */ /*+SET_VAR(timezone='Asia/Shanghai') */ 1;
 ---------- Output ---------
-[(SELECT, "select", 0..6), (HintPrefix, "/*+", 27..30), (SET_VAR, "SET_VAR", 30..37), (LParen, "(", 37..38), (TIMEZONE, "timezone", 38..46), (Eq, "=", 46..47), (QuotedString, "'Asia/Shanghai'", 47..62), (RParen, ")", 62..63), (HintSuffix, "*/", 64..66), (LiteralInteger, "1", 67..68), (SemiColon, ";", 68..69), (EOI, "", 69..69)]
+[(SELECT, "select", 0..6), (HintPrefix, "/*+", 27..30), (SET_VAR, "SET_VAR", 30..37), (LParen, "(", 37..38), (TIMEZONE, "timezone", 38..46), (Eq, "=", 46..47), (LiteralString, "'Asia/Shanghai'", 47..62), (RParen, ")", 62..63), (HintSuffix, "*/", 64..66), (LiteralInteger, "1", 67..68), (SemiColon, ";", 68..69), (EOI, "", 69..69)]
 
 
 ---------- Input ----------
 create view v_t as select /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;
 ---------- Output ---------
-[(CREATE, "create", 0..6), (VIEW, "view", 7..11), (Ident, "v_t", 12..15), (AS, "as", 16..18), (SELECT, "select", 19..25), (HintPrefix, "/*+", 26..29), (SET_VAR, "SET_VAR", 30..37), (LParen, "(", 37..38), (TIMEZONE, "timezone", 38..46), (Eq, "=", 46..47), (QuotedString, "'Asia/Shanghai'", 47..62), (RParen, ")", 62..63), (HintSuffix, "*/", 64..66), (LiteralInteger, "1", 67..68), (SemiColon, ";", 68..69), (EOI, "", 69..69)]
+[(CREATE, "create", 0..6), (VIEW, "view", 7..11), (Ident, "v_t", 12..15), (AS, "as", 16..18), (SELECT, "select", 19..25), (HintPrefix, "/*+", 26..29), (SET_VAR, "SET_VAR", 30..37), (LParen, "(", 37..38), (TIMEZONE, "timezone", 38..46), (Eq, "=", 46..47), (LiteralString, "'Asia/Shanghai'", 47..62), (RParen, ")", 62..63), (HintSuffix, "*/", 64..66), (LiteralInteger, "1", 67..68), (SemiColon, ";", 68..69), (EOI, "", 69..69)]
 
 
 ---------- Input ----------
 create table "user" (id int, name varchar /* the user name */);
 ---------- Output ---------
-[(CREATE, "create", 0..6), (TABLE, "table", 7..12), (QuotedString, "\"user\"", 13..19), (LParen, "(", 20..21), (Ident, "id", 21..23), (INT, "int", 24..27), (Comma, ",", 27..28), (Ident, "name", 29..33), (VARCHAR, "varchar", 34..41), (RParen, ")", 61..62), (SemiColon, ";", 62..63), (EOI, "", 63..63)]
+[(CREATE, "create", 0..6), (TABLE, "table", 7..12), (LiteralString, "\"user\"", 13..19), (LParen, "(", 20..21), (Ident, "id", 21..23), (INT, "int", 24..27), (Comma, ",", 27..28), (Ident, "name", 29..33), (VARCHAR, "varchar", 34..41), (RParen, ")", 61..62), (SemiColon, ";", 62..63), (EOI, "", 63..63)]
 
 
