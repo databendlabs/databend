@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI8;
@@ -26,6 +27,7 @@ use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
@@ -44,6 +46,7 @@ use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
+use crate::sql::IndexType;
 
 pub struct SerializerHashJoinHashTable {
     pub(crate) hash_table: BinaryHashJoinHashMap,
@@ -120,9 +123,34 @@ pub struct HashJoinState {
     pub(crate) enable_spill: bool,
 
     pub(crate) merge_into_state: Option<SyncUnsafeCell<MergeIntoState>>,
+
+    /// Build side cache info.
+    pub(crate) column_map: HashMap<usize, usize>,
 }
 
 impl HashJoinState {
+    pub fn num_build_chunks(&self) -> usize {
+        let build_state = unsafe { &*self.build_state.get() };
+        build_state.generation_state.chunks.len()
+    }
+
+    pub fn read_build_cache(&self, column_index: usize) -> Vec<(BlockEntry, usize)> {
+        let index = self.column_map.get(&column_index).unwrap();
+        let build_state = unsafe { &*self.build_state.get() };
+        let columns = build_state
+            .generation_state
+            .chunks
+            .iter()
+            .map(|datablock| {
+                (
+                    datablock.get_by_offset(*index).clone(),
+                    datablock.num_rows(),
+                )
+            })
+            .collect::<Vec<_>>();
+        columns
+    }
+
     pub fn try_create(
         ctx: Arc<QueryContext>,
         mut build_schema: DataSchemaRef,
@@ -131,6 +159,7 @@ impl HashJoinState {
         probe_to_build: &[(usize, (bool, bool))],
         merge_into_is_distributed: bool,
         enable_merge_into_optimization: bool,
+        build_side_cache: Option<(usize, HashMap<IndexType, usize>)>,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -144,6 +173,11 @@ impl HashJoinState {
         if ctx.get_settings().get_join_spilling_memory_ratio()? != 0 {
             enable_spill = true;
         }
+        let column_map = if let Some((_, column_map)) = build_side_cache {
+            column_map
+        } else {
+            HashMap::new()
+        };
         Ok(Arc::new(HashJoinState {
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
             hash_table_builders: AtomicUsize::new(0),
@@ -166,6 +200,7 @@ impl HashJoinState {
                     merge_into_is_distributed,
                 )),
             },
+            column_map,
         }))
     }
 

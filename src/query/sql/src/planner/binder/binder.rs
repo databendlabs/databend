@@ -39,6 +39,7 @@ use log::info;
 use log::warn;
 
 use super::Finder;
+use crate::binder::bind_query::ExpressionScanContext;
 use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
@@ -79,6 +80,7 @@ use crate::Visibility;
 /// - Check semantic of query
 /// - Validate expressions
 /// - Build `Metadata`
+#[derive(Clone)]
 pub struct Binder {
     pub ctx: Arc<dyn TableContext>,
     pub dialect: Dialect,
@@ -91,6 +93,9 @@ pub struct Binder {
     /// Use `IndexMap` because need to keep the insertion order
     /// Then wrap materialized ctes to main plan.
     pub ctes_map: Box<IndexMap<String, CteInfo>>,
+    /// The `ExpressionScanContext` is used to store the information of
+    /// expression scan and hash join build cache.
+    pub expression_scan_context: ExpressionScanContext,
 }
 
 impl<'a> Binder {
@@ -110,6 +115,7 @@ impl<'a> Binder {
             m_cte_bound_ctx: Default::default(),
             m_cte_bound_s_expr: Default::default(),
             ctes_map: Box::default(),
+            expression_scan_context: ExpressionScanContext::new(),
         }
     }
 
@@ -135,6 +141,7 @@ impl<'a> Binder {
         let plan = match stmt {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
                     if !cte_info.materialized || cte_info.used_count == 0 {

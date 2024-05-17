@@ -68,6 +68,8 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::CteScan(_) => "CteScan".to_string(),
         RelOperator::MaterializedCte(_) => "MaterializedCte".to_string(),
         RelOperator::ConstantTableScan(_) => "ConstantTableScan".to_string(),
+        RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
+        RelOperator::CacheScan(_) => "CacheScan".to_string(),
         RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
         RelOperator::Udf(_) => "Udf".to_string(),
     }
