@@ -129,6 +129,7 @@ fn test_statement() {
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
         r#"create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );"#,
         r#"create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );"#,
+        r#"create table if not exists a.b (a string, b string, inverted index idx1 (a,b) tokenizer='chinese');"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,

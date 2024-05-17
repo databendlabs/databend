@@ -233,7 +233,7 @@ impl Display for AttachTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateTableSource {
-    Columns(Vec<ColumnDefinition>),
+    Columns(Vec<ColumnDefinition>, Option<Vec<InvertedIndexDefinition>>),
     Like {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
@@ -244,9 +244,13 @@ pub enum CreateTableSource {
 impl Display for CreateTableSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            CreateTableSource::Columns(columns) => {
+            CreateTableSource::Columns(columns, inverted_indexes) => {
                 write!(f, "(")?;
                 write_comma_separated_list(f, columns)?;
+                if let Some(inverted_indexes) = inverted_indexes {
+                    write!(f, ", ")?;
+                    write_comma_separated_list(f, inverted_indexes)?;
+                }
                 write!(f, ")")
             }
             CreateTableSource::Like {
@@ -829,6 +833,56 @@ impl Display for ColumnDefinition {
         }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT '{comment}'")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct InvertedIndexDefinition {
+    pub index_name: Identifier,
+    pub columns: Vec<Identifier>,
+    #[drive(skip)]
+    pub sync_creation: bool,
+    #[drive(skip)]
+    pub index_options: BTreeMap<String, String>,
+}
+
+impl Display for InvertedIndexDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if !self.sync_creation {
+            write!(f, "ASYNC ")?;
+        }
+        write!(f, "INVERTED INDEX")?;
+        write!(f, " {}", self.index_name)?;
+        write!(f, " (")?;
+        write_comma_separated_list(f, &self.columns)?;
+        write!(f, ")")?;
+
+        if !self.index_options.is_empty() {
+            write!(f, " ")?;
+            write_space_separated_string_map(f, &self.index_options)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum CreateDefinition {
+    Column(ColumnDefinition),
+    InvertedIndex(InvertedIndexDefinition),
+}
+
+impl Display for CreateDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CreateDefinition::Column(column_def) => {
+                write!(f, "{}", column_def)?;
+            }
+            CreateDefinition::InvertedIndex(inverted_index_def) => {
+                write!(f, "{}", inverted_index_def)?;
+            }
         }
         Ok(())
     }
