@@ -1,7 +1,7 @@
 {
   "name": "databend-driver",
   "author": "Databend Authors <opensource@datafuselabs.com>",
-  "version": "0.17.3",
+  "version": "0.18.0",
   "license": "Apache-2.0",
   "main": "index.js",
   "types": "index.d.ts",
