@@ -153,4 +153,3 @@ FROM probe ASOF JOIN build USING(k, t);
 ----
 1249625025
 
-endloop
