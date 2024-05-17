@@ -72,85 +72,84 @@ FROM probe p ASOF JOIN build b on p.k=b.k and p.t>=b.t;
 # 50 dates, 5 keys
 query I
 WITH build AS (
-	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	SELECT k, add_minutes('2001-01-01 00:00:00'::TIMESTAMP , v) AS t, v
 	FROM range(0,50) vals(v), range(0,5) keys(k)
 ), probe AS (
-	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	SELECT k * 2 AS k, add_seconds(t ,- 30) AS t
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build USING(k, t);
+FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
 ----
 3528
 
 # 100 dates, 5 keys
 query I
 WITH build AS (
-	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	SELECT k, add_minutes('2001-01-01 00:00:00'::TIMESTAMP , v) AS t, v
 	FROM range(0,100) vals(v), range(0,5) keys(k)
 ), probe AS (
-	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	SELECT k * 2 AS k, add_seconds(t ,- 30) AS t
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build USING(k, t);
+FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
 ----
 14553
 
 # 100 dates, 50 keys
 query I
 WITH build AS (
-	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	SELECT k, add_minutes('2001-01-01 00:00:00'::TIMESTAMP , v) AS t, v
 	FROM range(0,100) vals(v), range(0,50) keys(k)
 ), probe AS (
-	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	SELECT k * 2 AS k, add_seconds(t ,- 30) AS t
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build USING(k, t);
+FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
 ----
 121275
 
 # 1000 dates, 5 keys
 query I
 WITH build AS (
-	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	SELECT k, add_minutes('2001-01-01 00:00:00'::TIMESTAMP , v) AS t, v
 	FROM range(0,1000) vals(v), range(0,5) keys(k)
 ), probe AS (
-	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	SELECT k * 2 AS k, add_seconds(t ,- 30) AS t
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build USING(k, t);
+FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
 ----
 1495503
 
 # 1000 dates, 50 keys
 query I
 WITH build AS (
-	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	SELECT k, add_minutes('2001-01-01 00:00:00'::TIMESTAMP , v) AS t, v
 	FROM range(0,1000) vals(v), range(0,50) keys(k)
 ), probe AS (
-	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	SELECT k * 2 AS k, add_seconds(t ,- 30) AS t
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build USING(k, t);
+FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
 ----
 12462525
 
 # 10000 dates, 50 keys
 query I
 WITH build AS (
-	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	SELECT k, add_minutes('2001-01-01 00:00:00'::TIMESTAMP , v) AS t, v
 	FROM range(0,10000) vals(v), range(0,50) keys(k)
 ), probe AS (
-	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	SELECT k * 2 AS k, add_seconds(t ,- 30) AS t
 	FROM build
 )
 SELECT SUM(v)
-FROM probe ASOF JOIN build USING(k, t);
+FROM probe ASOF JOIN build on p.k=b.k and p.t>=b.t;
 ----
 1249625025
 
-endloop

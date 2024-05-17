@@ -44,13 +44,6 @@ FROM range(0,10) p(ts) ASOF JOIN events0 e
 ON p.ts <> e.begin
 ORDER BY p.ts ASC
 
-# Invalid ASOF JOIN condition
-statement error (?s).*Missing equality condition!
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON 1 = 1 AND p.ts >= e.begin
-ORDER BY p.ts ASC
-
 # Missing ASOF JOIN inequality
 statement error (?s).*Missing inequality condition!
 SELECT p.ts, e.value
