@@ -21,6 +21,7 @@ mod loggers;
 mod panic_hook;
 mod structlog;
 
+pub use crate::config::Config;
 pub use crate::config::FileConfig;
 pub use crate::config::OTLPConfig;
 pub use crate::config::ProfileLogConfig;
