@@ -38,6 +38,7 @@ impl Binder {
                 temporal,
                 pivot: _,
                 unpivot: _,
+                consume,
             } => {
                 self.bind_table(
                     bind_context,
@@ -47,6 +48,7 @@ impl Binder {
                     table,
                     alias,
                     temporal,
+                    *consume,
                 )
                 .await
             }

@@ -176,6 +176,7 @@ impl Binder {
                 false,
                 false,
                 false,
+                false,
             );
 
             let (s_expr, mut bind_context) = self
@@ -202,6 +203,7 @@ impl Binder {
                 "system".to_string(),
                 table.clone(),
                 table_alias_name,
+                false,
                 false,
                 false,
                 false,
