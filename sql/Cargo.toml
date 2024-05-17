@@ -20,7 +20,7 @@ chrono = { version = "0.4.35", default-features = false }
 geozero = { version = "0.12", features = ["default", "with-wkb"] }
 glob = "0.3"
 itertools = "0.12"
-jsonb = "0.3"
+jsonb = "0.4"
 lexical-core = "0.8"
 memchr = "2.7"
 
