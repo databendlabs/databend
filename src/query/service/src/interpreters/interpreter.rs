@@ -271,7 +271,7 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
 
         (query_hash, format!("{:x}", Md5::digest(stmt.to_string())))
     } else {
-        let hash = format!("{:x}", Md5::digest(sql.to_string()));
+        let hash = format!("{:x}", Md5::digest(sql));
         (hash.to_string(), hash)
     };
 
