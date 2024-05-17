@@ -58,6 +58,7 @@ use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::AbortChecker;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
@@ -220,6 +221,7 @@ impl Binder {
                 database.as_str(),
                 table_name.as_str(),
                 navigation.as_ref(),
+                self.ctx.clone().get_abort_checker(),
             )
             .await
         {
@@ -1342,6 +1344,7 @@ impl Binder {
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
+        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with ctx
         // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
@@ -1353,7 +1356,7 @@ impl Binder {
             .await?;
 
         if let Some(desc) = navigation {
-            table_meta = table_meta.navigate_to(desc).await?;
+            table_meta = table_meta.navigate_to(desc, abort_checker).await?;
         }
         Ok(table_meta)
     }

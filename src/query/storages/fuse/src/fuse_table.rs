@@ -33,6 +33,7 @@ use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
@@ -803,9 +804,15 @@ impl Table for FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn navigate_to(&self, navigation: &TimeNavigation) -> Result<Arc<dyn Table>> {
+    async fn navigate_to(
+        &self,
+        navigation: &TimeNavigation,
+        abort_checker: AbortChecker,
+    ) -> Result<Arc<dyn Table>> {
         match navigation {
-            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(point).await?),
+            TimeNavigation::TimeTravel(point) => {
+                Ok(self.navigate_to_point(point, abort_checker).await?)
+            }
             TimeNavigation::Changes {
                 append_only,
                 at,
@@ -813,12 +820,15 @@ impl Table for FuseTable {
                 desc,
             } => {
                 let mut end_point = if let Some(end) = end {
-                    self.navigate_to_point(end).await?.as_ref().clone()
+                    self.navigate_to_point(end, abort_checker.clone())
+                        .await?
+                        .as_ref()
+                        .clone()
                 } else {
                     self.clone()
                 };
                 let changes_desc = end_point
-                    .get_change_descriptor(*append_only, desc.clone(), Some(at))
+                    .get_change_descriptor(*append_only, desc.clone(), Some(at), abort_checker)
                     .await?;
                 end_point.changes_desc = Some(changes_desc);
                 Ok(Arc::new(end_point))
@@ -893,7 +903,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         point: NavigationDescriptor,
     ) -> Result<()> {
-        self.do_revert_to(ctx.as_ref(), point).await
+        self.do_revert_to(ctx, point).await
     }
 
     fn support_prewhere(&self) -> bool {

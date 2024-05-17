@@ -19,6 +19,8 @@ use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::StringType;
+use databend_common_expression::AbortChecker;
+use databend_common_expression::CheckAbort;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -298,7 +300,18 @@ fn test_blocks_merge_sort() -> Result<()> {
         ),
     ];
 
-    let aborting: Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>> = Arc::new(Box::new(|| false));
+    struct NeverAbort;
+    impl CheckAbort for NeverAbort {
+        fn is_aborting(&self) -> bool {
+            false
+        }
+        fn try_check_aborting(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    let aborting: AbortChecker = Arc::new(NeverAbort);
+
     for (name, sort_descs, limit, expected) in test_cases {
         let res = DataBlock::merge_sort(&blocks, &sort_descs, limit, aborting.clone())?;
 

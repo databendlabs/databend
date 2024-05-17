@@ -89,9 +89,12 @@ impl Interpreter for AnalyzeTableInterpreter {
 
             let temporal_str = if let Some(table_statistics) = &table_statistics {
                 let is_full = table
-                    .navigate_to_point(&NavigationPoint::SnapshotID(
-                        table_statistics.snapshot_id.simple().to_string(),
-                    ))
+                    .navigate_to_point(
+                        &NavigationPoint::SnapshotID(
+                            table_statistics.snapshot_id.simple().to_string(),
+                        ),
+                        self.ctx.clone().get_abort_checker(),
+                    )
                     .await
                     .is_err();
 
