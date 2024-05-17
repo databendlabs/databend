@@ -64,19 +64,22 @@ impl TestFixture {
 #[test]
 fn test_empty_dir() {
     let f = TestFixture::new();
-    DiskCache::new(f.tmp(), 1024).unwrap();
+    let fuzzy_reload_cache_keys = false;
+    DiskCache::new(f.tmp(), 1024, fuzzy_reload_cache_keys).unwrap();
 }
 
 #[test]
 fn test_missing_root() {
     let f = TestFixture::new();
-    DiskCache::new(f.tmp().join("not-here"), 1024).unwrap();
+    let fuzzy_reload_cache_keys = false;
+    DiskCache::new(f.tmp().join("not-here"), 1024, fuzzy_reload_cache_keys).unwrap();
 }
 
 #[test]
 fn test_insert_bytes() {
     let f = TestFixture::new();
-    let mut c = DiskCache::new(f.tmp(), 25).unwrap();
+    let fuzzy_reload_cache_keys = false;
+    let mut c = DiskCache::new(f.tmp(), 25, fuzzy_reload_cache_keys).unwrap();
     c.insert_single_slice("a/b/c", &[0; 10]).unwrap();
     assert!(c.contains_key("a/b/c"));
     c.insert_single_slice("a/b/d", &[0; 10]).unwrap();
@@ -95,7 +98,8 @@ fn test_insert_bytes() {
 fn test_insert_bytes_exact() {
     // Test that files adding up to exactly the size limit works.
     let f = TestFixture::new();
-    let mut c = DiskCache::new(f.tmp(), 20).unwrap();
+    let fuzzy_reload_cache_keys = false;
+    let mut c = DiskCache::new(f.tmp(), 20, fuzzy_reload_cache_keys).unwrap();
     c.insert_single_slice("file1", &[1; 10]).unwrap();
     c.insert_single_slice("file2", &[2; 10]).unwrap();
     assert_eq!(c.size(), 20);
@@ -108,7 +112,8 @@ fn test_insert_bytes_exact() {
 fn test_add_get_lru() {
     let f = TestFixture::new();
     {
-        let mut c = DiskCache::new(f.tmp(), 25).unwrap();
+        let fuzzy_reload_cache_keys = false;
+        let mut c = DiskCache::new(f.tmp(), 25, fuzzy_reload_cache_keys).unwrap();
         c.insert_single_slice("file1", &[1; 10]).unwrap();
         c.insert_single_slice("file2", &[2; 10]).unwrap();
         // Get the file to bump its LRU status.
@@ -127,7 +132,8 @@ fn test_add_get_lru() {
 #[test]
 fn test_insert_bytes_too_large() {
     let f = TestFixture::new();
-    let mut c = DiskCache::new(f.tmp(), 1).unwrap();
+    let fuzzy_reload_cache_keys = false;
+    let mut c = DiskCache::new(f.tmp(), 1, fuzzy_reload_cache_keys).unwrap();
     match c.insert_single_slice("a/b/c", &[0; 2]) {
         Err(DiskCacheError::FileTooLarge) => {}
         x => panic!("Unexpected result: {x:?}"),
@@ -137,7 +143,8 @@ fn test_insert_bytes_too_large() {
 #[test]
 fn test_evict_until_enough_space() {
     let f = TestFixture::new();
-    let mut c = DiskCache::new(f.tmp(), 4).unwrap();
+    let fuzzy_reload_cache_keys = false;
+    let mut c = DiskCache::new(f.tmp(), 4, fuzzy_reload_cache_keys).unwrap();
     c.insert_single_slice("file1", &[1; 1]).unwrap();
     c.insert_single_slice("file2", &[2; 2]).unwrap();
     c.insert_single_slice("file3", &[3; 1]).unwrap();

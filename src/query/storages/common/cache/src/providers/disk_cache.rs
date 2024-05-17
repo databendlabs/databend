@@ -31,6 +31,7 @@ use databend_common_cache::LruCache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::error;
+use log::info;
 use log::warn;
 use parking_lot::RwLock;
 use siphasher::sip128;
@@ -69,7 +70,7 @@ impl From<&DiskCacheKey> for PathBuf {
 }
 
 impl<C> DiskCache<C>
-where C: Cache<String, u64, DefaultHashBuilder, FileSize>
+where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static
 {
     /// Create an `DiskCache` with `hashbrown::hash_map::DefaultHashBuilder` that stores files in `path`,
     /// limited to `size` bytes.
@@ -80,18 +81,18 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
     ///
     /// The cache is not observant of changes to files under `path` from external sources, it
     /// expects to have sole maintenance of the contents.
-    pub fn new<T>(path: T, size: u64) -> self::result::Result<Self>
+    pub fn new<T>(path: T, size: u64, fuzzy_reload_cache_keys: bool) -> self::result::Result<Self>
     where PathBuf: From<T> {
         DiskCache {
             cache: C::with_meter_and_hasher(size, FileSize, DefaultHashBuilder::default()),
             root: PathBuf::from(path),
         }
-        .init()
+        .init(fuzzy_reload_cache_keys)
     }
 }
 
 impl<C> DiskCache<C>
-where C: Cache<String, u64, DefaultHashBuilder, FileSize>
+where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static
 {
     /// Return the current size of all the files in the cache.
     pub fn size(&self) -> u64 {
@@ -122,7 +123,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         self.root.join(rel_path)
     }
 
-    fn init(self) -> self::result::Result<Self> {
+    fn reset_restart(self) -> result::Result<Self> {
         // remove dir when init, ignore remove error
         if let Err(e) = fs::remove_dir_all(&self.root) {
             warn!("remove disk cache dir {:?} error {}", self.root, e);
@@ -132,9 +133,163 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         Ok(self)
     }
 
+    fn fuzzy_restart(self) -> result::Result<Self> {
+        fs::create_dir_all(&self.root)?;
+
+        let parallel_degree = std::thread::available_parallelism()
+            .expect("failed to detect number of parallelism")
+            .get();
+
+        let root_dir = Path::new(&self.root);
+        assert!(root_dir.is_dir());
+
+        let mut sub_dirs = Vec::new();
+        for entry in fs::read_dir(root_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                sub_dirs.push(path);
+            } else {
+                warn!(
+                    "unexpected file {:?} found under cache dir {:?}",
+                    path, root_dir
+                );
+            }
+        }
+
+        info!("{} sub dirs found {:?}", sub_dirs.len(), sub_dirs);
+
+        if sub_dirs.is_empty() {
+            info!("no previous cache found");
+            return Ok(self);
+        }
+
+        // The smallest unit of parallelism is a subdirectory.
+        let parallel_degree = std::cmp::min(sub_dirs.len(), parallel_degree);
+
+        info!("launching {} threads to reload cache keys", parallel_degree);
+
+        // number of sub dirs should be limited, use unbounded channel
+        let (tx, rx) = crossbeam_channel::unbounded();
+
+        let mut handles = vec![];
+
+        let root = self.root.clone();
+        let cache_holder = Arc::new(RwLock::new(Some(self)));
+
+        for thread_num in 0..parallel_degree {
+            let cache_holder = cache_holder.clone();
+            let rx = rx.clone();
+            let root = root.clone();
+            let thread_builder =
+                std::thread::Builder::new().name("table-data-cache-fuzzy-restart".to_owned());
+            let handle = thread_builder.spawn(move || {
+                for directory in rx.iter() {
+                    Self::load_cache_keys(&cache_holder, &root, directory, thread_num)?
+                }
+                Ok::<_, Error>(())
+            })?;
+            handles.push(handle);
+        }
+
+        for dir in sub_dirs {
+            tx.send(dir).expect("sending reload-cache task dir failed");
+        }
+
+        // safe to drop sender, since all sub dirs are sent into channel
+        drop(tx);
+
+        info!("all reload-cache-key tasks sent, waiting...");
+
+        for handle in handles {
+            handle
+                .join()
+                .map_err(|_e| Error::Misc("failed to join cache key reload thread".to_owned()))??;
+        }
+
+        info!("all reload-cache-key tasks done");
+
+        let cache = {
+            let mut write_guard = cache_holder.write();
+            std::mem::take(&mut *write_guard).expect("failed to take back cache object")
+        };
+
+        Ok(cache)
+    }
+
+    fn init(self, fuzzy_reload_cache_keys: bool) -> self::result::Result<Self> {
+        if fuzzy_reload_cache_keys {
+            info!("table data disk cache fuzzy restart");
+            Self::fuzzy_restart(self)
+        } else {
+            info!("table data disk cache reset restart");
+            Self::reset_restart(self)
+        }
+    }
+
+    fn load_cache_keys(
+        cache_holder: &Arc<RwLock<Option<Self>>>,
+        prefix: &Path,
+        absolute_cache_path: PathBuf,
+        thread_num: usize,
+    ) -> result::Result<()> {
+        info!(
+            "cache-key reload thread #{}, loading cache keys from dir {:?}",
+            thread_num, absolute_cache_path,
+        );
+
+        let mut file_idx = 0;
+        for entry in fs::read_dir(&absolute_cache_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            let size = entry.metadata()?.len();
+            let relative_path = path
+                .strip_prefix(prefix)
+                .map_err(|_e| self::Error::MalformedPath)?;
+            let cache_key = Self::recovery_from(relative_path);
+            {
+                let mut cache_guard = cache_holder.write();
+                let dick_cache_opt = (*cache_guard).as_mut();
+                dick_cache_opt
+                    .expect("unreachable")
+                    .cache
+                    .put(cache_key, size);
+            }
+            file_idx += 1;
+            if file_idx % 1000 == 0 {
+                info!(
+                    "cache-key reload thread #{}, processed {} items so far, from dir {:?}",
+                    thread_num, file_idx, absolute_cache_path
+                );
+            }
+        }
+        info!(
+            "cache-key reload thread #{} finished, {} items processed totally, from dir {:?}",
+            thread_num, file_idx, absolute_cache_path
+        );
+        Ok(())
+    }
+
     /// Returns `true` if the disk cache can store a file of `size` bytes.
     pub fn can_store(&self, size: u64) -> bool {
         size <= self.cache.capacity()
+    }
+
+    fn recovery_from(relative_path: &Path) -> String {
+        let key_string = match relative_path.file_name() {
+            Some(file_name) => match file_name.to_str() {
+                Some(str) => str.to_owned(),
+                None => {
+                    // relative_path is constructed by ourself, and shall be valid utf8 string
+                    unreachable!()
+                }
+            },
+            None => {
+                // only called during init, and only path of files are passed in
+                unreachable!()
+            }
+        };
+        key_string
     }
 
     fn cache_key(&self, key: &str) -> DiskCacheKey {
@@ -226,6 +381,9 @@ pub mod result {
         MalformedPath,
         /// An IO Error occurred.
         Io(io::Error),
+
+        /// unclassified errors
+        Misc(String),
     }
 
     impl fmt::Display for Error {
@@ -234,6 +392,7 @@ pub mod result {
                 Error::FileTooLarge => write!(f, "File too large"),
                 Error::MalformedPath => write!(f, "Malformed catch file path"),
                 Error::Io(ref e) => write!(f, "{e}"),
+                Error::Misc(msg) => write!(f, "{msg}"),
             }
         }
     }
@@ -377,9 +536,11 @@ impl LruDiskCacheBuilder {
     pub fn new_disk_cache(
         path: &PathBuf,
         disk_cache_bytes_size: u64,
+        fuzzy_reload_cache_keys: bool,
     ) -> Result<LruDiskCacheHolder> {
-        let external_cache = DiskCache::new(path, disk_cache_bytes_size)
-            .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
+        let external_cache =
+            DiskCache::new(path, disk_cache_bytes_size, fuzzy_reload_cache_keys)
+                .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         Ok(Arc::new(RwLock::new(external_cache)))
     }
 }
