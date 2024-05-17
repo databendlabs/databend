@@ -14,6 +14,8 @@
 
 use databend_common_exception::Result;
 
+use super::physical_plans::CacheScan;
+use super::physical_plans::ExpressionScan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -103,6 +105,8 @@ pub trait PhysicalPlanReplacer {
             }
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
+            PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
+            PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
             PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
             PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
@@ -141,6 +145,14 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
+    }
+
+    fn replace_expression_scan(&mut self, plan: &ExpressionScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ExpressionScan(plan.clone()))
+    }
+
+    fn replace_cache_scan(&mut self, plan: &CacheScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CacheScan(plan.clone()))
     }
 
     fn replace_filter(&mut self, plan: &Filter) -> Result<PhysicalPlan> {
@@ -261,6 +273,7 @@ pub trait PhysicalPlanReplacer {
             enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
+            build_side_cache: plan.build_side_cache.clone(),
         }))
     }
 
@@ -624,6 +637,8 @@ impl PhysicalPlan {
                 | PhysicalPlan::ReplaceAsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
                 | PhysicalPlan::ConstantTableScan(_)
+                | PhysicalPlan::ExpressionScan(_)
+                | PhysicalPlan::CacheScan(_)
                 | PhysicalPlan::ReclusterSource(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)

@@ -14,6 +14,7 @@
 
 mod add_row_number;
 mod aggregate;
+mod cache_scan;
 mod call;
 mod constant_table_scan;
 mod copy_into_table;
@@ -24,6 +25,7 @@ mod delete;
 mod dummy_table_scan;
 mod eval_scalar;
 mod exchange;
+mod expression_scan;
 mod filter;
 pub mod insert;
 mod join;
@@ -53,6 +55,7 @@ mod window;
 
 pub use add_row_number::AddRowNumber;
 pub use aggregate::*;
+pub use cache_scan::*;
 pub use call::CallPlan;
 pub use constant_table_scan::ConstantTableScan;
 pub use copy_into_location::*;
@@ -65,6 +68,7 @@ pub use delete::SubqueryDesc;
 pub use dummy_table_scan::DummyTableScan;
 pub use eval_scalar::*;
 pub use exchange::*;
+pub use expression_scan::*;
 pub use filter::*;
 pub use insert::Insert;
 pub use insert::InsertInputSource;

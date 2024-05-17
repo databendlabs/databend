@@ -24,6 +24,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
+use super::physical_plans::CacheScan;
+use super::physical_plans::ExpressionScan;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -60,6 +62,7 @@ use crate::executor::PhysicalPlan;
 use crate::planner::Metadata;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
+use crate::plans::CacheSource;
 
 impl PhysicalPlan {
     pub fn format(
@@ -252,6 +255,8 @@ fn to_format_tree(
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
+        PhysicalPlan::ExpressionScan(plan) => expression_scan_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::CacheScan(plan) => cache_scan_to_format_tree(plan, metadata),
         PhysicalPlan::Duplicate(_) => Ok(FormatTreeNode::new("Duplicate".to_string())),
         PhysicalPlan::Shuffle(_) => Ok(FormatTreeNode::new("Shuffle".to_string())),
         PhysicalPlan::ChunkFilter(_) => Ok(FormatTreeNode::new("ChunkFilter".to_string())),
@@ -448,6 +453,58 @@ fn constant_table_scan_to_format_tree(
     }
     Ok(FormatTreeNode::with_children(
         "ConstantTableScan".to_string(),
+        children,
+    ))
+}
+
+fn expression_scan_to_format_tree(
+    plan: &ExpressionScan,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = Vec::with_capacity(plan.values.len() + 1);
+    children.push(FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    )));
+    for (i, value) in plan.values.iter().enumerate() {
+        let column = value
+            .iter()
+            .map(|val| val.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .join(", ");
+        children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
+
+    Ok(FormatTreeNode::with_children(
+        "ExpressionScan".to_string(),
+        children,
+    ))
+}
+
+fn cache_scan_to_format_tree(
+    plan: &CacheScan,
+    metadata: &Metadata,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = Vec::with_capacity(2);
+    children.push(FormatTreeNode::new(format!(
+        "output columns: [{}]",
+        format_output_columns(plan.output_schema()?, metadata, true)
+    )));
+
+    match &plan.cache_source {
+        CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
+            children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
+            children.push(FormatTreeNode::new(format!(
+                "column indexes: {:?}",
+                column_indexes
+            )));
+        }
+    }
+
+    Ok(FormatTreeNode::with_children(
+        "CacheScan".to_string(),
         children,
     ))
 }
@@ -954,6 +1011,14 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
     ];
+
+    if let Some((cache_index, column_map)) = &plan.build_side_cache {
+        children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
+        children.push(FormatTreeNode::new(format!(
+            "cache columns: {:?}",
+            column_map.keys()
+        )));
+    }
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
