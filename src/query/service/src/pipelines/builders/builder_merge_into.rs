@@ -272,7 +272,6 @@ impl PipelineBuilder {
 
             // 6. serialize segment
             let serialize_segment_transform = TransformSerializeSegment::new(
-                self.ctx.clone(),
                 InputPort::create(),
                 OutputPort::create(),
                 table,
@@ -400,7 +399,6 @@ impl PipelineBuilder {
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
         let serialize_segment_transform = TransformSerializeSegment::new(
-            self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,

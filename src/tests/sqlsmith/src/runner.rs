@@ -120,7 +120,7 @@ impl Runner {
 
             let table_name = create_table_stmt.table.name.clone();
             let mut fields = Vec::new();
-            if let CreateTableSource::Columns(columns) = create_table_stmt.source.unwrap() {
+            if let CreateTableSource::Columns(columns, _) = create_table_stmt.source.unwrap() {
                 for column in columns {
                     let data_type = resolve_type_name(&column.data_type, true).unwrap();
                     let field = TableField::new(&column.name.name, data_type);

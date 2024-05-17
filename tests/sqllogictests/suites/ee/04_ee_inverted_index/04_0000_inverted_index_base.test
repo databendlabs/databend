@@ -22,7 +22,7 @@ statement ok
 use test_index
 
 statement ok
-CREATE TABLE t (id int, content string)
+CREATE TABLE t (id int, content string, INVERTED INDEX idx1 (content) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop')
 
 statement ok
 INSERT INTO t VALUES 
@@ -37,16 +37,10 @@ INSERT INTO t VALUES
 (9, 'You can not judge a book by its cover'),
 (10, 'An apple a day keeps the doctor away')
 
-statement ok
-CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop'
-
 query TT
 SHOW CREATE TABLE t
 ----
 t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) filters = 'english_stop,english_stemmer,chinese_stop', tokenizer = 'chinese' ) ENGINE=FUSE
-
-statement ok
-REFRESH INVERTED INDEX idx1 ON t
 
 query 
 SELECT id, score(), content FROM t WHERE match(content, 'test')

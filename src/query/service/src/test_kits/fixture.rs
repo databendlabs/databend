@@ -347,6 +347,7 @@ impl TestFixture {
             field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
+            inverted_indexes: None,
         }
     }
 
@@ -372,6 +373,7 @@ impl TestFixture {
             field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: None,
+            inverted_indexes: None,
         }
     }
 
@@ -408,6 +410,7 @@ impl TestFixture {
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
+            inverted_indexes: None,
         }
     }
 
@@ -444,6 +447,7 @@ impl TestFixture {
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
+            inverted_indexes: None,
         }
     }
 
@@ -489,6 +493,7 @@ impl TestFixture {
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
+            inverted_indexes: None,
         }
     }
 

@@ -528,6 +528,12 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_column_definition(&mut self, _column_definition: &'ast ColumnDefinition) {}
 
+    fn visit_inverted_index_definition(
+        &mut self,
+        _inverted_index_definition: &'ast InvertedIndexDefinition,
+    ) {
+    }
+
     fn visit_drop_table(&mut self, _stmt: &'ast DropTableStmt) {}
 
     fn visit_undrop_table(&mut self, _stmt: &'ast UndropTableStmt) {}

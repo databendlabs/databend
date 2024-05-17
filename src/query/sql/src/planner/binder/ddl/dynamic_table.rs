@@ -122,7 +122,7 @@ impl Binder {
         }
 
         // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns(cols)) = &source {
+        if let Some(CreateTableSource::Columns(cols, indexes)) = &source {
             if cols
                 .iter()
                 .any(|col| matches!(col.data_type, TypeName::Geometry))
@@ -132,6 +132,11 @@ impl Binder {
                     "Create table using the geometry type is an experimental feature. \
                     You can `set enable_geo_create_table=1` to use this feature. \
                     We do not guarantee its compatibility until we doc this feature.",
+                ));
+            }
+            if indexes.is_some() {
+                return Err(ErrorCode::SemanticError(
+                    "dynamic table don't support inverted indexes".to_string(),
                 ));
             }
         }
@@ -151,7 +156,7 @@ impl Binder {
 
         let (schema, field_comments) = match source {
             Some(source) => {
-                let (source_schema, source_comments) =
+                let (source_schema, source_comments, _) =
                     self.analyze_create_table_schema(source).await?;
                 if source_schema.fields().len() != query_fields.len() {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
