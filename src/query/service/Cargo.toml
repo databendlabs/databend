@@ -110,6 +110,7 @@ arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
+flatbuffers = { workspace = true }
 async-channel = "1.7.1"
 async-stream = "0.3.3"
 async-trait = { workspace = true }
