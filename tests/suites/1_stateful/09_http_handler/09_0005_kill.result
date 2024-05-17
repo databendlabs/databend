@@ -1,0 +1,4 @@
+"Running"
+200
+{"error":{"code":"400","message":"query id my_query_for_kill_4 canceled"}}
+400
