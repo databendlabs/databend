@@ -82,8 +82,7 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc =
-                TransformSerializeSegment::new(ctx.clone(), input, output, self, block_thresholds);
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 

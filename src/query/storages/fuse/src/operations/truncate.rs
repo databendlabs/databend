@@ -48,6 +48,7 @@ impl FuseTable {
                 |output| {
                     let meta = CommitMeta {
                         conflict_resolve_context: ConflictResolveContext::None,
+                        new_segment_locs: vec![],
                         table_id: self.get_id(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));

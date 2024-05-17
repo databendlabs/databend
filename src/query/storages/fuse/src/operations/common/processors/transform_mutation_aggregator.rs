@@ -210,6 +210,10 @@ impl TableMutationAggregator {
     pub async fn apply(&mut self) -> Result<CommitMeta> {
         let appended_segments = std::mem::take(&mut self.appended_segments);
         let appended_statistics = std::mem::take(&mut self.appended_statistics);
+
+        let mut new_segment_locs = Vec::new();
+        new_segment_locs.extend(appended_segments.clone());
+
         let conflict_resolve_context = match self.kind {
             MutationKind::Insert => ConflictResolveContext::AppendOnly((
                 SnapshotMerged {
@@ -232,7 +236,7 @@ impl TableMutationAggregator {
                         if let Some((location, summary)) = result.new_segment_info {
                             // replace the old segment location with the new one.
                             let new_segment_loc = (location, SegmentInfo::VERSION);
-                            self.ctx.add_segment_location(new_segment_loc.clone())?;
+                            new_segment_locs.push(new_segment_loc.clone());
                             merge_statistics_mut(
                                 &mut merged_statistics,
                                 &summary,
@@ -284,7 +288,7 @@ impl TableMutationAggregator {
             }
         };
 
-        let meta = CommitMeta::new(conflict_resolve_context, self.table_id);
+        let meta = CommitMeta::new(conflict_resolve_context, new_segment_locs, self.table_id);
         Ok(meta)
     }
 

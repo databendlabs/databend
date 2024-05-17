@@ -99,13 +99,14 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
         let mut merged_statistics = Statistics::default();
         let mut appended_segments = Vec::new();
         let mut replaced_segments = HashMap::with_capacity(replaced_segments_len);
+        let mut new_segment_locs = Vec::with_capacity(new_segments_len);
 
         if new_segments_len > removed_segments_len {
             // The remain new segments will be append.
             let appended = new_segments.split_off(removed_segments_len);
             for (location, stats) in appended.into_iter().rev() {
                 let segment_loc = (location, SegmentInfo::VERSION);
-                self.ctx.add_segment_location(segment_loc.clone())?;
+                new_segment_locs.push(segment_loc.clone());
                 appended_segments.push(segment_loc);
                 merge_statistics_mut(&mut merged_statistics, &stats, default_cluster_key);
             }
@@ -114,7 +115,7 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
         for (i, (location, stats)) in new_segments.into_iter().enumerate() {
             // The old segments will be replaced with the news.
             let segment_loc = (location, SegmentInfo::VERSION);
-            self.ctx.add_segment_location(segment_loc.clone())?;
+            new_segment_locs.push(segment_loc.clone());
             replaced_segments.insert(self.removed_segment_indexes[i], segment_loc);
             merge_statistics_mut(&mut merged_statistics, &stats, default_cluster_key);
         }
@@ -129,7 +130,7 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
                 merged_statistics,
             });
 
-        let meta = CommitMeta::new(conflict_resolve_context, self.table_id);
+        let meta = CommitMeta::new(conflict_resolve_context, new_segment_locs, self.table_id);
         let block_meta: BlockMetaInfoPtr = Box::new(meta);
         Ok(Some(DataBlock::empty_with_meta(block_meta)))
     }

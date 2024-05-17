@@ -16,6 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotChanges;
@@ -23,6 +24,7 @@ use crate::operations::common::SnapshotChanges;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CommitMeta {
     pub conflict_resolve_context: ConflictResolveContext,
+    pub new_segment_locs: Vec<Location>,
     pub table_id: u64,
 }
 
@@ -32,13 +34,19 @@ impl CommitMeta {
             conflict_resolve_context: ConflictResolveContext::ModifiedSegmentExistsInLatest(
                 SnapshotChanges::default(),
             ),
+            new_segment_locs: vec![],
             table_id,
         }
     }
 
-    pub fn new(conflict_resolve_context: ConflictResolveContext, table_id: u64) -> Self {
+    pub fn new(
+        conflict_resolve_context: ConflictResolveContext,
+        new_segment_locs: Vec<Location>,
+        table_id: u64,
+    ) -> Self {
         CommitMeta {
             conflict_resolve_context,
+            new_segment_locs,
             table_id,
         }
     }

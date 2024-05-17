@@ -92,6 +92,11 @@ impl TransformMergeCommitMeta {
                 r.conflict_resolve_context,
                 default_cluster_key_id,
             ),
+            new_segment_locs: l
+                .new_segment_locs
+                .into_iter()
+                .chain(r.new_segment_locs)
+                .collect(),
             table_id: l.table_id,
         }
     }

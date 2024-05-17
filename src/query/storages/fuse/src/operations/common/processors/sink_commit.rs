@@ -37,6 +37,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::LockGuard;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -92,6 +93,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     max_retry_elapsed: Option<Duration>,
     backoff: ExponentialBackoff,
 
+    new_segment_locs: Vec<Location>,
     lock_guard: Option<LockGuard>,
     lock: Option<Arc<dyn Lock>>,
     start_time: Instant,
@@ -133,6 +135,7 @@ where F: SnapshotGenerator + Send + 'static
             retries: 0,
             max_retry_elapsed,
             input,
+            new_segment_locs: vec![],
             lock,
             start_time: Instant::now(),
             prev_snapshot_id,
@@ -169,6 +172,8 @@ where F: SnapshotGenerator + Send + 'static
 
         let meta = CommitMeta::downcast_from(input_meta)
             .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
+
+        self.new_segment_locs = meta.new_segment_locs;
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
@@ -446,6 +451,9 @@ where F: SnapshotGenerator + Send + 'static
                         }
                         if let Some(files) = &self.copied_files {
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
+                        }
+                        for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
+                            self.ctx.add_segment_location(segment_loc)?;
                         }
                         self.state = State::Finish;
                     }
