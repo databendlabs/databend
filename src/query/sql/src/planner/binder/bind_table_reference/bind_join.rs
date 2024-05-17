@@ -42,6 +42,7 @@ use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
+use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
@@ -66,9 +67,30 @@ impl Binder {
         bind_context: &mut BindContext,
         join: &databend_common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_child, mut left_context) = self.bind_table_reference(bind_context, &join.left).await?;
+        let (left_child, mut left_context) =
+            self.bind_table_reference(bind_context, &join.left).await?;
         let left_column_bindings = left_context.columns.clone();
-        let (right_child, right_context) = self.bind_table_reference(&mut left_context, &join.right).await?;
+        
+        let cache_column_bindings = left_column_bindings.clone();
+        let mut cache_column_indexes = Vec::with_capacity(cache_column_bindings.len());
+        for column in cache_column_bindings.iter() {
+            cache_column_indexes.push(column.index);
+        }
+        let cache_idx = self
+            .expression_scan_context
+            .add_hash_join_build_cache(cache_column_bindings, cache_column_indexes);
+
+        if join.right.is_lateral_table_function() {
+            let (result_expr, bind_context) = self
+                .bind_lateral_table_function(&mut left_context, left_child.clone(), &join.right)
+                .await?;
+            return Ok((result_expr, bind_context));
+        }
+
+        let (right_child, right_context) = self
+            .bind_table_reference(&mut left_context, &join.right)
+            .await?;
+
         let right_column_bindings = right_context.columns.clone();
 
         let mut bind_context = bind_context.replace();
@@ -84,12 +106,15 @@ impl Binder {
             )
             .await?;
 
+        let build_side_cache_info = self.expression_scan_context.generate_cache_info(cache_idx);
+
         let s_expr = self
             .bind_join_with_type(
                 join_type(&join.op),
                 join_conditions,
                 left_child,
                 right_child,
+                build_side_cache_info,
             )
             .await?;
 
@@ -127,6 +152,7 @@ impl Binder {
                 join_conditions,
                 left_child,
                 right_child,
+                None,
             )
             .await?;
 
@@ -181,6 +207,7 @@ impl Binder {
         join_conditions: JoinConditions,
         mut left_child: SExpr,
         mut right_child: SExpr,
+        build_side_cache_info: Option<HashJoinBuildCacheInfo>,
     ) -> Result<SExpr> {
         let mut left_conditions = join_conditions.left_conditions;
         let mut right_conditions = join_conditions.right_conditions;
@@ -206,7 +233,8 @@ impl Binder {
         let mut is_lateral = false;
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
-            let mut decorrelator = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
+            let mut decorrelator =
+                SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), Some(self.clone()));
             right_child = decorrelator.flatten_plan(
                 &right_child,
                 &right_prop.outer_columns,
@@ -227,6 +255,26 @@ impl Binder {
             is_lateral = true;
         }
 
+        let (left_child, right_child, join_type, left_conditions, right_conditions) =
+            // If there are cache indexes used in the expression scan context, we swap the left and right child
+            // to make left child as the build side.
+            if !self.expression_scan_context.used_cache_indexes.is_empty() {
+                (
+                    right_child,
+                    left_child,
+                    join_type.opposite(),
+                    right_conditions,
+                    left_conditions,
+                )
+            } else {
+                (
+                    left_child,
+                    right_child,
+                    join_type,
+                    left_conditions,
+                    right_conditions,
+                )
+            };
         let logical_join = Join {
             left_conditions,
             right_conditions,
@@ -237,6 +285,7 @@ impl Binder {
             need_hold_hash_table: false,
             is_lateral,
             single_to_inner: None,
+            build_side_cache_info,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),

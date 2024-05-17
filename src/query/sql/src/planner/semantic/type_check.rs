@@ -4009,6 +4009,7 @@ impl<'a> TypeChecker<'a> {
             &mut bind_context,
             None,
             &values,
+            None,
         )
         .await?;
         assert_eq!(ctx.columns.len(), 1);

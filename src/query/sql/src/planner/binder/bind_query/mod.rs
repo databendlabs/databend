@@ -20,3 +20,4 @@ mod bind_value;
 
 pub use bind_select::MaxColumnPosition;
 pub use bind_value::bind_values;
+pub use bind_value::ExpressionScanContext;

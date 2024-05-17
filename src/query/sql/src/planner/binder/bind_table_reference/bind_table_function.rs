@@ -307,7 +307,7 @@ impl Binder {
 
     /// Bind a lateral table function.
     #[async_backtrace::framed]
-    async fn bind_lateral_table_function(
+    pub(crate) async fn bind_lateral_table_function(
         &mut self,
         parent_context: &mut BindContext,
         child: SExpr,

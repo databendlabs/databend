@@ -202,7 +202,7 @@ impl Binder {
         scan.columns.insert(row_id_index.unwrap());
         table_expr.plan = Arc::new(Scan(scan));
         let filter_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
-        let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
+        let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), None);
         let filter_expr = rewriter.rewrite(&filter_expr)?;
 
         Ok(SubqueryDesc {
