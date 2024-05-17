@@ -7,7 +7,11 @@ services:
     volumes:
       - ./data:/data
   databend:
-    image: docker.io/datafuselabs/databend
+    # Use nightly image for testing
+    #
+    # Please remove the nightly tag once https://github.com/datafuselabs/databend/pull/15559 included
+    # in stable.
+    image: docker.io/datafuselabs/databend:nightly
     environment:
       - QUERY_STORAGE_TYPE=s3
       - AWS_S3_ENDPOINT=http://localhost:9000
