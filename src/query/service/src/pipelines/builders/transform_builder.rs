@@ -126,16 +126,9 @@ impl PipelineBuilder {
         table: Arc<dyn Table>,
         block_thresholds: BlockThresholds,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
-        let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let proc = TransformSerializeSegment::new(
-                ctx.clone(),
-                input,
-                output,
-                fuse_table,
-                block_thresholds,
-            );
+            let proc = TransformSerializeSegment::new(input, output, fuse_table, block_thresholds);
             proc.into_processor()
         })
     }
