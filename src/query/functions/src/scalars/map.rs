@@ -263,10 +263,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "map_insert",
         |_, domian1, _, _| {
             FunctionDomain::Domain(match domian1 {
-                Some((key_domain, val_domain)) => Some((
-                    key_domain.clone(),
-                    val_domain.clone(),
-                )),
+                Some((key_domain, val_domain)) => Some((key_domain.clone(), val_domain.clone())),
                 None => None,
             })
         },
