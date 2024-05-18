@@ -27,8 +27,10 @@ use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
@@ -244,4 +246,53 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .any(|(k, _)| k == key)
             },
         );
+
+    registry.register_3_arg_core::<EmptyMapType, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>, _, _>(
+        "map_insert",
+        |_, _, _, _| FunctionDomain::Full,
+        |_, key, value, ctx| {
+            let mut b = ArrayType::create_builder(1, ctx.generics);
+            b.put_item((key.into_scalar().unwrap(), value.into_scalar().unwrap()));
+            b.commit_row();
+      
+            return Value::Scalar(MapType::build_scalar(b));
+        },
+    );
+
+    registry.register_passthrough_nullable_3_arg(
+        "map_insert",
+        |_, domian1, _, _| {
+            FunctionDomain::Domain(match domian1 {
+                Some((key_domain, val_domain)) => Some((
+                    key_domain.clone(),
+                    val_domain.clone(),
+                )),
+                None => None,
+            })
+        },
+        vectorize_with_builder_3_arg::<
+            MapType<GenericType<0>, GenericType<1>>,
+            GenericType<0>,
+            GenericType<1>,
+            MapType<GenericType<0>, GenericType<1>>,
+        >(|source, key, value, output, ctx| {
+            // check if key already exists in the map
+            let duplicate_key = source.iter().any(|(k, _)| k == key);
+
+            let mut new_map = ArrayType::create_builder(source.len() + 1, ctx.generics);
+            for (k, v) in source.iter() {
+                if k == key {
+                    new_map.put_item((k.clone(), value.clone()));
+                    continue;
+                }
+                new_map.put_item((k.clone(), v.clone()));
+            }
+            if !duplicate_key {
+                new_map.put_item((key.clone(), value.clone()));
+            }
+            new_map.commit_row();
+
+            output.append_column(&new_map.build());
+        }),
+    );
 }
