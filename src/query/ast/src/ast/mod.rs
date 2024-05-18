@@ -14,10 +14,10 @@
 
 #[allow(clippy::module_inception)]
 mod common;
-mod escape;
 mod expr;
 mod format;
 mod query;
+pub mod quote;
 mod statements;
 mod visitors;
 

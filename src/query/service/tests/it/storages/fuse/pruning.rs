@@ -108,6 +108,7 @@ async fn test_block_pruner() -> Result<()> {
         field_comments: vec![],
         as_select: None,
         cluster_key: None,
+        inverted_indexes: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;

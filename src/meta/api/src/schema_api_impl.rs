@@ -1557,6 +1557,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 .collect::<Vec<_>>()
         };
 
+        if !req.table_meta.indexes.is_empty() {
+            // check the index column id exists and not be duplicated.
+            let mut index_column_ids = HashSet::new();
+            for (_, index) in req.table_meta.indexes.iter() {
+                for column_id in &index.column_ids {
+                    if req.table_meta.schema.is_column_deleted(*column_id) {
+                        return Err(KVAppError::AppError(AppError::IndexColumnIdNotFound(
+                            IndexColumnIdNotFound::new(*column_id, &index.name),
+                        )));
+                    }
+                    if index_column_ids.contains(column_id) {
+                        return Err(KVAppError::AppError(AppError::DuplicatedIndexColumnId(
+                            DuplicatedIndexColumnId::new(*column_id, &index.name),
+                        )));
+                    }
+                    index_column_ids.insert(column_id);
+                }
+            }
+        }
+
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;

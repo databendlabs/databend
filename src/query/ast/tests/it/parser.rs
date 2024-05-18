@@ -16,12 +16,12 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::quote::ident_needs_quote;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
-use databend_common_ast::parser::quote::quote_ident;
-use databend_common_ast::parser::quote::unquote_ident;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::script::script_stmt;
 use databend_common_ast::parser::statement::insert_stmt;
@@ -129,6 +129,7 @@ fn test_statement() {
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
         r#"create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );"#,
         r#"create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );"#,
+        r#"create table if not exists a.b (a string, b string, inverted index idx1 (a,b) tokenizer='chinese');"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
@@ -775,6 +776,13 @@ fn test_statement() {
             return i+1
             $$;
         "#,
+        r#"
+            create or replace function addone(int)
+            returns int
+            language python
+            handler = 'addone_py'
+            as '@data/abc/a.py';
+        "#,
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
         r#"
@@ -788,16 +796,16 @@ fn test_statement() {
             $$
         "#,
         r#"
-        with
-        abc as (
-            select
-                id, uid, eid, match_id, created_at, updated_at
-            from (
-               select * from ddd.ccc where score > 0 limit 10
-             )
-            qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
-        )
-        select * from abc;
+            with
+            abc as (
+                select
+                    id, uid, eid, match_id, created_at, updated_at
+                from (
+                    select * from ddd.ccc where score > 0 limit 10
+                )
+                qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
+            )
+            select * from abc;
         "#,
     ];
 
@@ -939,6 +947,8 @@ fn test_query() {
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
         r#"select columns('abc'), columns(a -> length(a) = 3) from t"#,
         r#"select * from customer at(offset => -10 * 30)"#,
+        r#"select * from customer changes(information => default) at (stream => s) order by a, b"#,
+        r#"select * from customer with consume as s"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,
@@ -1317,6 +1327,7 @@ fn test_quote() {
         ("_abc12", "_abc12"),
         ("_12a", "_12a"),
         ("12a", "\"12a\""),
+        ("a\\\"b", "\"a\\\"\"b\""),
         ("12", "\"12\""),
         ("🍣", "\"🍣\""),
         ("価格", "\"価格\""),
@@ -1326,10 +1337,17 @@ fn test_quote() {
         ("'''", "\"'''\""),
         ("name\"with\"quote", "\"name\"\"with\"\"quote\""),
     ];
-    for (input, want) in cases {
-        let quoted = quote_ident(input, '"', false);
-        assert_eq!(quoted, *want);
-        let unquoted = unquote_ident(&quoted, '"');
-        assert_eq!(unquoted, *input, "unquote({}) got {}", quoted, unquoted);
+
+    for (input, expected) in cases {
+        if ident_needs_quote(input) {
+            let quoted = QuotedIdent(input, '"').to_string();
+            assert_eq!(quoted, *expected);
+
+            let QuotedIdent(ident, quote) = quoted.parse().unwrap();
+            assert_eq!(ident, *input);
+            assert_eq!(quote, '"');
+        } else {
+            assert_eq!(input, expected);
+        };
     }
 }

@@ -275,6 +275,30 @@ async fn test_heavy_actions() -> Result<()> {
             add_to_queue: true,
         },
         Query {
+            sql: "optimize table t1 compact",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "vacuum table t",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "vacuum temporary files",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "truncate table t",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "drop table t",
+            add_to_queue: false,
+        },
+        Query {
+            sql: "drop table t all",
+            add_to_queue: true,
+        },
+        Query {
             sql: "merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete",
             // MERGE INTO
             add_to_queue: true,

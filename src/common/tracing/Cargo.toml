@@ -10,15 +10,11 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[features]
-console = ["console-subscriber", "tracing", "tracing-subscriber"]
-
 [dependencies] # In alphabetical order
 # Workspace dependencies
 databend-common-base = { path = "../base" }
 
 # Crates.io dependencies
-console-subscriber = { workspace = true, optional = true }
 defer = "0.2"
 fern = "0.6.2"
 humantime = "2.1.0"
@@ -32,6 +28,4 @@ opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
-tracing = { workspace = true, optional = true }
 tracing-appender = { workspace = true }
-tracing-subscriber = { workspace = true, optional = true }

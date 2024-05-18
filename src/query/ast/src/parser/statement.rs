@@ -2725,6 +2725,36 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     Ok((i, def))
 }
 
+pub fn inverted_index_def(i: Input) -> IResult<InvertedIndexDefinition> {
+    map_res(
+        rule! {
+            ASYNC?
+            ~ INVERTED ~ ^INDEX
+            ~ #ident
+            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+            ~ ( #table_option )?
+        },
+        |(opt_async, _, _, index_name, _, columns, _, opt_index_options)| {
+            Ok(InvertedIndexDefinition {
+                index_name,
+                columns,
+                sync_creation: opt_async.is_none(),
+                index_options: opt_index_options.unwrap_or_default(),
+            })
+        },
+    )(i)
+}
+
+pub fn create_def(i: Input) -> IResult<CreateDefinition> {
+    alt((
+        map(rule! { #column_def }, CreateDefinition::Column),
+        map(
+            rule! { #inverted_index_def },
+            CreateDefinition::InvertedIndex,
+        ),
+    ))(i)
+}
+
 pub fn role_name(i: Input) -> IResult<String> {
     let role_ident = map(
         rule! {
@@ -3036,9 +3066,28 @@ pub fn grant_option(i: Input) -> IResult<PrincipalIdentity> {
 pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     let columns = map(
         rule! {
-            "(" ~ ^#comma_separated_list1(column_def) ~ ^")"
+            "(" ~ ^#comma_separated_list1(create_def) ~ ^")"
         },
-        |(_, columns, _)| CreateTableSource::Columns(columns),
+        |(_, create_defs, _)| {
+            let mut columns = Vec::with_capacity(create_defs.len());
+            let mut inverted_indexes = Vec::new();
+            for create_def in create_defs {
+                match create_def {
+                    CreateDefinition::Column(column) => {
+                        columns.push(column);
+                    }
+                    CreateDefinition::InvertedIndex(inverted_index) => {
+                        inverted_indexes.push(inverted_index);
+                    }
+                }
+            }
+            let opt_inverted_indexes = if !inverted_indexes.is_empty() {
+                Some(inverted_indexes)
+            } else {
+                None
+            };
+            CreateTableSource::Columns(columns, opt_inverted_indexes)
+        },
     );
     let like = map(
         rule! {
@@ -3892,6 +3941,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 columns: vec![],
             }),
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -3910,6 +3960,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -3971,7 +4022,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ RETURNS ~ #udf_arg_type
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ AS ~ ^#code_string
+            ~ AS ~ ^(#code_string | #literal_string)
         },
         |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
             UDFDefinition::UDFScript {

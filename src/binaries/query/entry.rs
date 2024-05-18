@@ -92,29 +92,6 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
         GLOBAL_MEM_STAT.set_limit(size);
     }
 
-    let tenant = conf.query.tenant_id.clone();
-    let cluster_id = conf.query.cluster_id.clone();
-    let flight_addr = conf.query.flight_api_address.clone();
-
-    let mut _sentry_guard = None;
-    let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
-    if !bend_sentry_env.is_empty() {
-        // NOTE: `traces_sample_rate` is 0.0 by default, which disable sentry tracing.
-        let traces_sample_rate = env::var("SENTRY_TRACES_SAMPLE_RATE").ok().map_or(0.0, |s| {
-            s.parse()
-                .unwrap_or_else(|_| panic!("`{}` was defined but could not be parsed", s))
-        });
-
-        _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
-            release: databend_common_tracing::databend_semver!(),
-            traces_sample_rate,
-            ..Default::default()
-        })));
-        sentry::configure_scope(|scope| scope.set_tag("tenant", tenant.tenant_name()));
-        sentry::configure_scope(|scope| scope.set_tag("cluster_id", cluster_id));
-        sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
-    }
-
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
 

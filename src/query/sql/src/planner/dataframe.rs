@@ -62,6 +62,7 @@ impl Dataframe {
             catalog: None,
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         };
@@ -84,7 +85,14 @@ impl Dataframe {
             let database = "system";
             let tenant = query_ctx.get_tenant();
             let table_meta: Arc<dyn Table> = binder
-                .resolve_data_source(tenant.tenant_name(), catalog, database, "one", None)
+                .resolve_data_source(
+                    tenant.tenant_name(),
+                    catalog,
+                    database,
+                    "one",
+                    None,
+                    query_ctx.clone().get_abort_checker(),
+                )
                 .await?;
 
             let table_index = metadata.write().add_table(
@@ -92,6 +100,7 @@ impl Dataframe {
                 database.to_string(),
                 table_meta,
                 None,
+                false,
                 false,
                 false,
                 false,
@@ -478,6 +487,7 @@ impl Dataframe {
                 catalog: None,
                 alias: None,
                 temporal: None,
+                consume: false,
                 pivot: None,
                 unpivot: None,
             };

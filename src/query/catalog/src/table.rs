@@ -20,6 +20,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
@@ -294,8 +295,13 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn navigate_to(&self, navigation: &TimeNavigation) -> Result<Arc<dyn Table>> {
+    async fn navigate_to(
+        &self,
+        navigation: &TimeNavigation,
+        abort_checker: AbortChecker,
+    ) -> Result<Arc<dyn Table>> {
         let _ = navigation;
+        let _ = abort_checker;
 
         Err(ErrorCode::Unimplemented(format!(
             "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
@@ -310,8 +316,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
+        consume: bool,
     ) -> Result<String> {
-        let (_, _, _) = (ctx, database_name, table_name);
+        let (_, _, _, _) = (ctx, database_name, table_name, consume);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",
