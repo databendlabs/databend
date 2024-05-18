@@ -195,19 +195,13 @@ impl BloomIndex {
         let mut column_distinct_count = HashMap::<usize, usize>::new();
         for (index, field) in bloom_columns_map.into_iter() {
             let field_type = &data_blocks_tobe_indexed[0].get_by_offset(index).data_type;
+            if !Xor8Filter::supported_type(field_type) {
+                continue;
+            }
+
             let (column, data_type) = match field_type.remove_nullable() {
                 DataType::Map(box inner_ty) => {
                     // Add bloom filter for the value of map type
-                    let val_type = match inner_ty {
-                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                        _ => unreachable!(),
-                    };
-                    if !Xor8Filter::supported_type(&val_type)
-                        && val_type.remove_nullable() != DataType::Variant
-                    {
-                        continue;
-                    }
-
                     let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
                         let value = &block.get_by_offset(index).value;
                         let column = value.convert_to_full_column(field_type, block.num_rows());
@@ -225,6 +219,10 @@ impl BloomIndex {
                     });
                     let column = Column::concat_columns(source_columns_iter)?;
 
+                    let val_type = match inner_ty {
+                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                        _ => unreachable!(),
+                    };
                     // Extract JSON value of string type to create bloom index,
                     // other types of JSON value will be ignored.
                     if val_type.remove_nullable() == DataType::Variant {
@@ -265,9 +263,6 @@ impl BloomIndex {
                     }
                 }
                 _ => {
-                    if !Xor8Filter::supported_type(field_type) {
-                        continue;
-                    }
                     let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
                         let value = &block.get_by_offset(index).value;
                         value.convert_to_full_column(field_type, block.num_rows())
@@ -521,20 +516,7 @@ impl BloomIndex {
 
     pub fn supported_type(data_type: &TableDataType) -> bool {
         let data_type = DataType::from(data_type);
-        Self::supported_data_type(&data_type)
-    }
-
-    pub fn supported_data_type(data_type: &DataType) -> bool {
-        if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
-            match inner_ty {
-                DataType::Tuple(kv_tys) => {
-                    return Xor8Filter::supported_type(&kv_tys[1])
-                        || kv_tys[1].remove_nullable() == DataType::Variant;
-                }
-                _ => unreachable!(),
-            };
-        }
-        Xor8Filter::supported_type(data_type)
+        Xor8Filter::supported_type(&data_type)
     }
 
     /// Checks if the average length of a string column exceeds 256 bytes.
@@ -673,8 +655,8 @@ fn visit_map_column(
                     if scalar_type.remove_nullable() != DataType::String {
                         return Ok(None);
                     }
-                } else {
-                    debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
+                } else if val_type.remove_nullable() != scalar_type.remove_nullable() {
+                    return Ok(None);
                 }
                 return visitor(span, id, scalar, scalar_type, return_type);
             }
