@@ -20669,8 +20669,8 @@ abc as (
     select
         id, uid, eid, match_id, created_at, updated_at
     from (
-       select * from ddd.ccc where score > 0 limit 10
-     )
+        select * from ddd.ccc where score > 0 limit 10
+    )
     qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
 )
 select * from abc;
@@ -20860,13 +20860,13 @@ Query(
                                             lateral: false,
                                             subquery: Query {
                                                 span: Some(
-                                                    98..135,
+                                                    99..136,
                                                 ),
                                                 with: None,
                                                 body: Select(
                                                     SelectStmt {
                                                         span: Some(
-                                                            98..135,
+                                                            99..136,
                                                         ),
                                                         hints: None,
                                                         distinct: false,
@@ -20876,7 +20876,7 @@ Query(
                                                                 qualified: [
                                                                     Star(
                                                                         Some(
-                                                                            105..106,
+                                                                            106..107,
                                                                         ),
                                                                     ),
                                                                 ],
@@ -20886,13 +20886,13 @@ Query(
                                                         from: [
                                                             Table {
                                                                 span: Some(
-                                                                    112..119,
+                                                                    113..120,
                                                                 ),
                                                                 catalog: None,
                                                                 database: Some(
                                                                     Identifier {
                                                                         span: Some(
-                                                                            112..115,
+                                                                            113..116,
                                                                         ),
                                                                         name: "ddd",
                                                                         quote: None,
@@ -20901,7 +20901,7 @@ Query(
                                                                 ),
                                                                 table: Identifier {
                                                                     span: Some(
-                                                                        116..119,
+                                                                        117..120,
                                                                     ),
                                                                     name: "ccc",
                                                                     quote: None,
@@ -20917,12 +20917,12 @@ Query(
                                                         selection: Some(
                                                             BinaryOp {
                                                                 span: Some(
-                                                                    132..133,
+                                                                    133..134,
                                                                 ),
                                                                 op: Gt,
                                                                 left: ColumnRef {
                                                                     span: Some(
-                                                                        126..131,
+                                                                        127..132,
                                                                     ),
                                                                     column: ColumnRef {
                                                                         database: None,
@@ -20930,7 +20930,7 @@ Query(
                                                                         column: Name(
                                                                             Identifier {
                                                                                 span: Some(
-                                                                                    126..131,
+                                                                                    127..132,
                                                                                 ),
                                                                                 name: "score",
                                                                                 quote: None,
@@ -20941,7 +20941,7 @@ Query(
                                                                 },
                                                                 right: Literal {
                                                                     span: Some(
-                                                                        134..135,
+                                                                        135..136,
                                                                     ),
                                                                     value: UInt64(
                                                                         0,
@@ -20959,7 +20959,7 @@ Query(
                                                 limit: [
                                                     Literal {
                                                         span: Some(
-                                                            142..144,
+                                                            143..145,
                                                         ),
                                                         value: UInt64(
                                                             10,

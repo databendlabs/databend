@@ -234,13 +234,16 @@ async fn query_final_handler(
             query_id, query_id
         );
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.remove_query(&query_id, RemoveReason::Finished) {
+        match http_query_manager
+            .remove_query(
+                &query_id,
+                RemoveReason::Finished,
+                ErrorCode::ClosedQuery("closed by client"),
+            )
+            .await
+        {
             Some(query) => {
                 let mut response = query.get_response_state_only().await;
-                if query.check_removed().is_none() && !response.state.state.is_stopped() {
-                    query.kill(ErrorCode::ClosedQuery("closed by client")).await;
-                    response = query.get_response_state_only().await;
-                }
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
@@ -268,15 +271,15 @@ async fn query_cancel_handler(
             query_id, query_id
         );
         let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.remove_query(&query_id, RemoveReason::Canceled) {
-            Some(query) => {
-                if query.check_removed().is_none() {
-                    query
-                        .kill(ErrorCode::AbortedQuery("canceled by client"))
-                        .await;
-                }
-                Ok(StatusCode::OK)
-            }
+        match http_query_manager
+            .remove_query(
+                &query_id,
+                RemoveReason::Canceled,
+                ErrorCode::AbortedQuery("canceled by client"),
+            )
+            .await
+        {
+            Some(_) => Ok(StatusCode::OK),
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
     }
