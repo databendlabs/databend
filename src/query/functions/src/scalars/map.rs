@@ -244,4 +244,41 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .any(|(k, _)| k == key)
             },
         );
+
+    registry.register_2_arg_core::<EmptyMapType, EmptyArrayType, EmptyMapType, _, _>(
+        "map_pick",
+        |_, _, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_2_arg_core::<EmptyMapType, ArrayType<GenericType<0>>, EmptyMapType, _, _>(
+        "map_pick",
+        |_, _, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_passthrough_nullable_2_arg(
+        "map_pick",
+        |_, domain1, domain2| {
+            FunctionDomain::Domain(match (domain1, domain2) {
+                (Some(domain1), _) => Some(domain1).cloned(),
+                (None, _) => None,
+            })
+        },
+        vectorize_with_builder_2_arg::<
+            MapType<GenericType<0>, GenericType<1>>,
+            ArrayType<GenericType<0>>,
+            MapType<GenericType<0>, GenericType<1>>,
+        >(|map, keys, output_map, ctx| {
+            let mut picked_map_builder = ArrayType::create_builder(keys.len(), ctx.generics);
+            for key in keys.iter() {
+                if let Some((k, v)) = map.iter().find(|(k, _)| k == &key) {
+                    picked_map_builder.put_item((k.clone(), v.clone()));
+                }
+            }
+
+            picked_map_builder.commit_row();
+            output_map.append_column(&picked_map_builder.build());
+        }),
+    );
 }
