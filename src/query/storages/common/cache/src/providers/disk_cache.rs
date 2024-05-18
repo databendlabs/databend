@@ -20,6 +20,8 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -34,6 +36,8 @@ use log::error;
 use log::info;
 use log::warn;
 use parking_lot::RwLock;
+use rayon::prelude::*;
+use rayon::ThreadPoolBuilder;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
@@ -91,6 +95,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     }
 }
 
+type CacheHolder<C> = Arc<RwLock<Option<DiskCache<C>>>>;
 impl<C> DiskCache<C>
 where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static
 {
@@ -123,177 +128,145 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         self.root.join(rel_path)
     }
 
-    fn reset_restart(self) -> result::Result<Self> {
-        // remove dir when init, ignore remove error
-        if let Err(e) = fs::remove_dir_all(&self.root) {
-            warn!("remove disk cache dir {:?} error {}", self.root, e);
-        }
-        fs::create_dir_all(&self.root)?;
+    fn reset_restart(cache_root: &PathBuf) -> result::Result<()> {
+        // remove dir recursively, ignore error
 
-        Ok(self)
-    }
-
-    fn fuzzy_restart(self) -> result::Result<Self> {
-        fs::create_dir_all(&self.root)?;
-
-        let parallel_degree = match std::thread::available_parallelism() {
-            Ok(degree) => degree.get(),
-            Err(e) => {
-                error!("Failed to detect the number of parallelism: {}", e);
-                8
+        fn parallel_delete(path: &PathBuf, counter: &AtomicUsize) {
+            if let Ok(entries) = fs::read_dir(path) {
+                entries.par_bridge().for_each(|entry| {
+                    if let Ok(entry) = entry {
+                        let entry_path = entry.path();
+                        if entry_path.is_dir() {
+                            info!("deleting content of path {:?}", entry_path);
+                            parallel_delete(&entry_path, counter);
+                            info!("path {:?} cleaned", entry_path);
+                        } else if let Err(e) = fs::remove_file(&entry_path) {
+                            warn!("failed to remove file {:?}. {}", entry_path, e);
+                        } else {
+                            let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                            if count % 1000 == 0 {
+                                info!("Deleted {} files", count);
+                            }
+                        }
+                    }
+                });
             }
-        };
-
-        let root_dir = Path::new(&self.root);
-        assert!(root_dir.is_dir());
-
-        let mut sub_dirs = Vec::new();
-        for entry in fs::read_dir(root_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                sub_dirs.push(path);
-            } else {
-                warn!(
-                    "unexpected file {:?} found under cache dir {:?}",
-                    path, root_dir
-                );
+            if let Err(e) = fs::remove_dir(path) {
+                warn!("failed to remove path {:?}. {}", path, e);
             }
         }
 
-        info!("{} sub dirs found {:?}", sub_dirs.len(), sub_dirs);
+        let counter = AtomicUsize::new(0);
+        parallel_delete(cache_root, &counter);
 
-        if sub_dirs.is_empty() {
-            info!("no previous cache found");
-            return Ok(self);
-        }
-
-        // The smallest unit of parallelism is a subdirectory.
-        let parallel_degree = std::cmp::min(sub_dirs.len(), parallel_degree);
-
-        info!("launching {} threads to reload cache keys", parallel_degree);
-
-        // number of sub dirs should be limited, use unbounded channel
-        let (tx, rx) = crossbeam_channel::unbounded();
-
-        let mut handles = vec![];
-
-        let root = self.root.clone();
-        let cache_holder = Arc::new(RwLock::new(Some(self)));
-
-        for thread_num in 0..parallel_degree {
-            let cache_holder = cache_holder.clone();
-            let rx = rx.clone();
-            let root = root.clone();
-            let thread_builder =
-                std::thread::Builder::new().name("table-data-cache-fuzzy-restart".to_owned());
-            let handle = thread_builder.spawn(move || {
-                for directory in rx.iter() {
-                    Self::load_cache_keys(&cache_holder, &root, directory, thread_num)?
-                }
-                Ok::<_, Error>(())
-            })?;
-            handles.push(handle);
-        }
-
-        for dir in sub_dirs {
-            tx.send(dir).expect("sending reload-cache task dir failed");
-        }
-
-        // safe to drop sender, since all sub dirs are sent into channel
-        drop(tx);
-
-        info!("all reload-cache-key tasks sent, waiting...");
-
-        for handle in handles {
-            handle
-                .join()
-                .map_err(|_e| Error::Misc("failed to join cache key reload thread".to_owned()))??;
-        }
-
-        info!("all reload-cache-key tasks done");
-
-        let cache = {
-            let mut write_guard = cache_holder.write();
-            std::mem::take(&mut *write_guard).expect("failed to take back cache object")
-        };
-
-        Ok(cache)
+        fs::create_dir_all(cache_root)?;
+        Ok(())
     }
 
-    fn init(self, fuzzy_reload_cache_keys: bool) -> self::result::Result<Self> {
-        if fuzzy_reload_cache_keys {
-            info!("table data disk cache fuzzy restart");
-            Self::fuzzy_restart(self)
-        } else {
-            info!("table data disk cache reset restart");
-            Self::reset_restart(self)
-        }
-    }
-
-    fn load_cache_keys(
-        cache_holder: &Arc<RwLock<Option<Self>>>,
-        prefix: &Path,
-        absolute_cache_path: PathBuf,
-        thread_num: usize,
-    ) -> result::Result<()> {
-        info!(
-            "cache-key reload thread #{}, loading cache keys from dir {:?}",
-            thread_num, absolute_cache_path,
-        );
-
-        let mut file_idx = 0;
-        for entry in fs::read_dir(&absolute_cache_path)? {
-            let entry = entry?;
-            let path = entry.path();
+    fn fuzzy_restart(root: &PathBuf, me: CacheHolder<C>) -> result::Result<CacheHolder<C>> {
+        fn populate_cache_key<C>(
+            prefix: &Path,
+            path: &Path,
+            entry: &fs::DirEntry,
+            cache_holder: &CacheHolder<C>,
+        ) -> result::Result<()>
+        where
+            C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static,
+        {
             let size = entry.metadata()?.len();
             let relative_path = path
                 .strip_prefix(prefix)
-                .map_err(|_e| self::Error::MalformedPath)?;
-            let cache_key = Self::recovery_from(relative_path);
+                .map_err(|_| self::Error::MalformedPath(path.to_path_buf()))?;
+            let cache_key = recovery_cache_key_from_path(relative_path);
             {
                 let mut cache_guard = cache_holder.write();
                 let dick_cache_opt = (*cache_guard).as_mut();
                 dick_cache_opt
-                    .expect("unreachable")
+                    .expect("unreachable, disk cache should be there")
                     .cache
                     .put(cache_key, size);
             }
-            file_idx += 1;
-            if file_idx % 1000 == 0 {
-                info!(
-                    "cache-key reload thread #{}, processed {} items so far, from dir {:?}",
-                    thread_num, file_idx, absolute_cache_path
-                );
+            Ok(())
+        }
+
+        fn parallel_scan<C>(
+            cache_root: &Path,
+            working_path: &PathBuf,
+            cache_holder: &CacheHolder<C>,
+            counter: &AtomicUsize,
+        ) where
+            C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static,
+        {
+            if let Ok(entries) = fs::read_dir(working_path) {
+                entries.par_bridge().for_each(|entry| {
+                    if let Ok(entry) = entry {
+                        let entry_path = entry.path();
+                        if entry_path.is_dir() {
+                            info!("scanning path {:?}", entry_path);
+                            parallel_scan(cache_root, &entry_path, cache_holder, counter);
+                            info!("path {:?} processed", entry_path);
+                        } else if let Err(e) =
+                            populate_cache_key(cache_root, &entry_path, &entry, cache_holder)
+                        {
+                            warn!("failed to process {:?} processed. {}", entry, e);
+                        } else {
+                            let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                            if count % 1000 == 0 {
+                                info!("scanned {} files", count);
+                            }
+                        }
+                    }
+                });
             }
         }
+
+        let counter = AtomicUsize::new(0);
+        parallel_scan(root, root, &me, &counter);
+        info!("all reload-cache-key tasks done");
+
+        Ok(me)
+    }
+
+    fn init(self, fuzzy_reload_cache_keys: bool) -> self::result::Result<Self> {
+        let parallelism = match std::thread::available_parallelism() {
+            Ok(degree) => degree.get(),
+            Err(e) => {
+                error!("failed to detect the number of parallelism: {}", e);
+                8
+            }
+        };
+
         info!(
-            "cache-key reload thread #{} finished, {} items processed totally, from dir {:?}",
-            thread_num, file_idx, absolute_cache_path
+            "initializing disk cache, parallelism set to {}",
+            parallelism
         );
-        Ok(())
+
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(parallelism) // 设置线程池中的线程数量
+            .thread_name(|index| format!("data-cache-restart-worker-{}", index))
+            .build()
+            .expect("failed to build data cache restart thread pool");
+
+        if fuzzy_reload_cache_keys {
+            info!("table data disk cache fuzzy restart");
+            let root = self.root.clone();
+            let cache_holder = thread_pool
+                .install(|| Self::fuzzy_restart(&root, Arc::new(RwLock::new(Some(self)))))?;
+            let me = {
+                let mut write_guard = cache_holder.write();
+                std::mem::take(&mut *write_guard).expect("failed to take back cache object")
+            };
+            Ok(me)
+        } else {
+            info!("table data disk cache reset restart");
+            thread_pool.install(|| Self::reset_restart(&self.root))?;
+            Ok(self)
+        }
     }
 
     /// Returns `true` if the disk cache can store a file of `size` bytes.
     pub fn can_store(&self, size: u64) -> bool {
         size <= self.cache.capacity()
-    }
-
-    fn recovery_from(relative_path: &Path) -> String {
-        let key_string = match relative_path.file_name() {
-            Some(file_name) => match file_name.to_str() {
-                Some(str) => str.to_owned(),
-                None => {
-                    // relative_path is constructed by ourself, and shall be valid utf8 string
-                    unreachable!()
-                }
-            },
-            None => {
-                // only called during init, and only path of files are passed in
-                unreachable!()
-            }
-        };
-        key_string
     }
 
     fn cache_key(&self, key: &str) -> DiskCacheKey {
@@ -375,6 +348,7 @@ pub mod result {
     use std::error::Error as StdError;
     use std::fmt;
     use std::io;
+    use std::path::PathBuf;
 
     /// Errors returned by this crate.
     #[derive(Debug)]
@@ -382,7 +356,7 @@ pub mod result {
         /// The file was too large to fit in the cache.
         FileTooLarge,
         /// The file was not in the cache.
-        MalformedPath,
+        MalformedPath(PathBuf),
         /// An IO Error occurred.
         Io(io::Error),
 
@@ -394,7 +368,7 @@ pub mod result {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 Error::FileTooLarge => write!(f, "File too large"),
-                Error::MalformedPath => write!(f, "Malformed catch file path"),
+                Error::MalformedPath(p) => write!(f, "Malformed catch file path: {:?}", p),
                 Error::Io(ref e) => write!(f, "{e}"),
                 Error::Misc(msg) => write!(f, "{msg}"),
             }
@@ -507,6 +481,23 @@ impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Cou
         let cache = self.read();
         cache.len()
     }
+}
+
+fn recovery_cache_key_from_path(relative_path: &Path) -> String {
+    let key_string = match relative_path.file_name() {
+        Some(file_name) => match file_name.to_str() {
+            Some(str) => str.to_owned(),
+            None => {
+                // relative_path is constructed by ourself, and shall be valid utf8 string
+                unreachable!()
+            }
+        },
+        None => {
+            // only called during init, and only path of files are passed in
+            unreachable!()
+        }
+    };
+    key_string
 }
 
 /// The crc32 checksum is stored at the end of `bytes` and encoded as le u32.
