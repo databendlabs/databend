@@ -136,9 +136,13 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     fn fuzzy_restart(self) -> result::Result<Self> {
         fs::create_dir_all(&self.root)?;
 
-        let parallel_degree = std::thread::available_parallelism()
-            .expect("failed to detect number of parallelism")
-            .get();
+let parallel_degree = match std::thread::available_parallelism() {
+    Ok(degree) => degree.get(),
+    Err(e) => {
+        error!("Failed to detect the number of parallelism: {}", e);
+        8
+    }
+};
 
         let root_dir = Path::new(&self.root);
         assert!(root_dir.is_dir());
