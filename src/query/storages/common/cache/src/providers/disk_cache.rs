@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 
 use bytes::Bytes;
 use databend_common_cache::Cache;
@@ -130,7 +131,6 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
 
     fn reset_restart(cache_root: &PathBuf) -> result::Result<()> {
         // remove dir recursively, ignore error
-
         fn parallel_delete(path: &PathBuf, counter: &AtomicUsize) {
             if let Ok(entries) = fs::read_dir(path) {
                 entries.par_bridge().for_each(|entry| {
@@ -159,7 +159,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         let counter = AtomicUsize::new(0);
         parallel_delete(cache_root, &counter);
 
-        fs::create_dir_all(cache_root)?;
+        info!("all reset tasks done, {:?} cache items removed", counter);
         Ok(())
     }
 
@@ -208,7 +208,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
                         } else if let Err(e) =
                             populate_cache_key(cache_root, &entry_path, &entry, cache_holder)
                         {
-                            warn!("failed to process {:?} processed. {}", entry, e);
+                            warn!("failed to process path {:?}, error: {}", entry, e);
                         } else {
                             let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
                             if count % 1000 == 0 {
@@ -222,16 +222,23 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
 
         let counter = AtomicUsize::new(0);
         parallel_scan(root, root, &me, &counter);
-        info!("all reload-cache-key tasks done");
+        info!(
+            "all reload-cache-key tasks done, {:?} keys reloaded",
+            counter,
+        );
 
         Ok(me)
     }
 
     fn init(self, fuzzy_reload_cache_keys: bool) -> self::result::Result<Self> {
+        let begin = Instant::now();
         let parallelism = match std::thread::available_parallelism() {
             Ok(degree) => degree.get(),
             Err(e) => {
-                error!("failed to detect the number of parallelism: {}", e);
+                error!(
+                    "failed to detect the number of parallelism: {}, fallback to 8",
+                    e
+                );
                 8
             }
         };
@@ -242,26 +249,32 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         );
 
         let thread_pool = ThreadPoolBuilder::new()
-            .num_threads(parallelism) // 设置线程池中的线程数量
+            .num_threads(parallelism)
             .thread_name(|index| format!("data-cache-restart-worker-{}", index))
             .build()
-            .expect("failed to build data cache restart thread pool");
+            .expect("failed to build disk cache restart thread pool");
 
-        if fuzzy_reload_cache_keys {
-            info!("table data disk cache fuzzy restart");
-            let root = self.root.clone();
+        let ret = if fuzzy_reload_cache_keys {
+            info!("disk cache fuzzy restart");
+            let cache_root = self.root.clone();
             let cache_holder = thread_pool
-                .install(|| Self::fuzzy_restart(&root, Arc::new(RwLock::new(Some(self)))))?;
+                .install(|| Self::fuzzy_restart(&cache_root, Arc::new(RwLock::new(Some(self)))))?;
             let me = {
                 let mut write_guard = cache_holder.write();
                 std::mem::take(&mut *write_guard).expect("failed to take back cache object")
             };
-            Ok(me)
+            me
         } else {
-            info!("table data disk cache reset restart");
+            info!("disk cache reset restart");
             thread_pool.install(|| Self::reset_restart(&self.root))?;
-            Ok(self)
-        }
+            self
+        };
+
+        fs::create_dir_all(&ret.root)?;
+
+        // error(if any) will be reported by the caller site
+        info!("disk cache initialized. time used: {:?}", begin.elapsed());
+        Ok(ret)
     }
 
     /// Returns `true` if the disk cache can store a file of `size` bytes.
@@ -417,7 +430,7 @@ impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Cou
             match get_cache_content() {
                 Ok(mut bytes) => {
                     if let Err(e) = validate_checksum(bytes.as_slice()) {
-                        error!("data cache, of key {k},  crc validation failure: {e}");
+                        error!("disk cache, of key {k},  crc validation failure: {e}");
                         {
                             // remove the invalid cache, error of removal ignored
                             let r = {
