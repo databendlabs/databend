@@ -44,10 +44,19 @@ pub struct WriterV002<'a> {
 
     inner: BufWriter<fs::File>,
 
+    /// Number of entries written.
+    pub(crate) cnt: u64,
+
+    /// The count of entries to reach before next progress logging.
+    next_progress_cnt: u64,
+
+    /// The time when the writer starts to write entries.
+    start_time: std::time::Instant,
+
     /// The last_applied entry that has written to the snapshot.
     ///
     /// It will be used to create a snapshot id.
-    last_applied: Option<LogId>,
+    pub(crate) last_applied: Option<LogId>,
 
     // Keep a mutable ref so that there could only be one writer at a time.
     snapshot_store: &'a mut SnapshotStoreV002,
@@ -69,6 +78,9 @@ impl<'a> WriterV002<'a> {
         let writer = WriterV002 {
             temp_path,
             inner: buffered_file,
+            cnt: 0,
+            next_progress_cnt: 1000,
+            start_time: std::time::Instant::now(),
             last_applied: None,
             snapshot_store,
         };
@@ -76,35 +88,49 @@ impl<'a> WriterV002<'a> {
         Ok(writer)
     }
 
+    /// Increase the number of entries written by one.
+    fn count(&mut self) {
+        self.cnt += 1;
+
+        if self.cnt == self.next_progress_cnt {
+            self.log_progress();
+
+            // Increase the number of entries before next log by 5%,
+            // but at least 50k, at most 800k.
+            let step = std::cmp::min(self.next_progress_cnt / 20, 800_000);
+            let step = std::cmp::max(step, 50_000);
+
+            self.next_progress_cnt += step;
+        }
+    }
+
+    fn log_progress(&self) {
+        let elapsed_sec = self.start_time.elapsed().as_secs();
+        // Avoid div by 0
+        let avg = self.cnt / (elapsed_sec + 1);
+
+        if self.cnt >= 10_000_000 {
+            info!(
+                "Snapshot Writer has written {} million entries; avg: {} kilo entries/s",
+                self.cnt / 1_000_000,
+                avg / 1_000,
+            )
+        } else {
+            info!(
+                "Snapshot Writer has written {} kilo entries; avg: {} kilo entries/s",
+                self.cnt / 1_000,
+                avg / 1_000,
+            )
+        }
+    }
+
     /// Write entries to the snapshot, without flushing.
     ///
     /// Returns the count of entries
     pub fn write_entries_sync(
-        &mut self,
+        mut self,
         mut entries_rx: tokio::sync::mpsc::Receiver<WriteEntry<SMEntry>>,
-    ) -> Result<usize, io::Error> {
-        fn log_progress(start: std::time::Instant, c: usize) {
-            let avg = c / (start.elapsed().as_secs() as usize + 1);
-
-            if c >= 10_000_000 {
-                info!(
-                    "Snapshot Writer has written {} million entries; avg: {} kilo entries/s",
-                    c / 1_000_000,
-                    avg / 1_000,
-                )
-            } else {
-                info!(
-                    "Snapshot Writer has written {} kilo entries; avg: {} kilo entries/s",
-                    c / 1_000,
-                    avg / 1_000,
-                )
-            }
-        }
-
-        let now = std::time::Instant::now();
-        let mut cnt = 0;
-        let mut next_progress_cnt = 1000;
-
+    ) -> Result<Self, io::Error> {
         let data_version = self.snapshot_store.data_version();
 
         while let Some(ent) = entries_rx.blocking_recv() {
@@ -113,11 +139,8 @@ impl<'a> WriterV002<'a> {
             let ent = match ent {
                 WriteEntry::Data(ent) => ent,
                 WriteEntry::Finish => {
-                    info!(
-                        "received Commit entry, written {} entries, quit and about to commit",
-                        cnt
-                    );
-                    return Ok(cnt);
+                    info!("received Commit, written {} entries, quit", self.cnt);
+                    return Ok(self);
                 }
             };
 
@@ -144,17 +167,7 @@ impl<'a> WriterV002<'a> {
                 .write(b"\n")
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-            cnt += 1;
-
-            if cnt == next_progress_cnt {
-                log_progress(now, cnt);
-
-                // increase by 5%, but at least 50k, at most 800k
-                let step = std::cmp::min(next_progress_cnt / 20, 800_000);
-                let step = std::cmp::max(step, 50_000);
-
-                next_progress_cnt += step;
-            }
+            self.count();
         }
 
         Err(io::Error::new(
@@ -165,31 +178,23 @@ impl<'a> WriterV002<'a> {
 
     /// Commit the snapshot so that it is visible to the readers.
     ///
-    /// Returns the snapshot id and file size written.
+    /// Returns the file size written.
     ///
     /// This method consumes the writer, thus the writer will not be used after commit.
-    ///
-    /// `uniq` is the unique number used to build snapshot id.
-    /// If it is `None`, an epoch in milliseconds will be used.
-    pub fn commit(mut self, uniq: Option<u64>) -> Result<(MetaSnapshotId, u64), io::Error> {
+    pub fn commit(mut self, snapshot_id: MetaSnapshotId) -> Result<u64, io::Error> {
         self.inner.flush()?;
         let mut f = self.inner.into_inner()?;
         f.sync_all()?;
 
         let file_size = f.seek(io::SeekFrom::End(0))?;
 
-        let snapshot_id = if let Some(u) = uniq {
-            MetaSnapshotId::new(self.last_applied, u)
-        } else {
-            MetaSnapshotId::new_with_epoch(self.last_applied)
-        };
-
-        let path = self.snapshot_store.snapshot_path(&snapshot_id.to_string());
+        let id_str = snapshot_id.to_string();
+        let path = self.snapshot_store.snapshot_path(&id_str);
 
         fs::rename(&self.temp_path, path)?;
 
-        info!(snapshot_id :? =(snapshot_id); "snapshot committed: file_size: {}; {}", file_size, snapshot_id.to_string());
+        info!(snapshot_id :% = id_str; "snapshot committed: file_size: {}", file_size);
 
-        Ok((snapshot_id, file_size))
+        Ok(file_size)
     }
 }
