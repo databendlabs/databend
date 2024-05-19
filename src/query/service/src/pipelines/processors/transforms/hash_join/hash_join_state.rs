@@ -126,6 +126,7 @@ pub struct HashJoinState {
 
     /// Build side cache info.
     pub(crate) column_map: HashMap<usize, usize>,
+    pub(crate) next_cache_block_index: AtomicUsize,
 }
 
 impl HashJoinState {
@@ -134,21 +135,31 @@ impl HashJoinState {
         build_state.generation_state.chunks.len()
     }
 
-    pub fn read_build_cache(&self, column_index: usize) -> Vec<(BlockEntry, usize)> {
+    pub fn build_cache_columns(&self, column_index: usize) -> Vec<BlockEntry> {
         let index = self.column_map.get(&column_index).unwrap();
         let build_state = unsafe { &*self.build_state.get() };
         let columns = build_state
             .generation_state
             .chunks
             .iter()
-            .map(|datablock| {
-                (
-                    datablock.get_by_offset(*index).clone(),
-                    datablock.num_rows(),
-                )
-            })
+            .map(|data_block| data_block.get_by_offset(*index).clone())
             .collect::<Vec<_>>();
         columns
+    }
+
+    pub fn build_cache_num_rows(&self) -> Vec<usize> {
+        let build_state = unsafe { &*self.build_state.get() };
+        let num_rows = build_state
+            .generation_state
+            .chunks
+            .iter()
+            .map(|data_block| data_block.num_rows())
+            .collect::<Vec<_>>();
+        num_rows
+    }
+
+    pub fn next_cache_block_index(&self) -> usize {
+        self.next_cache_block_index.fetch_add(1, Ordering::Relaxed)
     }
 
     pub fn try_create(
@@ -201,6 +212,7 @@ impl HashJoinState {
                 )),
             },
             column_map,
+            next_cache_block_index: AtomicUsize::new(0),
         }))
     }
 
