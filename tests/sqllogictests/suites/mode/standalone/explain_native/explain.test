@@ -1125,7 +1125,7 @@ EXPLAIN SELECT * FROM t3 WHERE c['k2'] = 100;
 TableScan
 ├── table: default.default.t3
 ├── output columns: [a (#0), b (#1), c (#2)]
-├── read rows: 3
+├── read rows: 6
 ├── read size: < 1 KiB
 ├── partitions total: 2
 ├── partitions scanned: 2
