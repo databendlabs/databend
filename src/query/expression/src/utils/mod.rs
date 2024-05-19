@@ -174,10 +174,16 @@ fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
     let valid_bits = 256 - decimal.saturating_abs().leading_zeros();
     let log10_2 = std::f64::consts::LOG10_2;
     let mut precision = ((valid_bits as f64) * log10_2).floor() as u8;
-    if decimal >= i256::from(10).pow(precision as u32) {
+
+    if decimal.saturating_abs() >= i256::from(10).pow(precision as u32) {
         precision += 1;
     }
-    precision = precision.clamp(1, MAX_DECIMAL256_PRECISION).max(size.scale);
+
+    // adjust precision to the maximum scale of the decimal type
+    if precision < size.scale {
+        precision = size.scale;
+    }
+    precision = precision.clamp(1, MAX_DECIMAL256_PRECISION);
 
     let size = DecimalSize { precision, ..size };
     let decimal_ty = DecimalDataType::from_size(size).unwrap();
