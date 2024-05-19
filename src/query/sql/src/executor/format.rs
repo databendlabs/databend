@@ -1083,7 +1083,7 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("filters: [{filters}]")),
     ];
 
-    if let Some((cache_index, column_map)) = &plan.build_side_cache {
+    if let Some((cache_index, column_map)) = &plan.build_side_cache_info {
         children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
         children.push(FormatTreeNode::new(format!(
             "cache columns: {:?}",

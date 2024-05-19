@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -28,6 +29,8 @@ use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::plans::CacheSource;
 use databend_common_sql::StreamContext;
 
+use crate::pipelines::processors::transforms::CacheSourceState;
+use crate::pipelines::processors::transforms::HashJoinCacheState;
 use crate::pipelines::processors::transforms::MaterializedCteSource;
 use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::processors::transforms::TransformCacheScan;
@@ -124,17 +127,28 @@ impl PipelineBuilder {
 
     pub(crate) fn build_cache_scan(&mut self, scan: &CacheScan) -> Result<()> {
         let max_threads = self.settings.get_max_threads()?;
-        let cache_idx = match scan.cache_source {
-            CacheSource::HashJoinBuild((cache_index, _)) => cache_index,
+        let max_block_size = self.settings.get_max_block_size()? as usize;
+        let cache_source_state = match &scan.cache_source {
+            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
+                let hash_join_state = match self.hash_join_states.get(cache_index) {
+                    Some(hash_join_state) => hash_join_state.clone(),
+                    None => {
+                        return Err(ErrorCode::Internal(
+                            "Hash join state not found during building cache scan".to_string(),
+                        ));
+                    }
+                };
+                CacheSourceState::HashJoinCacheState(HashJoinCacheState::new(
+                    column_indexes.clone(),
+                    hash_join_state,
+                    max_block_size,
+                ))
+            }
         };
+
         self.main_pipeline.add_source(
             |output| {
-                TransformCacheScan::create(
-                    self.ctx.clone(),
-                    output,
-                    scan.cache_source.clone(),
-                    self.hash_join_states.get(&cache_idx).unwrap().clone(),
-                )
+                TransformCacheScan::create(self.ctx.clone(), output, cache_source_state.clone())
             },
             max_threads as usize,
         )

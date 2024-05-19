@@ -31,7 +31,7 @@ use crate::pipelines::processors::Processor;
 
 pub struct TransformExpressionScan {
     values: Vec<Vec<Expr>>,
-    output_data_blocks: VecDeque<DataBlock>,
+    output_buffer: VecDeque<DataBlock>,
     func_ctx: FunctionContext,
     max_block_size: usize,
 }
@@ -46,7 +46,7 @@ impl TransformExpressionScan {
     ) -> Box<dyn Processor> {
         BlockingTransformer::create(input, output, TransformExpressionScan {
             values,
-            output_data_blocks: VecDeque::new(),
+            output_buffer: VecDeque::new(),
             func_ctx,
             max_block_size,
         })
@@ -58,7 +58,6 @@ impl BlockingTransform for TransformExpressionScan {
 
     fn consume(&mut self, input: DataBlock) -> Result<()> {
         let evaluator = Evaluator::new(&input, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut data_blocks = Vec::with_capacity(input.num_rows() * self.values.len());
         for row in self.values.iter() {
             let mut columns = Vec::with_capacity(row.len());
             for expr in row {
@@ -66,22 +65,15 @@ impl BlockingTransform for TransformExpressionScan {
                 let column = BlockEntry::new(expr.data_type().clone(), result);
                 columns.push(column);
             }
-            let data_block = DataBlock::new(columns, input.num_rows());
-            data_blocks.push(data_block);
+            self.output_buffer
+                .push_back(DataBlock::new(columns, input.num_rows()));
         }
-
-        let split_data_blocks =
-            DataBlock::concat(&data_blocks)?.split_by_rows_no_tail(self.max_block_size);
-        for data_block in split_data_blocks {
-            self.output_data_blocks.push_back(data_block)
-        }
-
         Ok(())
     }
 
     fn transform(&mut self) -> Result<Option<DataBlock>> {
-        match !self.output_data_blocks.is_empty() {
-            true => Ok(Some(self.output_data_blocks.pop_front().unwrap())),
+        match !self.output_buffer.is_empty() {
+            true => Ok(Some(self.output_buffer.pop_front().unwrap())),
             false => Ok(None),
         }
     }

@@ -106,7 +106,7 @@ impl PipelineBuilder {
             merge_into_is_distributed,
             enable_merge_into_optimization,
         )?;
-        if let Some((build_cache_index, _)) = join.build_side_cache {
+        if let Some((build_cache_index, _)) = join.build_side_cache_info {
             self.hash_join_states
                 .insert(build_cache_index, state.clone());
         }
@@ -128,7 +128,7 @@ impl PipelineBuilder {
             &join.probe_to_build,
             merge_into_is_distributed,
             enable_merge_into_optimization,
-            join.build_side_cache.clone(),
+            join.build_side_cache_info.clone(),
         )
     }
 

@@ -125,43 +125,13 @@ pub struct HashJoinState {
     pub(crate) merge_into_state: Option<SyncUnsafeCell<MergeIntoState>>,
 
     /// Build side cache info.
+    /// A HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
     pub(crate) column_map: HashMap<usize, usize>,
+    // The index of the next cache block to be read.
     pub(crate) next_cache_block_index: AtomicUsize,
 }
 
 impl HashJoinState {
-    pub fn num_build_chunks(&self) -> usize {
-        let build_state = unsafe { &*self.build_state.get() };
-        build_state.generation_state.chunks.len()
-    }
-
-    pub fn build_cache_columns(&self, column_index: usize) -> Vec<BlockEntry> {
-        let index = self.column_map.get(&column_index).unwrap();
-        let build_state = unsafe { &*self.build_state.get() };
-        let columns = build_state
-            .generation_state
-            .chunks
-            .iter()
-            .map(|data_block| data_block.get_by_offset(*index).clone())
-            .collect::<Vec<_>>();
-        columns
-    }
-
-    pub fn build_cache_num_rows(&self) -> Vec<usize> {
-        let build_state = unsafe { &*self.build_state.get() };
-        let num_rows = build_state
-            .generation_state
-            .chunks
-            .iter()
-            .map(|data_block| data_block.num_rows())
-            .collect::<Vec<_>>();
-        num_rows
-    }
-
-    pub fn next_cache_block_index(&self) -> usize {
-        self.next_cache_block_index.fetch_add(1, Ordering::Relaxed)
-    }
-
     pub fn try_create(
         ctx: Arc<QueryContext>,
         mut build_schema: DataSchemaRef,
@@ -170,7 +140,7 @@ impl HashJoinState {
         probe_to_build: &[(usize, (bool, bool))],
         merge_into_is_distributed: bool,
         enable_merge_into_optimization: bool,
-        build_side_cache: Option<(usize, HashMap<IndexType, usize>)>,
+        build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -184,7 +154,7 @@ impl HashJoinState {
         if ctx.get_settings().get_join_spilling_memory_ratio()? != 0 {
             enable_spill = true;
         }
-        let column_map = if let Some((_, column_map)) = build_side_cache {
+        let column_map = if let Some((_, column_map)) = build_side_cache_info {
             column_map
         } else {
             HashMap::new()
@@ -302,5 +272,37 @@ impl HashJoinState {
             build_state.mark_scan_map.clear();
         }
         build_state.generation_state.is_build_projected = true;
+    }
+
+    pub fn num_build_chunks(&self) -> usize {
+        let build_state = unsafe { &*self.build_state.get() };
+        build_state.generation_state.chunks.len()
+    }
+
+    pub fn get_cached_columns(&self, column_index: usize) -> Vec<BlockEntry> {
+        let index = self.column_map.get(&column_index).unwrap();
+        let build_state = unsafe { &*self.build_state.get() };
+        let columns = build_state
+            .generation_state
+            .chunks
+            .iter()
+            .map(|data_block| data_block.get_by_offset(*index).clone())
+            .collect::<Vec<_>>();
+        columns
+    }
+
+    pub fn get_cached_num_rows(&self) -> Vec<usize> {
+        let build_state = unsafe { &*self.build_state.get() };
+        let num_rows = build_state
+            .generation_state
+            .chunks
+            .iter()
+            .map(|data_block| data_block.num_rows())
+            .collect::<Vec<_>>();
+        num_rows
+    }
+
+    pub fn next_cache_block_index(&self) -> usize {
+        self.next_cache_block_index.fetch_add(1, Ordering::Relaxed)
     }
 }

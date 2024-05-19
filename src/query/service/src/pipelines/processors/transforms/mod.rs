@@ -49,6 +49,8 @@ pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_add_internal_columns::TransformAddInternalColumns;
 pub use transform_add_stream_columns::TransformAddStreamColumns;
+pub use transform_cache_scan::CacheSourceState;
+pub use transform_cache_scan::HashJoinCacheState;
 pub use transform_cache_scan::TransformCacheScan;
 pub use transform_cast_schema::TransformCastSchema;
 pub use transform_create_sets::TransformCreateSets;

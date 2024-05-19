@@ -88,7 +88,9 @@ pub struct HashJoin {
     // and do some special processing during runtime.
     pub single_to_inner: Option<JoinType>,
 
-    pub build_side_cache: Option<(usize, HashMap<IndexType, usize>)>,
+    // Hash join build side cache information for ExpressionScan, which includes the cache index and
+    // a HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
+    pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
 }
 
 impl HashJoin {
@@ -352,7 +354,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let build_side_cache = if let Some(cache_info) = &join.build_side_cache_info {
+        let build_side_cache_info = if let Some(cache_info) = &join.build_side_cache_info {
             probe_to_build_index.clear();
             Some((cache_info.cache_idx, cache_column_map))
         } else {
@@ -540,7 +542,7 @@ impl PhysicalPlanBuilder {
                 s_expr,
             )
             .await?,
-            build_side_cache,
+            build_side_cache_info,
         }))
     }
 }

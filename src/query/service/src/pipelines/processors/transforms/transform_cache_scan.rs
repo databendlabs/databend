@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -24,9 +25,9 @@ use databend_common_pipeline_sources::AsyncSourcer;
 
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
-use crate::sql::plans::CacheSource;
 
-enum CacheSourceState {
+#[derive(Clone)]
+pub enum CacheSourceState {
     HashJoinCacheState(HashJoinCacheState),
 }
 
@@ -38,30 +39,53 @@ impl CacheSourceState {
     }
 }
 
-struct HashJoinCacheState {
+#[derive(Clone)]
+pub struct HashJoinCacheState {
     initilized: bool,
     column_indexes: Vec<usize>,
     columns: Vec<Vec<BlockEntry>>,
     num_rows: Vec<usize>,
     num_cache_blocks: usize,
     hash_join_state: Arc<HashJoinState>,
+    output_buffer: VecDeque<DataBlock>,
+    max_block_size: usize,
 }
 
 impl HashJoinCacheState {
+    pub fn new(
+        column_indexes: Vec<usize>,
+        hash_join_state: Arc<HashJoinState>,
+        max_block_size: usize,
+    ) -> Self {
+        Self {
+            initilized: false,
+            column_indexes,
+            columns: Vec::new(),
+            num_rows: Vec::new(),
+            num_cache_blocks: 0,
+            hash_join_state,
+            output_buffer: VecDeque::new(),
+            max_block_size,
+        }
+    }
     fn next_data_block(&mut self) -> Option<DataBlock> {
         if !self.initilized {
             self.num_cache_blocks = self.hash_join_state.num_build_chunks();
             for column_index in self.column_indexes.iter() {
-                let column = self.hash_join_state.build_cache_columns(*column_index);
+                let column = self.hash_join_state.get_cached_columns(*column_index);
                 self.columns.push(column);
             }
-            self.num_rows = self.hash_join_state.build_cache_num_rows();
+            self.num_rows = self.hash_join_state.get_cached_num_rows();
             self.initilized = true;
+        }
+
+        if let Some(data_block) = self.output_buffer.pop_front() {
+            return Some(data_block);
         }
 
         let next_cache_block_index = self.hash_join_state.next_cache_block_index();
         if next_cache_block_index >= self.num_cache_blocks {
-            // Release the memory.
+            // Release memory.
             self.columns.clear();
             return None;
         }
@@ -70,8 +94,13 @@ impl HashJoinCacheState {
             .map(|idx| self.columns[idx][next_cache_block_index].clone())
             .collect::<Vec<BlockEntry>>();
         let num_rows = self.num_rows[next_cache_block_index];
+        let data_block = DataBlock::new(block_entries, num_rows);
 
-        Some(DataBlock::new(block_entries, num_rows))
+        for data_block in data_block.split_by_rows_no_tail(self.max_block_size) {
+            self.output_buffer.push_back(data_block);
+        }
+
+        self.output_buffer.pop_front()
     }
 }
 
@@ -83,21 +112,8 @@ impl TransformCacheScan {
     pub fn create(
         ctx: Arc<QueryContext>,
         output_port: Arc<OutputPort>,
-        cache_source: CacheSource,
-        state: Arc<HashJoinState>,
+        cache_source_state: CacheSourceState,
     ) -> Result<ProcessorPtr> {
-        let cache_source_state = match cache_source {
-            CacheSource::HashJoinBuild((_, column_indexes)) => {
-                CacheSourceState::HashJoinCacheState(HashJoinCacheState {
-                    initilized: false,
-                    column_indexes,
-                    columns: Vec::new(),
-                    num_rows: Vec::new(),
-                    num_cache_blocks: 0,
-                    hash_join_state: state.clone(),
-                })
-            }
-        };
         AsyncSourcer::create(ctx.clone(), output_port, TransformCacheScan {
             cache_source_state,
         })
