@@ -69,19 +69,19 @@ async fn test_get_storage_accessor_fs() -> Result<()> {
 
 #[test]
 fn test_short_sql() {
-    // Test case 1: SQL query shorter than 10KB
+    // Test case 1: SQL query shorter than 30KB
     let sql1 = "SELECT * FROM users WHERE id = 1;".to_string();
     assert_eq!(short_sql(sql1.clone()), sql1);
 
-    // Test case 2: SQL query longer than 10KB and starts with "INSERT"
+    // Test case 2: SQL query longer than 30KB and starts with "INSERT"
     let long_sql = "INSERT INTO users (id, name, email) VALUES ".to_string()
-        + &"(1, 'John Doe', 'john@example.com'), ".repeat(1000);
-    let expected_result = long_sql.as_bytes()[..10240].to_vec();
+        + &"(1, 'John Doe', 'john@example.com'), ".repeat(1500); // Adjusted for 30KB
+    let expected_result = long_sql.as_bytes()[..30 * 1024].to_vec();
     let expected_result = String::from_utf8(expected_result).unwrap() + "...";
     assert_eq!(short_sql(long_sql), expected_result);
 
-    // Test case 3: SQL query longer than 10KB but does not start with "INSERT"
-    let long_sql = "SELECT * FROM users WHERE ".to_string() + &"id = 1 OR ".repeat(1000);
+    // Test case 3: SQL query longer than 30KB but does not start with "INSERT"
+    let long_sql = "SELECT * FROM users WHERE ".to_string() + &"id = 1 OR ".repeat(1500); // Adjusted for 30KB
     assert_eq!(short_sql(long_sql.clone()), long_sql);
 
     // Test case 4: Empty SQL query

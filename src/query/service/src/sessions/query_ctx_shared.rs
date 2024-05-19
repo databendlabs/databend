@@ -582,14 +582,17 @@ impl Drop for QueryContextShared {
 
 pub fn short_sql(sql: String) -> String {
     use unicode_segmentation::UnicodeSegmentation;
+    const MAX_LENGTH: usize = 30 * 1024; // 30KB
+
     let query = sql.trim_start();
-    if query.as_bytes().len() > 10240 && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT") {
-        // keep first 10KB (10,240 bytes)
+    if query.as_bytes().len() > MAX_LENGTH && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT")
+    {
+        // keep first 30KB
         let mut result = Vec::new();
         let mut bytes_taken = 0;
         for grapheme in query.graphemes(true) {
             let grapheme_bytes = grapheme.as_bytes();
-            if bytes_taken + grapheme_bytes.len() <= 10240 {
+            if bytes_taken + grapheme_bytes.len() <= MAX_LENGTH {
                 result.extend_from_slice(grapheme_bytes);
                 bytes_taken += grapheme_bytes.len();
             } else {
