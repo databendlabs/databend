@@ -265,7 +265,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             let mut b = ArrayType::create_builder(1, ctx.generics);
             b.put_item((key.into_scalar().unwrap(), value.into_scalar().unwrap()));
             b.commit_row();
-      
             return Value::Scalar(MapType::build_scalar(b));
         },
     );
@@ -293,7 +292,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 && !key_type.is_string()
                 && !key_type.is_numeric()
                 && !key_type.is_decimal()
-                && !key_type.is_date_or_date_time() {
+                && !key_type.is_date_or_date_time()
+            {
                 ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
             }
 
@@ -302,30 +302,32 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-     // grammar: map_insert(map, insert_key, insert_value, allow_update)
-     registry.register_passthrough_nullable_4_arg(
+    // grammar: map_insert(map, insert_key, insert_value, allow_update)
+    registry.register_passthrough_nullable_4_arg(
         "map_insert",
-        |_, domain1, key_domain, value_domain, _| 
-        FunctionDomain::Domain(match (domain1, key_domain, value_domain) {
-            (Some((key_domain, val_domain)), insert_key_domain, insert_value_domain) => Some((
-                key_domain.merge(insert_key_domain),
-                val_domain.merge(insert_value_domain),
-            )),
-            (None, _, _) => None,
-        }),
+        |_, domain1, key_domain, value_domain, _| {
+            FunctionDomain::Domain(match (domain1, key_domain, value_domain) {
+                (Some((key_domain, val_domain)), insert_key_domain, insert_value_domain) => Some((
+                    key_domain.merge(insert_key_domain),
+                    val_domain.merge(insert_value_domain),
+                )),
+                (None, _, _) => None,
+            })
+        },
         vectorize_with_builder_4_arg::<
             MapType<GenericType<0>, GenericType<1>>,
             GenericType<0>,
             GenericType<1>,
             BooleanType,
             MapType<GenericType<0>, GenericType<1>>,
-        >(|source, key: databend_common_expression::ScalarRef, value, allow_update, output, ctx| {
+        >(|source, key, value, allow_update, output, ctx| {
             let key_type = &ctx.generics[0];
             if !key_type.is_boolean()
                 && !key_type.is_string()
                 && !key_type.is_numeric()
                 && !key_type.is_decimal()
-                && !key_type.is_date_or_date_time() {
+                && !key_type.is_date_or_date_time()
+            {
                 ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
             }
 
@@ -333,7 +335,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             // if duplicate_key is true and allow_update is false, return the original map
             if duplicate_key && !allow_update {
                 let mut new_builder = ArrayType::create_builder(source.len(), ctx.generics);
-                source.iter().for_each(|(k, v)| new_builder.put_item((k.clone(), v.clone())));
+                source
+                    .iter()
+                    .for_each(|(k, v)| new_builder.put_item((k.clone(), v.clone())));
                 new_builder.commit_row();
                 output.append_column(&new_builder.build());
                 return;
@@ -347,7 +351,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         source: &KvColumn<GenericType<0>, GenericType<1>>,
         insert_key: ScalarRef,
         insert_value: ScalarRef,
-        ctx: &EvalContext
+        ctx: &EvalContext,
     ) -> ArrayColumn<KvPair<GenericType<0>, GenericType<1>>> {
         let duplicate_key = source.iter().any(|(k, _)| k == insert_key);
         let mut new_map = ArrayType::create_builder(source.len() + 1, ctx.generics);
