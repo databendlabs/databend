@@ -283,6 +283,16 @@ fn test_map_size(file: &mut impl Write) {
 fn test_map_insert(file: &mut impl Write) {
     run_ast(file, "map_insert({}, 'k1', 'v1')", &[]);
     run_ast(file, "map_insert({'k1': 'v1'}, 'k2', 'v2')", &[]);
+    run_ast(
+        file,
+        "map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'v10', false)",
+        &[],
+    );
+    run_ast(
+        file,
+        "map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'v10', true)",
+        &[],
+    );
 
     let columns = [
         ("a_col", StringType::from_data(vec!["a", "b", "c"])),
@@ -304,6 +314,16 @@ fn test_map_insert(file: &mut impl Write) {
     run_ast(
         file,
         "map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'k1', 'v10')",
+        &columns,
+    );
+    run_ast(
+        file,
+        "map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a', 'v10', true)",
+        &columns,
+    );
+    run_ast(
+        file,
+        "map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a', 'v10', false)",
         &columns,
     );
 }
