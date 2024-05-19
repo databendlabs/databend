@@ -77,8 +77,13 @@ impl TableDataCacheBuilder {
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
+        fuzzy_reload_cache_keys: bool,
     ) -> Result<TableDataCache<LruDiskCacheHolder>> {
-        let disk_cache = LruDiskCacheBuilder::new_disk_cache(path, disk_cache_bytes_size)?;
+        let disk_cache = LruDiskCacheBuilder::new_disk_cache(
+            path,
+            disk_cache_bytes_size,
+            fuzzy_reload_cache_keys,
+        )?;
         let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
         Ok(TableDataCache {
