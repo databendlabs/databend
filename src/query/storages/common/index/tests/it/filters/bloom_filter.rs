@@ -491,13 +491,7 @@ fn bloom_columns_map(
     let mut bloom_columns_map = BTreeMap::new();
     for i in cols {
         let field_type = schema.field(i).data_type();
-        let mut data_type = DataType::from(field_type);
-        if let DataType::Map(box inner_ty) = data_type {
-            data_type = match inner_ty {
-                DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                _ => unreachable!(),
-            };
-        }
+        let data_type = DataType::from(field_type);
         if Xor8Filter::supported_type(&data_type) {
             bloom_columns_map.insert(i, schema.field(i).clone());
         }
