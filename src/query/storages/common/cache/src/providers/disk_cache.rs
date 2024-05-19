@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
 use std::fs;
 use std::fs::File;
 use std::hash::Hasher;
@@ -33,6 +34,7 @@ use databend_common_cache::FileSize;
 use databend_common_cache::LruCache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::debug;
 use log::error;
 use log::info;
 use log::warn;
@@ -49,6 +51,7 @@ pub struct DiskCache<C> {
     root: PathBuf,
 }
 
+#[derive(Debug)]
 pub struct DiskCacheKey(String);
 
 impl<S> From<S> for DiskCacheKey
@@ -71,6 +74,12 @@ impl From<&DiskCacheKey> for PathBuf {
         let mut path_buf = PathBuf::from(prefix);
         path_buf.push(Path::new(&cache_key.0));
         path_buf
+    }
+}
+
+impl Display for DiskCacheKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.clone())
     }
 }
 
@@ -97,6 +106,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
 }
 
 type CacheHolder<C> = Arc<RwLock<Option<DiskCache<C>>>>;
+
 impl<C> DiskCache<C>
 where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static
 {
@@ -129,99 +139,100 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         self.root.join(rel_path)
     }
 
+    // Scan the cache directory in parallel using rayon, and call `process_entry` on each file.
+    fn parallel_scan<F>(
+        cache_root: &Path,
+        working_path: &PathBuf,
+        cache_holder: &CacheHolder<C>,
+        counter: &AtomicUsize,
+        process_entry: F,
+    ) where
+        C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static,
+        F: Fn(&Path, &fs::DirEntry, &CacheHolder<C>, &AtomicUsize) + Clone + Send + Sync + 'static,
+    {
+        if let Ok(entries) = fs::read_dir(working_path) {
+            let process_entry_clone = process_entry.clone();
+            // This will use the rayon thread pool to process the entries in parallel.
+            entries.par_bridge().for_each(move |entry| {
+                if let Ok(entry) = entry {
+                    let entry_path = entry.path();
+                    if entry_path.is_dir() {
+                        debug!("scanning dir {:?}", entry_path);
+                        Self::parallel_scan(
+                            cache_root,
+                            &entry_path,
+                            cache_holder,
+                            counter,
+                            process_entry_clone.clone(),
+                        );
+                    } else {
+                        debug!("scanning file {:?}", entry_path);
+                        process_entry_clone(cache_root, &entry, cache_holder, counter);
+                    }
+                }
+            });
+        }
+    }
+
+    /// Remove all files in the cache.
     fn reset_restart(cache_root: &PathBuf) -> result::Result<()> {
-        // remove dir recursively, ignore error
-        fn parallel_delete(path: &PathBuf, counter: &AtomicUsize) {
-            if let Ok(entries) = fs::read_dir(path) {
-                entries.par_bridge().for_each(|entry| {
-                    if let Ok(entry) = entry {
-                        let entry_path = entry.path();
-                        if entry_path.is_dir() {
-                            info!("deleting content of path {:?}", entry_path);
-                            parallel_delete(&entry_path, counter);
-                            info!("path {:?} cleaned", entry_path);
-                        } else if let Err(e) = fs::remove_file(&entry_path) {
-                            warn!("failed to remove file {:?}. {}", entry_path, e);
-                        } else {
-                            let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
-                            if count % 1000 == 0 {
-                                info!("Deleted {} files", count);
-                            }
+        let counter = AtomicUsize::new(0);
+        Self::parallel_scan(
+            cache_root,
+            cache_root,
+            &Arc::new(RwLock::new(None)),
+            &counter,
+            |_cache_root, entry, _cache_holder, counter| {
+                if let Ok(entry_path) = entry.path().canonicalize() {
+                    if let Err(e) = fs::remove_file(&entry_path) {
+                        warn!("failed to remove file {:?}. {}", entry_path, e);
+                    } else {
+                        let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                        if count % 1000 == 0 {
+                            info!("deleted {} files", count);
                         }
                     }
-                });
-            }
-            if let Err(e) = fs::remove_dir(path) {
-                warn!("failed to remove path {:?}. {}", path, e);
-            }
-        }
-
-        let counter = AtomicUsize::new(0);
-        parallel_delete(cache_root, &counter);
+                }
+            },
+        );
 
         info!("all reset tasks done, {:?} cache items removed", counter);
         Ok(())
     }
 
+    /// Reload cache keys from the cache directory.
     fn fuzzy_restart(root: &PathBuf, me: CacheHolder<C>) -> result::Result<CacheHolder<C>> {
-        fn populate_cache_key<C>(
-            prefix: &Path,
-            path: &Path,
-            entry: &fs::DirEntry,
-            cache_holder: &CacheHolder<C>,
-        ) -> result::Result<()>
-        where
-            C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static,
-        {
-            let size = entry.metadata()?.len();
-            let relative_path = path
-                .strip_prefix(prefix)
-                .map_err(|_| self::Error::MalformedPath(path.to_path_buf()))?;
-            let cache_key = recovery_cache_key_from_path(relative_path);
-            {
-                let mut cache_guard = cache_holder.write();
-                let dick_cache_opt = (*cache_guard).as_mut();
-                dick_cache_opt
-                    .expect("unreachable, disk cache should be there")
-                    .cache
-                    .put(cache_key, size);
-            }
-            Ok(())
-        }
-
-        fn parallel_scan<C>(
-            cache_root: &Path,
-            working_path: &PathBuf,
-            cache_holder: &CacheHolder<C>,
-            counter: &AtomicUsize,
-        ) where
-            C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static,
-        {
-            if let Ok(entries) = fs::read_dir(working_path) {
-                entries.par_bridge().for_each(|entry| {
-                    if let Ok(entry) = entry {
-                        let entry_path = entry.path();
-                        if entry_path.is_dir() {
-                            info!("scanning path {:?}", entry_path);
-                            parallel_scan(cache_root, &entry_path, cache_holder, counter);
-                            info!("path {:?} processed", entry_path);
-                        } else if let Err(e) =
-                            populate_cache_key(cache_root, &entry_path, &entry, cache_holder)
-                        {
-                            warn!("failed to process path {:?}, error: {}", entry, e);
-                        } else {
+        let counter = AtomicUsize::new(0);
+        Self::parallel_scan(
+            root,
+            root,
+            &me,
+            &counter,
+            |cache_root, entry, cache_holder, counter| {
+                let canonical_root =
+                    fs::canonicalize(cache_root).unwrap_or_else(|_| PathBuf::from(cache_root));
+                if let Ok(entry_path) = entry.path().canonicalize() {
+                    if let Ok(size) = entry.metadata().map(|m| m.len()) {
+                        if let Ok(relative_path) = entry_path.strip_prefix(&canonical_root) {
+                            let cache_key = recovery_cache_key_from_path(relative_path);
+                            {
+                                let mut cache_guard = cache_holder.write();
+                                let disk_cache_opt = (*cache_guard).as_mut();
+                                disk_cache_opt
+                                    .expect("unreachable, disk cache should be there")
+                                    .cache
+                                    .put(cache_key, size);
+                            }
                             let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
                             if count % 1000 == 0 {
                                 info!("scanned {} files", count);
                             }
                         }
                     }
-                });
-            }
-        }
+                }
+            },
+        );
 
-        let counter = AtomicUsize::new(0);
-        parallel_scan(root, root, &me, &counter);
         info!(
             "all reload-cache-key tasks done, {:?} keys reloaded",
             counter,
@@ -313,7 +324,9 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         debug_assert!(self.cache.size() <= self.cache.capacity());
 
         let cache_key = self.cache_key(key.as_ref());
+        info!("insert_bytes: {:?}", cache_key.0);
         let path = self.abs_path_of_cache_key(&cache_key);
+        info!("insert_bytes: {:?}", path);
         if let Some(parent_path) = path.parent() {
             fs::create_dir_all(parent_path)?;
         }
@@ -540,6 +553,7 @@ pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, File
 pub type LruDiskCacheHolder = Arc<RwLock<LruDiskCache>>;
 
 pub struct LruDiskCacheBuilder;
+
 impl LruDiskCacheBuilder {
     pub fn new_disk_cache(
         path: &PathBuf,

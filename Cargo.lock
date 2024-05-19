@@ -4878,6 +4878,7 @@ dependencies = [
  "databend-common-cache",
  "databend-common-exception",
  "databend-common-metrics",
+ "env_logger",
  "hex",
  "log",
  "parking_lot 0.12.1",
