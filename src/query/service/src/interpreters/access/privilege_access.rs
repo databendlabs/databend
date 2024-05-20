@@ -722,10 +722,9 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::DescribeTask(plan) => {
                 let session = self.ctx.get_current_session();
-                if self
+                if !self
                     .has_ownership(&session, &GrantObject::Task(plan.task_name.to_owned()))
-                    .await
-                    .is_err()
+                    .await?
                 {
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
                         .await?;
@@ -733,10 +732,9 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::ExecuteTask(plan) => {
                 let session = self.ctx.get_current_session();
-                if self
+                if !self
                     .has_ownership(&session, &GrantObject::Task(plan.task_name.to_owned()))
-                    .await
-                    .is_err()
+                    .await?
                 {
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
                         .await?;

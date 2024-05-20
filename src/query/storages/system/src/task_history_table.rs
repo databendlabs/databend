@@ -43,6 +43,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_run_schema;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use log::info;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -194,9 +195,22 @@ impl AsyncSystemTable for TaskHistoryTable {
                 .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN)
                 && !owned_tasks_names.contains(task_name)
             {
+                info!(
+                    "--task_history:198 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
+                    all_effective_roles.clone(),
+                    owned_tasks_names.clone(),
+                    task_name.clone()
+                );
                 return parse_task_runs_to_datablock(vec![]);
             }
         }
+
+        info!(
+            "--task_history:203 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
+            all_effective_roles.clone(),
+            owned_tasks_names.clone(),
+            task_name.clone()
+        );
 
         let req = ShowTaskRunsRequest {
             tenant_id: tenant.tenant_name().to_string(),

@@ -32,14 +32,20 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_schema;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use log::info;
 
+use crate::parse_task_runs_to_datablock;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_filter;
 use crate::util::get_owned_task_names;
 
 pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
@@ -120,7 +126,7 @@ impl AsyncSystemTable for TasksTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let user_api = UserApiProvider::instance();
         let config = GlobalConfig::instance();
@@ -140,7 +146,43 @@ impl AsyncSystemTable for TasksTable {
             .map(|x| x.identity().to_string())
             .collect();
 
+        let mut task_name = None;
+        if let Some(push_downs) = push_downs {
+            if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                find_eq_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "name" {
+                        if let Scalar::String(s) = scalar {
+                            task_name = Some(s.clone());
+                        }
+                    }
+                });
+            }
+        }
         let owned_tasks_names = get_owned_task_names(user_api, &tenant, &all_effective_roles).await;
+        if let Some(task_name) = &task_name {
+            // The user does not have admin role and not own the task_name
+            // Need directly return empty block
+            if !all_effective_roles
+                .iter()
+                .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN)
+                && !owned_tasks_names.contains(task_name)
+            {
+                info!(
+                    "--tasks:171 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
+                    all_effective_roles.clone(),
+                    owned_tasks_names.clone(),
+                    task_name.clone()
+                );
+                return parse_task_runs_to_datablock(vec![]);
+            }
+        }
+        info!(
+            "--tasks:175 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
+            all_effective_roles.clone(),
+            owned_tasks_names.clone(),
+            task_name.clone()
+        );
 
         let req = ShowTasksRequest {
             tenant_id: tenant.tenant_name().to_string(),
