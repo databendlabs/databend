@@ -86,7 +86,7 @@ unsafe impl Sync for GlobalRegistry {}
 
 impl GlobalRegistry {
     pub fn create() -> GlobalRegistry {
-        let registry = Registry::with_prefix("databend");
+        let mut registry = Registry::with_prefix("databend");
         registry.register_collector(ProcessCollector::new());
         GlobalRegistry {
             inner: Mutex::new(GlobalRegistryInner {

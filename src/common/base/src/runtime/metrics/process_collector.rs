@@ -7,8 +7,8 @@ use prometheus_client::metrics::gauge::ConstGauge;
 pub struct ProcessCollector {}
 
 impl ProcessCollector {
-    pub fn new() -> Self {
-        ProcessCollector {}
+    pub fn new() -> Box<Self> {
+        Box::new(ProcessCollector {})
     }
 }
 
