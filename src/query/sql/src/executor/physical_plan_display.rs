@@ -58,6 +58,7 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
+use crate::plans::CacheSource;
 use crate::plans::JoinType;
 
 impl PhysicalPlan {
@@ -174,14 +175,35 @@ impl Display for ConstantTableScan {
 }
 
 impl Display for ExpressionScan {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let columns = self
+            .values
+            .iter()
+            .enumerate()
+            .map(|(i, value)| {
+                let column = value
+                    .iter()
+                    .map(|val| val.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .join(", ");
+                format!("column {}: [{}]", i, column)
+            })
+            .collect::<Vec<String>>();
+
+        write!(f, "ExpressionScan: {}", columns.join(", "))
     }
 }
 
 impl Display for CacheScan {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.cache_source {
+            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
+                write!(
+                    f,
+                    "CacheScan: [cache_index: {}, column_indexes: {:?}]",
+                    cache_index, column_indexes
+                )
+            }
+        }
     }
 }
 

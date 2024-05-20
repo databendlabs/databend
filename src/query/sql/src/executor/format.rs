@@ -566,6 +566,8 @@ fn cache_scan_to_format_tree(
 
     match &plan.cache_source {
         CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
+            let mut column_indexes = column_indexes.clone();
+            column_indexes.sort();
             children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
             children.push(FormatTreeNode::new(format!(
                 "column indexes: {:?}",
@@ -1084,10 +1086,12 @@ fn hash_join_to_format_tree(
     ];
 
     if let Some((cache_index, column_map)) = &plan.build_side_cache_info {
+        let mut column_indexes = column_map.keys().collect::<Vec<_>>();
+        column_indexes.sort();
         children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
         children.push(FormatTreeNode::new(format!(
             "cache columns: {:?}",
-            column_map.keys()
+            column_indexes
         )));
     }
 

@@ -430,6 +430,8 @@ impl SubqueryRewriter {
         left_conditions: &mut Vec<ScalarExpr>,
         right_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
+        let mut correlated_columns = correlated_columns.clone().into_iter().collect::<Vec<_>>();
+        correlated_columns.sort();
         for correlated_column in correlated_columns.iter() {
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);

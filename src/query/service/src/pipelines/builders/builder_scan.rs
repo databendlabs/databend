@@ -167,7 +167,6 @@ impl PipelineBuilder {
             })
             .collect::<Vec<_>>();
 
-        let max_block_size = self.settings.get_max_block_size()? as usize;
         let fun_ctx = self.func_ctx.clone();
 
         self.main_pipeline.add_transform(|input, output| {
@@ -176,7 +175,6 @@ impl PipelineBuilder {
                 output,
                 values.clone(),
                 fun_ctx.clone(),
-                max_block_size,
             )))
         })?;
 

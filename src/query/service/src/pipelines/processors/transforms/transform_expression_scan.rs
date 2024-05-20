@@ -33,7 +33,6 @@ pub struct TransformExpressionScan {
     values: Vec<Vec<Expr>>,
     output_buffer: VecDeque<DataBlock>,
     func_ctx: FunctionContext,
-    max_block_size: usize,
 }
 
 impl TransformExpressionScan {
@@ -42,13 +41,11 @@ impl TransformExpressionScan {
         output: Arc<OutputPort>,
         values: Vec<Vec<Expr>>,
         func_ctx: FunctionContext,
-        max_block_size: usize,
     ) -> Box<dyn Processor> {
         BlockingTransformer::create(input, output, TransformExpressionScan {
             values,
             output_buffer: VecDeque::new(),
             func_ctx,
-            max_block_size,
         })
     }
 }
