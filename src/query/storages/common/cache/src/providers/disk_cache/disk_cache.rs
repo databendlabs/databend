@@ -58,7 +58,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         path: T,
         size: u64,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
-    ) -> self::result::Result<Self>
+    ) -> self::io_result::Result<Self>
     where
         PathBuf: From<T>,
     {
@@ -138,7 +138,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     }
 
     /// Remove all files in the cache.
-    fn reset_restart(cache_root: &PathBuf) -> result::Result<()> {
+    fn reset_restart(cache_root: &PathBuf) -> io_result::Result<()> {
         let counter = AtomicUsize::new(0);
         Self::parallel_scan(
             cache_root,
@@ -164,7 +164,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     }
 
     /// Reload cache keys from the cache directory.
-    fn fuzzy_restart(root: &PathBuf, me: CacheHolder<C>) -> result::Result<CacheHolder<C>> {
+    fn fuzzy_restart(root: &PathBuf, me: CacheHolder<C>) -> io_result::Result<CacheHolder<C>> {
         let counter = AtomicUsize::new(0);
         Self::parallel_scan(
             root,
@@ -207,7 +207,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     fn init(
         self,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
-    ) -> self::result::Result<Self> {
+    ) -> self::io_result::Result<Self> {
         let begin = Instant::now();
         let parallelism = match std::thread::available_parallelism() {
             Ok(degree) => degree.get(),
@@ -272,7 +272,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         self.rel_to_abs_path(path)
     }
 
-    pub fn insert_bytes(&mut self, key: &str, bytes: &[&[u8]]) -> self::result::Result<()> {
+    pub fn insert_bytes(&mut self, key: &str, bytes: &[&[u8]]) -> self::io_result::Result<()> {
         let bytes_len = bytes.iter().map(|x| x.len() as u64).sum::<u64>();
         // check if this chunk of bytes itself is too large
         if !self.can_store(bytes_len) {
@@ -355,7 +355,7 @@ fn recovery_cache_key_from_path(relative_path: &Path) -> String {
     key_string
 }
 
-pub mod result {
+pub mod io_result {
     use std::error::Error as StdError;
     use std::fmt;
     use std::io;
@@ -405,4 +405,4 @@ pub mod result {
     pub type Result<T> = std::result::Result<T, Error>;
 }
 
-use result::*;
+use io_result::*;
