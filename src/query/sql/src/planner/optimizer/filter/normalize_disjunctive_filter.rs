@@ -73,6 +73,9 @@ fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
                 .into_iter()
                 .unique()
                 .collect::<Vec<PredicateScalar>>();
+            if and_args.len() == 1 {
+                return and_args[0].clone();
+            }
             PredicateScalar::And(and_args)
         }
         ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
@@ -90,6 +93,9 @@ fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
                 .into_iter()
                 .unique()
                 .collect::<Vec<PredicateScalar>>();
+            if or_args.len() == 1 {
+                return or_args[0].clone();
+            }
             PredicateScalar::Or(or_args)
         }
         _ => PredicateScalar::Other(Box::from(scalar.clone())),
