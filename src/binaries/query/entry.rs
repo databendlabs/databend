@@ -215,8 +215,10 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
     // Print information to users.
     println!("Databend Query");
+
     println!();
     println!("Version: {}", *DATABEND_COMMIT_VERSION);
+
     println!();
     println!("Logging:");
     println!("    file: {}", conf.log.file);
@@ -224,6 +226,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("    otlp: {}", conf.log.otlp);
     println!("    query: {}", conf.log.query);
     println!("    tracing: {}", conf.log.tracing);
+
+    println!();
     println!(
         "Meta: {}",
         if conf.meta.is_embedded_meta()? {
@@ -232,6 +236,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
+
+    println!();
     println!("Memory:");
     println!("    limit: {}", {
         if conf.query.max_memory_limit_enabled {
@@ -246,6 +252,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("    allocator: {}", GlobalAllocator::name());
     println!("    config: {}", GlobalAllocator::conf());
 
+    println!();
     println!("Cluster: {}", {
         let cluster = ClusterDiscovery::instance().discover(conf).await?;
         let nodes = cluster.nodes.len();
@@ -255,8 +262,18 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             "standalone".to_string()
         }
     });
+
+    println!();
     println!("Storage: {}", conf.storage.params);
-    println!("Cache: {}", conf.cache.data_cache_storage.to_string());
+    println!("Disk cache:");
+    println!("    storage: {}", conf.cache.data_cache_storage.to_string());
+    println!("    path: {:?}", conf.cache.disk_cache_config);
+    println!(
+        "    reload policy: {}",
+        conf.cache.data_cache_key_reload_policy.to_string()
+    );
+
+    println!();
     println!(
         "Builtin users: {}",
         conf.query
@@ -267,6 +284,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ")
     );
+
     println!();
     println!("Admin");
     println!("    listened at {}", conf.query.admin_api_address);
