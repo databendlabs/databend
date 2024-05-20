@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
@@ -176,8 +175,7 @@ impl Interpreter for DeleteInterpreter {
             let mut used_columns = scalar.used_columns().clone();
             let col_indices: Vec<usize> = if let Some(subquery_desc) = &self.plan.subquery_desc {
                 // add scalar.used_columns() but ignore _row_id index
-                let mut col_indices = HashSet::new();
-                col_indices.extend(subquery_desc.outer_columns.iter());
+                let mut col_indices = subquery_desc.outer_columns.clone();
                 used_columns.remove(&subquery_desc.index);
                 col_indices.extend(used_columns.iter());
                 col_indices.into_iter().collect()
@@ -369,7 +367,7 @@ pub async fn subquery_filter(
                     span: None,
                     column: row_id_column_binding.clone(),
                 }),
-                index: 0,
+                index: row_id_column_binding.index,
             }],
         })),
         Arc::new(input_expr),

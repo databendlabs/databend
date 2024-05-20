@@ -26,7 +26,6 @@ use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::SExpr;
-use crate::optimizer::SubqueryRewriter;
 use crate::plans::DeletePlan;
 use crate::plans::Filter;
 use crate::plans::Operator;
@@ -37,7 +36,6 @@ use crate::plans::SubqueryDesc;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
 use crate::BindContext;
-use crate::ColumnEntry;
 use crate::ScalarExpr;
 
 impl<'a> Binder {
@@ -49,10 +47,13 @@ impl<'a> Binder {
     ) -> Result<(Option<ScalarExpr>, Option<SubqueryDesc>)> {
         Ok(if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            if !self.has_subquery_in_selection(&scalar)? {
+            let (found_subquery, outer_columns) = self.has_subquery_in_selection(&scalar)?;
+            if !found_subquery {
                 return Ok((Some(scalar), None));
             }
-            let subquery_desc = self.process_subquery(scalar.clone(), table_expr).await?;
+            let subquery_desc = self
+                .process_subquery(scalar.clone(), outer_columns, table_expr)
+                .await?;
             (Some(scalar), Some(subquery_desc))
         } else {
             (None, None)
@@ -133,34 +134,42 @@ impl<'a> Binder {
 
 impl Binder {
     // The method will find all subquery in filter
-    fn has_subquery_in_selection(&self, scalar: &ScalarExpr) -> Result<bool> {
-        struct FindSubqueryVisitor {
+    fn has_subquery_in_selection(&self, scalar: &ScalarExpr) -> Result<(bool, HashSet<usize>)> {
+        struct SubqueryVisitor {
+            outer_columns: HashSet<usize>,
             found_subquery: bool,
         }
 
-        impl<'a> Visitor<'a> for FindSubqueryVisitor {
-            fn visit_subquery(&mut self, _subquery: &'a SubqueryExpr) -> Result<()> {
+        impl<'a> Visitor<'a> for SubqueryVisitor {
+            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+                if let Some(child_expr) = &subquery.child_expr {
+                    self.outer_columns.extend(child_expr.used_columns());
+                };
+                self.outer_columns.extend(subquery.outer_columns.iter());
                 self.found_subquery = true;
                 Ok(())
             }
         }
 
-        let mut find_subquery = FindSubqueryVisitor {
+        let mut subquery_visitor = SubqueryVisitor {
+            outer_columns: HashSet::new(),
             found_subquery: false,
         };
-        find_subquery.visit(scalar)?;
+        subquery_visitor.visit(scalar)?;
 
-        Ok(find_subquery.found_subquery)
+        Ok((
+            subquery_visitor.found_subquery,
+            subquery_visitor.outer_columns,
+        ))
     }
 
     #[async_backtrace::framed]
     async fn process_subquery(
         &self,
         predicate: ScalarExpr,
+        outer_columns: HashSet<usize>,
         mut table_expr: SExpr,
     ) -> Result<SubqueryDesc> {
-        let mut outer_columns: HashSet<usize> = Default::default();
-
         let filter = Filter {
             predicates: vec![predicate],
         };
@@ -194,21 +203,10 @@ impl Binder {
             );
         }
 
-        // add all table columns into outer columns
-        let metadata = self.metadata.read();
-        let columns = metadata.columns_by_table_index(scan.table_index);
-        for column in columns {
-            if let ColumnEntry::BaseTableColumn(column) = &column {
-                outer_columns.insert(column.column_index);
-            }
-        }
-
         // Add row_id column to scan's column set
         scan.columns.insert(row_id_index.unwrap());
         table_expr.plan = Arc::new(Scan(scan));
         let filter_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
-        let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
-        let filter_expr = rewriter.rewrite(&filter_expr)?;
 
         Ok(SubqueryDesc {
             input_expr: filter_expr,

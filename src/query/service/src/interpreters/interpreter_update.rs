@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
@@ -195,12 +194,15 @@ impl UpdateInterpreter {
                 ));
             }
 
+            let mut used_columns = scalar.used_columns().clone();
             let col_indices: Vec<usize> = if let Some(subquery_desc) = &self.plan.subquery_desc {
-                let mut col_indices = HashSet::new();
-                col_indices.extend(subquery_desc.outer_columns.iter());
+                // add scalar.used_columns() but ignore _row_id index
+                let mut col_indices = subquery_desc.outer_columns.clone();
+                used_columns.remove(&subquery_desc.index);
+                col_indices.extend(used_columns.iter());
                 col_indices.into_iter().collect()
             } else {
-                scalar.used_columns().into_iter().collect()
+                used_columns.into_iter().collect()
             };
             (Some(filters), col_indices)
         } else {
