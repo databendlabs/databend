@@ -103,7 +103,7 @@ pub struct ProcessStat {
 pub fn dump_process_stat() -> Option<ProcessStat> {
     #[cfg(target_os = "linux")]
     {
-        return dump_linux_process_stat();
+        dump_linux_process_stat()
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -128,8 +128,8 @@ fn dump_linux_process_stat() -> Option<ProcessStat> {
     };
 
     // constants
-    let clk_tck: i64 = unsafe { libc::sysconf(libc::_SC_CLK_TCK) }.into();
-    let page_size: i64 = unsafe { libc::sysconf(libc::_SC_PAGESIZE) }.into();
+    let clk_tck: i64 = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
+    let page_size: i64 = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
 
     // fds
     let open_fds = proc.fd_count().unwrap_or(0) as u64;
