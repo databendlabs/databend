@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bind_table_reference;
 mod bind_join;
 mod bind_location;
 mod bind_subquery;
 mod bind_table;
 mod bind_table_function;
+mod bind_table_reference;
 
 pub use bind_join::JoinConditions;
 pub use bind_table_function::parse_result_scan_args;
