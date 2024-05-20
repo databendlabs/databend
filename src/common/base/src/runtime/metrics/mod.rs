@@ -26,6 +26,7 @@ pub use gauge::Gauge;
 pub use histogram::Histogram;
 pub use histogram::BUCKET_MILLISECONDS;
 pub use histogram::BUCKET_SECONDS;
+pub use process_collector::dump_process_stat;
 pub use registry::register_counter;
 pub use registry::register_counter_family;
 pub use registry::register_gauge;

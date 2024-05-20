@@ -26,6 +26,7 @@ use parking_lot::RwLock;
 use prometheus_client::registry::Metric as PMetrics;
 use prometheus_client::registry::Registry;
 
+use super::process_collector::ProcessCollector;
 use crate::runtime::metrics::counter::Counter;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyCounterCreator as InnerFamilyCounterCreator;
@@ -85,10 +86,12 @@ unsafe impl Sync for GlobalRegistry {}
 
 impl GlobalRegistry {
     pub fn create() -> GlobalRegistry {
+        let registry = Registry::with_prefix("databend");
+        registry.register_collector(ProcessCollector::new());
         GlobalRegistry {
             inner: Mutex::new(GlobalRegistryInner {
                 metrics: vec![],
-                registry: Registry::with_prefix("databend"),
+                registry,
             }),
         }
     }

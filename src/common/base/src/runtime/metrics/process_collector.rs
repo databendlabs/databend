@@ -1,12 +1,16 @@
-use std::sync::LazyLock;
-
 use prometheus_client::collector::Collector;
 use prometheus_client::encoding::EncodeMetric;
 use prometheus_client::metrics::counter::ConstCounter;
 use prometheus_client::metrics::gauge::ConstGauge;
 
 #[derive(Debug)]
-struct ProcessCollector {}
+pub struct ProcessCollector {}
+
+impl ProcessCollector {
+    pub fn new() -> Self {
+        ProcessCollector {}
+    }
+}
 
 impl Collector for ProcessCollector {
     fn encode(
@@ -86,17 +90,17 @@ impl Collector for ProcessCollector {
 }
 
 #[derive(Clone, Default)]
-struct ProcessStat {
-    cpu_total: u64,
-    open_fds: u64,
-    max_fds: u64,
-    vsize: u64,
-    rss: u64,
-    start_time: i64,
-    threads_num: usize,
+pub struct ProcessStat {
+    pub cpu_total: u64,
+    pub open_fds: u64,
+    pub max_fds: u64,
+    pub vsize: u64,
+    pub rss: u64,
+    pub start_time: i64,
+    pub threads_num: usize,
 }
 
-fn dump_process_stat() -> Option<ProcessStat> {
+pub fn dump_process_stat() -> Option<ProcessStat> {
     #[cfg(target_os = "linux")]
     {
         return dump_linux_process_stat();
