@@ -121,6 +121,9 @@ statement ok
 drop table bloom_test_t
 
 statement ok
+drop table if exists bloom_test_nullable_t
+
+statement ok
 create table bloom_test_nullable_t(c1 int null, c2 int null);
 
 statement ok
@@ -143,5 +146,42 @@ TableScan
 ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
 └── estimated rows: 1.00
 
+# fix https://github.com/datafuselabs/databend/issues/15570
+# fix https://github.com/datafuselabs/databend/issues/15572
+
 statement ok
-drop table bloom_test_nullable_t
+drop table if exists bloom_test_nullable_t2
+
+statement ok
+create table bloom_test_nullable_t2(c0 bool null, c1 int null, c2 varchar null) storage_format = 'native'
+
+statement ok
+insert into bloom_test_nullable_t2 values(false, 1, 'a'), (true, 5, null)
+
+query T
+explain select * from bloom_test_nullable_t2 where ((c2) in ('1') is null);
+----
+TableScan
+├── table: default.default.bloom_test_nullable_t2
+├── output columns: [c0 (#0), c1 (#1), c2 (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')], limit: NONE]
+└── estimated rows: 1.60
+
+query T
+explain select * from bloom_test_nullable_t2 where (not (not c0))
+----
+TableScan
+├── table: default.default.bloom_test_nullable_t2
+├── output columns: [c0 (#0), c1 (#1), c2 (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [is_true(NOT NOT bloom_test_nullable_t2.c0 (#0))], limit: NONE]
+└── estimated rows: 2.00
