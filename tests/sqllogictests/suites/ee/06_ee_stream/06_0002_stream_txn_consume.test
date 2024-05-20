@@ -289,8 +289,10 @@ SELECT c FROM s2;
 ----
 
 
+#######################################
+# consume inside explicit transaction #
+#######################################
 
-# consume inside explicit transaction
 
 statement ok
 create or replace table t_1 (
@@ -304,7 +306,7 @@ statement ok
 insert into t_1 (str) values ('a'), ('b');
 
 
-# rollback if txn failed
+# case 1: with consume should rollback-able (implicitly)
 
 onlyif http
 statement ok
@@ -332,8 +334,9 @@ select str from s_1 order by str;
 a
 b
 
+# case 2: with consume should rollback-able (explicitly)
+
 onlyif http
-# explicitly rollback
 statement ok
 begin;
 
@@ -362,11 +365,20 @@ b
 
 
 
+# case 3:  mixed with DMLs
+
 onlyif http
-# repeatable read of stream works
+statement ok
+create table tmp_sink like t_1;
+
+onlyif http
 statement ok
 begin;
 
+# normal dml (without consume, changes should not consumes)
+onlyif http
+statement ok
+insert into tmp_sink select str from s_1;
 
 onlyif http
 query I
@@ -375,21 +387,7 @@ select str from s_1 order by str;
 a
 b
 
-# after the first normal select, changes are still there
-onlyif http
-query I
-select str from s_1 order by str;
-----
-a
-b
-
-onlyif http
-query I
-select str from s_1 with consume order by str;
-----
-a
-b
-
+# and also rollback-able
 onlyif http
 statement ok
 rollback;
@@ -400,6 +398,37 @@ select str from s_1 order by str;
 ----
 a
 b
+
+
+# case 4:  disallows WITH CONSUME inside dml
+
+statement error 1005
+insert into tmp_sink select str from s_1 with consume;
+
+statement error 1005
+copy into tmp_sink select str from s_1 with consume;
+
+# allows explain
+
+# using statement to ignore the result (which may not be deterministic)
+
+statement ok
+explain select str from s_1 with consume;
+
+statement ok
+explain select str from s_1;
+
+# explain should not consume the stream
+onlyif http
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+
+
+
 
 statement ok
 drop database test_txn_stream;
