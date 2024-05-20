@@ -401,6 +401,54 @@ select str from s_1 order by str;
 a
 b
 
+onlyif http
+statement ok
+create or replace table target_1 (
+  str varchar
+);
+
+onlyif http
+statement ok
+create or replace table target_2 (
+  str varchar
+);
+
+onlyif http
+statement ok
+begin;
+
+onlyif http
+statement ok
+insert into target_1 select str from s_1;
+
+onlyif http
+query I
+select str from s_1 with consume order by str;
+----
+a
+b
+
+onlyif http
+statement ok
+insert into target_2 select str from s_1;
+
+onlyif http
+statement ok
+commit;
+
+onlyif http
+query I
+select str from target_1 order by str;
+----
+a
+b
+
+onlyif http
+query I
+select str from target_2 order by str;
+----
+
+
 statement ok
 drop database test_txn_stream;
 
