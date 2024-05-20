@@ -26,7 +26,6 @@ use parking_lot::RwLock;
 use prometheus_client::registry::Metric as PMetrics;
 use prometheus_client::registry::Registry;
 
-use super::process_collector::ProcessCollector;
 use crate::runtime::metrics::counter::Counter;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyCounterCreator as InnerFamilyCounterCreator;
@@ -40,6 +39,7 @@ use crate::runtime::metrics::gauge::Gauge;
 use crate::runtime::metrics::histogram::Histogram;
 use crate::runtime::metrics::histogram::BUCKET_MILLISECONDS;
 use crate::runtime::metrics::histogram::BUCKET_SECONDS;
+use crate::runtime::metrics::process_collector::ProcessCollector;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::ThreadTracker;
 

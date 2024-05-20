@@ -57,4 +57,5 @@ fn test_process_collector() {
     assert!(stat.max_fds > 0);
     assert!(stat.vsize > 0);
     assert!(stat.rss > 0);
+    assert!(stat.threads_num > 0);
 }
