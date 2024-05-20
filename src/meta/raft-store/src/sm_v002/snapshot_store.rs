@@ -30,9 +30,14 @@ use log::warn;
 use openraft::AnyError;
 use openraft::ErrorVerb;
 use openraft::SnapshotId;
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 use crate::config::RaftConfig;
+use crate::key_spaces::SMEntry;
 use crate::ondisk::DataVersion;
+use crate::sm_v002::SnapshotStat;
+use crate::sm_v002::WriteEntry;
 use crate::sm_v002::WriterV002;
 use crate::state_machine::MetaSnapshotId;
 
@@ -263,6 +268,49 @@ impl SnapshotStoreV002 {
         info!("dir: {}; invalid files: {:?}", dir, invalid_files);
 
         Ok((snapshot_ids, invalid_files))
+    }
+
+    /// Spawn a thread to receive snapshot data and write them to a snapshot file.
+    ///
+    /// It returns a sender to send entries and a handle to wait for the thread to finish.
+    /// Internally it calls tokio::spawn_blocking.
+    #[allow(clippy::type_complexity)]
+    pub fn spawn_writer_thread(
+        mut self,
+        context: impl Display + Send + Sync + 'static,
+    ) -> (
+        mpsc::Sender<WriteEntry<SMEntry>>,
+        JoinHandle<Result<(Self, SnapshotStat), io::Error>>,
+    ) {
+        // Add context information to io::Error
+
+        let (tx, rx) = mpsc::channel(64 * 1024);
+
+        // Spawn another thread to write entries to disk.
+        let join_handle = databend_common_base::runtime::spawn_blocking(move || {
+            let with_context =
+                |e: io::Error| io::Error::new(e.kind(), format!("{} while {}", e, context));
+
+            let mut writer = self.new_writer().map_err(|e| {
+                io::Error::new(e.source.kind(), format!("creating snapshot writer: {}", e))
+            })?;
+
+            info!("snapshot_writer_thread start writing: {}", context);
+            let cnt = writer.write_entries_sync(rx).map_err(with_context)?;
+
+            info!("snapshot_writer_thread committing...: {}", context);
+            let (snapshot_id, size) = writer.commit(None).map_err(with_context)?;
+
+            info!("snapshot_writer_thread commit done: {}", context);
+
+            Ok::<(Self, SnapshotStat), io::Error>((self, SnapshotStat {
+                snapshot_id,
+                size,
+                entry_cnt: cnt as u64,
+            }))
+        });
+
+        (tx, join_handle)
     }
 
     pub fn new_writer(&mut self) -> Result<WriterV002, SnapshotStoreError> {

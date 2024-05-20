@@ -17,26 +17,23 @@ use std::io;
 use std::io::BufWriter;
 use std::io::Seek;
 use std::io::Write;
-use std::time::Duration;
 
 use databend_common_meta_types::LogId;
-use futures::Stream;
-use futures_util::StreamExt;
 use log::debug;
 use log::info;
 
-use crate::key_spaces::RaftStoreEntry;
+use crate::key_spaces::SMEntry;
 use crate::sm_v002::SnapshotStoreV002;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 
 /// A write entry sent to snapshot writer.
 ///
-/// A `Commit` entry will flush the writer.
+/// A `Finish` entry indicates the end of the data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteEntry<T> {
     Data(T),
-    Commit,
+    Finish,
 }
 
 /// Write json lines snapshot data to [`SnapshotStoreV002`].
@@ -54,16 +51,6 @@ pub struct WriterV002<'a> {
 
     // Keep a mutable ref so that there could only be one writer at a time.
     snapshot_store: &'a mut SnapshotStoreV002,
-}
-
-impl<'a> io::Write for WriterV002<'a> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.inner.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
 }
 
 impl<'a> WriterV002<'a> {
@@ -89,77 +76,35 @@ impl<'a> WriterV002<'a> {
         Ok(writer)
     }
 
-    /// Write `Result` of entries to the snapshot, without flushing.
-    ///
-    /// Returns the count of entries
-    pub async fn write_entry_results<E>(
-        &mut self,
-        entry_results: impl Stream<Item = Result<RaftStoreEntry, E>>,
-    ) -> Result<usize, E>
-    where
-        E: std::error::Error + From<io::Error> + 'static,
-    {
-        let mut cnt = 0;
-        let data_version = self.snapshot_store.data_version();
-
-        let mut entry_results = std::pin::pin!(entry_results);
-
-        while let Some(ent) = entry_results.next().await {
-            let ent = ent?;
-
-            debug!(entry :? =(&ent); "write {} entry", data_version);
-
-            if let RaftStoreEntry::StateMachineMeta {
-                key: StateMachineMetaKey::LastApplied,
-                ref value,
-            } = ent
-            {
-                let last: LogId = value.clone().try_into().unwrap();
-                info!(last_applied :? =(last); "write last applied to snapshot");
-
-                assert!(
-                    self.last_applied.is_none(),
-                    "already seen a last_applied: {:?}",
-                    self.last_applied
-                );
-                self.last_applied = Some(last);
-            }
-
-            serde_json::to_writer(&mut *self, &ent)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-            self.write(b"\n")
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-            cnt += 1;
-
-            if cnt % 10_000 == 0 {
-                info!("Snapshot Writer has written {} kilo entries", cnt / 1000)
-            }
-        }
-
-        Ok(cnt)
-    }
-
     /// Write entries to the snapshot, without flushing.
     ///
     /// Returns the count of entries
     pub fn write_entries_sync(
         &mut self,
-        mut entries_rx: tokio::sync::mpsc::Receiver<WriteEntry<RaftStoreEntry>>,
+        mut entries_rx: tokio::sync::mpsc::Receiver<WriteEntry<SMEntry>>,
     ) -> Result<usize, io::Error> {
-        fn log_progress(c: usize) {
+        fn log_progress(start: std::time::Instant, c: usize) {
+            let avg = c / (start.elapsed().as_secs() as usize + 1);
+
             if c >= 10_000_000 {
                 info!(
-                    "Snapshot Writer has written {} million entries",
-                    c / 1_000_000
+                    "Snapshot Writer has written {} million entries; avg: {} kilo entries/s",
+                    c / 1_000_000,
+                    avg / 1_000,
                 )
             } else {
-                info!("Snapshot Writer has written {} kilo entries", c / 1_000)
+                info!(
+                    "Snapshot Writer has written {} kilo entries; avg: {} kilo entries/s",
+                    c / 1_000,
+                    avg / 1_000,
+                )
             }
         }
 
+        let now = std::time::Instant::now();
         let mut cnt = 0;
+        let mut next_progress_cnt = 1000;
+
         let data_version = self.snapshot_store.data_version();
 
         while let Some(ent) = entries_rx.blocking_recv() {
@@ -167,7 +112,7 @@ impl<'a> WriterV002<'a> {
 
             let ent = match ent {
                 WriteEntry::Data(ent) => ent,
-                WriteEntry::Commit => {
+                WriteEntry::Finish => {
                     info!(
                         "received Commit entry, written {} entries, quit and about to commit",
                         cnt
@@ -176,7 +121,7 @@ impl<'a> WriterV002<'a> {
                 }
             };
 
-            if let RaftStoreEntry::StateMachineMeta {
+            if let SMEntry::StateMachineMeta {
                 key: StateMachineMetaKey::LastApplied,
                 ref value,
             } = ent
@@ -192,28 +137,23 @@ impl<'a> WriterV002<'a> {
                 self.last_applied = Some(last);
             }
 
-            serde_json::to_writer(&mut *self, &ent)
+            serde_json::to_writer(&mut self.inner, &ent)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-            self.write(b"\n")
+            self.inner
+                .write(b"\n")
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
             cnt += 1;
 
-            // Yield to give up the CPU to avoid starving other tasks.
-            if cnt % 1000 == 0 {
-                std::thread::sleep(Duration::from_millis(1));
-            }
+            if cnt == next_progress_cnt {
+                log_progress(now, cnt);
 
-            #[allow(clippy::collapsible_else_if)]
-            if cnt < 1_000_000 {
-                if cnt % 10_000 == 0 {
-                    log_progress(cnt);
-                }
-            } else {
-                if cnt % 100_000 == 0 {
-                    log_progress(cnt);
-                }
+                // increase by 5%, but at least 50k, at most 800k
+                let step = std::cmp::min(next_progress_cnt / 20, 800_000);
+                let step = std::cmp::max(step, 50_000);
+
+                next_progress_cnt += step;
             }
         }
 
