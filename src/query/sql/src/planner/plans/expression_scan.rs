@@ -16,14 +16,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchemaRef;
 
 use crate::optimizer::ColumnSet;
-use crate::optimizer::ColumnStatSet;
-use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -35,7 +32,7 @@ use crate::plans::RelOp;
 use crate::ScalarExpr;
 
 // Constant table is a table with constant values.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExpressionScan {
     pub expression_scan_index: usize,
     pub values: Vec<Vec<ScalarExpr>>,
@@ -63,6 +60,21 @@ impl ExpressionScan {
         }
         self.column_indexes.remove(index);
         self.data_types.remove(index);
+    }
+}
+
+impl std::hash::Hash for ExpressionScan {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.expression_scan_index.hash(state);
+        for row in self.values.iter() {
+            for scalar in row {
+                scalar.hash(state);
+            }
+        }
+        self.num_scalar_columns.hash(state);
+        self.cache_index.hash(state);
+        self.column_indexes.hash(state);
+        self.data_types.hash(state);
     }
 }
 

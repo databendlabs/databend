@@ -15,12 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
 use crate::optimizer::ColumnSet;
-use crate::optimizer::ColumnStatSet;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -31,7 +29,7 @@ use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CacheSource {
     HashJoinBuild((usize, Vec<usize>)),
 }
@@ -48,7 +46,7 @@ impl CacheSource {
 }
 
 // Constant table is a table with constant values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheScan {
     pub cache_source: CacheSource,
     pub columns: ColumnSet,
@@ -79,17 +77,14 @@ impl CacheScan {
     }
 }
 
-impl PartialEq for CacheScan {
-    fn eq(&self, other: &Self) -> bool {
-        self.cache_source == other.cache_source
-    }
-}
-
-impl Eq for CacheScan {}
-
 impl std::hash::Hash for CacheScan {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.cache_source.hash(state);
+        let mut column = self.columns.iter().collect::<Vec<_>>();
+        column.sort();
+        for column in column.iter() {
+            column.hash(state);
+        }
     }
 }
 
