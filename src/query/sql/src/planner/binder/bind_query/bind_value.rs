@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -463,111 +464,158 @@ pub async fn bind_values(
     if !cache_indexes.is_empty() {
         if cache_indexes.len() > 1 {
             return Err(ErrorCode::SemanticError(
-                "Values can only reference one cache index".to_string(),
+                "Values can only reference one cache".to_string(),
             )
             .set_span(span));
         }
         let cache_index = *cache_indexes.iter().next().unwrap();
-
         let expression_scan_info = expression_scan_info.unwrap();
-        expression_scan_info.add_used_cache_index(cache_index);
-        let expression_scan_index = expression_scan_info.add_expression_scan();
-        // Get the columns in the cache.
-        let cache_columns = expression_scan_info.get_cache_columns(cache_index).clone();
+        bind_expression_scan(
+            metadata,
+            bind_context,
+            num_values,
+            num_columns,
+            column_scalars,
+            column_common_type,
+            cache_index,
+            expression_scan_info,
+        )
+    } else {
+        bind_constant_scan(
+            ctx,
+            metadata,
+            bind_context,
+            span,
+            num_values,
+            num_columns,
+            column_scalars,
+            column_common_type,
+        )
+    }
+}
 
-        let mut scalars = vec![Vec::with_capacity(num_columns + cache_columns.len()); num_values];
-        for (column_idx, column) in column_scalars.iter().enumerate() {
-            for (row_idx, (scalar, data_type)) in column.iter().enumerate() {
-                let scalar = if data_type != &column_common_type[column_idx] {
-                    wrap_cast(scalar, &column_common_type[column_idx])
-                } else {
-                    scalar.clone()
-                };
-                scalars[row_idx].push(scalar);
-            }
+pub fn bind_expression_scan(
+    metadata: MetadataRef,
+    bind_context: &mut BindContext,
+    num_values: usize,
+    num_columns: usize,
+    column_scalars: Vec<Vec<(ScalarExpr, DataType)>>,
+    mut column_common_type: Vec<DataType>,
+    cache_index: usize,
+    expression_scan_info: &mut ExpressionScanContext,
+) -> Result<(SExpr, BindContext)> {
+    // Add the cache index to the used cache indexes.
+    expression_scan_info.add_used_cache_index(cache_index);
+    // Get the columns in the cache.
+    let cache_columns = expression_scan_info.get_cache_columns(cache_index).clone();
+    // Generate expression scan index.
+    let expression_scan_index = expression_scan_info.add_expression_scan();
+    // The scalars include the values and the cache columns.
+    let mut scalars = vec![Vec::with_capacity(num_columns + cache_columns.len()); num_values];
+    for (column_idx, column) in column_scalars.iter().enumerate() {
+        for (row_idx, (scalar, data_type)) in column.iter().enumerate() {
+            let scalar = if data_type != &column_common_type[column_idx] {
+                wrap_cast(scalar, &column_common_type[column_idx])
+            } else {
+                scalar.clone()
+            };
+            scalars[row_idx].push(scalar);
         }
-
-        let mut metadata = metadata.write();
-
-        // assigns default column names col0, col1, etc.
-        let names = (0..num_columns + cache_columns.len())
-            .map(|i| format!("col{}", i))
-            .collect::<Vec<_>>();
-        for column in cache_columns.iter() {
-            column_common_type.push(*column.data_type.clone());
-        }
-        let mut expression_scan_fields = Vec::with_capacity(names.len());
-        for (name, data_type) in names.into_iter().zip(column_common_type.iter()) {
-            let value_field = DataField::new(&name, data_type.clone());
-            expression_scan_fields.push(value_field);
-        }
-
-        // Column index for the each column.
-        let mut column_indexes = Vec::with_capacity(num_columns + cache_columns.len());
-
-        for (idx, field) in expression_scan_fields.iter().take(num_columns).enumerate() {
-            let index =
-                metadata.add_derived_column(field.name().clone(), field.data_type().clone());
-            let column_binding = ColumnBindingBuilder::new(
-                format!("expr_scan_{}", idx),
-                index,
-                Box::new(field.data_type().clone()),
-                Visibility::Visible,
-            )
-            .build();
-            bind_context.add_column_binding(column_binding);
-            column_indexes.push(index);
-        }
-
-        let mut outer_columns = ColumnSet::new();
-        for (idx, cache_column) in cache_columns.iter().enumerate() {
-            outer_columns.insert(cache_column.index);
-            for row_scalars in scalars.iter_mut() {
-                let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: cache_column.clone(),
-                });
-                row_scalars.push(scalar);
-            }
-
-            let column_entry = metadata.column(cache_column.index);
-            let name = column_entry.name();
-            let data_type = column_entry.data_type();
-            let new_column_index = metadata.add_derived_column(name.clone(), data_type.clone());
-            let new_column_binding = ColumnBindingBuilder::new(
-                format!("expr_scan_{}", idx + num_columns),
-                new_column_index,
-                Box::new(data_type),
-                Visibility::Visible,
-            )
-            .build();
-
-            bind_context.add_column_binding(new_column_binding);
-            column_indexes.push(new_column_index);
-            expression_scan_info.add_expression_scan_column(
-                expression_scan_index,
-                cache_column.index,
-                new_column_index,
-            );
-        }
-
-        let s_expr = SExpr::create_leaf(Arc::new(
-            ExpressionScan {
-                expression_scan_index,
-                values: scalars,
-                num_scalar_columns: num_columns,
-                cache_index,
-                data_types: column_common_type,
-                column_indexes,
-                outer_columns,
-                schema: DataSchemaRefExt::create(vec![]),
-            }
-            .into(),
-        ));
-
-        return Ok((s_expr, bind_context.clone()));
     }
 
+    // Assigns default column names col0, col1, etc.
+    let names = (0..num_columns + cache_columns.len())
+        .map(|i| format!("col{}", i))
+        .collect::<Vec<_>>();
+    let mut expression_scan_fields = Vec::with_capacity(names.len());
+    for column in cache_columns.iter() {
+        column_common_type.push(*column.data_type.clone());
+    }
+    // Build expression scan fields.
+    for (name, data_type) in names.into_iter().zip(column_common_type.iter()) {
+        let value_field = DataField::new(&name, data_type.clone());
+        expression_scan_fields.push(value_field);
+    }
+
+    let mut metadata = metadata.write();
+    // Column index for the each column.
+    let mut column_indexes = Vec::with_capacity(num_columns + cache_columns.len());
+    // Add column bindings for expression scan columns.
+    for (idx, field) in expression_scan_fields.iter().take(num_columns).enumerate() {
+        let index = metadata.add_derived_column(field.name().clone(), field.data_type().clone());
+        let column_binding = ColumnBindingBuilder::new(
+            format!("expr_scan_{}", idx),
+            index,
+            Box::new(field.data_type().clone()),
+            Visibility::Visible,
+        )
+        .build();
+        bind_context.add_column_binding(column_binding);
+        column_indexes.push(index);
+    }
+
+    // Add column bindings for cache columns.
+    let mut outer_columns = ColumnSet::new();
+    for (idx, cache_column) in cache_columns.iter().enumerate() {
+        outer_columns.insert(cache_column.index);
+        for row_scalars in scalars.iter_mut() {
+            let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: cache_column.clone(),
+            });
+            row_scalars.push(scalar);
+        }
+
+        let column_entry = metadata.column(cache_column.index);
+        let name = column_entry.name();
+        let data_type = column_entry.data_type();
+        let new_column_index = metadata.add_derived_column(name.clone(), data_type.clone());
+        let new_column_binding = ColumnBindingBuilder::new(
+            format!("expr_scan_{}", idx + num_columns),
+            new_column_index,
+            Box::new(data_type),
+            Visibility::Visible,
+        )
+        .build();
+
+        bind_context.add_column_binding(new_column_binding);
+        column_indexes.push(new_column_index);
+
+        // Record the mapping between original index (cache index in hash join build side) and derived index.
+        expression_scan_info.add_expression_scan_column(
+            expression_scan_index,
+            cache_column.index,
+            new_column_index,
+        );
+    }
+
+    let s_expr = SExpr::create_leaf(Arc::new(
+        ExpressionScan {
+            expression_scan_index,
+            values: scalars,
+            num_scalar_columns: num_columns,
+            cache_index,
+            data_types: column_common_type,
+            column_indexes,
+            outer_columns,
+            schema: DataSchemaRefExt::create(vec![]),
+        }
+        .into(),
+    ));
+
+    Ok((s_expr, bind_context.clone()))
+}
+
+pub fn bind_constant_scan(
+    ctx: Arc<dyn TableContext>,
+    metadata: MetadataRef,
+    bind_context: &mut BindContext,
+    span: Span,
+    num_values: usize,
+    num_columns: usize,
+    column_scalars: Vec<Vec<(ScalarExpr, DataType)>>,
+    column_common_type: Vec<DataType>,
+) -> Result<(SExpr, BindContext)> {
     let names = (0..num_columns)
         .map(|i| format!("col{}", i))
         .collect::<Vec<_>>();
@@ -616,7 +664,7 @@ pub async fn bind_values(
 
     // add column bindings
     let mut columns = ColumnSet::new();
-    let mut fields = Vec::with_capacity(values.len());
+    let mut fields = Vec::with_capacity(num_values);
     for value_field in value_schema.fields() {
         let index = metadata
             .write()
