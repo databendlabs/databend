@@ -145,7 +145,7 @@ impl<'a> Binder {
         let plan = match stmt {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
-                
+
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
                     if !cte_info.materialized || cte_info.used_count == 0 {
