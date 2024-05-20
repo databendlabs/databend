@@ -308,26 +308,21 @@ insert into t_1 (str) values ('a'), ('b');
 
 # case 1: with consume should rollback-able (implicitly)
 
-onlyif http
 statement ok
 begin;
 
-onlyif http
 query I
 select str from s_1 with consume order by str;
 ----
 a
 b
 
-onlyif http
 statement error 1006
 select 1/0;
 
-onlyif http
 statement ok
 commit;
 
-onlyif http
 query I
 select str from s_1 order by str;
 ----
@@ -336,11 +331,9 @@ b
 
 # case 2: with consume should rollback-able (explicitly)
 
-onlyif http
 statement ok
 begin;
 
-onlyif http
 query I
 select str from s_1 with consume order by str;
 ----
@@ -348,15 +341,12 @@ a
 b
 
 # inside txn, s_1 is consumed, expects empty result set
-onlyif http
 query I
 select str from s_1;
 
-onlyif http
 statement ok
 rollback;
 
-onlyif http
 query I
 select str from s_1 order by str;
 ----
@@ -370,17 +360,14 @@ b
 statement ok
 create table tmp_sink like t_1;
 
-onlyif http
 statement ok
 begin;
 
 # normal dml
-onlyif http
 statement ok
 insert into tmp_sink select str from s_1;
 
 # changes should not be consumed
-onlyif http
 query I
 select str from s_1 order by str;
 ----
@@ -388,7 +375,6 @@ a
 b
 
 # but changes should be captured by insert stmt
-onlyif http
 query I
 select count() from tmp_sink
 ----
@@ -396,29 +382,23 @@ select count() from tmp_sink
 
 # dml and stream consume
 
-onlyif http
 statement ok
 select str from s_1 with consume;
 
-onlyif http
 statement ok
 truncate table tmp_sink;
 
-onlyif http
 statement ok
 insert into tmp_sink select str from s_1;
 
-onlyif http
 query I
 select count() from tmp_sink
 ----
 0
 
-onlyif http
 statement ok
 commit;
 
-onlyif http
 query I
 select str from s_1 order by str;
 ----
@@ -446,56 +426,46 @@ statement ok
 explain select str from s_1;
 
 # explain should not consume the stream
-onlyif http
 query I
 select str from s_1 order by str;
 ----
 a
 b
 
-onlyif http
 statement ok
 create or replace table target_1 (
   str varchar
 );
 
-onlyif http
 statement ok
 create or replace table target_2 (
   str varchar
 );
 
-onlyif http
 statement ok
 begin;
 
-onlyif http
 statement ok
 insert into target_1 select str from s_1;
 
-onlyif http
 query I
 select str from s_1 with consume order by str;
 ----
 a
 b
 
-onlyif http
 statement ok
 insert into target_2 select str from s_1;
 
-onlyif http
 statement ok
 commit;
 
-onlyif http
 query I
 select str from target_1 order by str;
 ----
 a
 b
 
-onlyif http
 query I
 select str from target_2 order by str;
 ----
