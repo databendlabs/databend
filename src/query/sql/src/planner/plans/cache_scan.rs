@@ -113,17 +113,16 @@ impl Operator for CacheScan {
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
-            distribution: Distribution::Random,
+            distribution: Distribution::Serial,
         })
     }
 
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let column_stats: ColumnStatSet = Default::default();
         Ok(Arc::new(StatInfo {
             cardinality: 0.0,
             statistics: Statistics {
                 precise_cardinality: None,
-                column_stats,
+                column_stats: Default::default(),
             },
         }))
     }
@@ -133,10 +132,10 @@ impl Operator for CacheScan {
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _child_index: usize,
-        _required: &RequiredProperty,
+        required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Err(ErrorCode::Internal(
-            "CacheScan cannot compute required property for children".to_string(),
-        ))
+        let mut required = required.clone();
+        required.distribution = Distribution::Serial;
+        Ok(required.clone())
     }
 }

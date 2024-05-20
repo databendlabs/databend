@@ -35,7 +35,7 @@ use crate::plans::RelOp;
 use crate::ScalarExpr;
 
 // Constant table is a table with constant values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ExpressionScan {
     pub expression_scan_index: usize,
     pub values: Vec<Vec<ScalarExpr>>,
@@ -43,7 +43,6 @@ pub struct ExpressionScan {
     pub cache_index: usize,
     pub column_indexes: Vec<usize>,
     pub data_types: Vec<DataType>,
-    pub outer_columns: ColumnSet,
     pub schema: DataSchemaRef,
 }
 
@@ -58,7 +57,7 @@ impl ExpressionScan {
         Ok(columns)
     }
 
-    pub fn remove_column(&mut self, index: usize) {
+    pub fn remove_cache_column(&mut self, index: usize) {
         for row in self.values.iter_mut() {
             row.remove(index);
         }
@@ -67,55 +66,34 @@ impl ExpressionScan {
     }
 }
 
-impl PartialEq for ExpressionScan {
-    fn eq(&self, other: &Self) -> bool {
-        self.values == other.values
-    }
-}
-
-impl Eq for ExpressionScan {}
-
-impl std::hash::Hash for ExpressionScan {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        for row in self.values.iter() {
-            for value in row {
-                value.hash(state);
-            }
-        }
-    }
-}
-
 impl Operator for ExpressionScan {
     fn rel_op(&self) -> RelOp {
-        RelOp::ConstantTableScan
+        RelOp::ExpressionScan
     }
 
     fn arity(&self) -> usize {
-        0
+        1
     }
 
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {
             output_columns: self.column_indexes.clone().into_iter().collect(),
-            outer_columns: self.outer_columns.clone(),
+            outer_columns: self.used_columns()?,
             used_columns: self.used_columns()?,
             orderings: vec![],
         }))
     }
 
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
-        })
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        rel_expr.derive_physical_prop_child(0)
     }
 
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let column_stats: ColumnStatSet = Default::default();
         Ok(Arc::new(StatInfo {
             cardinality: 0.0,
             statistics: Statistics {
                 precise_cardinality: None,
-                column_stats,
+                column_stats: Default::default(),
             },
         }))
     }
@@ -125,10 +103,8 @@ impl Operator for ExpressionScan {
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _child_index: usize,
-        _required: &RequiredProperty,
+        required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Err(ErrorCode::Internal(
-            "ExpressionScan cannot compute required property for children".to_string(),
-        ))
+        Ok(required.clone())
     }
 }

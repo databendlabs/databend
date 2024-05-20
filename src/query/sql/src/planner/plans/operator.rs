@@ -98,6 +98,7 @@ pub enum RelOp {
     ProjectSet,
     MaterializedCte,
     ConstantTableScan,
+    ExpressionScan,
     CacheScan,
     AddRowNumber,
     Udf,

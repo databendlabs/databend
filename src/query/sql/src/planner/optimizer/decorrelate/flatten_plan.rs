@@ -52,7 +52,6 @@ use crate::IndexType;
 use crate::TableInternalColumn;
 use crate::VirtualColumn;
 
-// select t1.a, t1.b from t1 join lateral (values(t1.b)) as v1 ("c1") on t1.b = v1.c1;
 impl SubqueryRewriter {
     pub fn flatten_plan(
         &mut self,

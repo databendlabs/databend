@@ -294,7 +294,7 @@ impl Binder {
                         self.expression_scan_context
                             .add_used_cache_column_index(scan.cache_index, original_index)
                     } else {
-                        scan.remove_column(index);
+                        scan.remove_cache_column(index);
                     }
                 }
 
@@ -555,9 +555,7 @@ pub fn bind_expression_scan(
     }
 
     // Add column bindings for cache columns.
-    let mut outer_columns = ColumnSet::new();
     for (idx, cache_column) in cache_columns.iter().enumerate() {
-        outer_columns.insert(cache_column.index);
         for row_scalars in scalars.iter_mut() {
             let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
@@ -597,7 +595,6 @@ pub fn bind_expression_scan(
             cache_index,
             data_types: column_common_type,
             column_indexes,
-            outer_columns,
             schema: DataSchemaRefExt::create(vec![]),
         }
         .into(),
