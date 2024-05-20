@@ -4876,6 +4876,7 @@ dependencies = [
  "crossbeam-channel",
  "databend-common-base",
  "databend-common-cache",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-metrics",
  "env_logger",

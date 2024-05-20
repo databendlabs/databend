@@ -26,6 +26,7 @@ use std::time::Instant;
 use databend_common_cache::Cache;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_cache::FileSize;
+use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
 use log::error;
 use log::info;
@@ -53,13 +54,19 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     ///
     /// The cache is not observant of changes to files under `path` from external sources, it
     /// expects to have sole maintenance of the contents.
-    pub fn new<T>(path: T, size: u64, fuzzy_reload_cache_keys: bool) -> self::result::Result<Self>
-    where PathBuf: From<T> {
+    pub fn new<T>(
+        path: T,
+        size: u64,
+        disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+    ) -> self::result::Result<Self>
+    where
+        PathBuf: From<T>,
+    {
         DiskCache {
             cache: C::with_meter_and_hasher(size, FileSize, DefaultHashBuilder::default()),
             root: PathBuf::from(path),
         }
-        .init(fuzzy_reload_cache_keys)
+        .init(disk_cache_key_reload_policy)
     }
 }
 
@@ -197,7 +204,10 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         Ok(me)
     }
 
-    fn init(self, fuzzy_reload_cache_keys: bool) -> self::result::Result<Self> {
+    fn init(
+        self,
+        disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+    ) -> self::result::Result<Self> {
         let begin = Instant::now();
         let parallelism = match std::thread::available_parallelism() {
             Ok(degree) => degree.get(),
@@ -221,20 +231,24 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
             .build()
             .expect("failed to build disk cache restart thread pool");
 
-        let ret = if fuzzy_reload_cache_keys {
-            info!("disk cache fuzzy restart");
-            let cache_root = self.root.clone();
-            let cache_holder = thread_pool
-                .install(|| Self::fuzzy_restart(&cache_root, Arc::new(RwLock::new(Some(self)))))?;
-            let me = {
-                let mut write_guard = cache_holder.write();
-                std::mem::take(&mut *write_guard).expect("failed to take back cache object")
-            };
-            me
-        } else {
-            info!("disk cache reset restart");
-            thread_pool.install(|| Self::reset_restart(&self.root))?;
-            self
+        let ret = match disk_cache_key_reload_policy {
+            DiskCacheKeyReloadPolicy::Reset => {
+                info!("disk cache reset restart");
+                thread_pool.install(|| Self::reset_restart(&self.root))?;
+                self
+            }
+            DiskCacheKeyReloadPolicy::Fuzzy => {
+                info!("disk cache fuzzy restart");
+                let cache_root = self.root.clone();
+                let cache_holder = thread_pool.install(|| {
+                    Self::fuzzy_restart(&cache_root, Arc::new(RwLock::new(Some(self))))
+                })?;
+                let me = {
+                    let mut write_guard = cache_holder.write();
+                    std::mem::take(&mut *write_guard).expect("failed to take back cache object")
+                };
+                me
+            }
         };
 
         fs::create_dir_all(&ret.root)?;

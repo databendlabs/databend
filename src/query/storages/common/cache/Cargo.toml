@@ -15,6 +15,7 @@ test = true
 bytes = { workspace = true }
 databend-common-base = { path = "../../../../common/base" }
 databend-common-cache = { path = "../../../../common/cache" }
+databend-common-config = { path = "../../../config" }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-metrics = { path = "../../../../common/metrics" }
 

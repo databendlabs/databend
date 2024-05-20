@@ -22,6 +22,7 @@ use databend_common_cache::Count;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_cache::FileSize;
 use databend_common_cache::LruCache;
+use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::error;
@@ -150,11 +151,10 @@ impl LruDiskCacheBuilder {
     pub fn new_disk_cache(
         path: &PathBuf,
         disk_cache_bytes_size: u64,
-        fuzzy_reload_cache_keys: bool,
+        disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
     ) -> Result<LruDiskCacheHolder> {
-        let external_cache =
-            DiskCache::new(path, disk_cache_bytes_size, fuzzy_reload_cache_keys)
-                .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
+        let external_cache = DiskCache::new(path, disk_cache_bytes_size, disk_cache_reload_policy)
+            .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         Ok(Arc::new(RwLock::new(external_cache)))
     }
 }
