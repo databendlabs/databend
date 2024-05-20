@@ -15,6 +15,7 @@
 mod disk_cache;
 mod memory_cache;
 mod table_data_cache;
+
 pub use disk_cache::result::Error as DiskCacheError;
 pub use disk_cache::result::Result as DiskCacheResult;
 pub use disk_cache::DiskCacheKey;
