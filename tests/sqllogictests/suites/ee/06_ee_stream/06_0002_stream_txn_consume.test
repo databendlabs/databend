@@ -367,7 +367,6 @@ b
 
 # case 3:  mixed with DMLs
 
-onlyif http
 statement ok
 create table tmp_sink like t_1;
 
@@ -425,10 +424,6 @@ select str from s_1 order by str;
 ----
 a
 b
-
-
-
-
 
 statement ok
 drop database test_txn_stream;
