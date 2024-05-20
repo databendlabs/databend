@@ -15,13 +15,9 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::state_machine::MetaSnapshotId;
-
 /// Snapshot stat.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SnapshotStat {
-    pub snapshot_id: MetaSnapshotId,
-
     /// Total number of entries in the snapshot.
     ///
     /// Including meta entries, such as seq, nodes, generic kv, and expire index
@@ -35,10 +31,8 @@ impl fmt::Display for SnapshotStat {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{{ snapshot_id: {}, entry_cnt: {}, size: {} }}",
-            self.snapshot_id.to_string(),
-            self.entry_cnt,
-            self.size
+            "{{ entry_cnt: {}, size: {} }}",
+            self.entry_cnt, self.size
         )
     }
 }
