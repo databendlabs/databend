@@ -164,8 +164,6 @@ fn test_evict_until_enough_space() {
 
 #[test]
 fn test_fuzzy_restart_parallelism() {
-    let _ = env_logger::builder().is_test(true).try_init();
-
     let f = TestFixture::new();
     let cache_root = f.tmp();
 
@@ -202,8 +200,6 @@ fn test_fuzzy_restart_parallelism() {
 
 #[test]
 fn test_reset_restart_parallelism() {
-    let _ = env_logger::builder().is_test(true).try_init();
-
     let f = TestFixture::new();
     let cache_root = f.tmp();
 
@@ -223,7 +219,7 @@ fn test_reset_restart_parallelism() {
         file.write_all(content.as_bytes()).unwrap();
     }
 
-    // Check that all files within prefix directories are removed
+    // Check that all files within prefix directories are properly created
     let prefix_dirs = fs::read_dir(cache_root).unwrap();
     let remaining_files = prefix_dirs
         .map(|entry| {
