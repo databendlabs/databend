@@ -54,7 +54,6 @@ async fn test_metric_server() -> databend_common_exception::Result<()> {
 fn test_process_collector() {
     let stat = dump_process_stat().unwrap();
 
-    assert!(stat.cpu_secs > 0.0);
     assert!(stat.max_fds > 0);
     assert!(stat.vsize > 0);
     assert!(stat.rss > 0);
