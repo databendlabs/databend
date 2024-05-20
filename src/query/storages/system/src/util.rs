@@ -118,12 +118,10 @@ pub(crate) async fn get_owned_task_names(
     user_api: Arc<UserApiProvider>,
     tenant: &Tenant,
     all_effective_roles: &[String],
+    has_admin_role: bool,
 ) -> Vec<String> {
     let mut owned_tasks_names = vec![];
-    let has_admin_role = all_effective_roles
-        .iter()
-        .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
-    if has_admin_role {
+    if !has_admin_role {
         // Note: In old version databend-query the hashmap maybe empty
         let task_ownerships = user_api
             .list_tasks_ownerships(tenant)

@@ -186,45 +186,60 @@ impl AsyncSystemTable for TaskHistoryTable {
             }
         }
 
-        let owned_tasks_names = get_owned_task_names(user_api, &tenant, &all_effective_roles).await;
-        if let Some(task_name) = &task_name {
-            // The user does not have admin role and not own the task_name
-            // Need directly return empty block
-            if !all_effective_roles
-                .iter()
-                .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN)
-                && !owned_tasks_names.contains(task_name)
-            {
-                info!(
-                    "--task_history:198 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
-                    all_effective_roles.clone(),
-                    owned_tasks_names.clone(),
-                    task_name.clone()
-                );
-                return parse_task_runs_to_datablock(vec![]);
+        let has_admin_role = all_effective_roles
+            .iter()
+            .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
+        let req = if has_admin_role {
+            ShowTaskRunsRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
+                scheduled_time_end: scheduled_time_end.unwrap_or("".to_string()),
+                task_name: task_name.unwrap_or("".to_string()),
+                result_limit: result_limit.unwrap_or(0), // 0 means default
+                error_only: false,
+                owners: all_effective_roles.clone(),
+                next_page_token: None,
+                page_size: None,
+                previous_page_token: None,
+                task_ids: vec![],
+                task_names: vec![],
+            };
+        } else {
+            let owned_tasks_names =
+                get_owned_task_names(user_api, &tenant, &all_effective_roles, has_admin_role).await;
+            if let Some(task_name) = &task_name {
+                // The user does not have admin role and not own the task_name
+                // Need directly return empty block
+                if !owned_tasks_names.contains(task_name) {
+                    info!(
+                        "--task_history:215 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
+                        all_effective_roles.clone(),
+                        owned_tasks_names.clone(),
+                        task_name.clone()
+                    );
+                    return parse_task_runs_to_datablock(vec![]);
+                }
             }
-        }
-
-        info!(
-            "--task_history:203 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
-            all_effective_roles.clone(),
-            owned_tasks_names.clone(),
-            task_name.clone()
-        );
-
-        let req = ShowTaskRunsRequest {
-            tenant_id: tenant.tenant_name().to_string(),
-            scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
-            scheduled_time_end: scheduled_time_end.unwrap_or("".to_string()),
-            task_name: task_name.unwrap_or("".to_string()),
-            result_limit: result_limit.unwrap_or(0), // 0 means default
-            error_only: false,
-            owners: all_effective_roles.clone(),
-            next_page_token: None,
-            page_size: None,
-            previous_page_token: None,
-            task_ids: vec![],
-            task_names: owned_tasks_names.clone(),
+            info!(
+                "--task_history:224 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
+                all_effective_roles.clone(),
+                owned_tasks_names.clone(),
+                task_name.clone()
+            );
+            ShowTaskRunsRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
+                scheduled_time_end: scheduled_time_end.unwrap_or("".to_string()),
+                task_name: task_name.unwrap_or("".to_string()),
+                result_limit: result_limit.unwrap_or(0), // 0 means default
+                error_only: false,
+                owners: all_effective_roles.clone(),
+                next_page_token: None,
+                page_size: None,
+                previous_page_token: None,
+                task_ids: vec![],
+                task_names: owned_tasks_names.clone(),
+            };
         };
 
         let cloud_api = CloudControlApiProvider::instance();

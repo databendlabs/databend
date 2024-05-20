@@ -159,38 +159,53 @@ impl AsyncSystemTable for TasksTable {
                 });
             }
         }
-        let owned_tasks_names = get_owned_task_names(user_api, &tenant, &all_effective_roles).await;
-        if let Some(task_name) = &task_name {
-            // The user does not have admin role and not own the task_name
-            // Need directly return empty block
-            if !all_effective_roles
-                .iter()
-                .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN)
-                && !owned_tasks_names.contains(task_name)
-            {
-                info!(
-                    "--tasks:171 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
-                    all_effective_roles.clone(),
-                    owned_tasks_names.clone(),
-                    task_name.clone()
-                );
+
+        let has_admin_role = all_effective_roles
+            .iter()
+            .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
+
+        let req = if has_admin_role {
+            ShowTasksRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                name_like: "".to_string(),
+                result_limit: 10000, // TODO: use plan.limit pushdown
+                owners: all_effective_roles.clone(),
+                task_ids: vec![],
+                task_names: vec![],
+            }
+        } else {
+            let owned_tasks_names =
+                get_owned_task_names(user_api, &tenant, &all_effective_roles, has_admin_role).await;
+            if let Some(task_name) = &task_name {
+                // The user does not have admin role and not own the task_name
+                // Need directly return empty block
+                if !owned_tasks_names.contains(task_name) {
+                    info!(
+                        "--tasks:184 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
+                        all_effective_roles.clone(),
+                        owned_tasks_names.clone(),
+                        task_name.clone()
+                    );
+                    return parse_task_runs_to_datablock(vec![]);
+                }
+            }
+            info!(
+                "--tasks:193 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
+                all_effective_roles.clone(),
+                owned_tasks_names.clone(),
+                task_name.clone()
+            );
+            if owned_tasks_names.is_empty() {
                 return parse_task_runs_to_datablock(vec![]);
             }
-        }
-        info!(
-            "--tasks:175 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
-            all_effective_roles.clone(),
-            owned_tasks_names.clone(),
-            task_name.clone()
-        );
-
-        let req = ShowTasksRequest {
-            tenant_id: tenant.tenant_name().to_string(),
-            name_like: "".to_string(),
-            result_limit: 10000, // TODO: use plan.limit pushdown
-            owners: all_effective_roles.clone(),
-            task_ids: vec![],
-            task_names: owned_tasks_names.clone(),
+            ShowTasksRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                name_like: "".to_string(),
+                result_limit: 10000, // TODO: use plan.limit pushdown
+                owners: all_effective_roles.clone(),
+                task_ids: vec![],
+                task_names: owned_tasks_names.clone(),
+            }
         };
 
         let cloud_api = CloudControlApiProvider::instance();

@@ -923,7 +923,7 @@ error:
   --> SQL:1:22
   |
 1 | GRANT CREATE TASK ON task mytask1 TO role role1
-  | ----- ------         ^^^^ unexpected `task`, expecting `FALSE`, <QuotedString>, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `*`, or <Ident>
+  | ----- ------         ^^^^ unexpected `task`, expecting <LiteralString>, `FALSE`, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `*`, or <Ident>
   | |     |               
   | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -948,7 +948,7 @@ error:
   --> SQL:1:17
   |
 1 | GRANT select ON task MyTask1 TO u2
-  |                 ^^^^ unexpected `task`, expecting `FALSE`, `TABLE`, <QuotedString>, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `DATABASE`, `*`, or <Ident>
+  |                 ^^^^ unexpected `task`, expecting <LiteralString>, `FALSE`, `TABLE`, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `DATABASE`, `*`, or <Ident>
 
 
 ---------- Input ----------
@@ -958,6 +958,6 @@ error:
   --> SQL:1:16
   |
 1 | GRANT usage ON task MyTask1 TO u1
-  |                ^^^^ unexpected `task`, expecting `FALSE`, `TABLE`, <QuotedString>, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `DATABASE`, `UDF`, `*`, or <Ident>
+  |                ^^^^ unexpected `task`, expecting <LiteralString>, `FALSE`, `TABLE`, <LiteralInteger>, `TRUE`, `IDENTIFIER`, <PGLiteralHex>, <MySQLLiteralHex>, `DATABASE`, `UDF`, `*`, or <Ident>
 
 
