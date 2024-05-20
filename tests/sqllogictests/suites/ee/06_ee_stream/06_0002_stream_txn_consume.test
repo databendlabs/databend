@@ -288,6 +288,119 @@ query I
 SELECT c FROM s2;
 ----
 
+
+
+# consume inside explicit transaction
+
+statement ok
+create or replace table t_1 (
+  str varchar
+);
+
+statement ok
+create or replace stream s_1 on table t_1 append_only = true;
+
+statement ok
+insert into t_1 (str) values ('a'), ('b');
+
+
+# rollback if txn failed
+
+onlyif http
+statement ok
+begin;
+
+onlyif http
+query I
+select str from s_1 with consume order by str;
+----
+a
+b
+
+onlyif http
+statement error 1006
+select 1/0;
+
+onlyif http
+statement ok
+commit;
+
+onlyif http
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+onlyif http
+# explicitly rollback
+statement ok
+begin;
+
+onlyif http
+query I
+select str from s_1 with consume order by str;
+----
+a
+b
+
+# inside txn, s_1 is consumed, expects empty result set
+onlyif http
+query I
+select str from s_1;
+
+onlyif http
+statement ok
+rollback;
+
+onlyif http
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+
+
+onlyif http
+# repeatable read of stream works
+statement ok
+begin;
+
+
+onlyif http
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+# after the first normal select, changes are still there
+onlyif http
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+onlyif http
+query I
+select str from s_1 with consume order by str;
+----
+a
+b
+
+onlyif http
+statement ok
+rollback;
+
+onlyif http
+query I
+select str from s_1 order by str;
+----
+a
+b
+
 statement ok
 drop database test_txn_stream;
 
