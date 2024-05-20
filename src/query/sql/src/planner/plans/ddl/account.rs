@@ -115,6 +115,7 @@ impl ShowRolesPlan {
         DataSchemaRefExt::create(vec![
             DataField::new("name", DataType::String),
             DataField::new("inherited_roles", DataType::Number(NumberDataType::UInt64)),
+            DataField::new("inherited_roles_name", DataType::String),
             DataField::new("is_current", DataType::Boolean),
             DataField::new("is_default", DataType::Boolean),
         ])

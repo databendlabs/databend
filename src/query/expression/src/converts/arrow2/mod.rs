@@ -22,4 +22,3 @@ pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
 pub const ARROW_EXT_TYPE_GEOMETRY: &str = "Geometry";
 
 pub use to::set_validities;
-pub use to::table_field_to_arrow2_field_ignore_inside_nullable;

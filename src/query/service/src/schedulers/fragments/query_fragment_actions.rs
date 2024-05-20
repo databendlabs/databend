@@ -22,14 +22,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_types::NodeInfo;
-use itertools::Itertools;
 
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchange;
-use crate::servers::flight::v1::packets::ConnectionInfo;
+use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
 use crate::servers::flight::v1::packets::ExecutePartialQueryPacket;
 use crate::servers::flight::v1::packets::FragmentPlanPacket;
-use crate::servers::flight::v1::packets::InitNodesChannelPacket;
+use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -205,56 +204,20 @@ impl QueryFragmentsActions {
         ))
     }
 
-    pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
-        let nodes_info = Self::nodes_info(&self.ctx);
-        let local_id = self.ctx.get_cluster().local_id.clone();
-        let connections_info = self.fragments_connections();
-        let statistics_connections = self.statistics_connections();
+    pub fn get_query_env(&self) -> Result<QueryEnv> {
+        let mut builder = DataflowDiagramBuilder::create(self.ctx.get_cluster().nodes.clone());
 
-        let mut init_nodes_channel_packets = Vec::with_capacity(connections_info.len());
+        self.fragments_connections(&mut builder)?;
+        self.statistics_connections(&mut builder)?;
 
-        for (executor, fragments_connections) in &connections_info {
-            if !nodes_info.contains_key(executor) {
-                return Err(ErrorCode::NotFoundClusterNode(format!(
-                    "Not found node {} in cluster. cluster nodes: {:?}",
-                    executor,
-                    nodes_info.keys().cloned().collect::<Vec<_>>()
-                )));
-            }
-
-            let executor_node_info = &nodes_info[executor];
-            let mut connections_info = Vec::with_capacity(fragments_connections.len());
-
-            for (source, fragments) in fragments_connections {
-                if !nodes_info.contains_key(source) {
-                    return Err(ErrorCode::NotFoundClusterNode(format!(
-                        "Not found node {} in cluster. cluster nodes: {:?}",
-                        source,
-                        nodes_info.keys().cloned().collect::<Vec<_>>()
-                    )));
-                }
-
-                connections_info.push(ConnectionInfo::create(
-                    nodes_info[source].clone(),
-                    fragments.iter().cloned().unique().collect::<Vec<_>>(),
-                ));
-            }
-
-            init_nodes_channel_packets.push(InitNodesChannelPacket::create(
-                self.ctx.get_id(),
-                executor_node_info.clone(),
-                connections_info,
-                match executor_node_info.id == local_id {
-                    true => statistics_connections.clone(),
-                    false => vec![],
-                },
-                self.ctx
-                    .get_settings()
-                    .get_create_query_flight_client_with_current_rt()?,
-            ));
-        }
-
-        Ok(init_nodes_channel_packets)
+        Ok(QueryEnv {
+            query_id: self.ctx.get_id(),
+            dataflow_diagram: Arc::new(builder.build()),
+            create_rpc_clint_with_current_rt: self
+                .ctx
+                .get_settings()
+                .get_create_query_flight_client_with_current_rt()?,
+        })
     }
 
     pub fn get_execute_partial_query_packets(&self) -> Result<Vec<ExecutePartialQueryPacket>> {
@@ -273,9 +236,7 @@ impl QueryFragmentsActions {
     }
 
     /// unique map(target, map(source, vec(fragment_id)))
-    fn fragments_connections(&self) -> HashMap<String, HashMap<String, Vec<usize>>> {
-        let mut target_source_fragments = HashMap::<String, HashMap<String, Vec<usize>>>::new();
-
+    fn fragments_connections(&self, builder: &mut DataflowDiagramBuilder) -> Result<()> {
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let fragment_id = fragment_actions.fragment_id;
@@ -285,59 +246,23 @@ impl QueryFragmentsActions {
                     let source = fragment_action.executor.to_string();
 
                     for destination in &destinations {
-                        if &source == destination {
-                            continue;
-                        }
-
-                        if target_source_fragments.contains_key(destination) {
-                            let source_fragments = target_source_fragments
-                                .get_mut(destination)
-                                .expect("Target fragments expect source");
-
-                            if source_fragments.contains_key(&source) {
-                                source_fragments
-                                    .get_mut(&source)
-                                    .expect("Source target fragments expect destination")
-                                    .push(fragment_id);
-
-                                continue;
-                            }
-                        }
-
-                        if target_source_fragments.contains_key(destination) {
-                            let source_fragments = target_source_fragments
-                                .get_mut(destination)
-                                .expect("Target fragments expect source");
-
-                            source_fragments.insert(source.clone(), vec![fragment_id]);
-                            continue;
-                        }
-
-                        let mut target_fragments = HashMap::new();
-                        target_fragments.insert(source.clone(), vec![fragment_id]);
-                        target_source_fragments.insert(destination.clone(), target_fragments);
+                        builder.add_data_edge(&source, destination, fragment_id)?;
                     }
                 }
             }
         }
 
-        target_source_fragments
+        Ok(())
     }
 
-    fn statistics_connections(&self) -> Vec<ConnectionInfo> {
+    fn statistics_connections(&self, builder: &mut DataflowDiagramBuilder) -> Result<()> {
         let local_id = self.ctx.get_cluster().local_id.clone();
-        let nodes_info = Self::nodes_info(&self.ctx);
-        let mut target_source_connections = Vec::with_capacity(nodes_info.len());
 
-        for (id, node_info) in nodes_info {
-            if local_id == id {
-                continue;
-            }
-
-            target_source_connections.push(ConnectionInfo::create(node_info, vec![]));
+        for (_id, node_info) in Self::nodes_info(&self.ctx) {
+            builder.add_statistics_edge(&node_info.id, &local_id)?;
         }
 
-        target_source_connections
+        Ok(())
     }
 
     fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {
@@ -377,7 +302,7 @@ impl QueryFragmentsActions {
 }
 
 impl Debug for QueryFragmentsActions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("QueryFragmentsActions")
             .field("actions", &self.fragments_actions)
             .finish()

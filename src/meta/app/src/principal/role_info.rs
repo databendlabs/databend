@@ -65,7 +65,7 @@ impl TryFrom<Vec<u8>> for RoleInfo {
 }
 
 impl Display for RoleInfoSerdeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} cause: {}", self.message, self.source)
     }
 }

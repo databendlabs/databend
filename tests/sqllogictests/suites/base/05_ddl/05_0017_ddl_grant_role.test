@@ -55,6 +55,31 @@ GRANT ROLE role1 TO ROLE role2
 statement ok
 GRANT ROLE role2 TO ROLE role3
 
+statement ok
+GRANT ROLE test TO ROLE role3
+
+query TTTT
+show roles
+----
+account_admin 0 (empty) 1 1
+public 0 (empty) 0 0
+role1 0 (empty) 0 0
+role2 1 role1 0 0
+role3 2 role2, test 0 0
+test 0 (empty) 0 0
+test-role 1 test 0 0
+
+query TTT
+select * from system.roles order by name;
+----
+account_admin 0 (empty)
+public 0 (empty)
+role1 0 (empty)
+role2 1 role1
+role3 2 role2, test
+test 0 (empty)
+test-role 1 test
+
 statement error 2206
 GRANT ROLE role3 TO ROLE role1
 

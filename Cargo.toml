@@ -158,14 +158,14 @@ chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
-ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
+ethnum = { version = "1.5.0" }
 feature-set = { version = "0.1.1" }
 geo = { version = "0.27.0", features = ["use-serde"] }
 geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
-geozero = { version = "0.11.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
+geozero = { version = "0.12.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 itertools = "0.10.5"
 match-template = "0.0.1"
-mysql_async = { version = "0.33", default-features = false, features = ["rustls-tls"] }
+mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
 ordered-float = { version = "4.1.0", default-features = false }
 poem = { version = "3.0", features = ["rustls", "multipart", "compression"] }
 prometheus-client = "0.22"
@@ -190,6 +190,7 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 derive-visitor = "0.3.0"
 http = "1"
+criterion = "0.5"
 
 # Synchronization
 dashmap = "5.4.0"
@@ -222,17 +223,19 @@ arrow-schema = { version = "51", features = ["serde"] }
 arrow-select = { version = "51" }
 parquet = { version = "51", features = ["async"] }
 parquet_rs = { package = "parquet", version = "51" }
+# Must use the same version with arrow-ipc
+flatbuffers = { version = "23" }
 
 # Crates from risingwavelabs
-arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "a8fdfdd" }
-arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "a8fdfdd" }
+arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
+arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
 
 # Serialization
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
-tonic-build = { version = "0.10.2" }
+tonic-build = { version = "0.11" }
 
 # Memory management
 bumpalo = "3.12.0"
@@ -241,14 +244,13 @@ tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 # Observability
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.5"
-minitrace = { version = "0.6", features = ["enable"] }
-minitrace-opentelemetry = "0.6"
+minitrace = { version = "0.6.5", features = ["enable"] }
+minitrace-opentelemetry = "0.6.5"
 opentelemetry = { version = "0.22", features = ["trace", "logs"] }
 opentelemetry-otlp = { version = "0.15", features = ["trace", "logs", "grpc-tonic"] }
 opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
-console-subscriber = { version = "0.2.0" }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 [profile.release]
@@ -296,12 +298,8 @@ rpath = false
 [patch.crates-io]
 arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
-micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" }
+ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
-geozero = { git = "https://github.com/georust/geozero", rev = "1d78b36" }
-# Wait for upstream to release new version.
-minitrace = { package = "minitrace", git = "https://github.com/tikv/minitrace-rust", rev = "b987f64" }
-minitrace-opentelemetry = { package = "minitrace-opentelemetry", git = "https://github.com/tikv/minitrace-rust", rev = "b987f64" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }

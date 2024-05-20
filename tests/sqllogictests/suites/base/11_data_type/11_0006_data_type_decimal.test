@@ -262,6 +262,7 @@ SELECT CAST(987654321.34 AS DECIMAL(76, 2)) / CAST(1.23 AS DECIMAL(76, 2)) AS re
 ----
 802970992.95934959
 
+
 ## negative
 
 query I
@@ -370,6 +371,17 @@ select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select (number+1
 DECIMAL(41, 3) DECIMAL(41, 3) DECIMAL(76, 5) DECIMAL(48, 8)
 
 ## compare
+
+## issue: https://github.com/datafuselabs/databend/issues/15568
+query IIII
+SELECT (0.123)>(-1.1), (0.1234)>(-1.1), (0.1234)>(-12.1), (0.1234)>(-123.1)
+----
+1 1 1 1
+
+query IIII
+SELECT (0.12)>(1.1), (0.1)>(-1.1), (0.12)>(-1.12), (0.12)>(-1);
+----
+0 1 1 1
 
 query IIIII
 select a > b, a < b, a = b, a != b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1::Decimal(8,2) b);

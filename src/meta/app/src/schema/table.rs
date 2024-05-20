@@ -64,7 +64,7 @@ impl TableIdent {
 }
 
 impl Display for TableIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "table_id:{}, ver:{}", self.table_id, self.seq)
     }
 }
@@ -103,7 +103,7 @@ impl TableNameIdent {
 }
 
 impl Display for TableNameIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "'{}'.'{}'.'{}'",
@@ -121,7 +121,7 @@ pub struct DBIdTableName {
 }
 
 impl Display for DBIdTableName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}.'{}'", self.db_id, self.table_name)
     }
 }
@@ -138,7 +138,7 @@ impl TableId {
 }
 
 impl Display for TableId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "TableId{{{}}}", self.table_id)
     }
 }
@@ -151,7 +151,7 @@ pub struct TableIdHistoryIdent {
 }
 
 impl Display for TableIdHistoryIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}.'{}'", self.database_id, self.table_name)
     }
 }
@@ -165,7 +165,7 @@ pub enum DatabaseType {
 }
 
 impl Display for DatabaseType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             DatabaseType::NormalDB => {
                 write!(f, "normal database")
@@ -404,7 +404,7 @@ impl TableMeta {
 }
 
 impl Display for TableMeta {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "Engine: {}={:?}, Schema: {:?}, Options: {:?}, FieldComments: {:?} Indexes: {:?} CreatedOn: {:?} DropOn: {:?}",
@@ -421,7 +421,7 @@ impl Display for TableMeta {
 }
 
 impl Display for TableInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "DB.Table: {}, Table: {}-{}, Engine: {}",
@@ -467,7 +467,7 @@ impl TableIdList {
 }
 
 impl Display for TableIdList {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "DB.Table id list: {:?}", self.id_list)
     }
 }
@@ -500,7 +500,7 @@ impl CreateTableReq {
 }
 
 impl Display for CreateTableReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self.create_option {
             CreateOption::Create => write!(
                 f,
@@ -563,7 +563,7 @@ impl DropTableByIdReq {
 }
 
 impl Display for DropTableByIdReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "drop_table_by_id(if_exists={}):{}",
@@ -606,7 +606,7 @@ impl UndropTableReq {
 }
 
 impl Display for UndropTableReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "undrop_table:{}/{}-{}",
@@ -641,7 +641,7 @@ impl RenameTableReq {
 }
 
 impl Display for RenameTableReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "rename_table:{}/{}-{}=>{}-{}",
@@ -695,6 +695,11 @@ pub struct UpdateMultiTableMetaReq {
     pub deduplicated_labels: Vec<String>,
 }
 
+/// The result of updating multiple table meta
+///
+/// If update fails due to table version mismatch, the `Err` will contain the (table id, seq , table meta)s that fail to update.
+pub type UpdateMultiTableMetaResult = std::result::Result<(), Vec<(u64, u64, TableMeta)>>;
+
 impl UpsertTableOptionReq {
     pub fn new(
         table_ident: &TableIdent,
@@ -710,7 +715,7 @@ impl UpsertTableOptionReq {
 }
 
 impl Display for UpsertTableOptionReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "upsert-table-options: table-id:{}({:?}) = {:?}",
@@ -762,7 +767,7 @@ pub struct CreateTableIndexReq {
 }
 
 impl Display for CreateTableIndexReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self.create_option {
             CreateOption::Create => {
                 write!(
@@ -800,7 +805,7 @@ pub struct DropTableIndexReq {
 }
 
 impl Display for DropTableIndexReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "drop_table_index(if_exists={}):{}/{}",
@@ -913,7 +918,7 @@ pub struct TableIdToName {
 }
 
 impl Display for TableIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "TableIdToName{{{}}}", self.table_id)
     }
 }

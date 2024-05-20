@@ -27,6 +27,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_license::license::Feature::ComputedColumn;
+use databend_common_license::license::Feature::InvertedIndex;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -97,7 +98,7 @@ impl CreateTableInterpreter {
 #[async_trait::async_trait]
 impl Interpreter for CreateTableInterpreter {
     fn name(&self) -> &str {
-        "CreateTableInterpreterV2"
+        "CreateTableInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -119,6 +120,12 @@ impl Interpreter for CreateTableInterpreter {
             license_manager
                 .manager
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
+        }
+        if self.plan.inverted_indexes.is_some() {
+            let license_manager = get_license_manager();
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), InvertedIndex)?;
         }
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
@@ -398,6 +405,7 @@ impl CreateTableInterpreter {
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
             comment: comment.unwrap_or_default(),
+            indexes: self.plan.inverted_indexes.clone().unwrap_or_default(),
             ..Default::default()
         };
 

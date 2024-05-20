@@ -96,7 +96,7 @@ impl From<CatalogNameIdent> for CatalogName {
 }
 
 impl Display for CatalogName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.catalog_name)
     }
 }
@@ -182,7 +182,7 @@ impl CreateCatalogReq {
 }
 
 impl Display for CreateCatalogReq {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "create_catalog(if_not_exists={}):{}/{}={:?}",
@@ -206,7 +206,7 @@ pub struct DropCatalogReq {
 }
 
 impl Display for DropCatalogReq {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "drop_catalog(if_exists={}):{}/{}",

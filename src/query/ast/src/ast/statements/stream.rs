@@ -40,7 +40,7 @@ pub struct CreateStreamStmt {
 }
 
 impl Display for CreateStreamStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -81,7 +81,7 @@ pub struct DropStreamStmt {
 }
 
 impl Display for DropStreamStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP STREAM ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -106,7 +106,7 @@ pub struct ShowStreamsStmt {
 }
 
 impl Display for ShowStreamsStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW ")?;
         if self.full {
             write!(f, "FULL ")?;

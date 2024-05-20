@@ -44,7 +44,7 @@ impl<'a> Token<'a> {
 }
 
 impl<'a> std::fmt::Debug for Token<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}({:?})", self.kind, self.span)
     }
 }
@@ -149,16 +149,13 @@ pub enum TokenKind {
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
-    QuotedString,
+    LiteralString,
 
     #[regex(r#"\$\$([^\$]|(\$[^\$]))*\$\$"#)]
-    CodeString,
+    LiteralCodeString,
 
     #[regex(r#"@([^\s`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]
-    AtString,
-
-    #[token("TOP", ignore(ascii_case))]
-    TOP,
+    LiteralAtString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
     PGLiteralHex,
@@ -175,10 +172,8 @@ pub enum TokenKind {
     // Symbols
     #[token("/*+")]
     HintPrefix,
-
     #[token("*/")]
     HintSuffix,
-
     #[token("==")]
     DoubleEq,
     #[token("=")]
@@ -320,9 +315,8 @@ pub enum TokenKind {
     //
     // Steps to add keyword:
     // 1. Add the keyword to token kind variants by alphabetical order.
-    // 2. Search in this file to see if the new keyword is a commented
-    //    out reserved keyword. If so, uncomment the keyword in the
-    //    reserved list.
+    // 2. Search in this file to see if the new keyword is a commented out reserved keyword. If
+    //    so, uncomment the keyword in the reserved list.
     #[token("ACCOUNT", ignore(ascii_case))]
     ACCOUNT,
     #[token("ALL", ignore(ascii_case))]
@@ -431,6 +425,8 @@ pub enum TokenKind {
     CONNECTION,
     #[token("CONNECTIONS", ignore(ascii_case))]
     CONNECTIONS,
+    #[token("CONSUME", ignore(ascii_case))]
+    CONSUME,
     #[token("CONTENT_TYPE", ignore(ascii_case))]
     CONTENT_TYPE,
     #[token("CONTINUE", ignore(ascii_case))]
@@ -980,6 +976,8 @@ pub enum TokenKind {
     SET,
     #[token("UNSET", ignore(ascii_case))]
     UNSET,
+    #[token("SESSION", ignore(ascii_case))]
+    SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
     #[token("STAGES", ignore(ascii_case))]
@@ -1220,6 +1218,8 @@ pub enum TokenKind {
     TASK,
     #[token("TASKS", ignore(ascii_case))]
     TASKS,
+    #[token("TOP", ignore(ascii_case))]
+    TOP,
     #[token("WAREHOUSE", ignore(ascii_case))]
     WAREHOUSE,
     #[token("SCHEDULE", ignore(ascii_case))]
@@ -1281,8 +1281,8 @@ impl TokenKind {
             self,
             LiteralInteger
                 | LiteralFloat
-                | QuotedString
-                | CodeString
+                | LiteralString
+                | LiteralCodeString
                 | PGLiteralHex
                 | MySQLLiteralHex
         )
@@ -1292,8 +1292,8 @@ impl TokenKind {
         !matches!(
             self,
             Ident
-                | QuotedString
-                | CodeString
+                | LiteralString
+                | LiteralCodeString
                 | PGLiteralHex
                 | MySQLLiteralHex
                 | LiteralInteger

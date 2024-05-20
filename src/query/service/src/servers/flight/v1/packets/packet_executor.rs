@@ -23,8 +23,7 @@ use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use databend_common_settings::ChangeValue;
 
-use crate::servers::flight::v1::actions::FlightAction;
-use crate::servers::flight::v1::actions::InitQueryFragmentsPlan;
+use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::packets::packet::create_client;
 use crate::servers::flight::v1::packets::FragmentPlanPacket;
 use crate::servers::flight::v1::packets::Packet;
@@ -77,9 +76,7 @@ impl Packet for QueryFragmentsPlanPacket {
 
         let executor = &self.executors_info[&self.executor];
         let mut conn = create_client(config, &executor.flight_address).await?;
-        let action = FlightAction::InitQueryFragmentsPlan(InitQueryFragmentsPlan {
-            executor_packet: self.clone(),
-        });
-        conn.execute_action(action, timeout).await
+        conn.do_action(INIT_QUERY_FRAGMENTS, self.clone(), timeout)
+            .await
     }
 }

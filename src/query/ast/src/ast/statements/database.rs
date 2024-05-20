@@ -34,7 +34,7 @@ pub struct ShowDatabasesStmt {
 }
 
 impl Display for ShowDatabasesStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW ")?;
         if self.full {
             write!(f, "FULL ")?;
@@ -58,7 +58,7 @@ pub struct ShowCreateDatabaseStmt {
 }
 
 impl Display for ShowCreateDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW CREATE DATABASE ")?;
         write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
 
@@ -76,7 +76,7 @@ pub struct CreateDatabaseStmt {
 }
 
 impl Display for CreateDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -109,7 +109,7 @@ pub struct DropDatabaseStmt {
 }
 
 impl Display for DropDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP DATABASE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -127,7 +127,7 @@ pub struct UndropDatabaseStmt {
 }
 
 impl Display for UndropDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UNDROP DATABASE ")?;
         write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
         Ok(())
@@ -144,7 +144,7 @@ pub struct AlterDatabaseStmt {
 }
 
 impl Display for AlterDatabaseStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER DATABASE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -172,7 +172,7 @@ pub enum DatabaseEngine {
 }
 
 impl Display for DatabaseEngine {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             DatabaseEngine::Default => write!(f, "DEFAULT"),
             DatabaseEngine::Share => write!(f, "SHARE"),

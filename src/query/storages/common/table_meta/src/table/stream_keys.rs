@@ -51,7 +51,7 @@ impl std::str::FromStr for StreamMode {
 }
 
 impl std::fmt::Display for StreamMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", match self {
             StreamMode::AppendOnly => MODE_APPEND_ONLY.to_string(),
             StreamMode::Standard => MODE_STANDARD.to_string(),

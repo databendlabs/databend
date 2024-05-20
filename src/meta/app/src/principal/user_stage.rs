@@ -80,7 +80,7 @@ pub enum StageType {
 }
 
 impl fmt::Display for StageType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
             // LegacyInternal will print the same name as Internal, this is by design.
             StageType::LegacyInternal => "Internal",
@@ -194,10 +194,10 @@ impl FromStr for StageFileFormatType {
             "XML" => Ok(StageFileFormatType::Xml),
             "JSON" => Ok(StageFileFormatType::Json),
             "ORC" | "AVRO" => Err(format!(
-                "File format type '{s}' not implemented yet', must be one of ( CSV | TSV | NDJSON | PARQUET | XML)"
+                "File format type '{s}' not implemented yet', must be one of ( CSV | TSV | NDJSON | PARQUET)"
             )),
             _ => Err(format!(
-                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET | XML)"
+                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET)"
             )),
         }
     }
@@ -346,7 +346,7 @@ impl FileFormatOptions {
 }
 
 impl Display for FileFormatOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "TYPE = {}", self.format.to_string().to_uppercase())?;
         match self.format {
             StageFileFormatType::Csv => {
@@ -448,7 +448,7 @@ impl FromStr for OnErrorMode {
 }
 
 impl Display for OnErrorMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             OnErrorMode::Continue => {
                 write!(f, "continue")
@@ -570,7 +570,7 @@ impl CopyOptions {
 }
 
 impl Display for CopyOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "OnErrorMode {}", self.on_error)?;
         write!(f, "SizeLimit {}", self.size_limit)?;
         write!(f, "MaxFiles {}", self.max_files)?;

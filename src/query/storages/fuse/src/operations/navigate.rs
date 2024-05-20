@@ -21,6 +21,7 @@ use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AbortChecker;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_storages_common_cache::LoadParams;
@@ -42,10 +43,15 @@ use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 impl FuseTable {
     #[minitrace::trace]
     #[async_backtrace::framed]
-    pub async fn navigate_to_point(&self, point: &NavigationPoint) -> Result<Arc<FuseTable>> {
+    pub async fn navigate_to_point(
+        &self,
+        point: &NavigationPoint,
+        abort_checker: AbortChecker,
+    ) -> Result<Arc<FuseTable>> {
         match point {
             NavigationPoint::SnapshotID(snapshot_id) => {
-                self.navigate_to_snapshot(snapshot_id.as_str()).await
+                self.navigate_to_snapshot(snapshot_id.as_str(), abort_checker)
+                    .await
             }
             NavigationPoint::TimePoint(time_point) => {
                 let Some(location) = self.snapshot_loc().await? else {
@@ -53,7 +59,8 @@ impl FuseTable {
                         "Empty Table has no historical data",
                     ));
                 };
-                self.navigate_to_time_point(location, *time_point).await
+                self.navigate_to_time_point(location, *time_point, abort_checker)
+                    .await
             }
             NavigationPoint::StreamInfo(info) => self.navigate_to_stream(info).await,
         }
@@ -90,8 +97,9 @@ impl FuseTable {
         &self,
         location: String,
         time_point: DateTime<Utc>,
+        aborting: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
-        self.find(location, |snapshot| {
+        self.find(location, aborting, |snapshot| {
             if let Some(ts) = snapshot.timestamp {
                 ts <= time_point
             } else {
@@ -102,14 +110,18 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
+    pub async fn navigate_to_snapshot(
+        &self,
+        snapshot_id: &str,
+        abort_checker: AbortChecker,
+    ) -> Result<Arc<FuseTable>> {
         let Some(location) = self.snapshot_loc().await? else {
             return Err(ErrorCode::TableHistoricalDataNotFound(
                 "Empty Table has no historical data",
             ));
         };
 
-        self.find(location, |snapshot| {
+        self.find(location, abort_checker, |snapshot| {
             snapshot
                 .snapshot_id
                 .simple()
@@ -121,8 +133,15 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn find<P>(&self, location: String, mut pred: P) -> Result<Arc<FuseTable>>
-    where P: FnMut(&TableSnapshot) -> bool {
+    pub async fn find<P>(
+        &self,
+        location: String,
+        abort_checker: AbortChecker,
+        mut pred: P,
+    ) -> Result<Arc<FuseTable>>
+    where
+        P: FnMut(&TableSnapshot) -> bool,
+    {
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         // grab the table history as stream
@@ -136,6 +155,7 @@ impl FuseTable {
         // Find the instant which matches the given `time_point`.
         let mut instant = None;
         while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
+            abort_checker.try_check_aborting()?;
             if pred(snapshot_with_version.0.as_ref()) {
                 instant = Some(snapshot_with_version);
                 break;
@@ -226,7 +246,9 @@ impl FuseTable {
             None => self.list_by_time_point(time_point).await,
         }?;
 
-        let table = self.navigate_to_time_point(location, time_point).await?;
+        let table = self
+            .navigate_to_time_point(location, time_point, ctx.clone().get_abort_checker())
+            .await?;
 
         Ok((table, files))
     }

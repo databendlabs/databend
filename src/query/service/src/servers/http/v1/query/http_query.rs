@@ -118,7 +118,7 @@ impl HttpQueryRequest {
 }
 
 impl Debug for HttpQueryRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
@@ -338,7 +338,13 @@ impl HttpQuery {
                             "last query on the session not finished",
                         ));
                     }
-                    let _ = http_query_manager.remove_query(&query_id, RemoveReason::Canceled);
+                    let _ = http_query_manager
+                        .remove_query(
+                            &query_id,
+                            RemoveReason::Canceled,
+                            ErrorCode::ClosedQuery("closed by next query"),
+                        )
+                        .await;
                 }
                 // wait for Arc<QueryContextShared> to drop and detach itself from session
                 // should not take too long

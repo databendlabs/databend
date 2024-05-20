@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::escape::escape_specified;
+use crate::ast::quote::EscapedString;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -50,8 +50,8 @@ impl Display for UserIdentity {
         write!(
             f,
             "'{}'@'{}'",
-            escape_specified(&self.username, &Self::ESCAPE_CHARS),
-            escape_specified(&self.hostname, &Self::ESCAPE_CHARS),
+            EscapedString(&self.username, &Self::ESCAPE_CHARS),
+            EscapedString(&self.hostname, &Self::ESCAPE_CHARS),
         )
     }
 }
@@ -87,7 +87,7 @@ pub enum AuthType {
 }
 
 impl Display for AuthType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", match self {
             AuthType::NoPassword => "no_password",
             AuthType::Sha256Password => "sha256_password",
@@ -105,7 +105,7 @@ pub enum CatalogType {
 }
 
 impl Display for CatalogType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
@@ -161,7 +161,7 @@ pub enum UserPrivilegeType {
 }
 
 impl Display for UserPrivilegeType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", match self {
             UserPrivilegeType::Usage => "USAGE",
             UserPrivilegeType::Create => "CREATE",
@@ -197,7 +197,7 @@ pub enum ShareGrantObjectName {
 }
 
 impl Display for ShareGrantObjectName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ShareGrantObjectName::Database(db) => {
                 write!(f, "DATABASE {db}")
@@ -220,7 +220,7 @@ pub enum ShareGrantObjectPrivilege {
 }
 
 impl Display for ShareGrantObjectPrivilege {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match *self {
             ShareGrantObjectPrivilege::Usage => write!(f, "USAGE"),
             ShareGrantObjectPrivilege::ReferenceUsage => write!(f, "REFERENCE_USAGE"),
@@ -253,7 +253,7 @@ pub struct CopyOptions {
 }
 
 impl Display for CopyOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "OnErrorMode {}", self.on_error)?;
         write!(f, "SizeLimit {}", self.size_limit)?;
         write!(f, "MaxFiles {}", self.max_files)?;
@@ -275,7 +275,7 @@ pub enum OnErrorMode {
 }
 
 impl Display for OnErrorMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             OnErrorMode::Continue => {
                 write!(f, "continue")

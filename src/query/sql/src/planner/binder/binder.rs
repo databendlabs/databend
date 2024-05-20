@@ -343,7 +343,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone().into(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
@@ -744,7 +744,7 @@ impl<'a> Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    // add check for SExpr to disable invalid source for copy/insert/merge/replace
+    #[allow(dead_code)]
     pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFCall(_));
         let mut finder = Finder::new(&f);

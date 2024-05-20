@@ -21,7 +21,6 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::OneBlockSource;
 
-use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
@@ -49,7 +48,7 @@ impl FuseTable {
                 |output| {
                     let meta = CommitMeta {
                         conflict_resolve_context: ConflictResolveContext::None,
-                        abort_operation: AbortOperation::default(),
+                        new_segment_locs: vec![],
                         table_id: self.get_id(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));

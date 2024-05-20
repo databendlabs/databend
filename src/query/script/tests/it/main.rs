@@ -731,7 +731,7 @@ impl MockSet {
 }
 
 impl Display for MockSet {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "(")?;
         for (i, name) in self.column_names.iter().enumerate() {
             if i > 0 {

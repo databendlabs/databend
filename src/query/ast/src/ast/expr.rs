@@ -465,17 +465,17 @@ impl Expr {
 }
 
 impl Display for Expr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         fn write_expr(
             expr: &Expr,
             min_precedence: Precedence,
-            f: &mut Formatter<'_>,
+            f: &mut Formatter,
         ) -> std::fmt::Result {
-            let precedence = expr.precedence();
-            let need_parentheses = precedence.map(|p| p < min_precedence).unwrap_or(false);
-            let inner_precedence = precedence.unwrap_or(Precedence(0));
+            let prec = expr.precedence();
+            let need_paren = prec.map(|p| p < min_precedence).unwrap_or(false);
+            let min_prec = prec.unwrap_or(Precedence(0));
 
-            if need_parentheses {
+            if need_paren {
                 write!(f, "(")?;
             }
 
@@ -488,7 +488,7 @@ impl Display for Expr {
                     }
                 }
                 Expr::IsNull { expr, not, .. } => {
-                    write_expr(expr, inner_precedence, f)?;
+                    write_expr(expr, min_prec, f)?;
                     write!(f, " IS")?;
                     if *not {
                         write!(f, " NOT")?;
@@ -498,19 +498,19 @@ impl Display for Expr {
                 Expr::IsDistinctFrom {
                     left, right, not, ..
                 } => {
-                    write_expr(left, inner_precedence, f)?;
+                    write_expr(left, min_prec, f)?;
                     write!(f, " IS")?;
                     if *not {
                         write!(f, " NOT")?;
                     }
                     write!(f, " DISTINCT FROM ")?;
-                    write_expr(right, inner_precedence, f)?;
+                    write_expr(right, min_prec, f)?;
                 }
 
                 Expr::InList {
                     expr, list, not, ..
                 } => {
-                    write_expr(expr, inner_precedence, f)?;
+                    write_expr(expr, min_prec, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -524,7 +524,7 @@ impl Display for Expr {
                     not,
                     ..
                 } => {
-                    write_expr(expr, inner_precedence, f)?;
+                    write_expr(expr, min_prec, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -537,7 +537,7 @@ impl Display for Expr {
                     not,
                     ..
                 } => {
-                    write_expr(expr, inner_precedence, f)?;
+                    write_expr(expr, min_prec, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -547,28 +547,28 @@ impl Display for Expr {
                     match op {
                         // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
                         UnaryOperator::Factorial => {
-                            write_expr(expr, inner_precedence, f)?;
+                            write_expr(expr, min_prec, f)?;
                             write!(f, " {op}")?;
                         }
                         _ => {
                             write!(f, "{op} ")?;
-                            write_expr(expr, inner_precedence, f)?;
+                            write_expr(expr, min_prec, f)?;
                         }
                     }
                 }
                 Expr::BinaryOp {
                     op, left, right, ..
                 } => {
-                    write_expr(left, inner_precedence, f)?;
+                    write_expr(left, min_prec, f)?;
                     write!(f, " {op} ")?;
-                    write_expr(right, inner_precedence, f)?;
+                    write_expr(right, min_prec, f)?;
                 }
                 Expr::JsonOp {
                     op, left, right, ..
                 } => {
-                    write_expr(left, inner_precedence, f)?;
+                    write_expr(left, min_prec, f)?;
                     write!(f, " {op} ")?;
-                    write_expr(right, inner_precedence, f)?;
+                    write_expr(right, min_prec, f)?;
                 }
                 Expr::Cast {
                     expr,
@@ -577,7 +577,7 @@ impl Display for Expr {
                     ..
                 } => {
                     if *pg_style {
-                        write_expr(expr, inner_precedence, f)?;
+                        write_expr(expr, min_prec, f)?;
                         write!(f, "::{target_type}")?;
                     } else {
                         write!(f, "CAST({expr} AS {target_type})")?;
@@ -680,7 +680,7 @@ impl Display for Expr {
                     write!(f, "({subquery})")?;
                 }
                 Expr::MapAccess { expr, accessor, .. } => {
-                    write_expr(expr, inner_precedence, f)?;
+                    write_expr(expr, min_prec, f)?;
                     match accessor {
                         MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
                         MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
@@ -729,7 +729,7 @@ impl Display for Expr {
                 }
             }
 
-            if need_parentheses {
+            if need_paren {
                 write!(f, ")")?;
             }
 
@@ -779,7 +779,7 @@ pub enum SubqueryModifier {
 }
 
 impl Display for SubqueryModifier {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SubqueryModifier::Any => write!(f, "ANY"),
             SubqueryModifier::All => write!(f, "ALL"),
@@ -807,7 +807,7 @@ pub enum Literal {
 }
 
 impl Display for Literal {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Literal::UInt64(val) => {
                 write!(f, "{val}")
@@ -848,7 +848,7 @@ pub struct FunctionCall {
 }
 
 impl Display for FunctionCall {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let FunctionCall {
             distinct,
             name,
@@ -956,7 +956,7 @@ impl TypeName {
 }
 
 impl Display for TypeName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TypeName::Boolean => {
                 write!(f, "BOOLEAN")?;
@@ -1084,7 +1084,7 @@ pub enum Window {
 }
 
 impl Display for Window {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match *self {
             Window::WindowReference(ref window_ref) => write!(f, "{}", window_ref),
             Window::WindowSpec(ref window_spec) => write!(f, "{}", window_spec),
@@ -1099,7 +1099,7 @@ pub struct WindowDefinition {
 }
 
 impl Display for WindowDefinition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} AS {}", self.name, self.spec)
     }
 }
@@ -1110,7 +1110,7 @@ pub struct WindowRef {
 }
 
 impl Display for WindowRef {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.window_name)
     }
 }
@@ -1124,7 +1124,7 @@ pub struct WindowSpec {
 }
 
 impl Display for WindowSpec {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "(")?;
         if let Some(existing_window_name) = &self.existing_window_name {
             write!(f, " {existing_window_name}")?;
@@ -1203,7 +1203,7 @@ pub struct Lambda {
 }
 
 impl Display for Lambda {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.params.len() == 1 {
             write!(f, "{}", self.params[0])?;
         } else {
@@ -1290,7 +1290,7 @@ impl BinaryOperator {
 }
 
 impl Display for BinaryOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             BinaryOperator::Plus => {
                 write!(f, "+")
@@ -1437,7 +1437,7 @@ impl JsonOperator {
 }
 
 impl Display for JsonOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             JsonOperator::Arrow => {
                 write!(f, "->")
@@ -1492,7 +1492,7 @@ pub enum UnaryOperator {
 }
 
 impl Display for UnaryOperator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             UnaryOperator::Plus => {
                 write!(f, "+")

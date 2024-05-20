@@ -28,7 +28,7 @@ pub struct ShowLocksStmt {
 }
 
 impl Display for ShowLocksStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW LOCKS")?;
         if self.in_account {
             write!(f, " IN ACCOUNT")?;

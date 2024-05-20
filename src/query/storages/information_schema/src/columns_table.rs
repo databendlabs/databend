@@ -29,7 +29,7 @@ impl ColumnsTable {
         let query = "SELECT
             database AS table_catalog,
             database AS table_schema,
-            \"table\" AS table_name,
+            table AS table_name,
             name AS column_name,
             1 AS ordinal_position,
             NULL AS column_default,

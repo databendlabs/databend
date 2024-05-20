@@ -31,6 +31,7 @@ impl ViewRewriter {
             table,
             alias,
             temporal,
+            consume,
             pivot,
             unpivot,
         } = table_ref
@@ -49,6 +50,7 @@ impl ViewRewriter {
                     table: table.clone(),
                     alias: alias.clone(),
                     temporal: temporal.clone(),
+                    consume: *consume,
                     pivot: pivot.clone(),
                     unpivot: unpivot.clone(),
                 }

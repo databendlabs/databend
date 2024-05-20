@@ -22,7 +22,6 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::Statistics;
 
-use crate::operations::common::AbortOperation;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::DeletedSegmentInfo;
@@ -38,7 +37,6 @@ pub enum MutationLogEntry {
     AppendSegment {
         segment_location: String,
         format_version: FormatVersion,
-        abort_operation: AbortOperation,
         summary: Statistics,
     },
     DeletedBlock {

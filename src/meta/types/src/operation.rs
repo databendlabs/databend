@@ -28,7 +28,7 @@ pub enum Operation<T> {
 }
 
 impl<T> Debug for Operation<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Operation::Update(_) => f.debug_tuple("Update").field(&"[binary]").finish(),
             Operation::Delete => f.debug_tuple("Delete").finish(),

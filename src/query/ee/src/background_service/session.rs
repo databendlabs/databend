@@ -25,9 +25,13 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 
 pub async fn create_session(conf: &InnerConfig) -> Result<Arc<Session>> {
-    let session = SessionManager::instance()
+    let session_manager = SessionManager::instance();
+    let session = session_manager
         .create_session(SessionType::FlightSQL)
         .await?;
+
+    let session = session_manager.register_session(session)?;
+
     let user = get_background_service_user(conf);
     session
         .set_authed_user(user.clone(), Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()))

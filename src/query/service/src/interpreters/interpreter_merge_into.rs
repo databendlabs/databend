@@ -57,7 +57,7 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use itertools::Itertools;
 
-use crate::interpreters::common::build_update_stream_meta_seq;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -206,7 +206,7 @@ impl MergeIntoInterpreter {
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
         check_table.check_mutable()?;
 
-        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), meta_data).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), meta_data).await?;
 
         let table_name = table_name.clone();
         let input = input.clone();

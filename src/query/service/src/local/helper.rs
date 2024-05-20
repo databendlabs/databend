@@ -101,7 +101,7 @@ impl Highlighter for CliHelper {
         std::borrow::Cow::Borrowed(candidate)
     }
 
-    fn highlight_char(&self, line: &str, _pos: usize) -> bool {
+    fn highlight_char(&self, line: &str, _pos: usize, _forced: bool) -> bool {
         !line.is_empty()
     }
 }

@@ -85,7 +85,6 @@ impl FileFormatParams {
             StageFileFormatType::Json => {
                 Ok(FileFormatParams::Json(JsonFileFormatParams::default()))
             }
-            StageFileFormatType::Xml => Ok(FileFormatParams::Xml(XmlFileFormatParams::default())),
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -270,9 +269,6 @@ impl FileFormatParams {
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
                 check_option!(p, nan_display)?;
-            }
-            FileFormatParams::Xml(p) => {
-                check_option!(p, row_tag)?;
             }
             _ => {}
         }
@@ -512,7 +508,7 @@ impl FromStr for EmptyFieldAs {
 }
 
 impl Display for EmptyFieldAs {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Self::FieldDefault => write!(f, "FILED_DEFAULT"),
             Self::Null => write!(f, "NULL"),
@@ -547,7 +543,7 @@ impl FromStr for NullAs {
 }
 
 impl Display for NullAs {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             NullAs::Error => write!(f, "ERROR"),
             NullAs::Null => write!(f, "NULL"),
@@ -578,7 +574,7 @@ impl FromStr for BinaryFormat {
 }
 
 impl Display for BinaryFormat {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Self::Hex => write!(f, "hex"),
             Self::Base64 => write!(f, "base64"),
@@ -672,7 +668,7 @@ impl ParquetFileFormatParams {
 }
 
 impl Display for FileFormatParams {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FileFormatParams::Csv(params) => {
                 write!(
