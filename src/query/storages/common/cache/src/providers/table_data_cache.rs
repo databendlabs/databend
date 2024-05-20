@@ -22,6 +22,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_cache::Count;
 use databend_common_cache::DefaultHashBuilder;
+use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::cache::*;
@@ -72,17 +73,18 @@ pub struct TableDataCache<T = LruDiskCacheHolder> {
 const TABLE_DATA_CACHE_NAME: &str = "table_data";
 
 pub struct TableDataCacheBuilder;
+
 impl TableDataCacheBuilder {
     pub fn new_table_data_disk_cache(
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
-        fuzzy_reload_cache_keys: bool,
+        disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
     ) -> Result<TableDataCache<LruDiskCacheHolder>> {
         let disk_cache = LruDiskCacheBuilder::new_disk_cache(
             path,
             disk_cache_bytes_size,
-            fuzzy_reload_cache_keys,
+            disk_cache_reload_policy,
         )?;
         let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;

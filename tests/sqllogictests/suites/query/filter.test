@@ -63,6 +63,28 @@ select count(*) from t where a <= b;
 ----
 2
 
+query BB
+select * from t where a
+----
+1 1
+1 0
+
+query BB
+select * from t where not(a)
+----
+0 0
+
+query BB
+select * from t where not(not(a))
+----
+1 1
+1 0
+
+query BB
+select * from t where not(not(not(a)))
+----
+0 0
+
 statement ok
 drop table if exists t;
 

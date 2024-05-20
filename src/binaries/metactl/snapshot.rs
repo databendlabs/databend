@@ -35,6 +35,7 @@ use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
+use databend_common_meta_raft_store::sm_v002::WriteEntry;
 use databend_common_meta_raft_store::state::RaftState;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
@@ -172,8 +173,9 @@ async fn import_v002(
     let mut max_log_id: Option<LogId> = None;
     let mut trees = BTreeMap::new();
 
-    let mut snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
-    let mut writer = snapshot_store.new_writer()?;
+    let snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
+
+    let (tx, join_handle) = snapshot_store.spawn_writer_thread("import_v002");
 
     for line in lines {
         let l = line?;
@@ -181,9 +183,10 @@ async fn import_v002(
 
         if tree_name.starts_with("state_machine/") {
             // Write to snapshot
-            writer
-                .write_entry_results::<io::Error>(futures::stream::iter([Ok(kv_entry)]))
-                .await?;
+            let sm_entry = kv_entry.try_into().map_err(|err_str| {
+                anyhow::anyhow!("Failed to convert RaftStoreEntry to SMEntry: {}", err_str)
+            })?;
+            tx.send(WriteEntry::Data(sm_entry)).await?;
         } else {
             // Write to sled tree
             if !trees.contains_key(&tree_name) {
@@ -208,14 +211,12 @@ async fn import_v002(
     for tree in trees.values() {
         tree.flush()?;
     }
-    let (snapshot_id, snapshot_size) = writer.commit(None)?;
 
-    eprintln!(
-        "Imported {} records, snapshot id: {}; snapshot size: {}",
-        n,
-        snapshot_id.to_string(),
-        snapshot_size
-    );
+    tx.send(WriteEntry::Finish).await?;
+
+    let (_snapshot_store, snapshot_stat) = join_handle.await??;
+
+    eprintln!("Imported {} records, snapshot: {}", n, snapshot_stat,);
     Ok(max_log_id)
 }
 
