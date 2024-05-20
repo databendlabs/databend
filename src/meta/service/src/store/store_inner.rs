@@ -41,8 +41,6 @@ use databend_common_meta_raft_store::state::RaftStateValue;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_raft_store::state_machine::StoredSnapshot;
 use databend_common_meta_sled_store::get_sled_db;
-use databend_common_meta_sled_store::openraft::ErrorSubject;
-use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::Endpoint;
@@ -170,7 +168,7 @@ impl StoreInner {
             (Default::default(), None)
         };
         let key_num = Self::calculate_key_num(&stored_snapshot, config.clone()).await;
-        metrics::server_metrics::set_snapshot_key_num(key_num.unwrap_or_default());
+        metrics::server_metrics::set_snapshot_key_num(key_num.unwrap_or_default() as i64);
 
         Ok(Self {
             id: raft_state.id,
@@ -279,69 +277,54 @@ impl StoreInner {
             .map_err(|e| StorageIOError::read_snapshot(None, &e))?;
 
         let mut snapshot_meta = snapshot_view.build_snapshot_meta();
+        let meta = snapshot_meta.clone();
+        let signature = snapshot_meta.signature();
 
         info!("do_build_snapshot writing snapshot start");
-
-        let mut ss_store = self.snapshot_store();
 
         let mut strm = snapshot_view.export().await.map_err(|e| {
             SnapshotStoreError::read(e).with_meta("export state machine", &snapshot_meta)
         })?;
 
-        let meta = snapshot_meta.clone();
-
-        let (tx, rx) = tokio::sync::mpsc::channel(64 * 1024);
-
-        // Spawn another thread to write entries to disk.
-        let th = databend_common_base::runtime::spawn_blocking(move || {
-            let mut writer = ss_store.new_writer()?;
-
-            info!("do_build_snapshot writer start");
-
-            writer
-                .write_entries_sync(rx)
-                .map_err(|e| SnapshotStoreError::write(e).with_meta("serialize entries", &meta))?;
-
-            info!("do_build_snapshot commit start");
-
-            let (snapshot_id, snapshot_size) = writer
-                .commit(None)
-                .map_err(|e| SnapshotStoreError::write(e).with_meta("writer.commit", &meta))?;
-
-            Ok::<(SnapshotStoreV002, MetaSnapshotId, u64), SnapshotStoreError>((
-                ss_store,
-                snapshot_id,
-                snapshot_size,
-            ))
-        });
+        let context = format!("build snapshot: {}", meta.snapshot_id);
+        let ss_store = self.snapshot_store();
+        let (tx, th) = ss_store.spawn_writer_thread(context);
 
         // Pipe entries to the writer.
-        while let Some(ent) = strm
-            .try_next()
-            .await
-            .map_err(|e| StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e))?
         {
-            tx.send(WriteEntry::Data(ent)).await.map_err(|e| {
-                let e = StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e);
-                StorageError::from(e)
-            })?;
+            while let Some(ent) = strm
+                .try_next()
+                .await
+                .map_err(|e| StorageIOError::read_snapshot(Some(signature.clone()), &e))?
+            {
+                tx.send(WriteEntry::Data(ent))
+                    .await
+                    .map_err(|e| StorageIOError::write_snapshot(Some(signature.clone()), &e))?;
+            }
+            tx.send(WriteEntry::Finish)
+                .await
+                .map_err(|e| StorageIOError::write_snapshot(Some(signature.clone()), &e))?;
         }
 
-        { tx }.send(WriteEntry::Commit).await.map_err(|e| {
-            let e = StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e);
-            StorageError::from(e)
-        })?;
-
-        let (ss_store, snapshot_id, snapshot_size) = th
+        // Get snapshot write result
+        let (ss_store, snapshot_stat) = th
             .await
-            .map_err(|e| StorageIOError::write_snapshot(None, &e))??;
+            .map_err(|e| {
+                error!(error :% = e; "snapshot writer thread error");
+                StorageIOError::write_snapshot(Some(signature.clone()), &e)
+            })?
+            .map_err(|e| {
+                error!(error :% = e; "snapshot writer thread error");
+                StorageIOError::write_snapshot(Some(signature.clone()), &e)
+            })?;
 
-        info!(snapshot_size :% =(snapshot_size); "do_build_snapshot complete");
+        info!(snapshot_stat :% = snapshot_stat; "do_build_snapshot complete");
 
+        // Clean old snapshot
         ss_store.clean_old_snapshots().await?;
-
         info!("do_build_snapshot clean_old_snapshots complete");
 
+        let snapshot_id = &snapshot_stat.snapshot_id;
         assert_eq!(
             snapshot_id.last_applied, snapshot_meta.last_log_id,
             "snapshot_id.last_applied: {:?} must equal snapshot_meta.last_log_id: {:?}",
@@ -350,15 +333,16 @@ impl StoreInner {
         snapshot_meta.snapshot_id = snapshot_id.to_string();
 
         {
+            let mut key_num = self.key_num.write().await;
+            *key_num = Some(snapshot_stat.entry_cnt as usize);
+        }
+
+        metrics::server_metrics::set_snapshot_key_num(snapshot_stat.entry_cnt as i64);
+
+        {
             let snapshot = Some(StoredSnapshot {
                 meta: snapshot_meta.clone(),
             });
-
-            if let Some(num) = Self::calculate_key_num(&snapshot, self.config.clone()).await {
-                let mut key_num = self.key_num.write().await;
-                *key_num = Some(num);
-                metrics::server_metrics::set_snapshot_key_num(num);
-            }
 
             let mut current_snapshot = self.current_snapshot.write().await;
             *current_snapshot = snapshot;
@@ -367,14 +351,7 @@ impl StoreInner {
         let r = ss_store
             .load_snapshot(&snapshot_meta.snapshot_id)
             .await
-            .map_err(|e| {
-                let e = StorageIOError::new(
-                    ErrorSubject::Snapshot(Some(snapshot_meta.signature())),
-                    ErrorVerb::Read,
-                    &e,
-                );
-                StorageError::from(e)
-            })?;
+            .map_err(|e| StorageIOError::read_snapshot(Some(signature), &e))?;
 
         Ok(Snapshot {
             meta: snapshot_meta,
