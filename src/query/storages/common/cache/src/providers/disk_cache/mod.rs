@@ -15,6 +15,8 @@
 #[allow(clippy::module_inception)]
 mod disk_cache;
 mod disk_cache_key;
+mod disk_cache_lru;
 
 pub use disk_cache::*;
 pub use disk_cache_key::DiskCacheKey;
+pub use disk_cache_lru::*;

@@ -79,6 +79,91 @@ fn test_missing_root() {
 }
 
 #[test]
+fn test_insert_bytes() {
+    let f = TestFixture::new();
+    let fuzzy_reload_cache_keys = false;
+    let mut c = DiskCache::new(f.tmp(), 25, fuzzy_reload_cache_keys).unwrap();
+    c.insert_single_slice("a/b/c", &[0; 10]).unwrap();
+    assert!(c.contains_key("a/b/c"));
+    c.insert_single_slice("a/b/d", &[0; 10]).unwrap();
+    assert_eq!(c.size(), 20);
+    // Adding this third file should put the cache above the limit.
+    c.insert_single_slice("x/y/z", &[0; 10]).unwrap();
+    assert_eq!(c.size(), 20);
+    // The least-recently-used file should have been removed.
+    assert!(!c.contains_key("a/b/c"));
+
+    let evicted_file_path = PathBuf::from(&DiskCacheKey::from("a/b/c"));
+    assert!(!f.tmp().join(evicted_file_path).exists());
+}
+
+#[test]
+fn test_insert_bytes_exact() {
+    // Test that files adding up to exactly the size limit works.
+    let f = TestFixture::new();
+    let fuzzy_reload_cache_keys = false;
+    let mut c = DiskCache::new(f.tmp(), 20, fuzzy_reload_cache_keys).unwrap();
+    c.insert_single_slice("file1", &[1; 10]).unwrap();
+    c.insert_single_slice("file2", &[2; 10]).unwrap();
+    assert_eq!(c.size(), 20);
+    c.insert_single_slice("file3", &[3; 10]).unwrap();
+    assert_eq!(c.size(), 20);
+    assert!(!c.contains_key("file1"));
+}
+
+#[test]
+fn test_add_get_lru() {
+    let f = TestFixture::new();
+    {
+        let fuzzy_reload_cache_keys = false;
+        let mut c = DiskCache::new(f.tmp(), 25, fuzzy_reload_cache_keys).unwrap();
+        c.insert_single_slice("file1", &[1; 10]).unwrap();
+        c.insert_single_slice("file2", &[2; 10]).unwrap();
+        // Get the file to bump its LRU status.
+        assert_eq!(
+            read_all(&mut File::open(c.get_cache_path("file1").unwrap()).unwrap()).unwrap(),
+            vec![1u8; 10]
+        );
+        // Adding this third file should put the cache above the limit.
+        c.insert_single_slice("file3", &[3; 10]).unwrap();
+        assert_eq!(c.size(), 20);
+        // The least-recently-used file should have been removed.
+        assert!(!c.contains_key("file2"));
+    }
+}
+
+#[test]
+fn test_insert_bytes_too_large() {
+    let f = TestFixture::new();
+    let fuzzy_reload_cache_keys = false;
+    let mut c = DiskCache::new(f.tmp(), 1, fuzzy_reload_cache_keys).unwrap();
+    match c.insert_single_slice("a/b/c", &[0; 2]) {
+        Err(DiskCacheError::FileTooLarge) => {}
+        x => panic!("Unexpected result: {x:?}"),
+    }
+}
+
+#[test]
+fn test_evict_until_enough_space() {
+    let f = TestFixture::new();
+    let fuzzy_reload_cache_keys = false;
+    let mut c = DiskCache::new(f.tmp(), 4, fuzzy_reload_cache_keys).unwrap();
+    c.insert_single_slice("file1", &[1; 1]).unwrap();
+    c.insert_single_slice("file2", &[2; 2]).unwrap();
+    c.insert_single_slice("file3", &[3; 1]).unwrap();
+    assert_eq!(c.size(), 4);
+
+    // insert a single slice which size bigger than file1 and less than file1 + file2
+    c.insert_single_slice("file4", &[3; 2]).unwrap();
+    assert_eq!(c.size(), 3);
+    // file1 and file2 MUST be evicted
+    assert!(!c.contains_key("file1"));
+    assert!(!c.contains_key("file2"));
+    // file3 MUST be keeped
+    assert!(c.contains_key("file3"));
+}
+
+#[test]
 fn test_fuzzy_restart_parallelism() {
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -168,89 +253,4 @@ fn test_reset_restart_parallelism() {
         remaining_files, 0,
         "Files within prefix directories are not completely removed"
     );
-}
-
-#[test]
-fn test_insert_bytes() {
-    let f = TestFixture::new();
-    let fuzzy_reload_cache_keys = false;
-    let mut c = DiskCache::new(f.tmp(), 25, fuzzy_reload_cache_keys).unwrap();
-    c.insert_single_slice("a/b/c", &[0; 10]).unwrap();
-    assert!(c.contains_key("a/b/c"));
-    c.insert_single_slice("a/b/d", &[0; 10]).unwrap();
-    assert_eq!(c.size(), 20);
-    // Adding this third file should put the cache above the limit.
-    c.insert_single_slice("x/y/z", &[0; 10]).unwrap();
-    assert_eq!(c.size(), 20);
-    // The least-recently-used file should have been removed.
-    assert!(!c.contains_key("a/b/c"));
-
-    let evicted_file_path = PathBuf::from(&DiskCacheKey::from("a/b/c"));
-    assert!(!f.tmp().join(evicted_file_path).exists());
-}
-
-#[test]
-fn test_insert_bytes_exact() {
-    // Test that files adding up to exactly the size limit works.
-    let f = TestFixture::new();
-    let fuzzy_reload_cache_keys = false;
-    let mut c = DiskCache::new(f.tmp(), 20, fuzzy_reload_cache_keys).unwrap();
-    c.insert_single_slice("file1", &[1; 10]).unwrap();
-    c.insert_single_slice("file2", &[2; 10]).unwrap();
-    assert_eq!(c.size(), 20);
-    c.insert_single_slice("file3", &[3; 10]).unwrap();
-    assert_eq!(c.size(), 20);
-    assert!(!c.contains_key("file1"));
-}
-
-#[test]
-fn test_add_get_lru() {
-    let f = TestFixture::new();
-    {
-        let fuzzy_reload_cache_keys = false;
-        let mut c = DiskCache::new(f.tmp(), 25, fuzzy_reload_cache_keys).unwrap();
-        c.insert_single_slice("file1", &[1; 10]).unwrap();
-        c.insert_single_slice("file2", &[2; 10]).unwrap();
-        // Get the file to bump its LRU status.
-        assert_eq!(
-            read_all(&mut File::open(c.get_cache_path("file1").unwrap()).unwrap()).unwrap(),
-            vec![1u8; 10]
-        );
-        // Adding this third file should put the cache above the limit.
-        c.insert_single_slice("file3", &[3; 10]).unwrap();
-        assert_eq!(c.size(), 20);
-        // The least-recently-used file should have been removed.
-        assert!(!c.contains_key("file2"));
-    }
-}
-
-#[test]
-fn test_insert_bytes_too_large() {
-    let f = TestFixture::new();
-    let fuzzy_reload_cache_keys = false;
-    let mut c = DiskCache::new(f.tmp(), 1, fuzzy_reload_cache_keys).unwrap();
-    match c.insert_single_slice("a/b/c", &[0; 2]) {
-        Err(DiskCacheError::FileTooLarge) => {}
-        x => panic!("Unexpected result: {x:?}"),
-    }
-}
-
-#[test]
-fn test_evict_until_enough_space() {
-    let f = TestFixture::new();
-    let fuzzy_reload_cache_keys = false;
-    let mut c = DiskCache::new(f.tmp(), 4, fuzzy_reload_cache_keys).unwrap();
-    c.insert_single_slice("file1", &[1; 1]).unwrap();
-    c.insert_single_slice("file2", &[2; 2]).unwrap();
-    c.insert_single_slice("file3", &[3; 1]).unwrap();
-    assert_eq!(c.size(), 4);
-
-    // insert a single slice which size bigger than file1 and less than file1 + file2
-    c.insert_single_slice("file4", &[3; 2]).unwrap();
-    assert_eq!(c.size(), 3);
-    // file1 and file2 MUST be evicted
-    assert!(!c.contains_key("file1"));
-    assert!(!c.contains_key("file2"));
-    // file3 MUST be keeped
-    assert!(c.contains_key("file3"));
 }

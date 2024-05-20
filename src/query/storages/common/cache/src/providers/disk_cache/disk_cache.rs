@@ -15,7 +15,6 @@
 use std::fs;
 use std::fs::File;
 use std::io::IoSlice;
-use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -24,15 +23,10 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
-use bytes::Bytes;
 use databend_common_cache::Cache;
-use databend_common_cache::Count;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_cache::FileSize;
-use databend_common_cache::LruCache;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use log::debug;
 use log::error;
 use log::info;
 use log::warn;
@@ -40,7 +34,6 @@ use parking_lot::RwLock;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
 
-use crate::CacheAccessor;
 use crate::DiskCacheKey;
 
 pub struct DiskCache<C> {
@@ -122,7 +115,6 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
                 if let Ok(entry) = entry {
                     let entry_path = entry.path();
                     if entry_path.is_dir() {
-                        debug!("scanning dir {:?}", entry_path);
                         Self::parallel_scan(
                             cache_root,
                             &entry_path,
@@ -131,7 +123,6 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
                             process_entry_clone.clone(),
                         );
                     } else {
-                        debug!("scanning file {:?}", entry_path);
                         process_entry_clone(cache_root, &entry, cache_holder, counter);
                     }
                 }
@@ -289,9 +280,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         debug_assert!(self.cache.size() <= self.cache.capacity());
 
         let cache_key = self.cache_key(key.as_ref());
-        info!("insert_bytes: {:?}", cache_key.0);
         let path = self.abs_path_of_cache_key(&cache_key);
-        info!("insert_bytes: {:?}", path);
         if let Some(parent_path) = path.parent() {
             fs::create_dir_all(parent_path)?;
         }
@@ -333,6 +322,23 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
             None => Ok(()),
         }
     }
+}
+
+fn recovery_cache_key_from_path(relative_path: &Path) -> String {
+    let key_string = match relative_path.file_name() {
+        Some(file_name) => match file_name.to_str() {
+            Some(str) => str.to_owned(),
+            None => {
+                // relative_path is constructed by ourself, and shall be valid utf8 string
+                unreachable!()
+            }
+        },
+        None => {
+            // only called during init, and only path of files are passed in
+            unreachable!()
+        }
+    };
+    key_string
 }
 
 pub mod result {
@@ -386,148 +392,3 @@ pub mod result {
 }
 
 use result::*;
-
-impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Count>
-    for LruDiskCacheHolder
-{
-    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
-        let k = k.as_ref();
-        {
-            let mut cache = self.write();
-            cache.get_cache_path(k)
-        }
-        .and_then(|cache_file_path| {
-            // check disk cache
-            let get_cache_content = || {
-                let mut v = vec![];
-                let mut file = File::open(cache_file_path)?;
-                file.read_to_end(&mut v)?;
-                Ok::<_, Box<dyn std::error::Error>>(v)
-            };
-
-            match get_cache_content() {
-                Ok(mut bytes) => {
-                    if let Err(e) = validate_checksum(bytes.as_slice()) {
-                        error!("disk cache, of key {k},  crc validation failure: {e}");
-                        {
-                            // remove the invalid cache, error of removal ignored
-                            let r = {
-                                let mut cache = self.write();
-                                cache.remove(k)
-                            };
-                            if let Err(e) = r {
-                                warn!("failed to remove invalid cache item, key {k}. {e}");
-                            }
-                        }
-                        None
-                    } else {
-                        // trim the checksum bytes and return
-                        let total_len = bytes.len();
-                        let body_len = total_len - 4;
-                        bytes.truncate(body_len);
-                        let item = Arc::new(bytes.into());
-                        Some(item)
-                    }
-                }
-                Err(e) => {
-                    error!("get disk cache item failed, cache_key {k}. {e}");
-                    None
-                }
-            }
-        })
-    }
-
-    fn put(&self, key: String, value: Arc<Bytes>) {
-        let crc = crc32fast::hash(value.as_ref());
-        let crc_bytes = crc.to_le_bytes();
-        let mut cache = self.write();
-        if let Err(e) = cache.insert_bytes(&key, &[value.as_ref(), &crc_bytes]) {
-            error!("put disk cache item failed {}", e);
-        }
-    }
-
-    fn evict(&self, k: &str) -> bool {
-        if let Err(e) = {
-            let mut cache = self.write();
-            cache.remove(k)
-        } {
-            error!("evict disk cache item failed {}", e);
-            false
-        } else {
-            true
-        }
-    }
-
-    fn contains_key(&self, k: &str) -> bool {
-        let cache = self.read();
-        cache.contains_key(k)
-    }
-
-    fn size(&self) -> u64 {
-        let cache = self.read();
-        cache.size()
-    }
-
-    fn len(&self) -> usize {
-        let cache = self.read();
-        cache.len()
-    }
-}
-
-fn recovery_cache_key_from_path(relative_path: &Path) -> String {
-    let key_string = match relative_path.file_name() {
-        Some(file_name) => match file_name.to_str() {
-            Some(str) => str.to_owned(),
-            None => {
-                // relative_path is constructed by ourself, and shall be valid utf8 string
-                unreachable!()
-            }
-        },
-        None => {
-            // only called during init, and only path of files are passed in
-            unreachable!()
-        }
-    };
-    key_string
-}
-
-/// The crc32 checksum is stored at the end of `bytes` and encoded as le u32.
-// Although parquet page has built-in crc, but it is optional (and not generated in parquet2)
-fn validate_checksum(bytes: &[u8]) -> Result<()> {
-    let total_len = bytes.len();
-    if total_len <= 4 {
-        Err(ErrorCode::StorageOther(format!(
-            "crc checksum validation failure: invalid file length {total_len}"
-        )))
-    } else {
-        // total_len > 4 is ensured
-        let crc_bytes: [u8; 4] = bytes[total_len - 4..].try_into().unwrap();
-        let crc_provided = u32::from_le_bytes(crc_bytes);
-        let crc_calculated = crc32fast::hash(&bytes[0..total_len - 4]);
-        if crc_provided == crc_calculated {
-            Ok(())
-        } else {
-            Err(ErrorCode::StorageOther(format!(
-                "crc checksum validation failure, key : crc checksum not match, crc provided {crc_provided}, crc calculated {crc_calculated}"
-            )))
-        }
-    }
-}
-
-pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, FileSize>>;
-pub type LruDiskCacheHolder = Arc<RwLock<LruDiskCache>>;
-
-pub struct LruDiskCacheBuilder;
-
-impl LruDiskCacheBuilder {
-    pub fn new_disk_cache(
-        path: &PathBuf,
-        disk_cache_bytes_size: u64,
-        fuzzy_reload_cache_keys: bool,
-    ) -> Result<LruDiskCacheHolder> {
-        let external_cache =
-            DiskCache::new(path, disk_cache_bytes_size, fuzzy_reload_cache_keys)
-                .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
-        Ok(Arc::new(RwLock::new(external_cache)))
-    }
-}
