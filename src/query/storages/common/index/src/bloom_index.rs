@@ -24,7 +24,6 @@ use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_expression::converts::datavalues::scalar_to_datavalue;
 use databend_common_expression::eval_function;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MapType;
@@ -226,8 +225,10 @@ impl BloomIndex {
                     // Extract JSON value of string type to create bloom index,
                     // other types of JSON value will be ignored.
                     if val_type.remove_nullable() == DataType::Variant {
-                        let mut builder =
-                            ColumnBuilder::with_capacity(&DataType::String, column.len());
+                        let mut builder = ColumnBuilder::with_capacity(
+                            &DataType::Nullable(Box::new(DataType::String)),
+                            column.len(),
+                        );
                         for val in column.iter() {
                             if let ScalarRef::Variant(v) = val {
                                 if let Ok(str_val) = jsonb::to_str(v) {
@@ -237,23 +238,11 @@ impl BloomIndex {
                             }
                             builder.push_default();
                         }
-                        let str_column = match column {
-                            Column::Nullable(nullable_column) => {
-                                Column::Nullable(Box::new(NullableColumn {
-                                    column: builder.build(),
-                                    validity: nullable_column.validity.clone(),
-                                }))
-                            }
-                            _ => builder.build(),
-                        };
+                        let str_column = builder.build();
                         if Self::check_large_string(&str_column) {
                             continue;
                         }
-                        let str_type = if val_type.is_nullable() {
-                            DataType::Nullable(Box::new(DataType::String))
-                        } else {
-                            DataType::String
-                        };
+                        let str_type = DataType::Nullable(Box::new(DataType::String));
                         (str_column, str_type)
                     } else {
                         if Self::check_large_string(&column) {
