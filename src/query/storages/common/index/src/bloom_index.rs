@@ -590,7 +590,15 @@ fn visit_expr_column_eq_constant(
         Expr::Cast { expr, .. } => {
             visit_expr_column_eq_constant(expr, visitor)?;
         }
-        Expr::FunctionCall { args, .. } => {
+        Expr::FunctionCall { function, args, .. } => {
+            // Ignore the `not`, `is_null` and `is_not_null` functions,
+            // as the return values of these functions may lead to incorrect results.
+            if function.signature.name == "not"
+                || function.signature.name == "is_null"
+                || function.signature.name == "is_not_null"
+            {
+                return Ok(());
+            }
             for arg in args.iter_mut() {
                 visit_expr_column_eq_constant(arg, visitor)?;
             }
