@@ -477,6 +477,7 @@ impl Binder {
             row_id_index,
             split_idx,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
+            enable_right_broadcast: false,
         })
     }
 

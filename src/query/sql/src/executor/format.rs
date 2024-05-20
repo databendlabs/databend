@@ -25,6 +25,9 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use super::physical_plans::AsyncFunction;
+use super::physical_plans::MergeInto;
+use super::physical_plans::MergeIntoAddRowNumber;
+use super::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -240,12 +243,12 @@ fn to_format_tree(
             Ok(FormatTreeNode::new("ReplaceDeduplicate".to_string()))
         }
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
-        PhysicalPlan::MergeInto(_) => Ok(FormatTreeNode::new("MergeInto".to_string())),
-        PhysicalPlan::MergeIntoAddRowNumber(_) => {
-            Ok(FormatTreeNode::new("MergeIntoAddRowNumber".to_string()))
+        PhysicalPlan::MergeInto(plan) => format_merge_into(plan, metadata, profs),
+        PhysicalPlan::MergeIntoAddRowNumber(plan) => {
+            format_merge_into_add_row_number(plan, metadata, profs)
         }
-        PhysicalPlan::MergeIntoAppendNotMatched(_) => {
-            Ok(FormatTreeNode::new("MergeIntoAppendNotMatched".to_string()))
+        PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+            format_merge_into_append_not_matched(plan, metadata, profs)
         }
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::MaterializedCte(plan) => {
@@ -286,6 +289,42 @@ fn append_profile_info(
             }
         }
     }
+}
+
+fn format_merge_into(
+    plan: &MergeInto,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeInto".to_string(),
+        vec![child],
+    ))
+}
+
+fn format_merge_into_add_row_number(
+    plan: &MergeIntoAddRowNumber,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoAddRowNumber".to_string(),
+        vec![child],
+    ))
+}
+
+fn format_merge_into_append_not_matched(
+    plan: &MergeIntoAppendNotMatched,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoAppendNotMatched".to_string(),
+        vec![child],
+    ))
 }
 
 fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
