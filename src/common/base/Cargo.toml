@@ -58,6 +58,9 @@ tikv-jemalloc-sys = "0.5.2"
 tokio = { workspace = true }
 uuid = { workspace = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = { version = "^0.16" }
+
 [dev-dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }

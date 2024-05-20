@@ -17,6 +17,7 @@ mod family;
 mod family_metrics;
 mod gauge;
 mod histogram;
+mod process_collector;
 mod registry;
 mod sample;
 
