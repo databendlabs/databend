@@ -22,14 +22,14 @@ impl Collector for ProcessCollector {
             None => return Ok(()),
         };
 
-        let cpu_total = ConstCounter::new(stat.cpu_total);
-        let cpu_total_encoder = encoder.encode_descriptor(
+        let cpu_secs = ConstCounter::new(stat.cpu_secs);
+        let cpu_secs_encoder = encoder.encode_descriptor(
             "process_cpu_seconds_total",
             "Total user and system CPU time spent in seconds.",
             None,
-            cpu_total.metric_type(),
+            cpu_secs.metric_type(),
         )?;
-        cpu_total.encode(cpu_total_encoder)?;
+        cpu_secs.encode(cpu_secs_encoder)?;
 
         let open_fds = ConstGauge::new(stat.open_fds as f64);
         let open_fds_encoder = encoder.encode_descriptor(
@@ -91,7 +91,7 @@ impl Collector for ProcessCollector {
 
 #[derive(Clone, Default)]
 pub struct ProcessStat {
-    pub cpu_total: u64,
+    pub cpu_secs: u64,
     pub open_fds: u64,
     pub max_fds: u64,
     pub vsize: u64,
@@ -147,7 +147,7 @@ fn dump_linux_process_stat() -> Option<ProcessStat> {
     let rss = stat.rss * (page_size as u64);
 
     // cpu time
-    let cpu_total = (stat.utime + stat.stime) / clk_tck as u64;
+    let cpu_secs = (stat.utime + stat.stime) / clk_tck as u64;
 
     // start time
     let start_time = stat.starttime as i64 * clk_tck;
@@ -160,7 +160,7 @@ fn dump_linux_process_stat() -> Option<ProcessStat> {
         max_fds,
         vsize,
         rss,
-        cpu_total,
+        cpu_secs,
         start_time,
         threads_num,
     })
