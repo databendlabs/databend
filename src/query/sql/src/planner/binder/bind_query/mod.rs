@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bind;
+mod bind_query;
 mod bind_limit;
 mod bind_select;
 mod bind_set_expr;
