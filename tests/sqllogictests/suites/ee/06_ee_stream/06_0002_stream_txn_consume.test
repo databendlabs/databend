@@ -374,32 +374,60 @@ onlyif http
 statement ok
 begin;
 
-# normal dml (without consume, changes should not consumes)
+# normal dml
+onlyif http
+statement ok
+insert into tmp_sink select str from s_1;
+
+# changes should not be consumed
+onlyif http
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+# but changes should be captured by insert stmt
+onlyif http
+query I
+select count() from tmp_sink
+----
+2
+
+# dml and stream consume
+
+onlyif http
+statement ok
+select str from s_1 with consume;
+
+onlyif http
+statement ok
+truncate table tmp_sink;
+
 onlyif http
 statement ok
 insert into tmp_sink select str from s_1;
 
 onlyif http
 query I
-select str from s_1 order by str;
+select count() from tmp_sink
 ----
-a
-b
+0
 
-# and also rollback-able
 onlyif http
 statement ok
-rollback;
+commit;
 
 onlyif http
 query I
 select str from s_1 order by str;
 ----
-a
-b
 
 
 # case 4:  disallows WITH CONSUME inside dml
+
+statement ok
+insert into t_1 (str) values ('a'), ('b');
 
 statement error 1005
 insert into tmp_sink select str from s_1 with consume;
