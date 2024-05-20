@@ -541,11 +541,11 @@ fn visit_expr_column_eq_constant(
     match expr {
         Expr::FunctionCall {
             span,
-            function,
+            id,
             args,
             return_type,
             ..
-        } if function.signature.name == "eq" => match args.as_slice() {
+        } if id.name() == "eq" => match args.as_slice() {
             [
                 Expr::ColumnRef {
                     id,
@@ -578,9 +578,40 @@ fn visit_expr_column_eq_constant(
                 }
             }
             [
-                Expr::FunctionCall { id, args, .. }
-                | Expr::Cast {
-                    expr: box Expr::FunctionCall { id, args, .. },
+                Expr::FunctionCall { id, args, .. },
+                Expr::Constant {
+                    scalar,
+                    data_type: scalar_type,
+                    ..
+                },
+            ]
+            | [
+                Expr::Constant {
+                    scalar,
+                    data_type: scalar_type,
+                    ..
+                },
+                Expr::FunctionCall { id, args, .. },
+            ] => {
+                if id.name() == "get" {
+                    if let Some(new_expr) =
+                        visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
+                    {
+                        *expr = new_expr;
+                        return Ok(());
+                    }
+                }
+            }
+            [
+                Expr::Cast {
+                    expr:
+                        box Expr::FunctionCall {
+                            id,
+                            args,
+                            return_type,
+                            ..
+                        },
+                    dest_type,
                     ..
                 },
                 Expr::Constant {
@@ -595,13 +626,25 @@ fn visit_expr_column_eq_constant(
                     data_type: scalar_type,
                     ..
                 },
-                Expr::FunctionCall { id, args, .. }
-                | Expr::Cast {
-                    expr: box Expr::FunctionCall { id, args, .. },
+                Expr::Cast {
+                    expr:
+                        box Expr::FunctionCall {
+                            id,
+                            args,
+                            return_type,
+                            ..
+                        },
+                    dest_type,
                     ..
                 },
             ] => {
                 if id.name() == "get" {
+                    // Only support cast variant value in map to string value
+                    if return_type.remove_nullable() != DataType::Variant
+                        || dest_type.remove_nullable() != DataType::String
+                    {
+                        return Ok(());
+                    }
                     if let Some(new_expr) =
                         visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
                     {
@@ -620,13 +663,10 @@ fn visit_expr_column_eq_constant(
         Expr::Cast { expr, .. } => {
             visit_expr_column_eq_constant(expr, visitor)?;
         }
-        Expr::FunctionCall { function, args, .. } => {
+        Expr::FunctionCall { id, args, .. } => {
             // Ignore the `not`, `is_null` and `is_not_null` functions,
             // as the return values of these functions may lead to incorrect results.
-            if function.signature.name == "not"
-                || function.signature.name == "is_null"
-                || function.signature.name == "is_not_null"
-            {
+            if id.name() == "not" || id.name() == "is_null" || id.name() == "is_not_null" {
                 return Ok(());
             }
             for arg in args.iter_mut() {
