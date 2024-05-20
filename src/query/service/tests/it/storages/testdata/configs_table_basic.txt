@@ -4,6 +4,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 +-----------+--------------------------------------------+----------------------------------------------------------------+----------+
 | Column 0  | Column 1                                   | Column 2                                                       | Column 3 |
 +-----------+--------------------------------------------+----------------------------------------------------------------+----------+
+| 'cache'   | 'data_cache_key_reload_policy'             | 'reset'                                                        | ''       |
 | 'cache'   | 'data_cache_storage'                       | 'none'                                                         | ''       |
 | 'cache'   | 'disk.max_bytes'                           | '21474836480'                                                  | ''       |
 | 'cache'   | 'disk.path'                                | './.databend/_cache'                                           | ''       |

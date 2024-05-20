@@ -1,0 +1,13 @@
+## query
+"Running"
+## kill
+200
+## page
+{"error":{"code":"400","message":"query id QID canceled"}}
+400
+## final
+{
+  "code": 1043,
+  "message": "canceled by client",
+  "detail": ""
+}

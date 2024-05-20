@@ -568,6 +568,9 @@ pub struct CacheConfig {
     /// Storage that hold the raw data caches
     pub disk_cache_config: DiskCacheConfig,
 
+    /// Policy of reloading disk cache keys
+    pub data_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+
     /// Max size of in memory table column object cache. By default it is 0 (disabled)
     ///
     /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
@@ -589,7 +592,6 @@ pub struct CacheConfig {
 pub enum CacheStorageTypeConfig {
     None,
     Disk,
-    // Redis,
 }
 
 impl Default for CacheStorageTypeConfig {
@@ -598,11 +600,34 @@ impl Default for CacheStorageTypeConfig {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DiskCacheKeyReloadPolicy {
+    // remove all the disk cache during restart
+    Reset,
+    // recovery the cache keys during restart,
+    // but cache capacity will not be checked
+    Fuzzy,
+}
+impl Default for DiskCacheKeyReloadPolicy {
+    fn default() -> Self {
+        Self::Reset
+    }
+}
+
 impl ToString for CacheStorageTypeConfig {
     fn to_string(&self) -> String {
         match self {
             CacheStorageTypeConfig::None => "none".to_string(),
             CacheStorageTypeConfig::Disk => "disk".to_string(),
+        }
+    }
+}
+
+impl ToString for DiskCacheKeyReloadPolicy {
+    fn to_string(&self) -> String {
+        match self {
+            DiskCacheKeyReloadPolicy::Reset => "reset".to_string(),
+            DiskCacheKeyReloadPolicy::Fuzzy => "fuzzy".to_string(),
         }
     }
 }
@@ -643,6 +668,7 @@ impl Default for CacheConfig {
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,
             disk_cache_config: Default::default(),
+            data_cache_key_reload_policy: Default::default(),
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
         }
