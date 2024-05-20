@@ -18353,13 +18353,13 @@ CreateDynamicTable(
 ---------- Input ----------
 GRANT CREATE TASK ON *.* TO role role1
 ---------- Output ---------
-GRANT CREATE DATABASE ON *.* TO ROLE 'role1'
+GRANT CREATE TASK ON *.* TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
         source: Privs {
             privileges: [
-                CreateDatabase,
+                CreateTask,
             ],
             level: Global,
         },
