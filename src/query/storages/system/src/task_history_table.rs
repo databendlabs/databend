@@ -37,13 +37,14 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_run_schema;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use log::info;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -189,7 +190,11 @@ impl AsyncSystemTable for TaskHistoryTable {
         let has_admin_role = all_effective_roles
             .iter()
             .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
-        let req = if has_admin_role {
+        let has_super_priv = ctx
+            .get_current_user()?
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super);
+        let req = if has_admin_role || has_super_priv {
             ShowTaskRunsRequest {
                 tenant_id: tenant.tenant_name().to_string(),
                 scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
@@ -207,25 +212,16 @@ impl AsyncSystemTable for TaskHistoryTable {
         } else {
             let owned_tasks_names =
                 get_owned_task_names(user_api, &tenant, &all_effective_roles, has_admin_role).await;
+            if owned_tasks_names.is_empty() {
+                return parse_task_runs_to_datablock(vec![]);
+            }
             if let Some(task_name) = &task_name {
                 // The user does not have admin role and not own the task_name
                 // Need directly return empty block
                 if !owned_tasks_names.contains(task_name) {
-                    info!(
-                        "--task_history:215 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
-                        all_effective_roles.clone(),
-                        owned_tasks_names.clone(),
-                        task_name.clone()
-                    );
                     return parse_task_runs_to_datablock(vec![]);
                 }
             }
-            info!(
-                "--task_history:224 all_effective_roles is {:?}, owned_tasks_names is {:?}, task_name is {:?}",
-                all_effective_roles.clone(),
-                owned_tasks_names.clone(),
-                task_name.clone()
-            );
             ShowTaskRunsRequest {
                 tenant_id: tenant.tenant_name().to_string(),
                 scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
