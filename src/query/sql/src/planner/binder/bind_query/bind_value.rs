@@ -211,6 +211,7 @@ impl Binder {
         Ok(())
     }
 
+    // Remove unused cache columns and join conditions and construct ExpressionScan's child.
     pub fn construct_expression_scan(
         &mut self,
         s_expr: &SExpr,
@@ -227,6 +228,7 @@ impl Binder {
                 let (right, right_correlated_columns) =
                     self.construct_expression_scan(s_expr.child(1)?, metadata.clone())?;
 
+                // Remove unused cache columns from hash join build side.
                 let used_cache_columns = &self.expression_scan_context.used_column_indexes
                     [build_side_cache_info.cache_idx];
                 for index in (0..build_side_cache_info.columns.len()).rev() {
@@ -236,6 +238,7 @@ impl Binder {
                     }
                 }
 
+                // Remove unused join conditions.
                 let join_conditions = [join.left_conditions.clone(), join.right_conditions.clone()];
                 for index in (0..join.left_conditions.len()).rev() {
                     let mut used = false;
@@ -259,7 +262,7 @@ impl Binder {
                 Ok((s_expr, right_correlated_columns))
             }
             RelOperator::ExpressionScan(scan) => {
-                // The join condition columns is composed of:
+                // The join condition columns may consist of the following two parts:
                 // (1) expression scan columns.
                 // (2) correlated columns in values.
                 let mut join_condition_columns = ColumnSet::new();
@@ -281,6 +284,7 @@ impl Binder {
 
                 let mut scan = scan.clone();
 
+                // Remove ExpressionScan unused cache columns.
                 let mut cache_scan_columns = vec![];
                 let mut cache_scan_column_indexes = vec![];
                 for index in (scan.num_scalar_columns..scan.values[0].len()).rev() {
@@ -298,6 +302,7 @@ impl Binder {
                     }
                 }
 
+                // Construct ExpressionScan schema.
                 let mut expression_scan_field = Vec::with_capacity(scan.values[0].len());
                 for (column_index, data_type) in
                     scan.column_indexes.iter().zip(scan.data_types.iter())
@@ -308,6 +313,7 @@ impl Binder {
                 let expression_scan_schema = DataSchemaRefExt::create(expression_scan_field);
                 scan.schema = expression_scan_schema;
 
+                // Construct CacheScan.
                 let mut cache_scan_fields = Vec::with_capacity(cache_scan_columns.len());
                 for (column, column_index) in cache_scan_columns
                     .iter()
@@ -332,7 +338,7 @@ impl Binder {
                     distinct_columns.push(column);
                 }
 
-                // Wrap logical get with distinct to eliminate duplicates rows.
+                // Wrap CacheScan with distinct to eliminate duplicates rows.
                 let mut group_items = Vec::with_capacity(cache_scan_column_indexes.len());
                 for (index, column_index) in cache_scan_column_indexes.iter().enumerate() {
                     group_items.push(ScalarItem {

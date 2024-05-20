@@ -145,7 +145,7 @@ impl<'a> Binder {
         let plan = match stmt {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
-                (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
+                
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
                     if !cte_info.materialized || cte_info.used_count == 0 {
@@ -159,6 +159,10 @@ impl<'a> Binder {
                         Arc::new(s_expr),
                     );
                 }
+
+                // Remove unused cache columns and join conditions and construct ExpressionScan's child.
+                (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
+
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
                     Some(format_statement(stmt.clone())?)
                 } else {
