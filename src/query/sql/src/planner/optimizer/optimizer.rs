@@ -439,7 +439,6 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
         change_join_order = true;
     }
     let join_op = Join::try_from(join_s_expr.plan().clone())?;
-    let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
     // don't support spill for now, and we need the matched clauses' count
@@ -473,24 +472,24 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
     if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
         // Inner join shouldn't add `RowNumber` node.
-        let mut distributed = true;
+        let mut enable_right_broadcast = false;
         if matches!(join_op.join_type, JoinType::RightAnti | JoinType::Right)
             && merge_source_optimizer
                 .merge_source_matcher
                 .matches(&join_s_expr)
-            && !non_equal_join
         {
+            // Todo(xudong): should consider the cost of shuffle and broadcast.
+            // Current behavior is to always use broadcast join.(source table is usually small)
             join_s_expr = merge_source_optimizer.optimize(&join_s_expr)?;
-        } else {
-            // The join is not distributed, its children has `Exchange::Merge` operator.
-            distributed = false;
+            enable_right_broadcast = true;
         }
 
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: Box::new(join_s_expr),
-            distributed,
+            distributed: true,
             change_join_order,
             columns_set: new_columns_set.clone(),
+            enable_right_broadcast,
             ..*plan
         })))
     } else {

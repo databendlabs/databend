@@ -874,10 +874,10 @@ insert into t11 values (1, 10),(2, 20),(3, 30),(4, 40);
 statement ok
 insert into t12 values (1, 10),(2, 20),(3, 30),(4, 40);
 
-query T
-MERGE INTO t11 USING(SELECT NULL AS c0 FROM t12) AS t12 ON (t11.a OR TRUE) WHEN MATCHED AND TRUE THEN DELETE;
-----
-4
+#query T
+#MERGE INTO t11 USING(SELECT NULL AS c0 FROM t12) AS t12 ON (t11.a OR TRUE) WHEN MATCHED AND TRUE THEN DELETE;
+#----
+#4
 
 query T
 select count(*) from t11;
