@@ -39,6 +39,7 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
 use log::warn;
+use databend_common_catalog::query_kind::QueryKind;
 
 use super::Finder;
 use crate::binder::util::illegal_ident_name;
@@ -663,6 +664,22 @@ impl<'a> Binder {
                 self.bind_set_priority(priority, object_id).await?
             },
         };
+
+        match plan.kind() {
+            QueryKind::Query { .. } | QueryKind::Explain { .. } => {}
+            _ => {
+                let meta_data_guard = self.metadata.read();
+                let tables = meta_data_guard.tables();
+                for t in tables {
+                    if t.is_consume() {
+                        return Err(ErrorCode::SyntaxException(
+                            "WITH CONSUME only allowed in query",
+                        ));
+                    }
+                }
+            }
+        }
+
         Ok(plan)
     }
 
