@@ -37,6 +37,7 @@ use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::BindContext;
+
 impl Binder {
     pub fn schema_project(
         &self,
