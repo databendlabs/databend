@@ -18,6 +18,10 @@ use std::sync::Arc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::make_request;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::DescribeTaskRequest;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
@@ -38,6 +42,7 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::access::AccessChecker;
+use crate::interpreters::common::get_task_client_config;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sql::plans::Plan;
@@ -701,6 +706,18 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::AlterTask(plan) => {
+                if plan.if_exists
+                    && !check_task_exists(
+                        &self.ctx,
+                        plan.task_name.to_string(),
+                        plan.task_name.to_string(),
+                    )
+                    .await?
+                {
+                    // has if exists tag, but task not exists, should skip priv check.
+                    return Ok(());
+                }
+
                 if self
                     .validate_task_access(&plan.task_name, UserPrivilegeType::Alter)
                     .await
@@ -711,6 +728,17 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::DropTask(plan) => {
+                if plan.if_exists
+                    && !check_task_exists(
+                        &self.ctx,
+                        plan.task_name.to_string(),
+                        plan.task_name.to_string(),
+                    )
+                    .await?
+                {
+                    // has if exists tag, but task not exists, should skip priv check.
+                    return Ok(());
+                }
                 if self
                     .validate_task_access(&plan.task_name, UserPrivilegeType::Drop)
                     .await
@@ -1575,4 +1603,28 @@ async fn has_priv(
                 _ => false,
             }
         }))
+}
+
+async fn check_task_exists(
+    ctx: &Arc<QueryContext>,
+    task_name: String,
+    tenant_id: String,
+) -> Result<bool> {
+    let config = GlobalConfig::instance();
+    if config.query.cloud_control_grpc_server_address.is_none() {
+        return Err(ErrorCode::CloudControlNotEnabled(
+            "cannot describe task without cloud control enabled, please set cloud_control_grpc_server_address in config",
+        ));
+    }
+    let cloud_api = CloudControlApiProvider::instance();
+    let task_client = cloud_api.get_task_client();
+    let req = DescribeTaskRequest {
+        task_name,
+        tenant_id,
+        if_exist: false,
+    };
+    let config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
+    let req = make_request(req, config);
+    let resp = task_client.describe_task(req).await?;
+    Ok(resp.task.is_some())
 }
