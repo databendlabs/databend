@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -339,14 +340,16 @@ impl BloomIndex {
         mut expr: Expr<String>,
         scalar_map: &HashMap<Scalar, u64>,
         column_stats: &StatisticsOfColumns,
+        table_id: u64,
         data_schema: TableSchemaRef,
+        invalid_keys: &mut HashSet<String>,
     ) -> Result<FilterEvalResult> {
         let mut new_col_id = 1;
         let mut domains = ConstantFolder::full_input_domains(&expr);
 
         visit_expr_column_eq_constant(
             &mut expr,
-            &mut |span, col_name, scalar, ty, return_type| {
+            &mut |span, col_name, opt_key, scalar, ty, return_type| {
                 let filter_column = &Self::build_filter_column_name(
                     self.version,
                     data_schema.field_with_name(col_name)?,
@@ -388,6 +391,17 @@ impl BloomIndex {
                         display_name: new_col_name,
                     }))
                 } else {
+                    if self
+                        .func_ctx
+                        .bloom_filter_ignore_invalid_key_ratio
+                        .is_some()
+                    {
+                        // If the result of a bloom filter is Uncertain, it means that the filter is invalid,
+                        // and reading the bloom filter data will increase additional costs,
+                        // so we can consider not using this bloom filter in the next query.
+                        let filter_key = build_filter_key(table_id, col_name, opt_key);
+                        invalid_keys.insert(filter_key);
+                    }
                     Ok(None)
                 }
             },
@@ -475,18 +489,23 @@ impl BloomIndex {
 
     /// Find all columns that match the pattern of `col = <constant>` in the expression.
     pub fn find_eq_columns(
+        table_id: u64,
         expr: &Expr<String>,
         fields: Vec<TableField>,
-    ) -> Result<Vec<(TableField, Scalar, DataType)>> {
+    ) -> Result<Vec<(TableField, Scalar, DataType, String)>> {
         let mut cols = Vec::new();
-        visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, scalar, ty, _| {
-            if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
-                if Xor8Filter::supported_type(ty) && !scalar.is_null() {
-                    cols.push((v.clone(), scalar.clone(), ty.clone()));
+        visit_expr_column_eq_constant(
+            &mut expr.clone(),
+            &mut |_, col_name, opt_key, scalar, ty, _| {
+                if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
+                    if Xor8Filter::supported_type(ty) && !scalar.is_null() {
+                        let filter_key = build_filter_key(table_id, col_name, opt_key);
+                        cols.push((v.clone(), scalar.clone(), ty.clone(), filter_key));
+                    }
                 }
-            }
-            Ok(None)
-        })?;
+                Ok(None)
+            },
+        )?;
         Ok(cols)
     }
 
@@ -559,7 +578,14 @@ impl BloomIndex {
 
 fn visit_expr_column_eq_constant(
     expr: &mut Expr<String>,
-    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
+    visitor: &mut impl FnMut(
+        Span,
+        &str,
+        Option<&Scalar>,
+        &Scalar,
+        &DataType,
+        &DataType,
+    ) -> Result<Option<Expr<String>>>,
 ) -> Result<()> {
     // Find patterns like `Column = <constant>`, `<constant> = Column`,
     // or `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
@@ -597,7 +623,8 @@ fn visit_expr_column_eq_constant(
             ] => {
                 debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
-                if let Some(new_expr) = visitor(*span, id, scalar, column_type, return_type)? {
+                if let Some(new_expr) = visitor(*span, id, None, scalar, column_type, return_type)?
+                {
                     *expr = new_expr;
                     return Ok(());
                 }
@@ -705,7 +732,14 @@ fn visit_map_column(
     scalar: &Scalar,
     scalar_type: &DataType,
     return_type: &DataType,
-    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
+    visitor: &mut impl FnMut(
+        Span,
+        &str,
+        Option<&Scalar>,
+        &Scalar,
+        &DataType,
+        &DataType,
+    ) -> Result<Option<Expr<String>>>,
 ) -> Result<Option<Expr<String>>> {
     match &args[0] {
         Expr::ColumnRef { id, data_type, .. }
@@ -726,10 +760,24 @@ fn visit_map_column(
                 } else if val_type.remove_nullable() != scalar_type.remove_nullable() {
                     return Ok(None);
                 }
-                return visitor(span, id, scalar, scalar_type, return_type);
+                if let Expr::Constant { scalar: key, .. } = &args[1] {
+                    return visitor(span, id, Some(key), scalar, scalar_type, return_type);
+                } else {
+                    return Ok(None);
+                }
             }
         }
         _ => {}
     }
     Ok(None)
+}
+
+// The filter key consists of the table id and column name, if the field is a map, the map's field key is also included.
+// Filter key can be stored in the cache to ignore bloom filters that always return Uncertain.
+fn build_filter_key(table_id: u64, col_name: &str, opt_key: Option<&Scalar>) -> String {
+    if let Some(key) = opt_key {
+        format!("{}_{}[{}]", table_id, col_name, key)
+    } else {
+        format!("{}_{}", table_id, col_name)
+    }
 }

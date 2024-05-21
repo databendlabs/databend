@@ -135,6 +135,7 @@ impl FuseTable {
             // read segments.
             let compact_segments = Self::segment_pruning(
                 &ctx,
+                self.get_id(),
                 self.schema_with_stream(),
                 self.get_operator(),
                 &push_downs,
@@ -221,6 +222,7 @@ impl FuseTable {
 
     pub async fn segment_pruning(
         ctx: &Arc<dyn TableContext>,
+        table_id: u64,
         schema: TableSchemaRef,
         dal: Operator,
         push_down: &Option<PushDownInfo>,
@@ -242,6 +244,7 @@ impl FuseTable {
         let pruning_ctx = PruningContext::try_create(
             ctx,
             dal,
+            table_id,
             schema.clone(),
             push_down,
             None,

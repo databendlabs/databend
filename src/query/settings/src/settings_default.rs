@@ -738,6 +738,12 @@ impl DefaultSettings {
                     desc: "The maximum temp files will be removed after query. please enable vacuum feature. disable if 0",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("bloom_filter_ignore_invalid_key_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(100),
+                    desc: "The ratio of bloom filter invalid keys enable. If the ratio of bloom filters return Uncertain exceeds this value, the filter key of bloom index is ignored in the following queries.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(70..=100)),
                 })
             ]);
 

@@ -169,10 +169,12 @@ impl FuseTable {
             }
         }
 
+        let table_id = self.get_id();
         let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(
                 &ctx,
                 dal.clone(),
+                table_id,
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
@@ -183,6 +185,7 @@ impl FuseTable {
             FusePruner::create_with_pages(
                 &ctx,
                 dal.clone(),
+                table_id,
                 table_schema,
                 &push_downs,
                 self.cluster_key_meta.clone(),

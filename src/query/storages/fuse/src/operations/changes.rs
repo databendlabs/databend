@@ -279,6 +279,7 @@ impl FuseTable {
             return Ok((PartStatistics::default(), Partitions::default()));
         }
 
+        let table_id = self.get_id();
         let table_schema = self.schema_with_stream();
         let (cluster_keys, cluster_key_meta) =
             if !self.is_native() || self.cluster_key_meta().is_none() {
@@ -290,6 +291,7 @@ impl FuseTable {
         let mut pruner = FusePruner::create_with_pages(
             &ctx,
             self.get_operator(),
+            table_id,
             table_schema.clone(),
             &push_downs,
             cluster_key_meta,

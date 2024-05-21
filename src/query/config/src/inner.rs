@@ -530,6 +530,9 @@ pub struct CacheConfig {
     /// Max number of cached prune partitions objects. Set it to 0 to disable it.
     pub table_prune_partitions_count: u64,
 
+    /// Max number of cached prune bloom filter invalid keys objects. Set it to 0 to disable it.
+    pub table_prune_bloom_filter_invalid_keys_count: u64,
+
     /// Max number of cached bloom index filters. Set it to 0 to disable it.
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     //
@@ -665,6 +668,7 @@ impl Default for CacheConfig {
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
+            table_prune_bloom_filter_invalid_keys_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,
             disk_cache_config: Default::default(),

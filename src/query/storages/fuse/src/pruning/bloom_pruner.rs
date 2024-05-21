@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -25,6 +26,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_table_meta::meta::Location;
@@ -43,6 +46,7 @@ pub trait BloomPruner {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
+        invalid_keys: &mut HashSet<String>,
     ) -> bool;
 }
 
@@ -61,6 +65,9 @@ pub struct BloomPrunerCreator {
     /// the data accessor
     dal: Operator,
 
+    /// table id
+    table_id: u64,
+
     /// the schema of data being indexed
     data_schema: TableSchemaRef,
 }
@@ -68,6 +75,7 @@ pub struct BloomPrunerCreator {
 impl BloomPrunerCreator {
     pub fn create(
         func_ctx: FunctionContext,
+        table_id: u64,
         schema: &TableSchemaRef,
         dal: Operator,
         filter_expr: Option<&Expr<String>>,
@@ -77,18 +85,33 @@ impl BloomPrunerCreator {
             let bloom_columns_map =
                 bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
             let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
-            let point_query_cols = BloomIndex::find_eq_columns(expr, bloom_column_fields)?;
+            let point_query_cols =
+                BloomIndex::find_eq_columns(table_id, expr, bloom_column_fields)?;
 
             if !point_query_cols.is_empty() {
                 // convert to filter column names
                 let mut filter_fields = Vec::with_capacity(point_query_cols.len());
                 let mut scalar_map = HashMap::<Scalar, u64>::new();
-                for (field, scalar, ty) in point_query_cols.into_iter() {
+
+                type CacheItem = bool;
+                for (field, scalar, ty, filter_key) in point_query_cols.into_iter() {
+                    if func_ctx.bloom_filter_ignore_invalid_key_ratio.is_some() {
+                        // If the invalid key cache contains this filter key, we can ignore it.
+                        if let Some(cache) = CacheItem::cache() {
+                            if cache.contains_key(&filter_key) {
+                                continue;
+                            }
+                        }
+                    }
+
                     filter_fields.push(field);
                     if let Entry::Vacant(e) = scalar_map.entry(scalar.clone()) {
                         let digest = BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &ty)?;
                         e.insert(digest);
                     }
+                }
+                if filter_fields.is_empty() {
+                    return Ok(None);
                 }
 
                 let creator = BloomPrunerCreator {
@@ -97,6 +120,7 @@ impl BloomPrunerCreator {
                     filter_expression: expr.clone(),
                     scalar_map,
                     dal,
+                    table_id,
                     data_schema: schema.clone(),
                 };
                 return Ok(Some(Arc::new(creator)));
@@ -113,6 +137,7 @@ impl BloomPrunerCreator {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids_of_indexed_block: Vec<ColumnId>,
+        invalid_keys: &mut HashSet<String>,
     ) -> Result<bool> {
         let version = index_location.1;
 
@@ -143,7 +168,9 @@ impl BloomPrunerCreator {
                 self.filter_expression.clone(),
                 &self.scalar_map,
                 column_stats,
+                self.table_id,
                 self.data_schema.clone(),
+                invalid_keys,
             )? != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return true to indicate
@@ -165,11 +192,12 @@ impl BloomPruner for BloomPrunerCreator {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
+        invalid_keys: &mut HashSet<String>,
     ) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
             match self
-                .apply(loc, index_length, column_stats, column_ids)
+                .apply(loc, index_length, column_stats, column_ids, invalid_keys)
                 .await
             {
                 Ok(v) => v,
