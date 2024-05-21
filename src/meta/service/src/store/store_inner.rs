@@ -14,6 +14,7 @@
 
 use std::io;
 use std::io::ErrorKind;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,7 +40,6 @@ use databend_common_meta_raft_store::state::RaftState;
 use databend_common_meta_raft_store::state::RaftStateKey;
 use databend_common_meta_raft_store::state::RaftStateValue;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
-use databend_common_meta_raft_store::state_machine::StoredSnapshot;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
@@ -101,9 +101,7 @@ pub struct StoreInner {
     pub state_machine: Arc<RwLock<SMV002>>,
 
     /// The current snapshot.
-    pub current_snapshot: RwLock<Option<StoredSnapshot>>,
-
-    pub key_num: RwLock<Option<usize>>,
+    pub current_snapshot: RwLock<Option<SnapshotMeta>>,
 }
 
 impl AsRef<StoreInner> for StoreInner {
@@ -153,7 +151,7 @@ impl StoreInner {
             .await
             .map_err(to_startup_err)?;
 
-        let (sm, stored_snapshot) = if let Some((id, snapshot)) = last {
+        let (sm, snapshot_meta) = if let Some((id, snapshot)) = last {
             let (sm, meta) = Self::rebuild_state_machine(&id, snapshot)
                 .await
                 .map_err(to_startup_err)?;
@@ -162,15 +160,21 @@ impl StoreInner {
                 "rebuilt state machine from last snapshot({:?}), meta: {:?}",
                 id, meta
             );
-            (sm, Some(StoredSnapshot { meta }))
+
+            if id.key_num.is_none() {
+                warn!(
+                    "no key num embedded in snapshot id: {:?}; key num will be updated next time building/installing snapshot",
+                    id
+                );
+            }
+
+            (sm, Some(meta))
         } else {
             info!("No snapshot, skip rebuilding state machine");
             (Default::default(), None)
         };
-        let key_num = Self::calculate_key_num(&stored_snapshot, config.clone()).await;
-        metrics::server_metrics::set_snapshot_key_num(key_num.unwrap_or_default() as i64);
 
-        Ok(Self {
+        let store = Self {
             id: raft_state.id,
             config: config.clone(),
             is_opened: is_open,
@@ -178,54 +182,12 @@ impl StoreInner {
             raft_state: RwLock::new(raft_state),
             log: RwLock::new(log),
             state_machine: sm,
-            current_snapshot: RwLock::new(stored_snapshot),
-            key_num: RwLock::new(key_num),
-        })
-    }
+            current_snapshot: RwLock::new(None),
+        };
 
-    pub async fn key_num(&self) -> Option<usize> {
-        let key_num = self.key_num.read().await;
-        *key_num
-    }
+        store.set_snapshot(snapshot_meta).await;
 
-    async fn calculate_key_num(
-        snapshot: &Option<StoredSnapshot>,
-        config: RaftConfig,
-    ) -> Option<usize> {
-        if let Some(s) = snapshot {
-            let meta = &s.meta;
-
-            let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, config);
-            match snapshot_store.load_snapshot(&meta.snapshot_id).await {
-                Err(e) => {
-                    error!("calculate_key_num error: {:?}", e);
-                    None
-                }
-                Ok(f) => {
-                    let bf = BufReader::new(f);
-                    let mut lines = AsyncBufReadExt::lines(bf);
-
-                    let mut count = 0;
-                    loop {
-                        let l = lines.next_line().await;
-                        if let Err(e) = l {
-                            error!("calculate_key_num async read line error: {:?}", e);
-                            return None;
-                        } else if let Ok(l) = l {
-                            if l.is_some() {
-                                count += 1;
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-
-                    Some(count)
-                }
-            }
-        } else {
-            None
-        }
+        Ok(store)
     }
 
     /// Return a snapshot store of this instance.
@@ -332,21 +294,7 @@ impl StoreInner {
         );
         snapshot_meta.snapshot_id = snapshot_id.to_string();
 
-        {
-            let mut key_num = self.key_num.write().await;
-            *key_num = Some(snapshot_stat.entry_cnt as usize);
-        }
-
-        metrics::server_metrics::set_snapshot_key_num(snapshot_stat.entry_cnt as i64);
-
-        {
-            let snapshot = Some(StoredSnapshot {
-                meta: snapshot_meta.clone(),
-            });
-
-            let mut current_snapshot = self.current_snapshot.write().await;
-            *current_snapshot = snapshot;
-        }
+        self.set_snapshot(Some(snapshot_meta.clone())).await;
 
         let r = ss_store
             .load_snapshot(&snapshot_meta.snapshot_id)
@@ -386,6 +334,50 @@ impl StoreInner {
                 warn!("finished {} sleep", key);
             }
         }
+    }
+
+    /// Store the last snapshot in memory.
+    ///
+    /// The snapshot is a small object and the snapshot data is store on disk.
+    pub(crate) async fn set_snapshot(&self, snapshot_meta: Option<SnapshotMeta>) {
+        info!("set_snapshot: {:?}", snapshot_meta);
+
+        // Update snapshot metrics
+        let key_num = if let Some(meta) = &snapshot_meta {
+            match MetaSnapshotId::from_str(&meta.snapshot_id) {
+                Ok(id) => id.key_num.unwrap_or_default() as i64,
+                Err(e) => {
+                    warn!("invalid snapshot id: {:?}, error: {:?}", meta, e);
+                    0
+                }
+            }
+        } else {
+            0
+        };
+
+        metrics::server_metrics::set_snapshot_key_num(key_num);
+
+        let mut current_snapshot = self.current_snapshot.write().await;
+        *current_snapshot = snapshot_meta;
+    }
+
+    /// Return snapshot id and meta of the last snapshot.
+    ///
+    /// It returns None if there is no snapshot or there is an error parsing snapshot meta or id.
+    pub(crate) async fn try_get_snapshot_info(&self) -> Option<(MetaSnapshotId, SnapshotMeta)> {
+        let meta = {
+            let current_snapshot = self.current_snapshot.read().await;
+            current_snapshot.clone()
+        };
+
+        let meta = meta?;
+
+        let Ok(id) = MetaSnapshotId::from_str(&meta.snapshot_id) else {
+            warn!("invalid snapshot id: {:?}", meta);
+            return None;
+        };
+
+        Some((id, meta))
     }
 
     /// Build and compact a snapshot view.
@@ -531,10 +523,8 @@ impl StoreInner {
         // Do not change it for keeping compatibility.
         let sm_tree_name = "state_machine/0";
         let f = {
-            let snapshot = current_snapshot.clone();
-            if let Some(s) = snapshot {
-                let meta = s.meta;
-
+            let snapshot_meta = current_snapshot.clone();
+            if let Some(meta) = snapshot_meta {
                 let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.config.clone());
 
                 let f = snapshot_store
