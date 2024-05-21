@@ -498,7 +498,19 @@ impl TableContext for CtxDelegation {
 
     fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
+    fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
+        todo!()
+    }
+
     fn get_query_str(&self) -> String {
+        todo!()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        todo!()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
         todo!()
     }
 

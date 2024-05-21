@@ -576,6 +576,7 @@ Explain {
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -659,6 +660,7 @@ Explain {
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -734,6 +736,7 @@ Explain {
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -948,6 +951,7 @@ CreateIndex(
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -1141,6 +1145,7 @@ CreateIndex(
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -1308,6 +1313,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1358,6 +1364,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1408,6 +1415,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1455,6 +1463,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1537,6 +1546,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1619,6 +1629,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1668,6 +1679,7 @@ CreateTable(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -1764,6 +1776,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -1916,6 +1929,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -2045,6 +2059,112 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a string, b string, inverted index idx1 (a,b) tokenizer='chinese');
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a STRING, b STRING, INVERTED INDEX idx1 (a, b) tokenizer = 'chinese')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: CreateIfNotExists,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    27..28,
+                ),
+                name: "a",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                29..30,
+            ),
+            name: "b",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                32..33,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                42..43,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+                Some(
+                    [
+                        InvertedIndexDefinition {
+                            index_name: Identifier {
+                                span: Some(
+                                    67..71,
+                                ),
+                                name: "idx1",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            columns: [
+                                Identifier {
+                                    span: Some(
+                                        73..74,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                Identifier {
+                                    span: Some(
+                                        75..76,
+                                    ),
+                                    name: "b",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ],
+                            sync_creation: true,
+                            index_options: {
+                                "tokenizer": "chinese",
+                            },
+                        },
+                    ],
+                ),
             ),
         ),
         engine: None,
@@ -2205,6 +2325,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -2278,6 +2399,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -2657,6 +2779,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -2800,6 +2923,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4203,6 +4327,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4282,6 +4407,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4342,6 +4468,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4400,6 +4527,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -4478,6 +4606,7 @@ CreateTable(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -4828,6 +4957,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5051,6 +5181,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5120,6 +5251,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5196,6 +5328,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5263,6 +5396,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5282,6 +5416,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5301,6 +5436,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5368,6 +5504,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5387,6 +5524,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5406,6 +5544,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -5591,6 +5730,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -5610,6 +5750,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -5749,6 +5890,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -5768,6 +5910,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -5907,6 +6050,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -5926,6 +6070,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6065,6 +6210,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6084,6 +6230,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6223,6 +6370,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6242,6 +6390,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6381,6 +6530,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6400,6 +6550,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6539,6 +6690,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6558,6 +6710,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6697,6 +6850,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6716,6 +6870,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6855,6 +7010,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -6874,6 +7030,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7013,6 +7170,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7032,6 +7190,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7171,6 +7330,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7190,6 +7350,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7277,6 +7438,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7296,6 +7458,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7383,6 +7546,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7402,6 +7566,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7489,6 +7654,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7508,6 +7674,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7595,6 +7762,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7614,6 +7782,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -7683,6 +7852,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -7791,6 +7961,7 @@ Query(
                                                 },
                                                 alias: None,
                                                 temporal: None,
+                                                consume: false,
                                                 pivot: None,
                                                 unpivot: None,
                                             },
@@ -7872,6 +8043,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -7980,6 +8152,7 @@ Query(
                                                 },
                                                 alias: None,
                                                 temporal: None,
+                                                consume: false,
                                                 pivot: None,
                                                 unpivot: None,
                                             },
@@ -8061,6 +8234,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -8169,6 +8343,7 @@ Query(
                                                 },
                                                 alias: None,
                                                 temporal: None,
+                                                consume: false,
                                                 pivot: None,
                                                 unpivot: None,
                                             },
@@ -8250,6 +8425,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -8356,6 +8532,7 @@ Query(
                                                 },
                                                 alias: None,
                                                 temporal: None,
+                                                consume: false,
                                                 pivot: None,
                                                 unpivot: None,
                                             },
@@ -8887,6 +9064,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -8974,6 +9152,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -9411,6 +9590,7 @@ Insert(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -10184,6 +10364,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10238,6 +10419,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10272,6 +10454,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10304,6 +10487,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10376,6 +10560,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10425,6 +10610,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10474,6 +10660,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10536,6 +10723,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10603,6 +10791,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10652,6 +10841,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10693,6 +10883,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10734,6 +10925,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10778,6 +10970,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10821,6 +11014,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10895,6 +11089,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -10975,6 +11170,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -11025,6 +11221,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -11075,6 +11272,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -11118,6 +11316,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -11464,6 +11663,7 @@ CreateTable(
                         ),
                     },
                 ],
+                None,
             ),
         ),
         engine: None,
@@ -14809,6 +15009,7 @@ Update(
             },
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -15410,6 +15611,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
+                                consume: false,
                                 pivot: None,
                                 unpivot: None,
                             },
@@ -15654,6 +15856,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -15810,6 +16013,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -15964,6 +16168,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -16137,6 +16342,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -16290,6 +16496,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -16419,6 +16626,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -17314,6 +17522,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -17399,6 +17608,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         cluster_by: [],
@@ -17457,6 +17667,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -17542,6 +17753,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         cluster_by: [
@@ -17653,6 +17865,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -17726,6 +17939,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         cluster_by: [
@@ -17855,6 +18069,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -17953,6 +18168,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
             ),
         ),
         cluster_by: [
@@ -18089,6 +18305,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
+                            consume: false,
                             pivot: None,
                             unpivot: None,
                         },
@@ -19716,6 +19933,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -19829,6 +20047,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
+                        consume: false,
                         pivot: None,
                         unpivot: None,
                     },
@@ -20343,6 +20562,47 @@ CreateUDF(
 
 
 ---------- Input ----------
+create or replace function addone(int)
+returns int
+language python
+handler = 'addone_py'
+as '@data/abc/a.py';
+---------- Output ---------
+CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
+@data/abc/a.py
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            span: Some(
+                27..33,
+            ),
+            name: "addone",
+            quote: None,
+            is_hole: false,
+        },
+        description: None,
+        definition: UDFScript {
+            arg_types: [
+                Nullable(
+                    Int32,
+                ),
+            ],
+            return_type: Nullable(
+                Int32,
+            ),
+            code: "@data/abc/a.py",
+            handler: "addone_py",
+            language: "python",
+            runtime_version: "",
+        },
+    },
+)
+
+
+---------- Input ----------
 DROP FUNCTION binary_reverse;
 ---------- Output ---------
 DROP FUNCTION binary_reverse
@@ -20399,6 +20659,497 @@ $$
 ExecuteImmediate(
     ExecuteImmediateStmt {
         script: "BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;",
+    },
+)
+
+
+---------- Input ----------
+with
+abc as (
+    select
+        id, uid, eid, match_id, created_at, updated_at
+    from (
+        select * from ddd.ccc where score > 0 limit 10
+    )
+    qualify row_number() over(partition by uid,eid order by updated_at desc) = 1
+)
+select * from abc;
+---------- Output ---------
+WITH abc AS (SELECT id, uid, eid, match_id, created_at, updated_at FROM (SELECT * FROM ddd.ccc WHERE score > 0 LIMIT 10) QUALIFY row_number() OVER ( PARTITION BY uid, eid ORDER BY updated_at DESC ) = 1) SELECT * FROM abc
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            235..252,
+        ),
+        with: Some(
+            With {
+                span: Some(
+                    0..234,
+                ),
+                recursive: false,
+                ctes: [
+                    CTE {
+                        span: Some(
+                            5..234,
+                        ),
+                        alias: TableAlias {
+                            name: Identifier {
+                                span: Some(
+                                    5..8,
+                                ),
+                                name: "abc",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            columns: [],
+                        },
+                        materialized: false,
+                        query: Query {
+                            span: Some(
+                                18..232,
+                            ),
+                            with: None,
+                            body: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        18..232,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    33..35,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                33..35,
+                                                            ),
+                                                            name: "id",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    37..40,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                37..40,
+                                                            ),
+                                                            name: "uid",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    42..45,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                42..45,
+                                                            ),
+                                                            name: "eid",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    47..55,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                47..55,
+                                                            ),
+                                                            name: "match_id",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    57..67,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                57..67,
+                                                            ),
+                                                            name: "created_at",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    69..79,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                69..79,
+                                                            ),
+                                                            name: "updated_at",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Subquery {
+                                            span: Some(
+                                                89..151,
+                                            ),
+                                            lateral: false,
+                                            subquery: Query {
+                                                span: Some(
+                                                    99..136,
+                                                ),
+                                                with: None,
+                                                body: Select(
+                                                    SelectStmt {
+                                                        span: Some(
+                                                            99..136,
+                                                        ),
+                                                        hints: None,
+                                                        distinct: false,
+                                                        top_n: None,
+                                                        select_list: [
+                                                            StarColumns {
+                                                                qualified: [
+                                                                    Star(
+                                                                        Some(
+                                                                            106..107,
+                                                                        ),
+                                                                    ),
+                                                                ],
+                                                                column_filter: None,
+                                                            },
+                                                        ],
+                                                        from: [
+                                                            Table {
+                                                                span: Some(
+                                                                    113..120,
+                                                                ),
+                                                                catalog: None,
+                                                                database: Some(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            113..116,
+                                                                        ),
+                                                                        name: "ddd",
+                                                                        quote: None,
+                                                                        is_hole: false,
+                                                                    },
+                                                                ),
+                                                                table: Identifier {
+                                                                    span: Some(
+                                                                        117..120,
+                                                                    ),
+                                                                    name: "ccc",
+                                                                    quote: None,
+                                                                    is_hole: false,
+                                                                },
+                                                                alias: None,
+                                                                temporal: None,
+                                                                consume: false,
+                                                                pivot: None,
+                                                                unpivot: None,
+                                                            },
+                                                        ],
+                                                        selection: Some(
+                                                            BinaryOp {
+                                                                span: Some(
+                                                                    133..134,
+                                                                ),
+                                                                op: Gt,
+                                                                left: ColumnRef {
+                                                                    span: Some(
+                                                                        127..132,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    127..132,
+                                                                                ),
+                                                                                name: "score",
+                                                                                quote: None,
+                                                                                is_hole: false,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                right: Literal {
+                                                                    span: Some(
+                                                                        135..136,
+                                                                    ),
+                                                                    value: UInt64(
+                                                                        0,
+                                                                    ),
+                                                                },
+                                                            },
+                                                        ),
+                                                        group_by: None,
+                                                        having: None,
+                                                        window_list: None,
+                                                        qualify: None,
+                                                    },
+                                                ),
+                                                order_by: [],
+                                                limit: [
+                                                    Literal {
+                                                        span: Some(
+                                                            143..145,
+                                                        ),
+                                                        value: UInt64(
+                                                            10,
+                                                        ),
+                                                    },
+                                                ],
+                                                offset: None,
+                                                ignore_result: false,
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: Some(
+                                        BinaryOp {
+                                            span: Some(
+                                                229..230,
+                                            ),
+                                            op: Eq,
+                                            left: FunctionCall {
+                                                span: Some(
+                                                    164..228,
+                                                ),
+                                                func: FunctionCall {
+                                                    distinct: false,
+                                                    name: Identifier {
+                                                        span: Some(
+                                                            164..174,
+                                                        ),
+                                                        name: "row_number",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                    args: [],
+                                                    params: [],
+                                                    window: Some(
+                                                        WindowSpec(
+                                                            WindowSpec {
+                                                                existing_window_name: None,
+                                                                partition_by: [
+                                                                    ColumnRef {
+                                                                        span: Some(
+                                                                            195..198,
+                                                                        ),
+                                                                        column: ColumnRef {
+                                                                            database: None,
+                                                                            table: None,
+                                                                            column: Name(
+                                                                                Identifier {
+                                                                                    span: Some(
+                                                                                        195..198,
+                                                                                    ),
+                                                                                    name: "uid",
+                                                                                    quote: None,
+                                                                                    is_hole: false,
+                                                                                },
+                                                                            ),
+                                                                        },
+                                                                    },
+                                                                    ColumnRef {
+                                                                        span: Some(
+                                                                            199..202,
+                                                                        ),
+                                                                        column: ColumnRef {
+                                                                            database: None,
+                                                                            table: None,
+                                                                            column: Name(
+                                                                                Identifier {
+                                                                                    span: Some(
+                                                                                        199..202,
+                                                                                    ),
+                                                                                    name: "eid",
+                                                                                    quote: None,
+                                                                                    is_hole: false,
+                                                                                },
+                                                                            ),
+                                                                        },
+                                                                    },
+                                                                ],
+                                                                order_by: [
+                                                                    OrderByExpr {
+                                                                        expr: ColumnRef {
+                                                                            span: Some(
+                                                                                212..222,
+                                                                            ),
+                                                                            column: ColumnRef {
+                                                                                database: None,
+                                                                                table: None,
+                                                                                column: Name(
+                                                                                    Identifier {
+                                                                                        span: Some(
+                                                                                            212..222,
+                                                                                        ),
+                                                                                        name: "updated_at",
+                                                                                        quote: None,
+                                                                                        is_hole: false,
+                                                                                    },
+                                                                                ),
+                                                                            },
+                                                                        },
+                                                                        asc: Some(
+                                                                            false,
+                                                                        ),
+                                                                        nulls_first: None,
+                                                                    },
+                                                                ],
+                                                                window_frame: None,
+                                                            },
+                                                        ),
+                                                    ),
+                                                    lambda: None,
+                                                },
+                                            },
+                                            right: Literal {
+                                                span: Some(
+                                                    231..232,
+                                                ),
+                                                value: UInt64(
+                                                    1,
+                                                ),
+                                            },
+                                        },
+                                    ),
+                                },
+                            ),
+                            order_by: [],
+                            limit: [],
+                            offset: None,
+                            ignore_result: false,
+                        },
+                    },
+                ],
+            },
+        ),
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    235..252,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    242..243,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            249..252,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                249..252,
+                            ),
+                            name: "abc",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        temporal: None,
+                        consume: false,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 

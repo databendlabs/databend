@@ -17,12 +17,6 @@ memory-profiling = [
 simd = ["databend-meta/simd", "databend-query/simd"]
 z3-prove = ["databend-query/z3-prove"]
 jemalloc = ["databend-common-base/jemalloc"]
-tokio-console = [
-    "databend-meta/tokio-console",
-    "databend-query/io-uring",
-    "databend-common-base/tracing",
-    "databend-common-tracing/console",
-]
 io-uring = [
     "databend-meta/io-uring",
     "databend-query/io-uring",
@@ -67,13 +61,6 @@ log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 poem = { workspace = true }
-sentry = { version = "0.32.2", default-features = false, features = [
-    "backtrace",
-    "contexts",
-    "panic",
-    "reqwest",
-    "rustls",
-] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }

@@ -114,6 +114,9 @@ pub struct MetaNodeStatus {
     /// The size in bytes of the on disk data.
     pub db_size: u64,
 
+    /// key number of current snapshot
+    pub key_num: usize,
+
     /// Server state, one of "Follower", "Learner", "Candidate", "Leader".
     pub state: String,
 
@@ -910,6 +913,8 @@ impl MetaNode {
             MetaError::StorageError(se)
         })?;
 
+        let key_num = self.sto.key_num().await.map_or(0, |num| num);
+
         let metrics = self.raft.metrics().borrow().clone();
 
         let leader = if let Some(leader_id) = metrics.current_leader {
@@ -926,6 +931,7 @@ impl MetaNode {
             data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
             db_size,
+            key_num,
             state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,

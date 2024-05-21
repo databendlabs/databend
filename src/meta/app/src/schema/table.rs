@@ -695,6 +695,11 @@ pub struct UpdateMultiTableMetaReq {
     pub deduplicated_labels: Vec<String>,
 }
 
+/// The result of updating multiple table meta
+///
+/// If update fails due to table version mismatch, the `Err` will contain the (table id, seq , table meta)s that fail to update.
+pub type UpdateMultiTableMetaResult = std::result::Result<(), Vec<(u64, u64, TableMeta)>>;
+
 impl UpsertTableOptionReq {
     pub fn new(
         table_ident: &TableIdent,

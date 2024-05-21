@@ -173,6 +173,7 @@ message ClusterStatus {
   repeated string voters = 15;
   repeated string non_voters = 16;
   uint64 last_seq = 17;
+  uint64 key_num = 18;
 }
 
 message ClientInfo {

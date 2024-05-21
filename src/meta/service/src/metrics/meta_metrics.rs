@@ -51,6 +51,7 @@ pub mod server_metrics {
         node_is_health: Gauge,
         leader_changes: Counter,
         applying_snapshot: Gauge,
+        snapshot_key_num: Gauge,
         last_log_index: Gauge,
         last_seq: Gauge,
         current_term: Gauge,
@@ -70,6 +71,7 @@ pub mod server_metrics {
                 node_is_health: Gauge::default(),
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
+                snapshot_key_num: Gauge::default(),
                 last_log_index: Gauge::default(),
                 last_seq: Gauge::default(),
                 current_term: Gauge::default(),
@@ -102,6 +104,11 @@ pub mod server_metrics {
                 key!("applying_snapshot"),
                 "if this node is applying snapshot",
                 metrics.applying_snapshot.clone(),
+            );
+            registry.register(
+                key!("snapshot_key_num"),
+                "snapshot key numbers",
+                metrics.snapshot_key_num.clone(),
             );
             registry.register(
                 key!("proposals_applied"),
@@ -161,6 +168,10 @@ pub mod server_metrics {
     /// Whether or not state-machine is applying snapshot.
     pub fn incr_applying_snapshot(cnt: i64) {
         SERVER_METRICS.applying_snapshot.inc_by(cnt);
+    }
+
+    pub fn set_snapshot_key_num(snapshot_key_num: i64) {
+        SERVER_METRICS.snapshot_key_num.set(snapshot_key_num);
     }
 
     pub fn set_proposals_applied(proposals_applied: u64) {

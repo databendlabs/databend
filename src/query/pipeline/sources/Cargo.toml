@@ -11,9 +11,6 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[package.metadata.cargo-machete]
-ignored = ["xml-rs"]
-
 [dependencies]
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
@@ -45,4 +42,3 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 typetag = { workspace = true }
-xml-rs = "0.8.14"

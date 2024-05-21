@@ -122,6 +122,7 @@ pub use table::UndropTableByIdReq;
 pub use table::UndropTableReply;
 pub use table::UndropTableReq;
 pub use table::UpdateMultiTableMetaReq;
+pub use table::UpdateMultiTableMetaResult;
 pub use table::UpdateStreamMetaReq;
 pub use table::UpdateTableMetaReply;
 pub use table::UpdateTableMetaReq;

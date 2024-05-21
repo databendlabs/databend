@@ -679,6 +679,7 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
+        consume: bool,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -737,15 +738,16 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |((catalog, database, table), temporal, alias, pivot, unpivot)| {
+        |((catalog, database, table), temporal, opt_consume, alias, pivot, unpivot)| {
             TableReferenceElement::Table {
                 catalog,
                 database,
                 table,
                 alias,
                 temporal,
+                consume: opt_consume.is_some(),
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
             }
@@ -856,6 +858,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot,
                 unpivot,
             } => TableReference::Table {
@@ -865,6 +868,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot,
                 unpivot,
             },

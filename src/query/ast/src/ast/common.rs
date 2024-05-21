@@ -19,7 +19,7 @@ use databend_common_exception::Span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::parser::quote::quote_ident;
+use crate::ast::quote::QuotedIdent;
 
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -62,9 +62,8 @@ impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.is_hole {
             write!(f, "IDENTIFIER(:{})", self.name)
-        } else if let Some(c) = self.quote {
-            let quoted = quote_ident(&self.name, c, true);
-            write!(f, "{}", quoted)
+        } else if let Some(quote) = self.quote {
+            write!(f, "{}", QuotedIdent(&self.name, quote))
         } else {
             write!(f, "{}", self.name)
         }

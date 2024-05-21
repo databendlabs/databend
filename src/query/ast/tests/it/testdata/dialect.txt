@@ -231,29 +231,14 @@ ColumnRef {
 ---------- Input ----------
 "a\"b"
 ---------- Output ---------
-"a\""b"
----------- AST ------------
-ColumnRef {
-    span: Some(
-        0..6,
-    ),
-    column: ColumnRef {
-        database: None,
-        table: None,
-        column: Name(
-            Identifier {
-                span: Some(
-                    0..6,
-                ),
-                name: "a\\\"b",
-                quote: Some(
-                    '"',
-                ),
-                is_hole: false,
-            },
-        ),
-    },
-}
+error: 
+  --> SQL:1:1
+  |
+1 | "a\"b"
+  | ^^^^^^
+  | |
+  | invalid identifier
+  | while parsing expression
 
 
 ---------- Input ----------

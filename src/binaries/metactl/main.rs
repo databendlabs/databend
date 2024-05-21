@@ -237,6 +237,7 @@ async fn show_status(conf: &Config) -> anyhow::Result<()> {
     println!("BinaryVersion: {}", res.binary_version);
     println!("DataVersion: {}", res.data_version);
     println!("DBSize: {}", res.db_size);
+    println!("KeyNumber: {}", res.key_num);
     println!("Node: id={} raft={}", res.id, res.endpoint);
     println!("State: {}", res.state);
     if let Some(leader) = res.leader {

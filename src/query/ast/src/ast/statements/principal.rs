@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::escape::escape_specified;
+use crate::ast::quote::EscapedString;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -50,8 +50,8 @@ impl Display for UserIdentity {
         write!(
             f,
             "'{}'@'{}'",
-            escape_specified(&self.username, &Self::ESCAPE_CHARS),
-            escape_specified(&self.hostname, &Self::ESCAPE_CHARS),
+            EscapedString(&self.username, &Self::ESCAPE_CHARS),
+            EscapedString(&self.hostname, &Self::ESCAPE_CHARS),
         )
     }
 }

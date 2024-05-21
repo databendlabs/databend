@@ -18,8 +18,6 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use chrono::Utc;
-use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
-use databend_common_arrow::arrow::datatypes::Schema as Arrow2Schema;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
@@ -120,16 +118,7 @@ impl IcebergTable {
             .map_err(|e| {
                 ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
             })?;
-
-        // Build arrow2 schema from arrow schema.
-        let fields: Vec<Arrow2Field> = arrow_schema
-            .fields()
-            .into_iter()
-            .map(|f| f.into())
-            .collect();
-        let arrow2_schema = Arrow2Schema::from(fields);
-
-        TableSchema::try_from(&arrow2_schema)
+        TableSchema::try_from(&arrow_schema)
     }
 
     /// create a new table on the table directory

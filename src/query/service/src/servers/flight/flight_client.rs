@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryInto;
-use std::error::Error;
 use std::sync::Arc;
 
 use async_channel::Receiver;
@@ -31,6 +29,8 @@ use futures_util::future::Either;
 use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
+use serde::Deserialize;
+use serde::Serialize;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
@@ -38,7 +38,6 @@ use tonic::Streaming;
 
 use crate::pipelines::executor::WatchNotify;
 use crate::servers::flight::request_builder::RequestBuilder;
-use crate::servers::flight::v1::actions::FlightAction;
 use crate::servers::flight::v1::packets::DataPacket;
 
 pub struct FlightClient {
@@ -55,12 +54,40 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {
-        if let Err(cause) = self.do_action(action, timeout).await {
-            return Err(cause.add_message_back("(while in query flight)"));
-        }
+    #[minitrace::trace]
+    pub async fn do_action<T, Res>(&mut self, path: &str, message: T, timeout: u64) -> Result<Res>
+    where
+        T: Serialize,
+        Res: for<'a> Deserialize<'a>,
+    {
+        let mut request =
+            databend_common_tracing::inject_span_to_tonic_request(Request::new(Action {
+                r#type: path.to_string(),
+                body: serde_json::to_vec(&message).map_err(|cause| {
+                    ErrorCode::BadArguments(format!(
+                        "Request payload serialize error while in {:?}, cause: {}",
+                        path, cause
+                    ))
+                })?,
+            }));
 
-        Ok(())
+        drop(message);
+        request.set_timeout(Duration::from_secs(timeout));
+
+        let response = self.inner.do_action(request).await?;
+
+        match response.into_inner().message().await? {
+            Some(response) => serde_json::from_slice::<Res>(&response.body).map_err(|cause| {
+                ErrorCode::BadBytes(format!(
+                    "Response payload deserialize error while in {:?}, cause: {}",
+                    path, cause
+                ))
+            }),
+            None => Err(ErrorCode::EmptyDataFromServer(format!(
+                "Can not receive data from flight server, action: {:?}",
+                path
+            ))),
+        }
     }
 
     #[async_backtrace::framed]
@@ -156,27 +183,6 @@ impl FlightClient {
         match self.inner.do_get(request).await {
             Ok(res) => Ok(res.into_inner()),
             Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
-        }
-    }
-
-    // Execute do_action.
-    #[async_backtrace::framed]
-    #[minitrace::trace]
-    async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
-        let action: Action = action.try_into()?;
-        let action_type = action.r#type.clone();
-        let request = Request::new(action);
-        let mut request = databend_common_tracing::inject_span_to_tonic_request(request);
-        request.set_timeout(Duration::from_secs(timeout));
-
-        let response = self.inner.do_action(request).await?;
-
-        match response.into_inner().message().await? {
-            Some(response) => Ok(response.body),
-            None => Err(ErrorCode::EmptyDataFromServer(format!(
-                "Can not receive data from flight server, action: {:?}",
-                action_type
-            ))),
         }
     }
 }
@@ -282,30 +288,5 @@ impl FlightExchange {
             },
             _ => unreachable!(),
         }
-    }
-}
-
-#[allow(dead_code)]
-fn match_for_io_error(err_status: &Status) -> Option<&std::io::Error> {
-    let mut err: &(dyn Error + 'static) = err_status;
-
-    loop {
-        if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
-            return Some(io_err);
-        }
-
-        // h2::Error do not expose std::io::Error with `source()`
-        // https://github.com/hyperium/h2/pull/462
-        use h2::Error as h2Error;
-        if let Some(h2_err) = err.downcast_ref::<h2Error>() {
-            if let Some(io_err) = h2_err.get_io() {
-                return Some(io_err);
-            }
-        }
-
-        err = match err.source() {
-            Some(err) => err,
-            None => return None,
-        };
     }
 }

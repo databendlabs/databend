@@ -15,6 +15,7 @@ test = true
 bytes = { workspace = true }
 databend-common-base = { path = "../../../../common/base" }
 databend-common-cache = { path = "../../../../common/cache" }
+databend-common-config = { path = "../../../config" }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-metrics = { path = "../../../../common/metrics" }
 
@@ -25,6 +26,7 @@ crossbeam-channel = "0.5.6"
 hex = "0.4.3"
 log = { workspace = true }
 parking_lot = { workspace = true }
+rayon = "1.9.0"
 siphasher = "0.3.10"
 
 [dev-dependencies]

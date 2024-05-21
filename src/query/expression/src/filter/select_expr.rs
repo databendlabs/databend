@@ -134,7 +134,7 @@ impl SelectExprBuilder {
                             if result.can_push_down_not {
                                 result
                             } else {
-                                SelectExprBuildResult::new(SelectExpr::Others(expr.clone()))
+                                self.other_select_expr(expr, not)
                             }
                         }
                         "like" => {

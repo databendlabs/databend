@@ -30,7 +30,7 @@ def insert_data(name):
 
 
 def get_license():
-    return os.getenv("DATABEND_ENTERPRISE_LICENSE")
+    return os.getenv("QUERY_DATABEND_ENTERPRISE_LICENSE")
 
 
 def compact_data(name):

@@ -30,7 +30,6 @@ use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
 use databend_common_exception::Result;
 
 use super::EXTENSION_KEY;
-use crate::converts::arrow2::table_field_to_arrow2_field_ignore_inside_nullable;
 use crate::infer_table_schema;
 use crate::Column;
 use crate::DataBlock;
@@ -67,18 +66,11 @@ impl From<&TableSchema> for ArrowSchema {
     }
 }
 
-/// Parquet2 can't dealing with nested type like Tuple(int not null,int null) null, but for type like Tuple(int null,int null) null, it can work.
-///
-/// So when casting from TableSchema to Arrow2 schema, the inner type inherit the nullable property from outer type.
-///
-/// But when casting from TableSchema to Arrow-rs schema, there is no such problem, so the inside nullable is ignored.
-pub fn table_schema_to_arrow_schema_ignore_inside_nullable(schema: &TableSchema) -> ArrowSchema {
+pub fn table_schema_to_arrow_schema(schema: &TableSchema) -> ArrowSchema {
     let fields = schema
         .fields
         .iter()
-        .map(|f| {
-            arrow_field_from_arrow2_field(table_field_to_arrow2_field_ignore_inside_nullable(f))
-        })
+        .map(|f| arrow_field_from_arrow2_field(f.into()))
         .collect::<Vec<_>>();
     ArrowSchema {
         fields: Fields::from(fields),
@@ -106,7 +98,7 @@ impl DataBlock {
     }
 
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
-        let arrow_schema = table_schema_to_arrow_schema_ignore_inside_nullable(table_schema);
+        let arrow_schema = table_schema_to_arrow_schema(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
         for (entry, arrow_field) in self
             .convert_to_full()

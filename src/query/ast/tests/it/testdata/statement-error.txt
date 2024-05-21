@@ -42,7 +42,7 @@ error:
   --> SQL:1:25
   |
 1 | create table a (c tuple())
-  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `NULLABLE`, <Ident>, <QuotedString>, or `IDENTIFIER`
+  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `NULLABLE`, <Ident>, <LiteralString>, or `IDENTIFIER`
   | |               | |      
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
@@ -170,7 +170,7 @@ error:
   --> SQL:1:19
   |
 1 | show tables format
-  |                   ^ unexpected end of input, expecting <Ident>, <QuotedString>, or `IDENTIFIER`
+  |                   ^ unexpected end of input, expecting <Ident>, <LiteralString>, or `IDENTIFIER`
 
 
 ---------- Input ----------
@@ -299,7 +299,7 @@ error:
   --> SQL:1:17
   |
 1 | GRANT select ON UDF a TO 'test-grant';
-  |                 ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <QuotedString>, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, or `TABLE`
+  |                 ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, or `TABLE`
 
 
 ---------- Input ----------
@@ -388,7 +388,7 @@ error:
   --> SQL:1:9
   |
 1 | PRESIGN INVALID @my_stage/path/to/file
-  | ------- ^^^^^^^ unexpected `INVALID`, expecting `DOWNLOAD`, `AtString`, `UPLOAD`, or <QuotedString>
+  | ------- ^^^^^^^ unexpected `INVALID`, expecting `DOWNLOAD`, <LiteralString>, `UPLOAD`, or `LiteralAtString`
   | |        
   | while parsing `PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`
 
@@ -576,7 +576,7 @@ error:
   --> SQL:1:6
   |
 1 | with as t2(tt) as (select a from t) select t2.tt from t2
-  | ---- ^^ unexpected `as`, expecting <QuotedString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
+  | ---- ^^ unexpected `as`, expecting <LiteralString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
   | |     
   | while parsing `SELECT ...`
 
@@ -588,7 +588,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE
-  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -619,7 +619,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT
-  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -638,7 +638,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = 
-  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -657,7 +657,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (
-  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -676,7 +676,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE
-  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -695,7 +695,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -714,7 +714,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -733,7 +733,7 @@ error:
   --> SQL:1:19
   |
 1 | COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);
-  | ----              ^^ unexpected `""`, expecting <QuotedString>, `AtString`, or `(`
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -887,7 +887,7 @@ error:
   --> SQL:1:12
   |
 1 | drop table :a
-  | ----       ^ unexpected `:`, expecting <Ident>, <QuotedString>, `IDENTIFIER`, or `IF`
+  | ----       ^ unexpected `:`, expecting <Ident>, <LiteralString>, `IDENTIFIER`, or `IF`
   | |           
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 

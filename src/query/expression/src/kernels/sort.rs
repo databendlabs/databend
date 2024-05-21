@@ -37,7 +37,12 @@ use crate::utils::arrow::column_to_arrow_array;
 use crate::Column;
 use crate::DataBlock;
 
-pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
+pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;
+
+pub trait CheckAbort {
+    fn is_aborting(&self) -> bool;
+    fn try_check_aborting(&self) -> Result<()>;
+}
 
 #[derive(Clone)]
 pub struct SortColumnDescription {
@@ -162,13 +167,13 @@ impl DataBlock {
         blocks: &[DataBlock],
         descriptions: &[SortColumnDescription],
         limit: Option<usize>,
-        aborting: Aborting,
+        abort_checker: AbortChecker,
     ) -> Result<DataBlock> {
         match blocks.len() {
             0 => Result::Err(ErrorCode::EmptyData("Can't merge empty blocks")),
             1 => Ok(blocks[0].clone()),
             2 => {
-                if aborting() {
+                if abort_checker.is_aborting() {
                     return Err(ErrorCode::AbortedQuery(
                         "Aborted query, because the server is shutting down or the query was killed.",
                     ));
@@ -177,7 +182,7 @@ impl DataBlock {
                 DataBlock::two_way_merge_sort(blocks, descriptions, limit)
             }
             _ => {
-                if aborting() {
+                if abort_checker.is_aborting() {
                     return Err(ErrorCode::AbortedQuery(
                         "Aborted query, because the server is shutting down or the query was killed.",
                     ));
@@ -186,9 +191,9 @@ impl DataBlock {
                     &blocks[0..blocks.len() / 2],
                     descriptions,
                     limit,
-                    aborting.clone(),
+                    abort_checker.clone(),
                 )?;
-                if aborting() {
+                if abort_checker.is_aborting() {
                     return Err(ErrorCode::AbortedQuery(
                         "Aborted query, because the server is shutting down or the query was killed.",
                     ));
@@ -197,9 +202,9 @@ impl DataBlock {
                     &blocks[blocks.len() / 2..blocks.len()],
                     descriptions,
                     limit,
-                    aborting.clone(),
+                    abort_checker.clone(),
                 )?;
-                if aborting() {
+                if abort_checker.is_aborting() {
                     return Err(ErrorCode::AbortedQuery(
                         "Aborted query, because the server is shutting down or the query was killed.",
                     ));

@@ -206,7 +206,7 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 desc: "The time spent to write spill in millisecond",
                 index: ProfileStatisticsName::SpillWriteTime as usize,
                 unit: StatisticsUnit::MillisSeconds,
-                plain_statistics: true,
+                plain_statistics: false,
             }),
             (ProfileStatisticsName::SpillReadCount, ProfileDesc {
                 display_name: "numbers spilled by read",
@@ -227,7 +227,7 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 desc: "The time spent to read spill in millisecond",
                 index: ProfileStatisticsName::SpillReadTime as usize,
                 unit: StatisticsUnit::MillisSeconds,
-                plain_statistics: true,
+                plain_statistics: false,
             }),
             (ProfileStatisticsName::RuntimeFilterPruneParts, ProfileDesc {
                 display_name: "parts pruned by runtime filter",

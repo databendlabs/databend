@@ -21,7 +21,7 @@ mydb = mysql.connector.connect(
 
 
 def get_license():
-    return os.getenv("DATABEND_ENTERPRISE_LICENSE")
+    return os.getenv("QUERY_DATABEND_ENTERPRISE_LICENSE")
 
 
 # TODO: https://github.com/datafuselabs/databend/pull/15088

@@ -235,6 +235,9 @@ impl Display for SelectStmt {
             write_comma_separated_list(f, windows)?;
         }
 
+        if let Some(quailfy) = &self.qualify {
+            write!(f, " QUALIFY {quailfy}")?;
+        }
         Ok(())
     }
 }
@@ -631,6 +634,9 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
+        /// whether consume the table
+        #[drive(skip)]
+        consume: bool,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -703,6 +709,7 @@ impl Display for TableReference {
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot,
                 unpivot,
             } => {
@@ -713,6 +720,10 @@ impl Display for TableReference {
 
                 if let Some(temporal) = temporal {
                     write!(f, " {temporal}")?;
+                }
+
+                if *consume {
+                    write!(f, " WITH CONSUME")?;
                 }
 
                 if let Some(alias) = alias {

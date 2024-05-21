@@ -200,7 +200,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             };
             column_defs.push(column_def);
         }
-        CreateTableSource::Columns(column_defs)
+        CreateTableSource::Columns(column_defs, None)
     }
 }
 

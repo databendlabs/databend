@@ -43,10 +43,13 @@ pub async fn cluster_list_handler() -> poem::Result<impl IntoResponse> {
     Ok(Json(nodes))
 }
 
-async fn list_nodes(sessions: &Arc<SessionManager>) -> Result<Vec<Arc<NodeInfo>>> {
-    let watch_cluster_session = sessions
+async fn list_nodes(session_manager: &Arc<SessionManager>) -> Result<Vec<Arc<NodeInfo>>> {
+    let session = session_manager
         .create_session(SessionType::HTTPAPI("WatchCluster".to_string()))
         .await?;
-    let watch_cluster_context = watch_cluster_session.create_query_context().await?;
+
+    let session = session_manager.register_session(session)?;
+
+    let watch_cluster_context = session.create_query_context().await?;
     Ok(watch_cluster_context.get_cluster().get_nodes())
 }
