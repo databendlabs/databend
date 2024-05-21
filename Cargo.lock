@@ -2648,9 +2648,9 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42b9c412e3a4ef2ca258ecccab2ec154400ef93f9e1539b4e430d8ef20b09df7"
+checksum = "5517338bec352f24119594d32c23e71553e005fc0fb1e9df994b85c4f4238645"
 dependencies = [
  "async-trait",
  "log",
@@ -3017,7 +3017,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "lexical-core",
  "log",
  "match-template",
@@ -3060,7 +3060,7 @@ dependencies = [
  "geos",
  "geozero",
  "hex",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "lexical-core",
  "match-template",
  "micromarshal 0.4.1",
@@ -3107,7 +3107,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "lexical-core",
  "libm",
  "match-template",
@@ -3631,7 +3631,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-pipeline-core",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "match-template",
  "rand 0.8.5",
  "serde",
@@ -3783,7 +3783,7 @@ dependencies = [
  "globiter",
  "indexmap 2.2.5",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "log",
  "minitrace",
  "num-derive",
@@ -3930,7 +3930,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.2.5",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "log",
  "minitrace",
  "opendal",
@@ -4252,7 +4252,7 @@ dependencies = [
  "databend-storages-common-cache-manager",
  "futures",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "log",
  "once_cell",
  "opendal",
@@ -4340,9 +4340,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cb4c0be644442f0e351a7ea5d0e7ae15183ae48e13779540a10bca60fd83d16"
+checksum = "2fc41daaaff7b8235046c0b7ae1e29c0e5136cd3fbae57cb432f36fb0255671a"
 dependencies = [
  "arrow",
  "async-compression 0.4.6",
@@ -4365,9 +4365,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "872f2a6fdee458d37a66c94c2b8181a3838e2d63efc661d96b454e09515db8ac"
+checksum = "ad3df58cb5e1d7ffc9c2add629b8a0bc2aff6b872c92309dbf7c2355d58acada"
 dependencies = [
  "quote",
  "syn 2.0.52",
@@ -4474,7 +4474,7 @@ dependencies = [
  "derive-visitor",
  "futures",
  "futures-util",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "jwt-simple 0.11.9",
  "log",
  "opendal",
@@ -4699,7 +4699,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "jwt-simple 0.11.9",
  "jwt-simple 0.12.9",
  "log",
@@ -4786,9 +4786,9 @@ dependencies = [
 
 [[package]]
 name = "databend-sql"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d7e16459e7525450c7ff4e7b97e5f8291d6b04a65c68487ba8952be8b2ff3cb"
+checksum = "28a09f0357ee782df7d50ef39d4e0a2f044fcc474b517717ca87e55fd3aca14d"
 dependencies = [
  "arrow",
  "chrono",
@@ -4797,7 +4797,7 @@ dependencies = [
  "glob",
  "hex",
  "itertools 0.12.1",
- "jsonb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonb",
  "lexical-core",
  "memchr",
  "roaring",
@@ -4846,7 +4846,7 @@ dependencies = [
  "databend-sql",
  "ethnum",
  "itertools 0.10.5",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "rand 0.8.5",
  "roaring",
  "tokio",
@@ -4876,11 +4876,13 @@ dependencies = [
  "crossbeam-channel",
  "databend-common-base",
  "databend-common-cache",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-metrics",
  "hex",
  "log",
  "parking_lot 0.12.1",
+ "rayon",
  "siphasher",
  "tempfile",
 ]
@@ -4915,6 +4917,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
  "log",
  "match-template",
  "minitrace",
@@ -8656,22 +8659,9 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67ecc0ffa63ae2ba534a38128fdd9e1e86bf08515769c6252d2a2c1da66d1773"
-dependencies = [
- "byteorder",
- "fast-float",
- "nom",
- "ordered-float 4.2.0",
- "rand 0.8.5",
- "serde_json",
-]
-
-[[package]]
-name = "jsonb"
-version = "0.3.0"
-source = "git+https://github.com/datafuselabs/jsonb?rev=3fe3acd#3fe3acdf7e0117f6b4202b37e8fff2d35b3434a1"
+checksum = "3bfb26af44ecc374918e35798b7aa7d4432c5da02cdcef862c2a3a6dbc0d9134"
 dependencies = [
  "byteorder",
  "fast-float",

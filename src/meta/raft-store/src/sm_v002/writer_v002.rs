@@ -17,26 +17,23 @@ use std::io;
 use std::io::BufWriter;
 use std::io::Seek;
 use std::io::Write;
-use std::time::Duration;
 
 use databend_common_meta_types::LogId;
-use futures::Stream;
-use futures_util::StreamExt;
 use log::debug;
 use log::info;
 
-use crate::key_spaces::RaftStoreEntry;
+use crate::key_spaces::SMEntry;
 use crate::sm_v002::SnapshotStoreV002;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 
 /// A write entry sent to snapshot writer.
 ///
-/// A `Commit` entry will flush the writer.
+/// A `Finish` entry indicates the end of the data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteEntry<T> {
     Data(T),
-    Commit,
+    Finish,
 }
 
 /// Write json lines snapshot data to [`SnapshotStoreV002`].
@@ -47,23 +44,22 @@ pub struct WriterV002<'a> {
 
     inner: BufWriter<fs::File>,
 
+    /// Number of entries written.
+    pub(crate) cnt: u64,
+
+    /// The count of entries to reach before next progress logging.
+    next_progress_cnt: u64,
+
+    /// The time when the writer starts to write entries.
+    start_time: std::time::Instant,
+
     /// The last_applied entry that has written to the snapshot.
     ///
     /// It will be used to create a snapshot id.
-    last_applied: Option<LogId>,
+    pub(crate) last_applied: Option<LogId>,
 
     // Keep a mutable ref so that there could only be one writer at a time.
     snapshot_store: &'a mut SnapshotStoreV002,
-}
-
-impl<'a> io::Write for WriterV002<'a> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.inner.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
 }
 
 impl<'a> WriterV002<'a> {
@@ -82,6 +78,9 @@ impl<'a> WriterV002<'a> {
         let writer = WriterV002 {
             temp_path,
             inner: buffered_file,
+            cnt: 0,
+            next_progress_cnt: 1000,
+            start_time: std::time::Instant::now(),
             last_applied: None,
             snapshot_store,
         };
@@ -89,77 +88,49 @@ impl<'a> WriterV002<'a> {
         Ok(writer)
     }
 
-    /// Write `Result` of entries to the snapshot, without flushing.
-    ///
-    /// Returns the count of entries
-    pub async fn write_entry_results<E>(
-        &mut self,
-        entry_results: impl Stream<Item = Result<RaftStoreEntry, E>>,
-    ) -> Result<usize, E>
-    where
-        E: std::error::Error + From<io::Error> + 'static,
-    {
-        let mut cnt = 0;
-        let data_version = self.snapshot_store.data_version();
+    /// Increase the number of entries written by one.
+    fn count(&mut self) {
+        self.cnt += 1;
 
-        let mut entry_results = std::pin::pin!(entry_results);
+        if self.cnt == self.next_progress_cnt {
+            self.log_progress();
 
-        while let Some(ent) = entry_results.next().await {
-            let ent = ent?;
+            // Increase the number of entries before next log by 5%,
+            // but at least 50k, at most 800k.
+            let step = std::cmp::min(self.next_progress_cnt / 20, 800_000);
+            let step = std::cmp::max(step, 50_000);
 
-            debug!(entry :? =(&ent); "write {} entry", data_version);
-
-            if let RaftStoreEntry::StateMachineMeta {
-                key: StateMachineMetaKey::LastApplied,
-                ref value,
-            } = ent
-            {
-                let last: LogId = value.clone().try_into().unwrap();
-                info!(last_applied :? =(last); "write last applied to snapshot");
-
-                assert!(
-                    self.last_applied.is_none(),
-                    "already seen a last_applied: {:?}",
-                    self.last_applied
-                );
-                self.last_applied = Some(last);
-            }
-
-            serde_json::to_writer(&mut *self, &ent)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-            self.write(b"\n")
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-            cnt += 1;
-
-            if cnt % 10_000 == 0 {
-                info!("Snapshot Writer has written {} kilo entries", cnt / 1000)
-            }
+            self.next_progress_cnt += step;
         }
+    }
 
-        Ok(cnt)
+    fn log_progress(&self) {
+        let elapsed_sec = self.start_time.elapsed().as_secs();
+        // Avoid div by 0
+        let avg = self.cnt / (elapsed_sec + 1);
+
+        if self.cnt >= 10_000_000 {
+            info!(
+                "Snapshot Writer has written {} million entries; avg: {} kilo entries/s",
+                self.cnt / 1_000_000,
+                avg / 1_000,
+            )
+        } else {
+            info!(
+                "Snapshot Writer has written {} kilo entries; avg: {} kilo entries/s",
+                self.cnt / 1_000,
+                avg / 1_000,
+            )
+        }
     }
 
     /// Write entries to the snapshot, without flushing.
     ///
     /// Returns the count of entries
     pub fn write_entries_sync(
-        &mut self,
-        mut entries_rx: tokio::sync::mpsc::Receiver<WriteEntry<RaftStoreEntry>>,
-    ) -> Result<usize, io::Error> {
-        fn log_progress(c: usize) {
-            if c >= 10_000_000 {
-                info!(
-                    "Snapshot Writer has written {} million entries",
-                    c / 1_000_000
-                )
-            } else {
-                info!("Snapshot Writer has written {} kilo entries", c / 1_000)
-            }
-        }
-
-        let mut cnt = 0;
+        mut self,
+        mut entries_rx: tokio::sync::mpsc::Receiver<WriteEntry<SMEntry>>,
+    ) -> Result<Self, io::Error> {
         let data_version = self.snapshot_store.data_version();
 
         while let Some(ent) = entries_rx.blocking_recv() {
@@ -167,16 +138,13 @@ impl<'a> WriterV002<'a> {
 
             let ent = match ent {
                 WriteEntry::Data(ent) => ent,
-                WriteEntry::Commit => {
-                    info!(
-                        "received Commit entry, written {} entries, quit and about to commit",
-                        cnt
-                    );
-                    return Ok(cnt);
+                WriteEntry::Finish => {
+                    info!("received Commit, written {} entries, quit", self.cnt);
+                    return Ok(self);
                 }
             };
 
-            if let RaftStoreEntry::StateMachineMeta {
+            if let SMEntry::StateMachineMeta {
                 key: StateMachineMetaKey::LastApplied,
                 ref value,
             } = ent
@@ -192,29 +160,14 @@ impl<'a> WriterV002<'a> {
                 self.last_applied = Some(last);
             }
 
-            serde_json::to_writer(&mut *self, &ent)
+            serde_json::to_writer(&mut self.inner, &ent)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-            self.write(b"\n")
+            self.inner
+                .write(b"\n")
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-            cnt += 1;
-
-            // Yield to give up the CPU to avoid starving other tasks.
-            if cnt % 1000 == 0 {
-                std::thread::sleep(Duration::from_millis(1));
-            }
-
-            #[allow(clippy::collapsible_else_if)]
-            if cnt < 1_000_000 {
-                if cnt % 10_000 == 0 {
-                    log_progress(cnt);
-                }
-            } else {
-                if cnt % 100_000 == 0 {
-                    log_progress(cnt);
-                }
-            }
+            self.count();
         }
 
         Err(io::Error::new(
@@ -225,31 +178,23 @@ impl<'a> WriterV002<'a> {
 
     /// Commit the snapshot so that it is visible to the readers.
     ///
-    /// Returns the snapshot id and file size written.
+    /// Returns the file size written.
     ///
     /// This method consumes the writer, thus the writer will not be used after commit.
-    ///
-    /// `uniq` is the unique number used to build snapshot id.
-    /// If it is `None`, an epoch in milliseconds will be used.
-    pub fn commit(mut self, uniq: Option<u64>) -> Result<(MetaSnapshotId, u64), io::Error> {
+    pub fn commit(mut self, snapshot_id: MetaSnapshotId) -> Result<u64, io::Error> {
         self.inner.flush()?;
         let mut f = self.inner.into_inner()?;
         f.sync_all()?;
 
         let file_size = f.seek(io::SeekFrom::End(0))?;
 
-        let snapshot_id = if let Some(u) = uniq {
-            MetaSnapshotId::new(self.last_applied, u)
-        } else {
-            MetaSnapshotId::new_with_epoch(self.last_applied)
-        };
-
-        let path = self.snapshot_store.snapshot_path(&snapshot_id.to_string());
+        let id_str = snapshot_id.to_string();
+        let path = self.snapshot_store.snapshot_path(&id_str);
 
         fs::rename(&self.temp_path, path)?;
 
-        info!(snapshot_id :? =(snapshot_id); "snapshot committed: file_size: {}; {}", file_size, snapshot_id.to_string());
+        info!(snapshot_id :% = id_str; "snapshot committed: file_size: {}", file_size);
 
-        Ok((snapshot_id, file_size))
+        Ok(file_size)
     }
 }

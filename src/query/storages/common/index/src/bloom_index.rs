@@ -34,12 +34,14 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -192,16 +194,13 @@ impl BloomIndex {
         let mut column_distinct_count = HashMap::<usize, usize>::new();
         for (index, field) in bloom_columns_map.into_iter() {
             let field_type = &data_blocks_tobe_indexed[0].get_by_offset(index).data_type;
+            if !Xor8Filter::supported_type(field_type) {
+                continue;
+            }
+
             let (column, data_type) = match field_type.remove_nullable() {
                 DataType::Map(box inner_ty) => {
                     // Add bloom filter for the value of map type
-                    let val_type = match inner_ty {
-                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                        _ => unreachable!(),
-                    };
-                    if !Xor8Filter::supported_type(&val_type) {
-                        continue;
-                    }
                     let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
                         let value = &block.get_by_offset(index).value;
                         let column = value.convert_to_full_column(field_type, block.num_rows());
@@ -219,16 +218,40 @@ impl BloomIndex {
                     });
                     let column = Column::concat_columns(source_columns_iter)?;
 
-                    if Self::check_large_string(&column) {
-                        continue;
+                    let val_type = match inner_ty {
+                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                        _ => unreachable!(),
+                    };
+                    // Extract JSON value of string type to create bloom index,
+                    // other types of JSON value will be ignored.
+                    if val_type.remove_nullable() == DataType::Variant {
+                        let mut builder = ColumnBuilder::with_capacity(
+                            &DataType::Nullable(Box::new(DataType::String)),
+                            column.len(),
+                        );
+                        for val in column.iter() {
+                            if let ScalarRef::Variant(v) = val {
+                                if let Ok(str_val) = jsonb::to_str(v) {
+                                    builder.push(ScalarRef::String(str_val.as_str()));
+                                    continue;
+                                }
+                            }
+                            builder.push_default();
+                        }
+                        let str_column = builder.build();
+                        if Self::check_large_string(&str_column) {
+                            continue;
+                        }
+                        let str_type = DataType::Nullable(Box::new(DataType::String));
+                        (str_column, str_type)
+                    } else {
+                        if Self::check_large_string(&column) {
+                            continue;
+                        }
+                        (column, val_type)
                     }
-
-                    (column, val_type)
                 }
                 _ => {
-                    if !Xor8Filter::supported_type(field_type) {
-                        continue;
-                    }
                     let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
                         let value = &block.get_by_offset(index).value;
                         value.convert_to_full_column(field_type, block.num_rows())
@@ -482,19 +505,7 @@ impl BloomIndex {
 
     pub fn supported_type(data_type: &TableDataType) -> bool {
         let data_type = DataType::from(data_type);
-        Self::supported_data_type(&data_type)
-    }
-
-    pub fn supported_data_type(data_type: &DataType) -> bool {
-        if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
-            match inner_ty {
-                DataType::Tuple(kv_tys) => {
-                    return Xor8Filter::supported_type(&kv_tys[1]);
-                }
-                _ => unreachable!(),
-            };
-        }
-        Xor8Filter::supported_type(data_type)
+        Xor8Filter::supported_type(&data_type)
     }
 
     /// Checks if the average length of a string column exceeds 256 bytes.
@@ -519,11 +530,11 @@ fn visit_expr_column_eq_constant(
     match expr {
         Expr::FunctionCall {
             span,
-            function,
+            id,
             args,
             return_type,
             ..
-        } if function.signature.name == "eq" => match args.as_slice() {
+        } if id.name() == "eq" => match args.as_slice() {
             [
                 Expr::ColumnRef {
                     id,
@@ -580,6 +591,57 @@ fn visit_expr_column_eq_constant(
                     }
                 }
             }
+            [
+                Expr::Cast {
+                    expr:
+                        box Expr::FunctionCall {
+                            id,
+                            args,
+                            return_type,
+                            ..
+                        },
+                    dest_type,
+                    ..
+                },
+                Expr::Constant {
+                    scalar,
+                    data_type: scalar_type,
+                    ..
+                },
+            ]
+            | [
+                Expr::Constant {
+                    scalar,
+                    data_type: scalar_type,
+                    ..
+                },
+                Expr::Cast {
+                    expr:
+                        box Expr::FunctionCall {
+                            id,
+                            args,
+                            return_type,
+                            ..
+                        },
+                    dest_type,
+                    ..
+                },
+            ] => {
+                if id.name() == "get" {
+                    // Only support cast variant value in map to string value
+                    if return_type.remove_nullable() != DataType::Variant
+                        || dest_type.remove_nullable() != DataType::String
+                    {
+                        return Ok(());
+                    }
+                    if let Some(new_expr) =
+                        visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
+                    {
+                        *expr = new_expr;
+                        return Ok(());
+                    }
+                }
+            }
             _ => (),
         },
         _ => (),
@@ -590,7 +652,12 @@ fn visit_expr_column_eq_constant(
         Expr::Cast { expr, .. } => {
             visit_expr_column_eq_constant(expr, visitor)?;
         }
-        Expr::FunctionCall { args, .. } => {
+        Expr::FunctionCall { id, args, .. } => {
+            // Ignore the `not`, `is_null` and `is_not_null` functions,
+            // as the return values of these functions may lead to incorrect results.
+            if id.name() == "not" || id.name() == "is_null" || id.name() == "is_not_null" {
+                return Ok(());
+            }
             for arg in args.iter_mut() {
                 visit_expr_column_eq_constant(arg, visitor)?;
             }
@@ -620,8 +687,15 @@ fn visit_map_column(
                     DataType::Tuple(kv_tys) => kv_tys[1].clone(),
                     _ => unreachable!(),
                 };
-                debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
-                return visitor(span, id, scalar, &val_type, return_type);
+                // Only JSON value of string type have bloom index.
+                if val_type.remove_nullable() == DataType::Variant {
+                    if scalar_type.remove_nullable() != DataType::String {
+                        return Ok(None);
+                    }
+                } else if val_type.remove_nullable() != scalar_type.remove_nullable() {
+                    return Ok(None);
+                }
+                return visitor(span, id, scalar, scalar_type, return_type);
             }
         }
         _ => {}

@@ -115,7 +115,7 @@ pub struct MetaNodeStatus {
     pub db_size: u64,
 
     /// key number of current snapshot
-    pub key_num: usize,
+    pub key_num: u64,
 
     /// Server state, one of "Follower", "Learner", "Candidate", "Leader".
     pub state: String,
@@ -913,7 +913,15 @@ impl MetaNode {
             MetaError::StorageError(se)
         })?;
 
-        let key_num = self.sto.key_num().await.map_or(0, |num| num);
+        let key_num = {
+            let snapshot_info = self.sto.try_get_snapshot_info().await;
+
+            if let Some((id, _)) = snapshot_info {
+                id.key_num.unwrap_or_default()
+            } else {
+                0
+            }
+        };
 
         let metrics = self.raft.metrics().borrow().clone();
 

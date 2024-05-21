@@ -131,6 +131,86 @@ impl SledKeySpace for DataHeader {
     type V = Header;
 }
 
+/// Serialize SledKeySpace key value pair
+macro_rules! serialize_for_sled {
+    ($ks:tt, $key:expr, $value:expr) => {
+        Ok(($ks::serialize_key($key)?, $ks::serialize_value($value)?))
+    };
+}
+
+/// Convert (sub_tree_prefix, key, value, key_space1, key_space2...) into a [`RaftStoreEntry`].
+///
+/// It compares the sub_tree_prefix with prefix defined by every key space to determine which key space it belongs to.
+macro_rules! deserialize_by_prefix {
+    ($prefix: expr, $vec_key: expr, $vec_value: expr, $($key_space: tt),+ ) => {
+        $(
+
+        if <$key_space as SledKeySpace>::PREFIX == $prefix {
+
+            let key = SledOrderedSerde::de($vec_key)?;
+            let value = SledSerde::de($vec_value)?;
+
+            // Self reference the enum that use this macro
+            return Ok(Self::$key_space { key, value, });
+        }
+        )+
+    };
+}
+
+/// Enum of key-value pairs that are used in the raft state machine.
+///
+/// It is a sub set of [`RaftStoreEntry`] and contains only the types used by state-machine.
+#[rustfmt::skip]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SMEntry {
+    DataHeader       { key: <DataHeader       as SledKeySpace>::K, value: <DataHeader       as SledKeySpace>::V, },
+    Nodes            { key: <Nodes            as SledKeySpace>::K, value: <Nodes            as SledKeySpace>::V, },
+    StateMachineMeta { key: <StateMachineMeta as SledKeySpace>::K, value: <StateMachineMeta as SledKeySpace>::V, },
+    Expire           { key: <Expire           as SledKeySpace>::K, value: <Expire           as SledKeySpace>::V, },
+    GenericKV        { key: <GenericKV        as SledKeySpace>::K, value: <GenericKV        as SledKeySpace>::V, },
+    Sequences        { key: <Sequences        as SledKeySpace>::K, value: <Sequences        as SledKeySpace>::V, },
+}
+
+impl SMEntry {
+    /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
+    #[rustfmt::skip]
+    pub fn serialize(kv: &SMEntry) -> Result<(sled::IVec, sled::IVec), MetaStorageError> {
+
+        match kv {
+            Self::DataHeader       { key, value } => serialize_for_sled!(DataHeader,       key, value),
+            Self::Nodes            { key, value } => serialize_for_sled!(Nodes,            key, value),
+            Self::StateMachineMeta { key, value } => serialize_for_sled!(StateMachineMeta, key, value),
+            Self::Expire           { key, value } => serialize_for_sled!(Expire,           key, value),
+            Self::GenericKV        { key, value } => serialize_for_sled!(GenericKV,        key, value),
+            Self::Sequences        { key, value } => serialize_for_sled!(Sequences,        key, value),
+        }
+    }
+
+    /// Deserialize a serialized key-value entry `[key, value]`.
+    ///
+    /// It is able to deserialize openraft-v7 or openraft-v8 key-value pairs.
+    /// The compatibility is provided by [`SledSerde`] implementation for value types.
+    pub fn deserialize(prefix_key: &[u8], vec_value: &[u8]) -> Result<Self, MetaStorageError> {
+        let prefix = prefix_key[0];
+        let vec_key = &prefix_key[1..];
+
+        deserialize_by_prefix!(
+            prefix,
+            vec_key,
+            vec_value,
+            // Available key spaces:
+            DataHeader,
+            Nodes,
+            StateMachineMeta,
+            Expire,
+            GenericKV,
+            Sequences
+        );
+
+        unreachable!("unknown prefix: {}", prefix);
+    }
+}
+
 /// Enum of key-value pairs that are used in the raft storage impl for meta-service.
 #[rustfmt::skip]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,23 +231,18 @@ impl RaftStoreEntry {
     /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
     #[rustfmt::skip]
     pub fn serialize(kv: &RaftStoreEntry) -> Result<(sled::IVec, sled::IVec), MetaStorageError> {
-        macro_rules! ser {
-            ($ks:tt, $key:expr, $value:expr) => {
-                Ok(($ks::serialize_key($key)?, $ks::serialize_value($value)?))
-            };
-        }
 
         match kv {
-            Self::DataHeader       { key, value } => ser!(DataHeader,       key, value),
-            Self::Logs             { key, value } => ser!(Logs,             key, value),
-            Self::Nodes            { key, value } => ser!(Nodes,            key, value),
-            Self::StateMachineMeta { key, value } => ser!(StateMachineMeta, key, value),
-            Self::RaftStateKV      { key, value } => ser!(RaftStateKV,      key, value),
-            Self::Expire           { key, value } => ser!(Expire,           key, value),
-            Self::GenericKV        { key, value } => ser!(GenericKV,        key, value),
-            Self::Sequences        { key, value } => ser!(Sequences,        key, value),
-            Self::ClientLastResps  { key, value } => ser!(ClientLastResps,  key, value),
-            Self::LogMeta          { key, value } => ser!(LogMeta,          key, value),
+            Self::DataHeader       { key, value } => serialize_for_sled!(DataHeader,       key, value),
+            Self::Logs             { key, value } => serialize_for_sled!(Logs,             key, value),
+            Self::Nodes            { key, value } => serialize_for_sled!(Nodes,            key, value),
+            Self::StateMachineMeta { key, value } => serialize_for_sled!(StateMachineMeta, key, value),
+            Self::RaftStateKV      { key, value } => serialize_for_sled!(RaftStateKV,      key, value),
+            Self::Expire           { key, value } => serialize_for_sled!(Expire,           key, value),
+            Self::GenericKV        { key, value } => serialize_for_sled!(GenericKV,        key, value),
+            Self::Sequences        { key, value } => serialize_for_sled!(Sequences,        key, value),
+            Self::ClientLastResps  { key, value } => serialize_for_sled!(ClientLastResps,  key, value),
+            Self::LogMeta          { key, value } => serialize_for_sled!(LogMeta,          key, value),
         }
     }
 
@@ -178,24 +253,6 @@ impl RaftStoreEntry {
     pub fn deserialize(prefix_key: &[u8], vec_value: &[u8]) -> Result<Self, MetaStorageError> {
         let prefix = prefix_key[0];
         let vec_key = &prefix_key[1..];
-
-        // Convert (sub_tree_prefix, key, value, key_space1, key_space2...) into a [`RaftStoreEntry`].
-        //
-        // It compares the sub_tree_prefix with prefix defined by every key space to determine which key space it belongs to.
-        macro_rules! deserialize_by_prefix {
-            ($prefix: expr, $vec_key: expr, $vec_value: expr, $($key_space: tt),+ ) => {
-                $(
-
-                if <$key_space as SledKeySpace>::PREFIX == $prefix {
-
-                    let key = SledOrderedSerde::de($vec_key)?;
-                    let value = SledSerde::de($vec_value)?;
-
-                    return Ok(RaftStoreEntry::$key_space { key, value, });
-                }
-                )+
-            };
-        }
 
         deserialize_by_prefix!(
             prefix,
@@ -215,5 +272,26 @@ impl RaftStoreEntry {
         );
 
         unreachable!("unknown prefix: {}", prefix);
+    }
+}
+
+impl TryInto<SMEntry> for RaftStoreEntry {
+    type Error = String;
+
+    #[rustfmt::skip]
+    fn try_into(self) -> Result<SMEntry, Self::Error> {
+        match self {
+            Self::DataHeader       { key, value } => Ok(SMEntry::DataHeader       { key, value }),
+            Self::Nodes            { key, value } => Ok(SMEntry::Nodes            { key, value }),
+            Self::StateMachineMeta { key, value } => Ok(SMEntry::StateMachineMeta { key, value }),
+            Self::Expire           { key, value } => Ok(SMEntry::Expire           { key, value }),
+            Self::GenericKV        { key, value } => Ok(SMEntry::GenericKV        { key, value }),
+            Self::Sequences        { key, value } => Ok(SMEntry::Sequences        { key, value }),
+
+            Self::Logs             { .. } => {Err("SMEntry does not contain Logs".to_string())},
+            Self::RaftStateKV      { .. } => {Err("SMEntry does not contain RaftStateKV".to_string())}
+            Self::ClientLastResps  { .. } => {Err("SMEntry does not contain ClientLastResps".to_string())}
+            Self::LogMeta          { .. } => {Err("SMEntry does not contain LogMeta".to_string())}
+        }
     }
 }

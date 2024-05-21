@@ -15,7 +15,6 @@
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
-use databend_common_meta_raft_store::state_machine::StoredSnapshot;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
 use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::OptionalSend;
@@ -139,12 +138,8 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
             }
         };
 
-        // Update current snapshot.
-        let new_snapshot = StoredSnapshot { meta: meta.clone() };
-        {
-            let mut current_snapshot = self.current_snapshot.write().await;
-            *current_snapshot = Some(new_snapshot);
-        }
+        self.set_snapshot(Some(meta.clone())).await;
+
         Ok(())
     }
 
@@ -157,11 +152,10 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         let p = self.current_snapshot.read().await;
 
         let snap = match &*p {
-            Some(snapshot) => {
-                let meta = &snapshot.meta;
-
+            Some(meta) => {
                 let snapshot_store =
                     SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
+
                 let d = snapshot_store
                     .load_snapshot(&meta.snapshot_id)
                     .await

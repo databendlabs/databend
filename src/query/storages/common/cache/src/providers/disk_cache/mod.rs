@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::SnapshotMeta;
-use serde::Deserialize;
-use serde::Serialize;
+#[allow(clippy::module_inception)]
+mod disk_cache;
+mod disk_cache_key;
+mod disk_cache_lru;
 
-/// The application snapshot type which the `MetaStore` works with.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct StoredSnapshot {
-    pub meta: SnapshotMeta,
-}
+pub use disk_cache::*;
+pub use disk_cache_key::DiskCacheKey;
+pub use disk_cache_lru::*;

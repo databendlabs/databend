@@ -1,0 +1,58 @@
+statement ok
+create or replace table t_1 (str varchar);
+
+statement ok
+begin;
+
+statement ok
+insert into t_1 (str) values ('a'), ('b');
+
+statement error
+select 1/0;
+
+statement ok
+commit;
+
+query I
+select * from t_1;
+----
+
+
+statement ok
+create or replace table t_1 (str varchar);
+
+statement ok
+begin;
+
+statement ok
+insert into t_1 (str) values ('a'), ('b');
+
+statement error
+1;
+
+statement ok
+commit;
+
+query I
+select * from t_1;
+----
+
+
+statement ok
+create or replace table t_1 (str varchar);
+
+statement ok
+begin;
+
+statement ok
+insert into t_1 (str) values ('a'), ('b');
+
+statement error
+select nonexistent from t_1;
+
+statement ok
+commit;
+
+query I
+select * from t_1;
+----
