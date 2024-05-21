@@ -1,0 +1,44 @@
+# Please start the UDF Server first before running this test:
+#   python3 tests/cloud-control-server/simple_server.py
+#
+statement ok
+DROP TASK IF EXISTS mstask
+
+statement ok
+CREATE TASK mstask
+  WAREHOUSE = 'mywh'
+  SCHEDULE = 500 MILLISECOND
+  AS SELECT 1;
+
+query SSSS
+select name, warehouse, schedule, definition from system.tasks where name = 'mstask'
+----
+mstask mywh INTERVAL 0 SECOND 500 MILLISECOND SELECT 1
+
+statement error
+ALTER TASK mstask SET SCHEDULE = 1000 MILLISECOND
+
+statement error
+ALTER TASK mstask SET SCHEDULE = 499 MILLISECOND
+
+statement ok
+ALTER TASK mstask SET SCHEDULE = 1000 SECOND
+
+statement ok
+ALTER TASK mstask SET SCHEDULE = 501 MILLISECOND
+
+query SSSS
+select name, warehouse, schedule, definition from system.tasks where name = 'mstask'
+----
+mstask mywh INTERVAL 0 SECOND 501 MILLISECOND SELECT 1
+
+statement ok
+execute TASK mstask
+
+query SSSS
+select name, warehouse, schedule, definition from system.task_history where name = 'mstask'
+----
+mstask mywh INTERVAL 0 SECOND 501 MILLISECOND SELECT 1
+
+statement ok
+DROP TASK mstask
