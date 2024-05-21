@@ -1,0 +1,8 @@
+>>>> drop stage if exists s1;
+>>>> create stage s1;
+1
+2
+1
+1
+2
+>>>> drop stage if exists s1;
