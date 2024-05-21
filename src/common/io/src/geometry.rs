@@ -44,6 +44,18 @@ pub enum GeometryDataType {
     GEOJSON,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Axis {
+    X,
+    Y,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Extremum {
+    Max,
+    Min,
+}
+
 impl FromStr for GeometryDataType {
     type Err = ErrorCode;
 

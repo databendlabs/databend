@@ -2970,7 +2970,7 @@ dependencies = [
  "codespan-reporting",
  "databend-common-arrow",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "http 1.1.0",
  "opendal",
  "parquet",
@@ -3013,7 +3013,7 @@ dependencies = [
  "futures",
  "geo",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "goldenfile",
  "hex",
  "itertools 0.10.5",
@@ -3058,7 +3058,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "hex",
  "jsonb",
  "lexical-core",
@@ -3102,7 +3102,7 @@ dependencies = [
  "geo-types",
  "geohash",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "goldenfile",
  "h3o",
  "hex",
@@ -3193,7 +3193,7 @@ dependencies = [
  "ethnum",
  "geo",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "lexical-core",
  "micromarshal 0.5.0",
  "ordered-float 4.2.0",
@@ -4793,7 +4793,7 @@ dependencies = [
  "arrow",
  "chrono",
  "databend-client",
- "geozero",
+ "geozero 0.12.0",
  "glob",
  "hex",
  "itertools 0.12.1",
@@ -4917,7 +4917,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "log",
  "match-template",
  "minitrace",
@@ -6404,6 +6404,21 @@ name = "geozero"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61d25cc15c7e5b86cd8dadea56bb78c46f346d4fb09022e7cbba0839c890d0a1"
+dependencies = [
+ "geo-types",
+ "geojson",
+ "log",
+ "scroll 0.11.0",
+ "serde_json",
+ "thiserror",
+ "wkt",
+]
+
+[[package]]
+name = "geozero"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cd8fb67347739a057fd607b6d8b43ba4ed93619ed84b8f429fa3296f8ae504c"
 dependencies = [
  "geo-types",
  "geojson",

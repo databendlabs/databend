@@ -31,6 +31,8 @@ use databend_common_io::geometry_format;
 use databend_common_io::parse_to_ewkb;
 use databend_common_io::parse_to_subtype;
 use databend_common_io::read_ewkb_srid;
+use databend_common_io::Axis;
+use databend_common_io::Extremum;
 use databend_common_io::GeometryDataType;
 use geo::dimensions::Dimensions;
 use geo::BoundingRect;
@@ -1034,7 +1036,103 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                match st_xmax(&geo) {
+                match st_extreme(&geo, Axis::X, Extremum::Max) {
+                    None => builder.push_null(),
+                    Some(x_max) => builder.push(F64::from(AsPrimitive::<f64>::as_(x_max))),
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_xmin",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.push_null();
+                        return;
+                    }
+                };
+
+                match st_extreme(&geo, Axis::X, Extremum::Min) {
+                    None => builder.push_null(),
+                    Some(x_max) => builder.push(F64::from(AsPrimitive::<f64>::as_(x_max))),
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_ymax",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.push_null();
+                        return;
+                    }
+                };
+
+                match st_extreme(&geo, Axis::Y, Extremum::Max) {
+                    None => builder.push_null(),
+                    Some(x_max) => builder.push(F64::from(AsPrimitive::<f64>::as_(x_max))),
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_ymin",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.push_null();
+                        return;
+                    }
+                };
+
+                match st_extreme(&geo, Axis::Y, Extremum::Min) {
                     None => builder.push_null(),
                     Some(x_max) => builder.push(F64::from(AsPrimitive::<f64>::as_(x_max))),
                 };
@@ -1609,67 +1707,150 @@ fn point_to_geohash(
     }
 }
 
-fn st_xmax(geometry: &geo_types::Geometry<f64>) -> Option<f64> {
+fn st_extreme(geometry: &geo_types::Geometry<f64>, axis: Axis, extremum: Extremum) -> Option<f64> {
     match geometry {
-        geo_types::Geometry::Point(point) => Some(point.x()),
+        geo_types::Geometry::Point(point) => {
+            let coord = match axis {
+                Axis::X => point.x(),
+                Axis::Y => point.y(),
+            };
+            Some(coord)
+        }
         geo_types::Geometry::MultiPoint(multi_point) => {
-            let mut xmax: Option<f64> = None;
+            let mut extreme_coord: Option<f64> = None;
             for point in multi_point {
-                if let Some(x) = st_xmax(&geo_types::Geometry::Point(*point)) {
-                    if let Some(existing_xmax) = xmax {
-                        xmax = Some(existing_xmax.max(x));
-                    } else {
-                        xmax = Some(x);
-                    }
+                if let Some(coord) = st_extreme(&geo_types::Geometry::Point(*point), axis, extremum)
+                {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
                 }
             }
-            xmax
+            extreme_coord
         }
-        geo_types::Geometry::Line(line) => Some(line.bounding_rect().max().x),
+        geo_types::Geometry::Line(line) => {
+            let bounding_rect = line.bounding_rect();
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
         geo_types::Geometry::MultiLineString(multi_line) => {
-            let mut xmax: Option<f64> = None;
+            let mut extreme_coord: Option<f64> = None;
             for line in multi_line {
-                if let Some(x) = st_xmax(&geo_types::Geometry::LineString(line.clone())) {
-                    if let Some(existing_xmax) = xmax {
-                        xmax = Some(existing_xmax.max(x));
-                    } else {
-                        xmax = Some(x);
-                    }
+                if let Some(coord) = st_extreme(
+                    &geo_types::Geometry::LineString(line.clone()),
+                    axis,
+                    extremum,
+                ) {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
                 }
             }
-            xmax
+            extreme_coord
         }
-        geo_types::Geometry::Polygon(polygon) => Some(polygon.bounding_rect().unwrap().max().x),
+        geo_types::Geometry::Polygon(polygon) => {
+            let bounding_rect = polygon.bounding_rect().unwrap();
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
         geo_types::Geometry::MultiPolygon(multi_polygon) => {
-            let mut xmax: Option<f64> = None;
+            let mut extreme_coord: Option<f64> = None;
             for polygon in multi_polygon {
-                if let Some(x) = st_xmax(&geo_types::Geometry::Polygon(polygon.clone())) {
-                    if let Some(existing_xmax) = xmax {
-                        xmax = Some(existing_xmax.max(x));
-                    } else {
-                        xmax = Some(x);
-                    }
+                if let Some(coord) = st_extreme(
+                    &geo_types::Geometry::Polygon(polygon.clone()),
+                    axis,
+                    extremum,
+                ) {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
                 }
             }
-            xmax
+            extreme_coord
         }
         geo_types::Geometry::GeometryCollection(geometry_collection) => {
-            let mut xmax: Option<f64> = None;
+            let mut extreme_coord: Option<f64> = None;
             for geometry in geometry_collection {
-                if let Some(x) = st_xmax(geometry) {
-                    if let Some(existing_xmax) = xmax {
-                        xmax = Some(existing_xmax.max(x));
-                    } else {
-                        xmax = Some(x);
-                    }
+                if let Some(coord) = st_extreme(geometry, axis, extremum) {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
                 }
             }
-            xmax
+            extreme_coord
         }
         geo_types::Geometry::LineString(line_string) => {
-            line_string.bounding_rect().map(|rect| rect.max().x)
+            line_string.bounding_rect().map(|rect| match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => rect.max().x,
+                    Extremum::Min => rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => rect.max().y,
+                    Extremum::Min => rect.min().y,
+                },
+            })
         }
-        geo_types::Geometry::Rect(rect) => Some(rect.max().x),
-        geo_types::Geometry::Triangle(triangle) => Some(triangle.bounding_rect().max().x),
+        geo_types::Geometry::Rect(rect) => {
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => rect.max().x,
+                    Extremum::Min => rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => rect.max().y,
+                    Extremum::Min => rect.min().y,
+                },
+            };
+            Some(coord)
+        }
+        geo_types::Geometry::Triangle(triangle) => {
+            let bounding_rect = triangle.bounding_rect();
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
     }
 }
