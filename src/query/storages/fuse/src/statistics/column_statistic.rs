@@ -25,7 +25,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
-use databend_common_functions::aggregates::eval_aggr;
+use databend_common_functions::aggregates::eval_unary_aggr_for_discrete_chunks;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -36,7 +36,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 const DISTINCT_ERROR_RATE: f64 = 0.04;
 
 pub fn calc_column_distinct_of_values(columns: &[Column], rows: usize) -> Result<u64> {
-    let distinct_values = eval_aggr(
+    let distinct_values = eval_unary_aggr_for_discrete_chunks(
         "approx_count_distinct",
         vec![Scalar::Number(NumberScalar::Float64(
             DISTINCT_ERROR_RATE.into(),
@@ -93,8 +93,8 @@ pub fn gen_columns_statistics(
         let mut min = Scalar::Null;
         let mut max = Scalar::Null;
 
-        let (mins, _) = eval_aggr("min", vec![], cols, rows)?;
-        let (maxs, _) = eval_aggr("max", vec![], cols, rows)?;
+        let (mins, _) = eval_unary_aggr_for_discrete_chunks("min", vec![], cols, rows)?;
+        let (maxs, _) = eval_unary_aggr_for_discrete_chunks("max", vec![], cols, rows)?;
 
         if mins.len() > 0 {
             min = if let Some(v) = mins.index(0) {
