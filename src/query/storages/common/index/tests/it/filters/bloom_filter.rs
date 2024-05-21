@@ -28,6 +28,7 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
@@ -65,13 +66,23 @@ fn test_bloom_filter() -> Result<()> {
                 ],
             })),
         ),
+        TableField::new(
+            "3",
+            TableDataType::Map(Box::new(TableDataType::Tuple {
+                fields_name: vec!["key".to_string(), "value".to_string()],
+                fields_type: vec![TableDataType::String, TableDataType::Variant],
+            })),
+        ),
     ]));
 
-    let kv_ty = DataType::Tuple(vec![
+    let map_ty1 = DataType::Map(Box::new(DataType::Tuple(vec![
         DataType::Number(NumberDataType::UInt8),
         DataType::String,
-    ]);
-    let map_ty = DataType::Map(Box::new(kv_ty));
+    ])));
+    let map_ty2 = DataType::Map(Box::new(DataType::Tuple(vec![
+        DataType::String,
+        DataType::Variant,
+    ])));
 
     let blocks = [
         DataBlock::new(
@@ -85,10 +96,20 @@ fn test_bloom_filter() -> Result<()> {
                     Value::Scalar(Scalar::String("a".to_string())),
                 ),
                 BlockEntry::new(
-                    map_ty.clone(),
+                    map_ty1.clone(),
                     Value::Scalar(Scalar::Map(Column::Tuple(vec![
                         UInt8Type::from_data(vec![1, 2]),
                         StringType::from_data(vec!["a", "b"]),
+                    ]))),
+                ),
+                BlockEntry::new(
+                    map_ty2.clone(),
+                    Value::Scalar(Scalar::Map(Column::Tuple(vec![
+                        StringType::from_data(vec!["a", "b"]),
+                        VariantType::from_data(vec![
+                            jsonb::parse_value(r#""abc""#.as_bytes()).unwrap().to_vec(),
+                            jsonb::parse_value(r#"100"#.as_bytes()).unwrap().to_vec(),
+                        ]),
                     ]))),
                 ),
             ],
@@ -107,11 +128,25 @@ fn test_bloom_filter() -> Result<()> {
                 }
                 .upcast(),
             )),
+            Column::Map(Box::new(
+                ArrayColumn::<KvPair<AnyType, AnyType>> {
+                    values: KvColumn {
+                        keys: StringType::from_data(vec!["b", "c", "d"]),
+                        values: VariantType::from_data(vec![
+                            jsonb::parse_value(r#""def""#.as_bytes()).unwrap().to_vec(),
+                            jsonb::parse_value(r#"true"#.as_bytes()).unwrap().to_vec(),
+                            jsonb::parse_value(r#""xyz""#.as_bytes()).unwrap().to_vec(),
+                        ]),
+                    },
+                    offsets: Buffer::<u64>::from(vec![0, 2, 3]),
+                }
+                .upcast(),
+            )),
         ]),
     ];
     let blocks_ref = blocks.iter().collect::<Vec<_>>();
 
-    let bloom_columns = bloom_columns_map(schema.clone(), vec![0, 1, 2]);
+    let bloom_columns = bloom_columns_map(schema.clone(), vec![0, 1, 2, 3]);
     let bloom_fields = bloom_columns.values().cloned().collect::<Vec<_>>();
     let index = BloomIndex::try_create(
         FunctionContext::default(),
@@ -194,7 +229,7 @@ fn test_bloom_filter() -> Result<()> {
             &index,
             2,
             schema.clone(),
-            map_ty.clone(),
+            map_ty1.clone(),
             Scalar::Number(NumberScalar::UInt8(1)),
             DataType::Number(NumberDataType::UInt8),
             Scalar::String("a".to_string()),
@@ -207,7 +242,7 @@ fn test_bloom_filter() -> Result<()> {
             &index,
             2,
             schema.clone(),
-            map_ty.clone(),
+            map_ty1.clone(),
             Scalar::Number(NumberScalar::UInt8(2)),
             DataType::Number(NumberDataType::UInt8),
             Scalar::String("b".to_string()),
@@ -219,12 +254,51 @@ fn test_bloom_filter() -> Result<()> {
         eval_map_index(
             &index,
             2,
-            schema,
-            map_ty,
+            schema.clone(),
+            map_ty1,
             Scalar::Number(NumberScalar::UInt8(3)),
             DataType::Number(NumberDataType::UInt8),
             Scalar::String("x".to_string()),
             DataType::String
+        )
+    );
+    assert_eq!(
+        FilterEvalResult::Uncertain,
+        eval_map_index(
+            &index,
+            3,
+            schema.clone(),
+            map_ty2.clone(),
+            Scalar::String("b".to_string()),
+            DataType::String,
+            Scalar::String("def".to_string()),
+            DataType::String
+        )
+    );
+    assert_eq!(
+        FilterEvalResult::MustFalse,
+        eval_map_index(
+            &index,
+            3,
+            schema.clone(),
+            map_ty2.clone(),
+            Scalar::String("d".to_string()),
+            DataType::String,
+            Scalar::String("xxx".to_string()),
+            DataType::String
+        )
+    );
+    assert_eq!(
+        FilterEvalResult::Uncertain,
+        eval_map_index(
+            &index,
+            3,
+            schema,
+            map_ty2,
+            Scalar::String("c".to_string()),
+            DataType::String,
+            Scalar::Boolean(true),
+            DataType::Boolean,
         )
     );
 
@@ -386,20 +460,17 @@ fn eval_map_index(
         &BUILTIN_FUNCTIONS,
     )
     .unwrap();
-    let expr = check_function(
-        None,
-        "eq",
-        &[],
-        &[get_expr, Expr::Constant {
-            span: None,
-            scalar: val,
-            data_type: ty,
-        }],
-        &BUILTIN_FUNCTIONS,
-    )
-    .unwrap();
-    let (expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
 
+    let const_expr = Expr::Constant {
+        span: None,
+        scalar: val,
+        data_type: ty,
+    };
+
+    let expr =
+        check_function(None, "eq", &[], &[get_expr, const_expr], &BUILTIN_FUNCTIONS).unwrap();
+
+    let (expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
     let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
@@ -420,13 +491,7 @@ fn bloom_columns_map(
     let mut bloom_columns_map = BTreeMap::new();
     for i in cols {
         let field_type = schema.field(i).data_type();
-        let mut data_type = DataType::from(field_type);
-        if let DataType::Map(box inner_ty) = data_type {
-            data_type = match inner_ty {
-                DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                _ => unreachable!(),
-            };
-        }
+        let data_type = DataType::from(field_type);
         if Xor8Filter::supported_type(&data_type) {
             bloom_columns_map.insert(i, schema.field(i).clone());
         }

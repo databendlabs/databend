@@ -288,6 +288,189 @@ query I
 SELECT c FROM s2;
 ----
 
+
+#######################################
+# consume inside explicit transaction #
+#######################################
+
+
+statement ok
+create or replace table t_1 (
+  str varchar
+);
+
+statement ok
+create or replace stream s_1 on table t_1 append_only = true;
+
+statement ok
+insert into t_1 (str) values ('a'), ('b');
+
+
+# case 1: with consume should rollback-able (implicitly)
+
+statement ok
+begin;
+
+query I
+select str from s_1 with consume order by str;
+----
+a
+b
+
+statement error 1006
+select 1/0;
+
+statement ok
+commit;
+
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+# case 2: with consume should rollback-able (explicitly)
+
+statement ok
+begin;
+
+query I
+select str from s_1 with consume order by str;
+----
+a
+b
+
+# inside txn, s_1 is consumed, expects empty result set
+query I
+select str from s_1;
+
+statement ok
+rollback;
+
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+
+
+# case 3:  mixed with DMLs
+
+statement ok
+create table tmp_sink like t_1;
+
+statement ok
+begin;
+
+# normal dml
+statement ok
+insert into tmp_sink select str from s_1;
+
+# changes should not be consumed
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+# but changes should be captured by insert stmt
+query I
+select count() from tmp_sink
+----
+2
+
+# dml and stream consume
+
+statement ok
+select str from s_1 with consume;
+
+statement ok
+truncate table tmp_sink;
+
+statement ok
+insert into tmp_sink select str from s_1;
+
+query I
+select count() from tmp_sink
+----
+0
+
+statement ok
+commit;
+
+query I
+select str from s_1 order by str;
+----
+
+
+# case 4:  disallows WITH CONSUME inside dml
+
+statement ok
+insert into t_1 (str) values ('a'), ('b');
+
+statement error 1005
+insert into tmp_sink select str from s_1 with consume;
+
+statement error 1005
+copy into tmp_sink select str from s_1 with consume;
+
+# allows explain
+
+# using statement to ignore the result (which may not be deterministic)
+
+statement ok
+explain select str from s_1 with consume;
+
+statement ok
+explain select str from s_1;
+
+# explain should not consume the stream
+query I
+select str from s_1 order by str;
+----
+a
+b
+
+statement ok
+create or replace table target_1 (
+  str varchar
+);
+
+statement ok
+create or replace table target_2 (
+  str varchar
+);
+
+statement ok
+begin;
+
+statement ok
+insert into target_1 select str from s_1;
+
+query I
+select str from s_1 with consume order by str;
+----
+a
+b
+
+statement ok
+insert into target_2 select str from s_1;
+
+statement ok
+commit;
+
+query I
+select str from target_1 order by str;
+----
+a
+b
+
+query I
+select str from target_2 order by str;
+----
+
+
 statement ok
 drop database test_txn_stream;
 

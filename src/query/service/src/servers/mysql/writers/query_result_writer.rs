@@ -132,6 +132,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             while let Some(block) = blocks.next().await {
                 if let Err(e) = block {
                     error!("dataset write failed: {:?}", e);
+                    self.session.txn_mgr().lock().set_fail();
                     dataset_writer
                         .error(
                             ErrorKind::ER_UNKNOWN_ERROR,
@@ -220,6 +221,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     let block = match block {
                         Err(e) => {
                             error!("result row write failed: {:?}", e);
+                            self.session.txn_mgr().lock().set_fail();
                             row_writer
                                 .finish_error(
                                     ErrorKind::ER_UNKNOWN_ERROR,

@@ -272,19 +272,14 @@ impl CacheManager {
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
-        restart_policy: DiskCacheKeyReloadPolicy,
+        disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
     ) -> Result<Option<TableDataCache>> {
-        let fuzzy_reload_cache_keys = match restart_policy {
-            DiskCacheKeyReloadPolicy::Reset => false,
-            DiskCacheKeyReloadPolicy::Fuzzy => true,
-        };
-
         if disk_cache_bytes_size > 0 {
             let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
                 path,
                 population_queue_size,
                 disk_cache_bytes_size,
-                fuzzy_reload_cache_keys,
+                disk_cache_key_reload_policy,
             )?;
             Ok(Some(cache_holder))
         } else {

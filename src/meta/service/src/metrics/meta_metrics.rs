@@ -170,8 +170,8 @@ pub mod server_metrics {
         SERVER_METRICS.applying_snapshot.inc_by(cnt);
     }
 
-    pub fn set_snapshot_key_num(snapshot_key_num: usize) {
-        SERVER_METRICS.snapshot_key_num.set(snapshot_key_num as i64);
+    pub fn set_snapshot_key_num(snapshot_key_num: i64) {
+        SERVER_METRICS.snapshot_key_num.set(snapshot_key_num);
     }
 
     pub fn set_proposals_applied(proposals_applied: u64) {
