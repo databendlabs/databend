@@ -291,22 +291,25 @@ impl SnapshotStoreV002 {
             let with_context =
                 |e: io::Error| io::Error::new(e.kind(), format!("{} while {}", e, context));
 
-            let mut writer = self.new_writer().map_err(|e| {
+            let writer = self.new_writer().map_err(|e| {
                 io::Error::new(e.source.kind(), format!("creating snapshot writer: {}", e))
             })?;
 
             info!("snapshot_writer_thread start writing: {}", context);
-            let cnt = writer.write_entries_sync(rx).map_err(with_context)?;
+            let writer = writer.write_entries_sync(rx).map_err(with_context)?;
 
             info!("snapshot_writer_thread committing...: {}", context);
-            let (snapshot_id, size) = writer.commit(None).map_err(with_context)?;
+            let cnt = writer.cnt;
+            let last_applied = writer.last_applied;
+            let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied).with_key_num(Some(cnt));
+            let size = writer.commit(snapshot_id.clone()).map_err(with_context)?;
 
             info!("snapshot_writer_thread commit done: {}", context);
 
             Ok::<(Self, SnapshotStat), io::Error>((self, SnapshotStat {
                 snapshot_id,
                 size,
-                entry_cnt: cnt as u64,
+                entry_cnt: cnt,
             }))
         });
 
