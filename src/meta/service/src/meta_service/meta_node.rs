@@ -606,6 +606,11 @@ impl MetaNode {
                         return Ok(true);
                     } else {
                         error!("leaving cluster via {} fail: {:?}", addr, reply.error);
+                        errors.push(
+                            AnyError::error(reply.error).add_context(|| {
+                                format!("leave {} via: {}", leave_id, addr.clone())
+                            }),
+                        );
                     }
                 }
                 Err(s) => {
