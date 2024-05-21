@@ -1438,7 +1438,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         folder.fold_to_stable(expr)
     }
 
-    fn full_input_domains(expr: &Expr<Index>) -> HashMap<Index, Domain> {
+    pub fn full_input_domains(expr: &Expr<Index>) -> HashMap<Index, Domain> {
         expr.column_refs()
             .into_iter()
             .map(|(id, ty)| {

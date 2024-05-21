@@ -153,7 +153,7 @@ statement ok
 drop table if exists bloom_test_nullable_t2
 
 statement ok
-create table bloom_test_nullable_t2(c0 bool null, c1 int null, c2 varchar null) storage_format = 'native'
+create table bloom_test_nullable_t2(c0 bool null, c1 int null, c2 varchar null)
 
 statement ok
 insert into bloom_test_nullable_t2 values(false, 1, 'a'), (true, 5, null)
@@ -168,7 +168,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
 ├── push downs: [filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')], limit: NONE]
 └── estimated rows: 1.60
 
