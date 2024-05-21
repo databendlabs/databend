@@ -1077,31 +1077,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 
 [[package]]
-<<<<<<< HEAD
-=======
-name = "bendpy"
-version = "0.0.0"
-dependencies = [
- "arrow",
- "arrow-schema",
- "ctor 0.2.7",
- "databend-common-config",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-license",
- "databend-common-meta-app",
- "databend-common-meta-embedded",
- "databend-common-users",
- "databend-query",
- "pyo3",
- "pyo3-build-config 0.18.3",
- "tokio",
- "tokio-stream",
- "uuid",
-]
-
-[[package]]
->>>>>>> main
 name = "bigdecimal"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
