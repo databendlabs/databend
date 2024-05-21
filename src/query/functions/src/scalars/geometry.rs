@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
-
 use databend_common_exception::ErrorCode;
 use databend_common_expression::types::geometry::GeometryType;
 use databend_common_expression::types::BinaryType;
@@ -30,12 +28,12 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_io::geometry_format;
 use databend_common_io::parse_to_ewkb;
 use databend_common_io::parse_to_subtype;
-use databend_common_io::read_ewkb_srid;
+use databend_common_io::Axis;
+use databend_common_io::Extremum;
 use databend_common_io::GeometryDataType;
 use geo::dimensions::Dimensions;
 use geo::BoundingRect;
 use geo::HasDimensions;
-use geo::MultiPoint;
 use geo::Point;
 use geo_types::Polygon;
 use geohash::decode_bbox;
@@ -43,13 +41,14 @@ use geohash::encode;
 use geos::geo_types;
 use geos::geo_types::Coord;
 use geos::geo_types::LineString;
-use geos::Geom;
 use geos::Geometry;
 use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
 use geozero::wkb::Wkb;
 use geozero::CoordDimensions;
+use geozero::GeozeroGeometry;
 use geozero::ToGeo;
+use geozero::ToGeos;
 use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
@@ -115,20 +114,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-
-            let srid = match read_ewkb_srid(&mut io::Cursor::new(&geometry)) {
-                Ok(srid) => srid,
-                _ => {
-                    ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError("input geometry must has the correct SRID")
-                            .to_string(),
-                    );
-                    builder.commit_row();
-                    return;
-                }
-            };
-
+            let ewkb = Ewkb(geometry);
+            let srid = ewkb.to_geos().unwrap().srid();
             match Ewkb(geometry).to_ewkb(CoordDimensions::xy(), srid) {
                 Ok(wkb) => builder.put_slice(wkb.as_slice()),
                 Err(e) => {
@@ -177,18 +164,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let srid = match read_ewkb_srid(&mut io::Cursor::new(&geometry)) {
-                Ok(srid) => srid,
-                _ => {
-                    ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError("input geometry must has the correct SRID")
-                            .to_string(),
-                    );
-                    builder.commit_row();
-                    return;
-                }
-            };
+            let srid = Ewkb(geometry).to_geo().unwrap().srid();
 
             match Ewkb(geometry).to_ewkt(srid) {
                 Ok(ewkt) => builder.put_str(&ewkt),
@@ -234,19 +210,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
-                Ok(geo) => geo,
-                Err(e) => {
-                    ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError(e.to_string()).to_string(),
-                    );
-                    builder.commit_row();
-                    return;
-                }
-            };
-
-            let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(geo) {
+            let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(
+                Ewkb(geometry).to_geo().unwrap(),
+            ) {
                 Ok(line_string) => line_string.points().last().unwrap(),
                 Err(e) => {
                     ctx.set_error(
@@ -282,19 +248,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
-                    Ok(geo) => geo,
-                    Err(e) => {
-                        ctx.set_error(
-                            builder.len(),
-                            ErrorCode::GeometryError(e.to_string()).to_string(),
-                        );
-                        builder.commit_row();
-                        return;
-                    }
-                };
-
-                let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(geo) {
+                let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(
+                    Ewkb(geometry).to_geo().unwrap(),
+                ) {
                     Ok(line_string) => {
                         let len = line_string.0.len() as i32;
                         if index >= -len && index < len && index != 0 {
@@ -340,34 +296,22 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
         "st_dimension",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<GeometryType, NullableType<Int32Type>>(
-            |ewkb, output, ctx| {
-                let geo: geo_types::Geometry = match Ewkb(ewkb).to_geo() {
-                    Ok(geo) => geo,
-                    Err(e) => {
-                        ctx.set_error(
-                            output.len(),
-                            ErrorCode::GeometryError(e.to_string()).to_string(),
-                        );
-                        output.push_null();
-                        return;
-                    }
-                };
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<Int32Type>>(|ewkb, output, _| {
+            let geo: geo_types::Geometry = Ewkb(ewkb).to_geo().unwrap();
 
-                let dimension: Option<i32> = match geo.dimensions() {
-                    Dimensions::Empty => None,
-                    Dimensions::ZeroDimensional => Some(0),
-                    Dimensions::OneDimensional => Some(1),
-                    Dimensions::TwoDimensional => Some(2),
-                };
+            let dimension: Option<i32> = match geo.dimensions() {
+                Dimensions::Empty => None,
+                Dimensions::ZeroDimensional => Some(0),
+                Dimensions::OneDimensional => Some(1),
+                Dimensions::TwoDimensional => Some(2),
+            };
 
-                match dimension {
-                    Some(dimension) => output.push(dimension),
-                    None => output.push_null(),
-                }
-            },
-        ),
+            match dimension {
+                Some(dimension) => output.push(dimension),
+                None => output.push_null(),
+            }
+        }),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
@@ -469,14 +413,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             let geom = geo::Geometry::from(Point::new(longitude.0, latitude.0));
-            match geom.to_wkb(CoordDimensions::xy()) {
-                Ok(data) => {
-                    builder.put_slice(data.as_slice())
-                },
-                Err(e) => {
-                    ctx.set_error(builder.len(), e.to_string())
-                }
-            }
+            builder.put_slice(geom.to_wkb(CoordDimensions::xy()).unwrap().as_slice());
             builder.commit_row();
         })
     );
@@ -492,19 +429,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let line_string = match Wkb(wkb).to_geo() {
-                Ok(geo) => geo.try_into(),
-                Err(e) => {
-                    ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError(e.to_string()).to_string(),
-                    );
-                    builder.commit_row();
-                    return;
-                }
-            };
-
-            let polygon = line_string
+            let polygon = Wkb(wkb)
+                .to_geo()
+                .unwrap()
+                .try_into()
                 .map_err(|e: geo_types::Error| ErrorCode::GeometryError(e.to_string()))
                 .and_then(|line_string: LineString| {
                     let points = line_string.into_points();
@@ -536,7 +464,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, GeometryType, _, _>(
         "st_makeline",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<GeometryType, GeometryType, GeometryType>(
             |left_ewkb, right_ewkb, builder, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -545,68 +473,32 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let srid: Option<i32>;
-                let params = &vec![left_ewkb, right_ewkb];
-                let geos: Vec<Geometry> =
-                    match binary_to_geos(params)
-                    {
-                        Ok(geos) => {
-                            match get_shared_srid(&geos){
-                                Ok(s) => {
-                                    srid = s;
-                                    geos
-                                },
-                                Err(e) => {
-                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e).to_string());
-                                    builder.commit_row();
-                                    return;
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
-                            builder.commit_row();
-                            return;
-                        }
-                    };
+                let left_geo = Ewkb(left_ewkb);
+                let right_geo = Ewkb(right_ewkb);
+                let geos = &vec![left_geo.to_geos().unwrap(), right_geo.to_geos().unwrap()];
+                // check srid
+                let srid = match get_shared_srid(geos) {
+                    Ok(srid) => srid,
+                    Err(e) => {
+                        ctx.set_error(builder.len(), ErrorCode::GeometryError(e).to_string());
+                        builder.commit_row();
+                        return;
+                    }
+                };
 
                 let mut coords: Vec<Coord> = vec![];
-                for geometry in geos.into_iter() {
-                    let g : geo_types::Geometry = (&geometry).try_into().unwrap();
+                for geometry in geos.iter() {
+                    let g : geo_types::Geometry = geometry.try_into().unwrap();
                     match g {
-                        geo_types::Geometry::Point(_) => {
-                            let point: Point = match g.try_into() {
-                                Ok(point) => point,
-                                Err(e) => {
-                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
-                                    builder.commit_row();
-                                    return;
-                                }
-                            };
-                            coords.push(point.into());
+                        geo_types::Geometry::Point(point) => {
+                            coords.push(point.0);
                         },
-                        geo_types::Geometry::LineString(_)=> {
-                            let line: LineString = match g.try_into() {
-                                Ok(line) => line,
-                                Err(e) => {
-                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
-                                    builder.commit_row();
-                                    return;
-                                }
-                            };
-                            coords.append(&mut line.into_inner());
+                        geo_types::Geometry::LineString(line)=> {
+                            coords.append(&mut line.clone().into_inner());
                         },
-                        geo_types::Geometry::MultiPoint(_)=> {
-                            let multi_point: MultiPoint = match g.try_into() {
-                                Ok(multi_point) => multi_point,
-                                Err(e) => {
-                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
-                                    builder.commit_row();
-                                    return;
-                                }
-                            };
+                        geo_types::Geometry::MultiPoint(multi_point)=> {
                             for point in multi_point.into_iter() {
-                                coords.push(point.into());
+                                coords.push(point.0);
                             }
                         },
                         _ => {
@@ -699,8 +591,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let binary = match hex::decode(str) {
-                Ok(binary) => binary,
+            let ewkb = match hex::decode(str) {
+                Ok(binary) => Ewkb(binary),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
+            let geos = match ewkb.to_geos() {
+                Ok(geos) => geos,
                 Err(e) => {
                     ctx.set_error(
                         builder.len(),
@@ -711,20 +614,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             };
 
-            let srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
-                Ok(srid) => srid,
-                _ => {
-                    ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError("input geometry must has the correct SRID")
-                            .to_string(),
-                    );
-                    builder.commit_row();
-                    return;
-                }
-            };
-
-            match Ewkb(binary).to_ewkb(CoordDimensions::xy(), srid) {
+            match geos.to_ewkb(CoordDimensions::xy(), geos.srid()) {
                 Ok(ewkb) => {
                     builder.put_slice(ewkb.as_slice());
                 }
@@ -749,13 +639,29 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
+            let ewkb = Ewkb(binary);
+            let geos = match ewkb.to_geos() {
+                Ok(geos) => geos,
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.commit_row();
+                    return;
+                }
+            };
 
-            match binary_to_geometry_impl(binary, None) {
-                Ok(data) => builder.put_slice(data.as_slice()),
-                Err(e) => ctx.set_error(
-                    builder.len(),
-                    ErrorCode::GeometryError(e.to_string()).to_string(),
-                ),
+            match geos.to_ewkb(CoordDimensions::xy(), geos.srid()) {
+                Ok(ewkb) => {
+                    builder.put_slice(ewkb.as_slice());
+                }
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                }
             }
             builder.commit_row();
         }),
@@ -811,12 +717,29 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match binary_to_geometry_impl(binary, Some(srid)) {
-                    Ok(data) => builder.put_slice(data.as_slice()),
-                    Err(e) => ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError(e.to_string()).to_string(),
-                    ),
+                let ewkb = Ewkb(binary);
+                let geos = match ewkb.to_geos() {
+                    Ok(geos) => geos,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.commit_row();
+                        return;
+                    }
+                };
+
+                match geos.to_ewkb(CoordDimensions::xy(), Some(srid)) {
+                    Ok(ewkb) => {
+                        builder.put_slice(ewkb.as_slice());
+                    }
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                    }
                 }
                 builder.commit_row();
             },
@@ -833,6 +756,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
+
             match parse_to_ewkb(wkt.as_bytes(), None) {
                 Ok(data) => builder.put_slice(data.as_slice()),
                 Err(e) => ctx.set_error(
@@ -878,19 +802,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
-                Ok(geo) => geo,
-                Err(e) => {
-                    ctx.set_error(
-                        builder.len(),
-                        ErrorCode::GeometryError(e.to_string()).to_string(),
-                    );
-                    builder.commit_row();
-                    return;
-                }
-            };
-
-            let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(geo) {
+            let point = match <geo_types::Geometry as TryInto<LineString>>::try_into(
+                Ewkb(geometry).to_geo().unwrap(),
+            ) {
                 Ok(line_string) => line_string.points().next().unwrap(),
                 Err(e) => {
                     ctx.set_error(
@@ -925,19 +839,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
-                    Ok(geo) => geo,
-                    Err(e) => {
-                        ctx.set_error(
-                            builder.len(),
-                            ErrorCode::GeometryError(e.to_string()).to_string(),
-                        );
-                        builder.push_null();
-                        return;
-                    }
-                };
-
-                match <geo_types::Geometry as TryInto<Point>>::try_into(geo) {
+                match <geo_types::Geometry as TryInto<Point>>::try_into(
+                    Ewkb(geometry).to_geo().unwrap(),
+                ) {
                     Ok(point) => builder.push(F64::from(AsPrimitive::<f64>::as_(point.x()))),
                     Err(e) => ctx.set_error(
                         builder.len(),
@@ -960,19 +864,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
-                    Ok(geo) => geo,
-                    Err(e) => {
-                        ctx.set_error(
-                            builder.len(),
-                            ErrorCode::GeometryError(e.to_string()).to_string(),
-                        );
-                        builder.push_null();
-                        return;
-                    }
-                };
-
-                match <geo_types::Geometry as TryInto<Point>>::try_into(geo) {
+                match <geo_types::Geometry as TryInto<Point>>::try_into(
+                    Ewkb(geometry).to_geo().unwrap(),
+                ) {
                     Ok(point) => builder.push(F64::from(AsPrimitive::<f64>::as_(point.y()))),
                     Err(e) => ctx.set_error(
                         builder.len(),
@@ -985,7 +879,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
         "st_srid",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<GeometryType, NullableType<Int32Type>>(
             |geometry, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -994,25 +888,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match read_ewkb_srid(&mut io::Cursor::new(&geometry)) {
-                    Ok(srid) => {
-                        output.push(srid.unwrap_or(4326));
-                    }
-                    Err(e) => {
-                        ctx.set_error(
-                            output.len(),
-                            ErrorCode::GeometryError(e.to_string()).to_string(),
-                        );
-                        output.push(0);
-                    }
-                };
+
+                output.push(Ewkb(geometry).to_geos().unwrap().srid().unwrap_or(4326));
             },
         ),
     );
 
     registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
         "st_xmax",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
             |geometry, builder, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -1022,21 +906,68 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                let geo: geo_types::Geometry = match Ewkb(geometry).to_geo() {
-                    Ok(geo) => geo,
-                    Err(e) => {
-                        ctx.set_error(
-                            builder.len(),
-                            ErrorCode::GeometryError(e.to_string()).to_string(),
-                        );
+                match st_extreme(&Ewkb(geometry).to_geo().unwrap(), Axis::X, Extremum::Max) {
+                    None => builder.push_null(),
+                    Some(x_max) => builder.push(F64::from(AsPrimitive::<f64>::as_(x_max))),
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_xmin",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
                         builder.push_null();
                         return;
                     }
-                };
-
-                match st_xmax(&geo) {
+                }
+                match st_extreme(&Ewkb(geometry).to_geo().unwrap(), Axis::X, Extremum::Min) {
                     None => builder.push_null(),
-                    Some(x_max) => builder.push(F64::from(AsPrimitive::<f64>::as_(x_max))),
+                    Some(x_min) => builder.push(F64::from(AsPrimitive::<f64>::as_(x_min))),
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_ymax",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                match st_extreme(&Ewkb(geometry).to_geo().unwrap(), Axis::Y, Extremum::Max) {
+                    None => builder.push_null(),
+                    Some(y_max) => builder.push(F64::from(AsPrimitive::<f64>::as_(y_max))),
+                };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_ymin",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                match st_extreme(&Ewkb(geometry).to_geo().unwrap(), Axis::Y, Extremum::Min) {
+                    None => builder.push_null(),
+                    Some(y_min) => builder.push(F64::from(AsPrimitive::<f64>::as_(y_min))),
                 };
             },
         ),
@@ -1120,21 +1051,21 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
-                Ok(srid) => srid,
-                _ => {
+            let ewkb = Ewkb(binary);
+            let geos = match ewkb.to_geos() {
+                Ok(geos) => geos,
+                Err(e) => {
                     ctx.set_error(
                         builder.len(),
-                        ErrorCode::GeometryError("input geometry must has the correct SRID")
-                            .to_string(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
                     );
                     builder.commit_row();
                     return;
                 }
             };
 
-            match binary_to_geometry_impl(binary, srid) {
-                Ok(data) => builder.put_slice(data.as_slice()),
+            match geos.to_ewkb(CoordDimensions::xy(), geos.srid()) {
+                Ok(ewkb) => builder.put_slice(ewkb.as_slice()),
                 Err(e) => ctx.set_error(
                     builder.len(),
                     ErrorCode::GeometryError(e.to_string()).to_string(),
@@ -1156,13 +1087,25 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match binary_to_geometry_impl(binary, Some(srid)) {
-                    Ok(data) => builder.put_slice(data.as_slice()),
+                let geo = match Ewkb(binary).to_geo() {
+                    Ok(geo) => geo,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        builder.commit_row();
+                        return;
+                    }
+                };
+
+                match geo.to_ewkb(CoordDimensions::xy(), Some(srid)) {
+                    Ok(ewkb) => builder.put_slice(ewkb.as_slice()),
                     Err(e) => ctx.set_error(
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
                     ),
-                }
+                };
                 builder.commit_row();
             },
         ),
@@ -1315,18 +1258,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
-                    Ok(srid) => srid,
+                let ewkb = Ewkb(binary);
+                let geos = match ewkb.to_geos() {
+                    Ok(geos) => geos,
                     Err(_) => {
                         output.push_null();
                         return;
                     }
                 };
 
-                match binary_to_geometry_impl(binary, srid) {
-                    Ok(data) => {
+                match geos.to_ewkb(CoordDimensions::xy(), geos.srid()) {
+                    Ok(ewkb) => {
                         output.validity.push(true);
-                        output.builder.put_slice(data.as_slice());
+                        output.builder.put_slice(ewkb.as_slice());
                         output.builder.commit_row();
                     }
                     Err(_) => output.push_null(),
@@ -1346,11 +1290,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
+                let geo = match Ewkb(binary).to_geo() {
+                    Ok(geo) => geo,
+                    Err(_) => {
+                        output.push_null();
+                        return;
+                    }
+                };
 
-                match binary_to_geometry_impl(binary, Some(srid)) {
-                    Ok(data) => {
+                match geo.to_ewkb(CoordDimensions::xy(), Some(srid)) {
+                    Ok(ewkb) => {
                         output.validity.push(true);
-                        output.builder.put_slice(data.as_slice());
+                        output.builder.put_slice(ewkb.as_slice());
                         output.builder.commit_row();
                     }
                     Err(_) => output.push_null(),
@@ -1464,35 +1415,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 // }
 
 #[inline]
-fn binary_to_geos<'a>(binaries: &'a Vec<&'a [u8]>) -> Result<Vec<Geometry<'a>>, String> {
-    let mut geos: Vec<Geometry> = Vec::with_capacity(binaries.len());
-    let mut srid: Option<i32> = None;
-    for (index, binary) in binaries.iter().enumerate() {
-        match Geometry::new_from_wkb(binary) {
-            Ok(data) => {
-                if index == 0 {
-                    srid = data.get_srid().map_or_else(|_| None, |v| Some(v as i32));
-                } else {
-                    let t_srid = data.get_srid().map_or_else(|_| None, |v| Some(v as i32));
-                    if !srid.eq(&t_srid) {
-                        return Err("Srid does not match!".to_string());
-                    }
-                }
-                geos.push(data)
-            }
-            Err(e) => return Err(e.to_string()),
-        };
-    }
-    Ok(geos)
-}
-
-#[inline]
 fn get_shared_srid(geometries: &Vec<Geometry>) -> Result<Option<i32>, String> {
     let mut srid: Option<i32> = None;
     let mut error_srid: String = String::new();
     let check_srid = geometries.windows(2).all(|w| {
-        let v1 = w[0].get_srid().map_or_else(|_| None, |v| Some(v as i32));
-        let v2 = w[1].get_srid().map_or_else(|_| None, |v| Some(v as i32));
+        let v1 = w[0].srid();
+        let v2 = w[1].srid();
         match v1.eq(&v2) {
             true => {
                 srid = v1;
@@ -1512,27 +1440,13 @@ fn get_shared_srid(geometries: &Vec<Geometry>) -> Result<Option<i32>, String> {
 
 pub fn ewkb_to_json(buf: &[u8]) -> databend_common_exception::Result<String> {
     Ewkb(buf)
-        .to_geo()
+        .to_geos()
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-        .and_then(|geo| {
-            geo.to_json()
+        .and_then(|geos| {
+            geos.to_json()
                 .map_err(|e| ErrorCode::GeometryError(e.to_string()))
                 .map(|json: String| json)
         })
-}
-
-fn binary_to_geometry_impl(
-    binary: &[u8],
-    srid: Option<i32>,
-) -> databend_common_exception::Result<Vec<u8>> {
-    let ewkb_srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
-        Ok(srid) => srid,
-        Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
-    };
-    match Ewkb(&binary).to_ewkb(CoordDimensions::xy(), srid.or(ewkb_srid)) {
-        Ok(ewkb) => Ok(ewkb),
-        Err(e) => Err(ErrorCode::GeometryError(e.to_string())),
-    }
 }
 
 /// The argument str must be a string expression that represents a valid geometric object in one of the following formats:
@@ -1550,24 +1464,23 @@ fn str_to_geometry_impl(
         Ok(geo_types) => geo_types,
         Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
     };
-
     let ewkb = match geo_type {
         GeometryDataType::WKT | GeometryDataType::EWKT => parse_to_ewkb(str.as_bytes(), srid),
         GeometryDataType::GEOJSON => GeoJson(str)
             .to_ewkb(CoordDimensions::xy(), srid)
             .map_err(|e| ErrorCode::GeometryError(e.to_string())),
         GeometryDataType::WKB | GeometryDataType::EWKB => {
-            let binary = match hex::decode(str) {
-                Ok(binary) => binary,
+            let ewkb = match hex::decode(str) {
+                Ok(binary) => Ewkb(binary),
                 Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
             };
 
-            let ewkb_srid = match read_ewkb_srid(&mut io::Cursor::new(&binary)) {
-                Ok(ewkb_srid) => ewkb_srid,
+            let geos = match ewkb.to_geos() {
+                Ok(geos) => geos,
                 Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
             };
-            Ewkb(binary)
-                .to_ewkb(CoordDimensions::xy(), srid.or(ewkb_srid))
+
+            geos.to_ewkb(CoordDimensions::xy(), srid.or(geos.srid()))
                 .map_err(|e| ErrorCode::GeometryError(e.to_string()))
         }
     };
@@ -1609,67 +1522,150 @@ fn point_to_geohash(
     }
 }
 
-fn st_xmax(geometry: &geo_types::Geometry<f64>) -> Option<f64> {
+fn st_extreme(geometry: &geo_types::Geometry<f64>, axis: Axis, extremum: Extremum) -> Option<f64> {
     match geometry {
-        geo_types::Geometry::Point(point) => Some(point.x()),
+        geo_types::Geometry::Point(point) => {
+            let coord = match axis {
+                Axis::X => point.x(),
+                Axis::Y => point.y(),
+            };
+            Some(coord)
+        }
         geo_types::Geometry::MultiPoint(multi_point) => {
-            let mut xmax: Option<f64> = None;
+            let mut extreme_coord: Option<f64> = None;
             for point in multi_point {
-                if let Some(x) = st_xmax(&geo_types::Geometry::Point(*point)) {
-                    if let Some(existing_xmax) = xmax {
-                        xmax = Some(existing_xmax.max(x));
-                    } else {
-                        xmax = Some(x);
-                    }
+                if let Some(coord) = st_extreme(&geo_types::Geometry::Point(*point), axis, extremum)
+                {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
                 }
             }
-            xmax
+            extreme_coord
         }
-        geo_types::Geometry::Line(line) => Some(line.bounding_rect().max().x),
+        geo_types::Geometry::Line(line) => {
+            let bounding_rect = line.bounding_rect();
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
         geo_types::Geometry::MultiLineString(multi_line) => {
-            let mut xmax: Option<f64> = None;
+            let mut extreme_coord: Option<f64> = None;
             for line in multi_line {
-                if let Some(x) = st_xmax(&geo_types::Geometry::LineString(line.clone())) {
-                    if let Some(existing_xmax) = xmax {
-                        xmax = Some(existing_xmax.max(x));
-                    } else {
-                        xmax = Some(x);
-                    }
+                if let Some(coord) = st_extreme(
+                    &geo_types::Geometry::LineString(line.clone()),
+                    axis,
+                    extremum,
+                ) {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
                 }
             }
-            xmax
+            extreme_coord
         }
-        geo_types::Geometry::Polygon(polygon) => Some(polygon.bounding_rect().unwrap().max().x),
+        geo_types::Geometry::Polygon(polygon) => {
+            let bounding_rect = polygon.bounding_rect().unwrap();
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
         geo_types::Geometry::MultiPolygon(multi_polygon) => {
-            let mut xmax: Option<f64> = None;
+            let mut extreme_coord: Option<f64> = None;
             for polygon in multi_polygon {
-                if let Some(x) = st_xmax(&geo_types::Geometry::Polygon(polygon.clone())) {
-                    if let Some(existing_xmax) = xmax {
-                        xmax = Some(existing_xmax.max(x));
-                    } else {
-                        xmax = Some(x);
-                    }
+                if let Some(coord) = st_extreme(
+                    &geo_types::Geometry::Polygon(polygon.clone()),
+                    axis,
+                    extremum,
+                ) {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
                 }
             }
-            xmax
+            extreme_coord
         }
         geo_types::Geometry::GeometryCollection(geometry_collection) => {
-            let mut xmax: Option<f64> = None;
+            let mut extreme_coord: Option<f64> = None;
             for geometry in geometry_collection {
-                if let Some(x) = st_xmax(geometry) {
-                    if let Some(existing_xmax) = xmax {
-                        xmax = Some(existing_xmax.max(x));
-                    } else {
-                        xmax = Some(x);
-                    }
+                if let Some(coord) = st_extreme(geometry, axis, extremum) {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
                 }
             }
-            xmax
+            extreme_coord
         }
         geo_types::Geometry::LineString(line_string) => {
-            line_string.bounding_rect().map(|rect| rect.max().x)
+            line_string.bounding_rect().map(|rect| match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => rect.max().x,
+                    Extremum::Min => rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => rect.max().y,
+                    Extremum::Min => rect.min().y,
+                },
+            })
         }
-        geo_types::Geometry::Rect(rect) => Some(rect.max().x),
-        geo_types::Geometry::Triangle(triangle) => Some(triangle.bounding_rect().max().x),
+        geo_types::Geometry::Rect(rect) => {
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => rect.max().x,
+                    Extremum::Min => rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => rect.max().y,
+                    Extremum::Min => rect.min().y,
+                },
+            };
+            Some(coord)
+        }
+        geo_types::Geometry::Triangle(triangle) => {
+            let bounding_rect = triangle.bounding_rect();
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
     }
 }

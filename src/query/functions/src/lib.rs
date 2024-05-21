@@ -24,6 +24,8 @@
 #![feature(lazy_cell)]
 #![feature(str_internals)]
 
+extern crate core;
+
 use aggregates::AggregateFunctionFactory;
 use ctor::ctor;
 use databend_common_expression::FunctionRegistry;
