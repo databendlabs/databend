@@ -50,5 +50,6 @@ pub use escape::escape_string_with_quote;
 pub use geometry::geometry_format;
 pub use geometry::parse_to_ewkb;
 pub use geometry::parse_to_subtype;
-pub use geometry::read_ewkb_srid;
+pub use geometry::Axis;
+pub use geometry::Extremum;
 pub use geometry::GeometryDataType;
