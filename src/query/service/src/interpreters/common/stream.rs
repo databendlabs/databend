@@ -19,7 +19,7 @@ use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
@@ -95,10 +95,14 @@ where F: Fn(&TableEntry) -> bool {
     Ok(streams)
 }
 
+pub struct StreamTableUpdates {
+    pub update_table_metas: Vec<UpdateTableMetaReq>,
+    pub table_infos: Vec<TableInfo>,
+}
 pub async fn query_build_update_stream_req(
     ctx: &Arc<QueryContext>,
     metadata: &MetadataRef,
-) -> Result<Option<UpdateMultiTableMetaReq>> {
+) -> Result<Option<StreamTableUpdates>> {
     let streams = get_stream_table(metadata, |t| {
         t.is_consume() && t.table().engine() == STREAM_ENGINE
     })?;
@@ -111,10 +115,13 @@ pub async fn query_build_update_stream_req(
         .manager
         .check_enterprise_enabled(ctx.get_license_key(), Feature::Stream)?;
 
-    let mut update_table_metas = Vec::with_capacity(streams.len());
+    let cap = streams.len();
+    let mut update_table_meta_reqs = Vec::with_capacity(cap);
+    let mut table_infos = Vec::with_capacity(cap);
     for table in streams.into_iter() {
         let stream = StreamTable::try_from_table(table.as_ref())?;
         let stream_info = stream.get_table_info();
+        table_infos.push(stream_info.clone());
 
         let source_table = stream.source_table(ctx.clone()).await?;
         let inner_fuse = FuseTable::try_from_table(source_table.as_ref())?;
@@ -129,7 +136,7 @@ pub async fn query_build_update_stream_req(
         new_table_meta.options = options;
         new_table_meta.updated_on = Utc::now();
 
-        update_table_metas.push(UpdateTableMetaReq {
+        update_table_meta_reqs.push(UpdateTableMetaReq {
             table_id: stream_info.ident.table_id,
             seq: MatchSeq::Exact(stream_info.ident.seq),
             new_table_meta,
@@ -138,10 +145,9 @@ pub async fn query_build_update_stream_req(
             deduplicated_label: None,
         });
     }
-    Ok(Some(UpdateMultiTableMetaReq {
-        update_table_metas,
-        copied_files: vec![],
-        update_stream_metas: vec![],
-        deduplicated_labels: vec![],
+
+    Ok(Some(StreamTableUpdates {
+        update_table_metas: update_table_meta_reqs,
+        table_infos,
     }))
 }
