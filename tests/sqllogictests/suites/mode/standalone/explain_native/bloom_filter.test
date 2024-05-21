@@ -146,6 +146,49 @@ TableScan
 ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
 └── estimated rows: 1.00
 
+statement ok
+set bloom_filter_ignore_invalid_key_ratio = 90
+
+query T
+explain select 1 from bloom_test_nullable_t where c1 = 1
+----
+EvalScalar
+├── output columns: [1 (#2)]
+├── expressions: [1]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.default.bloom_test_nullable_t
+    ├── output columns: []
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
+    ├── push downs: [filters: [is_true(bloom_test_nullable_t.c1 (#0) = 1)], limit: NONE]
+    └── estimated rows: 1.00
+
+# column c1 is cached as invalid key, bloom filter is ignored
+query T
+explain select 1 from bloom_test_nullable_t where c1 = 5
+----
+EvalScalar
+├── output columns: [1 (#2)]
+├── expressions: [1]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.default.bloom_test_nullable_t
+    ├── output columns: []
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+    ├── push downs: [filters: [is_true(bloom_test_nullable_t.c1 (#0) = 5)], limit: NONE]
+    └── estimated rows: 1.00
+
+statement ok
+set bloom_filter_ignore_invalid_key_ratio = 100
+
 # fix https://github.com/datafuselabs/databend/issues/15570
 # fix https://github.com/datafuselabs/databend/issues/15572
 

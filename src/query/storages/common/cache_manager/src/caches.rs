@@ -63,6 +63,8 @@ pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
 
 pub type PrunePartitionsCache = NamedCache<InMemoryItemCacheHolder<(PartStatistics, Partitions)>>;
 
+pub type PruneBloomFilterInvalidKeysCache = NamedCache<InMemoryItemCacheHolder<bool>>;
+
 /// In memory object cache of table column array
 pub type ColumnArrayCache =
     NamedCache<InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>>;
@@ -157,6 +159,13 @@ impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
     type Cache = InvertedIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_inverted_index_meta_cache()
+    }
+}
+
+impl CachedObject<bool> for bool {
+    type Cache = PruneBloomFilterInvalidKeysCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_prune_bloom_filter_invalid_keys_cache()
     }
 }
 

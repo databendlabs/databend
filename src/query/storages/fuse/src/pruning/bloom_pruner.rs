@@ -51,14 +51,20 @@ pub trait BloomPruner {
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockMeta,
+        invalid_keys: &mut HashSet<String>,
     ) -> bool;
+
+    fn update_index_fields(
+        &self,
+        ignored_keys: &HashSet<String>,
+    ) -> Option<Arc<dyn BloomPruner + Send + Sync>>;
 }
 
 pub struct BloomPrunerCreator {
     func_ctx: FunctionContext,
 
     /// indices that should be loaded from filter block
-    index_fields: Vec<TableField>,
+    index_fields: Vec<(TableField, String)>,
 
     /// the expression that would be evaluate
     filter_expression: Expr<String>,
@@ -95,8 +101,8 @@ impl BloomPrunerCreator {
                 // convert to filter column names
                 let mut filter_fields = Vec::with_capacity(point_query_cols.len());
                 let mut scalar_map = HashMap::<Scalar, u64>::new();
-                for (field, scalar, ty) in point_query_cols.into_iter() {
-                    filter_fields.push(field);
+                for (field, scalar, ty, filter_key) in point_query_cols.into_iter() {
+                    filter_fields.push((field, filter_key));
                     if let Entry::Vacant(e) = scalar_map.entry(scalar.clone()) {
                         let digest = BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &ty)?;
                         e.insert(digest);
@@ -127,13 +133,14 @@ impl BloomPrunerCreator {
         column_stats: &StatisticsOfColumns,
         column_ids_of_indexed_block: Vec<ColumnId>,
         block_meta: &BlockMeta,
+        invalid_keys: &mut HashSet<String>,
     ) -> Result<bool> {
         let version = index_location.1;
 
         // filter out columns that no longer exist in the indexed block
         let index_columns = self.index_fields.iter().try_fold(
             Vec::with_capacity(self.index_fields.len()),
-            |mut acc, field| {
+            |mut acc, (field, _)| {
                 if column_ids_of_indexed_block.contains(&field.column_id()) {
                     acc.push(BloomIndex::build_filter_column_name(version, field)?);
                 }
@@ -196,6 +203,7 @@ impl BloomPrunerCreator {
                 &self.scalar_map,
                 column_stats,
                 self.data_schema.clone(),
+                invalid_keys,
             )? != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return true to indicate
@@ -272,11 +280,19 @@ impl BloomPruner for BloomPrunerCreator {
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockMeta,
+        invalid_keys: &mut HashSet<String>,
     ) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
             match self
-                .apply(loc, index_length, column_stats, column_ids, block_meta)
+                .apply(
+                    loc,
+                    index_length,
+                    column_stats,
+                    column_ids,
+                    block_meta,
+                    invalid_keys,
+                )
                 .await
             {
                 Ok(v) => v,
@@ -288,6 +304,32 @@ impl BloomPruner for BloomPrunerCreator {
             }
         } else {
             true
+        }
+    }
+
+    fn update_index_fields(
+        &self,
+        ignored_keys: &HashSet<String>,
+    ) -> Option<Arc<dyn BloomPruner + Send + Sync>> {
+        let mut new_index_fields = Vec::with_capacity(self.index_fields.len());
+        for (field, filter_key) in &self.index_fields {
+            if !ignored_keys.contains(filter_key) {
+                new_index_fields.push((field.clone(), filter_key.clone()));
+            }
+        }
+        if new_index_fields.is_empty() {
+            None
+        } else {
+            let creator = BloomPrunerCreator {
+                func_ctx: self.func_ctx.clone(),
+                index_fields: new_index_fields,
+                filter_expression: self.filter_expression.clone(),
+                scalar_map: self.scalar_map.clone(),
+                dal: self.dal.clone(),
+                data_schema: self.data_schema.clone(),
+                bloom_index_builder: self.bloom_index_builder.clone(),
+            };
+            Some(Arc::new(creator))
         }
     }
 }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
@@ -46,6 +48,7 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
+        invalid_keys_map: &mut HashMap<String, u64>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);
@@ -55,8 +58,13 @@ impl BlockPruner {
             || self.pruning_ctx.inverted_index_pruner.is_some()
         {
             // async pruning with bloom index or inverted index.
-            self.block_pruning(segment_location, block_metas, block_meta_indexes)
-                .await
+            self.block_pruning(
+                segment_location,
+                block_metas,
+                block_meta_indexes,
+                invalid_keys_map,
+            )
+            .await
         } else {
             // sync pruning without a bloom index and inverted index.
             self.block_pruning_sync(segment_location, block_metas, block_meta_indexes)
@@ -92,6 +100,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        invalid_keys_map: &mut HashMap<String, u64>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -166,7 +175,14 @@ impl BlockPruner {
                                     pruning_stats.set_blocks_bloom_pruning_before(1);
                                 }
                                 let keep = bloom_pruner
-                                    .should_keep(&index_location, index_size, &block_meta.col_stats, column_ids, &block_meta)
+                                    .should_keep(
+                                        &index_location,
+                                        index_size,
+                                        &block_meta.col_stats,
+                                        column_ids,
+                                        &block_meta,
+                                        &mut prune_result.invalid_keys
+                                    )
                                     .await
                                     && limit_pruner.within_limit(row_count);
                                 if keep {
@@ -252,6 +268,12 @@ impl BlockPruner {
         let block_num = block_metas.len();
         for prune_result in joint {
             let prune_result = prune_result?;
+
+            for invalid_key in prune_result.invalid_keys {
+                let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
+                *val_ref += 1;
+            }
+
             if prune_result.keep {
                 let block = block_metas[prune_result.block_idx].clone();
 
@@ -364,6 +386,8 @@ struct BlockPruneResult {
     // the matched rows and scores should keeped in the block
     // only used by inverted index search
     matched_rows: Option<Vec<(usize, Option<F32>)>>,
+    // invalid bloom filter keys
+    invalid_keys: HashSet<String>,
 }
 
 impl BlockPruneResult {
@@ -380,6 +404,7 @@ impl BlockPruneResult {
             range,
             block_location,
             matched_rows,
+            invalid_keys: HashSet::new(),
         }
     }
 }

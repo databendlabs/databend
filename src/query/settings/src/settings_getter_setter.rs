@@ -630,4 +630,12 @@ impl Settings {
     pub fn get_max_vacuum_temp_files_after_query(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_temp_files_after_query")
     }
+
+    pub fn set_bloom_filter_ignore_invalid_key_ratio(&self, val: u64) -> Result<()> {
+        self.try_set_u64("bloom_filter_ignore_invalid_key_ratio", val)
+    }
+
+    pub fn get_bloom_filter_ignore_invalid_key_ratio(&self) -> Result<u64> {
+        self.try_get_u64("bloom_filter_ignore_invalid_key_ratio")
+    }
 }

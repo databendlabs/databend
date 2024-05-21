@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Semaphore;
@@ -21,12 +22,15 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
@@ -56,6 +60,7 @@ use crate::pruning::SegmentLocation;
 
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
+    pub func_ctx: FunctionContext,
     pub dal: Operator,
     pub pruning_runtime: Arc<Runtime>,
     pub pruning_semaphore: Arc<Semaphore>,
@@ -75,6 +80,7 @@ impl PruningContext {
     pub fn try_create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
+        table_id: u64,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
@@ -129,6 +135,7 @@ impl PruningContext {
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let bloom_pruner = BloomPrunerCreator::create(
             func_ctx.clone(),
+            table_id,
             &table_schema,
             dal.clone(),
             filter_expr.as_ref(),
@@ -151,7 +158,7 @@ impl PruningContext {
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
         let internal_column_pruner =
-            InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
+            InternalColumnPruner::try_create(func_ctx.clone(), filter_expr.as_ref());
 
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -166,6 +173,7 @@ impl PruningContext {
 
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
+            func_ctx,
             dal,
             pruning_runtime,
             pruning_semaphore,
@@ -195,6 +203,7 @@ impl FusePruner {
     pub fn create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
+        table_id: u64,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
@@ -203,6 +212,7 @@ impl FusePruner {
         Self::create_with_pages(
             ctx,
             dal,
+            table_id,
             table_schema,
             push_down,
             None,
@@ -216,6 +226,7 @@ impl FusePruner {
     pub fn create_with_pages(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
+        table_id: u64,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
@@ -239,6 +250,7 @@ impl FusePruner {
         let pruning_ctx = PruningContext::try_create(
             ctx,
             dal,
+            table_id,
             table_schema.clone(),
             push_down,
             cluster_key_meta,
@@ -317,6 +329,8 @@ impl FusePruner {
 
                     let mut res = vec![];
                     let mut deleted_segments = vec![];
+                    let mut block_num = 0;
+                    let mut invalid_keys_map = HashMap::new();
                     let pruned_segments = segment_pruner.pruning(batch).await?;
 
                     if delete_pruning {
@@ -333,22 +347,28 @@ impl FusePruner {
                                             summary: compact_segment_info.summary.clone(),
                                         })
                                     } else {
+                                        let block_metas = compact_segment_info.block_metas()?;
+                                        block_num += block_metas.len();
                                         res.extend(
                                             block_pruner
                                                 .pruning(
                                                     segment_location.clone(),
-                                                    compact_segment_info.block_metas()?,
+                                                    block_metas,
+                                                    &mut invalid_keys_map,
                                                 )
                                                 .await?,
                                         );
                                     }
                                 }
                                 None => {
+                                    let block_metas = compact_segment_info.block_metas()?;
+                                    block_num += block_metas.len();
                                     res.extend(
                                         block_pruner
                                             .pruning(
                                                 segment_location.clone(),
-                                                compact_segment_info.block_metas()?,
+                                                block_metas,
+                                                &mut invalid_keys_map,
                                             )
                                             .await?,
                                     );
@@ -358,10 +378,15 @@ impl FusePruner {
                     } else {
                         for (location, info) in pruned_segments {
                             let block_metas = info.block_metas()?;
-                            res.extend(block_pruner.pruning(location, block_metas).await?);
+                            block_num += block_metas.len();
+                            res.extend(
+                                block_pruner
+                                    .pruning(location, block_metas, &mut invalid_keys_map)
+                                    .await?,
+                            );
                         }
                     }
-                    Result::<_, ErrorCode>::Ok((res, deleted_segments))
+                    Result::<_, ErrorCode>::Ok((res, deleted_segments, block_num, invalid_keys_map))
                 }
             }));
         }
@@ -373,11 +398,39 @@ impl FusePruner {
             ))),
             Ok(workers) => {
                 let mut metas = vec![];
+                let mut block_num = 0;
+                let mut invalid_keys_map = HashMap::new();
                 for worker in workers {
                     let mut res = worker?;
                     metas.extend(res.0);
                     self.deleted_segments.append(&mut res.1);
+
+                    block_num += res.2;
+                    for (invalid_key, invalid_num) in res.3 {
+                        let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
+                        *val_ref += invalid_num;
+                    }
                 }
+
+                if let Some(ratio) = self
+                    .pruning_ctx
+                    .func_ctx
+                    .bloom_filter_ignore_invalid_key_ratio
+                {
+                    type CacheItem = bool;
+                    if let Some(cache) = CacheItem::cache() {
+                        for (invalid_key, invalid_num) in invalid_keys_map {
+                            // invalid_num is the number of bloom filters that return Uncertain.
+                            // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
+                            // we put the filter key into the cache and the filter key is ignored in following queries.
+                            let invalid_ratio = invalid_num as f32 / block_num as f32;
+                            if invalid_ratio > ratio {
+                                cache.put(invalid_key.clone(), Arc::new(true));
+                            }
+                        }
+                    }
+                }
+
                 if delete_pruning {
                     Ok(metas)
                 } else {
@@ -410,6 +463,7 @@ impl FusePruner {
             works.push(self.pruning_ctx.pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 async move {
+                    let mut invalid_keys_map = HashMap::new();
                     // Build pruning tasks.
                     let res = block_pruner
                         .pruning(
@@ -420,6 +474,7 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             batch,
+                            &mut invalid_keys_map,
                         )
                         .await?;
 
