@@ -729,7 +729,7 @@ impl CompactSegmentTestFixture {
                 for block in blocks {
                     let block = block?;
 
-                    let col_stats = gen_columns_statistics(&block, None, &schema)?;
+                    let col_stats = gen_columns_statistics(&[block.clone()], None, &schema)?;
 
                     let cluster_stats = if num_blocks % 5 == 0 {
                         None

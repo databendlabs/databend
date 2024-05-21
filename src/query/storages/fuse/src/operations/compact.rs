@@ -193,14 +193,21 @@ impl FuseTable {
         };
         // Add source pipe.
         pipeline.add_source(
-            |output| {
-                CompactSource::try_create(
+            |output| match self.cluster_key_meta() {
+                Some(_) => CompactSource::<false>::try_create(
                     ctx.clone(),
                     self.storage_format,
                     block_reader.clone(),
                     stream_ctx.clone(),
                     output,
-                )
+                ),
+                None => CompactSource::<true>::try_create(
+                    ctx.clone(),
+                    self.storage_format,
+                    block_reader.clone(),
+                    stream_ctx.clone(),
+                    output,
+                ),
             },
             max_threads,
         )?;
