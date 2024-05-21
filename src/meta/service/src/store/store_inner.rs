@@ -64,7 +64,6 @@ use log::info;
 use log::warn;
 
 use crate::export::vec_kv_to_json;
-use crate::metrics;
 use crate::Opened;
 
 /// This is the inner store that provides support utilities for implementing the raft storage API.
@@ -341,22 +340,6 @@ impl StoreInner {
     /// The snapshot is a small object and the snapshot data is store on disk.
     pub(crate) async fn set_snapshot(&self, snapshot_meta: Option<SnapshotMeta>) {
         info!("set_snapshot: {:?}", snapshot_meta);
-
-        // Update snapshot metrics
-        let key_num = if let Some(meta) = &snapshot_meta {
-            match MetaSnapshotId::from_str(&meta.snapshot_id) {
-                Ok(id) => id.key_num.unwrap_or_default() as i64,
-                Err(e) => {
-                    warn!("invalid snapshot id: {:?}, error: {:?}", meta, e);
-                    0
-                }
-            }
-        } else {
-            0
-        };
-
-        metrics::server_metrics::set_snapshot_key_num(key_num);
-
         let mut current_snapshot = self.current_snapshot.write().await;
         *current_snapshot = snapshot_meta;
     }

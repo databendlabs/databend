@@ -4917,7 +4917,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
- "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=3fe3acd)",
+ "jsonb",
  "log",
  "match-template",
  "minitrace",
@@ -9656,9 +9656,9 @@ dependencies = [
 
 [[package]]
 name = "mysql_common"
-version = "0.32.2"
+version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ccdc1fe2bb3ef97e07ba4397327ed45509a1e2e499e2f8265243879cbc7313c"
+checksum = "d1e52cf194ab414202ead9dfda216d2a9ec59cc97ac024ba499ca686d82f040d"
 dependencies = [
  "base64 0.21.7",
  "bigdecimal",
