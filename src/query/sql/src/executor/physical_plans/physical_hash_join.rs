@@ -710,7 +710,8 @@ impl PhysicalPlanBuilder {
                 result
             }
             JoinType::AsOf => unreachable!(
-                "Invalid join type {} during building physical hash join.", join.join_type
+                "Invalid join type {} during building physical hash join.", 
+                join.join_type
             )
         };
 
