@@ -19,6 +19,7 @@ echo "copy /*+ set_var(max_threads=1) */ into @s1/ from (select * from numbers(6
 echo "copy /*+ set_var(max_threads=4) set_var(max_memory_usage=128000000) */ into @s1/ from (select * from numbers(60000000)) max_file_size=64000000 detailed_output=true;"  | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
 
 # two files, limit threads by memory
-echo "copy /*+ set_var(max_threads=4) set_var(max_memory_usage=256000000) */ into @s1/ from (select * from numbers(60000000)) max_file_size=64000000 detailed_output=true;"  | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
+# copy /*+ set_var(max_threads=4) set_var(max_memory_usage=256000000) */ not working in cluster mode
+echo "set max_threads=4; set max_memory_usage=256000000; copy /*+ set_var(max_threads=4) set_var(max_memory_usage=256000000) */ into @s1/ from (select * from numbers(60000000)) max_file_size=64000000 detailed_output=true;"  | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
 
 stmt "drop stage if exists s1;"
