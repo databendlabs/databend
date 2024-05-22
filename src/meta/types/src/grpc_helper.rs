@@ -124,7 +124,7 @@ impl GrpcHelper {
     ) -> Result<Result<T, RaftError<E>>, serde_json::Error>
     where
         T: serde::de::DeserializeOwned,
-        E: serde::Serialize + serde::de::DeserializeOwned,
+        E: serde::de::DeserializeOwned,
     {
         let raft_reply = reply.into_inner();
 

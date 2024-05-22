@@ -21,6 +21,7 @@ use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::Entry;
+use databend_common_meta_types::LogId;
 use databend_common_meta_types::LogIndex;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
@@ -208,6 +209,20 @@ impl SMEntry {
         );
 
         unreachable!("unknown prefix: {}", prefix);
+    }
+
+    pub fn last_applied(&self) -> Option<LogId> {
+        match self {
+            Self::StateMachineMeta { key, value } => {
+                if *key == StateMachineMetaKey::LastApplied {
+                    let last: LogId = value.clone().try_into().unwrap();
+                    Some(last)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 }
 

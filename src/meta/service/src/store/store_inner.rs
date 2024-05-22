@@ -64,7 +64,6 @@ use log::info;
 use log::warn;
 
 use crate::export::vec_kv_to_json;
-use crate::metrics;
 use crate::Opened;
 
 /// This is the inner store that provides support utilities for implementing the raft storage API.
@@ -250,7 +249,8 @@ impl StoreInner {
 
         let context = format!("build snapshot: {}", meta.snapshot_id);
         let ss_store = self.snapshot_store();
-        let (tx, th) = ss_store.spawn_writer_thread(context);
+        let writer = ss_store.new_writer()?;
+        let (tx, th) = writer.spawn_writer_thread(context);
 
         // Pipe entries to the writer.
         {
@@ -269,7 +269,7 @@ impl StoreInner {
         }
 
         // Get snapshot write result
-        let (ss_store, snapshot_stat) = th
+        let (temp_snapshot_data, snapshot_stat) = th
             .await
             .map_err(|e| {
                 error!(error :% = e; "snapshot writer thread error");
@@ -280,30 +280,32 @@ impl StoreInner {
                 StorageIOError::write_snapshot(Some(signature.clone()), &e)
             })?;
 
-        info!(snapshot_stat :% = snapshot_stat; "do_build_snapshot complete");
+        let (snapshot_id, snapshot_data) = ss_store
+            .commit_snapshot_data_gen_id(
+                temp_snapshot_data,
+                snapshot_meta.last_log_id,
+                snapshot_stat.entry_cnt,
+            )
+            .map_err(|e| {
+                error!(error :% = e; "commit temp snapshot error");
+                StorageIOError::write_snapshot(Some(signature.clone()), &e)
+            })?;
+
+        info!(
+            snapshot_id :% = snapshot_id.to_string(),
+            snapshot_stat :% = snapshot_stat; "do_build_snapshot complete");
 
         // Clean old snapshot
         ss_store.clean_old_snapshots().await?;
         info!("do_build_snapshot clean_old_snapshots complete");
 
-        let snapshot_id = &snapshot_stat.snapshot_id;
-        assert_eq!(
-            snapshot_id.last_applied, snapshot_meta.last_log_id,
-            "snapshot_id.last_applied: {:?} must equal snapshot_meta.last_log_id: {:?}",
-            snapshot_id.last_applied, snapshot_meta.last_log_id
-        );
         snapshot_meta.snapshot_id = snapshot_id.to_string();
 
         self.set_snapshot(Some(snapshot_meta.clone())).await;
 
-        let r = ss_store
-            .load_snapshot(&snapshot_meta.snapshot_id)
-            .await
-            .map_err(|e| StorageIOError::read_snapshot(Some(signature), &e))?;
-
         Ok(Snapshot {
             meta: snapshot_meta,
-            snapshot: Box::new(r),
+            snapshot: Box::new(snapshot_data),
         })
     }
 
@@ -341,22 +343,6 @@ impl StoreInner {
     /// The snapshot is a small object and the snapshot data is store on disk.
     pub(crate) async fn set_snapshot(&self, snapshot_meta: Option<SnapshotMeta>) {
         info!("set_snapshot: {:?}", snapshot_meta);
-
-        // Update snapshot metrics
-        let key_num = if let Some(meta) = &snapshot_meta {
-            match MetaSnapshotId::from_str(&meta.snapshot_id) {
-                Ok(id) => id.key_num.unwrap_or_default() as i64,
-                Err(e) => {
-                    warn!("invalid snapshot id: {:?}, error: {:?}", meta, e);
-                    0
-                }
-            }
-        } else {
-            0
-        };
-
-        metrics::server_metrics::set_snapshot_key_num(key_num);
-
         let mut current_snapshot = self.current_snapshot.write().await;
         *current_snapshot = snapshot_meta;
     }
