@@ -391,7 +391,6 @@ impl PhysicalPlanBuilder {
         let merged_fields = match join.join_type {
             JoinType::Cross
             | JoinType::Inner
-            | JoinType::AsOf
             | JoinType::Left
             | JoinType::LeftSingle
             | JoinType::Right
@@ -457,6 +456,9 @@ impl PhysicalPlanBuilder {
                 ));
                 probe_fields
             }
+            JoinType::AsOf => unreachable!(
+                "Invalid join type {} during building physical hash join.", join.join_type
+            )
         };
         let mut projections = ColumnSet::new();
         let projected_schema = DataSchemaRefExt::create(merged_fields.clone());
