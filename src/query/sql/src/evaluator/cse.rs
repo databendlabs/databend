@@ -118,7 +118,7 @@ pub fn apply_cse(
 /// `count_expressions` recursively counts the occurrences of expressions in an expression tree
 /// and stores the count in a HashMap.
 fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
-    if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+    if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
         return;
     }
     match expr {
