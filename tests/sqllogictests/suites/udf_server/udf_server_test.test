@@ -170,6 +170,12 @@ NULL
 6
 NULL
 
+query I
+SELECT gcd(a,b) d from (select number + 1 a, a * 2  b from numbers(3) where number in (select * from numbers(300))) order by d;
+----
+1
+2
+3
 
 
 statement ok 
