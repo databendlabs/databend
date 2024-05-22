@@ -272,7 +272,7 @@ impl DataExchangeManager {
 
         let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
             nodes: env.cluster.nodes.clone(),
-            local_id: GlobalConfig::instance().query.node_id,
+            local_id: GlobalConfig::instance().query.node_id.clone(),
         }))?;
         query_ctx.set_id(env.query_id.clone());
 
