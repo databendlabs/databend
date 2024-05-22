@@ -198,7 +198,7 @@ impl DataExchangeManager {
                     };
                 }
 
-                let mut query_info = Self::create_info(env).await?;
+                let mut query_info = Self::create_info(env)?;
 
                 let query_id = env.query_id.clone();
                 query_info.remove_leak_query_worker =
@@ -262,14 +262,15 @@ impl DataExchangeManager {
         }
     }
 
-    async fn create_info(env: &QueryEnv) -> Result<QueryInfo> {
+    fn create_info(env: &QueryEnv) -> Result<QueryInfo> {
         let session_manager = SessionManager::instance();
 
         let session =
             session_manager.create_with_settings(SessionType::FlightRPC, env.settings.clone())?;
         let session = session_manager.register_session(session)?;
 
-        let query_ctx = session.create_query_context().await?;
+        let cluster = env.cluster.clone();
+        let query_ctx = session.create_query_context_with_cluster(cluster)?;
         query_ctx.set_id(env.query_id.clone());
 
         Ok(QueryInfo {

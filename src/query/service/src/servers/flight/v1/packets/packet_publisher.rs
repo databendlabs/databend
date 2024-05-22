@@ -125,6 +125,7 @@ impl DataflowDiagramBuilder {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryEnv {
     pub query_id: String,
+    pub cluster: Arc<Cluster>,
     pub settings: Arc<Settings>,
     pub dataflow_diagram: Arc<DataflowDiagram>,
     pub create_rpc_clint_with_current_rt: bool,

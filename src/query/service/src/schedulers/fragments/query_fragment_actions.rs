@@ -181,6 +181,7 @@ impl QueryFragmentsActions {
 
         Ok(QueryEnv {
             query_id: self.ctx.get_id(),
+            cluster: self.ctx.get_cluster(),
             settings: self.ctx.get_settings(),
             dataflow_diagram: Arc::new(builder.build()),
             create_rpc_clint_with_current_rt: self
