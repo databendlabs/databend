@@ -14,6 +14,7 @@
 
 use std::borrow::Borrow;
 use std::io;
+use std::ops::Deref;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
@@ -27,10 +28,50 @@ use crate::sm_v002::leveled_store::map_api::MarkedOf;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 
-impl Level {
+/// A single **immutable** level of state machine data.
+///
+/// Immutable level implement only [`MapApiRO`], but not [`MapApi`].
+///
+/// [`MapApi`]: crate::sm_v002::leveled_store::map_api::MapApi
+#[derive(Debug, Clone)]
+pub struct Immutable {
+    level: Arc<Level>,
+}
+
+impl Immutable {
+    pub fn new(level: Arc<Level>) -> Self {
+        Self { level }
+    }
+
+    pub fn new_from_level(level: Level) -> Self {
+        Self {
+            level: Arc::new(level),
+        }
+    }
+
+    pub fn inner(&self) -> &Arc<Level> {
+        &self.level
+    }
+}
+
+impl AsRef<Level> for Immutable {
+    fn as_ref(&self) -> &Level {
+        self.level.as_ref()
+    }
+}
+
+impl Deref for Immutable {
+    type Target = Level;
+
+    fn deref(&self) -> &Self::Target {
+        self.level.as_ref()
+    }
+}
+
+impl Immutable {
     /// Build a static stream that yields key values for primary index
     #[futures_async_stream::try_stream(boxed, ok = MapKV<String>, error = io::Error)]
-    async fn str_range<Q, R>(self: Arc<Level>, range: R)
+    async fn str_range<Q, R>(self: Immutable, range: R)
     where
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -45,7 +86,7 @@ impl Level {
 
     /// Build a static stream that yields expire key and key for the secondary expiration index
     #[futures_async_stream::try_stream(boxed, ok = MapKV<ExpireKey>, error = io::Error)]
-    async fn expire_range<Q, R>(self: Arc<Level>, range: R)
+    async fn expire_range<Q, R>(self: Immutable, range: R)
     where
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -60,7 +101,7 @@ impl Level {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<String> for Arc<Level> {
+impl MapApiRO<String> for Immutable {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<<String as MapKey>::V>, io::Error>
     where
         String: Borrow<Q>,
@@ -78,7 +119,7 @@ impl MapApiRO<String> for Arc<Level> {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<ExpireKey> for Arc<Level> {
+impl MapApiRO<ExpireKey> for Immutable {
     async fn get<Q>(&self, key: &Q) -> Result<MarkedOf<ExpireKey>, io::Error>
     where
         ExpireKey: Borrow<Q>,

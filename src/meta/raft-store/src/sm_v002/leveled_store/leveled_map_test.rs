@@ -51,9 +51,9 @@ async fn test_freeze() -> anyhow::Result<()> {
     ]);
 
     // Listing from the base level sees the old value.
-    let frozen = l.frozen_ref();
+    let immutables = l.immutable_levels_ref();
 
-    let got = frozen
+    let got = immutables
         .str_map()
         .range(s("")..)
         .await?
@@ -193,9 +193,9 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Check base level
 
-    let frozen = l.frozen_ref();
+    let immutables = l.immutable_levels_ref();
 
-    let strm = frozen.str_map().range(s("")..).await?;
+    let strm = immutables.str_map().range(s("")..).await?;
     let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
