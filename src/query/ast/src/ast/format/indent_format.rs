@@ -15,9 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Write;
 
-use databend_common_exception::Result;
-
 use super::FormatTreeNode;
+use crate::Result;
 
 static INDENT_SIZE: usize = 4;
 

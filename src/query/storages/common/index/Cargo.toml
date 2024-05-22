@@ -19,6 +19,7 @@ databend-common-arrow = { path = "../../../../common/arrow" }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-expression = { path = "../../../expression" }
 databend-common-functions = { path = "../../../functions" }
+databend-common-ast = { path = "../../../ast" }
 
 databend-storages-common-table-meta = { path = "../table_meta" }
 

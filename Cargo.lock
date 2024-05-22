@@ -2733,9 +2733,8 @@ dependencies = [
 name = "databend-common-ast"
 version = "0.1.0"
 dependencies = [
+ "codespan-reporting",
  "criterion",
- "databend-common-exception",
- "databend-common-io",
  "derive-visitor",
  "enum-as-inner 0.5.1",
  "ethnum",
@@ -2753,6 +2752,7 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
+ "serde",
  "serde_json",
  "strsim 0.10.0",
  "strum 0.24.1",
@@ -2967,8 +2967,8 @@ dependencies = [
  "arrow-schema",
  "backtrace 0.3.69 (git+https://github.com/rust-lang/backtrace-rs.git?rev=6145fe6bac65c38375f1216a565a6cc7deb89a2d)",
  "bincode 2.0.0-rc.3",
- "codespan-reporting",
  "databend-common-arrow",
+ "databend-common-ast",
  "geos",
  "geozero",
  "http 1.1.0",
@@ -4913,6 +4913,7 @@ dependencies = [
  "crc32fast",
  "criterion",
  "databend-common-arrow",
+ "databend-common-ast",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",

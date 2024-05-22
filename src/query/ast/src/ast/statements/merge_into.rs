@@ -16,8 +16,6 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -30,6 +28,8 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableAlias;
 use crate::ast::TableReference;
+use crate::ParseError;
+use crate::Result;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MergeUpdateExpr {
@@ -190,7 +190,7 @@ impl MergeIntoStmt {
         if clauses.len() > 1 {
             for (idx, clause) in clauses.iter().enumerate() {
                 if clause.selection.is_none() && idx < clauses.len() - 1 {
-                    return Err(ErrorCode::SemanticError(
+                    return Err(ParseError(None,
                         "when there are multi matched clauses, we must have a condition for every one except the last one".to_string(),
                     ));
                 }
@@ -204,7 +204,7 @@ impl MergeIntoStmt {
         if clauses.len() > 1 {
             for (idx, clause) in clauses.iter().enumerate() {
                 if clause.selection.is_none() && idx < clauses.len() - 1 {
-                    return Err(ErrorCode::SemanticError(
+                    return Err(ParseError(None,
                         "when there are multi unmatched clauses, we must have a condition for every one except the last one".to_string(),
                     ));
                 }
