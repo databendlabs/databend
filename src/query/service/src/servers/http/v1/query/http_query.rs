@@ -588,7 +588,8 @@ impl HttpQuery {
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
-        if !self.is_txn_mgr_saved.load(Ordering::Relaxed)
+        if txn_state != TxnState::AutoCommit
+            && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
             && matches!(executor.state, ExecuteState::Stopped(_))
             && self
                 .is_txn_mgr_saved
