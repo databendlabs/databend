@@ -20,7 +20,7 @@ mod internal_seq;
 use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
-pub(in crate::sm_v002) use internal_seq::InternalSeq;
+pub(crate) use internal_seq::InternalSeq;
 
 use crate::state_machine::ExpireValue;
 
@@ -95,7 +95,7 @@ impl<T> Marked<T> {
     }
 
     /// Get internal sequence number. Both None and Normal have sequence number.
-    pub(in crate::sm_v002) fn internal_seq(&self) -> InternalSeq {
+    pub(crate) fn internal_seq(&self) -> InternalSeq {
         match self {
             Marked::TombStone { internal_seq: seq } => InternalSeq::tombstone(*seq),
             Marked::Normal {
@@ -242,7 +242,7 @@ impl From<Marked<String>> for Option<ExpireValue> {
 mod tests {
     use databend_common_meta_types::KVMeta;
 
-    use crate::sm_v002::marked::Marked;
+    use super::Marked;
 
     #[test]
     fn test_marked_new() {

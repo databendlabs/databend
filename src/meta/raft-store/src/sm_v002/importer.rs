@@ -19,10 +19,10 @@ use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::LogId;
 use databend_common_meta_types::StoredMembership;
 
-use crate::key_spaces::RaftStoreEntry;
-use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
-use crate::sm_v002::marked::Marked;
+use crate::key_spaces::SMEntry;
+use crate::leveled_store::level::Level;
+use crate::leveled_store::sys_data_api::SysDataApiRO;
+use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineMetaKey;
 
@@ -38,29 +38,17 @@ pub struct Importer {
 }
 
 impl Importer {
-    pub fn import(&mut self, entry: RaftStoreEntry) -> Result<(), io::Error> {
+    pub fn import(&mut self, entry: SMEntry) -> Result<(), io::Error> {
         let d = &mut self.level_data;
 
         match entry {
-            RaftStoreEntry::DataHeader { .. } => {
+            SMEntry::DataHeader { .. } => {
                 // Not part of state machine
             }
-            RaftStoreEntry::Logs { .. } => {
-                // Not part of state machine
-            }
-            RaftStoreEntry::LogMeta { .. } => {
-                // Not part of state machine
-            }
-            RaftStoreEntry::RaftStateKV { .. } => {
-                // Not part of state machine
-            }
-            RaftStoreEntry::ClientLastResps { .. } => {
-                unreachable!("client last resp is not supported")
-            }
-            RaftStoreEntry::Nodes { key, value } => {
+            SMEntry::Nodes { key, value } => {
                 d.sys_data_mut().nodes_mut().insert(key, value);
             }
-            RaftStoreEntry::StateMachineMeta { key, value } => {
+            SMEntry::StateMachineMeta { key, value } => {
                 match key {
                     StateMachineMetaKey::LastApplied => {
                         let lid = TryInto::<LogId>::try_into(value).map_err(|e| {
@@ -90,7 +78,7 @@ impl Importer {
                     }
                 }
             }
-            RaftStoreEntry::Expire { key, mut value } => {
+            SMEntry::Expire { key, mut value } => {
                 // Old version ExpireValue has seq to be 0. replace it with 1.
                 // `1` is a valid seq. `0` is used by tombstone.
                 // 2023-06-06: by drdr.xp@gmail.com
@@ -101,11 +89,11 @@ impl Importer {
                 self.greatest_seq = std::cmp::max(self.greatest_seq, value.seq);
                 self.expire.insert(key, Marked::from(value));
             }
-            RaftStoreEntry::GenericKV { key, value } => {
+            SMEntry::GenericKV { key, value } => {
                 self.greatest_seq = std::cmp::max(self.greatest_seq, value.seq);
                 self.kv.insert(key, Marked::from(value));
             }
-            RaftStoreEntry::Sequences { key: _, value } => d.sys_data_mut().update_seq(value.0),
+            SMEntry::Sequences { key: _, value } => d.sys_data_mut().update_seq(value.0),
         }
 
         Ok(())
