@@ -29,6 +29,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -269,8 +270,10 @@ impl DataExchangeManager {
             session_manager.create_with_settings(SessionType::FlightRPC, env.settings.clone())?;
         let session = session_manager.register_session(session)?;
 
-        let cluster = env.cluster.clone();
-        let query_ctx = session.create_query_context_with_cluster(cluster)?;
+        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
+            nodes: env.cluster.nodes.clone(),
+            local_id: GlobalConfig::instance().query.node_id,
+        }))?;
         query_ctx.set_id(env.query_id.clone());
 
         Ok(QueryInfo {
