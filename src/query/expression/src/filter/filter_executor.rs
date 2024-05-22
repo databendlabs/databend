@@ -14,12 +14,15 @@
 
 use core::ops::Range;
 use std::collections::HashSet;
+use std::sync::Arc;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;
 use crate::filter::Selector;
+use crate::kernels::BIT_MASK;
 use crate::DataBlock;
 use crate::Evaluator;
 use crate::FunctionContext;
@@ -185,5 +188,55 @@ impl FilterExecutor {
 
     pub fn mutable_true_selection(&mut self) -> &mut [u32] {
         &mut self.true_selection
+    }
+
+    pub fn selection_to_bitmap(len: usize, selection: &[u32]) -> Bitmap {
+        let capacity = len.saturating_add(7) / 8;
+        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
+        let mut builder_len = 0;
+        let mut unset_bits = 0;
+        let mut value = 0;
+        let mut i = 0;
+
+        unsafe {
+            for index in selection.iter() {
+                while i < *index as usize {
+                    unset_bits += 1;
+                    i += 1;
+                    if i % 8 == 0 {
+                        *builder.get_unchecked_mut(builder_len) = value;
+                        builder_len += 1;
+                        value = 0;
+                    }
+                }
+                value |= BIT_MASK[i % 8];
+                i += 1;
+                if i % 8 == 0 {
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
+                    value = 0;
+                }
+            }
+
+            while i < len {
+                unset_bits += 1;
+                i += 1;
+                if i % 8 == 0 {
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
+                    value = 0;
+                }
+            }
+
+            if i % 8 == 0 {
+                *builder.get_unchecked_mut(builder_len) = value;
+                builder_len += 1;
+            }
+
+            builder.set_len(builder_len);
+            Bitmap::from_inner(Arc::new(builder.into()), 0, len, unset_bits)
+                .ok()
+                .unwrap()
+        }
     }
 }

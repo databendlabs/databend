@@ -16,6 +16,7 @@
 
 use std::time::Instant;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -29,8 +30,10 @@ use crate::EvalContext;
 use crate::EvaluateOptions;
 use crate::Evaluator;
 use crate::Expr;
+use crate::FilterExecutor;
 use crate::LikePattern;
 use crate::Scalar;
+use crate::SelectExprBuilder;
 use crate::Value;
 
 // SelectStrategy is used to determine the iteration strategy of the index.
@@ -345,9 +348,14 @@ impl<'a> Selector<'a> {
             &select_strategy,
         );
         let mut eval_options = EvaluateOptions::new(selection);
-        let (value, data_type) = self
-            .evaluator
-            .get_select_child(column_ref, &mut eval_options)?;
+        let validity = Self::short_circuit_validity(
+            column_ref,
+            self.evaluator.data_block().num_rows(),
+            eval_options.selection,
+        );
+        let (value, data_type) =
+            self.evaluator
+                .get_select_child(column_ref, &mut eval_options, validity)?;
         debug_assert!(
             matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
         );
@@ -551,7 +559,15 @@ impl<'a> Selector<'a> {
                     &select_strategy,
                 );
                 let mut eval_options = EvaluateOptions::new(selection);
-                let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
+                let validity = Self::short_circuit_validity(
+                    expr,
+                    self.evaluator.data_block().num_rows(),
+                    eval_options.selection,
+                );
+                let value = self
+                    .evaluator
+                    .get_select_child(expr, &mut eval_options, validity)?
+                    .0;
                 let result = if *is_try {
                     self.evaluator
                         .run_try_cast(*span, expr.data_type(), dest_type, value)?
@@ -621,6 +637,21 @@ impl<'a> Selector<'a> {
             SelectStrategy::True => Some(&true_selection[0..true_count]),
             SelectStrategy::False => Some(&false_selection[0..false_count]),
             SelectStrategy::All => None,
+        }
+    }
+
+    pub fn short_circuit_validity(
+        expr: &Expr,
+        len: usize,
+        selection: Option<&[u32]>,
+    ) -> Option<Bitmap> {
+        let can_reorder = SelectExprBuilder::can_reorder(expr);
+        if let Some(selection) = selection
+            && !can_reorder
+        {
+            Some(FilterExecutor::selection_to_bitmap(len, selection))
+        } else {
+            None
         }
     }
 }
