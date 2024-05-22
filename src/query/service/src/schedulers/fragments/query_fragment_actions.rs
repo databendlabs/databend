@@ -26,10 +26,9 @@ use databend_common_meta_types::NodeInfo;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
-use crate::servers::flight::v1::packets::ExecutePartialQueryPacket;
-use crate::servers::flight::v1::packets::FragmentPlanPacket;
 use crate::servers::flight::v1::packets::QueryEnv;
-use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
+use crate::servers::flight::v1::packets::QueryFragment;
+use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlan;
@@ -162,46 +161,16 @@ impl QueryFragmentsActions {
         Ok(())
     }
 
-    pub fn get_query_fragments_plan_packets(
-        &self,
-    ) -> Result<(QueryFragmentsPlanPacket, Vec<QueryFragmentsPlanPacket>)> {
-        let nodes_info = Self::nodes_info(&self.ctx);
-
-        let mut fragments_packets = self.get_executors_fragments();
-        let mut query_fragments_plan_packets = Vec::with_capacity(fragments_packets.len());
-
-        let cluster = self.ctx.get_cluster();
-        let settings = self.ctx.get_settings();
-        let local_query_fragments_plan_packet = QueryFragmentsPlanPacket::create(
-            self.ctx.get_id(),
-            self.ctx.get_query_kind(),
-            cluster.local_id.clone(),
-            fragments_packets.remove(&cluster.local_id).unwrap(),
-            nodes_info.clone(),
-            settings.changes().clone(),
-            cluster.local_id(),
-        );
-
-        for (executor, fragments) in fragments_packets.into_iter() {
-            let query_id = self.ctx.get_id();
-            let query_kind = self.ctx.get_query_kind();
-            let executors_info = nodes_info.clone();
-
-            query_fragments_plan_packets.push(QueryFragmentsPlanPacket::create(
-                query_id,
-                query_kind,
-                executor,
+    pub fn get_query_fragments(&self) -> Result<HashMap<String, QueryFragments>> {
+        let mut query_fragments = HashMap::new();
+        for (executor, fragments) in self.get_executors_fragments() {
+            query_fragments.insert(executor, QueryFragments {
+                query_id: self.ctx.get_id(),
                 fragments,
-                executors_info,
-                settings.changes().clone(),
-                cluster.local_id(),
-            ));
+            });
         }
 
-        Ok((
-            local_query_fragments_plan_packet,
-            query_fragments_plan_packets,
-        ))
+        Ok(query_fragments)
     }
 
     pub fn get_query_env(&self) -> Result<QueryEnv> {
@@ -212,6 +181,7 @@ impl QueryFragmentsActions {
 
         Ok(QueryEnv {
             query_id: self.ctx.get_id(),
+            settings: self.ctx.get_settings(),
             dataflow_diagram: Arc::new(builder.build()),
             create_rpc_clint_with_current_rt: self
                 .ctx
@@ -220,19 +190,17 @@ impl QueryFragmentsActions {
         })
     }
 
-    pub fn get_execute_partial_query_packets(&self) -> Result<Vec<ExecutePartialQueryPacket>> {
-        let nodes_info = Self::nodes_info(&self.ctx);
-        let mut execute_partial_query_packets = Vec::with_capacity(nodes_info.len());
-
-        for node_id in nodes_info.keys() {
-            execute_partial_query_packets.push(ExecutePartialQueryPacket::create(
-                self.ctx.get_id(),
-                node_id.to_owned(),
-                nodes_info.clone(),
-            ));
+    pub fn prepared_query(&self) -> Result<HashMap<String, String>> {
+        let mut prepared_fragments = HashMap::new();
+        for fragment_actions in &self.fragments_actions {
+            for fragment_action in &fragment_actions.fragment_actions {
+                if !prepared_fragments.contains_key(&fragment_action.executor) {
+                    prepared_fragments.insert(fragment_action.executor.clone(), self.ctx.get_id());
+                }
+            }
         }
 
-        Ok(execute_partial_query_packets)
+        Ok(prepared_fragments)
     }
 
     /// unique map(target, map(source, vec(fragment_id)))
@@ -276,11 +244,11 @@ impl QueryFragmentsActions {
         nodes_info
     }
 
-    fn get_executors_fragments(&self) -> HashMap<String, Vec<FragmentPlanPacket>> {
+    fn get_executors_fragments(&self) -> HashMap<String, Vec<QueryFragment>> {
         let mut fragments_packets = HashMap::new();
         for fragment_actions in &self.fragments_actions {
             for fragment_action in &fragment_actions.fragment_actions {
-                let fragment_packet = FragmentPlanPacket::create(
+                let query_fragment = QueryFragment::create(
                     fragment_actions.fragment_id,
                     fragment_action.physical_plan.clone(),
                     fragment_actions.data_exchange.clone(),
@@ -288,10 +256,10 @@ impl QueryFragmentsActions {
 
                 match fragments_packets.entry(fragment_action.executor.clone()) {
                     Entry::Vacant(entry) => {
-                        entry.insert(vec![fragment_packet]);
+                        entry.insert(vec![query_fragment]);
                     }
                     Entry::Occupied(mut entry) => {
-                        entry.get_mut().push(fragment_packet);
+                        entry.get_mut().push(query_fragment);
                     }
                 }
             }

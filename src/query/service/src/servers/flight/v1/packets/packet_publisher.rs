@@ -18,10 +18,11 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_config::GlobalConfig;
+use databend_common_catalog::cluster_info::Cluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
+use databend_common_settings::Settings;
 use log::debug;
 use petgraph::dot::Dot;
 use petgraph::graph::NodeIndex;
@@ -29,8 +30,8 @@ use petgraph::Graph;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
-use crate::servers::flight::v1::packets::packet::create_client;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
@@ -124,29 +125,23 @@ impl DataflowDiagramBuilder {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryEnv {
     pub query_id: String,
+    pub settings: Arc<Settings>,
     pub dataflow_diagram: Arc<DataflowDiagram>,
     pub create_rpc_clint_with_current_rt: bool,
 }
 
 impl QueryEnv {
-    pub async fn init(&self, timeout: u64) -> Result<()> {
+    pub async fn init(&self, cluster: Arc<Cluster>, timeout: u64) -> Result<()> {
         debug!("Dataflow diagram {:?}", self.dataflow_diagram);
 
-        let mut futures = Vec::with_capacity(self.dataflow_diagram.node_count());
-        for x in self.dataflow_diagram.node_weights() {
-            futures.push({
-                let x = x.clone();
-                let query_env = self.clone();
-                let config = GlobalConfig::instance();
-                async move {
-                    let mut conn = create_client(&config, &x.flight_address).await?;
-                    conn.do_action::<_, ()>(INIT_QUERY_ENV, query_env, timeout)
-                        .await
-                }
-            });
+        let mut message = HashMap::with_capacity(self.dataflow_diagram.node_count());
+        for node in self.dataflow_diagram.node_weights() {
+            message.insert(node.id.clone(), self.clone());
         }
 
-        let _ = futures::future::try_join_all(futures).await?;
+        let _ = cluster
+            .do_action::<_, ()>(INIT_QUERY_ENV, message, timeout)
+            .await?;
         Ok(())
     }
 }

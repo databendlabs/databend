@@ -32,4 +32,5 @@ sys-info = "0.9"
 
 [dev-dependencies]
 databend-common-base = { path = "../../common/base" }
+serde_json = { workspace = true }
 tokio = { workspace = true }

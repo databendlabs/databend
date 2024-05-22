@@ -16,7 +16,10 @@ use std::cell::SyncUnsafeCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Deref;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_channel::Receiver;
 use databend_common_arrow::arrow_format::flight::data::FlightData;
@@ -31,11 +34,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_sql::executor::PhysicalPlan;
+use log::warn;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use petgraph::prelude::EdgeRef;
 use petgraph::Direction;
+use tokio::task::JoinHandle;
 use tonic::Status;
 
 use super::exchange_params::ExchangeParams;
@@ -45,25 +50,30 @@ use super::exchange_sink::ExchangeSink;
 use super::exchange_transform::ExchangeTransform;
 use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
+use crate::clusters::ClusterHelper;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
+use crate::servers::flight::v1::actions::init_query_fragments;
+use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
+use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::packets::Edge;
-use crate::servers::flight::v1::packets::FragmentPlanPacket;
-use crate::servers::flight::v1::packets::Packet;
 use crate::servers::flight::v1::packets::QueryEnv;
-use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
+use crate::servers::flight::v1::packets::QueryFragment;
+use crate::servers::flight::v1::packets::QueryFragments;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
 use crate::sessions::QueryContext;
+use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 pub struct DataExchangeManager {
@@ -188,26 +198,88 @@ impl DataExchangeManager {
                     };
                 }
 
+                let mut query_info = Self::create_info(env).await?;
+
+                let query_id = env.query_id.clone();
+                query_info.remove_leak_query_worker =
+                    Some(GlobalIORuntime::instance().spawn(async move {
+                        let _ = databend_common_base::base::tokio::time::sleep(
+                            Duration::from_secs(180),
+                        )
+                        .await;
+                        DataExchangeManager::instance().remove_if_leak_query(query_id);
+                    }));
+
                 let queries_coordinator_guard = self.queries_coordinator.lock();
                 let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-                return match queries_coordinator.entry(env.query_id.clone()) {
+                match queries_coordinator.entry(env.query_id.clone()) {
                     Entry::Occupied(mut v) => {
                         let query_coordinator = v.get_mut();
                         query_coordinator.add_fragment_exchanges(targets_exchanges)?;
-                        query_coordinator.add_statistics_exchanges(request_exchanges)
+                        query_coordinator.add_statistics_exchanges(request_exchanges)?;
+                        query_coordinator.info = Some(query_info);
                     }
                     Entry::Vacant(v) => {
                         let query_coordinator = v.insert(QueryCoordinator::create());
                         query_coordinator.add_fragment_exchanges(targets_exchanges)?;
-                        query_coordinator.add_statistics_exchanges(request_exchanges)
+                        query_coordinator.add_statistics_exchanges(request_exchanges)?;
+                        query_coordinator.info = Some(query_info);
                     }
                 };
+
+                return Ok(());
             }
         }
 
         // do nothing
         Ok(())
+    }
+
+    fn remove_if_leak_query(&self, query_id: String) {
+        let leak_query_id = {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+            match queries_coordinator.get(&query_id) {
+                None => None,
+                Some(may_leak_query) => {
+                    let info = may_leak_query.info.as_ref().expect("expect query info");
+                    match info.started.load(Ordering::SeqCst) {
+                        true => None,
+                        false => Some(query_id),
+                    }
+                }
+            }
+        };
+
+        if let Some(query_id) = leak_query_id {
+            warn!(
+                "Query {} cannot start command while in 180 seconds",
+                query_id
+            );
+            self.on_finished_query(&query_id);
+        }
+    }
+
+    async fn create_info(env: &QueryEnv) -> Result<QueryInfo> {
+        let session_manager = SessionManager::instance();
+
+        let session =
+            session_manager.create_with_settings(SessionType::FlightRPC, env.settings.clone())?;
+        let session = session_manager.register_session(session)?;
+
+        let query_ctx = session.create_query_context().await?;
+        query_ctx.set_id(env.query_id.clone());
+
+        Ok(QueryInfo {
+            query_ctx,
+            query_executor: None,
+            remove_leak_query_worker: None,
+            query_id: env.query_id.clone(),
+            started: AtomicBool::new(false),
+            current_executor: GlobalConfig::instance().query.node_id.clone(),
+        })
     }
 
     #[async_backtrace::framed]
@@ -256,21 +328,17 @@ impl DataExchangeManager {
 
     // Create a pipeline based on query plan
     #[minitrace::trace]
-    pub fn init_query_fragments_plan(
-        &self,
-        ctx: &Arc<QueryContext>,
-        packet: &QueryFragmentsPlanPacket,
-    ) -> Result<()> {
+    pub fn init_query_fragments_plan(&self, fragments: &QueryFragments) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         // TODO: When the query is not executed for a long time after submission, we need to remove it
-        match queries_coordinator.get_mut(&packet.query_id) {
+        match queries_coordinator.get_mut(&fragments.query_id) {
             None => Err(ErrorCode::Internal(format!(
                 "Query {} not found in cluster.",
-                packet.query_id
+                fragments.query_id
             ))),
-            Some(query_coordinator) => query_coordinator.prepare_pipeline(ctx, packet),
+            Some(query_coordinator) => query_coordinator.prepare_pipeline(fragments),
         }
     }
 
@@ -346,26 +414,26 @@ impl DataExchangeManager {
 
         // Initialize query env between cluster nodes
         let query_env = actions.get_query_env()?;
-        query_env.init(timeout).await?;
+        query_env.init(ctx.get_cluster(), timeout).await?;
 
         // Submit distributed tasks to all nodes.
-        let (local_query_fragments_plan_packet, query_fragments_plan_packets) =
-            actions.get_query_fragments_plan_packets()?;
+        let cluster = ctx.get_cluster();
+        let mut query_fragments = actions.get_query_fragments()?;
 
-        // Submit tasks to other nodes
-        query_fragments_plan_packets
-            .commit(conf.as_ref(), timeout)
+        if let Some(query_fragments) = query_fragments.remove(&conf.query.node_id) {
+            init_query_fragments(query_fragments).await?;
+        }
+
+        let _ = cluster
+            .do_action::<_, ()>(INIT_QUERY_FRAGMENTS, query_fragments, timeout)
             .await?;
-
-        // Submit tasks to localhost
-        self.init_query_fragments_plan(&ctx, &local_query_fragments_plan_packet)?;
 
         // Get local pipeline of local task
         let build_res = self.get_root_pipeline(ctx, root_actions)?;
 
-        actions
-            .get_execute_partial_query_packets()?
-            .commit(conf.as_ref(), timeout)
+        let prepared_query = actions.prepared_query()?;
+        let _ = cluster
+            .do_action::<_, ()>(START_PREPARED_QUERY, prepared_query, timeout)
             .await?;
         Ok(build_res)
     }
@@ -469,8 +537,10 @@ impl DataExchangeManager {
 
 struct QueryInfo {
     query_id: String,
+    started: AtomicBool,
     current_executor: String,
     query_ctx: Arc<QueryContext>,
+    remove_leak_query_worker: Option<JoinHandle<()>>,
     query_executor: Option<Arc<PipelineCompleteExecutor>>,
 }
 
@@ -621,29 +691,21 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn prepare_pipeline(
-        &mut self,
-        ctx: &Arc<QueryContext>,
-        packet: &QueryFragmentsPlanPacket,
-    ) -> Result<()> {
-        self.info = Some(QueryInfo {
-            query_ctx: ctx.clone(),
-            query_id: packet.query_id.clone(),
-            current_executor: packet.executor.clone(),
-            query_executor: None,
-        });
+    pub fn prepare_pipeline(&mut self, fragments: &QueryFragments) -> Result<()> {
+        let query_info = self.info.as_ref().expect("expect query info");
+        let query_context = query_info.query_ctx.clone();
 
-        for fragment in &packet.fragments {
+        for fragment in &fragments.fragments {
             self.fragments_coordinator.insert(
                 fragment.fragment_id.to_owned(),
                 FragmentCoordinator::create(fragment),
             );
         }
 
-        for fragment in &packet.fragments {
+        for fragment in &fragments.fragments {
             let fragment_id = fragment.fragment_id;
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                coordinator.prepare_pipeline(ctx.clone())?;
+                coordinator.prepare_pipeline(query_context.clone())?;
             }
         }
 
@@ -700,9 +762,13 @@ impl QueryCoordinator {
     }
 
     pub fn shutdown_query(&mut self) {
-        if let Some(query_info) = &self.info {
+        if let Some(query_info) = &mut self.info {
             if let Some(query_executor) = &query_info.query_executor {
                 query_executor.finish(None);
+            }
+
+            if let Some(worker) = query_info.remove_leak_query_worker.take() {
+                worker.abort();
             }
         }
     }
@@ -712,12 +778,18 @@ impl QueryCoordinator {
     }
 
     pub fn execute_pipeline(&mut self) -> Result<()> {
+        let info = self.info.as_mut().expect("Query info is None");
+
+        if !info.started.swap(true, Ordering::SeqCst) {
+            if let Some(leak_worker) = info.remove_leak_query_worker.take() {
+                leak_worker.abort();
+            }
+        }
+
         if self.fragments_coordinator.is_empty() {
             // Empty fragments if it is a request server, because the pipelines may have been linked.
             return Ok(());
         }
-
-        let info = self.info.as_ref().expect("Query info is None");
 
         let max_threads = info.query_ctx.get_settings().get_max_threads()?;
         let mut pipelines = Vec::with_capacity(self.fragments_coordinator.len());
@@ -809,7 +881,7 @@ struct FragmentCoordinator {
 }
 
 impl FragmentCoordinator {
-    pub fn create(packet: &FragmentPlanPacket) -> Box<FragmentCoordinator> {
+    pub fn create(packet: &QueryFragment) -> Box<FragmentCoordinator> {
         Box::new(FragmentCoordinator {
             initialized: false,
             physical_plan: packet.physical_plan.clone(),

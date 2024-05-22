@@ -12,55 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::match_join_handle;
-use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_config::GlobalConfig;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_settings::Settings;
-use minitrace::full_name;
-use minitrace::future::FutureExt;
-use minitrace::Span;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
-use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
-use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
+use crate::servers::flight::v1::packets::QueryFragments;
 
 pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 
-pub async fn init_query_fragments(fragments: QueryFragmentsPlanPacket) -> Result<()> {
-    let config = GlobalConfig::instance();
-    let session_manager = SessionManager::instance();
-    let settings = Settings::create(config.query.tenant_id.clone());
-    unsafe {
-        // Keep settings
-        settings.unchecked_apply_changes(&fragments.changed_settings);
-    }
-    let session = session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
-    let session = session_manager.register_session(session)?;
+pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(fragments.query_id.clone());
+    let _guard = ThreadTracker::tracking(tracking_payload);
 
-    let ctx = session.create_query_context().await?;
-    // Keep query id
-    ctx.set_id(fragments.query_id.clone());
-    ctx.attach_query_str(fragments.query_kind, "".to_string());
+    ThreadTracker::tracking_future(async move {
+        // Avoid blocking runtime.
+        let join_handler = databend_common_base::runtime::spawn_blocking(move || {
+            let exchange_manager = DataExchangeManager::instance();
+            if let Err(cause) = exchange_manager.init_query_fragments_plan(&fragments) {
+                exchange_manager.on_finished_query(&fragments.query_id);
+                return Err(cause);
+            }
 
-    let spawner = ctx.clone();
-    let query_id = fragments.query_id.clone();
-    if let Err(cause) =
-        match_join_handle(
-            spawner.spawn(
-                async move {
-                    DataExchangeManager::instance().init_query_fragments_plan(&ctx, &fragments)
-                }
-                .in_span(Span::enter_with_local_parent(full_name!())),
-            ),
-        )
-        .await
-    {
-        DataExchangeManager::instance().on_finished_query(&query_id);
-        return Err(cause);
-    }
+            Ok(())
+        });
 
-    Ok(())
+        match join_handler.await {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(error)) => Err(error),
+            Err(join_error) => match join_error.is_panic() {
+                true => std::panic::resume_unwind(join_error.into_panic()),
+                false => Err(ErrorCode::TokioError("Tokio cancel error")),
+            },
+        }
+    })
+    .await
 }
