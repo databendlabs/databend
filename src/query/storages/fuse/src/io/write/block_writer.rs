@@ -94,6 +94,11 @@ pub fn serialize_blocks(
             );
 
             writer.start()?;
+            assert_eq!(
+                blocks.len(),
+                1,
+                "Native format does not support write multiple chunk for now"
+            );
             for block in blocks {
                 let batch = ArrowChunk::try_from(block)?;
                 writer.write(&batch)?;

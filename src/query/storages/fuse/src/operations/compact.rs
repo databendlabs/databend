@@ -38,6 +38,7 @@ use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
@@ -191,17 +192,20 @@ impl FuseTable {
         } else {
             None
         };
+        let is_lazy_compact = self.cluster_key_meta().is_none()
+        // native format does not support serializing multiple chunks into one file for now.
+            && matches!(self.storage_format, FuseStorageFormat::Parquet);
         // Add source pipe.
         pipeline.add_source(
-            |output| match self.cluster_key_meta() {
-                Some(_) => CompactSource::<false>::try_create(
+            |output| match is_lazy_compact {
+                false => CompactSource::<false>::try_create(
                     ctx.clone(),
                     self.storage_format,
                     block_reader.clone(),
                     stream_ctx.clone(),
                     output,
                 ),
-                None => CompactSource::<true>::try_create(
+                true => CompactSource::<true>::try_create(
                     ctx.clone(),
                     self.storage_format,
                     block_reader.clone(),
