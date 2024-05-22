@@ -16,7 +16,6 @@
 
 use std::time::Instant;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -30,10 +29,8 @@ use crate::EvalContext;
 use crate::EvaluateOptions;
 use crate::Evaluator;
 use crate::Expr;
-use crate::FilterExecutor;
 use crate::LikePattern;
 use crate::Scalar;
-use crate::SelectExprBuilder;
 use crate::Value;
 
 // SelectStrategy is used to determine the iteration strategy of the index.
@@ -348,9 +345,9 @@ impl<'a> Selector<'a> {
             &select_strategy,
         );
         let mut eval_options = EvaluateOptions::new(selection);
-        let (value, data_type) =
-            self.evaluator
-                .get_select_child(column_ref, &mut eval_options)?;
+        let (value, data_type) = self
+            .evaluator
+            .get_select_child(column_ref, &mut eval_options)?;
         debug_assert!(
             matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
         );
@@ -554,10 +551,7 @@ impl<'a> Selector<'a> {
                     &select_strategy,
                 );
                 let mut eval_options = EvaluateOptions::new(selection);
-                let value = self
-                    .evaluator
-                    .get_select_child(expr, &mut eval_options)?
-                    .0;
+                let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
                 let result = if *is_try {
                     self.evaluator
                         .run_try_cast(*span, expr.data_type(), dest_type, value)?

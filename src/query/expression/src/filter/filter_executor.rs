@@ -14,15 +14,12 @@
 
 use core::ops::Range;
 use std::collections::HashSet;
-use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;
 use crate::filter::Selector;
-use crate::kernels::BIT_MASK;
 use crate::DataBlock;
 use crate::Evaluator;
 use crate::FunctionContext;

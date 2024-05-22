@@ -90,7 +90,7 @@ impl<'a> Evaluator<'a> {
     ) -> Self {
         Evaluator {
             data_block,
-        func_ctx,
+            func_ctx,
             fn_registry,
         }
     }
@@ -1191,9 +1191,7 @@ impl<'a> Evaluator<'a> {
     ) -> Result<Vec<(Value<AnyType>, DataType)>> {
         let children = args
             .iter()
-            .map(|expr| {
-                self.get_select_child(expr, options)
-            })
+            .map(|expr| self.get_select_child(expr, options))
             .collect::<Result<Vec<_>>>()?;
         assert!(
             children
