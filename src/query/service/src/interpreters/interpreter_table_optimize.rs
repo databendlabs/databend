@@ -230,15 +230,14 @@ impl OptimizeTableInterpreter {
                 .await?
             {
                 if !mutator.tasks.is_empty() {
+                    let is_distributed = mutator.is_distributed();
                     let reclustered_block_count = mutator.recluster_blocks_count;
                     let physical_plan = build_recluster_physical_plan(
                         mutator.tasks,
                         table.get_table_info().clone(),
                         catalog.info(),
                         mutator.snapshot,
-                        mutator.remained_blocks,
-                        mutator.removed_segment_indexes,
-                        mutator.removed_segment_summary,
+                        is_distributed,
                     )?;
 
                     build_res =

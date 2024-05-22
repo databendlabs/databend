@@ -30,6 +30,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterMutator;
+use databend_common_storages_fuse::operations::ReclusterTasks;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -149,8 +150,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     );
     let need_recluster = mutator.target_select(compact_segments).await?;
     assert!(need_recluster);
-    assert_eq!(mutator.tasks.len(), 1);
-    let total_block_nums = mutator.tasks.iter().map(|t| t.parts.len()).sum::<usize>();
+    let ReclusterTasks::Recluster { tasks, .. } = mutator.tasks else {
+        return Err(ErrorCode::Internal("Logical error, it's a bug"));
+    };
+    assert_eq!(tasks.len(), 1);
+    let total_block_nums = tasks.iter().map(|t| t.parts.len()).sum::<usize>();
     assert_eq!(total_block_nums, 3);
 
     Ok(())
@@ -284,7 +288,15 @@ async fn test_safety_for_recluster() -> Result<()> {
 
         eprintln!("need_recluster: {}", need_recluster);
         if need_recluster {
-            let tasks = mutator.tasks;
+            let ReclusterTasks::Recluster {
+                tasks,
+                remained_blocks,
+                removed_segment_indexes,
+                ..
+            } = mutator.tasks
+            else {
+                return Err(ErrorCode::Internal("Logical error, it's a bug"));
+            };
             assert!(tasks.len() <= max_tasks && !tasks.is_empty());
             eprintln!("tasks_num: {}, max_tasks: {}", tasks.len(), max_tasks);
             let mut blocks = Vec::new();
@@ -297,10 +309,9 @@ async fn test_safety_for_recluster() -> Result<()> {
                 }
             }
 
-            let remained_blocks = std::mem::take(&mut mutator.remained_blocks);
             eprintln!(
                 "selected segments number {}, selected blocks number {}, remained blocks number {}",
-                mutator.removed_segment_indexes.len(),
+                removed_segment_indexes.len(),
                 blocks.len(),
                 remained_blocks.len()
             );
@@ -311,7 +322,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             let block_ids_after_target = HashSet::from_iter(blocks.into_iter());
 
             let mut origin_blocks_ids = HashSet::new();
-            for idx in &mutator.removed_segment_indexes {
+            for idx in &removed_segment_indexes {
                 for b in &segment_infos[*idx].blocks {
                     origin_blocks_ids.insert(b.location.0.clone());
                 }
