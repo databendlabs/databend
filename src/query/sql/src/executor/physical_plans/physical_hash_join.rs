@@ -710,9 +710,9 @@ impl PhysicalPlanBuilder {
                 result
             }
             JoinType::AsOf => unreachable!(
-                "Invalid join type {} during building physical hash join.", 
+                "Invalid join type {} during building physical hash join.",
                 join.join_type
-            )
+            ),
         };
 
         // Create projections and output schema
