@@ -54,10 +54,7 @@ impl SelectExprBuilder {
     }
 
     pub fn build(&mut self, expr: &Expr) -> SelectExprBuildResult {
-        dbg!("original expr = {:?}", &expr);
-        let res = self.build_select_expr(expr, false);
-        dbg!("select_expr = {:?}", &res.select_expr);
-        res
+        self.build_select_expr(expr, false)
     }
 
     // Build `SelectExpr` from `Expr`, return the `SelectExpr` and whether the `SelectExpr` contains `Or` operation.
