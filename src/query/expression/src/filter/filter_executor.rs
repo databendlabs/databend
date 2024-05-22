@@ -228,7 +228,7 @@ impl FilterExecutor {
                 }
             }
 
-            if i % 8 == 0 {
+            if i % 8 != 0 {
                 *builder.get_unchecked_mut(builder_len) = value;
                 builder_len += 1;
             }
