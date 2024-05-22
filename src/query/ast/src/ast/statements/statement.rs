@@ -204,6 +204,7 @@ pub enum Statement {
         principal: Option<PrincipalIdentity>,
         show_options: Option<ShowOptions>,
     },
+    ShowObjectPrivileges(ShowObjectPrivilegesStmt),
     Revoke(RevokeStmt),
 
     // UDF
@@ -619,6 +620,7 @@ impl Display for Statement {
                     write!(f, " {show_options}")?;
                 }
             }
+            Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {

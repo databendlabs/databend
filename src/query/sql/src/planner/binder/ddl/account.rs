@@ -17,9 +17,11 @@ use databend_common_ast::ast::AccountMgrLevel;
 use databend_common_ast::ast::AccountMgrSource;
 use databend_common_ast::ast::AlterUserStmt;
 use databend_common_ast::ast::CreateUserStmt;
+use databend_common_ast::ast::GrantObjectName;
 use databend_common_ast::ast::GrantStmt;
 use databend_common_ast::ast::PrincipalIdentity as AstPrincipalIdentity;
 use databend_common_ast::ast::RevokeStmt;
+use databend_common_ast::ast::ShowObjectPrivilegesStmt;
 use databend_common_ast::ast::ShowOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -359,7 +361,52 @@ impl Binder {
         };
 
         let (show_limit, limit_str) =
-            get_show_options(show_options, Some("ObjectName".to_string()));
+            get_show_options(show_options, Some("object_name".to_string()));
+        let query = format!("{} {} {}", query, show_limit, limit_str,);
+
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_object_privileges(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowObjectPrivilegesStmt,
+    ) -> Result<Plan> {
+        let ShowObjectPrivilegesStmt {
+            object,
+            show_option,
+        } = stmt;
+
+        let catalog = self.ctx.get_current_catalog();
+        let query = match object {
+            GrantObjectName::Database(db) => {
+                format!(
+                    "SELECT * FROM show_grants('database', '{}', '{}')",
+                    db, catalog
+                )
+            }
+            GrantObjectName::Table(db, tb) => {
+                let db = if let Some(db) = db {
+                    db.to_string()
+                } else {
+                    self.ctx.get_current_database()
+                };
+                format!(
+                    "SELECT * FROM show_grants('table', '{}', '{}', '{}')",
+                    tb, catalog, db
+                )
+            }
+            GrantObjectName::UDF(name) => {
+                format!("SELECT * FROM show_grants('udf', '{}')", name)
+            }
+            GrantObjectName::Stage(name) => {
+                format!("SELECT * FROM show_grants('stage', '{}')", name)
+            }
+        };
+
+        let (show_limit, limit_str) = get_show_options(show_option, Some("name".to_string()));
         let query = format!("{} {} {}", query, show_limit, limit_str,);
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)

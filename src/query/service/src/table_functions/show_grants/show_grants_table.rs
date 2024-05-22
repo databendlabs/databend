@@ -120,16 +120,16 @@ impl ShowGrants {
 
     fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
-            TableField::new("Privileges", TableDataType::String),
-            TableField::new("ObjectName", TableDataType::String),
+            TableField::new("privileges", TableDataType::String),
+            TableField::new("object_name", TableDataType::String),
             TableField::new(
-                "ObjectId",
+                "object_id",
                 TableDataType::Nullable(Box::from(TableDataType::Number(NumberDataType::UInt64))),
             ),
-            TableField::new("GrantTo", TableDataType::String),
-            TableField::new("Name", TableDataType::String),
+            TableField::new("grant_to", TableDataType::String),
+            TableField::new("name", TableDataType::String),
             TableField::new(
-                "Grants",
+                "grants",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
         ])
@@ -157,30 +157,6 @@ impl Table for ShowGrants {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        // match self.grant_type.to_lowercase().as_str() {
-        //     "role" | "user" => {
-        //         Some(TableArgs::new_positioned(vec![
-        //         Scalar::String(self.grant_type.clone()),
-        //         Scalar::String(self.name.clone()),
-        //         ]))
-        //     }
-        //     "table" => {
-        //         Some(TableArgs::new_positioned(vec![
-        //             Scalar::String(self.grant_type.clone()),
-        //             Scalar::String(self.name.clone()),
-        //             Scalar::String(self.catalog.clone()),
-        //             Scalar::String(self.db_name.clone()),
-        //         ]))
-        //     }
-        //     "database" => {
-        //         Some(TableArgs::new_positioned(vec![
-        //             Scalar::String(self.grant_type.clone()),
-        //             Scalar::String(self.name.clone()),
-        //             Scalar::String(self.catalog.clone()),
-        //         ]))
-        //     }
-        //     _ => {None}
-        // }
         Some(TableArgs::new_positioned(vec![
             Scalar::String(self.grant_type.clone()),
             Scalar::String(self.name.clone()),
@@ -526,7 +502,7 @@ async fn show_object_grant(
                 table_id,
             ) {
                 return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: No privilege on database {} for user {}.",
+                    "Permission denied: No privilege on table {} for user {}.",
                     name, current_user
                 )));
             }

@@ -446,6 +446,7 @@ impl<'a> Binder {
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
             Statement::ShowGrants { principal, show_options } => self.bind_show_account_grants(bind_context, principal, show_options).await?,
+            Statement::ShowObjectPrivileges(stmt) => self.bind_show_object_privileges(bind_context, stmt).await?,
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats

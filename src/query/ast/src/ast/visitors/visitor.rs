@@ -619,6 +619,8 @@ pub trait Visitor<'ast>: Sized {
     ) {
     }
 
+    fn visit_show_object_priv(&mut self, _show: &'ast ShowObjectPrivilegesStmt) {}
+
     fn visit_revoke(&mut self, _revoke: &'ast RevokeStmt) {}
 
     fn visit_create_udf(&mut self, _stmt: &'ast CreateUDFStmt) {}
