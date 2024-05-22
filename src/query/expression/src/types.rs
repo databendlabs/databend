@@ -216,7 +216,7 @@ impl DataType {
             DataType::Number(NumberDataType::Int32) => {
                 Ok(Scalar::Number(NumberScalar::Int32(i32::MIN)))
             }
-            DataType::Number(NumberDataType::Int16) => { 
+            DataType::Number(NumberDataType::Int16) => {
                 Ok(Scalar::Number(NumberScalar::Int16(i16::MIN)))
             }
             DataType::Number(NumberDataType::Int8) => {
