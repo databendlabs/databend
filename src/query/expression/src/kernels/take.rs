@@ -48,8 +48,6 @@ use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Value;
 
-pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
-
 impl DataBlock {
     pub fn take<I>(
         &self,

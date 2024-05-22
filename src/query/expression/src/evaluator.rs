@@ -50,7 +50,6 @@ use crate::FunctionDomain;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
 use crate::RemoteExpr;
-use crate::Selector;
 
 #[derive(Default)]
 pub struct EvaluateOptions<'a> {
@@ -91,7 +90,7 @@ impl<'a> Evaluator<'a> {
     ) -> Self {
         Evaluator {
             data_block,
-            func_ctx,
+        func_ctx,
             fn_registry,
         }
     }
@@ -1193,12 +1192,7 @@ impl<'a> Evaluator<'a> {
         let children = args
             .iter()
             .map(|expr| {
-                let validity = Selector::short_circuit_validity(
-                    expr,
-                    self.data_block.num_rows(),
-                    options.selection,
-                );
-                self.get_select_child(expr, options, validity)
+                self.get_select_child(expr, options)
             })
             .collect::<Result<Vec<_>>>()?;
         assert!(
@@ -1231,7 +1225,6 @@ impl<'a> Evaluator<'a> {
         &self,
         expr: &Expr,
         options: &mut EvaluateOptions,
-        validity: Option<Bitmap>,
     ) -> Result<(Value<AnyType>, DataType)> {
         #[cfg(debug_assertions)]
         self.check_expr(expr);
@@ -1251,7 +1244,7 @@ impl<'a> Evaluator<'a> {
                 expr,
                 dest_type,
             } => {
-                let value = self.get_select_child(expr, options, validity)?.0;
+                let value = self.get_select_child(expr, options)?.0;
                 if *is_try {
                     Ok((
                         self.run_try_cast(*span, expr.data_type(), dest_type, value)?,
@@ -1298,7 +1291,7 @@ impl<'a> Evaluator<'a> {
                 let mut child_option = options.with_suppress_error(child_suppress_error);
                 let args = args
                     .iter()
-                    .map(|expr| self.get_select_child(expr, &mut child_option, validity.clone()))
+                    .map(|expr| self.get_select_child(expr, &mut child_option))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -1322,7 +1315,7 @@ impl<'a> Evaluator<'a> {
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.data_block.num_rows(),
-                    validity,
+                    validity: None,
                     errors,
                     func_ctx: self.func_ctx,
                     suppress_error: options.suppress_error,
