@@ -18367,6 +18367,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 900,
+                0,
             ),
         ),
         session_parameters: {
@@ -18408,6 +18409,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 15,
+                0,
             ),
         ),
         session_parameters: {},
@@ -18444,6 +18446,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 1215,
+                0,
             ),
         ),
         session_parameters: {},
@@ -18741,6 +18744,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 1,
+                0,
             ),
         ),
         session_parameters: {},
@@ -18785,6 +18789,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 1,
+                0,
             ),
         ),
         session_parameters: {},
@@ -18915,6 +18920,7 @@ AlterTask(
             schedule: Some(
                 IntervalSecs(
                     780,
+                    0,
                 ),
             ),
             suspend_task_after_num_failures: Some(
@@ -18946,6 +18952,7 @@ AlterTask(
             schedule: Some(
                 IntervalSecs(
                     5,
+                    0,
                 ),
             ),
             suspend_task_after_num_failures: Some(
