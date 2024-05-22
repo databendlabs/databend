@@ -178,7 +178,9 @@ impl<const IS_LAZY: bool> Processor for CompactSource<IS_LAZY> {
 
                 let new_block = match IS_LAZY {
                     true => {
-                        let lazy_block = LazyCompactedBlock(blocks);
+                        let lazy_block = LazyCompactedBlock(
+                            blocks.into_iter().map(|x| x.convert_to_full()).collect(),
+                        );
                         let meta =
                             Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
                                 index,
