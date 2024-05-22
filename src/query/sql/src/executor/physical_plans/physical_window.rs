@@ -36,7 +36,6 @@ use crate::executor::physical_plans::common::SortDesc;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
-use crate::plans::ScalarItem;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
@@ -152,7 +151,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         window: &crate::plans::Window,
         mut required: ColumnSet,
-        stat_info: PlanStatsInfo,
+        _stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. DO NOT Prune unused Columns cause window may not in required, eg:
         // select s1.a from ( select t1.a as a, dense_rank() over(order by t1.a desc) as rk
@@ -174,8 +173,6 @@ impl PhysicalPlanBuilder {
             required.extend(item.order_by_item.scalar.used_columns());
             required.insert(item.order_by_item.index);
         });
-
-        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
 
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, required).await?;
