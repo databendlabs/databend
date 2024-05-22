@@ -234,18 +234,18 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
 
     // check statistics.
     let table = table.refresh(ctx.as_ref()).await?;
-    let expected = HashMap::from([(0, 3 as u64)]);
+    let expected = HashMap::from([(0, 3_u64)]);
     check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
 
-    let qry = format!("insert into t values(4)");
-    execute_command(ctx.clone(), &qry).await?;
+    let qry = "insert into t values(4)";
+    execute_command(ctx.clone(), qry).await?;
 
     ctx.evict_table_from_cache("default", "default", "t")?;
     let statistics_sql = "analyze table default.t";
     fixture.execute_command(statistics_sql).await?;
 
     let table = table.refresh(ctx.as_ref()).await?;
-    let expected = HashMap::from([(0, 4 as u64)]);
+    let expected = HashMap::from([(0, 4_u64)]);
     check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
     Ok(())
 }
