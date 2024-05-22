@@ -43,6 +43,7 @@ use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
+use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -168,7 +169,10 @@ impl SubqueryRewriter {
                 ))
             }
 
-            RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(SExpr::create_unary(
+            RelOperator::Limit(_)
+            | RelOperator::Sort(_)
+            | RelOperator::Udf(_)
+            | RelOperator::AsyncFunction(_) => Ok(SExpr::create_unary(
                 Arc::new(s_expr.plan().clone()),
                 Arc::new(self.rewrite(s_expr.child(0)?)?),
             )),
@@ -176,9 +180,9 @@ impl SubqueryRewriter {
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
             | RelOperator::CteScan(_)
-            | RelOperator::ConstantTableScan(_) => Ok(s_expr.clone()),
-
-            _ => Err(ErrorCode::Internal("Invalid plan type")),
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::AddRowNumber(_)
+            | RelOperator::Exchange(_) => Ok(s_expr.clone()),
         }
     }
 
