@@ -192,16 +192,14 @@ impl QueryFragmentsActions {
     }
 
     pub fn prepared_query(&self) -> Result<HashMap<String, String>> {
-        let mut prepared_fragments = HashMap::new();
-        for fragment_actions in &self.fragments_actions {
-            for fragment_action in &fragment_actions.fragment_actions {
-                if !prepared_fragments.contains_key(&fragment_action.executor) {
-                    prepared_fragments.insert(fragment_action.executor.clone(), self.ctx.get_id());
-                }
-            }
+        let nodes_info = Self::nodes_info(&self.ctx);
+        let mut execute_partial_query_packets = HashMap::with_capacity(nodes_info.len());
+
+        for node_id in nodes_info.keys() {
+            execute_partial_query_packets.insert(node_id.to_string(), self.ctx.get_id());
         }
 
-        Ok(prepared_fragments)
+        Ok(execute_partial_query_packets)
     }
 
     /// unique map(target, map(source, vec(fragment_id)))
