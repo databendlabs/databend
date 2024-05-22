@@ -12146,17 +12146,23 @@ Grant(
 ---------- Input ----------
 SHOW GRANTS;
 ---------- Output ---------
-SHOW GRANTS
+SHOW GRANTS 
 ---------- AST ------------
 ShowGrants {
     principal: None,
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
 
 
 ---------- Input ----------
 SHOW GRANTS FOR 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'%'
+SHOW GRANTS FOR USER 'test-grant'@'%' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12166,6 +12172,12 @@ ShowGrants {
                 hostname: "%",
             },
         ),
+    ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
     ),
 }
 
@@ -12173,7 +12185,7 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR USER 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'%'
+SHOW GRANTS FOR USER 'test-grant'@'%' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12184,13 +12196,19 @@ ShowGrants {
             },
         ),
     ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
 
 
 ---------- Input ----------
 SHOW GRANTS FOR ROLE role1;
 ---------- Output ---------
-SHOW GRANTS FOR ROLE 'role1'
+SHOW GRANTS FOR ROLE 'role1' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12198,19 +12216,31 @@ ShowGrants {
             "role1",
         ),
     ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
 
 
 ---------- Input ----------
 SHOW GRANTS FOR ROLE 'role1';
 ---------- Output ---------
-SHOW GRANTS FOR ROLE 'role1'
+SHOW GRANTS FOR ROLE 'role1' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         Role(
             "role1",
         ),
+    ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
     ),
 }
 

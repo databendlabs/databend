@@ -71,8 +71,9 @@ UPDATE,DELETE default.c_r1.t1  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r1
 SELECT,INSERT	*.*	NULL	ROLE	role1	GRANT SELECT,INSERT ON *.* TO ROLE `role1`
 SELECT,INSERT	*.*	NULL	USER	u1	GRANT SELECT,INSERT ON *.* TO 'u1'@'%'
 SELECT,INSERT	*.*	NULL	USER	u1	GRANT SELECT,INSERT ON *.* TO 'u1'@'%'
+SELECT,INSERT	*.*	NULL	USER	u1	GRANT SELECT,INSERT ON *.* TO 'u1'@'%'
 Need Err:
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Grant] is required on *.* for user 'u1'@'%' with roles [public,role1,role2]
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Grant] is required on *.* for user 'u1'@'%' with roles [public,role1,role2]
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Grant] is required on *.* for user 'u1'@'%' with roles [public,role1,role2]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Grant] is required on *.* for user 'u1'@'%' with roles [role1,role2]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Grant] is required on *.* for user 'u1'@'%' with roles [role1,role2]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Grant] is required on *.* for user 'u1'@'%' with roles [role1,role2]
 === clean up ===

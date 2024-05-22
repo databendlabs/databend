@@ -143,7 +143,6 @@ impl Plan {
             // Account
             Plan::GrantRole(_) => Ok("GrantRole".to_string()),
             Plan::GrantPriv(_) => Ok("GrantPrivilege".to_string()),
-            Plan::ShowGrants(_) => Ok("ShowGrants".to_string()),
             Plan::RevokePriv(_) => Ok("RevokePrivilege".to_string()),
             Plan::RevokeRole(_) => Ok("RevokeRole".to_string()),
             Plan::CreateUser(_) => Ok("CreateUser".to_string()),

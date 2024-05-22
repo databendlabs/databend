@@ -498,7 +498,10 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
             role_name,
         } => visitor.visit_drop_role(*if_exists, role_name),
         Statement::Grant(stmt) => visitor.visit_grant(stmt),
-        Statement::ShowGrants { principal } => visitor.visit_show_grant(principal),
+        Statement::ShowGrants {
+            principal,
+            show_options,
+        } => visitor.visit_show_grant(principal, show_options),
         Statement::Revoke(stmt) => visitor.visit_revoke(stmt),
         Statement::CreateUDF(stmt) => visitor.visit_create_udf(stmt),
         Statement::DropUDF {

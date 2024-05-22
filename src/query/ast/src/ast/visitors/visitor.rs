@@ -612,7 +612,12 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_grant(&mut self, _grant: &'ast GrantStmt) {}
 
-    fn visit_show_grant(&mut self, _principal: &'ast Option<PrincipalIdentity>) {}
+    fn visit_show_grant(
+        &mut self,
+        _principal: &'ast Option<PrincipalIdentity>,
+        _show_options: &'ast Option<ShowOptions>,
+    ) {
+    }
 
     fn visit_revoke(&mut self, _revoke: &'ast RevokeStmt) {}
 

@@ -118,38 +118,15 @@ impl ShowGrants {
         }))
     }
 
-    // PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-    //             StringType::from_data(privileges),
-    //             StringType::from_data(object_name),
-    //             UInt64Type::from_opt_data(object_id),
-    //             StringType::from_data(grant_tos),
-    //             StringType::from_data(names),
-    //             StringType::from_data(grant_list),
-    //         ])])
-    // show grants for role role1;
-    // +------------+-------------+-----------+----------+-------+-------------------------------------------------------+
-    // | Privileges | Object Name | Object Id | Grant To | Name  | Grants                                                |
-    // +------------+-------------+-----------+----------+-------+-------------------------------------------------------+
-    // | SELECT     | default     | 1         | ROLE     | role1 | GRANT SELECT ON 'default'.'default'.* TO ROLE `role1` |
-    // +------------+-------------+-----------+----------+-------+-------------------------------------------------------+
-    //
-    // SHOW GRANTS ON DATABASE sales;
-    //
-    // +-----------+------------+------------+------------+--------------+-------------------------------------------------------+
-    // | privilege | ObjectType | ObjN       | granted_to | GrantName    | Grants                                                |
-    // +-----------+------------+------------+------------+--------------+-------------------------------------------------------+
-    // | OWNERSHIP | DATABASE   | REALESTATE | ROLE       | ACCOUNTADMIN |                                                       |
-    // | USAGE     | DATABASE   | REALESTATE | ROLE       | PUBLIC       |                                                       |
-    // +-----------+------------+------------+------------+--------------+-------------------------------------------------------+
     fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("Privileges", TableDataType::String),
-            TableField::new("Object Name", TableDataType::String),
+            TableField::new("ObjectName", TableDataType::String),
             TableField::new(
-                "Object Id",
+                "ObjectId",
                 TableDataType::Nullable(Box::from(TableDataType::Number(NumberDataType::UInt64))),
             ),
-            TableField::new("Grant To", TableDataType::String),
+            TableField::new("GrantTo", TableDataType::String),
             TableField::new("Name", TableDataType::String),
             TableField::new(
                 "Grants",
@@ -324,9 +301,13 @@ async fn show_account_grants(
                 .get_user(&tenant, UserIdentity::new(name, "%"))
                 .await?;
             if current_user.identity().username != name && !has_grant_priv {
+                let mut roles = current_user.grants.roles();
+                roles.sort();
+
                 return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege Grant is required on user {}.",
-                    name
+                    "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
+                    &current_user.identity().display(),
+                    roles.join(",")
                 )));
             }
             (
@@ -338,9 +319,12 @@ async fn show_account_grants(
         }
         "role" => {
             if !current_user.grants.roles().contains(&name.to_string()) && !has_grant_priv {
+                let mut roles = current_user.grants.roles();
+                roles.sort();
                 return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege Grant is required on user {}.",
-                    name
+                    "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
+                    &current_user.identity().display(),
+                    roles.join(",")
                 )));
             }
             let role_info = UserApiProvider::instance()

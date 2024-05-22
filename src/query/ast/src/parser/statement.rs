@@ -1278,11 +1278,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_grants = map(
         rule! {
-            SHOW ~ GRANTS ~ #show_grant_option?
+            SHOW ~ GRANTS ~ #show_grant_option? ~ ^#show_options?
         },
-        |(_, _, show_grant_option)| match show_grant_option {
+        |(_, _, show_grant_option, opt_limit)| match show_grant_option {
             Some(ShowGrantOption::PrincipalIdentity(principal)) => Statement::ShowGrants {
                 principal: Some(principal),
+                show_options: opt_limit,
             },
             Some(ShowGrantOption::ShareGrantObjectName(object)) => {
                 Statement::ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt { object })
@@ -1290,7 +1291,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Some(ShowGrantOption::ShareName(share_name)) => {
                 Statement::ShowGrantsOfShare(ShowGrantsOfShareStmt { share_name })
             }
-            None => Statement::ShowGrants { principal: None },
+            None => Statement::ShowGrants {
+                principal: None,
+                show_options: opt_limit,
+            },
         },
     );
     let revoke = map(
