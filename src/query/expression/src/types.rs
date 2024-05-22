@@ -185,9 +185,15 @@ impl DataType {
             DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
                 ordered_float::OrderedFloat(f32::INFINITY),
             ))),
-            DataType::Number(NumberDataType::Int32) => Ok(Scalar::Number(NumberScalar::Int32(i32::MAX))),
-            DataType::Number(NumberDataType::Int16) => Ok(Scalar::Number(NumberScalar::Int16(i16::MAX))),
-            DataType::Number(NumberDataType::Int8) => Ok(Scalar::Number(NumberScalar::Int8(i8::MAX))),
+            DataType::Number(NumberDataType::Int32) => {
+                Ok(Scalar::Number(NumberScalar::Int32(i32::MAX)))
+            }
+            DataType::Number(NumberDataType::Int16) => {
+                Ok(Scalar::Number(NumberScalar::Int16(i16::MAX)))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+                Ok(Scalar::Number(NumberScalar::Int8(i8::MAX)))
+            }
             DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
                 ordered_float::OrderedFloat(f64::INFINITY),
             ))),
@@ -210,12 +216,12 @@ impl DataType {
             DataType::Number(NumberDataType::Int32) => {
                 Ok(Scalar::Number(NumberScalar::Int32(i32::MIN)))
             }
-            DataType::Number(NumberDataType::Int16) => Ok(Scalar::Number(NumberScalar::Int16(
-                i16::MIN,
-            ))),
-            DataType::Number(NumberDataType::Int8) => Ok(Scalar::Number(NumberScalar::Int8(
-                i8::MIN,
-            ))),
+            DataType::Number(NumberDataType::Int16) => { 
+                Ok(Scalar::Number(NumberScalar::Int16(i16::MIN)))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+                Ok(Scalar::Number(NumberScalar::Int8(i8::MIN)))
+            }
             DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
                 ordered_float::OrderedFloat(f64::NEG_INFINITY),
             ))),
