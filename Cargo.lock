@@ -4836,7 +4836,6 @@ dependencies = [
  "clap",
  "databend-client",
  "databend-common-ast",
- "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
  "databend-common-functions",
