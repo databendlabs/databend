@@ -518,9 +518,12 @@ pub async fn parse_uri_location(
                     ),
                 ));
             }
-            l.connection
-                .check()
-                .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
+            l.connection.check().map_err(|_| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!("connection_name can not be used with other connection options"),
+                )
+            })?;
             l.connection = Connection::new(conn.storage_params);
         }
     }
