@@ -15,12 +15,12 @@
 use databend_common_meta_types::KVMeta;
 use futures_util::TryStreamExt;
 
-use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
-use crate::sm_v002::leveled_store::map_api::AsMap;
-use crate::sm_v002::leveled_store::map_api::MapApi;
-use crate::sm_v002::leveled_store::map_api::MapApiExt;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::leveled_map::LeveledMap;
+use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::map_api::MapApi;
+use crate::leveled_store::map_api::MapApiExt;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::marked::Marked;
 
 #[tokio::test]
 async fn test_freeze() -> anyhow::Result<()> {

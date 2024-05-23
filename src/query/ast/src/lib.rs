@@ -19,4 +19,11 @@
 #![allow(clippy::type_complexity)]
 
 pub mod ast;
+mod error;
 pub mod parser;
+pub mod span;
+
+pub use error::ParseError;
+pub use error::Result;
+pub use span::Range;
+pub use span::Span;

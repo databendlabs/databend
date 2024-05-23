@@ -19,20 +19,19 @@ use std::ops::RangeBounds;
 
 use databend_common_meta_types::KVMeta;
 
-use crate::sm_v002::leveled_store::immutable::Immutable;
-use crate::sm_v002::leveled_store::immutable_levels::ImmutableLevels;
-use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::map_api::compacted_get;
-use crate::sm_v002::leveled_store::map_api::compacted_range;
-use crate::sm_v002::leveled_store::map_api::KVResultStream;
-use crate::sm_v002::leveled_store::map_api::MapApi;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::map_api::MarkedOf;
-use crate::sm_v002::leveled_store::map_api::Transition;
-use crate::sm_v002::leveled_store::ref_::Ref;
-use crate::sm_v002::leveled_store::ref_mut::RefMut;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::level::Level;
+use crate::leveled_store::map_api::compacted_get;
+use crate::leveled_store::map_api::compacted_range;
+use crate::leveled_store::map_api::KVResultStream;
+use crate::leveled_store::map_api::MapApi;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MarkedOf;
+use crate::leveled_store::map_api::Transition;
+use crate::leveled_store::ref_mut::RefMut;
+use crate::marked::Marked;
 
 /// State machine data organized in multiple levels.
 ///
@@ -58,16 +57,14 @@ impl LeveledMap {
     }
 
     /// Return an iterator of all levels in reverse order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
+    pub(crate) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         [&self.writable]
             .into_iter()
             .chain(self.immutable_levels.iter_levels())
     }
 
     /// Return the top level and an iterator of all immutable levels, in newest to oldest order.
-    pub(in crate::sm_v002) fn iter_shared_levels(
-        &self,
-    ) -> (Option<&Level>, impl Iterator<Item = &Immutable>) {
+    pub(crate) fn iter_shared_levels(&self) -> (Option<&Level>, impl Iterator<Item = &Immutable>) {
         (
             Some(&self.writable),
             self.immutable_levels.iter_immutable_levels(),
@@ -107,11 +104,6 @@ impl LeveledMap {
 
     pub(crate) fn to_ref_mut(&mut self) -> RefMut {
         RefMut::new(&mut self.writable, &self.immutable_levels)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn to_ref(&self) -> Ref {
-        Ref::new(Some(&self.writable), &self.immutable_levels)
     }
 }
 

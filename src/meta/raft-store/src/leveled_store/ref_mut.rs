@@ -18,19 +18,18 @@ use std::ops::RangeBounds;
 
 use databend_common_meta_types::KVMeta;
 
-use crate::sm_v002::leveled_store::immutable::Immutable;
-use crate::sm_v002::leveled_store::immutable_levels::ImmutableLevels;
-use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::map_api::compacted_get;
-use crate::sm_v002::leveled_store::map_api::compacted_range;
-use crate::sm_v002::leveled_store::map_api::KVResultStream;
-use crate::sm_v002::leveled_store::map_api::MapApi;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::map_api::MarkedOf;
-use crate::sm_v002::leveled_store::map_api::Transition;
-use crate::sm_v002::leveled_store::ref_::Ref;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::level::Level;
+use crate::leveled_store::map_api::compacted_get;
+use crate::leveled_store::map_api::compacted_range;
+use crate::leveled_store::map_api::KVResultStream;
+use crate::leveled_store::map_api::MapApi;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MarkedOf;
+use crate::leveled_store::map_api::Transition;
+use crate::marked::Marked;
 
 /// A writable leveled map that does not not own the data.
 #[derive(Debug)]
@@ -43,31 +42,21 @@ pub struct RefMut<'d> {
 }
 
 impl<'d> RefMut<'d> {
-    pub(in crate::sm_v002) fn new(
-        writable: &'d mut Level,
-        immutable_levels: &'d ImmutableLevels,
-    ) -> Self {
+    pub(crate) fn new(writable: &'d mut Level, immutable_levels: &'d ImmutableLevels) -> Self {
         Self {
             writable,
             immutable_levels,
         }
     }
 
-    #[allow(dead_code)]
-    pub(in crate::sm_v002) fn to_ref(&self) -> Ref {
-        Ref::new(Some(&*self.writable), self.immutable_levels)
-    }
-
     /// Return an iterator of all levels in new-to-old order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'_ Level> + '_ {
+    pub(crate) fn iter_levels(&self) -> impl Iterator<Item = &'_ Level> + '_ {
         [&*self.writable]
             .into_iter()
             .chain(self.immutable_levels.iter_levels())
     }
 
-    pub(in crate::sm_v002) fn iter_shared_levels(
-        &self,
-    ) -> (Option<&Level>, impl Iterator<Item = &Immutable>) {
+    pub(crate) fn iter_shared_levels(&self) -> (Option<&Level>, impl Iterator<Item = &Immutable>) {
         (
             Some(self.writable),
             self.immutable_levels.iter_immutable_levels(),
