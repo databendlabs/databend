@@ -1,0 +1,69 @@
+name: Cloud
+
+on:
+  pull_request_target:
+    types:
+      - labeled
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  pull-requests: write
+  contents: read
+
+env:
+  BUILD_PROFILE: release
+  RUNNER_PROVIDER: gcp
+
+jobs:
+  info:
+    if: contains(github.event.pull_request.labels.*.name, 'ci-meta-chaos')
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      target: ${{ steps.sha.outputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: "refs/pull/${{ github.event.number }}/merge"
+      - name: Get SHA
+        shell: bash
+        id: sha
+
+  build:
+    needs: info
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    strategy:
+      matrix:
+        include:
+          - {arch: x86_64, runner: X64}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: "refs/pull/${{ github.event.number }}/merge"
+      - name: Build Release
+        uses: ./.github/actions/build_linux
+        timeout-minutes: 60
+        with:
+          sha: ${{ needs.info.outputs.sha }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
+          artifacts: meta
+
+  test_meta_chaos:
+    needs: [info, build]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    if: needs.license.outputs.license
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/test_meta_chaos
+        timeout-minutes: 10
+        env:
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+
