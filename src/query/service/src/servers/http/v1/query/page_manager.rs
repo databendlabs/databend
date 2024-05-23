@@ -106,10 +106,13 @@ impl PageManager {
                 Ok(page)
             } else {
                 // when end is set to true, client should recv a response with next_url = final_url
-                Err(ErrorCode::Internal(format!(
-                    "expect /final from client, got /page/{}.",
-                    page_no
-                )))
+                // but the response may be lost and client will retry,
+                // we simply return an empty page.
+                let page = Page {
+                    data: JsonBlock::default(),
+                    total_rows: self.total_rows,
+                };
+                Ok(page)
             }
         } else if page_no + 1 == next_no {
             // later, there may be other ways to ack and drop the last page except collect_new_page.

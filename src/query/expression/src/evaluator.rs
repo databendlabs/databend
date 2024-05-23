@@ -18,9 +18,9 @@ use std::ops::Not;
 use databend_common_arrow::arrow::bitmap;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use itertools::Itertools;
 use log::error;
 
@@ -1438,7 +1438,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         folder.fold_to_stable(expr)
     }
 
-    fn full_input_domains(expr: &Expr<Index>) -> HashMap<Index, Domain> {
+    pub fn full_input_domains(expr: &Expr<Index>) -> HashMap<Index, Domain> {
         expr.column_refs()
             .into_iter()
             .map(|(id, ty)| {

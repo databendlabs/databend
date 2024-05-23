@@ -23,15 +23,15 @@ use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 
-use crate::key_spaces::RaftStoreEntry;
-use crate::sm_v002::leveled_store::immutable::Immutable;
-use crate::sm_v002::leveled_store::immutable_levels::ImmutableLevels;
-use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
-use crate::sm_v002::leveled_store::map_api::AsMap;
-use crate::sm_v002::leveled_store::map_api::MapApi;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
-use crate::sm_v002::marked::Marked;
+use crate::key_spaces::SMEntry;
+use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::leveled_map::LeveledMap;
+use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::map_api::MapApi;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::sys_data_api::SysDataApiRO;
+use crate::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
 use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::ExpireKey;
@@ -209,9 +209,17 @@ async fn test_import() -> anyhow::Result<()> {
     ];
     let data = exported
         .iter()
-        .map(|x| serde_json::from_str::<RaftStoreEntry>(x).unwrap());
+        .map(|x| serde_json::from_str::<SMEntry>(x).unwrap());
 
-    let d = SMV002::import(data)?;
+    let d = {
+        let mut importer = SMV002::new_importer();
+
+        for ent in data {
+            importer.import(ent)?;
+        }
+
+        importer.commit()
+    };
 
     let snapshot = SnapshotViewV002::new(ImmutableLevels::new([Immutable::new_from_level(d)]));
 

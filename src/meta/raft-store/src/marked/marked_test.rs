@@ -16,8 +16,8 @@ use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
 
-use crate::sm_v002::marked::InternalSeq;
-use crate::sm_v002::marked::Marked;
+use crate::marked::InternalSeq;
+use crate::marked::Marked;
 use crate::state_machine::ExpireValue;
 
 #[test]

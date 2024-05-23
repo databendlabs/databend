@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::Span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -28,6 +27,7 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
+use crate::Span;
 
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]

@@ -16,11 +16,11 @@
 
 use std::fmt::Display;
 
-use databend_common_exception::Result;
-use databend_common_exception::Span;
 use itertools::Itertools;
 
 use crate::ast::*;
+use crate::Result;
+use crate::Span;
 
 pub fn format_statement(stmt: Statement) -> Result<String> {
     let mut visitor = AstFormatVisitor::new();

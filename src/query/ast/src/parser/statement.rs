@@ -3656,7 +3656,7 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         rule! {
              #literal_u64 ~ MINUTE
         },
-        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60),
+        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60, 0),
     );
     let cron_expr = map(
         rule! {
@@ -3668,12 +3668,19 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         rule! {
              #literal_u64 ~ SECOND
         },
-        |(secs, _)| ScheduleOptions::IntervalSecs(secs),
+        |(secs, _)| ScheduleOptions::IntervalSecs(secs, 0),
+    );
+    let interval_millis = map(
+        rule! {
+             #literal_u64 ~ MILLISECOND
+        },
+        |(millis, _)| ScheduleOptions::IntervalSecs(0, millis),
     );
     rule!(
         #interval
         | #cron_expr
         | #interval_sec
+        | #interval_millis
     )(i)
 }
 

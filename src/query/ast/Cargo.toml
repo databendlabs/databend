@@ -15,10 +15,6 @@ doctest = false
 ignored = ["geos"]
 
 [dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-exception = { path = "../../common/exception" }
-databend-common-io = { path = "../../common/io" }
-
 # Crates.io dependencies
 derive-visitor = { workspace = true }
 enum-as-inner = "0.5.1"
@@ -34,12 +30,19 @@ nom-rule = "0.3.0"
 ordered-float = { workspace = true }
 pratt = "0.4.0"
 pretty = "0.11.3"
+serde = { workspace = true }
 serde_json = { workspace = true }
 strsim = "0.10"
 strum = "0.24"
 strum_macros = "0.24"
 unindent = "0.2.3"
 url = "2.3.1"
+
+# TODO: Use the version from crates.io once
+# https://github.com/brendanzab/codespan/pull/331 is released.
+[dependencies.codespan-reporting]
+git = "https://github.com/brendanzab/codespan"
+rev = "c84116f5"
 
 [dev-dependencies]
 criterion = { workspace = true }
