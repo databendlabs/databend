@@ -6,7 +6,7 @@ select 1 = all(select 1)
 ----
 1
 
-statement error 1002
+statement error 1005
 select 1 where 2 + all(select 2)
 
 statement ok

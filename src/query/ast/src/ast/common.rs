@@ -14,12 +14,14 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fmt::Write as _;
 
-use databend_common_exception::Span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use ethnum::i256;
 
 use crate::ast::quote::QuotedIdent;
+use crate::Span;
 
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -268,4 +270,34 @@ pub(crate) fn write_space_separated_string_map(
         write!(f, "{k} = '{v}'")?;
     }
     Ok(())
+}
+
+pub fn display_decimal_256(num: i256, scale: u8) -> String {
+    let mut buf = String::new();
+    if scale == 0 {
+        write!(buf, "{}", num).unwrap();
+    } else {
+        let pow_scale = i256::from(10).pow(scale as u32);
+        // -1/10 = 0
+        if num >= 0 {
+            write!(
+                buf,
+                "{}.{:0>width$}",
+                num / pow_scale,
+                (num % pow_scale).abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        } else {
+            write!(
+                buf,
+                "-{}.{:0>width$}",
+                -num / pow_scale,
+                (num % pow_scale).abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        }
+    }
+    buf
 }

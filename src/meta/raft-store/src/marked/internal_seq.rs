@@ -28,9 +28,9 @@
 ///
 /// With such a design, the system seq increases only when a new normal record is inserted, ensuring compatibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(in crate::sm_v002) struct InternalSeq {
-    pub(in crate::sm_v002) seq: u64,
-    pub(in crate::sm_v002) tombstone: bool,
+pub(crate) struct InternalSeq {
+    pub(crate) seq: u64,
+    pub(crate) tombstone: bool,
 }
 
 impl InternalSeq {
@@ -60,7 +60,7 @@ impl InternalSeq {
 
 #[cfg(test)]
 mod tests {
-    use crate::sm_v002::marked::internal_seq::InternalSeq;
+    use super::InternalSeq;
 
     #[test]
     fn test_ord() -> Result<(), anyhow::Error> {

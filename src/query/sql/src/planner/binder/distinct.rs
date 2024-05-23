@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;

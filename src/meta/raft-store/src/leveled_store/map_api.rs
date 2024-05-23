@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`MapApi`] and [`MapApiRO`] defines the behavior of a key-value map and readonly key-value map.
+
 use std::borrow::Borrow;
 use std::fmt;
 use std::io;
@@ -23,8 +25,8 @@ use futures_util::stream::BoxStream;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
-use crate::sm_v002::leveled_store::util;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::util;
+use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
 
 /// MapKey defines the behavior of a key in a map.
@@ -32,9 +34,7 @@ use crate::state_machine::ExpireKey;
 /// It is `Clone` to let MapApi clone a range of key.
 /// It is `Unpin` to let MapApi extract a key from pinned data, such as a stream.
 /// And it only accepts `'static` value for simplicity.
-pub(in crate::sm_v002) trait MapKey:
-    Clone + Ord + fmt::Debug + Send + Sync + Unpin + 'static
-{
+pub(crate) trait MapKey: Clone + Ord + fmt::Debug + Send + Sync + Unpin + 'static {
     type V: MapValue;
 }
 
@@ -43,25 +43,22 @@ pub(in crate::sm_v002) trait MapKey:
 /// It is `Clone` to let MapApi return an owned value.
 /// It is `Unpin` to let MapApi extract a value from pinned data, such as a stream.
 /// And it only accepts `'static` value for simplicity.
-pub(in crate::sm_v002) trait MapValue:
-    Clone + Send + Sync + Unpin + 'static
-{
-}
+pub(crate) trait MapValue: Clone + Send + Sync + Unpin + 'static {}
 
 /// A Marked value type of a key type.
-pub(in crate::sm_v002) type MarkedOf<K> = Marked<<K as MapKey>::V>;
+pub(crate) type MarkedOf<K> = Marked<<K as MapKey>::V>;
 
 /// A key-value pair used in a map.
-pub(in crate::sm_v002) type MapKV<K> = (K, MarkedOf<K>);
+pub(crate) type MapKV<K> = (K, MarkedOf<K>);
 
 /// Transition from one state to another.
-pub(in crate::sm_v002) type Transition<T> = (T, T);
+pub(crate) type Transition<T> = (T, T);
 
 /// A boxed stream of io results of key-value pair.
-pub(in crate::sm_v002) type ResultStream<T> = BoxStream<'static, Result<T, io::Error>>;
+pub(crate) type ResultStream<T> = BoxStream<'static, Result<T, io::Error>>;
 
 /// A stream of result of key-value returned by `range()`.
-pub(in crate::sm_v002) type KVResultStream<K> = ResultStream<MapKV<K>>;
+pub(crate) type KVResultStream<K> = ResultStream<MapKV<K>>;
 
 // Auto implement MapValue for all types that satisfy the constraints.
 impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}
@@ -78,7 +75,7 @@ impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}
 /// There is no lifetime constraint on the trait,
 /// and it's the implementation's duty to specify a valid lifetime constraint.
 #[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApiRO<K>: Send + Sync
+pub(crate) trait MapApiRO<K>: Send + Sync
 where K: MapKey
 {
     /// Get an entry by key.
@@ -96,7 +93,7 @@ where K: MapKey
 
 /// Trait for using Self as an implementation of the MapApi.
 #[allow(dead_code)]
-pub(in crate::sm_v002) trait AsMap {
+pub(crate) trait AsMap {
     /// Use Self as an implementation of the [`MapApiRO`] (Read-Only) interface.
     fn as_map<K: MapKey>(&self) -> &impl MapApiRO<K>
     where Self: MapApiRO<K> + Sized {
@@ -134,7 +131,7 @@ impl<T> AsMap for T {}
 
 /// Provide a read-write key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApi<K>: MapApiRO<K>
+pub(crate) trait MapApi<K>: MapApiRO<K>
 where K: MapKey
 {
     /// Set an entry and returns the old value and the new value.
@@ -145,12 +142,12 @@ where K: MapKey
     ) -> Result<Transition<MarkedOf<K>>, io::Error>;
 }
 
-pub(in crate::sm_v002) struct MapApiExt;
+pub(crate) struct MapApiExt;
 
 impl MapApiExt {
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
-    pub(in crate::sm_v002) async fn update_meta<K, T>(
+    pub(crate) async fn update_meta<K, T>(
         s: &mut T,
         key: K,
         meta: Option<KVMeta>,
@@ -174,7 +171,7 @@ impl MapApiExt {
     /// Update only the value and keeps the meta unchanged.
     /// If the entry does not exist, create one.
     #[allow(dead_code)]
-    pub(in crate::sm_v002) async fn upsert_value<K, T>(
+    pub(crate) async fn upsert_value<K, T>(
         s: &mut T,
         key: K,
         value: K::V,
@@ -198,7 +195,9 @@ impl MapApiExt {
 /// Get a key from multi levels data.
 ///
 /// Returns the first non-tombstone entry.
-pub(in crate::sm_v002) async fn compacted_get<'d, K, Q, L>(
+///
+/// `db` is the bottom level db.
+pub(crate) async fn compacted_get<'d, K, Q, L>(
     key: &Q,
     levels: impl IntoIterator<Item = &'d L>,
 ) -> Result<MarkedOf<K>, io::Error>
@@ -214,6 +213,7 @@ where
             return Ok(got);
         }
     }
+
     Ok(Marked::empty())
 }
 
@@ -226,7 +226,7 @@ where
 /// The `L` is the type of immutable levels.
 ///
 /// Because the top level is very likely to be a different type from the immutable levels, i.e., it is writable.
-pub(in crate::sm_v002) async fn compacted_range<'d, K, R, L, TOP>(
+pub(crate) async fn compacted_range<'d, K, R, L, TOP>(
     range: R,
     top: Option<&'d TOP>,
     levels: impl IntoIterator<Item = &'d L>,
@@ -260,12 +260,12 @@ mod tests {
 
     use futures_util::TryStreamExt;
 
-    use crate::sm_v002::leveled_store::immutable::Immutable;
-    use crate::sm_v002::leveled_store::level::Level;
-    use crate::sm_v002::leveled_store::map_api::compacted_get;
-    use crate::sm_v002::leveled_store::map_api::compacted_range;
-    use crate::sm_v002::leveled_store::map_api::MapApi;
-    use crate::sm_v002::marked::Marked;
+    use crate::leveled_store::immutable::Immutable;
+    use crate::leveled_store::level::Level;
+    use crate::leveled_store::map_api::compacted_get;
+    use crate::leveled_store::map_api::compacted_range;
+    use crate::leveled_store::map_api::MapApi;
+    use crate::marked::Marked;
 
     #[tokio::test]
     async fn test_compacted_get() -> anyhow::Result<()> {

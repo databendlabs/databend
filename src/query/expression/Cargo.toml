@@ -12,6 +12,7 @@ test = true
 [dependencies] # In alphabetical order
 # Workspace dependencies
 databend-common-arrow = { path = "../../common/arrow" }
+databend-common-ast = { path = "../ast" }
 databend-common-base = { path = "../../common/base" }
 databend-common-datavalues = { path = "../datavalues" }
 databend-common-exception = { path = "../../common/exception" }
@@ -64,7 +65,6 @@ unicode-segmentation = "1.10.1"
 
 [dev-dependencies]
 arrow-ord = { workspace = true }
-databend-common-ast = { path = "../ast" }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"
 rand = { workspace = true }
