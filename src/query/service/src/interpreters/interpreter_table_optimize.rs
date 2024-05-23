@@ -23,7 +23,6 @@ use databend_common_catalog::table::CompactTarget;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -34,6 +33,7 @@ use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::OptimizeTableAction;
 use databend_common_sql::plans::OptimizeTablePlan;
 use databend_common_storages_factory::NavigationPoint;
@@ -43,7 +43,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
-use crate::locks::LockExt;
 use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -114,7 +113,6 @@ impl OptimizeTableInterpreter {
         snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         is_distributed: bool,
-        need_lock: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
@@ -144,7 +142,7 @@ impl OptimizeTableInterpreter {
             mutation_kind: MutationKind::Compact,
             update_stream_meta: vec![],
             merge_meta,
-            need_lock,
+            need_lock: false,
             deduplicated_label: None,
             plan_id: u32::MAX,
         })))
@@ -162,17 +160,16 @@ impl OptimizeTableInterpreter {
 
         // check if the table is locked.
         let table_lock = LockManager::create_table_lock(table_info.clone())?;
-        if self.plan.need_lock && !table_lock.wait_lock_expired(catalog.clone()).await? {
-            return Err(ErrorCode::TableAlreadyLocked(format!(
-                "table '{}' is locked, please retry compaction later",
-                self.plan.table
-            )));
-        }
+        let lock_guard = match self.plan.lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock_no_retry(self.ctx.clone()).await?,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self.ctx.clone()).await?,
+            LockTableOption::NoLock => None,
+        };
 
         let compaction_limits = match target {
             CompactTarget::Segments => {
                 table
-                    .compact_segments(self.ctx.clone(), table_lock, self.plan.limit)
+                    .compact_segments(self.ctx.clone(), self.plan.limit)
                     .await?;
                 return Ok(PipelineBuildResult::create());
             }
@@ -198,7 +195,6 @@ impl OptimizeTableInterpreter {
                 snapshot,
                 catalog_info,
                 compact_is_distributed,
-                self.plan.need_lock,
             )?;
 
             let build_res =
@@ -247,7 +243,7 @@ impl OptimizeTableInterpreter {
                         mutator.remained_blocks,
                         mutator.removed_segment_indexes,
                         mutator.removed_segment_summary,
-                        self.plan.need_lock,
+                        false,
                     )?;
 
                     build_res =
@@ -291,6 +287,7 @@ impl OptimizeTableInterpreter {
             }
         }
 
+        build_res.main_pipeline.add_lock_guard(lock_guard);
         Ok(build_res)
     }
 }

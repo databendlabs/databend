@@ -35,6 +35,7 @@ use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
 use databend_common_sql::BindContext;
@@ -112,7 +113,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Replace,
-                true,
+                LockTableOption::LockNoRetry,
             );
             hook_operator.execute(&mut pipeline.main_pipeline).await;
         }

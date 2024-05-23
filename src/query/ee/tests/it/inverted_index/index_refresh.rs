@@ -20,6 +20,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -86,7 +87,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         table: fixture.default_table_name(),
         index_name: index_name.clone(),
         segment_locs: None,
-        need_lock: true,
+        lock_opt: LockTableOption::LockWithRetry,
     };
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan)?;
     let _ = interpreter.execute(ctx.clone()).await?;

@@ -31,4 +31,6 @@ pub trait Lock: Sync + Send {
     fn tenant_name(&self) -> &str;
 
     async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>>;
+
+    async fn try_lock_no_retry(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>>;
 }

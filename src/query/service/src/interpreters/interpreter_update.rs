@@ -41,6 +41,7 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::Visibility;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
@@ -122,7 +123,7 @@ impl Interpreter for UpdateInterpreter {
                     tbl_name.to_string(),
                     MutationKind::Update,
                     // table lock has been added, no need to check.
-                    false,
+                    LockTableOption::NoLock,
                 );
                 hook_operator
                     .execute_refresh(&mut build_res.main_pipeline)

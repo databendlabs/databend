@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -90,12 +91,11 @@ impl Interpreter for RefreshTableIndexInterpreter {
         let index_schema = TableSchemaRefExt::create(index_fields);
 
         // Add table lock if need.
-        let lock_guard = if self.plan.need_lock {
-            let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
-            let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-            Some(lock_guard)
-        } else {
-            None
+        let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
+        let lock_guard = match self.plan.lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock_no_retry(self.ctx.clone()).await?,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self.ctx.clone()).await?,
+            LockTableOption::NoLock => None,
         };
 
         // refresh table.
@@ -104,9 +104,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
         table.check_mutable()?;
 
         let mut build_res = PipelineBuildResult::create();
-        if let Some(lock_guard) = lock_guard {
-            build_res.main_pipeline.add_lock_guard(lock_guard);
-        }
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table

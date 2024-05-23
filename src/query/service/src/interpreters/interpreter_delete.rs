@@ -48,6 +48,7 @@ use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::EvalScalar;
 use databend_common_sql::plans::FunctionCall;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::SubqueryDesc;
@@ -301,7 +302,7 @@ impl Interpreter for DeleteInterpreter {
                 tbl_name.to_string(),
                 MutationKind::Delete,
                 // table lock has been added, no need to check.
-                false,
+                LockTableOption::NoLock,
             );
             hook_operator
                 .execute_refresh(&mut build_res.main_pipeline)

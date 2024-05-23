@@ -105,10 +105,10 @@ impl LockManager {
 
         let tenant_name = lock.tenant_name();
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-
+        let table_id = lock.get_table_id();
         let lock_key = LockKey::Table {
             tenant: tenant.clone(),
-            table_id: lock.get_table_id(),
+            table_id,
         };
 
         let req = CreateLockRevReq::new(lock_key.clone(), user, node, query_id, expire_secs);
@@ -117,7 +117,7 @@ impl LockManager {
         let res = catalog.create_lock_revision(req).await?;
         let revision = res.revision;
         // metrics.
-        record_created_lock_nums(lock.lock_type().to_string(), lock.get_table_id(), 1);
+        record_created_lock_nums(lock.lock_type().to_string(), table_id, 1);
 
         let lock_holder = Arc::new(LockHolder::default());
         lock_holder
@@ -147,18 +147,16 @@ impl LockManager {
 
             if position == 0 {
                 // The lock is acquired by current session.
-
                 let extend_table_lock_req =
                     ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, true);
 
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
-                record_acquired_lock_nums(lock.lock_type().to_string(), lock.get_table_id(), 1);
+                record_acquired_lock_nums(lock.lock_type().to_string(), table_id, 1);
                 break;
             }
 
-            let watch_delete_ident =
-                TableLockIdent::new(&tenant, lock.get_table_id(), reply[position - 1].0);
+            let watch_delete_ident = TableLockIdent::new(&tenant, table_id, reply[position - 1].0);
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest {
@@ -189,6 +187,71 @@ impl LockManager {
                     ))
                 }
             }?;
+        }
+
+        Ok(Some(guard))
+    }
+
+    /// Try request lock without retry.
+    #[async_backtrace::framed]
+    pub async fn try_lock_no_retry<T: Lock + ?Sized>(
+        self: &Arc<Self>,
+        ctx: Arc<dyn TableContext>,
+        lock: &T,
+    ) -> Result<Option<LockGuard>> {
+        let table_id = lock.get_table_id();
+        let lock_key = LockKey::Table {
+            tenant: Tenant::new_or_err(lock.tenant_name(), func_name!())?,
+            table_id,
+        };
+
+        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
+        let req = CreateLockRevReq::new(
+            lock_key.clone(),
+            ctx.get_current_user()?.name,
+            ctx.get_cluster().local_id.clone(),
+            ctx.get_current_session_id(),
+            expire_secs,
+        );
+
+        // get a new table lock revision.
+        let catalog = ctx.get_catalog(lock.get_catalog()).await?;
+        let res = catalog.create_lock_revision(req).await?;
+        let revision = res.revision;
+        // metrics.
+        record_created_lock_nums(lock.lock_type().to_string(), table_id, 1);
+
+        let lock_holder = Arc::new(LockHolder::default());
+        lock_holder
+            .start(ctx.get_id(), catalog.clone(), lock, revision, expire_secs)
+            .await?;
+
+        self.insert_lock(revision, lock_holder);
+        let guard = LockGuard::new(self.clone(), revision);
+
+        // List all revisions and check if the current is the minimum.
+        let reply = catalog
+            .list_lock_revisions(ListLockRevReq::new(lock_key.clone()))
+            .await?;
+        let position = reply.iter().position(|(x, _)| *x == revision).ok_or_else(||
+                // If the current is not found in list,  it means that the current has been expired.
+                ErrorCode::TableLockExpired("the acquired table lock has been expired".to_string()),
+            )?;
+
+        if position == 0 {
+            // The lock is acquired by current session.
+            catalog
+                .extend_lock_revision(ExtendLockRevReq::new(lock_key, revision, expire_secs, true))
+                .await?;
+            // metrics.
+            record_acquired_lock_nums(lock.lock_type().to_string(), table_id, 1);
+        } else {
+            catalog
+                .delete_lock_revision(DeleteLockRevReq::new(lock_key, revision))
+                .await?;
+            return Err(ErrorCode::TableAlreadyLocked(
+                "table is locked by other session, please retry later".to_string(),
+            ));
         }
 
         Ok(Some(guard))
