@@ -4,10 +4,10 @@
 
 set -e
 
-echo "install k3s.."
-curl -sfL https://rancher-mirror.rancher.cn/k3s/k3s-install.sh | INSTALL_K3S_MIRROR=cn sh -
+echo "install k3d"
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.6.0 bash
 
-echo "install chaos mesh"
+echo "install chaos mesh on k3d"
 curl -sSL https://mirrors.chaos-mesh.org/v2.0.2/install.sh | bash -s -- --k3s
 
 echo "kubectl get pods"
