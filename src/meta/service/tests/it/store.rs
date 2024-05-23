@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
+use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::state_machine::testing::snapshot_logs;
 use databend_common_meta_sled_store::openraft::entry::RaftEntry;
 use databend_common_meta_sled_store::openraft::storage::RaftLogReaderExt;
