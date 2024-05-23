@@ -328,6 +328,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
+                        None,
                     )
                 };
                 let join_plan = Join {
@@ -392,6 +393,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
+                        None,
                     )
                 };
                 let mark_join = Join {

@@ -451,10 +451,11 @@ impl Binder {
                         arguments: vec![scalar.clone()],
                     });
                     let data_type = field_expr.data_type()?;
-                    let index = self
-                        .metadata
-                        .write()
-                        .add_derived_column(field.clone(), data_type.clone());
+                    let index = self.metadata.write().add_derived_column(
+                        field.clone(),
+                        data_type.clone(),
+                        Some(field_expr.clone()),
+                    );
 
                     let column_binding = ColumnBindingBuilder::new(
                         field,
@@ -543,10 +544,11 @@ impl Binder {
                             } else {
                                 // Add result column to metadata
                                 let data_type = srf_result.data_type()?;
-                                let index = self
-                                    .metadata
-                                    .write()
-                                    .add_derived_column(srf.to_string(), data_type.clone());
+                                let index = self.metadata.write().add_derived_column(
+                                    srf.to_string(),
+                                    data_type.clone(),
+                                    Some(srf_result.clone()),
+                                );
                                 ColumnBindingBuilder::new(
                                     srf.to_string(),
                                     index,

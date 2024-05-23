@@ -107,10 +107,13 @@ impl Binder {
                 ScalarExpr::AsyncFunctionCall(async_func) => self.create_derived_column_binding(
                     async_func.display_name.clone(),
                     async_func.return_type.as_ref().clone(),
+                    Some(item.scalar.clone()),
                 ),
-                _ => {
-                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
-                }
+                _ => self.create_derived_column_binding(
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                    Some(item.scalar.clone()),
+                ),
             };
 
             if is_grouping_sets_item {
