@@ -14,11 +14,16 @@
 
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::sync::Arc;
 
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::EmptyMapType;
 use databend_common_expression::types::GenericType;
@@ -27,11 +32,20 @@ use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::Column;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use databend_common_hashtable::StackHashSet;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -244,6 +258,72 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .any(|(k, _)| k == key)
             },
         );
+
+    registry.register_function_factory("map_pick", |_, args_type: &[DataType]| {
+        if args_type.len() < 2 {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "map_pick".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: args_type[0].clone(),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(move |_, _| FunctionDomain::Full),
+                eval: Box::new(map_pick_fn_vec),
+            },
+        }))
+    });
+
+    fn map_pick_fn_vec(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+        let len = args.iter().find_map(|arg| match arg {
+            ValueRef::Column(col) => Some(col.len()),
+            _ => None,
+        });
+
+        let source_data_type = match args.first().unwrap() {
+            ValueRef::Scalar(s) => s.infer_data_type(),
+            ValueRef::Column(c) => c.data_type(),
+        };
+
+        let source_map = match &args[0] {
+            ValueRef::Scalar(ScalarRef::Map(s)) => {
+                KvPair::<GenericType<0>, GenericType<1>>::try_downcast_column(s).unwrap()
+            }
+            ValueRef::Column(Column::Map(c)) => {
+                KvPair::<GenericType<0>, GenericType<1>>::try_downcast_column(&c.values).unwrap()
+            }
+            _ => unreachable!(),
+        };
+
+        let mut builder: ArrayColumnBuilder<KvPair<GenericType<0>, GenericType<1>>> =
+            ArrayType::create_builder(
+                args.len() - 1,
+                &source_data_type.as_map().unwrap().as_tuple().unwrap(),
+            );
+        for key_arg in args[1..].iter() {
+            if let Some((k, v)) = source_map
+                .iter()
+                .find(|(k, _)| k == key_arg.as_scalar().unwrap())
+            {
+                builder.put_item((k.clone(), v.clone()));
+            }
+        }
+        builder.commit_row();
+
+        match len {
+            Some(_) => Value::Column(Column::Map(Box::new(builder.build().upcast()))),
+            _ => {
+                let scalar_builder = builder.build_scalar();
+                Value::Scalar(Scalar::Map(Column::Tuple(vec![
+                    scalar_builder.keys,
+                    scalar_builder.values,
+                ])))
+            }
+        }
+    }
 
     registry.register_2_arg_core::<EmptyMapType, EmptyArrayType, EmptyMapType, _, _>(
         "map_pick",
