@@ -235,8 +235,8 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             Ok(Plan::CopyIntoTable(plan))
         }
         Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan).await,
-        // Leiyu said: Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
-        // But I think it's ready now
+
+        // distributed insert will be optimized in `physical_plan_builder`
         Plan::Insert(mut plan) => {
             match plan.source {
                 InsertInputSource::SelectPlan(p) => {
@@ -269,6 +269,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             Ok(Plan::Replace(plan))
         }
+
         Plan::CreateTable(mut plan) => {
             if let Some(p) = &plan.as_select {
                 let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
