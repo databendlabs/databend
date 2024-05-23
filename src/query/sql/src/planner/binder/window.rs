@@ -28,10 +28,13 @@ use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
+use crate::plans::EvalScalar;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::Sort;
+use crate::plans::SortItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
 use crate::plans::Window;
@@ -61,6 +64,66 @@ impl Binder {
             order_by: window_info.order_by_items.clone(),
             frame: window_info.frame.clone(),
             limit: None,
+        };
+
+        // eval scalars before sort
+        // Generate a `EvalScalar` as the input of `Window`.
+        let mut scalar_items: Vec<ScalarItem> = Vec::new();
+        for arg in &window_plan.arguments {
+            scalar_items.push(arg.clone());
+        }
+        for part in &window_plan.partition_by {
+            scalar_items.push(part.clone());
+        }
+        for order in &window_plan.order_by {
+            scalar_items.push(order.order_by_item.clone())
+        }
+
+        let child = if !scalar_items.is_empty() {
+            let eval_scalar_plan = EvalScalar {
+                items: scalar_items,
+            };
+            SExpr::create_unary(Arc::new(eval_scalar_plan.into()), Arc::new(child))
+        } else {
+            child
+        };
+
+        let default_nulls_first = !self
+            .ctx
+            .get_settings()
+            .get_sql_dialect()
+            .unwrap()
+            .is_null_biggest();
+
+        let mut sort_items: Vec<SortItem> = vec![];
+        if !window_plan.partition_by.is_empty() {
+            for part in window_plan.partition_by.iter() {
+                sort_items.push(SortItem {
+                    index: part.index,
+                    asc: true,
+                    nulls_first: default_nulls_first,
+                });
+            }
+        }
+
+        for order in window_plan.order_by.iter() {
+            sort_items.push(SortItem {
+                index: order.order_by_item.index,
+                asc: order.asc.unwrap_or(true),
+                nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+            });
+        }
+
+        let child = if !sort_items.is_empty() {
+            let sort_plan = Sort {
+                items: sort_items,
+                limit: window_plan.limit,
+                after_exchange: None,
+                pre_projection: None,
+            };
+            SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
+        } else {
+            child
         };
 
         Ok(SExpr::create_unary(
