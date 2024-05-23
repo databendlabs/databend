@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::Membership;
@@ -26,11 +24,12 @@ use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 
 use crate::key_spaces::RaftStoreEntry;
+use crate::sm_v002::leveled_store::immutable::Immutable;
+use crate::sm_v002::leveled_store::immutable_levels::ImmutableLevels;
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
@@ -51,7 +50,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
     let d = top_level.newest().unwrap().as_ref();
 
-    assert_eq!(top_level.iter_arc_levels().count(), 1);
+    assert_eq!(top_level.iter_immutable_levels().count(), 1);
     assert_eq!(
         d.last_membership_ref(),
         &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()))
@@ -214,7 +213,7 @@ async fn test_import() -> anyhow::Result<()> {
 
     let d = SMV002::import(data)?;
 
-    let snapshot = SnapshotViewV002::new(StaticLevels::new([Arc::new(d)]));
+    let snapshot = SnapshotViewV002::new(ImmutableLevels::new([Immutable::new_from_level(d)]));
 
     let got = snapshot
         .export()
