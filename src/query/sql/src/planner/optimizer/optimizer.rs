@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use async_recursion::async_recursion;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
@@ -50,6 +51,7 @@ use crate::plans::Join;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
+use crate::InsertInputSource;
 use crate::MetadataRef;
 
 #[derive(Clone, Educe)]
@@ -156,6 +158,7 @@ impl<'a> RecursiveOptimizer<'a> {
 }
 
 #[minitrace::trace]
+#[async_recursion]
 pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
@@ -224,10 +227,36 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
                 "after optimization enable_distributed_copy? : {}",
                 plan.enable_distributed
             );
+
+            if let Some(p) = &plan.query {
+                let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                plan.query = Some(Box::new(optimized_plan));
+            }
             Ok(Plan::CopyIntoTable(plan))
         }
         Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan).await,
+        Plan::Insert(mut plan) => {
+            match plan.source {
+                InsertInputSource::SelectPlan(p) => {
+                    let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                    plan.source = InsertInputSource::SelectPlan(Box::new(optimized_plan));
+                }
+                InsertInputSource::Stage(p) => {
+                    let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                    plan.source = InsertInputSource::Stage(Box::new(optimized_plan));
+                }
+                _ => {}
+            }
+            Ok(Plan::Insert(plan))
+        }
+        Plan::CreateTable(mut plan) => {
+            if let Some(p) = &plan.as_select {
+                let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                plan.as_select = Some(Box::new(optimized_plan));
+            }
 
+            Ok(Plan::CreateTable(plan))
+        }
         // Pass through statements.
         _ => Ok(plan),
     }
