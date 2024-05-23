@@ -87,8 +87,8 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .read_table_snapshot_statistics(Some(&snapshot))
                 .await?;
 
-            let temporal_str = if let Some(table_statistics) = &table_statistics {
-                let is_full = table
+            let (is_full, temporal_str) = if let Some(table_statistics) = &table_statistics {
+                let is_full = match table
                     .navigate_to_point(
                         &NavigationPoint::SnapshotID(
                             table_statistics.snapshot_id.simple().to_string(),
@@ -96,10 +96,16 @@ impl Interpreter for AnalyzeTableInterpreter {
                         self.ctx.clone().get_abort_checker(),
                     )
                     .await
-                    .is_err();
+                {
+                    Ok(t) => !t
+                        .read_table_snapshot()
+                        .await
+                        .is_ok_and(|s| s.is_some_and(|s| s.prev_table_seq.is_some())),
+                    Err(_) => true,
+                };
 
-                if is_full {
-                    format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple(),)
+                let temporal_str = if is_full {
+                    format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple())
                 } else {
                     // analyze only need to collect the added blocks.
                     let table_alias = format!("_change_insert${:08x}", Utc::now().timestamp());
@@ -108,9 +114,13 @@ impl Interpreter for AnalyzeTableInterpreter {
                         table_statistics.snapshot_id.simple(),
                         snapshot.snapshot_id.simple(),
                     )
-                }
+                };
+                (is_full, temporal_str)
             } else {
-                format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple(),)
+                (
+                    true,
+                    format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple()),
+                )
             };
 
             let index_cols: Vec<(u32, String)> = schema
@@ -134,10 +144,8 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .join(", ");
 
             let sql = format!(
-                "SELECT {select_expr}, {} as is_full from {}.{} {temporal_str}",
-                temporal_str.is_empty(),
-                plan.database,
-                plan.table,
+                "SELECT {select_expr}, {is_full} as is_full from {}.{} {temporal_str}",
+                plan.database, plan.table,
             );
 
             log::info!("Analyze via sql {:?}", sql);

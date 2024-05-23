@@ -35,6 +35,8 @@ use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
+use log::error;
+use log::info;
 
 use crate::operations::set_backoff;
 use crate::operations::AppendGenerator;
@@ -96,6 +98,7 @@ impl AsyncSink for CommitMultiTableInsert {
         let is_active = self.ctx.txn_mgr().lock().is_active();
         match is_active {
             true => {
+                // inside explicit transaction
                 if update_table_meta_reqs.is_empty() {
                     return Err(ErrorCode::Internal(
                         "No table meta to update in multi table insert commit. It's a bug",
@@ -107,14 +110,12 @@ impl AsyncSink for CommitMultiTableInsert {
                 update_table_meta_reqs[0].update_stream_meta =
                     std::mem::take(&mut self.update_stream_meta);
                 update_table_meta_reqs[0].deduplicated_label = self.deduplicated_label.clone();
-                for (req, info) in update_table_meta_reqs
-                    .into_iter()
-                    .zip(table_infos.into_iter())
-                {
+                for (req, info) in update_table_meta_reqs.into_iter().zip(table_infos.iter()) {
                     self.catalog.update_table_meta(info, req).await?;
                 }
             }
             false => {
+                // auto commit
                 let mut backoff = set_backoff(None, None, None);
                 let mut retries = 0;
 
@@ -125,17 +126,49 @@ impl AsyncSink for CommitMultiTableInsert {
                         update_stream_metas: self.update_stream_meta.clone(),
                         deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
                     };
-                    let update_meta_result = self
-                        .catalog
-                        .update_multi_table_meta(update_multi_table_meta_req)
-                        .await?;
+
+                    let update_meta_result = {
+                        let ret = self
+                            .catalog
+                            .update_multi_table_meta(update_multi_table_meta_req)
+                            .await;
+                        if let Err(ref e) = ret {
+                            // other errors may occur, especially the version mismatch of streams,
+                            // let's log it here for the convenience of diagnostics
+                            error!(
+                                "Non-recoverable fault occurred during updating tables. {}",
+                                e
+                            );
+                        }
+                        ret?
+                    };
+
                     let Err(update_failed_tbls) = update_meta_result else {
+                        let table_descriptions = self
+                            .tables
+                            .values()
+                            .map(|tbl| {
+                                let table_info = tbl.get_table_info();
+                                (&table_info.desc, &table_info.ident, &table_info.meta.engine)
+                            })
+                            .collect::<Vec<_>>();
+                        let stream_descriptions = self
+                            .update_stream_meta
+                            .iter()
+                            .map(|s| (s.stream_id, s.seq, "stream"))
+                            .collect::<Vec<_>>();
+                        info!(
+                            "update tables success (auto commit), tables updated {:?}, streams updated {:?}",
+                            table_descriptions, stream_descriptions
+                        );
+
                         return Ok(());
                     };
-                    let update_failed_tbls_name: Vec<String> = update_failed_tbls
+                    let update_failed_tbl_descriptions: Vec<_> = update_failed_tbls
                         .iter()
-                        .map(|(tid, _, _)| {
-                            self.tables.get(tid).unwrap().get_table_info().name.clone()
+                        .map(|(tid, seq, meta)| {
+                            let tbl_info = self.tables.get(tid).unwrap().get_table_info();
+                            (&tbl_info.desc, (tid, seq), &meta.engine)
                         })
                         .collect();
                     match backoff.next_backoff() {
@@ -143,8 +176,8 @@ impl AsyncSink for CommitMultiTableInsert {
                             retries += 1;
 
                             debug!(
-                                "Failed to update tables: {:?}, the commit process of multi-table insert will be retried after {} ms, retrying {} times",
-                                update_failed_tbls_name,
+                                "Failed(temporarily) to update tables: {:?}, the commit process of multi-table insert will be retried after {} ms, retrying {} times",
+                                update_failed_tbl_descriptions,
                                 duration.as_millis(),
                                 retries,
                             );
@@ -167,14 +200,16 @@ impl AsyncSink for CommitMultiTableInsert {
                             }
                         }
                         None => {
-                            return Err(ErrorCode::OCCRetryFailure(format!(
-                                "Can not fulfill the tx after retries({} times, {} ms), aborted. target table names {:?}",
+                            let err_msg = format!(
+                                "Can not fulfill the tx after retries({} times, {} ms), aborted. updated tables {:?}",
                                 retries,
                                 Instant::now()
                                     .duration_since(backoff.start_time)
                                     .as_millis(),
-                                update_failed_tbls_name,
-                            )));
+                                update_failed_tbl_descriptions,
+                            );
+                            error!("{}", err_msg);
+                            return Err(ErrorCode::OCCRetryFailure(err_msg));
                         }
                     }
                 }
