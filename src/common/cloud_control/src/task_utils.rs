@@ -93,10 +93,19 @@ pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
         }
     };
     return match schedule_type {
-        ScheduleType::IntervalType => Ok(format!(
-            "INTERVAL {} SECOND",
-            s.interval.unwrap_or_default(),
-        )),
+        ScheduleType::IntervalType => {
+            if s.milliseconds_interval.is_some() {
+                return Ok(format!(
+                    "INTERVAL {} SECOND {} MILLISECOND",
+                    s.interval.unwrap_or_default(),
+                    s.milliseconds_interval.unwrap_or_default(),
+                ));
+            }
+            Ok(format!(
+                "INTERVAL {} SECOND",
+                s.interval.unwrap_or_default(),
+            ))
+        }
         ScheduleType::CronType => {
             if s.cron.is_none() {
                 return Err(ErrorCode::IllegalCloudControlMessageFormat(

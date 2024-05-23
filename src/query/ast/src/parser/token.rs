@@ -964,6 +964,8 @@ pub enum TokenKind {
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]
     SECOND,
+    #[token("MILLISECOND", ignore(ascii_case))]
+    MILLISECOND,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
     #[token("PIVOT", ignore(ascii_case))]
