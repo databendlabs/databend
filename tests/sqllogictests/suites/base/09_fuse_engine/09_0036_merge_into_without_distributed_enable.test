@@ -144,7 +144,7 @@ select * from t1 order by a,b,c;
 2 b_1 c_1
 3 b_2 c_2
 
-statement error 1105
+statement error 1005
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
 query TTT
