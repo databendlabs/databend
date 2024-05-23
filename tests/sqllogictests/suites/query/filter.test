@@ -33,6 +33,21 @@ select a from t where a = 0 or 3 / a > 2 order by a
 statement ok
 drop table if exists t;
 
+# AND filter short circuit
+statement ok
+create table t(a varchar);
+
+statement ok
+insert into t values('null'), ('202405');
+
+query I
+SELECT count(1) FROM t WHERE a <> 'null' AND a IS NOT NULL AND to_date(a || '01', '%Y%m%d') > add_years(today(), - 100);
+----
+1
+
+statement ok
+drop table if exists t;
+
 # Boolean comparison
 statement ok
 drop table if exists t;
