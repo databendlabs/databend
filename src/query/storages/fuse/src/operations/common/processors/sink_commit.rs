@@ -455,6 +455,19 @@ where F: SnapshotGenerator + Send + 'static
                         for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
                             self.ctx.add_segment_location(segment_loc)?;
                         }
+
+                        let target_descriptions = {
+                            let table_info = self.table.get_table_info();
+                            let tbl = (&table_info.name, table_info.ident, &table_info.meta.engine);
+
+                            let stream_descriptions = self
+                                .update_stream_meta
+                                .iter()
+                                .map(|s| (s.stream_id, s.seq, "stream"))
+                                .collect::<Vec<_>>();
+                            (tbl, stream_descriptions)
+                        };
+                        info!("commit mutation success, targets {:?}", target_descriptions);
                         self.state = State::Finish;
                     }
                     Err(e) if self.is_error_recoverable(&e) => {
