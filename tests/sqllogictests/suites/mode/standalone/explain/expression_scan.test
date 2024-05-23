@@ -27,7 +27,7 @@ HashJoin
 ├── filters: []
 ├── cache index: 0
 ├── cache columns: [1]
-├── estimated rows: 0.00
+├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── output columns: [a (#0), b (#1)]
@@ -66,7 +66,7 @@ HashJoin
 ├── filters: []
 ├── cache index: 0
 ├── cache columns: [1, 2]
-├── estimated rows: 0.00
+├── estimated rows: 6.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── output columns: [a (#0), b (#1), c (#2)]
@@ -106,7 +106,7 @@ HashJoin
 ├── filters: []
 ├── cache index: 0
 ├── cache columns: [1, 2]
-├── estimated rows: 3.00
+├── estimated rows: 6.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── output columns: [a (#0), b (#1), c (#2)]
@@ -146,7 +146,7 @@ HashJoin
 ├── filters: []
 ├── cache index: 1
 ├── cache columns: [1, 2]
-├── estimated rows: 3.00
+├── estimated rows: 12.00
 ├── HashJoin(Build)
 │   ├── output columns: [c1 (#3), c2 (#4), t1.a (#0), t1.b (#1), t1.c (#2)]
 │   ├── join type: RIGHT OUTER
@@ -155,7 +155,7 @@ HashJoin
 │   ├── filters: []
 │   ├── cache index: 0
 │   ├── cache columns: [1, 2]
-│   ├── estimated rows: 3.00
+│   ├── estimated rows: 6.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t1
 │   │   ├── output columns: [a (#0), b (#1), c (#2)]
@@ -200,3 +200,69 @@ HashJoin
                 ├── output columns: [t1.c (#2), t1.b (#1)]
                 ├── cache index: 1
                 └── column indexes: [1, 2]
+
+query T
+explain select t1.a, v1.c1, v1.c2 from t1 inner join lateral (values('t1_b', t1.b), ('t1_c', t1.c)) as v1 ("c1", "c2") on t1.a = v1.c2 inner join lateral (values('t1_b', t1.b), ('t1_c', v1.c1)) as v2 ("c1", "c2") on t1.a = v2.c2;
+----
+HashJoin
+├── output columns: [c1 (#3), c2 (#4), t1.a (#0)]
+├── join type: INNER
+├── build keys: [CAST(t1.a (#0) AS Int64 NULL), b (#1), c1 (#3)]
+├── probe keys: [v2.c2 (#9), b (#11), c1 (#13)]
+├── filters: []
+├── cache index: 1
+├── cache columns: [1, 3]
+├── estimated rows: 12.00
+├── HashJoin(Build)
+│   ├── output columns: [c1 (#3), c2 (#4), t1.a (#0), t1.b (#1)]
+│   ├── join type: INNER
+│   ├── build keys: [t1.a (#0), b (#1), c (#2)]
+│   ├── probe keys: [v1.c2 (#4), b (#6), c (#7)]
+│   ├── filters: []
+│   ├── cache index: 0
+│   ├── cache columns: [1, 2]
+│   ├── estimated rows: 6.00
+│   ├── TableScan(Build)
+│   │   ├── table: default.default.t1
+│   │   ├── output columns: [a (#0), b (#1), c (#2)]
+│   │   ├── read rows: 3
+│   │   ├── read size: < 1 KiB
+│   │   ├── partitions total: 1
+│   │   ├── partitions scanned: 1
+│   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 3.00
+│   └── ExpressionScan(Probe)
+│       ├── output columns: [c1 (#3), c2 (#4), b (#6), c (#7)]
+│       ├── column 0: ['t1_b', t1.b (#1), t1.b (#1), t1.c (#2)]
+│       ├── column 1: ['t1_c', t1.c (#2), t1.b (#1), t1.c (#2)]
+│       └── AggregateFinal
+│           ├── output columns: [t1.c (#2), t1.b (#1)]
+│           ├── group by: [c, b]
+│           ├── aggregate functions: []
+│           ├── estimated rows: 0.00
+│           └── AggregatePartial
+│               ├── group by: [c, b]
+│               ├── aggregate functions: []
+│               ├── estimated rows: 0.00
+│               └── CacheScan
+│                   ├── output columns: [t1.c (#2), t1.b (#1)]
+│                   ├── cache index: 0
+│                   └── column indexes: [1, 2]
+└── ExpressionScan(Probe)
+    ├── output columns: [c1 (#8), c2 (#9), b (#11), c1 (#13)]
+    ├── column 0: ['t1_b', CAST(t1.b (#1) AS Int64 NULL), t1.b (#1), v1.c1 (#3)]
+    ├── column 1: ['t1_c', CAST(v1.c1 (#3) AS Int64 NULL), t1.b (#1), v1.c1 (#3)]
+    └── AggregateFinal
+        ├── output columns: [c1 (#3), t1.b (#1)]
+        ├── group by: [c1, b]
+        ├── aggregate functions: []
+        ├── estimated rows: 0.00
+        └── AggregatePartial
+            ├── group by: [c1, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 0.00
+            └── CacheScan
+                ├── output columns: [c1 (#3), t1.b (#1)]
+                ├── cache index: 1
+                └── column indexes: [1, 3]
