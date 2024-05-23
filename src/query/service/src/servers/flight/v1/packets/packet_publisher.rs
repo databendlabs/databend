@@ -19,6 +19,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
@@ -32,6 +34,10 @@ use serde::Serialize;
 
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::sessions::QueryContext;
+use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
@@ -132,11 +138,24 @@ pub struct QueryEnv {
 }
 
 impl QueryEnv {
-    pub async fn init(&self, cluster: Arc<Cluster>, timeout: u64) -> Result<()> {
+    pub async fn init(&self, ctx: &Arc<QueryContext>, timeout: u64) -> Result<()> {
         debug!("Dataflow diagram {:?}", self.dataflow_diagram);
 
+        let cluster = ctx.get_cluster();
         let mut message = HashMap::with_capacity(self.dataflow_diagram.node_count());
         for node in self.dataflow_diagram.node_weights() {
+            if node.id == GlobalConfig::instance().query.node_id {
+                if let Err(cause) = DataExchangeManager::instance()
+                    .init_query_env(self, ctx.clone())
+                    .await
+                {
+                    DataExchangeManager::instance().on_finished_query(&self.query_id);
+                    return Err(cause);
+                }
+
+                continue;
+            }
+
             message.insert(node.id.clone(), self.clone());
         }
 
@@ -144,5 +163,22 @@ impl QueryEnv {
             .do_action::<_, ()>(INIT_QUERY_ENV, message, timeout)
             .await?;
         Ok(())
+    }
+
+    pub fn create_query_ctx(&self) -> Result<Arc<QueryContext>> {
+        let session_manager = SessionManager::instance();
+
+        let session = session_manager.register_session(
+            session_manager.create_with_settings(SessionType::FlightRPC, self.settings.clone())?,
+        )?;
+
+        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
+            nodes: self.cluster.nodes.clone(),
+            local_id: GlobalConfig::instance().query.node_id.clone(),
+        }))?;
+
+        query_ctx.set_id(self.query_id.clone());
+
+        Ok(query_ctx)
     }
 }

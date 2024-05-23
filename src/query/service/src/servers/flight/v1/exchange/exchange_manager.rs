@@ -29,7 +29,6 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -73,8 +72,6 @@ use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 pub struct DataExchangeManager {
@@ -130,7 +127,7 @@ impl DataExchangeManager {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn init_query_env(&self, env: &QueryEnv) -> Result<()> {
+    pub async fn init_query_env(&self, env: &QueryEnv, ctx: Arc<QueryContext>) -> Result<()> {
         enum QueryExchange {
             Fragment {
                 source: String,
@@ -199,7 +196,7 @@ impl DataExchangeManager {
                     };
                 }
 
-                let mut query_info = Self::create_info(env)?;
+                let mut query_info = Self::create_info(ctx)?;
 
                 let query_id = env.query_id.clone();
                 query_info.remove_leak_query_worker =
@@ -263,24 +260,14 @@ impl DataExchangeManager {
         }
     }
 
-    fn create_info(env: &QueryEnv) -> Result<QueryInfo> {
-        let session_manager = SessionManager::instance();
-
-        let session =
-            session_manager.create_with_settings(SessionType::FlightRPC, env.settings.clone())?;
-        let session = session_manager.register_session(session)?;
-
-        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
-            nodes: env.cluster.nodes.clone(),
-            local_id: GlobalConfig::instance().query.node_id.clone(),
-        }))?;
-        query_ctx.set_id(env.query_id.clone());
+    fn create_info(query_ctx: Arc<QueryContext>) -> Result<QueryInfo> {
+        let query_id = query_ctx.get_id();
 
         Ok(QueryInfo {
+            query_id,
             query_ctx,
             query_executor: None,
             remove_leak_query_worker: None,
-            query_id: env.query_id.clone(),
             started: AtomicBool::new(false),
             current_executor: GlobalConfig::instance().query.node_id.clone(),
         })
@@ -418,7 +405,7 @@ impl DataExchangeManager {
 
         // Initialize query env between cluster nodes
         let query_env = actions.get_query_env()?;
-        query_env.init(ctx.get_cluster(), timeout).await?;
+        query_env.init(&ctx, timeout).await?;
 
         // Submit distributed tasks to all nodes.
         let cluster = ctx.get_cluster();
