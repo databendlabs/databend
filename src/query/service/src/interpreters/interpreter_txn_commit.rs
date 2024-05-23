@@ -18,6 +18,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_txn::TxnManagerRef;
+use log::error;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -55,15 +57,51 @@ impl Interpreter for CommitInterpreter {
         let is_active = self.ctx.txn_mgr().lock().is_active();
         if is_active {
             let catalog = self.ctx.get_default_catalog()?;
+
             let req = self.ctx.txn_mgr().lock().req();
-            let mismatched_tids = catalog.update_multi_table_meta(req).await?;
+
+            let update_summary = {
+                let table_descriptions = req
+                    .update_table_metas
+                    .iter()
+                    .map(|req| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
+                    .collect::<Vec<_>>();
+                let stream_descriptions = req
+                    .update_stream_metas
+                    .iter()
+                    .map(|s| (s.stream_id, s.seq, "stream"))
+                    .collect::<Vec<_>>();
+                (table_descriptions, stream_descriptions)
+            };
+
+            let mismatched_tids = {
+                let ret = catalog.update_multi_table_meta(req).await;
+                if let Err(ref e) = ret {
+                    // other errors may occur, especially the version mismatch of streams,
+                    // let's log it here for the convenience of diagnostics
+                    error!(
+                        "Non-recoverable fault occurred during updating tables. {}",
+                        e
+                    );
+                }
+                ret?
+            };
+
             match &mismatched_tids {
-                Ok(_) => {}
+                Ok(_) => {
+                    info!(
+                        "COMMIT: Commit explicit transaction success, targets updated {:?}",
+                        update_summary
+                    );
+                }
                 Err(e) => {
-                    return Err(ErrorCode::TableVersionMismatched(format!(
-                        "Table version mismatched in multi statement transaction, tids: {:?}",
-                        e.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
-                    )));
+                    let err_msg = format!(
+                        "COMMIT: Table versions mismatched in multi statement transaction, conflict tables: {:?}",
+                        e.iter()
+                            .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
+                            .collect::<Vec<_>>()
+                    );
+                    return Err(ErrorCode::TableVersionMismatched(err_msg));
                 }
             }
             let need_purge_files = self.ctx.txn_mgr().lock().need_purge_files();

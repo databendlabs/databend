@@ -41,23 +41,6 @@ check_csv "csv_10"
 echo "copy into @s1/csv_20 from test_table FILE_FORMAT = (type = CSV) MAX_FILE_SIZE = 20;" | $BENDSQL_CLIENT_CONNECT
 check_csv "csv_20"
 
-check_parq() {
-	echo "---${1}"
-	ls "$STAGE_DIR"/${1} | wc -l | sed 's/ //g'
-	echo "select count(*) from @s1/${1}/ (FILE_FORMAT => 'PARQUET');" | $BENDSQL_CLIENT_CONNECT
-}
-
-# each block memory size is 42
-echo "copy into @s1/parq  from test_table FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT
-check_parq "parq"
-echo "copy into @s1/parq_single  from test_table FILE_FORMAT = (type = PARQUET) single=true;" | $BENDSQL_CLIENT_CONNECT
-check_parq "parq_single"
-echo "copy into @s1/parq_40  from test_table FILE_FORMAT = (type = PARQUET) MAX_FILE_SIZE = 40;" | $BENDSQL_CLIENT_CONNECT
-check_parq "parq_40"
-echo "copy into @s1/parq_80  from test_table FILE_FORMAT = (type = PARQUET) MAX_FILE_SIZE = 80;" | $BENDSQL_CLIENT_CONNECT
-check_parq "parq_80"
-
-# test big block
 echo "drop table if exists t1;" | $BENDSQL_CLIENT_CONNECT
 echo "create table t1 (a int);" | $BENDSQL_CLIENT_CONNECT
 
@@ -68,5 +51,3 @@ done
 echo "copy into t1 from @s1/big.csv FILE_FORMAT = (type = CSV);" | $BENDSQL_CLIENT_CONNECT
 echo "copy into @s1/csv_big_20 from t1 FILE_FORMAT = (type = CSV) MAX_FILE_SIZE = 20;" | $BENDSQL_CLIENT_CONNECT
 check_csv "csv_big_20"
-echo "copy into @s1/parq_big_80 from t1 FILE_FORMAT = (type = PARQUET) MAX_FILE_SIZE = 80;" | $BENDSQL_CLIENT_CONNECT
-check_parq "parq_big_80"

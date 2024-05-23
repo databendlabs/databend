@@ -16,15 +16,15 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
-use std::sync::Arc;
 
+use crate::sm_v002::leveled_store::immutable::Immutable;
+use crate::sm_v002::leveled_store::immutable_levels::ImmutableLevels;
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::KVResultStream;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::marked::Marked;
 
 /// A readonly leveled map that does not not own the data.
@@ -34,26 +34,31 @@ pub struct Ref<'d> {
     writable: Option<&'d Level>,
 
     /// The immutable levels.
-    frozen: &'d StaticLevels,
+    immutable_levels: &'d ImmutableLevels,
 }
 
 impl<'d> Ref<'d> {
     pub(in crate::sm_v002) fn new(
         writable: Option<&'d Level>,
-        frozen: &'d StaticLevels,
+        immutable_levels: &'d ImmutableLevels,
     ) -> Ref<'d> {
-        Self { writable, frozen }
+        Self {
+            writable,
+            immutable_levels,
+        }
     }
 
     /// Return an iterator of all levels in reverse order.
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d Level> + 'd {
-        self.writable.into_iter().chain(self.frozen.iter_levels())
+        self.writable
+            .into_iter()
+            .chain(self.immutable_levels.iter_levels())
     }
 
     pub(in crate::sm_v002) fn iter_shared_levels(
         &self,
-    ) -> (Option<&Level>, impl Iterator<Item = &Arc<Level>>) {
-        (self.writable, self.frozen.iter_arc_levels())
+    ) -> (Option<&Level>, impl Iterator<Item = &Immutable>) {
+        (self.writable, self.immutable_levels.iter_immutable_levels())
     }
 }
 
@@ -62,7 +67,7 @@ impl<'d, K> MapApiRO<K> for Ref<'d>
 where
     K: MapKey + fmt::Debug,
     Level: MapApiRO<K>,
-    Arc<Level>: MapApiRO<K>,
+    Immutable: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where

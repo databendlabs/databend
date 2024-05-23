@@ -15,10 +15,11 @@
 use std::borrow::Borrow;
 use std::io;
 use std::ops::RangeBounds;
-use std::sync::Arc;
 
 use databend_common_meta_types::KVMeta;
 
+use crate::sm_v002::leveled_store::immutable::Immutable;
+use crate::sm_v002::leveled_store::immutable_levels::ImmutableLevels;
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
@@ -29,7 +30,6 @@ use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::map_api::MarkedOf;
 use crate::sm_v002::leveled_store::map_api::Transition;
 use crate::sm_v002::leveled_store::ref_::Ref;
-use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::marked::Marked;
 
 /// A writable leveled map that does not not own the data.
@@ -39,30 +39,39 @@ pub struct RefMut<'d> {
     writable: &'d mut Level,
 
     /// The immutable levels.
-    frozen: &'d StaticLevels,
+    immutable_levels: &'d ImmutableLevels,
 }
 
 impl<'d> RefMut<'d> {
-    pub(in crate::sm_v002) fn new(writable: &'d mut Level, frozen: &'d StaticLevels) -> Self {
-        Self { writable, frozen }
+    pub(in crate::sm_v002) fn new(
+        writable: &'d mut Level,
+        immutable_levels: &'d ImmutableLevels,
+    ) -> Self {
+        Self {
+            writable,
+            immutable_levels,
+        }
     }
 
     #[allow(dead_code)]
     pub(in crate::sm_v002) fn to_ref(&self) -> Ref {
-        Ref::new(Some(&*self.writable), self.frozen)
+        Ref::new(Some(&*self.writable), self.immutable_levels)
     }
 
     /// Return an iterator of all levels in new-to-old order.
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'_ Level> + '_ {
         [&*self.writable]
             .into_iter()
-            .chain(self.frozen.iter_levels())
+            .chain(self.immutable_levels.iter_levels())
     }
 
     pub(in crate::sm_v002) fn iter_shared_levels(
         &self,
-    ) -> (Option<&Level>, impl Iterator<Item = &Arc<Level>>) {
-        (Some(self.writable), self.frozen.iter_arc_levels())
+    ) -> (Option<&Level>, impl Iterator<Item = &Immutable>) {
+        (
+            Some(self.writable),
+            self.immutable_levels.iter_immutable_levels(),
+        )
     }
 }
 
@@ -73,7 +82,7 @@ impl<'d, K> MapApiRO<K> for RefMut<'d>
 where
     K: MapKey,
     Level: MapApiRO<K>,
-    Arc<Level>: MapApiRO<K>,
+    Immutable: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
@@ -96,7 +105,7 @@ impl<'d, K> MapApi<K> for RefMut<'d>
 where
     K: MapKey,
     Level: MapApi<K>,
-    Arc<Level>: MapApiRO<K>,
+    Immutable: MapApiRO<K>,
 {
     async fn set(
         &mut self,

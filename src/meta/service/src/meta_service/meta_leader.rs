@@ -14,6 +14,7 @@
 
 use std::collections::BTreeSet;
 
+use anyerror::AnyError;
 use databend_common_base::base::tokio::sync::RwLockReadGuard;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -218,6 +219,16 @@ impl<'a> MetaLeader<'a> {
     #[minitrace::trace]
     pub async fn leave(&self, req: LeaveRequest) -> Result<(), MetaOperationError> {
         let node_id = req.node_id;
+
+        if node_id == self.sto.id {
+            return Err(MetaOperationError::DataError(MetaDataError::ReadError(
+                MetaDataReadError::new(
+                    "leave",
+                    format!("can not leave id={} via itself", node_id),
+                    &AnyError::error("leave-via-self"),
+                ),
+            )));
+        }
 
         let can_res = self
             .can_leave(node_id)
