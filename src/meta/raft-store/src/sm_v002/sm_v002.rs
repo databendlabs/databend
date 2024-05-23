@@ -424,13 +424,13 @@ impl SMV002 {
     pub fn replace_frozen(&mut self, snapshot: &SnapshotViewV002) {
         assert!(
             Arc::ptr_eq(
-                self.levels.frozen_ref().newest().unwrap(),
-                snapshot.original_ref().newest().unwrap()
+                self.levels.immutable_levels_ref().newest().unwrap().inner(),
+                snapshot.original_ref().newest().unwrap().inner()
             ),
             "the frozen must not change"
         );
 
-        self.levels.replace_frozen(snapshot.compacted());
+        self.levels.replace_immutable_levels(snapshot.compacted());
     }
 
     /// It returns 2 entries: the previous one and the new one after upsert.

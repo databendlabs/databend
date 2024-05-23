@@ -223,9 +223,9 @@ where
 /// There could be tombstone entries: [`Marked::TombStone`].
 ///
 /// The `TOP` is the type of the top level.
-/// The `L` is the type of frozen levels.
+/// The `L` is the type of immutable levels.
 ///
-/// Because the top level is very likely to be a different type from the frozen levels, i.e., it is writable.
+/// Because the top level is very likely to be a different type from the immutable levels, i.e., it is writable.
 pub(in crate::sm_v002) async fn compacted_range<'d, K, R, L, TOP>(
     range: R,
     top: Option<&'d TOP>,
@@ -257,10 +257,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
 
     use futures_util::TryStreamExt;
 
+    use crate::sm_v002::leveled_store::immutable::Immutable;
     use crate::sm_v002::leveled_store::level::Level;
     use crate::sm_v002::leveled_store::map_api::compacted_get;
     use crate::sm_v002::leveled_store::map_api::compacted_range;
@@ -301,12 +301,12 @@ mod tests {
         let mut l0 = Level::default();
         l0.set(s("a"), Some((b("a"), None))).await?;
         l0.set(s("b"), Some((b("b"), None))).await?;
-        let l0 = Arc::new(l0);
+        let l0 = Immutable::new_from_level(l0);
 
         let mut l1 = l0.new_level();
         l1.set(s("a"), None).await?;
         l1.set(s("c"), None).await?;
-        let l1 = Arc::new(l1);
+        let l1 = Immutable::new_from_level(l1);
 
         let mut l2 = l1.new_level();
         l2.set(s("b"), Some((b("b2"), None))).await?;
