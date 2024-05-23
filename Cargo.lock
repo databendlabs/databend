@@ -4170,6 +4170,7 @@ dependencies = [
 name = "databend-common-storages-stage"
 version = "0.1.0"
 dependencies = [
+ "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
  "bstr 1.9.1",
@@ -4190,10 +4191,12 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "databend-storages-common-table-meta",
  "enum-as-inner 0.6.0",
  "futures",
  "log",
  "opendal",
+ "parquet",
  "serde",
  "serde_json",
  "typetag",
