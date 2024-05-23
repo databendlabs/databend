@@ -24,6 +24,8 @@ use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_expression::converts::datavalues::scalar_to_datavalue;
 use databend_common_expression::eval_function;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MapType;
@@ -37,6 +39,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
@@ -49,6 +52,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
 use parquet::format::FileMetaData;
 
@@ -334,8 +338,12 @@ impl BloomIndex {
         &self,
         mut expr: Expr<String>,
         scalar_map: &HashMap<Scalar, u64>,
+        column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
     ) -> Result<FilterEvalResult> {
+        let mut new_col_id = 1;
+        let mut domains = ConstantFolder::full_input_domains(&expr);
+
         visit_expr_column_eq_constant(
             &mut expr,
             &mut |span, col_name, scalar, ty, return_type| {
@@ -344,13 +352,40 @@ impl BloomIndex {
                     data_schema.field_with_name(col_name)?,
                 )?;
 
-                // If the column doesn't contain the constant, we rewrite the expression to `false`.
+                // If the column doesn't contain the constant,
+                // we rewrite the expression to a new column with `false` domain.
                 if self.find(filter_column, scalar, ty, scalar_map)? == FilterEvalResult::MustFalse
                 {
-                    Ok(Some(Expr::Constant {
+                    let new_col_name = format!("__bloom_column_{}_{}", col_name, new_col_id);
+                    new_col_id += 1;
+
+                    let bool_domain = Domain::Boolean(BooleanDomain {
+                        has_false: true,
+                        has_true: false,
+                    });
+                    let new_domain = if return_type.is_nullable() {
+                        // generate `has_null` based on the `null_count` in column statistics.
+                        let has_null = match data_schema.column_id_of(col_name) {
+                            Ok(col_id) => match column_stats.get(&col_id) {
+                                Some(stat) => stat.null_count > 0,
+                                None => true,
+                            },
+                            Err(_) => true,
+                        };
+                        Domain::Nullable(NullableDomain {
+                            has_null,
+                            value: Some(Box::new(bool_domain)),
+                        })
+                    } else {
+                        bool_domain
+                    };
+                    domains.insert(new_col_name.clone(), new_domain);
+
+                    Ok(Some(Expr::ColumnRef {
                         span,
-                        scalar: Scalar::Boolean(false),
+                        id: new_col_name.clone(),
                         data_type: return_type.clone(),
+                        display_name: new_col_name,
                     }))
                 } else {
                     Ok(None)
@@ -358,7 +393,8 @@ impl BloomIndex {
             },
         )?;
 
-        let (new_expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (new_expr, _) =
+            ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         match new_expr {
             Expr::Constant {
@@ -652,12 +688,7 @@ fn visit_expr_column_eq_constant(
         Expr::Cast { expr, .. } => {
             visit_expr_column_eq_constant(expr, visitor)?;
         }
-        Expr::FunctionCall { id, args, .. } => {
-            // Ignore the `not`, `is_null` and `is_not_null` functions,
-            // as the return values of these functions may lead to incorrect results.
-            if id.name() == "not" || id.name() == "is_null" || id.name() == "is_not_null" {
-                return Ok(());
-            }
+        Expr::FunctionCall { args, .. } => {
             for arg in args.iter_mut() {
                 visit_expr_column_eq_constant(arg, visitor)?;
             }

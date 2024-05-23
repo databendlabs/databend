@@ -49,6 +49,7 @@ use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
 
 #[test]
@@ -422,8 +423,10 @@ fn eval_index(
             scalar_map.insert(scalar.clone(), digest);
         }
     }
-
-    index.apply(expr, &scalar_map, schema).unwrap()
+    let column_stats = StatisticsOfColumns::new();
+    index
+        .apply(expr, &scalar_map, &column_stats, schema)
+        .unwrap()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -467,8 +470,9 @@ fn eval_map_index(
         data_type: ty,
     };
 
-    let expr =
+    let eq_expr =
         check_function(None, "eq", &[], &[get_expr, const_expr], &BUILTIN_FUNCTIONS).unwrap();
+    let expr = check_function(None, "is_true", &[], &[eq_expr], &BUILTIN_FUNCTIONS).unwrap();
 
     let (expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
     let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
@@ -480,8 +484,10 @@ fn eval_map_index(
             scalar_map.insert(scalar.clone(), digest);
         }
     }
-
-    index.apply(expr, &scalar_map, schema).unwrap()
+    let column_stats = StatisticsOfColumns::new();
+    index
+        .apply(expr, &scalar_map, &column_stats, schema)
+        .unwrap()
 }
 
 fn bloom_columns_map(
