@@ -235,6 +235,8 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             Ok(Plan::CopyIntoTable(plan))
         }
         Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan).await,
+        // Leiyu said: Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
+        // But I think it's ready now
         Plan::Insert(mut plan) => {
             match plan.source {
                 InsertInputSource::SelectPlan(p) => {
@@ -249,6 +251,24 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             Ok(Plan::Insert(plan))
         }
+        Plan::InsertMultiTable(mut plan) => {
+            plan.input_source = optimize(opt_ctx.clone(), plan.input_source.clone()).await?;
+            Ok(Plan::InsertMultiTable(plan))
+        }
+        Plan::Replace(mut plan) => {
+            match plan.source {
+                InsertInputSource::SelectPlan(p) => {
+                    let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                    plan.source = InsertInputSource::SelectPlan(Box::new(optimized_plan));
+                }
+                InsertInputSource::Stage(p) => {
+                    let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                    plan.source = InsertInputSource::Stage(Box::new(optimized_plan));
+                }
+                _ => {}
+            }
+            Ok(Plan::Replace(plan))
+        }
         Plan::CreateTable(mut plan) => {
             if let Some(p) = &plan.as_select {
                 let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
@@ -256,6 +276,10 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
 
             Ok(Plan::CreateTable(plan))
+        }
+        Plan::RefreshIndex(mut plan) => {
+            plan.query_plan = Box::new(optimize(opt_ctx.clone(), *plan.query_plan.clone()).await?);
+            Ok(Plan::RefreshIndex(plan))
         }
         // Pass through statements.
         _ => Ok(plan),

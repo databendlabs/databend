@@ -46,8 +46,6 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::binder::Binder;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::DropIndexPlan;
@@ -350,9 +348,7 @@ impl Binder {
 
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
-            let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
-            Ok(optimize(opt_ctx, select_plan).await?)
+            self.bind_statement(bind_context, &stmt).await
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };
