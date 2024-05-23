@@ -108,8 +108,9 @@ impl SortAndLimitPushDownOptimizer {
         let exchange_sexpr = s_expr.child(0)?;
         debug_assert!(matches!(
             exchange_sexpr.plan.as_ref(),
-            RelOperator::Exchange(Exchange::Merge)
+            RelOperator::Exchange(Exchange::Merge) | RelOperator::Exchange(Exchange::MergeSort)
         ));
+
         debug_assert!(exchange_sexpr.children.len() == 1);
         let exchange_sexpr = exchange_sexpr.replace_plan(Arc::new(Exchange::MergeSort.into()));
 
