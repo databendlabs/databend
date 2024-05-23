@@ -470,8 +470,9 @@ fn eval_map_index(
         data_type: ty,
     };
 
-    let expr =
+    let eq_expr =
         check_function(None, "eq", &[], &[get_expr, const_expr], &BUILTIN_FUNCTIONS).unwrap();
+    let expr = check_function(None, "is_true", &[], &[eq_expr], &BUILTIN_FUNCTIONS).unwrap();
 
     let (expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
     let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
