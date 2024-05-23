@@ -66,4 +66,3 @@ jobs:
         timeout-minutes: 10
         env:
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
-
