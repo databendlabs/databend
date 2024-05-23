@@ -279,6 +279,9 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             Ok(Plan::CreateTable(plan))
         }
         Plan::RefreshIndex(mut plan) => {
+            // use fresh index
+            let opt_ctx =
+                OptimizerContext::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone());
             plan.query_plan = Box::new(optimize(opt_ctx.clone(), *plan.query_plan.clone()).await?);
             Ok(Plan::RefreshIndex(plan))
         }
