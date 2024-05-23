@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::WindowDefinition;
 use databend_common_ast::ast::WindowSpec;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 
 use super::select::SelectList;
 use crate::binder::ColumnBinding;

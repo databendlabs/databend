@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Span;
-
 use crate::ast::*;
+use crate::Span;
 
 #[deprecated = "Use derive_visitor::VisitorMut instead"]
 pub trait VisitorMut: Sized {

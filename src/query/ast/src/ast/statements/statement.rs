@@ -15,13 +15,13 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_io::escape_string_with_quote;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::task::CreateTaskStmt;
@@ -592,7 +592,7 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " '{}'", escape_string_with_quote(role, Some('\'')))?;
+                write!(f, " {}", QuotedString(role, '\''))?;
             }
             Statement::DropRole {
                 if_exists,

@@ -15,12 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::merge_span;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-use databend_common_exception::Span;
-use databend_common_io::display_decimal_256;
-use databend_common_io::escape_string_with_quote;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use enum_as_inner::EnumAsInner;
@@ -30,10 +24,16 @@ use pratt::Precedence;
 
 use super::ColumnRef;
 use super::OrderByExpr;
+use crate::ast::display_decimal_256;
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::parser::expr::ExprElement;
+use crate::span::merge_span;
+use crate::ParseError;
+use crate::Result;
+use crate::Span;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Expr {
@@ -819,7 +819,7 @@ impl Display for Literal {
                 write!(f, "{val}")
             }
             Literal::String(val) => {
-                write!(f, "\'{}\'", escape_string_with_quote(val, Some('\'')))
+                write!(f, "{}", QuotedString(val, '\''))
             }
             Literal::Boolean(val) => {
                 if *val {
@@ -1265,9 +1265,10 @@ impl BinaryOperator {
             BinaryOperator::Lte => Ok(BinaryOperator::Gt),
             BinaryOperator::Eq => Ok(BinaryOperator::NotEq),
             BinaryOperator::NotEq => Ok(BinaryOperator::Eq),
-            _ => Err(ErrorCode::Unimplemented(format!(
-                "Converting {self} to its contrary is not currently supported"
-            ))),
+            _ => Err(ParseError(
+                None,
+                format!("Converting {self} to its contrary is not currently supported"),
+            )),
         }
     }
 
