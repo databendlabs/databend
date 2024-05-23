@@ -16,6 +16,7 @@ ignored = ["xorfilter-rs", "match-template"]
 
 [dependencies]
 databend-common-arrow = { path = "../../../../common/arrow" }
+databend-common-ast = { path = "../../../ast" }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-expression = { path = "../../../expression" }
 databend-common-functions = { path = "../../../functions" }
@@ -25,6 +26,7 @@ databend-storages-common-table-meta = { path = "../table_meta" }
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
 crc32fast = "1.3.2"
+jsonb = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 minitrace = { workspace = true }

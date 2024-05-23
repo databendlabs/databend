@@ -32,9 +32,9 @@ use databend_common_grpc::DNSResolver;
 use databend_common_meta_client::reply_to_api_result;
 use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
@@ -115,7 +115,7 @@ pub struct MetaNodeStatus {
     pub db_size: u64,
 
     /// key number of current snapshot
-    pub key_num: usize,
+    pub key_num: u64,
 
     /// Server state, one of "Follower", "Learner", "Candidate", "Leader".
     pub state: String,
@@ -507,11 +507,9 @@ impl MetaNode {
                 let mm = metrics_rx.borrow().clone();
 
                 // Report metrics about server state and role.
-
                 server_metrics::set_node_is_health(
                     mm.state == ServerState::Follower || mm.state == ServerState::Leader,
                 );
-
                 if mm.current_leader.is_some() && mm.current_leader != last_leader {
                     server_metrics::incr_leader_change();
                 }
@@ -519,11 +517,14 @@ impl MetaNode {
                 server_metrics::set_is_leader(mm.current_leader == Some(meta_node.sto.id));
 
                 // metrics about raft log and state machine.
-
                 server_metrics::set_current_term(mm.current_term);
                 server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
                 server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
                 server_metrics::set_last_seq(meta_node.get_last_seq().await);
+
+                // metrics about server storage
+                server_metrics::set_db_size(meta_node.get_db_size().unwrap_or_default());
+                server_metrics::set_snapshot_key_num(meta_node.get_key_num().await);
 
                 last_leader = mm.current_leader;
             }
@@ -606,6 +607,11 @@ impl MetaNode {
                         return Ok(true);
                     } else {
                         error!("leaving cluster via {} fail: {:?}", addr, reply.error);
+                        errors.push(
+                            AnyError::error(reply.error).add_context(|| {
+                                format!("leave {} via: {}", leave_id, addr.clone())
+                            }),
+                        );
                     }
                 }
                 Err(s) => {
@@ -895,6 +901,22 @@ impl MetaNode {
         nodes
     }
 
+    fn get_db_size(&self) -> Result<u64, MetaError> {
+        self.sto.db.size_on_disk().map_err(|e| {
+            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
+            MetaError::StorageError(se)
+        })
+    }
+
+    async fn get_key_num(&self) -> u64 {
+        let snapshot_info = self.sto.try_get_snapshot_info().await;
+        if let Some((id, _)) = snapshot_info {
+            id.key_num.unwrap_or_default()
+        } else {
+            0
+        }
+    }
+
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
         let voters = self
             .sto
@@ -908,12 +930,8 @@ impl MetaNode {
 
         let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
 
-        let db_size = self.sto.db.size_on_disk().map_err(|e| {
-            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
-            MetaError::StorageError(se)
-        })?;
-
-        let key_num = self.sto.key_num().await.map_or(0, |num| num);
+        let db_size = self.get_db_size()?;
+        let key_num = self.get_key_num().await;
 
         let metrics = self.raft.metrics().borrow().clone();
 

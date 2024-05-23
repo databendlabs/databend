@@ -29,17 +29,40 @@ pub struct MetaSnapshotId {
     ///
     /// It is rare but possible a snapshot is built more than once with the same `last_applied`.
     pub uniq: u64,
+
+    /// Optionally embed number of keys in snapshot id.
+    ///
+    /// When encoding a snapshot id to string, the key_num must be appended to the end of the string,
+    /// in order to keep alphabetical order.
+    pub key_num: Option<u64>,
 }
 
 impl MetaSnapshotId {
     pub fn new(last_applied: Option<LogId>, uniq: u64) -> Self {
-        Self { last_applied, uniq }
+        Self {
+            last_applied,
+            uniq,
+            key_num: None,
+        }
     }
 
     /// Create a new snapshot id with current time as `uniq` index.
     pub fn new_with_epoch(last_applied: Option<LogId>) -> Self {
+        // Avoid dup
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
         let uniq = Self::epoch_millis();
-        Self { last_applied, uniq }
+        Self {
+            last_applied,
+            uniq,
+            key_num: None,
+        }
+    }
+
+    /// Add key num to the snapshot id
+    pub fn with_key_num(mut self, n: Option<u64>) -> Self {
+        self.key_num = n;
+        self
     }
 
     fn epoch_millis() -> u64 {
@@ -65,6 +88,7 @@ impl FromStr for MetaSnapshotId {
         let node_id = segs.next().ok_or_else(invalid)?;
         let log_index = segs.next().ok_or_else(invalid)?;
         let snapshot_index = segs.next().ok_or_else(invalid)?;
+        let key_num = segs.next();
 
         if segs.next().is_some() {
             return Err(invalid());
@@ -85,19 +109,37 @@ impl FromStr for MetaSnapshotId {
 
         let snapshot_index = snapshot_index.parse::<u64>().map_err(|_e| invalid())?;
 
+        let key_num = if let Some(num) = key_num {
+            if let Some(stripped) = num.strip_prefix('k') {
+                let n = stripped.parse::<u64>().map_err(|_e| invalid())?;
+                Some(n)
+            } else {
+                return Err(format!("{}: key_num must be in form `k01234`", invalid()));
+            }
+        } else {
+            None
+        };
+
         Ok(Self {
             last_applied: log_id,
             uniq: snapshot_index,
+            key_num,
         })
     }
 }
 
 impl ToString for MetaSnapshotId {
     fn to_string(&self) -> String {
-        if let Some(last) = self.last_applied {
+        let a = if let Some(last) = self.last_applied {
             format!("{}-{}-{}", last.leader_id, last.index, self.uniq)
         } else {
             format!("---{}", self.uniq)
+        };
+
+        if let Some(n) = self.key_num {
+            format!("{}-k{}", a, n)
+        } else {
+            a
         }
     }
 }
@@ -112,20 +154,8 @@ mod tests {
 
     #[test]
     fn test_meta_snapshot_id() -> anyhow::Result<()> {
-        assert_eq!("---5", MetaSnapshotId::new(None, 5).to_string());
-        assert_eq!(
-            "1-8-2-5",
-            MetaSnapshotId::new(Some(new_log_id(1, 8, 2)), 5).to_string()
-        );
-
-        assert_eq!(
-            Ok(MetaSnapshotId::new(None, 5)),
-            MetaSnapshotId::from_str("---5")
-        );
-        assert_eq!(
-            Ok(MetaSnapshotId::new(Some(new_log_id(1, 8, 2)), 5)),
-            MetaSnapshotId::from_str("1-8-2-5")
-        );
+        test_codec(MetaSnapshotId::new(None, 5), "---5");
+        test_codec(MetaSnapshotId::new(Some(new_log_id(1, 8, 2)), 5), "1-8-2-5");
 
         assert!(MetaSnapshotId::from_str("").is_err());
         assert!(MetaSnapshotId::from_str("-").is_err());
@@ -140,5 +170,39 @@ mod tests {
         assert!(MetaSnapshotId::from_str("1-1-1-x").is_err());
 
         Ok(())
+    }
+
+    #[test]
+    fn test_meta_snapshot_id_with_key_num() -> anyhow::Result<()> {
+        test_codec(
+            MetaSnapshotId::new(None, 5).with_key_num(Some(3)),
+            "---5-k3",
+        );
+        test_codec(
+            MetaSnapshotId::new(Some(new_log_id(1, 8, 2)), 5).with_key_num(Some(333)),
+            "1-8-2-5-k333",
+        );
+
+        assert!(
+            MetaSnapshotId::from_str("1-1-1-1-").is_err(),
+            "invalid key_num"
+        );
+        assert!(
+            MetaSnapshotId::from_str("1-1-1-1-123").is_err(),
+            "invalid key_num"
+        );
+        assert!(
+            MetaSnapshotId::from_str("1-1-1-1-k123").is_ok(),
+            "valid key_num"
+        );
+        Ok(())
+    }
+
+    fn test_codec(id: MetaSnapshotId, id_str: &str) {
+        let got_str = id.to_string();
+        assert_eq!(id_str, got_str);
+
+        let id2 = MetaSnapshotId::from_str(&got_str).unwrap();
+        assert_eq!(id, id2);
     }
 }

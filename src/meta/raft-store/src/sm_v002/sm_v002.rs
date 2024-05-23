@@ -47,17 +47,16 @@ use openraft::RaftLogId;
 use tokio::sync::RwLock;
 
 use crate::applier::Applier;
-use crate::key_spaces::RaftStoreEntry;
-use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
-use crate::sm_v002::leveled_store::map_api::AsMap;
-use crate::sm_v002::leveled_store::map_api::MapApi;
-use crate::sm_v002::leveled_store::map_api::MapApiExt;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::map_api::ResultStream;
-use crate::sm_v002::leveled_store::sys_data::SysData;
-use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
-use crate::sm_v002::marked::Marked;
+use crate::key_spaces::SMEntry;
+use crate::leveled_store::leveled_map::LeveledMap;
+use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::map_api::MapApi;
+use crate::leveled_store::map_api::MapApiExt;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::ResultStream;
+use crate::leveled_store::sys_data::SysData;
+use crate::leveled_store::sys_data_api::SysDataApiRO;
+use crate::marked::Marked;
 use crate::sm_v002::sm_v002;
 use crate::sm_v002::Importer;
 use crate::sm_v002::SnapshotViewV002;
@@ -165,7 +164,7 @@ impl SMV002 {
 
             let import_th = databend_common_base::runtime::Thread::spawn(move || {
                 while let Some(res) = rx.recv() {
-                    let entries: Result<Vec<RaftStoreEntry>, io::Error> =
+                    let entries: Result<Vec<SMEntry>, io::Error> =
                         res.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
                     let entries = entries?;
@@ -244,16 +243,6 @@ impl SMV002 {
         );
 
         Ok(())
-    }
-
-    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<Level, io::Error> {
-        let mut importer = Self::new_importer();
-
-        for ent in data {
-            importer.import(ent)?;
-        }
-
-        Ok(importer.commit())
     }
 
     pub fn new_importer() -> Importer {
@@ -424,13 +413,13 @@ impl SMV002 {
     pub fn replace_frozen(&mut self, snapshot: &SnapshotViewV002) {
         assert!(
             Arc::ptr_eq(
-                self.levels.frozen_ref().newest().unwrap(),
-                snapshot.original_ref().newest().unwrap()
+                self.levels.immutable_levels_ref().newest().unwrap().inner(),
+                snapshot.original_ref().newest().unwrap().inner()
             ),
             "the frozen must not change"
         );
 
-        self.levels.replace_frozen(snapshot.compacted());
+        self.levels.replace_immutable_levels(snapshot.compacted());
     }
 
     /// It returns 2 entries: the previous one and the new one after upsert.
@@ -515,12 +504,12 @@ struct Deserializer;
 
 impl ordq::Work for Deserializer {
     type I = Vec<String>;
-    type O = Result<Vec<RaftStoreEntry>, io::Error>;
+    type O = Result<Vec<SMEntry>, io::Error>;
 
     fn run(&mut self, strings: Self::I) -> Self::O {
         let mut res = Vec::with_capacity(strings.len());
         for s in strings {
-            let ent: RaftStoreEntry = serde_json::from_str(&s)
+            let ent: SMEntry = serde_json::from_str(&s)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             res.push(ent);
         }

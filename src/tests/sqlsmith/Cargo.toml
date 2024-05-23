@@ -9,9 +9,9 @@ edition = { workspace = true }
 [dependencies]
 chrono-tz = { workspace = true }
 clap = { workspace = true }
-databend-client = "0.18"
-databend-driver = "0.18"
-databend-sql = "0.18"
+databend-client = "0.18.1"
+databend-driver = "0.18.1"
+databend-sql = "0.18.1"
 ethnum = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
@@ -23,7 +23,6 @@ tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
 
 databend-common-ast = { path = "../../query/ast" }
-databend-common-exception = { path = "../../common/exception" }
 databend-common-expression = { path = "../../query/expression" }
 databend-common-formats = { path = "../../query/formats" }
 databend-common-functions = { path = "../../query/functions" }

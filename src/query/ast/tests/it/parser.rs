@@ -919,7 +919,7 @@ fn test_statement_error() {
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
-        writeln!(file, "{}", err.message()).unwrap();
+        writeln!(file, "{}", err.1).unwrap();
     }
 }
 

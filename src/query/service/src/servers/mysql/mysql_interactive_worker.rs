@@ -226,6 +226,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             let mut write_result = writer.write(query_result, &format).await;
 
             if let Err(cause) = write_result {
+                self.base.session.txn_mgr().lock().set_fail();
                 let suffix = format!("(while in query {})", query);
                 write_result = Err(cause.add_message_back(suffix));
             }

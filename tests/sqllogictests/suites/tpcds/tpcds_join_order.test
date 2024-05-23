@@ -6841,27 +6841,27 @@ ORDER BY lochierarchy DESC ,
          rank_within_parent
 LIMIT 100;
 ----
-HashJoin: INNER
+HashJoin: LEFT SEMI
 ├── Build
-│   └── Scan: default.tpcds.date_dim (#1) (read rows: 73049)
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── Scan: default.tpcds.store (#4) (read rows: 1)
+│       └── Probe
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
+│               └── Probe
+│                   └── Scan: default.tpcds.store_sales (#3) (read rows: 28810)
 └── Probe
     └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── HashJoin: INNER
-        │       │       ├── Build
-        │       │       │   └── Scan: default.tpcds.store (#4) (read rows: 1)
-        │       │       └── Probe
-        │       │           └── HashJoin: INNER
-        │       │               ├── Build
-        │       │               │   └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
-        │       │               └── Probe
-        │       │                   └── Scan: default.tpcds.store_sales (#3) (read rows: 28810)
-        │       └── Probe
-        │           └── Scan: default.tpcds.store (#2) (read rows: 1)
+        │   └── Scan: default.tpcds.store (#2) (read rows: 1)
         └── Probe
-            └── Scan: default.tpcds.store_sales (#0) (read rows: 28810)
+            └── HashJoin: INNER
+                ├── Build
+                │   └── Scan: default.tpcds.date_dim (#1) (read rows: 73049)
+                └── Probe
+                    └── Scan: default.tpcds.store_sales (#0) (read rows: 28810)
 
 # Q71
 query I

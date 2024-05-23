@@ -30,13 +30,13 @@ pub use header::Header;
 use log::debug;
 use log::info;
 use openraft::AnyError;
-use tokio::io;
 
 use crate::config::RaftConfig;
 use crate::key_spaces::DataHeader;
-use crate::key_spaces::RaftStoreEntry;
+use crate::key_spaces::SMEntry;
 use crate::log::TREE_RAFT_LOG;
 use crate::sm_v002::SnapshotStoreV002;
+use crate::sm_v002::WriteEntry;
 use crate::state::TREE_RAFT_STATE;
 use crate::state_machine::StateMachineMetaKey;
 
@@ -276,31 +276,38 @@ impl OnDisk {
         &mut self,
         sm_tree_name: &str,
     ) -> Result<(), MetaStorageError> {
-        let mut cnt = 0;
+        // Helper function to create a snapshot error.
+        fn snap_err(e: impl std::error::Error + 'static, context: &str) -> MetaStorageError {
+            let ae = AnyError::new(&e).add_context(|| context);
+            MetaStorageError::SnapshotError(ae)
+        }
+
         let tree = self.db.open_tree(sm_tree_name)?;
 
-        let mut snapshot_store = SnapshotStoreV002::new(DataVersion::V002, self.config.clone());
+        let snapshot_store = SnapshotStoreV002::new(DataVersion::V002, self.config.clone());
+        let mut last_applied = None;
 
-        let mut writer = snapshot_store.new_writer().map_err(|e| {
-            let ae = AnyError::new(&e).add_context(|| "new snapshot writer");
-            MetaStorageError::SnapshotError(ae)
-        })?;
+        let writer = snapshot_store
+            .new_writer()
+            .map_err(|e| snap_err(e, "new snapshot writer"))?;
+
+        let (tx, join_handle) = writer.spawn_writer_thread("upgrade-v001-to-v002-snapshot");
 
         for ivec_pair_res in tree.iter() {
-            let kv_entry = {
+            let sm_entry = {
                 let (k_ivec, v_ivec) = ivec_pair_res?;
-                RaftStoreEntry::deserialize(&k_ivec, &v_ivec)?
+                SMEntry::deserialize(&k_ivec, &v_ivec)?
             };
 
             debug!(
-                kv_entry :? =(&kv_entry);
+                kv_entry :? =(&sm_entry);
                 "upgrade kv from {:?}", self.header.version
             );
 
-            if let RaftStoreEntry::StateMachineMeta {
+            if let SMEntry::StateMachineMeta {
                 key: StateMachineMetaKey::Initialized,
                 ..
-            } = kv_entry
+            } = sm_entry
             {
                 self.progress(format_args!(
                     "Skip no longer used state machine key: {}",
@@ -309,27 +316,38 @@ impl OnDisk {
                 continue;
             }
 
-            writer
-                .write_entry_results::<io::Error>(futures::stream::iter([Ok(kv_entry)]))
-                .await
-                .map_err(|e| {
-                    let ae = AnyError::new(&e).add_context(|| "write snapshot entry");
-                    MetaStorageError::SnapshotError(ae)
-                })?;
+            if let Some(last) = sm_entry.last_applied() {
+                self.progress(format_args!("found state machine last_applied: {}", last));
+                last_applied = Some(last);
+            }
 
-            cnt += 1;
+            tx.send(WriteEntry::Data(sm_entry))
+                .await
+                .map_err(|e| snap_err(e, "send SMEntry"))?;
         }
 
-        let (snapshot_id, file_size) = writer.commit(None).map_err(|e| {
-            let ae = AnyError::new(&e).add_context(|| "commit snapshot");
-            MetaStorageError::SnapshotError(ae)
-        })?;
+        tx.send(WriteEntry::Finish)
+            .await
+            .map_err(|e| snap_err(e, "send Commit"))?;
+
+        let (temp_snapshot_data, snapshot_stat) = join_handle
+            .await
+            .map_err(|e| snap_err(e, "join snapshot writer thread"))?
+            .map_err(|e| snap_err(e, "writer error"))?;
+
+        if snapshot_stat.entry_cnt > 0 {
+            assert!(last_applied.is_some(), "last_applied must be Some");
+        }
+
+        let (snapshot_id, snapshot_data) = snapshot_store
+            .commit_snapshot_data_gen_id(temp_snapshot_data, last_applied, snapshot_stat.entry_cnt)
+            .map_err(|e| snap_err(e, "commit snapshot data"))?;
 
         self.progress(format_args!(
-            "Written {} records to snapshot, filesize: {}, path: {}",
-            cnt,
-            file_size,
-            snapshot_store.snapshot_path(&snapshot_id.to_string())
+            "Written to snapshot: {}, {}; path: {}",
+            snapshot_id.to_string(),
+            snapshot_stat,
+            snapshot_data.path()
         ));
 
         Ok(())

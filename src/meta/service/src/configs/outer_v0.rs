@@ -456,7 +456,11 @@ pub struct RaftConfig {
 
     /// The interval in milli seconds at which a leader send heartbeat message to followers.
     /// Different value of this setting on leader and followers may cause unexpected behavior.
-    #[clap(long, default_value = "1000")]
+    /// This value `t` also affect the election timeout:
+    /// Election timeout is a random between `[t*2, t*3)`,
+    /// i.e., a node start to elect in `[t*2, t*3)` without RequestVote from Candidate.
+    /// And a follower starts to elect after `[t*5, t*6)` without heartbeat from Leader.
+    #[clap(long, default_value = "500")]
     pub heartbeat_interval: u64,
 
     /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.

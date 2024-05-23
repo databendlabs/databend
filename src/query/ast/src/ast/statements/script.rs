@@ -15,11 +15,10 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::Span;
-
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Statement;
+use crate::Span;
 
 const INDENT_DEPTH: usize = 4;
 

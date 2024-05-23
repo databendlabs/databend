@@ -12,12 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::SnapshotMeta;
-use serde::Deserialize;
-use serde::Serialize;
+use std::fmt;
+use std::fmt::Formatter;
 
-/// The application snapshot type which the `MetaStore` works with.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct StoredSnapshot {
-    pub meta: SnapshotMeta,
+/// Snapshot stat.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SnapshotStat {
+    /// Total number of entries in the snapshot.
+    ///
+    /// Including meta entries, such as seq, nodes, generic kv, and expire index
+    pub entry_cnt: u64,
+
+    /// Size in bytes of the snapshot file
+    pub size: u64,
+}
+
+impl fmt::Display for SnapshotStat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{ entry_cnt: {}, size: {} }}",
+            self.entry_cnt, self.size
+        )
+    }
 }

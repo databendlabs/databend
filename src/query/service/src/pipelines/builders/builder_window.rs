@@ -56,22 +56,6 @@ impl PipelineBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         let old_output_len = self.main_pipeline.output_len();
-        if !partition_by.is_empty() || !order_by.is_empty() {
-            let mut sort_desc = Vec::with_capacity(partition_by.len() + order_by.len());
-
-            for offset in &partition_by {
-                sort_desc.push(SortColumnDescription {
-                    offset: *offset,
-                    asc: true,
-                    nulls_first: true,
-                    is_nullable: input_schema.field(*offset).is_nullable(),  // This information is not needed here.
-                })
-            }
-
-            sort_desc.extend(order_by.clone());
-
-            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.limit, None)?;
-        }
         // `TransformWindow` is a pipeline breaker.
         self.main_pipeline.try_resize(1)?;
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;

@@ -31,10 +31,12 @@ use anyhow::anyhow;
 use databend_common_base::base::tokio;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_common_meta_raft_store::key_spaces::SMEntry;
+use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::OnDisk;
-use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
+use databend_common_meta_raft_store::sm_v002::WriteEntry;
 use databend_common_meta_raft_store::state::RaftState;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
@@ -172,8 +174,13 @@ async fn import_v002(
     let mut max_log_id: Option<LogId> = None;
     let mut trees = BTreeMap::new();
 
-    let mut snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
-    let mut writer = snapshot_store.new_writer()?;
+    let snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
+
+    let writer = snapshot_store.new_writer()?;
+
+    let (tx, join_handle) = writer.spawn_writer_thread("import_v002");
+
+    let mut last_applied = None;
 
     for line in lines {
         let l = line?;
@@ -181,9 +188,15 @@ async fn import_v002(
 
         if tree_name.starts_with("state_machine/") {
             // Write to snapshot
-            writer
-                .write_entry_results::<io::Error>(futures::stream::iter([Ok(kv_entry)]))
-                .await?;
+            let sm_entry: SMEntry = kv_entry.try_into().map_err(|err_str| {
+                anyhow::anyhow!("Failed to convert RaftStoreEntry to SMEntry: {}", err_str)
+            })?;
+
+            if let Some(last) = sm_entry.last_applied() {
+                last_applied = Some(last);
+            }
+
+            tx.send(WriteEntry::Data(sm_entry)).await?;
         } else {
             // Write to sled tree
             if !trees.contains_key(&tree_name) {
@@ -208,13 +221,23 @@ async fn import_v002(
     for tree in trees.values() {
         tree.flush()?;
     }
-    let (snapshot_id, snapshot_size) = writer.commit(None)?;
+
+    tx.send(WriteEntry::Finish).await?;
+
+    let (temp_snapshot_data, snapshot_stat) = join_handle.await??;
+
+    let (snapshot_id, snapshot_data) = snapshot_store.commit_snapshot_data_gen_id(
+        temp_snapshot_data,
+        last_applied,
+        snapshot_stat.entry_cnt,
+    )?;
 
     eprintln!(
-        "Imported {} records, snapshot id: {}; snapshot size: {}",
+        "Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
         n,
         snapshot_id.to_string(),
-        snapshot_size
+        snapshot_data.path(),
+        snapshot_stat,
     );
     Ok(max_log_id)
 }

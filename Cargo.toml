@@ -112,7 +112,7 @@ members = [
 
 [workspace.dependencies]
 # databend maintains
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "3fe3acd" }
+jsonb = { version = "0.4.0" }
 
 opendal = { version = "0.46.0", features = [
     "layers-minitrace",
@@ -294,7 +294,6 @@ debug-assertions = true
 overflow-checks = true
 rpath = false
 
-# If there are dependencies that need patching, they can be listed below.
 [patch.crates-io]
 arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
@@ -303,3 +302,4 @@ async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", re
 z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }
+derive-visitor = { git = 'https://github.com/andylokandy/derive-visitor.git', rev = "c07c6b6" }

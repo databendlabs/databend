@@ -34,7 +34,7 @@ pub fn display_memo(memo: &Memo) -> Result<String> {
 
     let root = FormatTreeNode::with_children("Memo".to_string(), children);
 
-    root.format_pretty()
+    Ok(root.format_pretty()?)
 }
 
 pub fn display_rel_op(rel_op: &RelOperator) -> String {

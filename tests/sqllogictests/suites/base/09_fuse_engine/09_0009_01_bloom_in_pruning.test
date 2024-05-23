@@ -84,12 +84,51 @@ query I
 SELECT a FROM t2 where a = 3
 ----
 
+statement ok
+CREATE TABLE t3(c0 bool null, c1 int null, c2 varchar null)
+
+statement ok
+INSERT INTO TABLE t3 VALUES(false, 1, 'a'), (true, 5, null)
+
+query BIT
+SELECT * FROM t3 WHERE (NOT c0)
+----
+0 1 a
+
+query BIT
+SELECT * FROM t3 WHERE ((c2) IN ('1') IS NULL)
+----
+1 5 NULL
+
+query BIT
+SELECT * FROM t3 WHERE (c2 = '1' IS NULL)
+----
+1 5 NULL
+
+query BIT
+SELECT * FROM t3 WHERE (c2 = '1' IS NOT NULL)
+----
+0 1 a
+
+query BIT
+SELECT * FROM t3 WHERE (c1 = 3 IS NOT NULL)
+----
+0 1 a
+1 5 NULL
+
+query BIT
+SELECT * FROM t3 WHERE (c1 = 3 IS NULL)
+----
+
 
 statement ok
 DROP TABLE t1
 
 statement ok
 DROP TABLE t2
+
+statement ok
+DROP TABLE t3
 
 statement ok
 DROP DATABASE db_09_0009_01

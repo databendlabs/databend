@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use itertools::Itertools;
 
 use crate::cast_scalar;

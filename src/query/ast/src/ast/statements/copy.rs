@@ -16,17 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io::Error;
-use std::io::ErrorKind;
-use std::io::Result;
 
-use databend_common_exception::ErrorCode;
-use databend_common_io::escape_string_with_quote;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
 use url::Url;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
@@ -35,6 +31,8 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableRef;
 use crate::ast::With;
+use crate::ParseError;
+use crate::Result;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -285,8 +283,8 @@ impl Connection {
             .collect();
 
         if !diffs.is_empty() {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
+            return Err(ParseError(
+                None,
                 format!(
                     "connection params invalid: expected [{}], got [{}]",
                     self.visited_keys
@@ -361,14 +359,14 @@ impl UriLocation {
         uri: String,
         part_prefix: String,
         conns: BTreeMap<String, String>,
-    ) -> databend_common_exception::Result<Self> {
+    ) -> Result<Self> {
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
             if !path.starts_with('/') {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Invalid uri: {}. fs location must start with 'fs:///'",
-                    uri
-                )));
+                return Err(ParseError(
+                    None,
+                    format!("Invalid uri: {}. fs location must start with 'fs:///'", uri),
+                ));
             }
             return Ok(UriLocation::new(
                 "fs".to_string(),
@@ -379,9 +377,8 @@ impl UriLocation {
             ));
         }
 
-        let parsed = Url::parse(&uri).map_err(|e| {
-            databend_common_exception::ErrorCode::BadArguments(format!("invalid uri {}", e))
-        })?;
+        let parsed =
+            Url::parse(&uri).map_err(|e| ParseError(None, format!("invalid uri {}", e)))?;
 
         let protocol = parsed.scheme().to_string();
 
@@ -394,7 +391,7 @@ impl UriLocation {
                     hostname.to_string()
                 }
             })
-            .ok_or_else(|| databend_common_exception::ErrorCode::BadArguments("invalid uri"))?;
+            .ok_or_else(|| ParseError(None, "invalid uri".to_string()))?;
 
         let path = if parsed.path().is_empty() {
             "/".to_string()
@@ -527,7 +524,7 @@ impl Display for FileFormatValue {
             FileFormatValue::Bool(v) => write!(f, "{v}"),
             FileFormatValue::U64(v) => write!(f, "{v}"),
             FileFormatValue::String(v) => {
-                write!(f, "'{}'", escape_string_with_quote(v, Some('\'')))
+                write!(f, "{}", QuotedString(v, '\''))
             }
             FileFormatValue::StringList(v) => {
                 write!(f, "(")?;
@@ -535,7 +532,7 @@ impl Display for FileFormatValue {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "'{}'", escape_string_with_quote(s, Some('\'')))?;
+                    write!(f, "{}", QuotedString(s, '\''))?;
                 }
                 write!(f, ")")
             }

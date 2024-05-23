@@ -20,10 +20,12 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_meta_types::ErrorSubject;
+use databend_common_meta_types::LogId;
 use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::TempSnapshotData;
 use log::error;
 use log::info;
 use log::warn;
@@ -265,8 +267,9 @@ impl SnapshotStoreV002 {
         Ok((snapshot_ids, invalid_files))
     }
 
-    pub fn new_writer(&mut self) -> Result<WriterV002, SnapshotStoreError> {
-        self.ensure_snapshot_dir()?;
+    pub fn new_writer(&self) -> Result<WriterV002, SnapshotStoreError> {
+        self.ensure_snapshot_dir()
+            .map_err(|e| e.with_context("creating snapshot writer"))?;
 
         WriterV002::new(self)
             .map_err(|e| SnapshotStoreError::write(e).with_context("creating snapshot writer"))
@@ -277,6 +280,40 @@ impl SnapshotStoreV002 {
         let p = self.snapshot_temp_path();
 
         SnapshotData::new_temp(p).await
+    }
+
+    /// Commit [`TempSnapshotData`] to a snapshot file with a generated snapshot id.
+    pub fn commit_snapshot_data_gen_id(
+        &self,
+        temp: TempSnapshotData,
+        last_applied: Option<LogId>,
+        key_cnt: u64,
+    ) -> Result<(MetaSnapshotId, SnapshotData), io::Error> {
+        let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied).with_key_num(Some(key_cnt));
+        let d = self.commit_snapshot_data(temp, snapshot_id.clone())?;
+        Ok((snapshot_id, d))
+    }
+
+    /// Commit [`TempSnapshotData`] to a snapshot file with the given snapshot id.
+    pub fn commit_snapshot_data(
+        &self,
+        temp: TempSnapshotData,
+        snapshot_id: MetaSnapshotId,
+    ) -> Result<SnapshotData, io::Error> {
+        if snapshot_id.key_num.is_none() {
+            warn!("snapshot_id.key_num is not set: {:?}", snapshot_id);
+        }
+
+        let final_path = self.snapshot_path(&snapshot_id.to_string());
+        let d = temp.commit(final_path.clone())?;
+
+        info!(
+            "snapshot committed: snapshot_id: {}, path: {}",
+            snapshot_id.to_string(),
+            final_path
+        );
+
+        Ok(d)
     }
 
     /// Return a snapshot for async reading

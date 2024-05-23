@@ -21,16 +21,16 @@ use databend_common_meta_types::KVMeta;
 use futures_util::StreamExt;
 use log::warn;
 
-use crate::sm_v002::leveled_store::map_api::AsMap;
-use crate::sm_v002::leveled_store::map_api::KVResultStream;
-use crate::sm_v002::leveled_store::map_api::MapApi;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::map_api::MarkedOf;
-use crate::sm_v002::leveled_store::map_api::Transition;
-use crate::sm_v002::leveled_store::sys_data::SysData;
-use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::map_api::KVResultStream;
+use crate::leveled_store::map_api::MapApi;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MarkedOf;
+use crate::leveled_store::map_api::Transition;
+use crate::leveled_store::sys_data::SysData;
+use crate::leveled_store::sys_data_api::SysDataApiRO;
+use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
 
 impl MapKey for String {
@@ -46,13 +46,13 @@ impl MapKey for ExpireKey {
 #[derive(Debug, Default)]
 pub struct Level {
     /// System data(non-user data).
-    pub(in crate::sm_v002) sys_data: SysData,
+    pub(crate) sys_data: SysData,
 
     /// Generic Key-value store.
-    pub(in crate::sm_v002) kv: BTreeMap<String, Marked<Vec<u8>>>,
+    pub(crate) kv: BTreeMap<String, Marked<Vec<u8>>>,
 
     /// The expiration queue of generic kv.
-    pub(in crate::sm_v002) expire: BTreeMap<ExpireKey, Marked<String>>,
+    pub(crate) expire: BTreeMap<ExpireKey, Marked<String>>,
 }
 
 impl Level {
@@ -68,24 +68,21 @@ impl Level {
         }
     }
 
-    pub(in crate::sm_v002) fn sys_data_ref(&self) -> &SysData {
+    pub(crate) fn sys_data_ref(&self) -> &SysData {
         &self.sys_data
     }
 
-    pub(in crate::sm_v002) fn sys_data_mut(&mut self) -> &mut SysData {
+    pub(crate) fn sys_data_mut(&mut self) -> &mut SysData {
         &mut self.sys_data
     }
 
     /// Replace the kv store with a new one.
-    pub(in crate::sm_v002) fn replace_kv(&mut self, kv: BTreeMap<String, Marked<Vec<u8>>>) {
+    pub(crate) fn replace_kv(&mut self, kv: BTreeMap<String, Marked<Vec<u8>>>) {
         self.kv = kv;
     }
 
     /// Replace the expire queue with a new one.
-    pub(in crate::sm_v002) fn replace_expire(
-        &mut self,
-        expire: BTreeMap<ExpireKey, Marked<String>>,
-    ) {
+    pub(crate) fn replace_expire(&mut self, expire: BTreeMap<ExpireKey, Marked<String>>) {
         self.expire = expire;
     }
 }

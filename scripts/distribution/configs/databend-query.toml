@@ -129,6 +129,15 @@ data_path = "/var/lib/databend/data"
 # use "disk" to enabled disk cache
 data_cache_storage = "none"
 
+# Policy of data cache key reloading
+#
+# Available options: [reset|fuzzy]
+# "reset":  remove previous data cache during restart  (default value)
+# "fuzzy":  reload cache keys from cache dir, retaining the cache data
+#           that existed before the restart
+
+# data_cache_key_reload_policy = "fuzzy"
+
 [cache.disk]
 # cache path
 path = "/var/lib/databend/cache"

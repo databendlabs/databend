@@ -1,0 +1,12 @@
+statement ok
+drop table if exists t1;
+
+statement ok
+CREATE TABLE t2(c0 BOOLEAN, c1 INT);
+
+query I
+SELECT t2.c1 FROM t2 WHERE (FALSE OR t2.c0 AND t2.c0);
+----
+
+statement ok
+drop table t2;
