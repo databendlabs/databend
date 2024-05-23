@@ -34,6 +34,7 @@ use indexmap::IndexMap;
 use crate::binder::wrap_cast;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
+use crate::plans::BoundColumnRef;
 use crate::plans::ConstantTableScan;
 use crate::BindContext;
 use crate::Binder;
@@ -41,6 +42,7 @@ use crate::ColumnBindingBuilder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
+use crate::ScalarExpr;
 use crate::Visibility;
 
 impl Binder {
@@ -183,9 +185,7 @@ pub async fn bind_values(
     let mut columns = ColumnSet::new();
     let mut fields = Vec::with_capacity(values.len());
     for value_field in value_schema.fields() {
-        let index = metadata
-            .write()
-            .add_derived_column(value_field.name().clone(), value_field.data_type().clone());
+        let index = metadata.read().columns().len();
         columns.insert(index);
 
         let column_binding = ColumnBindingBuilder::new(
@@ -195,6 +195,14 @@ pub async fn bind_values(
             Visibility::Visible,
         )
         .build();
+        let _ = metadata.write().add_derived_column(
+            value_field.name().clone(),
+            value_field.data_type().clone(),
+            Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span,
+                column: column_binding.clone(),
+            })),
+        );
         bind_context.add_column_binding(column_binding);
 
         let field = DataField::new(&index.to_string(), value_field.data_type().clone());
