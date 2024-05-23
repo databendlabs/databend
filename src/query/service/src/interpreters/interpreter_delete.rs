@@ -68,7 +68,6 @@ use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -111,21 +110,21 @@ impl Interpreter for DeleteInterpreter {
         let is_distributed = !self.ctx.get_cluster().is_empty();
 
         let catalog_name = self.plan.catalog_name.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let catalog_info = catalog.info();
-
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
+
+        // Add table lock.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(catalog_name, db_name, tbl_name)
+            .await?;
+
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let catalog_info = catalog.info();
         let tbl = catalog
             .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await?;
-
-        // Add table lock.
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-
-        // refresh table.
-        let tbl = tbl.refresh(self.ctx.as_ref()).await?;
 
         // check mutability
         tbl.check_mutable()?;
@@ -355,7 +354,6 @@ impl DeleteInterpreter {
             mutation_kind: MutationKind::Delete,
             update_stream_meta: vec![],
             merge_meta,
-            need_lock: false,
             deduplicated_label: None,
             plan_id: u32::MAX,
         }));

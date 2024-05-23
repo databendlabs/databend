@@ -60,7 +60,6 @@ use itertools::Itertools;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
-use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -145,7 +144,17 @@ impl MergeIntoInterpreter {
         } = &self.plan;
         let enable_right_broadcast = *enable_right_broadcast;
         let mut columns_set = columns_set.clone();
+
+        // Add table lock before execution.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(catalog, database, table_name)
+            .await?;
+
         let table = self.ctx.get_table(catalog, database, table_name).await?;
+        // check mutability
+        table.check_mutable()?;
         let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Unimplemented(format!(
                 "table {}, engine type {}, does not support MERGE INTO",
@@ -155,9 +164,6 @@ impl MergeIntoInterpreter {
         })?;
 
         let table_info = fuse_table.get_table_info();
-        // Add table lock before execution.
-        let table_lock = LockManager::create_table_lock(table_info.clone())?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         // attentation!! for now we have some strategies:
         // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
@@ -203,10 +209,6 @@ impl MergeIntoInterpreter {
                 });
             }
         }
-
-        // check mutability
-        let check_table = self.ctx.get_table(catalog, database, table_name).await?;
-        check_table.check_mutable()?;
 
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), meta_data).await?;
 
@@ -485,7 +487,6 @@ impl MergeIntoInterpreter {
             mutation_kind: MutationKind::Update,
             update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
-            need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
         }));

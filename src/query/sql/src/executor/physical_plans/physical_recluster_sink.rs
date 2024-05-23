@@ -34,5 +34,4 @@ pub struct ReclusterSink {
     pub remained_blocks: Vec<Arc<BlockMeta>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_segment_summary: Statistics,
-    pub need_lock: bool,
 }
