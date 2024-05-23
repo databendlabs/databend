@@ -53,20 +53,20 @@ const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
 const HEADER_QUERY_PAGE_ROWS: &str = "X-DATABEND-QUERY-PAGE-ROWS";
 
-pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
-    format!("/v1/query/{}/page/{}", query_id, page_no)
+pub fn make_page_uri(query_id: &str, node_id: &str, page_no: usize) -> String {
+    format!("/v1/query/{}/{}/page/{}", query_id, node_id, page_no)
 }
 
-pub fn make_state_uri(query_id: &str) -> String {
-    format!("/v1/query/{}", query_id)
+pub fn make_state_uri(query_id: &str, node_id: &str) -> String {
+    format!("/v1/query/{}/{}", query_id, node_id)
 }
 
-pub fn make_final_uri(query_id: &str) -> String {
-    format!("/v1/query/{}/final", query_id)
+pub fn make_final_uri(query_id: &str, node_id: &str) -> String {
+    format!("/v1/query/{}/{}/final", query_id, node_id)
 }
 
-pub fn make_kill_uri(query_id: &str) -> String {
-    format!("/v1/query/{}/kill", query_id)
+pub fn make_kill_uri(query_id: &str, node_id: &str) -> String {
+    format!("/v1/query/{}/{}/kill", query_id, node_id)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -146,28 +146,31 @@ impl QueryResponse {
         r: HttpQueryResponseInternal,
         is_final: bool,
     ) -> impl IntoResponse {
+        let node_id = r.node_id.clone();
         let state = r.state.clone();
         let (data, next_uri) = if is_final {
             (JsonBlock::empty(), None)
         } else {
             match state.state {
                 ExecuteStateKind::Running | ExecuteStateKind::Starting => match r.data {
-                    None => (JsonBlock::empty(), Some(make_state_uri(&id))),
+                    None => (JsonBlock::empty(), Some(make_state_uri(&id, &r.node_id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
-                            Some(n) => Some(make_page_uri(&id, n)),
-                            None => Some(make_state_uri(&id)),
+                            Some(n) => Some(make_page_uri(&id, &r.node_id, n)),
+                            None => Some(make_state_uri(&id, &r.node_id)),
                         };
                         (d.page.data, uri)
                     }
                 },
-                ExecuteStateKind::Failed => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                ExecuteStateKind::Failed => {
+                    (JsonBlock::empty(), Some(make_final_uri(&id, &r.node_id)))
+                }
                 ExecuteStateKind::Succeeded => match r.data {
-                    None => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                    None => (JsonBlock::empty(), Some(make_final_uri(&id, &r.node_id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
-                            Some(n) => Some(make_page_uri(&id, n)),
-                            None => Some(make_final_uri(&id)),
+                            Some(n) => Some(make_page_uri(&id, &r.node_id, n)),
+                            None => Some(make_final_uri(&id, &r.node_id)),
                         };
                         (d.page.data, uri)
                     }
@@ -198,9 +201,9 @@ impl QueryResponse {
             warnings: r.state.warnings,
             id: id.clone(),
             next_uri,
-            stats_uri: Some(make_state_uri(&id)),
-            final_uri: Some(make_final_uri(&id)),
-            kill_uri: Some(make_kill_uri(&id)),
+            stats_uri: Some(make_state_uri(&id, &node_id)),
+            final_uri: Some(make_final_uri(&id, &node_id)),
+            kill_uri: Some(make_kill_uri(&id, &node_id)),
             error: r.state.error.map(QueryError::from_error_code),
             has_result_set: r.state.has_result_set,
         })
@@ -223,15 +226,16 @@ impl QueryResponse {
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
-    Path(query_id): Path<String>,
+    Path((query_id, node_id)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
+    ctx.check_node_id(&node_id, &query_id)?;
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
-
     async {
         info!(
-            "{}: got /v1/query/{}/final request, this query is going to be finally completed.",
-            query_id, query_id
+            "{}: got {} request, this query is going to be finally completed.",
+            query_id,
+            make_final_uri(&query_id, &node_id)
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
@@ -260,15 +264,16 @@ async fn query_final_handler(
 #[poem::handler]
 async fn query_cancel_handler(
     ctx: &HttpQueryContext,
-    Path(query_id): Path<String>,
+    Path((query_id, node_id)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
+    ctx.check_node_id(&node_id, &query_id)?;
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
-
     async {
         info!(
-            "{}: got /v1/query/{}/kill request, cancel the query",
-            query_id, query_id
+            "{}: got {} request, cancel the query",
+            query_id,
+            make_kill_uri(&query_id, &node_id)
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
@@ -290,10 +295,10 @@ async fn query_cancel_handler(
 #[poem::handler]
 async fn query_state_handler(
     ctx: &HttpQueryContext,
-    Path(query_id): Path<String>,
+    Path((query_id, node_id)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
+    ctx.check_node_id(&node_id, &query_id)?;
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
-
     async {
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
@@ -315,11 +320,11 @@ async fn query_state_handler(
 #[poem::handler]
 async fn query_page_handler(
     ctx: &HttpQueryContext,
-    Path((query_id, page_no)): Path<(String, usize)>,
+    Path((query_id, node_id, page_no)): Path<(String, String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
+    ctx.check_node_id(&node_id, &query_id)?;
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
-
     async {
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
@@ -352,7 +357,8 @@ pub(crate) async fn query_handler(
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        info!("http query new request: {:}", mask_connection_info(&format!("{:?}", req)));
+        let agent = ctx.user_agent.as_ref().map(|s|(format!("(from {s})"))).unwrap_or("".to_string());
+        info!("http query new request{}: {:}", agent, mask_connection_info(&format!("{:?}", req)));
         let http_query_manager = HttpQueryManager::instance();
         let sql = req.sql.clone();
 
@@ -397,14 +403,14 @@ pub fn query_route() -> Route {
     // Note: endpoints except /v1/query may change without notice, use uris in response instead
     let rules = [
         ("/", post(query_handler)),
-        ("/:id", get(query_state_handler)),
-        ("/:id/page/:page_no", get(query_page_handler)),
+        ("/:query_id/:node_id", get(query_state_handler)),
+        ("/:query_id/:node_id/page/:page_no", get(query_page_handler)),
         (
-            "/:id/kill",
+            "/:query_id/:node_id/kill",
             get(query_cancel_handler).post(query_cancel_handler),
         ),
         (
-            "/:id/final",
+            "/:query_id/:node_id/final",
             get(query_final_handler).post(query_final_handler),
         ),
     ];
@@ -436,7 +442,7 @@ fn query_id_to_trace_id(query_id: &str) -> TraceId {
 }
 
 /// The HTTP query endpoints are expected to be responses within 60 seconds.
-/// If it exceeds far of 60 seconds, there might be something wrong, we should
+/// If it exceeds far from 60 seconds, there might be something wrong, we should
 /// log it.
 struct SlowRequestLogTracker {
     started_at: std::time::Instant,

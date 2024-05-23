@@ -15,11 +15,14 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use http::StatusCode;
+use log::warn;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
-use poem::Result as PoemResult;
+use time::Instant;
 
+use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -101,11 +104,26 @@ impl HttpQueryContext {
     pub fn set_fail(&self) {
         self.session.txn_mgr().lock().set_fail();
     }
+
+    pub fn check_node_id(&self, node_id: &str, query_id: &str) -> poem::Result<()> {
+        if node_id != self.node_id {
+            let manager = HttpQueryManager::instance();
+            let start_time = manager.server_info.start_time.clone();
+            let uptime = (Instant::now() - manager.start_instant).as_seconds_f32();
+            let msg = format!(
+                "route error: query {query_id} SHOULD be on server {node_id}, but current server is {}, which started at {start_time}({uptime} secs ago)",
+                self.node_id
+            );
+            warn!("{msg}");
+            return Err(poem::Error::from_string(msg, StatusCode::NOT_FOUND));
+        }
+        Ok(())
+    }
 }
 
 impl<'a> FromRequest<'a> for &'a HttpQueryContext {
     #[async_backtrace::framed]
-    async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
+    async fn from_request(req: &'a Request, _body: &mut RequestBody) -> poem::Result<Self> {
         Ok(req.extensions().get::<HttpQueryContext>().expect(
             "To use the `HttpQueryContext` extractor, the `HTTPSessionMiddleware` is required",
         ))
