@@ -288,6 +288,7 @@ pub trait PhysicalPlanReplacer {
             after_exchange: plan.after_exchange,
             pre_projection: plan.pre_projection.clone(),
             stat_info: plan.stat_info.clone(),
+            window_partition: plan.window_partition.clone(),
         }))
     }
 

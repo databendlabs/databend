@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 
 use super::column_stat::ColumnStatSet;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::SortItem;
 use crate::IndexType;
 
@@ -77,6 +78,10 @@ pub struct RelationalProperty {
     /// to the physical property, but at that time, we will have
     /// to enforce the ordering property manually.
     pub orderings: Vec<SortItem>,
+
+    /// only sort in partition level
+    /// used in window sort after shuffle
+    pub partition_orderings: Option<(Vec<ScalarItem>, Vec<SortItem>)>,
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]

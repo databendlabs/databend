@@ -28,7 +28,6 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
-use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -40,14 +39,6 @@ pub struct AsyncFunction {
     pub index: IndexType,
 }
 
-impl AsyncFunction {
-    fn output_columns(&self) -> ColumnSet {
-        let mut output_columns = ColumnSet::new();
-        output_columns.insert(self.index);
-        output_columns
-    }
-}
-
 impl Operator for AsyncFunction {
     fn rel_op(&self) -> RelOp {
         RelOp::AsyncFunction
@@ -57,10 +48,30 @@ impl Operator for AsyncFunction {
         1
     }
 
-    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        // Derive output columns
+        let mut output_columns = input_prop.output_columns.clone();
+        output_columns.insert(self.index);
+
+        // Derive outer columns
+        let mut outer_columns = input_prop.outer_columns.clone();
+        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
+
+        // Derive used columns
+        let used_columns = input_prop.used_columns.clone();
+
+        // Derive orderings
+        let orderings = input_prop.orderings.clone();
+        let partition_orderings = input_prop.partition_orderings.clone();
+
         Ok(Arc::new(RelationalProperty {
-            output_columns: self.output_columns(),
-            ..Default::default()
+            output_columns,
+            outer_columns,
+            used_columns,
+            orderings,
+            partition_orderings,
         }))
     }
 

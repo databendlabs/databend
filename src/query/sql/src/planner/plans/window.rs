@@ -126,7 +126,13 @@ impl Operator for Window {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        required.distribution = Distribution::Serial;
+
+        required.distribution = if self.partition_by.is_empty() {
+            Distribution::Serial
+        } else {
+            let partition_by = self.partition_by.iter().map(|s| s.scalar.clone()).collect();
+            Distribution::Hash(partition_by)
+        };
         Ok(required)
     }
 
@@ -136,9 +142,17 @@ impl Operator for Window {
         _rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        Ok(vec![vec![RequiredProperty {
-            distribution: Distribution::Serial,
-        }]])
+        let distribution = if self.partition_by.is_empty() {
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            }
+        } else {
+            let partition_by = self.partition_by.iter().map(|s| s.scalar.clone()).collect();
+            RequiredProperty {
+                distribution: Distribution::Hash(partition_by),
+            }
+        };
+        Ok(vec![vec![distribution]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -161,12 +175,14 @@ impl Operator for Window {
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
+        let partition_orderings = input_prop.partition_orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings,
         }))
     }
 

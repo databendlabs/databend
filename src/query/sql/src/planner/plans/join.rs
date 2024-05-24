@@ -404,14 +404,12 @@ impl Operator for Join {
         used_columns.extend(left_prop.used_columns.clone());
         used_columns.extend(right_prop.used_columns.clone());
 
-        // Derive orderings
-        let orderings = vec![];
-
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-            orderings,
+            orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

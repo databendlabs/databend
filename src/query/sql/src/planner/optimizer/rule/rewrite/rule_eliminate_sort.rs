@@ -51,15 +51,32 @@ impl Rule for RuleEliminateSort {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let sort: Sort = s_expr.plan().clone().try_into()?;
         let input = s_expr.child(0)?;
+
         let rel_expr = RelExpr::with_s_expr(input);
         let prop = rel_expr.derive_relational_prop()?;
+
+        println!("prop {:?}", sort);
+        println!("sort {:?}", prop);
+
+        if !sort.window_partition.is_empty() {
+            if let Some((partition, ordering)) = &prop.partition_orderings {
+                println!(
+                    "eq {:?} {}",
+                    partition == &sort.window_partition,
+                    ordering == &sort.items
+                );
+                if partition == &sort.window_partition && ordering == &sort.items {
+                    state.add_result(input.clone());
+                    return Ok(());
+                }
+            }
+        }
 
         if prop.orderings == sort.items {
             // If the derived ordering is completely equal to
             // the sort operator, we can eliminate the sort.
             state.add_result(input.clone());
         }
-
         Ok(())
     }
 

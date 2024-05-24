@@ -120,6 +120,7 @@ impl Binder {
                 limit: window_plan.limit,
                 after_exchange: None,
                 pre_projection: None,
+                window_partition: window_plan.partition_by.clone(),
             };
             SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
         } else {

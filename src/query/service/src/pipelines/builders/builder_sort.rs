@@ -87,7 +87,11 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
+        if sort.window_partition.is_empty() {
+            self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
+        } else {
+            self.build_window_sort_pipeline(plan_schema, sort_desc, sort.limit)
+        }
     }
 
     pub(crate) fn build_sort_pipeline(
@@ -145,6 +149,33 @@ impl PipelineBuilder {
                 builder.build_full_sort_pipeline(&mut self.main_pipeline)
             }
         }
+    }
+
+    pub(crate) fn build_window_sort_pipeline(
+        &mut self,
+        plan_schema: DataSchemaRef,
+        sort_desc: Vec<SortColumnDescription>,
+        limit: Option<usize>,
+    ) -> Result<()> {
+        let block_size = self.settings.get_max_block_size()? as usize;
+        let max_threads = self.settings.get_max_threads()? as usize;
+        let sort_desc = Arc::new(sort_desc);
+
+        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+            self.main_pipeline.try_resize(max_threads)?;
+        }
+
+        let mut builder =
+            SortPipelineBuilder::create(self.ctx.clone(), plan_schema.clone(), sort_desc.clone())
+                .with_partial_block_size(block_size)
+                .with_final_block_size(block_size)
+                .with_limit(limit);
+
+        // Build for single node mode cause it's window shuffle
+        // We build the full sort pipeline for it
+        builder = builder.remove_order_col_at_last();
+        builder.build_full_sort_pipeline(&mut self.main_pipeline)
     }
 }
 
