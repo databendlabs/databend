@@ -18,6 +18,7 @@ databend-common-compress = { path = "../../../common/compress" }
 databend-common-exception = { path = "../../../common/exception" }
 databend-common-expression = { path = "../../expression" }
 databend-common-formats = { path = "../../formats" }
+databend-common-io = { path = "../../../common/io" }
 databend-common-meta-app = { path = "../../../meta/app" }
 databend-common-pipeline-core = { path = "../../pipeline/core" }
 databend-common-pipeline-sources = { path = "../../pipeline/sources" }
@@ -25,7 +26,9 @@ databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
 databend-common-settings = { path = "../../settings" }
 databend-common-storage = { path = "../../../common/storage" }
 databend-common-storages-parquet = { path = "../parquet" }
+databend-storages-common-table-meta = { path = "../common/table_meta" }
 
+arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bstr = "1.9.1"
@@ -35,6 +38,7 @@ enum-as-inner = "0.6.0"
 futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
+parquet_rs = { workspace = true }
 serde = { workspace = true }
 
 serde_json = { workspace = true }

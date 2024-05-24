@@ -71,8 +71,6 @@ use super::inner::QueryConfig as InnerQueryConfig;
 use crate::background_config::BackgroundConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
-// FIXME: too much boilerplate here
-
 const CATALOG_HIVE: &str = "hive";
 
 /// Config for `query`.
@@ -621,7 +619,7 @@ impl Default for GcsStorageConfig {
 }
 
 impl Debug for GcsStorageConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("GcsStorageConfig")
             .field("endpoint_url", &self.gcs_endpoint_url)
             .field("root", &self.gcs_root)
@@ -970,7 +968,7 @@ impl Default for ObsStorageConfig {
 }
 
 impl Debug for ObsStorageConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("ObsStorageConfig")
             .field("endpoint_url", &self.obs_endpoint_url)
             .field("bucket", &self.obs_bucket)
@@ -2806,6 +2804,15 @@ pub struct CacheConfig {
     )]
     pub data_cache_storage: CacheStorageTypeConfig,
 
+    /// Policy of disk cache restart
+    #[clap(
+        long = "cache-data-cache-key-reload-policy",
+        value_name = "VALUE",
+        value_enum,
+        default_value_t
+    )]
+    pub data_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+
     /// Max size of external cache population queue length
     ///
     /// the items being queued reference table column raw data, which are
@@ -2887,6 +2894,22 @@ pub enum CacheStorageTypeConfig {
 impl Default for CacheStorageTypeConfig {
     fn default() -> Self {
         Self::None
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum DiskCacheKeyReloadPolicy {
+    // remove all the disk cache during restart
+    Reset,
+    // recovery the cache keys during restart,
+    // but cache capacity will not be checked
+    Fuzzy,
+}
+
+impl Default for DiskCacheKeyReloadPolicy {
+    fn default() -> Self {
+        Self::Reset
     }
 }
 
@@ -2991,6 +3014,7 @@ mod cache_config_converters {
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.try_into()?,
+                data_cache_key_reload_policy: value.data_cache_key_reload_policy.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
             })
@@ -3013,6 +3037,7 @@ mod cache_config_converters {
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
+                data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.into(),
@@ -3057,6 +3082,25 @@ mod cache_config_converters {
             match value {
                 inner::CacheStorageTypeConfig::None => CacheStorageTypeConfig::None,
                 inner::CacheStorageTypeConfig::Disk => CacheStorageTypeConfig::Disk,
+            }
+        }
+    }
+
+    impl TryFrom<DiskCacheKeyReloadPolicy> for inner::DiskCacheKeyReloadPolicy {
+        type Error = ErrorCode;
+        fn try_from(value: DiskCacheKeyReloadPolicy) -> std::result::Result<Self, Self::Error> {
+            Ok(match value {
+                DiskCacheKeyReloadPolicy::Reset => inner::DiskCacheKeyReloadPolicy::Reset,
+                DiskCacheKeyReloadPolicy::Fuzzy => inner::DiskCacheKeyReloadPolicy::Fuzzy,
+            })
+        }
+    }
+
+    impl From<inner::DiskCacheKeyReloadPolicy> for DiskCacheKeyReloadPolicy {
+        fn from(value: inner::DiskCacheKeyReloadPolicy) -> Self {
+            match value {
+                inner::DiskCacheKeyReloadPolicy::Reset => DiskCacheKeyReloadPolicy::Reset,
+                inner::DiskCacheKeyReloadPolicy::Fuzzy => DiskCacheKeyReloadPolicy::Fuzzy,
             }
         }
     }

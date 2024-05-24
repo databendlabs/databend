@@ -24,7 +24,7 @@ pub struct OpenAI {
 }
 
 impl Debug for OpenAI {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut ds = f.debug_struct("OpenAI");
         ds.field("api_version", &self.api_version);
         ds.field("api_base", &self.api_base);

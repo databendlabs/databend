@@ -244,7 +244,7 @@ impl Default for BackgroundCompactionConfig {
 }
 
 impl Debug for BackgroundCompactionConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("BackgroundCompactionConfig")
             .field("mode", &self.compact_mode)
             .field("segment_limit", &self.segment_limit)
@@ -265,7 +265,7 @@ impl Default for BackgroundScheduledConfig {
 }
 
 impl Debug for BackgroundScheduledConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("BackgroundCompactionFixedConfig")
             .field("duration_secs", &self.duration_secs)
             .finish()
@@ -288,7 +288,7 @@ impl Default for InnerBackgroundConfig {
 }
 
 impl Debug for InnerBackgroundConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("InnerBackgroundConfig")
             .field("compaction", &self.compaction)
             .finish()
@@ -296,7 +296,7 @@ impl Debug for InnerBackgroundConfig {
 }
 
 impl Debug for InnerBackgroundCompactionConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("InnerBackgroundCompactionConfig")
             .field("segment_limit", &self.segment_limit)
             .field("block_limit", &self.block_limit)

@@ -128,13 +128,26 @@ pub enum ShareGrantObjectName {
 }
 
 impl Display for ShareGrantObjectName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ShareGrantObjectName::Database(db) => {
                 write!(f, "DATABASE {}", db)
             }
             ShareGrantObjectName::Table(db, table) => {
                 write!(f, "TABLE {}.{}", db, table)
+            }
+        }
+    }
+}
+
+impl From<databend_common_ast::ast::ShareGrantObjectName> for ShareGrantObjectName {
+    fn from(obj: databend_common_ast::ast::ShareGrantObjectName) -> Self {
+        match obj {
+            databend_common_ast::ast::ShareGrantObjectName::Database(db_name) => {
+                ShareGrantObjectName::Database(db_name.name)
+            }
+            databend_common_ast::ast::ShareGrantObjectName::Table(db_name, table_name) => {
+                ShareGrantObjectName::Table(db_name.name, table_name.name)
             }
         }
     }
@@ -366,7 +379,7 @@ pub struct ShareIdToName {
 }
 
 impl Display for ShareIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.share_id)
     }
 }
@@ -388,7 +401,7 @@ pub struct ShareEndpointIdToName {
 }
 
 impl Display for ShareEndpointIdToName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.share_endpoint_id)
     }
 }
@@ -413,7 +426,7 @@ impl ShareGrantObject {
 }
 
 impl Display for ShareGrantObject {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ShareGrantObject::Database(db_id) => {
                 write!(f, "db/{}", *db_id)
@@ -475,12 +488,18 @@ pub enum ShareGrantObjectPrivilege {
     Select = 1 << 2,
 }
 
-impl Display for ShareGrantObjectPrivilege {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            ShareGrantObjectPrivilege::Usage => write!(f, "USAGE"),
-            ShareGrantObjectPrivilege::ReferenceUsage => write!(f, "REFERENCE_USAGE"),
-            ShareGrantObjectPrivilege::Select => write!(f, "SELECT"),
+impl From<databend_common_ast::ast::ShareGrantObjectPrivilege> for ShareGrantObjectPrivilege {
+    fn from(privilege: databend_common_ast::ast::ShareGrantObjectPrivilege) -> Self {
+        match privilege {
+            databend_common_ast::ast::ShareGrantObjectPrivilege::Usage => {
+                ShareGrantObjectPrivilege::Usage
+            }
+            databend_common_ast::ast::ShareGrantObjectPrivilege::ReferenceUsage => {
+                ShareGrantObjectPrivilege::ReferenceUsage
+            }
+            databend_common_ast::ast::ShareGrantObjectPrivilege::Select => {
+                ShareGrantObjectPrivilege::Select
+            }
         }
     }
 }
@@ -541,7 +560,7 @@ impl ShareGrantEntry {
 }
 
 impl Display for ShareGrantEntry {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.object)
     }
 }

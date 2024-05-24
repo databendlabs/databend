@@ -20,6 +20,7 @@ use databend_common_cache::CountableMeter;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
+use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
 use databend_storages_common_cache::InMemoryCacheBuilder;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
@@ -97,6 +98,7 @@ impl CacheManager {
                         &real_disk_cache_root,
                         queue_size,
                         config.disk_cache_config.max_bytes,
+                        config.data_cache_key_reload_policy.clone(),
                     )?
                 }
             }
@@ -270,12 +272,14 @@ impl CacheManager {
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
+        disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
     ) -> Result<Option<TableDataCache>> {
         if disk_cache_bytes_size > 0 {
             let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
                 path,
                 population_queue_size,
                 disk_cache_bytes_size,
+                disk_cache_key_reload_policy,
             )?;
             Ok(Some(cache_holder))
         } else {

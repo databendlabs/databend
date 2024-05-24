@@ -50,7 +50,7 @@ pub struct ClientWorkerRequest {
 }
 
 impl fmt::Debug for ClientWorkerRequest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("ClientWorkerRequest")
             .field("request_id", &self.request_id)
             .field("req", &self.req)
@@ -135,7 +135,7 @@ pub enum Response {
 }
 
 impl fmt::Debug for Response {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Response::StreamMGet(x) => {
                 write!(f, "StreamMGet({:?})", x.as_ref().map(|_s| "<stream>"))

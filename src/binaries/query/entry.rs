@@ -21,10 +21,13 @@ use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::Commands;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
+use databend_common_config::QUERY_GIT_SEMVER;
+use databend_common_config::QUERY_GIT_SHA;
 use databend_common_config::QUERY_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
 use databend_enterprise_background_service::get_background_service_handler;
@@ -87,29 +90,6 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
         let size = conf.query.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
         GLOBAL_MEM_STAT.set_limit(size);
-    }
-
-    let tenant = conf.query.tenant_id.clone();
-    let cluster_id = conf.query.cluster_id.clone();
-    let flight_addr = conf.query.flight_api_address.clone();
-
-    let mut _sentry_guard = None;
-    let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
-    if !bend_sentry_env.is_empty() {
-        // NOTE: `traces_sample_rate` is 0.0 by default, which disable sentry tracing.
-        let traces_sample_rate = env::var("SENTRY_TRACES_SAMPLE_RATE").ok().map_or(0.0, |s| {
-            s.parse()
-                .unwrap_or_else(|_| panic!("`{}` was defined but could not be parsed", s))
-        });
-
-        _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
-            release: databend_common_tracing::databend_semver!(),
-            traces_sample_rate,
-            ..Default::default()
-        })));
-        sentry::configure_scope(|scope| scope.set_tag("tenant", tenant.tenant_name()));
-        sentry::configure_scope(|scope| scope.set_tag("cluster_id", cluster_id));
-        sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -184,6 +164,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
     // Metric API service.
     {
+        set_system_version("query", QUERY_GIT_SEMVER.as_str(), QUERY_GIT_SHA.as_str());
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv.start(address.parse()?).await?;
@@ -234,8 +215,10 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
     // Print information to users.
     println!("Databend Query");
+
     println!();
     println!("Version: {}", *DATABEND_COMMIT_VERSION);
+
     println!();
     println!("Logging:");
     println!("    file: {}", conf.log.file);
@@ -243,6 +226,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("    otlp: {}", conf.log.otlp);
     println!("    query: {}", conf.log.query);
     println!("    tracing: {}", conf.log.tracing);
+
+    println!();
     println!(
         "Meta: {}",
         if conf.meta.is_embedded_meta()? {
@@ -251,6 +236,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
+
+    println!();
     println!("Memory:");
     println!("    limit: {}", {
         if conf.query.max_memory_limit_enabled {
@@ -265,6 +252,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("    allocator: {}", GlobalAllocator::name());
     println!("    config: {}", GlobalAllocator::conf());
 
+    println!();
     println!("Cluster: {}", {
         let cluster = ClusterDiscovery::instance().discover(conf).await?;
         let nodes = cluster.nodes.len();
@@ -274,8 +262,18 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             "standalone".to_string()
         }
     });
+
+    println!();
     println!("Storage: {}", conf.storage.params);
-    println!("Cache: {}", conf.cache.data_cache_storage.to_string());
+    println!("Disk cache:");
+    println!("    storage: {}", conf.cache.data_cache_storage.to_string());
+    println!("    path: {:?}", conf.cache.disk_cache_config);
+    println!(
+        "    reload policy: {}",
+        conf.cache.data_cache_key_reload_policy.to_string()
+    );
+
+    println!();
     println!(
         "Builtin users: {}",
         conf.query
@@ -286,6 +284,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ")
     );
+
     println!();
     println!("Admin");
     println!("    listened at {}", conf.query.admin_api_address);

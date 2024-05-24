@@ -31,11 +31,13 @@ pub struct RealStorageQuotaHandler {
 #[async_trait::async_trait]
 impl StorageQuotaHandler for RealStorageQuotaHandler {
     async fn check_license(&self) -> Result<StorageQuota> {
-        let settings = SessionManager::create(&self.cfg)
-            .create_session(SessionType::Dummy)
-            .await
-            .unwrap()
-            .get_settings();
+        let session_manager = SessionManager::create(&self.cfg);
+
+        let session = session_manager.create_session(SessionType::Dummy).await?;
+
+        let session = session_manager.register_session(session)?;
+
+        let settings = session.get_settings();
         // check for valid license
         get_license_manager()
             .manager

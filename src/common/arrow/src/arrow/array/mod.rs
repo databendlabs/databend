@@ -328,7 +328,7 @@ macro_rules! with_match_primitive_type {(
 })}
 
 impl std::fmt::Debug for dyn Array + '_ {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use crate::arrow::datatypes::PhysicalType::*;
         match self.data_type().to_physical_type() {
             Null => fmt_dyn!(self, NullArray, f),

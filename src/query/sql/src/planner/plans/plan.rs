@@ -24,6 +24,8 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::Exchange;
+use super::RelOperator;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -136,7 +138,6 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantTenantsOfSharePlan;
-use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
@@ -275,7 +276,6 @@ pub enum Plan {
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
     GrantPriv(Box<GrantPrivilegePlan>),
-    ShowGrants(Box<ShowGrantsPlan>),
     RevokePriv(Box<RevokePrivilegePlan>),
     RevokeRole(Box<RevokeRolePlan>),
     SetRole(Box<SetRolePlan>),
@@ -396,6 +396,7 @@ pub enum RewriteKind {
     ListStage,
     ShowRoles,
     ShowPasswordPolicies,
+    ShowGrants,
 
     Call,
 }
@@ -424,7 +425,7 @@ impl Plan {
 }
 
 impl Display for Plan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.kind())
     }
 }
@@ -454,7 +455,6 @@ impl Plan {
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
-            Plan::ShowGrants(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),
@@ -487,5 +487,30 @@ impl Plan {
 
     pub fn has_result_set(&self) -> bool {
         !self.schema().fields().is_empty()
+    }
+
+    pub fn remove_exchange_for_select(&self) -> Self {
+        if let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            rewrite_kind,
+            formatted_ast,
+            ignore_result,
+        } = self
+        {
+            if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan.as_ref() {
+                let s_expr = Box::new(s_expr.child(0).unwrap().clone());
+                return Plan::Query {
+                    s_expr,
+                    metadata: metadata.clone(),
+                    bind_context: bind_context.clone(),
+                    rewrite_kind: rewrite_kind.clone(),
+                    formatted_ast: formatted_ast.clone(),
+                    ignore_result: *ignore_result,
+                };
+            }
+        }
+        self.clone()
     }
 }

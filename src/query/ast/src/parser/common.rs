@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Range;
-use databend_common_exception::Span;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -25,17 +23,19 @@ use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use crate::ast::quote::QuotedIdent;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
-use crate::parser::quote::unquote_ident;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::rule;
+use crate::Range;
+use crate::Span;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
@@ -133,7 +133,7 @@ fn plain_identifier(
 }
 
 fn quoted_identifier(i: Input) -> IResult<Identifier> {
-    match_token(QuotedString)(i).and_then(|(i2, token)| {
+    match_token(LiteralString)(i).and_then(|(i2, token)| {
         if token
             .text()
             .chars()
@@ -141,10 +141,15 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
             .filter(|c| i.dialect.is_ident_quote(*c))
             .is_some()
         {
-            let quote = token.text().chars().next().unwrap();
+            let QuotedIdent(ident, quote) = token.text().parse().map_err(|_| {
+                nom::Err::Error(Error::from_error_kind(
+                    i,
+                    ErrorKind::Other("invalid identifier"),
+                ))
+            })?;
             Ok((i2, Identifier {
                 span: transform_span(&[token.clone()]),
-                name: unquote_ident(token.text(), quote),
+                name: ident,
                 quote: Some(quote),
                 is_hole: false,
             }))
@@ -418,7 +423,7 @@ where
             Ok(o2) => Ok((input, o2)),
             Err(nom::Err::Error(e)) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
             Err(nom::Err::Failure(e)) => Err(nom::Err::Failure(Error::from_error_kind(i, e))),
-            Err(nom::Err::Incomplete(_)) => unimplemented!(),
+            Err(nom::Err::Incomplete(_)) => unreachable!(),
         }
     }
 }

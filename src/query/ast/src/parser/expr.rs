@@ -24,14 +24,13 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use crate::ast::quote::AtString;
 use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::query::*;
 use crate::parser::token::*;
-use crate::parser::unescape::unescape_at_string;
-use crate::parser::unescape::unescape_string;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::rule;
@@ -1324,11 +1323,11 @@ pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     // Plus and Minus are parsed as binary op at first.
     alt((
         value(UnaryOperator::Not, rule! { NOT }),
-        value(UnaryOperator::Factorial, rule! { Factorial}),
-        value(UnaryOperator::SquareRoot, rule! { SquareRoot}),
-        value(UnaryOperator::BitwiseNot, rule! {BitWiseNot}),
-        value(UnaryOperator::CubeRoot, rule! { CubeRoot}),
-        value(UnaryOperator::Abs, rule! { Abs}),
+        value(UnaryOperator::Factorial, rule! { Factorial }),
+        value(UnaryOperator::SquareRoot, rule! { SquareRoot }),
+        value(UnaryOperator::BitwiseNot, rule! { BitWiseNot }),
+        value(UnaryOperator::CubeRoot, rule! { CubeRoot }),
+        value(UnaryOperator::Abs, rule! { Abs }),
     ))(i)
 }
 
@@ -1477,45 +1476,47 @@ pub fn literal_bool(i: Input) -> IResult<bool> {
 pub fn literal_string(i: Input) -> IResult<String> {
     map_res(
         rule! {
-            QuotedString
+            LiteralString
         },
         |token| {
-            if let Some(quote) = token.text().chars().next() {
-                if i.dialect.is_string_quote(quote) {
-                    let str = &token.text()[1..token.text().len() - 1];
-                    let unescaped = unescape_string(str, quote).ok_or(nom::Err::Failure(
-                        ErrorKind::Other("invalid escape or unicode"),
-                    ))?;
-                    return Ok(unescaped);
-                }
+            let quote::QuotedString(s, quote) = token
+                .text()
+                .parse()
+                .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid escape or unicode")))?;
+
+            if !i.dialect.is_string_quote(quote) {
+                return Err(nom::Err::Error(ErrorKind::ExpectToken(LiteralString)));
             }
 
-            Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
+            Ok(s)
         },
     )(i)
 }
 
 pub fn literal_string_eq_ignore_case(s: &str) -> impl FnMut(Input) -> IResult<()> + '_ {
     move |i| {
-        map_res(rule! { QuotedString }, |token| {
+        map_res(rule! { LiteralString }, |token| {
             if token.text()[1..token.text().len() - 1].eq_ignore_ascii_case(s) {
                 Ok(())
             } else {
-                Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
+                Err(nom::Err::Error(ErrorKind::ExpectToken(LiteralString)))
             }
         })(i)
     }
 }
 
 pub fn at_string(i: Input) -> IResult<String> {
-    map_res(rule! { AtString }, |token| {
-        let path = token.text()[1..token.text().len()].to_string();
-        Ok(unescape_at_string(&path))
+    map_res(rule! { LiteralAtString }, |token| {
+        let AtString(s) = token
+            .text()
+            .parse()
+            .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid at string")))?;
+        Ok(s)
     })(i)
 }
 
 pub fn code_string(i: Input) -> IResult<String> {
-    map_res(rule! { CodeString }, |token| {
+    map_res(rule! { LiteralCodeString }, |token| {
         let content = &token.text()[2..token.text().len() - 2];
         let trimmed = unindent::unindent(content).trim().to_string();
         Ok(trimmed)

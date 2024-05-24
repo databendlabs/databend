@@ -20,10 +20,12 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_meta_types::ErrorSubject;
+use databend_common_meta_types::LogId;
 use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::TempSnapshotData;
 use log::error;
 use log::info;
 use log::warn;
@@ -103,6 +105,8 @@ pub struct SnapshotStoreV002 {
 }
 
 impl SnapshotStoreV002 {
+    const TEMP_PREFIX: &'static str = "0.snap";
+
     pub fn new(data_version: DataVersion, config: RaftConfig) -> Self {
         SnapshotStoreV002 {
             data_version,
@@ -130,12 +134,15 @@ impl SnapshotStoreV002 {
     }
 
     pub fn snapshot_temp_path(&self) -> String {
+        // Sleep to avoid timestamp collision when this function is called twice in a short time.
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
         let ts = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis();
 
-        format!("{}/0.snap-{}", self.snapshot_dir(), ts)
+        format!("{}/{}-{}", self.snapshot_dir(), Self::TEMP_PREFIX, ts)
     }
 
     /// Return a list of valid snapshot ids found in the snapshot directory.
@@ -164,7 +171,19 @@ impl SnapshotStoreV002 {
 
         info!("cleaning old snapshots in {}", dir);
 
-        let (snapshot_ids, invalid_files) = self.load_snapshot_ids().await?;
+        let (snapshot_ids, mut invalid_files) = self.load_snapshot_ids().await?;
+
+        // The last several temp files may be in use by snapshot transmitting.
+        // And do not delete them at once.
+        {
+            let l = invalid_files.len();
+            if l > 2 {
+                invalid_files = invalid_files.into_iter().take(l - 2).collect();
+            } else {
+                invalid_files = vec![];
+            }
+        }
+
         for invalid_file in invalid_files {
             let path = format!("{}/{}", dir, invalid_file);
 
@@ -240,13 +259,17 @@ impl SnapshotStoreV002 {
         }
 
         snapshot_ids.sort();
+        invalid_files.sort();
+
         info!("dir: {}; loaded snapshots: {:?}", dir, snapshot_ids);
+        info!("dir: {}; invalid files: {:?}", dir, invalid_files);
 
         Ok((snapshot_ids, invalid_files))
     }
 
-    pub fn new_writer(&mut self) -> Result<WriterV002, SnapshotStoreError> {
-        self.ensure_snapshot_dir()?;
+    pub fn new_writer(&self) -> Result<WriterV002, SnapshotStoreError> {
+        self.ensure_snapshot_dir()
+            .map_err(|e| e.with_context("creating snapshot writer"))?;
 
         WriterV002::new(self)
             .map_err(|e| SnapshotStoreError::write(e).with_context("creating snapshot writer"))
@@ -257,6 +280,40 @@ impl SnapshotStoreV002 {
         let p = self.snapshot_temp_path();
 
         SnapshotData::new_temp(p).await
+    }
+
+    /// Commit [`TempSnapshotData`] to a snapshot file with a generated snapshot id.
+    pub fn commit_snapshot_data_gen_id(
+        &self,
+        temp: TempSnapshotData,
+        last_applied: Option<LogId>,
+        key_cnt: u64,
+    ) -> Result<(MetaSnapshotId, SnapshotData), io::Error> {
+        let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied).with_key_num(Some(key_cnt));
+        let d = self.commit_snapshot_data(temp, snapshot_id.clone())?;
+        Ok((snapshot_id, d))
+    }
+
+    /// Commit [`TempSnapshotData`] to a snapshot file with the given snapshot id.
+    pub fn commit_snapshot_data(
+        &self,
+        temp: TempSnapshotData,
+        snapshot_id: MetaSnapshotId,
+    ) -> Result<SnapshotData, io::Error> {
+        if snapshot_id.key_num.is_none() {
+            warn!("snapshot_id.key_num is not set: {:?}", snapshot_id);
+        }
+
+        let final_path = self.snapshot_path(&snapshot_id.to_string());
+        let d = temp.commit(final_path.clone())?;
+
+        info!(
+            "snapshot committed: snapshot_id: {}, path: {}",
+            snapshot_id.to_string(),
+            final_path
+        );
+
+        Ok(d)
     }
 
     /// Return a snapshot for async reading
@@ -327,5 +384,32 @@ impl SnapshotStoreV002 {
         let s = context.to_string();
         error!("{} while context: {}", e, s);
         SnapshotStoreError::read(e).with_context(context)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::RaftConfig;
+    use crate::ondisk::DATA_VERSION;
+
+    #[test]
+    fn test_temp_path_no_dup() -> anyhow::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let p = temp.path();
+        let raft_config = RaftConfig {
+            raft_dir: p.to_str().unwrap().to_string(),
+            ..Default::default()
+        };
+
+        let store = super::SnapshotStoreV002::new(DATA_VERSION, raft_config);
+
+        let mut prev = None;
+        for _i in 0..10 {
+            let path = store.snapshot_temp_path();
+            assert_ne!(prev, Some(path.clone()), "dup: {}", path);
+            prev = Some(path);
+        }
+
+        Ok(())
     }
 }

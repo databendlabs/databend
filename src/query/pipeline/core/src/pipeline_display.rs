@@ -35,7 +35,7 @@ impl<'a> PipelineIndentDisplayWrapper<'a> {
 }
 
 impl<'a> Display for PipelineIndentDisplayWrapper<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let pipes = &self.pipeline.pipes;
         for (index, pipe) in pipes.iter().rev().enumerate() {
             if index > 0 {

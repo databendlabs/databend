@@ -190,7 +190,6 @@ impl ExecutorWorkerContext {
             let tracking_payload = graph.get_node_tracking_payload(node_index);
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
             executor.async_runtime.spawn(
-                query_id.as_ref().clone(),
                 ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
@@ -214,7 +213,7 @@ impl ExecutorWorkerContext {
 }
 
 impl Debug for ExecutorTask {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         unsafe {
             match self {
                 ExecutorTask::None => write!(f, "ExecutorTask::None"),

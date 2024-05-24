@@ -17,13 +17,14 @@ mod dml;
 mod expr;
 mod query;
 
-use databend_common_exception::Result;
 use ddl::*;
 use dml::*;
 use pretty::RcDoc;
 use query::*;
 
 use crate::ast::Statement;
+use crate::ParseError;
+use crate::Result;
 
 pub fn pretty_statement(stmt: Statement, max_width: usize) -> Result<String> {
     let pretty_stmt = match stmt {
@@ -44,8 +45,10 @@ pub fn pretty_statement(stmt: Statement, max_width: usize) -> Result<String> {
     };
 
     let mut bs = Vec::new();
-    pretty_stmt.render(max_width, &mut bs)?;
-    Ok(String::from_utf8(bs)?)
+    pretty_stmt
+        .render(max_width, &mut bs)
+        .map_err(|err| ParseError(None, err.to_string()))?;
+    String::from_utf8(bs).map_err(|err| ParseError(None, err.to_string()))
 }
 
 pub(crate) const NEST_FACTOR: isize = 4;

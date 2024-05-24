@@ -28,7 +28,6 @@ use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
@@ -37,8 +36,8 @@ use databend_common_storages_stage::StageTable;
 use log::debug;
 use log::info;
 
-use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
@@ -78,7 +77,7 @@ impl CopyIntoTableInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),
@@ -106,20 +105,22 @@ impl CopyIntoTableInterpreter {
             )
             .await?;
         let mut update_stream_meta_reqs = vec![];
-        let source = if let Some(ref query) = plan.query {
-            let (query_interpreter, update_stream_meta) = self.build_query(query).await?;
+        let (source, project_columns) = if let Some(ref query) = plan.query {
+            let query = if plan.enable_distributed {
+                query.remove_exchange_for_select()
+            } else {
+                *query.clone()
+            };
+
+            let (query_interpreter, update_stream_meta) = self.build_query(&query).await?;
             update_stream_meta_reqs = update_stream_meta;
             let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
 
             let result_columns = query_interpreter.get_result_columns();
-            CopyIntoTableSource::Query(Box::new(PhysicalPlan::Project(
-                Project::from_columns_binding(
-                    0,
-                    query_physical_plan,
-                    result_columns,
-                    query_interpreter.get_ignore_result(),
-                )?,
-            )))
+            (
+                CopyIntoTableSource::Query(query_physical_plan),
+                Some(result_columns),
+            )
         } else {
             let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
 
@@ -139,14 +140,17 @@ impl CopyIntoTableInterpreter {
                 name_mapping.insert(field.name.clone(), idx);
             }
 
-            CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
-                plan_id: 0,
-                name_mapping,
-                stat_info: None,
-                table_index: None,
-                internal_column: None,
-                source: Box::new(data_source_plan),
-            })))
+            (
+                CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
+                    plan_id: 0,
+                    name_mapping,
+                    stat_info: None,
+                    table_index: None,
+                    internal_column: None,
+                    source: Box::new(data_source_plan),
+                }))),
+                None,
+            )
         };
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
@@ -160,7 +164,7 @@ impl CopyIntoTableInterpreter {
             force: plan.force,
             write_mode: plan.write_mode,
             validation_mode: plan.validation_mode.clone(),
-
+            project_columns,
             source,
         }));
 

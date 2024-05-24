@@ -15,17 +15,6 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use databend_common_meta_app::principal::AuthType;
-use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::schema::CatalogType;
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::ShareGrantObjectName;
-use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::tenant::Tenant;
-use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -54,6 +43,7 @@ use crate::rule;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
+    GrantObjectName(GrantObjectName),
     ShareGrantObjectName(ShareGrantObjectName),
     ShareName(String),
 }
@@ -373,10 +363,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let unset_variable = map(
         rule! {
-            UNSET ~ #unset_source
+            UNSET ~ SESSION? ~ #unset_source
         },
-        |(_, unset_source)| {
+        |(_, opt_session_level, unset_source)| {
             Statement::UnSetVariable(UnSetStmt {
+                session_level: opt_session_level.is_some(),
                 source: unset_source,
             })
         },
@@ -1288,11 +1279,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_grants = map(
         rule! {
-            SHOW ~ GRANTS ~ #show_grant_option?
+            SHOW ~ GRANTS ~ #show_grant_option? ~ ^#show_options?
         },
-        |(_, _, show_grant_option)| match show_grant_option {
+        |(_, _, show_grant_option, opt_limit)| match show_grant_option {
             Some(ShowGrantOption::PrincipalIdentity(principal)) => Statement::ShowGrants {
                 principal: Some(principal),
+                show_options: opt_limit,
             },
             Some(ShowGrantOption::ShareGrantObjectName(object)) => {
                 Statement::ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt { object })
@@ -1300,7 +1292,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Some(ShowGrantOption::ShareName(share_name)) => {
                 Statement::ShowGrantsOfShare(ShowGrantsOfShareStmt { share_name })
             }
-            None => Statement::ShowGrants { principal: None },
+            None => Statement::ShowGrants {
+                principal: None,
+                show_options: opt_limit,
+            },
+            Some(ShowGrantOption::GrantObjectName(object)) => {
+                Statement::ShowObjectPrivileges(ShowObjectPrivilegesStmt {
+                    object,
+                    show_option: opt_limit,
+                })
+            }
         },
     );
     let revoke = map(
@@ -2735,6 +2736,36 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     Ok((i, def))
 }
 
+pub fn inverted_index_def(i: Input) -> IResult<InvertedIndexDefinition> {
+    map_res(
+        rule! {
+            ASYNC?
+            ~ INVERTED ~ ^INDEX
+            ~ #ident
+            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+            ~ ( #table_option )?
+        },
+        |(opt_async, _, _, index_name, _, columns, _, opt_index_options)| {
+            Ok(InvertedIndexDefinition {
+                index_name,
+                columns,
+                sync_creation: opt_async.is_none(),
+                index_options: opt_index_options.unwrap_or_default(),
+            })
+        },
+    )(i)
+}
+
+pub fn create_def(i: Input) -> IResult<CreateDefinition> {
+    alt((
+        map(rule! { #column_def }, CreateDefinition::Column),
+        map(
+            rule! { #inverted_index_def },
+            CreateDefinition::InvertedIndex,
+        ),
+    ))(i)
+}
+
 pub fn role_name(i: Input) -> IResult<String> {
     let role_ident = map(
         rule! {
@@ -2868,7 +2899,7 @@ pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
         rule! {
             DATABASE ~ #ident
         },
-        |(_, database)| ShareGrantObjectName::Database(database.to_string()),
+        |(_, database)| ShareGrantObjectName::Database(database),
     );
 
     // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
@@ -2876,14 +2907,46 @@ pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
         rule! {
             TABLE ~  #ident ~ "." ~ #ident
         },
-        |(_, database, _, table)| {
-            ShareGrantObjectName::Table(database.to_string(), table.to_string())
-        },
+        |(_, database, _, table)| ShareGrantObjectName::Table(database, table),
     );
 
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
+    )(i)
+}
+
+pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
+    let database = map(
+        rule! {
+            DATABASE ~ #ident
+        },
+        |(_, database)| GrantObjectName::Database(database.to_string()),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            TABLE ~  #dot_separated_idents_1_to_2
+        },
+        |(_, (database, table))| {
+            GrantObjectName::Table(database.map(|db| db.to_string()), table.to_string())
+        },
+    );
+
+    let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
+        GrantObjectName::Stage(stage_name.to_string())
+    });
+
+    let udf = map(rule! { UDF ~ #ident}, |(_, udf_name)| {
+        GrantObjectName::UDF(udf_name.to_string())
+    });
+
+    rule!(
+        #database : "DATABASE <database>"
+        | #table : "TABLE <database>.<table>"
+        | #stage : "STAGE <stage_name>"
+        | #udf : "UDF <udf_name>"
     )(i)
 }
 
@@ -3005,9 +3068,9 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 
     let share_object_name = map(
         rule! {
-            ON ~ #grant_share_object_name
+            ON ~ #on_object_name
         },
-        |(_, object_name)| ShowGrantOption::ShareGrantObjectName(object_name),
+        |(_, object_name)| ShowGrantOption::GrantObjectName(object_name),
     );
 
     let share_name = map(
@@ -3019,7 +3082,7 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
-        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name>}"
+        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> }"
         | #share_name: "OF SHARE <share_name>"
     )(i)
 }
@@ -3048,9 +3111,28 @@ pub fn grant_option(i: Input) -> IResult<PrincipalIdentity> {
 pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     let columns = map(
         rule! {
-            "(" ~ ^#comma_separated_list1(column_def) ~ ^")"
+            "(" ~ ^#comma_separated_list1(create_def) ~ ^")"
         },
-        |(_, columns, _)| CreateTableSource::Columns(columns),
+        |(_, create_defs, _)| {
+            let mut columns = Vec::with_capacity(create_defs.len());
+            let mut inverted_indexes = Vec::new();
+            for create_def in create_defs {
+                match create_def {
+                    CreateDefinition::Column(column) => {
+                        columns.push(column);
+                    }
+                    CreateDefinition::InvertedIndex(inverted_index) => {
+                        inverted_indexes.push(inverted_index);
+                    }
+                }
+            }
+            let opt_inverted_indexes = if !inverted_indexes.is_empty() {
+                Some(inverted_indexes)
+            } else {
+                None
+            };
+            CreateTableSource::Columns(columns, opt_inverted_indexes)
+        },
     );
     let like = map(
         rule! {
@@ -3619,7 +3701,7 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         rule! {
              #literal_u64 ~ MINUTE
         },
-        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60),
+        |(mins, _)| ScheduleOptions::IntervalSecs(mins * 60, 0),
     );
     let cron_expr = map(
         rule! {
@@ -3631,12 +3713,19 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         rule! {
              #literal_u64 ~ SECOND
         },
-        |(secs, _)| ScheduleOptions::IntervalSecs(secs),
+        |(secs, _)| ScheduleOptions::IntervalSecs(secs, 0),
+    );
+    let interval_millis = map(
+        rule! {
+             #literal_u64 ~ MILLISECOND
+        },
+        |(millis, _)| ScheduleOptions::IntervalSecs(0, millis),
     );
     rule!(
         #interval
         | #cron_expr
         | #interval_sec
+        | #interval_millis
     )(i)
 }
 
@@ -3762,16 +3851,12 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map_res(
+    let share_from = map(
         rule! {
             FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
-        |(_, _, tenant, _, share_name)| {
-            Tenant::new_or_err(tenant.to_string(), func_name!())
-                .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
-                .map(|tenant| {
-                    CreateDatabaseOption::FromShare(ShareNameIdent::new(tenant, share_name))
-                })
+        |(_, _, tenant, _, share)| {
+            CreateDatabaseOption::FromShare(ShareNameIdent { tenant, share })
         },
     );
 
@@ -3908,6 +3993,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 columns: vec![],
             }),
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -3926,6 +4012,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         },
@@ -3987,7 +4074,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ RETURNS ~ #udf_arg_type
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ AS ~ ^#code_string
+            ~ AS ~ ^(#code_string | #literal_string)
         },
         |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
             UDFDefinition::UDFScript {

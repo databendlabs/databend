@@ -236,7 +236,7 @@ impl Insert {
 }
 
 impl std::fmt::Debug for Insert {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Insert")
             .field("catalog", &self.catalog)
             .field("database", &self.database)

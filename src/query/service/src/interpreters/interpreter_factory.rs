@@ -404,10 +404,6 @@ impl InterpreterFactory {
                 ctx,
                 *grant_role.clone(),
             )?)),
-            Plan::ShowGrants(show_grants) => Ok(Arc::new(ShowGrantsInterpreter::try_create(
-                ctx,
-                *show_grants.clone(),
-            )?)),
             Plan::RevokePriv(revoke_priv) => Ok(Arc::new(RevokePrivilegeInterpreter::try_create(
                 ctx,
                 *revoke_priv.clone(),

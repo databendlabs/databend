@@ -118,7 +118,6 @@ impl PipelineBuilder {
         //  2.2 matched only: rowids and MutationLogs
         //  2.3 insert only: MutationLogs
         self.build_pipeline(input)?;
-        self.main_pipeline.try_resize(1)?;
 
         // deserialize MixRowIdKindAndLog
         if *change_join_order {
@@ -273,7 +272,6 @@ impl PipelineBuilder {
 
             // 6. serialize segment
             let serialize_segment_transform = TransformSerializeSegment::new(
-                self.ctx.clone(),
                 InputPort::create(),
                 OutputPort::create(),
                 table,
@@ -402,7 +400,6 @@ impl PipelineBuilder {
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
         let serialize_segment_transform = TransformSerializeSegment::new(
-            self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,

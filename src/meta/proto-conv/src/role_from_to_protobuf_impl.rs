@@ -15,6 +15,8 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::collections::HashSet;
+
 use databend_common_meta_app as mt;
 use databend_common_protos::pb;
 
@@ -35,11 +37,12 @@ impl FromToProto for mt::principal::RoleInfo {
 
         Ok(mt::principal::RoleInfo {
             name: p.name.clone(),
-            grants: mt::principal::UserGrantSet::from_pb(p.grants.ok_or_else(|| {
-                Incompatible {
-                    reason: "RoleInfo.grants cannot be None".to_string(),
-                }
-            })?)?,
+            grants: if let Some(grants) = p.grants {
+                mt::principal::UserGrantSet::from_pb(grants)
+                    .unwrap_or_else(|_| mt::principal::UserGrantSet::new(vec![], HashSet::new()))
+            } else {
+                mt::principal::UserGrantSet::new(vec![], HashSet::new())
+            },
         })
     }
 

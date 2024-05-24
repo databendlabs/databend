@@ -80,7 +80,7 @@ pub struct MergeInto {
 }
 
 impl std::fmt::Debug for MergeInto {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Merge Into")
             .field("catalog", &self.catalog)
             .field("database", &self.database)

@@ -548,7 +548,6 @@ impl ScheduleQueue {
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
             let process_future = proc.processor.async_process();
             executor.async_runtime.spawn(
-                query_id.as_ref().clone(),
                 ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
@@ -664,7 +663,6 @@ impl ScheduleQueue {
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
             let process_future = proc.processor.async_process();
             executor.async_runtime.spawn(
-                query_id.as_ref().clone(),
                 ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
@@ -842,7 +840,7 @@ impl RunningGraph {
         }
 
         impl Debug for NodeDisplay {
-            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
                 match &self.details_status {
                     None => f
                         .debug_struct("Node")
@@ -941,13 +939,13 @@ impl RunningGraph {
 }
 
 impl Debug for Node {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         unsafe { write!(f, "{}", self.processor.name()) }
     }
 }
 
 impl Debug for ExecutingGraph {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(
             f,
             "{:?}",
@@ -957,14 +955,14 @@ impl Debug for ExecutingGraph {
 }
 
 impl Debug for RunningGraph {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         // let graph = self.0.read();
         write!(f, "{:?}", self.0)
     }
 }
 
 impl Debug for ScheduleQueue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         #[derive(Debug)]
         #[allow(dead_code)]
         struct QueueItem {

@@ -60,7 +60,7 @@ impl LogType {
 }
 
 impl std::fmt::Debug for LogType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.as_string())
     }
 }
@@ -107,6 +107,8 @@ pub struct QueryLogElement {
     pub query_id: String,
     pub query_kind: String,
     pub query_text: String,
+    pub query_hash: String,
+    pub query_parameterized_hash: String,
 
     #[serde(serialize_with = "date_str")]
     pub event_date: i32,
@@ -196,6 +198,8 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("query_id", TableDataType::String),
             TableField::new("query_kind", TableDataType::String),
             TableField::new("query_text", TableDataType::String),
+            TableField::new("query_hash", TableDataType::String),
+            TableField::new("query_parameterized_hash", TableDataType::String),
             TableField::new("event_date", TableDataType::Date),
             TableField::new("event_time", TableDataType::Timestamp),
             TableField::new("query_start_time", TableDataType::Timestamp),
@@ -367,6 +371,14 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.query_text.clone()).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.query_hash.clone()).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.query_parameterized_hash.clone()).as_ref());
         columns
             .next()
             .unwrap()

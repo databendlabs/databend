@@ -38,6 +38,7 @@ use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
 
+use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use super::UpdateInterpreter;
 use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
@@ -119,6 +120,16 @@ impl Interpreter for ExplainInterpreter {
                     }
                     _ => self.explain_plan(&self.plan)?,
                 },
+                Plan::InsertMultiTable(plan) => {
+                    let physical_plan = InsertMultiTableInterpreter::try_create_static(
+                        self.ctx.clone(),
+                        *plan.clone(),
+                    )?
+                    .build_physical_plan()
+                    .await?;
+                    self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
+                        .await?
+                }
                 Plan::MergeInto(plan) => {
                     let mut res = self.explain_plan(&self.plan)?;
                     let input = self

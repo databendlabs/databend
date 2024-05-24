@@ -31,7 +31,7 @@ pub enum TaskSql {
 }
 
 impl Display for TaskSql {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TaskSql::SingleStatement(stmt) => write!(f, "{}", stmt),
             TaskSql::ScriptBlock(stmts) => {
@@ -72,7 +72,7 @@ pub struct CreateTaskStmt {
 }
 
 impl Display for CreateTaskStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE TASK")?;
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
@@ -126,7 +126,7 @@ pub struct WarehouseOptions {
 }
 
 impl Display for WarehouseOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(wh) = &self.warehouse {
             write!(f, "WAREHOUSE = '{}'", wh)?;
         }
@@ -136,15 +136,21 @@ impl Display for WarehouseOptions {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ScheduleOptions {
-    IntervalSecs(#[drive(skip)] u64),
+    IntervalSecs(#[drive(skip)] u64, #[drive(skip)] u64),
     CronExpression(#[drive(skip)] String, #[drive(skip)] Option<String>),
 }
 
 impl Display for ScheduleOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            ScheduleOptions::IntervalSecs(secs) => {
-                write!(f, "{} SECOND", secs)
+            ScheduleOptions::IntervalSecs(secs, ms) => {
+                if *ms > 0 {
+                    write!(f, "{} MILLISECOND", ms)?;
+                    Ok(())
+                } else {
+                    write!(f, "{} SECOND", secs)?;
+                    Ok(())
+                }
             }
             ScheduleOptions::CronExpression(expr, tz) => {
                 write!(f, "USING CRON '{}'", expr)?;
@@ -167,7 +173,7 @@ pub struct AlterTaskStmt {
 }
 
 impl Display for AlterTaskStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER TASK")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -207,7 +213,7 @@ pub enum AlterTaskOptions {
 }
 
 impl Display for AlterTaskOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AlterTaskOptions::Resume => write!(f, "RESUME"),
             AlterTaskOptions::Suspend => write!(f, "SUSPEND"),
@@ -270,7 +276,7 @@ pub struct DropTaskStmt {
 }
 
 impl Display for DropTaskStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP TASK")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -285,7 +291,7 @@ pub struct ShowTasksStmt {
 }
 
 impl Display for ShowTasksStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW ")?;
         write!(f, "TASKS")?;
         if let Some(limit) = &self.limit {
@@ -303,7 +309,7 @@ pub struct ExecuteTaskStmt {
 }
 
 impl Display for ExecuteTaskStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "EXECUTE TASK {}", self.name)
     }
 }
@@ -315,7 +321,7 @@ pub struct DescribeTaskStmt {
 }
 
 impl Display for DescribeTaskStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE TASK {}", self.name)
     }
 }

@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Span;
-use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::schema::CreateOption;
-
-use crate::ast::visitors::walk_column_id_mut;
 use crate::ast::*;
+use crate::Span;
 
 #[deprecated = "Use derive_visitor::VisitorMut instead"]
 pub trait VisitorMut: Sized {
@@ -544,6 +539,12 @@ pub trait VisitorMut: Sized {
 
     fn visit_column_definition(&mut self, _column_definition: &mut ColumnDefinition) {}
 
+    fn visit_inverted_index_definition(
+        &mut self,
+        _inverted_index_definition: &mut InvertedIndexDefinition,
+    ) {
+    }
+
     fn visit_drop_table(&mut self, _stmt: &mut DropTableStmt) {}
 
     fn visit_undrop_table(&mut self, _stmt: &mut UndropTableStmt) {}
@@ -622,7 +623,14 @@ pub trait VisitorMut: Sized {
 
     fn visit_grant(&mut self, _grant: &mut GrantStmt) {}
 
-    fn visit_show_grant(&mut self, _principal: &mut Option<PrincipalIdentity>) {}
+    fn visit_show_grant(
+        &mut self,
+        _principal: &mut Option<PrincipalIdentity>,
+        _show_options: &mut Option<ShowOptions>,
+    ) {
+    }
+
+    fn visit_show_object_priv(&mut self, _show: &mut ShowObjectPrivilegesStmt) {}
 
     fn visit_revoke(&mut self, _revoke: &mut RevokeStmt) {}
 

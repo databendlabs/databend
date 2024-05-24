@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use futures::Future;
 use opendal::raw::oio;
 use opendal::raw::Access;
@@ -54,7 +53,7 @@ pub struct RuntimeLayer {
 }
 
 impl Debug for RuntimeLayer {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", &self.runtime.inner())
     }
 }
@@ -83,7 +82,7 @@ pub struct RuntimeAccessor<A> {
 }
 
 impl<A> Debug for RuntimeAccessor<A> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.runtime.inner())
     }
 }
@@ -106,7 +105,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(GLOBAL_TASK, async move { op.create_dir(&path, args).await })
+            .spawn(async move { op.create_dir(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -117,7 +116,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let path = path.to_string();
 
         self.runtime
-            .spawn(GLOBAL_TASK, async move { op.read(&path, args).await })
+            .spawn(async move { op.read(&path, args).await })
             .await
             .expect("join must success")
             .map(|(rp, r)| {
@@ -131,7 +130,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(GLOBAL_TASK, async move { op.write(&path, args).await })
+            .spawn(async move { op.write(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -141,7 +140,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(GLOBAL_TASK, async move { op.stat(&path, args).await })
+            .spawn(async move { op.stat(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -151,7 +150,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(GLOBAL_TASK, async move { op.delete(&path, args).await })
+            .spawn(async move { op.delete(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -161,7 +160,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(GLOBAL_TASK, async move { op.list(&path, args).await })
+            .spawn(async move { op.list(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -204,7 +203,7 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
         let runtime = self.runtime.clone();
         async move {
             runtime
-                .spawn(GLOBAL_TASK, async move { r.read_at(offset, limit).await })
+                .spawn(async move { r.read_at(offset, limit).await })
                 .await
                 .expect("join must success")
         }

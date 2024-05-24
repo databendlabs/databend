@@ -149,7 +149,7 @@ pub struct HiveCatalog {
 }
 
 impl Debug for HiveCatalog {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("HiveCatalog")
             .field("info", &self.info)
             .field("sp", &self.sp)

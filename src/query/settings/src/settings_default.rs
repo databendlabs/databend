@@ -52,7 +52,7 @@ pub enum SettingRange {
 }
 
 impl Display for SettingRange {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             SettingRange::Numeric(range) => write!(f, "[{}, {}]", range.start(), range.end()),
             SettingRange::String(values) => write!(f, "{:?}", values),
@@ -345,7 +345,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("load_file_metadata_expire_hours", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(24 * 7),
+                    value: UserSettingValue::UInt64(24),
                     desc: "Sets the hours that the metadata of files you load data from with COPY INTO will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -632,7 +632,7 @@ impl DefaultSettings {
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting disables stage and udf privilege check(disable by default).",
+                    desc: "experiment setting disables stage and udf privilege check(enable by default).",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -808,7 +808,7 @@ impl DefaultSettings {
         let max_memory_usage = Self::max_memory_usage()?;
         // The sort merge consumes more than twice as much memory,
         // so the block size is set relatively conservatively here.
-        let recluster_block_size = max_memory_usage * 35 / 100;
+        let recluster_block_size = max_memory_usage * 32 / 100;
         Ok(recluster_block_size)
     }
 

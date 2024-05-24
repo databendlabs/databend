@@ -91,7 +91,7 @@ impl SinkAnalyzeState {
         snapshot_id: SnapshotId,
         input: Arc<InputPort>,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, ctx.clone(), SinkAnalyzeState {
+        let sinker = AsyncSinker::create(input, SinkAnalyzeState {
             ctx,
             output_schema,
             catalog: catalog.to_string(),
@@ -263,10 +263,10 @@ pub async fn regenerate_statistics(
         {
             read_segment_count += chunk.len();
             let status = format!(
-                "analyze: read segment files:{}/{}, cost:{} sec",
+                "analyze: read segment files:{}/{}, cost:{:?}",
                 read_segment_count,
                 number_segments,
-                start.elapsed().as_secs()
+                start.elapsed()
             );
             ctx.set_status_info(&status);
         }

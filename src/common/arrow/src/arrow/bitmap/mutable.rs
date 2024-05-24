@@ -74,7 +74,7 @@ pub struct MutableBitmap {
 }
 
 impl std::fmt::Debug for MutableBitmap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         fmt(&self.buffer, 0, self.len(), f)
     }
 }

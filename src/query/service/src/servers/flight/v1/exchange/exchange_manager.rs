@@ -26,7 +26,6 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -35,6 +34,8 @@ use databend_common_sql::executor::PhysicalPlan;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
+use petgraph::prelude::EdgeRef;
+use petgraph::Direction;
 use tonic::Status;
 
 use super::exchange_params::ExchangeParams;
@@ -53,9 +54,10 @@ use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::packets::Edge;
 use crate::servers::flight::v1::packets::FragmentPlanPacket;
-use crate::servers::flight::v1::packets::InitNodesChannelPacket;
 use crate::servers::flight::v1::packets::Packet;
+use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragmentsPlanPacket;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightExchange;
@@ -115,59 +117,97 @@ impl DataExchangeManager {
         queries_profiles
     }
 
-    // Create connections for cluster all nodes. We will push data through this connection.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
+    pub async fn init_query_env(&self, env: &QueryEnv) -> Result<()> {
+        enum QueryExchange {
+            Fragment {
+                source: String,
+                fragment: usize,
+                exchange: FlightExchange,
+            },
+            Statistics {
+                source: String,
+                exchange: FlightExchange,
+            },
+        }
+
+        let config = GlobalConfig::instance();
+        let with_cur_rt = env.create_rpc_clint_with_current_rt;
+
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
 
-        let target = &packet.executor.id;
+        for index in env.dataflow_diagram.node_indices() {
+            if env.dataflow_diagram[index].id == config.query.node_id {
+                let edges = env
+                    .dataflow_diagram
+                    .edges_directed(index, Direction::Incoming);
 
-        let create_rpc_client_with_current_rt = packet.create_rpc_clint_with_current_rt;
+                let mut flight_exchanges = vec![];
+                for edge in edges {
+                    let source = env.dataflow_diagram[edge.source()].clone();
+                    let target = env.dataflow_diagram[edge.target()].clone();
+                    let edge = edge.weight().clone();
 
-        for connection_info in &packet.fragment_connections_info {
-            for fragment in &connection_info.fragments {
-                let address = &connection_info.source.flight_address;
-                let mut flight_client =
-                    Self::create_client(address, create_rpc_client_with_current_rt).await?;
+                    let query_id = env.query_id.clone();
+                    let address = source.flight_address.clone();
 
-                targets_exchanges.insert(
-                    (connection_info.source.id.clone(), *fragment),
-                    flight_client
-                        .do_get(&packet.query_id, target, *fragment)
-                        .await?,
-                );
+                    flight_exchanges.push(async move {
+                        let mut flight_client = Self::create_client(&address, with_cur_rt).await?;
+
+                        Ok::<QueryExchange, ErrorCode>(match edge {
+                            Edge::Fragment(v) => QueryExchange::Fragment {
+                                source: source.id.clone(),
+                                fragment: v,
+                                exchange: flight_client.do_get(&query_id, &target.id, v).await?,
+                            },
+                            Edge::Statistics => QueryExchange::Statistics {
+                                source: source.id.clone(),
+                                exchange: flight_client
+                                    .request_server_exchange(&query_id, &target.id)
+                                    .await?,
+                            },
+                        })
+                    });
+                }
+
+                let flight_exchanges = futures::future::try_join_all(flight_exchanges).await?;
+                for flight_exchange in flight_exchanges {
+                    match flight_exchange {
+                        QueryExchange::Fragment {
+                            source,
+                            fragment,
+                            exchange,
+                        } => {
+                            targets_exchanges.insert((source, fragment), exchange);
+                        }
+                        QueryExchange::Statistics { source, exchange } => {
+                            request_exchanges.insert(source, exchange);
+                        }
+                    };
+                }
+
+                let queries_coordinator_guard = self.queries_coordinator.lock();
+                let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+                return match queries_coordinator.entry(env.query_id.clone()) {
+                    Entry::Occupied(mut v) => {
+                        let query_coordinator = v.get_mut();
+                        query_coordinator.add_fragment_exchanges(targets_exchanges)?;
+                        query_coordinator.add_statistics_exchanges(request_exchanges)
+                    }
+                    Entry::Vacant(v) => {
+                        let query_coordinator = v.insert(QueryCoordinator::create());
+                        query_coordinator.add_fragment_exchanges(targets_exchanges)?;
+                        query_coordinator.add_statistics_exchanges(request_exchanges)
+                    }
+                };
             }
         }
 
-        for connection_info in &packet.statistics_connections_info {
-            let address = &connection_info.source.flight_address;
-            let mut flight_client =
-                Self::create_client(address, create_rpc_client_with_current_rt).await?;
-            request_exchanges.insert(
-                connection_info.source.id.clone(),
-                flight_client
-                    .request_server_exchange(&packet.query_id, target)
-                    .await?,
-            );
-        }
-
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
-
-        match queries_coordinator.entry(packet.query_id.clone()) {
-            Entry::Occupied(mut v) => {
-                let query_coordinator = v.get_mut();
-                query_coordinator.add_fragment_exchanges(targets_exchanges)?;
-                query_coordinator.add_statistics_exchanges(request_exchanges)
-            }
-            Entry::Vacant(v) => {
-                let query_coordinator = v.insert(QueryCoordinator::create());
-                query_coordinator.add_fragment_exchanges(targets_exchanges)?;
-                query_coordinator.add_statistics_exchanges(request_exchanges)
-            }
-        }
+        // do nothing
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -193,7 +233,7 @@ impl DataExchangeManager {
             task.await
         } else {
             GlobalIORuntime::instance()
-                .spawn(GLOBAL_TASK, task)
+                .spawn(task)
                 .await
                 .expect("create client future must be joined successfully")
         }
@@ -304,11 +344,9 @@ impl DataExchangeManager {
         let root_actions = actions.get_root_actions()?;
         let conf = GlobalConfig::instance();
 
-        // Initialize channels between cluster nodes
-        actions
-            .get_init_nodes_channel_packets()?
-            .commit(conf.as_ref(), timeout)
-            .await?;
+        // Initialize query env between cluster nodes
+        let query_env = actions.get_query_env()?;
+        query_env.init(timeout).await?;
 
         // Submit distributed tasks to all nodes.
         let (local_query_fragments_plan_packet, query_fragments_plan_packets) =

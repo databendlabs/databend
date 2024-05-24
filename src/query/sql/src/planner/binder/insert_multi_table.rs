@@ -26,8 +26,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 
 use crate::binder::ScalarBinder;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::plans::Else;
 use crate::plans::InsertMultiTable;
 use crate::plans::Into;
@@ -62,14 +60,6 @@ impl Binder {
             };
 
             let (s_expr, bind_context) = self.bind_single_table(bind_context, &table_ref).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
-                .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
-
-            if !self.check_sexpr_top(&s_expr)? {
-                return Err(ErrorCode::SemanticError(
-                    "insert source can't contain udf functions".to_string(),
-                ));
-            }
             let select_plan = Plan::Query {
                 s_expr: Box::new(s_expr),
                 metadata: self.metadata.clone(),
@@ -79,8 +69,7 @@ impl Binder {
                 ignore_result: false,
             };
 
-            let optimized_plan = optimize(opt_ctx, select_plan).await?;
-            (optimized_plan, bind_context)
+            (select_plan, bind_context)
         };
 
         let source_schema = input_source.schema();
@@ -158,6 +147,7 @@ impl Binder {
             is_first: *is_first,
             intos,
             target_tables: ordered_target_tables,
+            meta_data: self.metadata.clone(),
         };
         Ok(Plan::InsertMultiTable(Box::new(plan)))
     }

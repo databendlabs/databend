@@ -319,6 +319,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             table,
             alias,
             temporal,
+            consume,
             pivot,
             unpivot,
         } => if let Some(catalog) = catalog {
@@ -332,6 +333,16 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::nil()
         })
         .append(RcDoc::text(table.to_string()))
+        .append(if let Some(temporal) = temporal {
+            RcDoc::text(format!(" {temporal}"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if consume {
+            RcDoc::text(" WITH CONSUME")
+        } else {
+            RcDoc::nil()
+        })
         .append(if let Some(pivot) = pivot {
             RcDoc::text(format!(" {pivot}"))
         } else {
@@ -339,11 +350,6 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         })
         .append(if let Some(unpivot) = unpivot {
             RcDoc::text(format!(" {unpivot}"))
-        } else {
-            RcDoc::nil()
-        })
-        .append(if let Some(temporal) = temporal {
-            RcDoc::text(format!(" {temporal}"))
         } else {
             RcDoc::nil()
         })

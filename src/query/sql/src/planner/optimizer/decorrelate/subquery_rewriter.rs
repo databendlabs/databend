@@ -168,7 +168,10 @@ impl SubqueryRewriter {
                 ))
             }
 
-            RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(SExpr::create_unary(
+            RelOperator::Limit(_)
+            | RelOperator::Sort(_)
+            | RelOperator::Udf(_)
+            | RelOperator::AsyncFunction(_) => Ok(SExpr::create_unary(
                 Arc::new(s_expr.plan().clone()),
                 Arc::new(self.rewrite(s_expr.child(0)?)?),
             )),
@@ -176,9 +179,9 @@ impl SubqueryRewriter {
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
             | RelOperator::CteScan(_)
-            | RelOperator::ConstantTableScan(_) => Ok(s_expr.clone()),
-
-            _ => Err(ErrorCode::Internal("Invalid plan type")),
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::AddRowNumber(_)
+            | RelOperator::Exchange(_) => Ok(s_expr.clone()),
         }
     }
 
@@ -426,10 +429,11 @@ impl SubqueryRewriter {
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
                 let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
-                let agg_func_index = self
-                    .metadata
-                    .write()
-                    .add_derived_column("count(*)".to_string(), agg_func.return_type()?);
+                let agg_func_index = self.metadata.write().add_derived_column(
+                    "count(*)".to_string(),
+                    agg_func.return_type()?,
+                    None,
+                );
 
                 let agg = Aggregate {
                     group_items: vec![],
@@ -496,6 +500,7 @@ impl SubqueryRewriter {
                     let column_index = self.metadata.write().add_derived_column(
                         "_exists_scalar_subquery".to_string(),
                         DataType::Number(NumberDataType::UInt64),
+                        None,
                     );
                     output_index = Some(column_index);
                     let eval_scalar = EvalScalar {
@@ -572,6 +577,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
+                        None,
                     )
                 };
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
@@ -649,10 +655,12 @@ impl SubqueryRewriter {
         let count_idx = self.metadata.write().add_derived_column(
             "_count_scalar_subquery".to_string(),
             DataType::Number(NumberDataType::UInt64),
+            None,
         );
         let any_idx = self.metadata.write().add_derived_column(
             "_any_scalar_subquery".to_string(),
             *subquery.output_column.data_type.clone(),
+            None,
         );
         // Aggregate operator
         let agg = SExpr::create_unary(
@@ -741,6 +749,7 @@ impl SubqueryRewriter {
         let if_func_idx = self.metadata.write().add_derived_column(
             "_if_scalar_subquery".to_string(),
             *subquery.output_column.data_type.clone(),
+            None,
         );
         let scalar_expr = SExpr::create_unary(
             Arc::new(

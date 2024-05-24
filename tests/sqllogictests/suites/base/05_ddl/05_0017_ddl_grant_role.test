@@ -55,6 +55,31 @@ GRANT ROLE role1 TO ROLE role2
 statement ok
 GRANT ROLE role2 TO ROLE role3
 
+statement ok
+GRANT ROLE test TO ROLE role3
+
+query TTTT
+show roles
+----
+account_admin 0 (empty) 1 1
+public 0 (empty) 0 0
+role1 0 (empty) 0 0
+role2 1 role1 0 0
+role3 2 role2, test 0 0
+test 0 (empty) 0 0
+test-role 1 test 0 0
+
+query TTT
+select * from system.roles order by name;
+----
+account_admin 0 (empty)
+public 0 (empty)
+role1 0 (empty)
+role2 1 role1
+role3 2 role2, test
+test 0 (empty)
+test-role 1 test
+
 statement error 2206
 GRANT ROLE role3 TO ROLE role1
 
@@ -68,6 +93,72 @@ statement ok
 DROP USER 'test-user'
 
 statement ok
+create or replace table t(id int);
+
+statement ok
+create or replace database db1;
+
+statement ok
+create or replace stage s1;
+
+statement ok
+create or replace FUNCTION isnotempty AS(p) -> not(is_null(p));
+
+statement ok
+grant select on default.t to role role3;
+
+statement ok
+grant all on db1.* to role role2;
+
+statement ok
+grant all on db1.* to role role3;
+
+statement ok
+grant read on stage s1 to role role2;
+
+statement ok
+drop user if exists u_05_0017;
+
+statement ok
+create user u_05_0017 identified by '123';
+
+statement ok
+grant usage on udf isnotempty to u_05_0017;
+
+statement ok
+grant usage on udf  isnotempty to role role2;
+
+statement ok
+grant usage on udf  isnotempty to role role3;
+
+query TT
+show grants on udf isnotempty;
+----
+USAGE isnotempty NULL ROLE role2 (empty)
+USAGE isnotempty NULL ROLE role3 (empty)
+
+query TT
+show grants on udf isnotempty where name!='role2' limit 1;
+----
+USAGE isnotempty NULL ROLE role3 (empty)
+
+query TT
+show grants on stage s1;
+----
+Read s1 NULL ROLE role2 (empty)
+
+query TT
+select * EXCLUDE(object_id) from show_grants('database', 'db1', 'default');
+----
+CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role2 (empty)
+CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role3 (empty)
+
+query TT
+select * EXCLUDE(object_id) from show_grants('table', 't', 'default', 'default');
+----
+SELECT t ROLE role3 (empty)
+
+statement ok
 DROP ROLE role1
 
 statement ok
@@ -76,3 +167,17 @@ DROP ROLE role2
 statement ok
 DROP ROLE role3
 
+statement ok
+drop stage if exists s1;
+
+statement ok
+drop database if exists db1;
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop function if exists isnotempty;
+
+statement ok
+drop user if exists u_05_0017;

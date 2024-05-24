@@ -37,7 +37,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_ast::ast::UpdateExpr;
 use databend_common_ast::ast::UpdateStmt;
-use databend_common_exception::Span;
+use databend_common_ast::Span;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
@@ -299,6 +299,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             table: Identifier::from_name(None, table.name.clone()),
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         };
@@ -501,6 +502,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             table: Identifier::from_name(None, table.name.clone()),
             alias: None,
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         };

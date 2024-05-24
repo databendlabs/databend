@@ -15,19 +15,17 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_io::escape_string_with_quote;
-use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::task::CreateTaskStmt;
+use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -186,7 +184,6 @@ pub enum Statement {
     DropUser {
         #[drive(skip)]
         if_exists: bool,
-        #[drive(skip)]
         user: UserIdentity,
     },
     ShowRoles,
@@ -204,9 +201,10 @@ pub enum Statement {
     },
     Grant(GrantStmt),
     ShowGrants {
-        #[drive(skip)]
         principal: Option<PrincipalIdentity>,
+        show_options: Option<ShowOptions>,
     },
+    ShowObjectPrivileges(ShowObjectPrivilegesStmt),
     Revoke(RevokeStmt),
 
     // UDF
@@ -251,7 +249,6 @@ pub enum Statement {
 
     // UserDefinedFileFormat
     CreateFileFormat {
-        #[drive(skip)]
         create_option: CreateOption,
         #[drive(skip)]
         name: String,
@@ -388,7 +385,7 @@ impl Statement {
 }
 
 impl Display for Statement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Statement::Explain {
                 options,
@@ -587,7 +584,7 @@ impl Display for Statement {
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
-                write!(f, " {}", user.display())?;
+                write!(f, " {}", user)?;
             }
             Statement::CreateRole {
                 if_not_exists,
@@ -597,7 +594,7 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " '{}'", escape_string_with_quote(role, Some('\'')))?;
+                write!(f, " {}", QuotedString(role, '\''))?;
             }
             Statement::DropRole {
                 if_exists,
@@ -610,13 +607,20 @@ impl Display for Statement {
                 write!(f, " '{role}'")?;
             }
             Statement::Grant(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowGrants { principal } => {
+            Statement::ShowGrants {
+                principal,
+                show_options,
+            } => {
                 write!(f, "SHOW GRANTS")?;
                 if let Some(principal) = principal {
                     write!(f, " FOR")?;
                     write!(f, "{principal}")?;
                 }
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
             }
+            Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {

@@ -40,7 +40,6 @@ use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
-use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::cursor_ext::collect_number;
@@ -52,7 +51,6 @@ use databend_common_io::parse_bitmap;
 use databend_common_io::parse_to_ewkb;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
-use databend_common_meta_app::principal::XmlFileFormatParams;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
@@ -101,23 +99,6 @@ impl SeparatedTextDecoder {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone: options_ext.timezone,
-                disable_variant_check: options_ext.disable_variant_check,
-                binary_format: Default::default(),
-                is_rounding_mode: options_ext.is_rounding_mode,
-            },
-            nested_decoder: NestedValues::create(options_ext),
-        }
-    }
-
-    pub fn create_xml(_params: &XmlFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
-        SeparatedTextDecoder {
-            common_settings: InputCommonSettings {
-                null_if: vec![NULL_BYTES_LOWER.as_bytes().to_vec()],
-                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,

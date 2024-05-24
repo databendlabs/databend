@@ -194,7 +194,7 @@ impl RaftConfig {
     ///
     /// Raft will choose a random timeout in this range for next election.
     pub fn election_timeout(&self) -> (u64, u64) {
-        (self.heartbeat_interval * 5, self.heartbeat_interval * 7)
+        (self.heartbeat_interval * 2, self.heartbeat_interval * 3)
     }
 
     pub fn check(&self) -> std::result::Result<(), MetaStartupError> {

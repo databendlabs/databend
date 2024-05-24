@@ -34,6 +34,7 @@ pub mod server_metrics {
 
     use databend_common_meta_types::NodeId;
     use prometheus_client::metrics::counter::Counter;
+    use prometheus_client::metrics::family::Family;
     use prometheus_client::metrics::gauge::Gauge;
 
     use crate::metrics::registry::load_global_registry;
@@ -50,6 +51,8 @@ pub mod server_metrics {
         node_is_health: Gauge,
         leader_changes: Counter,
         applying_snapshot: Gauge,
+        snapshot_key_num: Gauge,
+        db_size: Gauge,
         last_log_index: Gauge,
         last_seq: Gauge,
         current_term: Gauge,
@@ -58,6 +61,7 @@ pub mod server_metrics {
         proposals_failed: Counter,
         read_failed: Counter,
         watchers: Gauge,
+        version: Family<Vec<(String, String)>, Gauge>,
     }
 
     impl ServerMetrics {
@@ -68,6 +72,8 @@ pub mod server_metrics {
                 node_is_health: Gauge::default(),
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
+                snapshot_key_num: Gauge::default(),
+                db_size: Gauge::default(),
                 last_log_index: Gauge::default(),
                 last_seq: Gauge::default(),
                 current_term: Gauge::default(),
@@ -76,6 +82,7 @@ pub mod server_metrics {
                 proposals_failed: Counter::default(),
                 read_failed: Counter::default(),
                 watchers: Gauge::default(),
+                version: Family::default(),
             };
 
             let mut registry = load_global_registry();
@@ -100,6 +107,12 @@ pub mod server_metrics {
                 "if this node is applying snapshot",
                 metrics.applying_snapshot.clone(),
             );
+            registry.register(
+                key!("snapshot_key_num"),
+                "snapshot key numbers",
+                metrics.snapshot_key_num.clone(),
+            );
+            registry.register(key!("db_size"), "db size", metrics.db_size.clone());
             registry.register(
                 key!("proposals_applied"),
                 "proposals applied",
@@ -132,6 +145,7 @@ pub mod server_metrics {
                 metrics.read_failed.clone(),
             );
             registry.register(key!("watchers"), "watchers", metrics.watchers.clone());
+            registry.register(key!("version"), "version", metrics.version.clone());
             metrics
         }
     }
@@ -157,6 +171,14 @@ pub mod server_metrics {
     /// Whether or not state-machine is applying snapshot.
     pub fn incr_applying_snapshot(cnt: i64) {
         SERVER_METRICS.applying_snapshot.inc_by(cnt);
+    }
+
+    pub fn set_snapshot_key_num(snapshot_key_num: u64) {
+        SERVER_METRICS.snapshot_key_num.set(snapshot_key_num as i64);
+    }
+
+    pub fn set_db_size(db_size: u64) {
+        SERVER_METRICS.db_size.set(db_size as i64);
     }
 
     pub fn set_proposals_applied(proposals_applied: u64) {
@@ -200,6 +222,15 @@ pub mod server_metrics {
 
     pub fn incr_watchers(cnt: i64) {
         SERVER_METRICS.watchers.inc_by(cnt);
+    }
+
+    pub fn set_version(semver: String, sha: String) {
+        let labels = &vec![
+            ("component".to_string(), "metasrv".to_string()),
+            ("semver".to_string(), semver),
+            ("sha".to_string(), sha),
+        ];
+        SERVER_METRICS.version.get_or_create(labels).set(1);
     }
 }
 

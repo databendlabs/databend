@@ -229,10 +229,14 @@ impl Binder {
         } else {
             engine
         };
-        let meta = self.database_meta(engine, options, from_share)?;
+        let meta = self.database_meta(
+            engine,
+            options,
+            &from_share.clone().map(TryInto::try_into).transpose()?,
+        )?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             tenant,
             catalog,
             database,

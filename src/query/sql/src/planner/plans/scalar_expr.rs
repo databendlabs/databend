@@ -16,11 +16,11 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::Range;
+use databend_common_ast::Span;
 use databend_common_async_functions::AsyncFunctionCall;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Range;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::types::DataType;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -647,9 +647,8 @@ pub struct UDFCall {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
-    Server(String),                        // server_addr
-    Script((String, String, String)),      // Lang, Version, Code
-    WasmScript((String, String, Vec<u8>)), // Lang, Version, Code
+    Server(String),                    // server_addr
+    Script((String, String, Vec<u8>)), // Lang, Version, Code
 }
 
 impl UDFType {
@@ -657,7 +656,6 @@ impl UDFType {
         match self {
             UDFType::Server(_) => !is_script,
             UDFType::Script(_) => is_script,
-            UDFType::WasmScript(_) => is_script,
         }
     }
 }

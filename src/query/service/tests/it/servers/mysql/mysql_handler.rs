@@ -20,7 +20,6 @@ use std::time::Duration;
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -170,10 +169,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         let start_barrier = start_barriers.clone();
         let destroy_barrier = destroy_barriers.clone();
 
-        join_handlers.push(runtime.spawn(
-            GLOBAL_TASK,
-            connect_server(port, start_barrier, destroy_barrier),
-        ));
+        join_handlers.push(runtime.spawn(connect_server(port, start_barrier, destroy_barrier)));
     }
 
     let mut accept = 0;
@@ -194,7 +190,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
 
 async fn create_connection(port: u16, with_tls: bool) -> Result<mysql_async::Conn> {
     let ssl_opts = if with_tls {
-        Some(SslOpts::default().with_root_cert_path(Some(Path::new(TEST_CA_CERT))))
+        Some(SslOpts::default().with_root_certs(vec![Path::new(TEST_CA_CERT).into()]))
     } else {
         None
     };

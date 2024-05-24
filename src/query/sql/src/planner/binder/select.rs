@@ -37,9 +37,9 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ROW_ID_COLUMN_ID;
@@ -726,17 +726,6 @@ impl Binder {
             .enumerate()
         {
             let left_index = if *left_col.data_type != coercion_types[idx] {
-                let new_column_index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(left_col.column_name.clone(), coercion_types[idx].clone());
-                let column_binding = ColumnBindingBuilder::new(
-                    left_col.column_name.clone(),
-                    new_column_index,
-                    Box::new(coercion_types[idx].clone()),
-                    Visibility::Visible,
-                )
-                .build();
                 let left_coercion_expr = CastExpr {
                     span: left_span,
                     is_try: false,
@@ -749,6 +738,18 @@ impl Binder {
                     ),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
+                let new_column_index = self.metadata.write().add_derived_column(
+                    left_col.column_name.clone(),
+                    coercion_types[idx].clone(),
+                    Some(ScalarExpr::CastExpr(left_coercion_expr.clone())),
+                );
+                let column_binding = ColumnBindingBuilder::new(
+                    left_col.column_name.clone(),
+                    new_column_index,
+                    Box::new(coercion_types[idx].clone()),
+                    Visibility::Visible,
+                )
+                .build();
                 left_scalar_items.push(ScalarItem {
                     scalar: left_coercion_expr.into(),
                     index: new_column_index,
@@ -760,10 +761,6 @@ impl Binder {
                 left_col.index
             };
             let right_index = if *right_col.data_type != coercion_types[idx] {
-                let new_column_index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(right_col.column_name.clone(), coercion_types[idx].clone());
                 let right_coercion_expr = CastExpr {
                     span: right_span,
                     is_try: false,
@@ -776,6 +773,11 @@ impl Binder {
                     ),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
+                let new_column_index = self.metadata.write().add_derived_column(
+                    right_col.column_name.clone(),
+                    coercion_types[idx].clone(),
+                    Some(ScalarExpr::CastExpr(right_coercion_expr.clone())),
+                );
                 right_scalar_items.push(ScalarItem {
                     scalar: right_coercion_expr.into(),
                     index: new_column_index,
