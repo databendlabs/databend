@@ -65,6 +65,9 @@ runs:
         echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
         target=${{ inputs.target }}
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=/usr/local/lib" >> $GITHUB_ENV
+        echo "PYO3_PYTHON=python3.12" >> $GITHUB_ENV
+        echo "PYO3_CROSS_PYTHON_VERSION=/3.12" >> $GITHUB_ENV
 
     # build all binaries for debug
     - name: Build Debug
