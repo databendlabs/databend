@@ -2817,6 +2817,7 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
  "tokio",
+ "unicode-segmentation",
  "uuid",
 ]
 
@@ -4753,7 +4754,6 @@ dependencies = [
  "tonic",
  "tower",
  "typetag",
- "unicode-segmentation",
  "url",
  "uuid",
  "walkdir",
