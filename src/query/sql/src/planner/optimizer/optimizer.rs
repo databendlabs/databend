@@ -483,10 +483,10 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             join_s_expr = merge_source_optimizer.optimize(&join_s_expr)?;
             enable_right_broadcast = true;
         }
-
+        let distributed = !join_s_expr.has_merge_exchange();
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: Box::new(join_s_expr),
-            distributed: true,
+            distributed,
             change_join_order,
             columns_set: new_columns_set.clone(),
             enable_right_broadcast,

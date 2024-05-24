@@ -218,7 +218,7 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto(merge_into) => self.explain_merge_fragments(&merge_into).await?,
+                Plan::MergeInto(merge_into) => self.explain_merge_fragments(merge_into).await?,
                 Plan::Update(update) => self.explain_update_fragments(update.as_ref()).await?,
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
