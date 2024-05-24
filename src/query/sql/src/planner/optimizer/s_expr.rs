@@ -392,6 +392,13 @@ impl SExpr {
             .collect::<Vec<_>>();
         self.children = children;
     }
+
+    pub fn has_merge_exchange(&self) -> bool {
+        if let RelOperator::Exchange(Exchange::Merge) = self.plan.as_ref() {
+            return true;
+        }
+        self.children.iter().any(|child| child.has_merge_exchange())
+    }
 }
 
 fn find_subquery(rel_op: &RelOperator) -> bool {
