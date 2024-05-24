@@ -2936,6 +2936,7 @@ dependencies = [
  "pretty_assertions",
  "semver",
  "serde",
+ "serde_with",
  "serfig",
  "strum 0.24.1",
 ]
@@ -10181,6 +10182,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry-http"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7690dc77bf776713848c4faa6501157469017eaf332baccd4eb1cea928743d94"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "http 0.2.11",
+ "opentelemetry",
+ "reqwest 0.11.24",
+]
+
+[[package]]
 name = "opentelemetry-otlp"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10190,10 +10204,12 @@ dependencies = [
  "futures-core",
  "http 0.2.11",
  "opentelemetry",
+ "opentelemetry-http",
  "opentelemetry-proto",
  "opentelemetry-semantic-conventions",
  "opentelemetry_sdk",
  "prost 0.12.3",
+ "reqwest 0.11.24",
  "thiserror",
  "tokio",
  "tonic",
@@ -10228,6 +10244,7 @@ dependencies = [
  "futures-channel",
  "futures-executor",
  "futures-util",
+ "glob",
  "once_cell",
  "opentelemetry",
  "ordered-float 4.2.0",
@@ -12647,11 +12664,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.6.1"
+version = "3.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15d167997bd841ec232f5b2b8e0e26606df2e7caa4c31b95ea9ca52b200bd270"
+checksum = "0ad483d2ab0149d5a5ebcd9972a3852711e0153d863bf5a5d0391d28883c4a20"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "chrono",
  "hex",
  "indexmap 1.9.3",
@@ -12665,9 +12682,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.6.1"
+version = "3.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "865f9743393e638991566a8b7a479043c2c8da94a33e0a31f18214c9cae0a64d"
+checksum = "65569b702f41443e8bc8bbb1c5779bd0450bbe723b56198980e80ec45780bce2"
 dependencies = [
  "darling 0.20.8",
  "proc-macro2",
