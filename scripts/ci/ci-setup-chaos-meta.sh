@@ -19,7 +19,8 @@ curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
 
 echo "kubectl get pods"
 kubectl get pods -o wide
-kubectl delete pvc --namespace databend  data-my-release-databend-meta-0 data-my-release-databend-meta-1 data-my-release-databend-meta-2 2>/dev/null
+echo "kubectl delete pvc"
+kubectl delete pvc --namespace databend  data-my-release-databend-meta-0 data-my-release-databend-meta-1 data-my-release-databend-meta-2 > /dev/null 2>&1
 
 echo "install helm"
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
