@@ -56,6 +56,11 @@ jobs:
     needs: [info, build]
     timeout-minutes: 10
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5111:5111
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
@@ -93,21 +98,13 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}
+          tags: localhost:5111/databend-meta:chaostest
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/debian/meta.Dockerfile
-      - name: Comment on PR
-        uses: everpcpc/comment-on-pr-action@v1
-        with:
-          number: ${{ github.event.pull_request.number }}
-          token: ${{ github.token }}
-          body: |
-            ## Docker Image for PR
-            * **tag**: `${{ steps.prepare.outputs.tag }}`
-
-            > note: this image tag is only available for internal use,
-            > please check the [internal doc](https://datafuselabs.feishu.cn/wiki/Hk7iwYsnWi3wsXkpbW5c9apTn0b) for more details.
+      - name: Inspect
+        run: |
+          docker buildx imagetools inspect localhost:5111/databend-meta:chaostest
 
   test_meta_chaos:
     needs: [info, build, docker]

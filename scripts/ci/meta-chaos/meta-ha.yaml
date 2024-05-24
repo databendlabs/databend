@@ -1,3 +1,10 @@
+bootstrap: true
 replicaCount: 3
 persistence:
-  size: 5Gi
+  size: 8Gi
+
+image:
+  repository: localhost:5111/databend-meta:chaostest
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
