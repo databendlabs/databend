@@ -268,21 +268,35 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let inner_key_type = match args_type.get(0) {
+        let inner_key_type = match args_type.first() {
             Some(DataType::Map(m)) => m.as_tuple().map(|tuple| &tuple[0]),
             _ => None,
         };
-        let key_match = args_type[1..].iter().all(|arg_type| match inner_key_type {
-            Some(key_type) => arg_type == key_type,
-            None => matches!(
-                arg_type,
-                DataType::String
-                    | DataType::Number(_)
-                    | DataType::Decimal(_)
-                    | DataType::Date
-                    | DataType::Timestamp
-            ),
-        });
+        let key_match = match args_type.len() {
+            2 => args_type.get(1).map_or(false, |t| match t {
+                DataType::Array(_) => inner_key_type.map_or(false, |key_type| {
+                    t.as_array()
+                        .map_or(false, |array| array.as_ref() == key_type)
+                }),
+                DataType::EmptyArray => false,
+                _ => false,
+            }),
+            _ => args_type.iter().skip(1).all(|arg_type| {
+                inner_key_type.map_or_else(
+                    || {
+                        matches!(
+                            arg_type,
+                            DataType::String
+                                | DataType::Number(_)
+                                | DataType::Decimal(_)
+                                | DataType::Date
+                                | DataType::Timestamp
+                        )
+                    },
+                    |key_type| arg_type == key_type,
+                )
+            }),
+        };
         if !key_match {
             return None;
         }
@@ -312,9 +326,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
 
         let source_map = match &args[0] {
-            ValueRef::Scalar(ScalarRef::Map(s)) => {
-                KvPair::<GenericType<0>, GenericType<1>>::try_downcast_column(s).unwrap()
-            }
+            ValueRef::Scalar(s) => match s {
+                ScalarRef::Map(cols) => {
+                    KvPair::<GenericType<0>, GenericType<1>>::try_downcast_column(cols).unwrap()
+                }
+                ScalarRef::EmptyMap => {
+                    KvPair::<GenericType<0>, GenericType<1>>::try_downcast_column(
+                        &Column::EmptyMap { len: 0 },
+                    )
+                    .unwrap()
+                }
+                _ => unreachable!(),
+            },
             ValueRef::Column(Column::Map(c)) => {
                 KvPair::<GenericType<0>, GenericType<1>>::try_downcast_column(&c.values).unwrap()
             }
@@ -326,11 +349,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                 args.len() - 1,
                 source_data_type.as_map().unwrap().as_tuple().unwrap(),
             );
-        for key_arg in args[1..].iter() {
-            if let Some((k, v)) = source_map
+        let select_keys = match &args[1] {
+            ValueRef::Scalar(ScalarRef::Array(arr)) if args.len() == 2 => {
+                arr.iter().collect::<Vec<_>>()
+            }
+            _ => args[1..]
                 .iter()
-                .find(|(k, _)| k == key_arg.as_scalar().unwrap())
-            {
+                .map(|arg| arg.as_scalar().unwrap().clone())
+                .collect::<Vec<_>>(),
+        };
+        for key_arg in select_keys {
+            if let Some((k, v)) = source_map.iter().find(|(k, _)| k == &key_arg) {
                 builder.put_item((k.clone(), v.clone()));
             }
         }

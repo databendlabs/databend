@@ -282,6 +282,7 @@ fn test_map_size(file: &mut impl Write) {
 
 fn test_map_pick(file: &mut impl Write) {
     run_ast(file, "map_pick({'a':1,'b':2,'c':3}, 'a', 'b')", &[]);
+    run_ast(file, "map_pick({'a':1,'b':2,'c':3}, ['a', 'b'])", &[]);
 
     let columns = [
         ("a_col", StringType::from_data(vec!["a", "b", "c"])),

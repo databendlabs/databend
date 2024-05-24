@@ -626,6 +626,15 @@ output domain  : {[{"a"..="b"}], [{1..=2}]}
 output         : {'a':1, 'b':2}
 
 
+ast            : map_pick({'a':1,'b':2,'c':3}, ['a', 'b'])
+raw expr       : map_pick(map(array('a', 'b', 'c'), array(1, 2, 3)), array('a', 'b'))
+checked expr   : map_pick<Map(String, UInt8), Array(String)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), array<T0=String><T0, T0>("a", "b"))
+optimized expr : {"a":1_u8, "b":2_u8}
+output type    : Map(String, UInt8)
+output domain  : {[{"a"..="b"}], [{1..=2}]}
+output         : {'a':1, 'b':2}
+
+
 ast            : map_pick(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a', 'b')
 raw expr       : map_pick(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'a', 'b')
 checked expr   : map_pick<Map(String, String NULL), String, String>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "a", "b")
