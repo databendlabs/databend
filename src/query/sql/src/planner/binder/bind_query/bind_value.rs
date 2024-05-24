@@ -479,6 +479,7 @@ pub async fn bind_values(
         bind_expression_scan(
             metadata,
             bind_context,
+            span,
             num_values,
             num_columns,
             column_scalars,
@@ -503,6 +504,7 @@ pub async fn bind_values(
 pub fn bind_expression_scan(
     metadata: MetadataRef,
     bind_context: &mut BindContext,
+    span: Span,
     num_values: usize,
     num_columns: usize,
     column_scalars: Vec<Vec<(ScalarExpr, DataType)>>,
@@ -548,7 +550,7 @@ pub fn bind_expression_scan(
     let mut column_indexes = Vec::with_capacity(num_columns + cache_columns.len());
     // Add column bindings for expression scan columns.
     for (idx, field) in expression_scan_fields.iter().take(num_columns).enumerate() {
-        let index = metadata.add_derived_column(field.name().clone(), field.data_type().clone());
+        let index = metadata.columns().len();
         let column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx),
             index,
@@ -556,6 +558,14 @@ pub fn bind_expression_scan(
             Visibility::Visible,
         )
         .build();
+        let _ = metadata.add_derived_column(
+            field.name().clone(),
+            field.data_type().clone(),
+            Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span,
+                column: column_binding.clone(),
+            })),
+        );
         bind_context.add_column_binding(column_binding);
         column_indexes.push(index);
     }
@@ -573,7 +583,7 @@ pub fn bind_expression_scan(
         let column_entry = metadata.column(cache_column.index);
         let name = column_entry.name();
         let data_type = column_entry.data_type();
-        let new_column_index = metadata.add_derived_column(name.clone(), data_type.clone());
+        let new_column_index = metadata.columns().len();
         let new_column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx + num_columns),
             new_column_index,
@@ -582,6 +592,14 @@ pub fn bind_expression_scan(
         )
         .build();
 
+        let _ = metadata.add_derived_column(
+            name.clone(),
+            data_type.clone(),
+            Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span,
+                column: new_column_binding.clone(),
+            })),
+        );
         bind_context.add_column_binding(new_column_binding);
         column_indexes.push(new_column_index);
 
@@ -668,12 +686,9 @@ pub fn bind_constant_scan(
     // add column bindings
     let mut columns = ColumnSet::new();
     let mut fields = Vec::with_capacity(num_values);
+    let mut metadata = metadata.write();
     for value_field in value_schema.fields() {
-        let index = metadata
-            .write()
-            .add_derived_column(value_field.name().clone(), value_field.data_type().clone());
-        columns.insert(index);
-
+        let index = metadata.columns().len();
         let column_binding = ColumnBindingBuilder::new(
             value_field.name().clone(),
             index,
@@ -681,6 +696,14 @@ pub fn bind_constant_scan(
             Visibility::Visible,
         )
         .build();
+        let _ = metadata.add_derived_column(
+            value_field.name().clone(),
+            value_field.data_type().clone(),
+            Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span,
+                column: column_binding.clone(),
+            })),
+        );
         bind_context.add_column_binding(column_binding);
 
         let field = DataField::new(&index.to_string(), value_field.data_type().clone());
