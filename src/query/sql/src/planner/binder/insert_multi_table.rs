@@ -26,6 +26,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 
 use crate::binder::ScalarBinder;
+use crate::optimizer::OptimizerContext;
 use crate::plans::Else;
 use crate::plans::InsertMultiTable;
 use crate::plans::Into;
@@ -61,7 +62,7 @@ impl Binder {
 
             let (s_expr, bind_context) =
                 self.bind_table_reference(bind_context, &table_ref).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+            let _opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
                 .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
 
             let select_plan = Plan::Query {

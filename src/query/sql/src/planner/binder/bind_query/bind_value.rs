@@ -587,14 +587,14 @@ pub fn bind_expression_scan(
         let new_column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx + num_columns),
             new_column_index,
-            Box::new(data_type),
+            Box::new(data_type.clone()),
             Visibility::Visible,
         )
         .build();
 
         let _ = metadata.add_derived_column(
-            name.clone(),
-            data_type.clone(),
+            name,
+            data_type,
             Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
                 column: new_column_binding.clone(),
@@ -689,6 +689,7 @@ pub fn bind_constant_scan(
     let mut metadata = metadata.write();
     for value_field in value_schema.fields() {
         let index = metadata.columns().len();
+        columns.insert(index);
         let column_binding = ColumnBindingBuilder::new(
             value_field.name().clone(),
             index,
