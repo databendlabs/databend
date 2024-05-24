@@ -24,6 +24,8 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::Exchange;
+use super::RelOperator;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -487,5 +489,30 @@ impl Plan {
 
     pub fn has_result_set(&self) -> bool {
         !self.schema().fields().is_empty()
+    }
+
+    pub fn remove_exchange_for_select(&self) -> Self {
+        if let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            rewrite_kind,
+            formatted_ast,
+            ignore_result,
+        } = self
+        {
+            if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan.as_ref() {
+                let s_expr = Box::new(s_expr.child(0).unwrap().clone());
+                return Plan::Query {
+                    s_expr,
+                    metadata: metadata.clone(),
+                    bind_context: bind_context.clone(),
+                    rewrite_kind: rewrite_kind.clone(),
+                    formatted_ast: formatted_ast.clone(),
+                    ignore_result: *ignore_result,
+                };
+            }
+        }
+        self.clone()
     }
 }

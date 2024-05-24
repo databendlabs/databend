@@ -169,10 +169,11 @@ impl Binder {
             let return_types = srf_expr.data_type().as_tuple().unwrap();
 
             // Add result column to metadata
-            let column_index = self
-                .metadata
-                .write()
-                .add_derived_column(name.clone(), srf_expr.data_type().clone());
+            let column_index = self.metadata.write().add_derived_column(
+                name.clone(),
+                srf_expr.data_type().clone(),
+                Some(srf_scalar.clone()),
+            );
             let column = ColumnBindingBuilder::new(
                 name.clone(),
                 column_index,

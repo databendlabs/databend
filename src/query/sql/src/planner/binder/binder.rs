@@ -714,11 +714,13 @@ impl<'a> Binder {
         &mut self,
         column_name: String,
         data_type: DataType,
+        scalar_expr: Option<ScalarExpr>,
     ) -> ColumnBinding {
-        let index = self
-            .metadata
-            .write()
-            .add_derived_column(column_name.clone(), data_type.clone());
+        let index = self.metadata.write().add_derived_column(
+            column_name.clone(),
+            data_type.clone(),
+            scalar_expr,
+        );
         ColumnBindingBuilder::new(column_name, index, Box::new(data_type), Visibility::Visible)
             .build()
     }

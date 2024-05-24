@@ -206,10 +206,11 @@ impl<'a> AggregateRewriter<'a> {
                     column: column_binding,
                 }));
             } else {
-                let index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(name.clone(), arg.data_type()?);
+                let index = self.metadata.write().add_derived_column(
+                    name.clone(),
+                    arg.data_type()?,
+                    Some(arg.clone()),
+                );
 
                 // Generate a ColumnBinding for each argument of aggregates
                 let column_binding = ColumnBindingBuilder::new(
@@ -237,6 +238,7 @@ impl<'a> AggregateRewriter<'a> {
         let index = self.metadata.write().add_derived_column(
             aggregate.display_name.clone(),
             *aggregate.return_type.clone(),
+            Some(ScalarExpr::AggregateFunction(aggregate.clone())),
         );
 
         let replaced_agg = AggregateFunction {
@@ -377,7 +379,11 @@ impl Binder {
                     column.column_name = item.alias.clone();
                     column
                 } else {
-                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
+                    self.create_derived_column_binding(
+                        item.alias.clone(),
+                        item.scalar.data_type()?,
+                        Some(item.scalar.clone()),
+                    )
                 };
                 available_aliases.push((column, item.scalar.clone()));
             }
@@ -528,6 +534,7 @@ impl Binder {
             let dummy = self.create_derived_column_binding(
                 format!("_dup_group_item_{i}"),
                 item.scalar.data_type()?,
+                Some(item.scalar.clone()),
             );
             dup_group_items.push((dummy.index, *dummy.data_type));
         }
@@ -535,6 +542,7 @@ impl Binder {
         let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
+            None,
         );
 
         let bound_grouping_id_col = BoundColumnRef {
@@ -614,7 +622,11 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_derived_column_binding(alias, scalar.data_type()?)
+                        self.create_derived_column_binding(
+                            alias,
+                            scalar.data_type()?,
+                            Some(scalar.clone()),
+                        )
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
@@ -665,9 +677,11 @@ impl Binder {
             {
                 *index
             } else {
-                self.metadata
-                    .write()
-                    .add_derived_column(group_item_name.clone(), scalar_expr.data_type()?)
+                self.metadata.write().add_derived_column(
+                    group_item_name.clone(),
+                    scalar_expr.data_type()?,
+                    Some(scalar_expr.clone()),
+                )
             };
 
             bind_context.aggregate_info.group_items.push(ScalarItem {

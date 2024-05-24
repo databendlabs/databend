@@ -26,8 +26,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 
 use crate::binder::ScalarBinder;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::plans::Else;
 use crate::plans::InsertMultiTable;
 use crate::plans::Into;
@@ -75,8 +73,7 @@ impl Binder {
                 ignore_result: false,
             };
 
-            let optimized_plan = optimize(opt_ctx, select_plan).await?;
-            (optimized_plan, bind_context)
+            (select_plan, bind_context)
         };
 
         let source_schema = input_source.schema();
