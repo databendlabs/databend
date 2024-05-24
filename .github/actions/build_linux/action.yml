@@ -18,6 +18,10 @@ inputs:
   features:
     description: "Features to build"
     required: false
+    default: "default,ee"
+  release_features:
+    description: "Features to build release"
+    required: false
     default: "default"
   category:
     description: "Category to upload"
@@ -30,7 +34,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,PYO3_PYTHON,PYO3_CROSS_PYTHON_VERSION
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,PYO3_PYTHON,LD_LIBRARY_PATH,PYO3_CROSS_PYTHON_VERSION
 
     - name: Cross setup
       if: startsWith(inputs.target, 'aarch64-')
@@ -93,7 +97,7 @@ runs:
         artifacts="meta,metactl,query,sqllogictests"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.release_features }} --release --bin databend-$artifact
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
@@ -104,7 +108,7 @@ runs:
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.release_features }} --release --bin databend-$artifact
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
