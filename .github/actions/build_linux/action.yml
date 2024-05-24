@@ -19,10 +19,6 @@ inputs:
     description: "Features to build"
     required: false
     default: "default,ee"
-  release_features:
-    description: "Features to build release"
-    required: false
-    default: "default"
   category:
     description: "Category to upload"
     required: false
@@ -76,8 +72,12 @@ runs:
       run: |
         artifacts="meta,metactl,query,sqllogictests"
         for artifact in ${artifacts//,/ }; do
+          features=${{ inputs.features }}
+          if [ $artifact = 'query' ];then
+            features="${features},ee"
+          fi
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features $features --bin databend-$artifact
         done
         cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin open-sharing
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
@@ -88,8 +88,13 @@ runs:
       run: |
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
+          features=${{ inputs.features }}
+          if [ $artifact = 'query' ];then
+            features="${features},ee"
+          fi
+          
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features $features --bin databend-$artifact
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
@@ -100,7 +105,7 @@ runs:
         artifacts="meta,metactl,query,sqllogictests"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.release_features }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
@@ -111,7 +116,7 @@ runs:
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.release_features }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
