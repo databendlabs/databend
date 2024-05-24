@@ -14,7 +14,7 @@ test = true
 [features]
 default = ["simd", "z3-prove"]
 simd = ["databend-common-arrow/simd"]
-
+ee = ["arrow-udf-python"]
 z3-prove = ["databend-common-sql/z3-prove"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 
@@ -103,7 +103,7 @@ jsonb = { workspace = true }
 
 # Crates.io dependencies
 arrow-udf-js = { workspace = true }
-arrow-udf-python = { workspace = true }
+arrow-udf-python = { package = "arrow-udf-python", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0", optional = true }
 arrow-udf-wasm = { workspace = true }
 
 arrow-array = { workspace = true }

@@ -229,7 +229,6 @@ flatbuffers = { version = "23" }
 # Crates from risingwavelabs
 arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
 arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
-arrow-udf-python = { package = "arrow-udf-python", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
 
 # Serialization
 prost = { version = "0.12.1" }

@@ -288,21 +288,6 @@ version = "51.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "219d05930b81663fd3b32e3bde8ce5bff3c4d23052a99f11a8fa50a3b47b2658"
 dependencies = [
-<<<<<<< HEAD
- "arrow-arith 51.0.0",
- "arrow-array 51.0.0",
- "arrow-buffer 51.0.0",
- "arrow-cast 51.0.0",
- "arrow-csv 51.0.0",
- "arrow-data 51.0.0",
- "arrow-ipc 51.0.0",
- "arrow-json 51.0.0",
- "arrow-ord 51.0.0",
- "arrow-row 51.0.0",
- "arrow-schema 51.0.0",
- "arrow-select 51.0.0",
- "arrow-string 51.0.0",
-=======
  "arrow-arith",
  "arrow-array",
  "arrow-buffer",
@@ -316,8 +301,6 @@ dependencies = [
  "arrow-schema",
  "arrow-select",
  "arrow-string",
- "pyo3",
->>>>>>> main
 ]
 
 [[package]]
@@ -575,13 +558,13 @@ dependencies = [
 [[package]]
 name = "arrow-udf-python"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf?rev=a8fdfdd#a8fdfdd3622facb7d836a8da42a8a1c2d318f817"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=d0a21f0#d0a21f0fde330a0e5f658a55b58e0405d8372844"
 dependencies = [
  "anyhow",
- "arrow-array 51.0.0",
- "arrow-buffer 51.0.0",
- "arrow-ipc 51.0.0",
- "arrow-schema 51.0.0",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ipc",
+ "arrow-schema",
  "lazy_static",
  "pyo3",
  "pyo3-build-config",

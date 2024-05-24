@@ -15,7 +15,6 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
@@ -41,8 +40,9 @@ use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
 /// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
-static GLOBAL_PYTHON_RUNTIME: LazyLock<Arc<RwLock<arrow_udf_python::Runtime>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(arrow_udf_python::Runtime::new().unwrap())));
+#[cfg(feature = "ee")]
+static GLOBAL_PYTHON_RUNTIME: std::sync::LazyLock<Arc<RwLock<arrow_udf_python::Runtime>>> =
+    std::sync::LazyLock::new(|| Arc::new(RwLock::new(arrow_udf_python::Runtime::new().unwrap())));
 
 pub enum ScriptRuntime {
     JavaScript(Arc<RwLock<arrow_udf_js::Runtime>>),
@@ -108,7 +108,9 @@ impl ScriptRuntime {
                     &func.func_name,
                 )
             }
+            #[cfg(feature = "ee")]
             ScriptRuntime::Python => {
+                let code: &str = std::str::from_utf8(code)?;
                 let mut runtime = GLOBAL_PYTHON_RUNTIME.write();
                 runtime.add_function_with_handler(
                     &func.name,
@@ -117,6 +119,12 @@ impl ScriptRuntime {
                     code,
                     &func.func_name,
                 )
+            }
+            #[cfg(not(feature = "ee"))]
+            ScriptRuntime::Python => {
+                return Err(ErrorCode::EnterpriseFeatureNotEnable(
+                    "Failed to create python script udf",
+                ));
             }
             // Ignore the execution for WASM context
             ScriptRuntime::WebAssembly(_) => Ok(()),
@@ -140,7 +148,7 @@ impl ScriptRuntime {
                     ))
                 })?
             }
-
+            #[cfg(feature = "ee")]
             ScriptRuntime::Python => {
                 let runtime = GLOBAL_PYTHON_RUNTIME.read();
                 runtime.call(&func.name, input_batch).map_err(|err| {
@@ -149,6 +157,12 @@ impl ScriptRuntime {
                         func.name, err
                     ))
                 })?
+            }
+            #[cfg(not(feature = "ee"))]
+            ScriptRuntime::Python => {
+                return Err(ErrorCode::EnterpriseFeatureNotEnable(
+                    "Failed to execute python script udf",
+                ));
             }
             ScriptRuntime::WebAssembly(runtime) => {
                 let runtime = runtime.read();
