@@ -180,19 +180,18 @@ impl ReclusterMutator {
         compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
     ) -> Result<bool> {
         match self.tasks {
-            ReclusterTasks::Compact(_) => self.generate_compact_tasks(compact_segments).await?,
+            ReclusterTasks::Compact(_) => self.generate_compact_tasks(compact_segments).await,
             ReclusterTasks::Recluster { .. } => {
-                self.generate_recluster_tasks(compact_segments).await?
+                self.generate_recluster_tasks(compact_segments).await
             }
         }
-        Ok(self.tasks.is_empty())
     }
 
     #[async_backtrace::framed]
     pub async fn generate_recluster_tasks(
         &mut self,
         compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let mut selected_segments = Vec::with_capacity(compact_segments.len());
         let mut selected_indices = Vec::with_capacity(compact_segments.len());
         let mut selected_statistics = Vec::with_capacity(compact_segments.len());
@@ -204,7 +203,7 @@ impl ReclusterMutator {
 
         let blocks_map = self.gather_block_map(selected_segments).await?;
         if blocks_map.is_empty() {
-            return Ok(());
+            return Ok(false);
         }
 
         let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
@@ -258,13 +257,13 @@ impl ReclusterMutator {
                     .into_iter()
                     .map(|meta| (None, meta))
                     .collect::<Vec<_>>();
-                self.generate_task(
+                tasks.push(self.generate_task(
                     &block_metas,
                     &column_nodes,
                     total_rows as usize,
                     total_bytes as usize,
                     level,
-                );
+                ));
                 selected = true;
                 continue;
             }
@@ -350,13 +349,13 @@ impl ReclusterMutator {
                 removed_segment_summary,
             };
         }
-        Ok(())
+        Ok(selected)
     }
 
     async fn generate_compact_tasks(
         &mut self,
         compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let mut parts = Vec::new();
         let mut checker =
             SegmentCompactChecker::new(self.block_per_seg as u64, Some(self.cluster_key_id));
@@ -399,10 +398,10 @@ impl ReclusterMutator {
         } else {
             Partitions::create(PartitionsShuffleKind::Mod, parts)
         };
-        if !partitions.is_empty() {
-            self.tasks = ReclusterTasks::Compact(partitions);
-        }
-        Ok(())
+
+        let selected = !partitions.is_empty();
+        self.tasks = ReclusterTasks::Compact(partitions);
+        Ok(selected)
     }
 
     fn generate_task(
