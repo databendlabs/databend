@@ -384,7 +384,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
     ├── push downs: [filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')], limit: NONE]
     └── estimated rows: 2.00
 

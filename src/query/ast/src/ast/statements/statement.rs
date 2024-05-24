@@ -15,13 +15,13 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_io::escape_string_with_quote;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::task::CreateTaskStmt;
@@ -202,7 +202,9 @@ pub enum Statement {
     Grant(GrantStmt),
     ShowGrants {
         principal: Option<PrincipalIdentity>,
+        show_options: Option<ShowOptions>,
     },
+    ShowObjectPrivileges(ShowObjectPrivilegesStmt),
     Revoke(RevokeStmt),
 
     // UDF
@@ -592,7 +594,7 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " '{}'", escape_string_with_quote(role, Some('\'')))?;
+                write!(f, " {}", QuotedString(role, '\''))?;
             }
             Statement::DropRole {
                 if_exists,
@@ -605,13 +607,20 @@ impl Display for Statement {
                 write!(f, " '{role}'")?;
             }
             Statement::Grant(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowGrants { principal } => {
+            Statement::ShowGrants {
+                principal,
+                show_options,
+            } => {
                 write!(f, "SHOW GRANTS")?;
                 if let Some(principal) = principal {
                     write!(f, " FOR")?;
                     write!(f, "{principal}")?;
                 }
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
             }
+            Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {

@@ -36,7 +36,6 @@ use crate::executor::physical_plans::common::SortDesc;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
-use crate::plans::ScalarItem;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
@@ -152,7 +151,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         window: &crate::plans::Window,
         mut required: ColumnSet,
-        stat_info: PlanStatsInfo,
+        _stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. DO NOT Prune unused Columns cause window may not in required, eg:
         // select s1.a from ( select t1.a as a, dense_rank() over(order by t1.a desc) as rk
@@ -175,37 +174,12 @@ impl PhysicalPlanBuilder {
             required.insert(item.order_by_item.index);
         });
 
-        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
-
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, required).await?;
         let mut w = window.clone();
-        // Generate a `EvalScalar` as the input of `Window`.
-        let mut scalar_items: Vec<ScalarItem> = Vec::new();
-        for arg in &w.arguments {
-            scalar_items.push(arg.clone());
-        }
-        for part in &w.partition_by {
-            scalar_items.push(part.clone());
-        }
-        for order in &w.order_by {
-            scalar_items.push(order.order_by_item.clone())
-        }
-        let input = if !scalar_items.is_empty() {
-            self.create_eval_scalar(
-                &crate::planner::plans::EvalScalar {
-                    items: scalar_items,
-                },
-                column_projections,
-                input,
-                stat_info.clone(),
-            )?
-        } else {
-            input
-        };
+
         let input_schema = input.output_schema()?;
 
-        // Unify the data type for range frame.
         if w.frame.units.is_range() && w.order_by.len() == 1 {
             let order_by = &mut w.order_by[0].order_by_item.scalar;
 

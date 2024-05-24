@@ -29,14 +29,13 @@ use databend_common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::BindContext;
+
 impl Binder {
     pub fn schema_project(
         &self,
@@ -178,11 +177,7 @@ impl Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
-                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
-                    .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
-
-                let optimized_plan = optimize(opt_ctx, select_plan).await?;
-                Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
+                Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
         };
 

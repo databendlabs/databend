@@ -136,15 +136,21 @@ impl Display for WarehouseOptions {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ScheduleOptions {
-    IntervalSecs(#[drive(skip)] u64),
+    IntervalSecs(#[drive(skip)] u64, #[drive(skip)] u64),
     CronExpression(#[drive(skip)] String, #[drive(skip)] Option<String>),
 }
 
 impl Display for ScheduleOptions {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            ScheduleOptions::IntervalSecs(secs) => {
-                write!(f, "{} SECOND", secs)
+            ScheduleOptions::IntervalSecs(secs, ms) => {
+                if *ms > 0 {
+                    write!(f, "{} MILLISECOND", ms)?;
+                    Ok(())
+                } else {
+                    write!(f, "{} SECOND", secs)?;
+                    Ok(())
+                }
             }
             ScheduleOptions::CronExpression(expr, tz) => {
                 write!(f, "USING CRON '{}'", expr)?;

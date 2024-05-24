@@ -15,78 +15,72 @@
 use std::borrow::Borrow;
 use std::io;
 use std::ops::RangeBounds;
-use std::sync::Arc;
 
-use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::map_api::compacted_get;
-use crate::sm_v002::leveled_store::map_api::compacted_range;
-use crate::sm_v002::leveled_store::map_api::KVResultStream;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::ref_::Ref;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::level::Level;
+use crate::leveled_store::map_api::compacted_get;
+use crate::leveled_store::map_api::compacted_range;
+use crate::leveled_store::map_api::KVResultStream;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::MapKey;
+use crate::marked::Marked;
 
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]
-pub struct StaticLevels {
+pub struct ImmutableLevels {
     /// From oldest to newest, i.e., levels[0] is the oldest
-    levels: Vec<Arc<Level>>,
+    levels: Vec<Immutable>,
 }
 
-impl StaticLevels {
-    pub(in crate::sm_v002) fn new(levels: impl IntoIterator<Item = Arc<Level>>) -> Self {
+impl ImmutableLevels {
+    pub(crate) fn new(levels: impl IntoIterator<Item = Immutable>) -> Self {
         Self {
             levels: levels.into_iter().collect(),
         }
     }
 
     /// Return an iterator of all Arc of levels from newest to oldest.
-    pub(in crate::sm_v002) fn iter_arc_levels(&self) -> impl Iterator<Item = &Arc<Level>> {
+    pub(crate) fn iter_immutable_levels(&self) -> impl Iterator<Item = &Immutable> {
         self.levels.iter().rev()
     }
 
     /// Return an iterator of all levels from newest to oldest.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
+    pub(crate) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         self.levels.iter().map(|x| x.as_ref()).rev()
     }
 
-    pub(in crate::sm_v002) fn newest(&self) -> Option<&Arc<Level>> {
+    pub(crate) fn newest(&self) -> Option<&Immutable> {
         self.levels.last()
     }
 
-    pub(in crate::sm_v002) fn push(&mut self, level: Arc<Level>) {
+    pub(crate) fn push(&mut self, level: Immutable) {
         self.levels.push(level);
     }
 
-    pub(in crate::sm_v002) fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.levels.len()
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::sm_v002) fn to_ref(&self) -> Ref<'_> {
-        Ref::new(None, self)
     }
 }
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for StaticLevels
+impl<K> MapApiRO<K> for ImmutableLevels
 where
     K: MapKey,
     Level: MapApiRO<K>,
-    Arc<Level>: MapApiRO<K>,
+    Immutable: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        let levels = self.iter_arc_levels();
+        let levels = self.iter_immutable_levels();
         compacted_get(key, levels).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
     where R: RangeBounds<K> + Clone + Send + Sync + 'static {
-        let levels = self.iter_arc_levels();
+        let levels = self.iter_immutable_levels();
         compacted_range::<_, _, _, Level>(range, None, levels).await
     }
 }

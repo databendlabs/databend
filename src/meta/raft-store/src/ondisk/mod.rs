@@ -285,8 +285,13 @@ impl OnDisk {
         let tree = self.db.open_tree(sm_tree_name)?;
 
         let snapshot_store = SnapshotStoreV002::new(DataVersion::V002, self.config.clone());
+        let mut last_applied = None;
 
-        let (tx, join_handle) = snapshot_store.spawn_writer_thread("upgrade-v001-to-v002-snapshot");
+        let writer = snapshot_store
+            .new_writer()
+            .map_err(|e| snap_err(e, "new snapshot writer"))?;
+
+        let (tx, join_handle) = writer.spawn_writer_thread("upgrade-v001-to-v002-snapshot");
 
         for ivec_pair_res in tree.iter() {
             let sm_entry = {
@@ -311,6 +316,11 @@ impl OnDisk {
                 continue;
             }
 
+            if let Some(last) = sm_entry.last_applied() {
+                self.progress(format_args!("found state machine last_applied: {}", last));
+                last_applied = Some(last);
+            }
+
             tx.send(WriteEntry::Data(sm_entry))
                 .await
                 .map_err(|e| snap_err(e, "send SMEntry"))?;
@@ -320,15 +330,24 @@ impl OnDisk {
             .await
             .map_err(|e| snap_err(e, "send Commit"))?;
 
-        let (snapshot_store, snapshot_stat) = join_handle
+        let (temp_snapshot_data, snapshot_stat) = join_handle
             .await
             .map_err(|e| snap_err(e, "join snapshot writer thread"))?
             .map_err(|e| snap_err(e, "writer error"))?;
 
+        if snapshot_stat.entry_cnt > 0 {
+            assert!(last_applied.is_some(), "last_applied must be Some");
+        }
+
+        let (snapshot_id, snapshot_data) = snapshot_store
+            .commit_snapshot_data_gen_id(temp_snapshot_data, last_applied, snapshot_stat.entry_cnt)
+            .map_err(|e| snap_err(e, "commit snapshot data"))?;
+
         self.progress(format_args!(
-            "Written to snapshot: {}, path: {}",
+            "Written to snapshot: {}, {}; path: {}",
+            snapshot_id.to_string(),
             snapshot_stat,
-            snapshot_store.snapshot_path(&snapshot_stat.snapshot_id.to_string())
+            snapshot_data.path()
         ));
 
         Ok(())

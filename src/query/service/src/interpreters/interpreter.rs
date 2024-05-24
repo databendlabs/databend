@@ -18,6 +18,7 @@ use std::time::SystemTime;
 
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Statement;
+use databend_common_base::base::short_sql;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -46,7 +47,6 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
-use crate::sessions::short_sql;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;

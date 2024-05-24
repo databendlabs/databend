@@ -18,17 +18,11 @@ mod exception_backtrace;
 mod exception_code;
 mod exception_flight;
 mod exception_into;
-mod span;
 mod with_context;
 
 pub use exception::ErrorCode;
 pub use exception::Result;
 pub use exception::ToErrorCode;
 pub use exception_into::SerializedError;
-pub use span::merge_span;
-pub use span::offset_span;
-pub use span::pretty_print_error;
-pub use span::Range;
-pub use span::Span;
 pub use with_context::ErrorWithContext;
 pub use with_context::WithContext;

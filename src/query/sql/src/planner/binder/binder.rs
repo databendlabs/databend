@@ -27,6 +27,7 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -61,7 +62,6 @@ use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
-use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
@@ -445,9 +445,8 @@ impl<'a> Binder {
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
-            Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
-                principal: principal.clone().map(Into::into),
-            })),
+            Statement::ShowGrants { principal, show_options } => self.bind_show_account_grants(bind_context, principal, show_options).await?,
+            Statement::ShowObjectPrivileges(stmt) => self.bind_show_object_privileges(bind_context, stmt).await?,
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
@@ -663,6 +662,22 @@ impl<'a> Binder {
                 self.bind_set_priority(priority, object_id).await?
             },
         };
+
+        match plan.kind() {
+            QueryKind::Query { .. } | QueryKind::Explain { .. } => {}
+            _ => {
+                let meta_data_guard = self.metadata.read();
+                let tables = meta_data_guard.tables();
+                for t in tables {
+                    if t.is_consume() {
+                        return Err(ErrorCode::SyntaxException(
+                            "WITH CONSUME only allowed in query",
+                        ));
+                    }
+                }
+            }
+        }
+
         Ok(plan)
     }
 
@@ -688,11 +703,13 @@ impl<'a> Binder {
         &mut self,
         column_name: String,
         data_type: DataType,
+        scalar_expr: Option<ScalarExpr>,
     ) -> ColumnBinding {
-        let index = self
-            .metadata
-            .write()
-            .add_derived_column(column_name.clone(), data_type.clone());
+        let index = self.metadata.write().add_derived_column(
+            column_name.clone(),
+            data_type.clone(),
+            scalar_expr,
+        );
         ColumnBindingBuilder::new(column_name, index, Box::new(data_type), Visibility::Visible)
             .build()
     }

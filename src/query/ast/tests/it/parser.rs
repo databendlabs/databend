@@ -310,6 +310,7 @@ fn test_statement() {
         r#"SHOW GRANTS FOR USER 'test-grant';"#,
         r#"SHOW GRANTS FOR ROLE role1;"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
+        r#"SHOW GRANTS ON TABLE t;"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
@@ -911,6 +912,7 @@ fn test_statement_error() {
         r#"drop table :a"#,
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
+        r#"SHOW GRANTS ON task t1;"#,
     ];
 
     for case in cases {
@@ -919,7 +921,7 @@ fn test_statement_error() {
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
-        writeln!(file, "{}", err.message()).unwrap();
+        writeln!(file, "{}", err.1).unwrap();
     }
 }
 

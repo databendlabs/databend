@@ -31,9 +31,10 @@ use anyhow::anyhow;
 use databend_common_base::base::tokio;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_common_meta_raft_store::key_spaces::SMEntry;
+use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::OnDisk;
-use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use databend_common_meta_raft_store::sm_v002::WriteEntry;
 use databend_common_meta_raft_store::state::RaftState;
@@ -175,7 +176,11 @@ async fn import_v002(
 
     let snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
 
-    let (tx, join_handle) = snapshot_store.spawn_writer_thread("import_v002");
+    let writer = snapshot_store.new_writer()?;
+
+    let (tx, join_handle) = writer.spawn_writer_thread("import_v002");
+
+    let mut last_applied = None;
 
     for line in lines {
         let l = line?;
@@ -183,9 +188,14 @@ async fn import_v002(
 
         if tree_name.starts_with("state_machine/") {
             // Write to snapshot
-            let sm_entry = kv_entry.try_into().map_err(|err_str| {
+            let sm_entry: SMEntry = kv_entry.try_into().map_err(|err_str| {
                 anyhow::anyhow!("Failed to convert RaftStoreEntry to SMEntry: {}", err_str)
             })?;
+
+            if let Some(last) = sm_entry.last_applied() {
+                last_applied = Some(last);
+            }
+
             tx.send(WriteEntry::Data(sm_entry)).await?;
         } else {
             // Write to sled tree
@@ -214,9 +224,21 @@ async fn import_v002(
 
     tx.send(WriteEntry::Finish).await?;
 
-    let (_snapshot_store, snapshot_stat) = join_handle.await??;
+    let (temp_snapshot_data, snapshot_stat) = join_handle.await??;
 
-    eprintln!("Imported {} records, snapshot: {}", n, snapshot_stat,);
+    let (snapshot_id, snapshot_data) = snapshot_store.commit_snapshot_data_gen_id(
+        temp_snapshot_data,
+        last_applied,
+        snapshot_stat.entry_cnt,
+    )?;
+
+    eprintln!(
+        "Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
+        n,
+        snapshot_id.to_string(),
+        snapshot_data.path(),
+        snapshot_stat,
+    );
     Ok(max_log_id)
 }
 

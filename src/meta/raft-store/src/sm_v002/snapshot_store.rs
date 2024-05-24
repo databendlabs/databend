@@ -20,24 +20,21 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_meta_types::ErrorSubject;
+use databend_common_meta_types::LogId;
 use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::TempSnapshotData;
 use log::error;
 use log::info;
 use log::warn;
 use openraft::AnyError;
 use openraft::ErrorVerb;
 use openraft::SnapshotId;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 use crate::config::RaftConfig;
-use crate::key_spaces::SMEntry;
 use crate::ondisk::DataVersion;
-use crate::sm_v002::SnapshotStat;
-use crate::sm_v002::WriteEntry;
 use crate::sm_v002::WriterV002;
 use crate::state_machine::MetaSnapshotId;
 
@@ -270,51 +267,9 @@ impl SnapshotStoreV002 {
         Ok((snapshot_ids, invalid_files))
     }
 
-    /// Spawn a thread to receive snapshot data and write them to a snapshot file.
-    ///
-    /// It returns a sender to send entries and a handle to wait for the thread to finish.
-    /// Internally it calls tokio::spawn_blocking.
-    #[allow(clippy::type_complexity)]
-    pub fn spawn_writer_thread(
-        mut self,
-        context: impl Display + Send + Sync + 'static,
-    ) -> (
-        mpsc::Sender<WriteEntry<SMEntry>>,
-        JoinHandle<Result<(Self, SnapshotStat), io::Error>>,
-    ) {
-        // Add context information to io::Error
-
-        let (tx, rx) = mpsc::channel(64 * 1024);
-
-        // Spawn another thread to write entries to disk.
-        let join_handle = databend_common_base::runtime::spawn_blocking(move || {
-            let with_context =
-                |e: io::Error| io::Error::new(e.kind(), format!("{} while {}", e, context));
-
-            let mut writer = self.new_writer().map_err(|e| {
-                io::Error::new(e.source.kind(), format!("creating snapshot writer: {}", e))
-            })?;
-
-            info!("snapshot_writer_thread start writing: {}", context);
-            let cnt = writer.write_entries_sync(rx).map_err(with_context)?;
-
-            info!("snapshot_writer_thread committing...: {}", context);
-            let (snapshot_id, size) = writer.commit(None).map_err(with_context)?;
-
-            info!("snapshot_writer_thread commit done: {}", context);
-
-            Ok::<(Self, SnapshotStat), io::Error>((self, SnapshotStat {
-                snapshot_id,
-                size,
-                entry_cnt: cnt as u64,
-            }))
-        });
-
-        (tx, join_handle)
-    }
-
-    pub fn new_writer(&mut self) -> Result<WriterV002, SnapshotStoreError> {
-        self.ensure_snapshot_dir()?;
+    pub fn new_writer(&self) -> Result<WriterV002, SnapshotStoreError> {
+        self.ensure_snapshot_dir()
+            .map_err(|e| e.with_context("creating snapshot writer"))?;
 
         WriterV002::new(self)
             .map_err(|e| SnapshotStoreError::write(e).with_context("creating snapshot writer"))
@@ -325,6 +280,40 @@ impl SnapshotStoreV002 {
         let p = self.snapshot_temp_path();
 
         SnapshotData::new_temp(p).await
+    }
+
+    /// Commit [`TempSnapshotData`] to a snapshot file with a generated snapshot id.
+    pub fn commit_snapshot_data_gen_id(
+        &self,
+        temp: TempSnapshotData,
+        last_applied: Option<LogId>,
+        key_cnt: u64,
+    ) -> Result<(MetaSnapshotId, SnapshotData), io::Error> {
+        let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied).with_key_num(Some(key_cnt));
+        let d = self.commit_snapshot_data(temp, snapshot_id.clone())?;
+        Ok((snapshot_id, d))
+    }
+
+    /// Commit [`TempSnapshotData`] to a snapshot file with the given snapshot id.
+    pub fn commit_snapshot_data(
+        &self,
+        temp: TempSnapshotData,
+        snapshot_id: MetaSnapshotId,
+    ) -> Result<SnapshotData, io::Error> {
+        if snapshot_id.key_num.is_none() {
+            warn!("snapshot_id.key_num is not set: {:?}", snapshot_id);
+        }
+
+        let final_path = self.snapshot_path(&snapshot_id.to_string());
+        let d = temp.commit(final_path.clone())?;
+
+        info!(
+            "snapshot committed: snapshot_id: {}, path: {}",
+            snapshot_id.to_string(),
+            final_path
+        );
+
+        Ok(d)
     }
 
     /// Return a snapshot for async reading

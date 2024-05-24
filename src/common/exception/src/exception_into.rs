@@ -18,12 +18,12 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use geozero::error::GeozeroError;
 
 use crate::exception::ErrorCodeBacktrace;
 use crate::exception_backtrace::capture;
 use crate::ErrorCode;
-use crate::Span;
 
 #[derive(thiserror::Error)]
 enum OtherErrors {
@@ -228,6 +228,12 @@ impl From<std::string::FromUtf8Error> for ErrorCode {
             "Bad bytes, cannot parse bytes with UTF8, cause: {}",
             error
         ))
+    }
+}
+
+impl From<databend_common_ast::ParseError> for ErrorCode {
+    fn from(error: databend_common_ast::ParseError) -> Self {
+        ErrorCode::SyntaxException(error.1).set_span(error.0)
     }
 }
 

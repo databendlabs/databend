@@ -110,6 +110,17 @@ SELECT * FROM t3 WHERE (c2 = '1' IS NOT NULL)
 ----
 0 1 a
 
+query BIT
+SELECT * FROM t3 WHERE (c1 = 3 IS NOT NULL)
+----
+0 1 a
+1 5 NULL
+
+query BIT
+SELECT * FROM t3 WHERE (c1 = 3 IS NULL)
+----
+
+
 statement ok
 DROP TABLE t1
 

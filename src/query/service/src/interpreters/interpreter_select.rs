@@ -25,6 +25,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_store::MetaStore;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -45,6 +46,7 @@ use log::error;
 use log::info;
 
 use crate::interpreters::common::query_build_update_stream_req;
+use crate::interpreters::common::StreamTableUpdates;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
@@ -138,13 +140,16 @@ impl SelectInterpreter {
         .await?;
 
         // consume stream
-        if let Some(req) = query_build_update_stream_req(&self.ctx, &self.metadata).await? {
-            assert!(!req.update_table_metas.is_empty());
+        if let Some(StreamTableUpdates {
+            update_table_metas,
+            table_infos,
+        }) = query_build_update_stream_req(&self.ctx, &self.metadata).await?
+        {
+            assert!(!update_table_metas.is_empty());
 
             // defensively checks that all catalog names are identical
             {
-                let mut iter = req
-                    .update_table_metas
+                let mut iter = update_table_metas
                     .iter()
                     .map(|item| item.new_table_meta.catalog.as_str());
                 let first = iter.next().unwrap();
@@ -158,9 +163,10 @@ impl SelectInterpreter {
                 }
             }
 
-            let catalog_name = req.update_table_metas[0].new_table_meta.catalog.as_str();
+            let catalog_name = update_table_metas[0].new_table_meta.catalog.as_str();
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             let query_id = self.ctx.get_id();
+            let auto_commit = !self.ctx.txn_mgr().lock().is_active();
             build_res.main_pipeline.set_on_finished(
                 move |(_profiles, may_error)| match may_error {
                     Ok(_) => GlobalIORuntime::instance().block_on(async move {
@@ -168,7 +174,26 @@ impl SelectInterpreter {
                             "Updating the stream meta to consume data, query_id: {}",
                             query_id
                         );
-                        catalog.update_multi_table_meta(req).await.map(|_| ())
+
+                        if auto_commit {
+                            info!("(auto) committing stream consumptions");
+                            // commit to meta server directly
+                            let r = UpdateMultiTableMetaReq {
+                                update_table_metas,
+                                copied_files: vec![],
+                                update_stream_metas: vec![],
+                                deduplicated_labels: vec![],
+                            };
+                            catalog.update_multi_table_meta(r).await.map(|_| ())
+                        } else {
+                            info!("(non-auto) committing stream consumptions");
+                            for (req, info) in
+                                update_table_metas.into_iter().zip(table_infos.into_iter())
+                            {
+                                catalog.update_table_meta(&info, req).await?;
+                            }
+                            Ok(())
+                        }
                     }),
                     Err(error_code) => Err(error_code.clone()),
                 },

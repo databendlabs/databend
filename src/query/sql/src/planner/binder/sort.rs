@@ -161,6 +161,7 @@ impl Binder {
                                 self.create_derived_column_binding(
                                     format!("{:#}", order.expr),
                                     rewrite_scalar.data_type()?,
+                                    Some(rewrite_scalar.clone()),
                                 )
                             };
                         let item = ScalarItem {

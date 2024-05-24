@@ -16,11 +16,11 @@
 
 use std::fmt::Display;
 
-use databend_common_exception::Result;
-use databend_common_exception::Span;
 use itertools::Itertools;
 
 use crate::ast::*;
+use crate::Result;
+use crate::Span;
 
 pub fn format_statement(stmt: Statement) -> Result<String> {
     let mut visitor = AstFormatVisitor::new();
@@ -2236,7 +2236,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_grant(&mut self, principal: &'ast Option<PrincipalIdentity>) {
+    fn visit_show_grant(
+        &mut self,
+        principal: &'ast Option<PrincipalIdentity>,
+        show_options: &'ast Option<ShowOptions>,
+    ) {
         let mut children = Vec::new();
         if let Some(principal) = &principal {
             let principal_name = match principal {
@@ -2245,6 +2249,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             };
             let principal_format_ctx = AstFormatContext::new(principal_name);
             children.push(FormatTreeNode::new(principal_format_ctx));
+        }
+        if let Some(show_options) = show_options {
+            if let Some(show_limit) = &show_options.show_limit {
+                self.visit_show_limit(show_limit);
+                children.push(self.children.pop().unwrap());
+            }
+            if let Some(limit) = show_options.limit {
+                let name = format!("Limit {}", limit);
+                let limit_format_ctx = AstFormatContext::new(name);
+                let node = FormatTreeNode::new(limit_format_ctx);
+                children.push(node);
+            }
         }
         let name = "ShowGrant".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());

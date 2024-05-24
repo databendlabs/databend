@@ -305,14 +305,22 @@ async fn test_simple_sql() -> Result<()> {
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     }
 
-    // get page not expected
+    // client retry
     let page_1_uri = make_page_uri(query_id, 1);
-    let response = get_uri(&ep, &page_1_uri).await;
+    let (_, result) = get_uri_checked(&ep, &page_1_uri).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
+    assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
+
+    // get page not expected
+    let page_2_uri = make_page_uri(query_id, 2);
+    let response = get_uri(&ep, &page_2_uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"expect /final from client, got /page/1."}}"#
+        r#"{"error":{"code":"404","message":"wrong page number 2"}}"#
     );
 
     // final

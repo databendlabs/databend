@@ -15,9 +15,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::types::DataType;
 
 use crate::binder::ColumnBindingBuilder;
@@ -328,6 +328,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
+                        None,
                     )
                 };
                 let join_plan = Join {
@@ -392,6 +393,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
+                        None,
                     )
                 };
                 let mark_join = Join {

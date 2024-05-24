@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::SnapshotMeta;
-use serde::Deserialize;
-use serde::Serialize;
+mod show_grants_table;
 
-/// The application snapshot type which the `MetaStore` works with.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct StoredSnapshot {
-    pub meta: SnapshotMeta,
-}
+pub use show_grants_table::ShowGrants;
