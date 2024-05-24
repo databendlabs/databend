@@ -138,7 +138,6 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantTenantsOfSharePlan;
-use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
@@ -277,7 +276,6 @@ pub enum Plan {
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
     GrantPriv(Box<GrantPrivilegePlan>),
-    ShowGrants(Box<ShowGrantsPlan>),
     RevokePriv(Box<RevokePrivilegePlan>),
     RevokeRole(Box<RevokeRolePlan>),
     SetRole(Box<SetRolePlan>),
@@ -398,6 +396,7 @@ pub enum RewriteKind {
     ListStage,
     ShowRoles,
     ShowPasswordPolicies,
+    ShowGrants,
 
     Call,
 }
@@ -456,7 +455,6 @@ impl Plan {
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
-            Plan::ShowGrants(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),

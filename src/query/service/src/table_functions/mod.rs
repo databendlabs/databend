@@ -20,6 +20,7 @@ mod list_stage;
 mod numbers;
 mod openai;
 mod others;
+mod show_grants;
 mod srf;
 mod sync_crash_me;
 mod table_function;
