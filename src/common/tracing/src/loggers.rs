@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt;
 use std::io::BufWriter;
 use std::path::Path;
@@ -31,6 +30,9 @@ use tracing_appender::non_blocking::NonBlocking;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
+
+use crate::config::OTLPEndpointConfig;
+use crate::config::OTLPProtocol;
 
 /// Create a `BufWriter<NonBlocking>` for a rolling file logger.
 ///
@@ -85,6 +87,8 @@ impl log::Log for MinitraceLogger {
 
 #[derive(Debug)]
 pub(crate) struct OpenTelemetryLogger {
+    name: String,
+    category: String,
     library: Arc<InstrumentationLibrary>,
     provider: opentelemetry_sdk::logs::LoggerProvider,
 }
@@ -92,28 +96,56 @@ pub(crate) struct OpenTelemetryLogger {
 impl OpenTelemetryLogger {
     pub(crate) fn new(
         name: impl ToString,
-        endpoint: &str,
-        labels: BTreeMap<String, String>,
+        category: impl ToString,
+        config: &OTLPEndpointConfig,
     ) -> Self {
-        let kvs = labels
-            .into_iter()
-            .map(|(k, v)| opentelemetry::KeyValue::new(k, v))
-            .collect::<Vec<_>>();
-        let export_config = opentelemetry_otlp::ExportConfig {
-            endpoint: endpoint.to_string(),
-            protocol: opentelemetry_otlp::Protocol::Grpc,
-            timeout: Duration::from_secs(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT),
+        let exporter = match config.protocol {
+            OTLPProtocol::Grpc => {
+                let export_config = opentelemetry_otlp::ExportConfig {
+                    endpoint: config.endpoint.clone(),
+                    protocol: opentelemetry_otlp::Protocol::Grpc,
+                    timeout: Duration::from_secs(
+                        opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                    ),
+                };
+                let exporter_builder: opentelemetry_otlp::LogExporterBuilder =
+                    opentelemetry_otlp::new_exporter()
+                        .tonic()
+                        .with_export_config(export_config)
+                        .into();
+                exporter_builder
+                    .build_log_exporter()
+                    .expect("build grpc log exporter")
+            }
+            OTLPProtocol::Http => {
+                let export_config = opentelemetry_otlp::ExportConfig {
+                    endpoint: config.endpoint.clone(),
+                    protocol: opentelemetry_otlp::Protocol::HttpBinary,
+                    timeout: Duration::from_secs(
+                        opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                    ),
+                };
+                let exporter_builder: opentelemetry_otlp::LogExporterBuilder =
+                    opentelemetry_otlp::new_exporter()
+                        .http()
+                        .with_export_config(export_config)
+                        .into();
+                exporter_builder
+                    .build_log_exporter()
+                    .expect("build http log exporter")
+            }
         };
-        let exporter_builder: opentelemetry_otlp::LogExporterBuilder =
-            opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_export_config(export_config)
-                .into();
-        let exporter = exporter_builder
-            .build_log_exporter()
-            .expect("build log exporter");
+        let mut kvs = config
+            .labels
+            .iter()
+            .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string()))
+            .collect::<Vec<_>>();
+        kvs.push(opentelemetry::KeyValue::new(
+            "category",
+            category.to_string(),
+        ));
         let provider = opentelemetry_sdk::logs::LoggerProvider::builder()
-            .with_simple_exporter(exporter)
+            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
             .with_config(
                 opentelemetry_sdk::logs::Config::default()
                     .with_resource(opentelemetry_sdk::Resource::new(kvs)),
@@ -125,7 +157,12 @@ impl OpenTelemetryLogger {
             None::<&str>,
             None,
         ));
-        Self { library, provider }
+        Self {
+            name: name.to_string(),
+            category: category.to_string(),
+            library,
+            provider,
+        }
     }
 
     pub fn instrumentation_library(&self) -> &InstrumentationLibrary {
@@ -163,7 +200,7 @@ impl log::Log for OpenTelemetryLogger {
         let result = self.provider.force_flush();
         for r in result {
             if let Err(e) = r {
-                eprintln!("flush log failed: {}", e);
+                eprintln!("flush logger {}:{} failed: {}", self.name, self.category, e);
             }
         }
     }

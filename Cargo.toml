@@ -234,6 +234,7 @@ arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafus
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
+serde_with = { version = "3.8.1" }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 tonic-build = { version = "0.11" }
 
@@ -247,7 +248,13 @@ logcall = "0.1.5"
 minitrace = { version = "0.6.5", features = ["enable"] }
 minitrace-opentelemetry = "0.6.5"
 opentelemetry = { version = "0.22", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.15", features = ["trace", "logs", "grpc-tonic"] }
+opentelemetry-otlp = { version = "0.15", features = [
+    "trace",
+    "logs",
+    "grpc-tonic",
+    "http-proto",
+    "reqwest-client",
+] }
 opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"

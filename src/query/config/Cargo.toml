@@ -33,6 +33,7 @@ hex = "0.4.3"
 log = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
+serde_with = { workspace = true }
 serfig = { workspace = true }
 strum = "0.24.1"
 

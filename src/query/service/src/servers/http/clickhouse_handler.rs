@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_stream::stream;
+use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc::Sender;
 use databend_common_base::base::tokio::task::JoinHandle;
@@ -64,7 +65,6 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::servers::http::middleware::sanitize_request_headers;
 use crate::servers::http::v1::HttpQueryContext;
-use crate::sessions::short_sql;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;

@@ -72,24 +72,6 @@ pub struct GrantRolePlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ShowGrantsPlan {
-    pub principal: Option<PrincipalIdentity>,
-}
-
-impl ShowGrantsPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![
-            DataField::new("Privileges", DataType::String),
-            DataField::new("Object Name", DataType::String),
-            DataField::new("Object Id", DataType::Nullable(Box::new(DataType::String))),
-            DataField::new("Grant To", DataType::String),
-            DataField::new("Name", DataType::String),
-            DataField::new("Grants", DataType::String),
-        ])
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokeRolePlan {
     pub principal: PrincipalIdentity,
     pub role: String,

@@ -24,6 +24,8 @@ mod structlog;
 pub use crate::config::Config;
 pub use crate::config::FileConfig;
 pub use crate::config::OTLPConfig;
+pub use crate::config::OTLPEndpointConfig;
+pub use crate::config::OTLPProtocol;
 pub use crate::config::ProfileLogConfig;
 pub use crate::config::QueryLogConfig;
 pub use crate::config::StderrConfig;

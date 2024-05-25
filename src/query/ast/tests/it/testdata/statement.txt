@@ -11681,7 +11681,7 @@ CreateTable(
 ---------- Input ----------
 GRANT CREATE, CREATE USER ON * TO 'test-grant';
 ---------- Output ---------
-GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'%'
+GRANT CREATE, CREATE USER ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11707,7 +11707,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
+GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11733,7 +11733,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'%'
+GRANT SELECT, CREATE ON  *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11757,7 +11757,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
+GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11783,7 +11783,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO ROLE 'role1'
+GRANT SELECT, CREATE ON  * TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11806,7 +11806,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'%'
+GRANT ALL PRIVILEGES ON  *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11826,7 +11826,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL ON *.* TO ROLE role2;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON *.* TO ROLE 'role2'
+GRANT ALL PRIVILEGES ON  *.* TO ROLE 'role2'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11843,7 +11843,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL PRIVILEGES ON * TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'%'
+GRANT ALL PRIVILEGES ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11865,7 +11865,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL PRIVILEGES ON * TO ROLE role3;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON * TO ROLE 'role3'
+GRANT ALL PRIVILEGES ON  * TO ROLE 'role3'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11941,7 +11941,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
+GRANT SELECT ON  db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11968,7 +11968,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.* TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
+GRANT SELECT ON  db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11995,7 +11995,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- Output ---------
-GRANT SELECT ON db01.* TO ROLE 'role1'
+GRANT SELECT ON  db01.* TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12019,7 +12019,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.tb1 TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
+GRANT SELECT ON  db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12047,7 +12047,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.tb1 TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
+GRANT SELECT ON  db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12075,7 +12075,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.tb1 TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO ROLE 'role1'
+GRANT SELECT ON  db01.tb1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12100,7 +12100,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON tb1 TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT ON tb1 TO ROLE 'role1'
+GRANT SELECT ON  tb1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12123,7 +12123,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL ON tb1 TO 'u1';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON tb1 TO USER 'u1'@'%'
+GRANT ALL PRIVILEGES ON  tb1 TO USER 'u1'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12146,17 +12146,23 @@ Grant(
 ---------- Input ----------
 SHOW GRANTS;
 ---------- Output ---------
-SHOW GRANTS
+SHOW GRANTS 
 ---------- AST ------------
 ShowGrants {
     principal: None,
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
 
 
 ---------- Input ----------
 SHOW GRANTS FOR 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'%'
+SHOW GRANTS FOR USER 'test-grant'@'%' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12166,6 +12172,12 @@ ShowGrants {
                 hostname: "%",
             },
         ),
+    ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
     ),
 }
 
@@ -12173,7 +12185,7 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR USER 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'%'
+SHOW GRANTS FOR USER 'test-grant'@'%' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12184,19 +12196,31 @@ ShowGrants {
             },
         ),
     ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
 
 
 ---------- Input ----------
 SHOW GRANTS FOR ROLE role1;
 ---------- Output ---------
-SHOW GRANTS FOR ROLE 'role1'
+SHOW GRANTS FOR ROLE 'role1' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         Role(
             "role1",
         ),
+    ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
     ),
 }
 
@@ -12204,7 +12228,7 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR ROLE 'role1';
 ---------- Output ---------
-SHOW GRANTS FOR ROLE 'role1'
+SHOW GRANTS FOR ROLE 'role1' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12212,13 +12236,40 @@ ShowGrants {
             "role1",
         ),
     ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
+
+
+---------- Input ----------
+SHOW GRANTS ON TABLE t;
+---------- Output ---------
+SHOW GRANTS ON TABLE t 
+---------- AST ------------
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
+        object: Table(
+            None,
+            "t",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
+            },
+        ),
+    },
+)
 
 
 ---------- Input ----------
 REVOKE SELECT, CREATE ON * FROM 'test-grant';
 ---------- Output ---------
-REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'%'
+REVOKE SELECT, CREATE ON  * FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -12244,7 +12295,7 @@ Revoke(
 ---------- Input ----------
 REVOKE SELECT ON tb1 FROM ROLE role1;
 ---------- Output ---------
-REVOKE SELECT ON tb1 FROM ROLE 'role1'
+REVOKE SELECT ON  tb1 FROM ROLE 'role1'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -12267,7 +12318,7 @@ Revoke(
 ---------- Input ----------
 REVOKE SELECT ON tb1 FROM ROLE 'role1';
 ---------- Output ---------
-REVOKE SELECT ON tb1 FROM ROLE 'role1'
+REVOKE SELECT ON  tb1 FROM ROLE 'role1'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -12368,7 +12419,7 @@ SetRole {
 ---------- Input ----------
 REVOKE ALL ON tb1 FROM 'u1';
 ---------- Output ---------
-REVOKE ALL PRIVILEGES ON tb1 FROM USER 'u1'@'%'
+REVOKE ALL PRIVILEGES ON  tb1 FROM USER 'u1'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -14487,7 +14538,7 @@ GrantShareObject(
 ---------- Input ----------
 GRANT all ON stage s1 TO a;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON STAGE s1 TO USER 'a'@'%'
+GRANT ALL PRIVILEGES ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14509,7 +14560,7 @@ Grant(
 ---------- Input ----------
 GRANT read ON stage s1 TO a;
 ---------- Output ---------
-GRANT Read ON STAGE s1 TO USER 'a'@'%'
+GRANT Read ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14534,7 +14585,7 @@ Grant(
 ---------- Input ----------
 GRANT write ON stage s1 TO a;
 ---------- Output ---------
-GRANT Write ON STAGE s1 TO USER 'a'@'%'
+GRANT Write ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14559,7 +14610,7 @@ Grant(
 ---------- Input ----------
 REVOKE write ON stage s1 FROM a;
 ---------- Output ---------
-REVOKE Write ON STAGE s1 FROM USER 'a'@'%'
+REVOKE Write ON  STAGE s1 FROM USER 'a'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -14584,7 +14635,7 @@ Revoke(
 ---------- Input ----------
 GRANT all ON UDF a TO 'test-grant';
 ---------- Output ---------
-GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+GRANT USAGE ON  UDF a TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14609,7 +14660,7 @@ Grant(
 ---------- Input ----------
 GRANT usage ON UDF a TO 'test-grant';
 ---------- Output ---------
-GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+GRANT USAGE ON  UDF a TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14634,7 +14685,7 @@ Grant(
 ---------- Input ----------
 REVOKE usage ON UDF a FROM 'test-grant';
 ---------- Output ---------
-REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+REVOKE USAGE ON  UDF a FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -14659,7 +14710,7 @@ Revoke(
 ---------- Input ----------
 REVOKE all ON UDF a FROM 'test-grant';
 ---------- Output ---------
-REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+REVOKE USAGE ON  UDF a FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -14917,26 +14968,20 @@ ShowShares(
 ---------- Input ----------
 SHOW GRANTS ON TABLE db1.tb1;
 ---------- Output ---------
-SHOW GRANTS ON TABLE db1.tb1
+SHOW GRANTS ON TABLE db1.tb1 
 ---------- AST ------------
-ShowObjectGrantPrivileges(
-    ShowObjectGrantPrivilegesStmt {
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
         object: Table(
-            Identifier {
-                span: Some(
-                    21..24,
-                ),
-                name: "db1",
-                quote: None,
-                is_hole: false,
-            },
-            Identifier {
-                span: Some(
-                    25..28,
-                ),
-                name: "tb1",
-                quote: None,
-                is_hole: false,
+            Some(
+                "db1",
+            ),
+            "tb1",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
             },
         ),
     },
@@ -14946,18 +14991,17 @@ ShowObjectGrantPrivileges(
 ---------- Input ----------
 SHOW GRANTS ON DATABASE db;
 ---------- Output ---------
-SHOW GRANTS ON DATABASE db
+SHOW GRANTS ON DATABASE db 
 ---------- AST ------------
-ShowObjectGrantPrivileges(
-    ShowObjectGrantPrivilegesStmt {
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
         object: Database(
-            Identifier {
-                span: Some(
-                    24..26,
-                ),
-                name: "db",
-                quote: None,
-                is_hole: false,
+            "db",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
             },
         ),
     },
@@ -20140,7 +20184,7 @@ Query(
 ---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner'
+GRANT OWNERSHIP ON  d20_0014.* TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -20164,7 +20208,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner'
+GRANT OWNERSHIP ON  d20_0014.t TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -20189,7 +20233,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner'
+GRANT OWNERSHIP ON  STAGE s1 TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -20211,7 +20255,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner'
+GRANT OWNERSHIP ON  UDF f1 TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {

@@ -62,7 +62,6 @@ use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
-use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
@@ -446,9 +445,8 @@ impl<'a> Binder {
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
-            Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
-                principal: principal.clone().map(Into::into),
-            })),
+            Statement::ShowGrants { principal, show_options } => self.bind_show_account_grants(bind_context, principal, show_options).await?,
+            Statement::ShowObjectPrivileges(stmt) => self.bind_show_object_privileges(bind_context, stmt).await?,
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
