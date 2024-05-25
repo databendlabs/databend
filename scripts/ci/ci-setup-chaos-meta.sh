@@ -21,7 +21,7 @@ mkdir -p temp/distro/amd64
 #cp ./target/$1/databend-meta ./temp/distro/amd64/
 cp ./target/debug/databend-meta ./temp/distro/amd64/
 #cp ./target/$1/release/databend-metactl ./temp/distro/amd64/
-cp ./target/debug/databend-metactl ./temp/distro/amd64/
+#cp ./target/debug/databend-metactl ./temp/distro/amd64/
 docker build -t databend-meta --build-arg TARGETPLATFORM="amd64" -f ./docker/debian/meta.Dockerfile temp
 docker tag databend-meta:meta-chaos 127.0.0.1:5111/databend-meta
 docker push 127.0.0.1:5111/databend-meta
