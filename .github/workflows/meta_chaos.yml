@@ -50,7 +50,7 @@ jobs:
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
-          artifacts: meta
+          artifacts: meta,metactl
 
   test_meta_chaos:
     needs: [info, build]
