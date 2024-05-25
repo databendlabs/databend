@@ -628,7 +628,7 @@ output         : {'k1':'v1'}
 
 ast            : map_insert({'k1': 'v1'}, 'k2', 'v2')
 raw expr       : map_insert(map(array('k1'), array('v1')), 'k2', 'v2')
-checked expr   : map_insert<T0=String, T1=String><Map(T0, T1), T0, T1>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")), "k2", "v2")
+checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")) AS Map(String, String) NULL), "k2", "v2")
 optimized expr : {"k1":"v1", "k2":"v2"}
 output type    : Map(String, String)
 output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
@@ -655,8 +655,8 @@ output         : {'k1':'v10', 'k2':'v2'}
 
 ast            : map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'k1', 'v10')
 raw expr       : map_insert(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'k1', 'v10')
-checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1), T0, T1>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "k1", CAST("v10" AS String NULL))
-optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1), T0, T1>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "k1", "v10")
+checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "k1", CAST("v10" AS String NULL))
+optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "k1", "v10")
 evaluation:
 +--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------------------------------+
 |        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output                                     |

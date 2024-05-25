@@ -206,5 +206,13 @@ FROM map_insert_test;
 {'k5':'v5','k6':'v6','k1':'k100'} {'k5':'v5','k6':'v6','k1':'k100'}
 {'k1':'k100'} {'k1':'k100'}
 
+query
+SELECT map_insert(col_int, 'k1', 100)
+FROM map_insert_test;
+----
+{'a':10,'b':20,'k1':100}
+{'d':40,'e':NULL,'f':50,'k1':100}
+{'k1':100}
+
 statement ok
 DROP DATABASE map_func_test
