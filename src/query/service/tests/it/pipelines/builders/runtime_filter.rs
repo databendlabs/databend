@@ -91,6 +91,7 @@ async fn join_build_state(
         &join.probe_to_build,
         false,
         true,
+        None,
     )?;
     let build_state = HashJoinBuildState::try_create(
         ctx.clone(),

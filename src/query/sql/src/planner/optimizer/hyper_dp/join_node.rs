@@ -89,6 +89,7 @@ impl JoinNode {
             need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
+            build_side_cache_info: None,
         });
         let children = self
             .children

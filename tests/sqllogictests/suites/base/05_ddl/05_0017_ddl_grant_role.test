@@ -181,3 +181,15 @@ drop function if exists isnotempty;
 
 statement ok
 drop user if exists u_05_0017;
+
+statement ok
+drop user if exists 'u@05_0017';
+
+statement ok
+create user 'u@05_0017' identified by '123';
+
+statement ok
+show grants for 'u@05_0017';
+
+statement ok
+drop user if exists 'u@05_0017';
