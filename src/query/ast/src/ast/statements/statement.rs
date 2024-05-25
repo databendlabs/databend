@@ -202,7 +202,9 @@ pub enum Statement {
     Grant(GrantStmt),
     ShowGrants {
         principal: Option<PrincipalIdentity>,
+        show_options: Option<ShowOptions>,
     },
+    ShowObjectPrivileges(ShowObjectPrivilegesStmt),
     Revoke(RevokeStmt),
 
     // UDF
@@ -605,13 +607,20 @@ impl Display for Statement {
                 write!(f, " '{role}'")?;
             }
             Statement::Grant(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowGrants { principal } => {
+            Statement::ShowGrants {
+                principal,
+                show_options,
+            } => {
                 write!(f, "SHOW GRANTS")?;
                 if let Some(principal) = principal {
                     write!(f, " FOR")?;
                     write!(f, "{principal}")?;
                 }
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
             }
+            Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {

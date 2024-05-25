@@ -195,6 +195,25 @@ EOF
 echo "drop user if exists b" | $BENDSQL_CLIENT_CONNECT
 echo "create user b identified by '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
 
+echo "=== Test: show grants on privilege check ==="
+echo "drop database if exists root_db" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists default.root_table" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage if exists root_stage" | $BENDSQL_CLIENT_CONNECT
+echo "drop function if exists root_func" | $BENDSQL_CLIENT_CONNECT
+echo "create database root_db" | $BENDSQL_CLIENT_CONNECT
+echo "create table default.root_table(id int)" | $BENDSQL_CLIENT_CONNECT
+echo "create stage root_stage" | $BENDSQL_CLIENT_CONNECT
+echo "create function root_func as (a) -> (a+1);" | $BENDSQL_CLIENT_CONNECT
+echo "show grants on udf root_func" | $USER_B_CONNECT
+echo "show grants on stage root_stage" | $USER_B_CONNECT
+echo "show grants on database root_db" | $USER_B_CONNECT
+echo "show grants on table default.root_table" | $USER_B_CONNECT
+echo "show grants on table root_table" | $USER_B_CONNECT
+echo "drop database if exists root_db" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists default.root_table" | $BENDSQL_CLIENT_CONNECT
+echo "drop stage if exists root_stage" | $BENDSQL_CLIENT_CONNECT
+echo "drop function if exists root_func" | $BENDSQL_CLIENT_CONNECT
+
 echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT

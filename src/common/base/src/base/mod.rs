@@ -47,6 +47,7 @@ pub use string::escape_for_key;
 pub use string::format_byte_size;
 pub use string::mask_connection_info;
 pub use string::mask_string;
+pub use string::short_sql;
 pub use string::unescape_for_key;
 pub use string::unescape_string;
 pub use take_mut::take_mut;
