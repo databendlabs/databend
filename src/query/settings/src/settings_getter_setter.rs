@@ -508,6 +508,14 @@ impl Settings {
         self.try_get_u64("recluster_block_size")
     }
 
+    pub fn set_compact_max_block_selection(&self, val: u64) -> Result<()> {
+        self.try_set_u64("compact_max_block_selection", val)
+    }
+
+    pub fn get_compact_max_block_selection(&self) -> Result<u64> {
+        self.try_get_u64("compact_max_block_selection")
+    }
+
     pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
     }

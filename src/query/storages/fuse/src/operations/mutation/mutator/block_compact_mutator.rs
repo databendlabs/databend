@@ -45,7 +45,6 @@ use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::mutation::MAX_BLOCK_COUNT;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
@@ -84,6 +83,11 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
+
+        let settings = self.ctx.get_settings();
+        let compact_max_block_selection = settings.get_compact_max_block_selection()? as usize;
+        let max_threads = settings.get_max_threads()? as usize;
+
         let num_segment_limit = self
             .compact_params
             .num_segment_limit
@@ -91,7 +95,7 @@ impl BlockCompactMutator {
         let num_block_limit = self
             .compact_params
             .num_block_limit
-            .unwrap_or(MAX_BLOCK_COUNT);
+            .unwrap_or(compact_max_block_selection);
 
         info!("block compaction limits: seg {num_segment_limit},  block {num_block_limit}");
 
@@ -112,7 +116,7 @@ impl BlockCompactMutator {
         let mut segment_idx = 0;
         let mut is_end = false;
         let mut parts = Vec::new();
-        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
+        let chunk_size = max_threads * 4;
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
             let mut segment_infos = segments_io
@@ -194,7 +198,6 @@ impl BlockCompactMutator {
         metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time.as_millis() as u64);
 
         let cluster = self.ctx.get_cluster();
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
             // NOTE: The snapshot schema does not contain the stream column.
             let column_ids = self
