@@ -32,6 +32,7 @@ use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
+use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -168,6 +169,7 @@ impl SubqueryRewriter {
                 need_hold_hash_table: false,
                 is_lateral: false,
                 single_to_inner: None,
+                build_side_cache_info: None,
             }
             .into();
 
@@ -228,6 +230,10 @@ impl SubqueryRewriter {
 
             RelOperator::Window(op) => {
                 self.flatten_window(plan, op, correlated_columns, flatten_info)
+            }
+
+            RelOperator::ExpressionScan(scan) => {
+                self.flatten_expression_scan(plan, scan, correlated_columns)
             }
 
             _ => Err(ErrorCode::Internal(
@@ -501,6 +507,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 }
                 .into(),
             ),
@@ -763,5 +770,22 @@ impl SubqueryRewriter {
             Arc::new(left_flatten_plan),
             Arc::new(right_flatten_plan),
         ))
+    }
+
+    fn flatten_expression_scan(
+        &mut self,
+        plan: &SExpr,
+        scan: &ExpressionScan,
+        correlated_columns: &ColumnSet,
+    ) -> Result<SExpr> {
+        let binder = self.binder.as_ref().unwrap();
+        for correlated_column in correlated_columns.iter() {
+            let derived_column_index = binder
+                .expression_scan_context
+                .get_derived_column(scan.expression_scan_index, *correlated_column);
+            self.derived_columns
+                .insert(*correlated_column, derived_column_index);
+        }
+        Ok(plan.clone())
     }
 }

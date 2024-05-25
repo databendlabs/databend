@@ -192,7 +192,7 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                if !is_inner_join {
+                if !is_inner_join || op.build_side_cache_info.is_some() {
                     let new_s_expr = self.new_children(s_expr)?;
                     self.join_relations.push(JoinRelation::new(&new_s_expr));
                     Ok((Arc::new(new_s_expr), true))
@@ -260,6 +260,8 @@ impl DPhpy {
             }
             RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AsyncFunction(_)
             | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
