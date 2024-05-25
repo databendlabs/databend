@@ -272,7 +272,7 @@ impl DataType {
                 ordered_float::OrderedFloat(f64::INFINITY),
             ))),
             DataType::Number(NumberDataType::Int64) => {
-                Ok(Scalar::Number(NumberScalar::Int64(MAX.into())))
+                Ok(Scalar::Number(NumberScalar::Int64(i64::MAX)))
             }
             _ => Result::Err(format!(
                 "only support numeric types and time types, but got {:?}",
@@ -300,7 +300,7 @@ impl DataType {
                 ordered_float::OrderedFloat(f64::NEG_INFINITY),
             ))),
             DataType::Number(NumberDataType::Int64) => {
-                Ok(Scalar::Number(NumberScalar::Int64((-MAX).into())))
+                Ok(Scalar::Number(NumberScalar::Int64(i64::MIN)))
             }
             _ => Result::Err(format!(
                 "only support numeric types and time types, but got {:?}",
