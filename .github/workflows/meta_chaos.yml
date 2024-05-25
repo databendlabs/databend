@@ -52,62 +52,8 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: meta
 
-  docker:
-    needs: [info, build]
-    timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
-    services:
-      registry:
-        image: registry:2
-        ports:
-          - 5111:5111
-    outputs:
-      tag: ${{ steps.prepare.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download artifact for x86_64
-        uses: ./.github/actions/artifact_download
-        with:
-          sha: ${{ needs.info.outputs.sha }}
-          target: x86_64-unknown-linux-gnu
-          path: ./target/x86_64-unknown-linux-gnu/release
-          artifacts: meta,query
-      - name: Download artifact for aarch64
-        uses: ./.github/actions/artifact_download
-        with:
-          sha: ${{ needs.info.outputs.sha }}
-          target: aarch64-unknown-linux-gnu
-          path: ./target/aarch64-unknown-linux-gnu/release
-          artifacts: meta,query
-      - uses: ./.github/actions/setup_docker
-        id: login
-        with:
-          repo: databend-meta
-          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
-      - name: Prepare for docker
-        id: prepare
-        run: |
-          mkdir -p ./distro/linux/{amd64,arm64}
-          cp ./target/x86_64-unknown-linux-gnu/release/databend-meta ./distro/linux/amd64/
-          cp ./target/x86_64-unknown-linux-gnu/release/databend-metactl ./distro/linux/amd64/
-          cp ./target/aarch64-unknown-linux-gnu/release/databend-meta ./distro/linux/arm64/
-          cp ./target/aarch64-unknown-linux-gnu/release/databend-metactl ./distro/linux/arm64/
-          short_sha=$(echo "${{ needs.info.outputs.sha }}" | cut -c1-7)
-          echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}" >> $GITHUB_OUTPUT
-      - name: push service image
-        uses: docker/build-push-action@v5
-        with:
-          push: true
-          tags: localhost:5111/databend-meta:chaostest
-          platforms: linux/amd64,linux/arm64
-          context: .
-          file: ./docker/debian/meta.Dockerfile
-      - name: Inspect
-        run: |
-          docker buildx imagetools inspect localhost:5111/databend-meta:chaostest
-
   test_meta_chaos:
-    needs: [info, build, docker]
+    needs: [info, build]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     steps:
