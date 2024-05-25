@@ -216,6 +216,7 @@ impl Interpreter for InsertInterpreter {
                 let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
                 let catalog_info = catalog.info();
 
+                // here we remove the last exchange merge plan to trigger distribute insert
                 let insert_select_plan = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
                         // insert can be dispatched to different nodes

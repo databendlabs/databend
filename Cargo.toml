@@ -234,6 +234,7 @@ arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafus
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
+serde_with = { version = "3.8.1" }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 tonic-build = { version = "0.11" }
 
@@ -247,7 +248,13 @@ logcall = "0.1.5"
 minitrace = { version = "0.6.5", features = ["enable"] }
 minitrace-opentelemetry = "0.6.5"
 opentelemetry = { version = "0.22", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.15", features = ["trace", "logs", "grpc-tonic"] }
+opentelemetry-otlp = { version = "0.15", features = [
+    "trace",
+    "logs",
+    "grpc-tonic",
+    "http-proto",
+    "reqwest-client",
+] }
 opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
@@ -294,7 +301,6 @@ debug-assertions = true
 overflow-checks = true
 rpath = false
 
-# If there are dependencies that need patching, they can be listed below.
 [patch.crates-io]
 arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
@@ -303,3 +309,4 @@ async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", re
 z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }
+derive-visitor = { git = 'https://github.com/andylokandy/derive-visitor.git', rev = "c07c6b6" }

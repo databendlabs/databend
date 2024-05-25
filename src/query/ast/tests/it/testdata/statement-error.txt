@@ -916,3 +916,13 @@ error:
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
 
+---------- Input ----------
+SHOW GRANTS ON task t1;
+---------- Output ---------
+error: 
+  --> SQL:1:16
+  |
+1 | SHOW GRANTS ON task t1;
+  |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `DATABASE`, or `UDF`
+
+

@@ -60,6 +60,12 @@ Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does n
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 1
 0
+=== Test: show grants on privilege check ===
+Error: APIError: ResponseError with 1063: Permission denied: privilege USAGE is required on udf root_func for user b.
+Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage root_stage for user b. Or no need to show the stage privilege
+Error: APIError: ResponseError with 1063: Permission denied: No privilege on database root_db for user b.
+Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
+Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
 1	64	378
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]

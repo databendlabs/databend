@@ -20,11 +20,11 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
+use databend_common_ast::span::pretty_print_error;
+use databend_common_ast::Span;
 use thiserror::Error;
 
 use crate::exception_backtrace::capture;
-use crate::span::pretty_print_error;
-use crate::Span;
 
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {

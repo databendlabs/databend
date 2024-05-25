@@ -124,10 +124,10 @@ impl Planner {
                 .take_while(|token| token.is_ok())
                 // Make sure the tokens stream is always ended with EOI.
                 .chain(std::iter::once(Ok(Token::new_eoi(&final_sql))))
-                .collect::<Result<_>>()
+                .collect::<databend_common_ast::Result<_>>()
                 .unwrap()
         } else {
-            (&mut tokenizer).collect::<Result<_>>()?
+            (&mut tokenizer).collect::<databend_common_ast::Result<_>>()?
         };
 
         loop {

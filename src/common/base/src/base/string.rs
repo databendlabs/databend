@@ -17,6 +17,7 @@ use std::string::FromUtf8Error;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use regex::Regex;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Function that escapes special characters in a string.
 ///
@@ -187,4 +188,34 @@ pub fn mask_connection_info(sql: &str) -> String {
         .to_string();
 
     masked_sql
+}
+
+/// Maximum length of the SQL query to be displayed or log.
+/// If the query exceeds this length and starts with keywords,
+/// it will be truncated and appended with the remaining length.
+pub fn short_sql(sql: String) -> String {
+    const MAX_LENGTH: usize = 128;
+    let keywords = ["INSERT"];
+
+    fn starts_with_any(query: &str, keywords: &[&str]) -> bool {
+        keywords
+            .iter()
+            .any(|&keyword| query.to_uppercase().starts_with(keyword))
+    }
+
+    let query = sql.trim_start();
+
+    // Graphemes represent user-perceived characters, which might be composed
+    // of multiple Unicode code points.
+    // This ensures that we handle complex characters like emojis or
+    // accented characters properly.
+    if query.graphemes(true).count() > MAX_LENGTH && starts_with_any(query, &keywords) {
+        let truncated: String = query.graphemes(true).take(MAX_LENGTH).collect();
+        let original_length = query.graphemes(true).count();
+        let remaining_length = original_length.saturating_sub(MAX_LENGTH);
+        // Append the remaining length indicator
+        truncated + &format!("...[{} more characters]", remaining_length)
+    } else {
+        query.to_string()
+    }
 }

@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::Span;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
