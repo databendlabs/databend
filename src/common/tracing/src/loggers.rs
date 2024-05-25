@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::io::BufWriter;
 use std::path::Path;
@@ -98,6 +99,7 @@ impl OpenTelemetryLogger {
         name: impl ToString,
         category: impl ToString,
         config: &OTLPEndpointConfig,
+        labels: &BTreeMap<String, String>,
     ) -> Self {
         let exporter = match config.protocol {
             OTLPProtocol::Grpc => {
@@ -144,6 +146,9 @@ impl OpenTelemetryLogger {
             "category",
             category.to_string(),
         ));
+        for (k, v) in labels {
+            kvs.push(opentelemetry::KeyValue::new(k.to_string(), v.to_string()));
+        }
         let provider = opentelemetry_sdk::logs::LoggerProvider::builder()
             .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
             .with_config(

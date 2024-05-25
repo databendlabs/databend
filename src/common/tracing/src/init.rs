@@ -72,17 +72,19 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
 
 #[allow(dyn_drop)]
 pub fn init_logging(
-    name: &str,
+    log_name: &str,
     cfg: &Config,
-    labels: BTreeMap<String, String>,
+    mut labels: BTreeMap<String, String>,
 ) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
-    let log_name = name;
+    if !labels.contains_key("service") {
+        labels.insert("service".to_string(), log_name.to_string());
+    }
     let trace_name = match labels.get("node_id") {
-        None => name.to_string(),
+        None => log_name.to_string(),
         Some(node_id) => format!(
             "{}@{}",
-            name,
+            log_name,
             if node_id.len() >= 7 {
                 &node_id[0..7]
             } else {
@@ -105,8 +107,8 @@ pub fn init_logging(
             "service.name",
             trace_name.clone(),
         ));
-        for (k, v) in labels {
-            kvs.push(opentelemetry::KeyValue::new(k, v));
+        for (k, v) in &labels {
+            kvs.push(opentelemetry::KeyValue::new(k.to_string(), v.to_string()));
         }
         let exporter = match cfg.tracing.otlp.protocol {
             OTLPProtocol::Grpc => opentelemetry_otlp::new_exporter()
@@ -201,7 +203,7 @@ pub fn init_logging(
 
     // OpenTelemetry logger
     if cfg.otlp.on {
-        let logger = OpenTelemetryLogger::new(log_name, "system", &cfg.otlp.endpoint);
+        let logger = OpenTelemetryLogger::new(log_name, "system", &cfg.otlp.endpoint, &labels);
         let dispatch = fern::Dispatch::new()
             .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
             .format(formatter("json"))
@@ -233,7 +235,7 @@ pub fn init_logging(
             query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
         }
         if let Some(endpoint) = &cfg.query.otlp {
-            let logger = OpenTelemetryLogger::new(log_name, "query", endpoint);
+            let logger = OpenTelemetryLogger::new(log_name, "query", endpoint, &labels);
             query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
@@ -248,7 +250,7 @@ pub fn init_logging(
                 profile_logger.chain(Box::new(profile_log_file) as Box<dyn Write + Send>);
         }
         if let Some(endpoint) = &cfg.profile.otlp {
-            let logger = OpenTelemetryLogger::new(log_name, "profile", endpoint);
+            let logger = OpenTelemetryLogger::new(log_name, "profile", endpoint, &labels);
             profile_logger = profile_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
