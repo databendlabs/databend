@@ -190,7 +190,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
@@ -198,9 +197,6 @@ use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
-use databend_common_meta_types::MetaAPIError;
-use databend_common_meta_types::MetaDataError;
-use databend_common_meta_types::MetaDataReadError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::MetaNetworkError;
@@ -2288,10 +2284,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let seq_names = self.mget_kv(&id_name_kv_keys).await?;
         let mut table_names = Vec::with_capacity(table_ids.len());
 
-        // None means table_name not found, maybe immutable table id. Ignore it
-        for seq_name in seq_names.into_iter().flatten() {
-            let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
-            table_names.push(Some(name_ident.table_name));
+        for seq_name in seq_names {
+            if let Some(seq_name) = seq_name {
+                let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
+                table_names.push(Some(name_ident.table_name));
+            } else {
+                table_names.push(None);
+            }
         }
 
         let mut meta_kv_keys = Vec::with_capacity(table_ids.len());
@@ -2301,15 +2300,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         let seq_metas = self.mget_kv(&meta_kv_keys).await?;
-        if seq_metas.len() != table_names.len() {
-            return Err(KVAppError::MetaError(MetaError::APIError(
-                MetaAPIError::DataError(MetaDataError::ReadError(MetaDataReadError::new(
-                    "mget_table_names_by_ids",
-                    "",
-                    &AnyError::error("The system is experiencing high load, please retry later"),
-                ))),
-            )));
-        }
         for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
             if let Some(seq_meta) = seq_meta_opt {
                 let table_meta: TableMeta = deserialize_struct(&seq_meta.data)?;
@@ -2362,10 +2352,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // If multi drop/create db the capacity may not same
         let mut db_names = Vec::with_capacity(db_ids.len());
 
-        // None means db_name not found, maybe immutable database id. Ignore it
-        for seq_name in seq_names.into_iter().flatten() {
-            let name_ident: DatabaseNameIdentRaw = deserialize_struct(&seq_name.data)?;
-            db_names.push(Some(name_ident.database_name().to_string()));
+        for seq_name in seq_names {
+            if let Some(seq_name) = seq_name {
+                let name_ident: DatabaseNameIdentRaw = deserialize_struct(&seq_name.data)?;
+                db_names.push(Some(name_ident.database_name().to_string()));
+            } else {
+                db_names.push(None);
+            }
         }
 
         let mut meta_kv_keys = Vec::with_capacity(db_ids.len());
@@ -2375,15 +2368,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         let seq_metas = self.mget_kv(&meta_kv_keys).await?;
-        if seq_metas.len() != db_names.len() {
-            return Err(KVAppError::MetaError(MetaError::APIError(
-                MetaAPIError::DataError(MetaDataError::ReadError(MetaDataReadError::new(
-                    "mget_table_names_by_ids",
-                    "",
-                    &AnyError::error("The system is experiencing high load, please retry later"),
-                ))),
-            )));
-        }
         for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
             if let Some(seq_meta) = seq_meta_opt {
                 let db_meta: DatabaseMeta = deserialize_struct(&seq_meta.data)?;
