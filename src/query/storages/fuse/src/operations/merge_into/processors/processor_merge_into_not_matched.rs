@@ -36,6 +36,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_storage::MergeStatus;
 use itertools::Itertools;
+use log::info;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
 use crate::operations::BlockMetaIndex;
@@ -161,6 +162,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
             if no_need_add_status {
                 // no need to give source schema, the data block's schema is complete, so we won'f fill default
                 // field values.The computed field will be processed in `TransformResortAddOnWithoutSourceSchema`.
+                info!("CHECK: target build optimized, passing data block directly to downstream");
                 self.output_data.push(data_block);
                 return Ok(());
             }
@@ -182,6 +184,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
                         deleted_rows: 0,
                     });
 
+                    info!("CHECK: appending data block {:#?} ", satisfied_block);
                     self.output_data
                         .push(op.op.execute(&self.func_ctx, satisfied_block)?)
                 }

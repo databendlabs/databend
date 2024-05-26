@@ -26,6 +26,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
+use log::info;
 
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
@@ -180,11 +181,23 @@ impl Processor for MergeIntoSplitProcessor {
 
             if !matched_block.is_empty() {
                 metrics_inc_merge_into_matched_rows(matched_block.num_rows() as u32);
+                info!(
+                    "CHECK: matched data, row number {}, col number {}: {:#?}",
+                    matched_block.num_rows(),
+                    matched_block.num_columns(),
+                    matched_block.columns()
+                );
                 self.output_data_matched_data = Some(matched_block);
             }
 
             if !not_matched_block.is_empty() {
                 metrics_inc_merge_into_unmatched_rows(not_matched_block.num_rows() as u32);
+                info!(
+                    "CHECK: not matched data, row number {}, col number {} : {:#?}",
+                    not_matched_block.num_rows(),
+                    not_matched_block.num_columns(),
+                    not_matched_block.columns()
+                );
                 self.output_data_not_matched_data = Some(not_matched_block);
             }
         }

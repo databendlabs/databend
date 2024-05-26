@@ -365,6 +365,7 @@ impl MatchedAggregator {
                 mutation_logs.push(segment_mutation_log);
             }
         }
+        info!("CHECK: mutation logs {:#?}", mutation_logs);
         let elapsed_time = start.elapsed().as_millis() as u64;
         metrics_inc_merge_into_apply_milliseconds(elapsed_time);
         Ok(Some(MutationLogs {
@@ -383,7 +384,7 @@ impl AggregationContext {
         modified_offsets: HashSet<usize>,
     ) -> Result<Option<MutationLogEntry>> {
         info!(
-            "apply update and delete to segment idx {}, block idx {}",
+            "CHECK: apply update and delete to segment idx {}, block idx {}",
             segment_idx, block_idx,
         );
         let progress_values = ProgressValues {
@@ -461,7 +462,13 @@ impl AggregationContext {
         let new_block_location = new_block_meta.location.0.clone();
         let new_block_raw_data = serialized.block_raw_data;
         let data_accessor = self.data_accessor.clone();
+
+        // TODO BUGGY, inverted index not saved
+
         write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
+        if let Some(bloom_state) = serialized.bloom_index_state {
+            write_data(bloom_state.data, &data_accessor, &bloom_state.location.0).await?;
+        }
 
         metrics_inc_merge_into_replace_blocks_counter(1);
         metrics_inc_merge_into_replace_blocks_rows_counter(origin_num_rows as u32);

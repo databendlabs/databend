@@ -49,6 +49,7 @@ use databend_common_storages_fuse::operations::TransformDistributedMergeIntoBloc
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::FuseTable;
+use log::info;
 
 use crate::pipelines::processors::transforms::AccumulateRowNumber;
 use crate::pipelines::processors::transforms::ExtractHashTableByRowNumber;
@@ -378,6 +379,7 @@ impl PipelineBuilder {
         if let Some(split_idx) = merge_into_split_idx {
             let mut items = Vec::with_capacity(self.main_pipeline.output_len());
             let output_len = self.main_pipeline.output_len();
+            info!("split_idx {split_idx}, main_pipeline output len {output_len}");
             for _ in 0..output_len {
                 let merge_into_split_processor =
                     MergeIntoSplitProcessor::create(*split_idx as u32)?;

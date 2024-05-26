@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
+use log::info;
 
 pub struct MergeIntoSplitMutator {
     pub split_idx: u32,
@@ -37,6 +38,7 @@ impl MergeIntoSplitMutator {
         // get row_id do check duplicate and get filter
         let filter: Bitmap = match &split_column.value {
             databend_common_expression::Value::Scalar(scalar) => {
+                info!("split block using scalar value");
                 // fast judge
                 if scalar.is_null() {
                     return Ok((DataBlock::empty(), block.clone()));
@@ -46,6 +48,10 @@ impl MergeIntoSplitMutator {
             }
             databend_common_expression::Value::Column(column) => match column {
                 databend_common_expression::Column::Nullable(nullable_column) => {
+                    info!(
+                        "CHECK: split block using column's validity: {:#?}",
+                        nullable_column
+                    );
                     nullable_column.validity.clone()
                 }
                 _ => {
