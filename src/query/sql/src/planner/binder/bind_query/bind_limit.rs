@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SetExpr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -24,6 +26,51 @@ use crate::optimizer::SExpr;
 use crate::plans::Limit;
 
 impl Binder {
+    pub(super) fn bind_query_limit(
+        &self,
+        query: &Query,
+        s_expr: SExpr,
+        limit: Option<usize>,
+        offset: usize,
+    ) -> SExpr {
+        if limit.is_none() && query.offset.is_none() {
+            return s_expr;
+        }
+
+        let limit_plan = Limit {
+            before_exchange: false,
+            limit,
+            offset,
+        };
+        SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(s_expr))
+    }
+
+    pub(crate) fn extract_limit_and_offset(&self, query: &Query) -> Result<(Option<usize>, usize)> {
+        let (mut limit, offset) = if !query.limit.is_empty() {
+            if query.limit.len() == 1 {
+                Self::analyze_limit(Some(&query.limit[0]), &query.offset)?
+            } else {
+                Self::analyze_limit(Some(&query.limit[1]), &Some(query.limit[0].clone()))?
+            }
+        } else if query.offset.is_some() {
+            Self::analyze_limit(None, &query.offset)?
+        } else {
+            (None, 0)
+        };
+
+        if let SetExpr::Select(stmt) = &query.body {
+            if !query.limit.is_empty() && stmt.top_n.is_some() {
+                return Err(ErrorCode::SemanticError(
+                    "Duplicate LIMIT: TopN and Limit cannot be used together",
+                ));
+            } else if let Some(n) = stmt.top_n {
+                limit = Some(n as usize);
+            }
+        }
+
+        Ok((limit, offset))
+    }
+
     pub(super) fn analyze_limit(
         limit: Option<&Expr>,
         offset: &Option<Expr>,
@@ -46,15 +93,6 @@ impl Binder {
         };
 
         Ok((limit_cnt, offset_cnt))
-    }
-
-    pub(super) fn bind_limit(child: SExpr, limit: Option<usize>, offset: usize) -> SExpr {
-        let limit_plan = Limit {
-            before_exchange: false,
-            limit,
-            offset,
-        };
-        SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(child))
     }
 
     /// So far, we only support integer literal as limit argument.

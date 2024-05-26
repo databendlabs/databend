@@ -59,7 +59,9 @@ impl Binder {
                 alias: None,
             };
 
-            let (s_expr, bind_context) = self.bind_single_table(bind_context, &table_ref).await?;
+            let (s_expr, bind_context) =
+                self.bind_table_reference(bind_context, &table_ref).await?;
+
             let select_plan = Plan::Query {
                 s_expr: Box::new(s_expr),
                 metadata: self.metadata.clone(),

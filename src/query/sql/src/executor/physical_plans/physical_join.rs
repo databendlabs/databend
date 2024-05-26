@@ -40,6 +40,11 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
+    if join.build_side_cache_info.is_some() {
+        // There is a build side cache, use hash join.
+        return Ok(PhysicalJoinType::Hash);
+    }
+
     let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
     let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
     let mut range_conditions = vec![];
@@ -113,12 +118,17 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let column_projections = required.clone().into_iter().collect::<Vec<_>>();
-        let others_required = join
+        let mut others_required = join
             .non_equi_conditions
             .iter()
             .fold(required.clone(), |acc, v| {
                 acc.union(&v.used_columns()).cloned().collect()
             });
+        if let Some(cache_info) = &join.build_side_cache_info {
+            for column in &cache_info.columns {
+                others_required.insert(*column);
+            }
+        }
         let pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
         // Include columns referenced in left conditions and right conditions.
         let left_required = join
@@ -148,7 +158,8 @@ impl PhysicalPlanBuilder {
                 self.build_hash_join(
                     join,
                     s_expr,
-                    (left_required, right_required),
+                    left_required,
+                    right_required,
                     pre_column_projections,
                     column_projections,
                     stat_info,

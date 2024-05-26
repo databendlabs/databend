@@ -86,9 +86,9 @@ impl Binder {
             overwrite,
             ..
         } = stmt;
-        if let Some(with) = &with {
-            self.add_cte(with, bind_context)?;
-        }
+
+        self.init_cte(bind_context, with)?;
+
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
         let table = self

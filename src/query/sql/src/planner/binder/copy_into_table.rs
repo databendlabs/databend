@@ -64,8 +64,8 @@ use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
+use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::location::parse_uri_location;
-use crate::binder::select::MaxColumnPosition;
 use crate::binder::Binder;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
@@ -96,9 +96,7 @@ impl<'a> Binder {
                     .await
             }
             CopyIntoTableSource::Query(query) => {
-                if let Some(with) = &stmt.with {
-                    self.add_cte(with, bind_context)?;
-                }
+                self.init_cte(bind_context, &stmt.with)?;
 
                 let mut max_column_position = MaxColumnPosition::new();
                 query.drive(&mut max_column_position);

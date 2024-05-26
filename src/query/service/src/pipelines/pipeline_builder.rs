@@ -31,6 +31,7 @@ use databend_common_sql::IndexType;
 use super::PipelineBuilderData;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::MaterializedCteState;
+use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
@@ -52,6 +53,8 @@ pub struct PipelineBuilder {
     pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
 
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
+
+    pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
 }
 
 impl PipelineBuilder {
@@ -71,6 +74,7 @@ impl PipelineBuilder {
             cte_state: HashMap::new(),
             merge_into_probe_data_fields: None,
             join_state: None,
+            hash_join_states: HashMap::new(),
         }
     }
 
@@ -156,6 +160,10 @@ impl PipelineBuilder {
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 self.build_materialized_cte(materialized_cte)
+            }
+            PhysicalPlan::CacheScan(cache_scan) => self.build_cache_scan(cache_scan),
+            PhysicalPlan::ExpressionScan(expression_scan) => {
+                self.build_expression_scan(expression_scan)
             }
 
             // Copy into.
