@@ -143,7 +143,7 @@ impl PipelineBuilder {
             }
             assert!(self.join_state.is_some());
             assert!(self.merge_into_probe_data_fields.is_some());
-
+            self.main_pipeline.resize(1, false)?;
             let join_state = self.join_state.clone().unwrap();
             // split row_number and log
             //      output_port_row_number
@@ -291,6 +291,7 @@ impl PipelineBuilder {
                 // we will receive MutationLogs only without rowids.
                 return Ok(());
             }
+            self.main_pipeline.resize(1, false)?;
             // we will receive MutationLogs and rowids. So we should apply
             // rowids firstly and then send all mutation logs to commit sink.
             // we need to spilt rowid and mutationlogs, and we can get pipeitems:
