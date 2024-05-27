@@ -341,9 +341,11 @@ impl PhysicalPlanBuilder {
             });
         }
 
-        let index = self.metadata
-                               .write()
-                               .add_derived_column(window.display_name.clone(), window.func.return_type(), None);
+        let index = self.metadata.write().add_derived_column(
+            window.display_name.clone(),
+            window.func.return_type(),
+            None,
+        );
 
         let window_plan = Window {
             span: window.span,
