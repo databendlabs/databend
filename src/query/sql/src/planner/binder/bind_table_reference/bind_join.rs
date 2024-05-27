@@ -27,8 +27,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use indexmap::IndexMap;
 
-use super::Finder;
 use crate::binder::CteInfo;
+use crate::binder::Finder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
@@ -42,11 +42,13 @@ use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
+use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 use crate::BindContext;
+use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -62,33 +64,112 @@ impl Binder {
     #[async_backtrace::framed]
     pub(crate) async fn bind_join(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
+        join: &databend_common_ast::ast::Join,
+    ) -> Result<(SExpr, BindContext)> {
+        let (left_child, mut left_context) =
+            self.bind_table_reference(bind_context, &join.left).await?;
+        let left_column_bindings = left_context.columns.clone();
+
+        let cache_column_bindings = left_column_bindings.clone();
+        let mut cache_column_indexes = Vec::with_capacity(cache_column_bindings.len());
+        for column in cache_column_bindings.iter() {
+            cache_column_indexes.push(column.index);
+        }
+        let cache_idx = self
+            .expression_scan_context
+            .add_hash_join_build_cache(cache_column_bindings, cache_column_indexes);
+
+        if join.right.is_lateral_table_function() {
+            let (result_expr, bind_context) = self
+                .bind_lateral_table_function(&mut left_context, left_child.clone(), &join.right)
+                .await?;
+            return Ok((result_expr, bind_context));
+        }
+
+        let (right_child, right_context) = self
+            .bind_table_reference(&mut left_context, &join.right)
+            .await?;
+
+        let right_column_bindings = right_context.columns.clone();
+
+        let mut bind_context = bind_context.replace();
+
+        self.check_table_name_and_condition(&left_column_bindings, &right_column_bindings, join)?;
+
+        let join_conditions = self
+            .generate_join_condition(
+                &mut bind_context,
+                join,
+                &left_column_bindings,
+                &right_column_bindings,
+            )
+            .await?;
+
+        let build_side_cache_info = self.expression_scan_context.generate_cache_info(cache_idx);
+
+        let join_type = join_type(&join.op);
+        let s_expr = self
+            .bind_join_with_type(
+                join_type.clone(),
+                join_conditions,
+                left_child,
+                right_child,
+                build_side_cache_info,
+            )
+            .await?;
+        let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
+
+        Ok((s_expr, bind_context))
+    }
+
+    // TODO: unify this function with bind_join
+    #[async_recursion]
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_merge_into_join(
+        &mut self,
+        bind_context: &mut BindContext,
         left_context: BindContext,
         right_context: BindContext,
         left_child: SExpr,
         right_child: SExpr,
         join: &databend_common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
-        check_duplicate_join_tables(&left_context, &right_context)?;
+        self.check_table_name_and_condition(&left_context.columns, &right_context.columns, join)?;
 
         let mut bind_context = bind_context.replace();
 
-        match &join.op {
-            JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter
-                if join.condition == JoinCondition::None =>
-            {
-                return Err(ErrorCode::SemanticError(
-                    "outer join should contain join conditions".to_string(),
-                ));
-            }
-            JoinOperator::CrossJoin if join.condition != JoinCondition::None => {
-                return Err(ErrorCode::SemanticError(
-                    "cross join should not contain join conditions".to_string(),
-                ));
-            }
-            _ => (),
-        };
+        let join_conditions = self
+            .generate_join_condition(
+                &mut bind_context,
+                join,
+                &left_context.columns,
+                &right_context.columns,
+            )
+            .await?;
 
+        let join_type = join_type(&join.op);
+        let s_expr = self
+            .bind_join_with_type(
+                join_type.clone(),
+                join_conditions,
+                left_child,
+                right_child,
+                None,
+            )
+            .await?;
+        let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
+
+        Ok((s_expr, bind_context))
+    }
+
+    async fn generate_join_condition(
+        &self,
+        bind_context: &mut BindContext,
+        join: &databend_common_ast::ast::Join,
+        left_column_bindings: &[ColumnBinding],
+        right_column_bindings: &[ColumnBinding],
+    ) -> Result<JoinConditions> {
         let mut left_join_conditions: Vec<ScalarExpr> = vec![];
         let mut right_join_conditions: Vec<ScalarExpr> = vec![];
         let mut non_equi_conditions: Vec<ScalarExpr> = vec![];
@@ -100,11 +181,12 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
             join.op.clone(),
-            &left_context,
-            &right_context,
-            &mut bind_context,
+            left_column_bindings,
+            right_column_bindings,
+            bind_context,
             &join.condition,
         );
+
         join_condition_resolver
             .resolve(
                 &mut left_join_conditions,
@@ -115,80 +197,27 @@ impl Binder {
             )
             .await?;
 
-        let join_conditions = JoinConditions {
+        Ok(JoinConditions {
             left_conditions: left_join_conditions,
             right_conditions: right_join_conditions,
             non_equi_conditions,
             other_conditions,
-        };
-
-        let s_expr = match &join.op {
-            JoinOperator::Inner => {
-                self.bind_join_with_type(JoinType::Inner, join_conditions, left_child, right_child)
-            }
-            JoinOperator::LeftOuter => {
-                self.bind_join_with_type(JoinType::Left, join_conditions, left_child, right_child)
-            }
-            JoinOperator::RightOuter => {
-                self.bind_join_with_type(JoinType::Right, join_conditions, left_child, right_child)
-            }
-            JoinOperator::FullOuter => {
-                self.bind_join_with_type(JoinType::Full, join_conditions, left_child, right_child)
-            }
-            JoinOperator::CrossJoin => {
-                self.bind_join_with_type(JoinType::Cross, join_conditions, left_child, right_child)
-            }
-            JoinOperator::LeftSemi => {
-                bind_context = left_context;
-                self.bind_join_with_type(
-                    JoinType::LeftSemi,
-                    join_conditions,
-                    left_child,
-                    right_child,
-                )
-            }
-            JoinOperator::RightSemi => {
-                bind_context = right_context;
-                self.bind_join_with_type(
-                    JoinType::RightSemi,
-                    join_conditions,
-                    left_child,
-                    right_child,
-                )
-            }
-            JoinOperator::LeftAnti => {
-                bind_context = left_context;
-                self.bind_join_with_type(
-                    JoinType::LeftAnti,
-                    join_conditions,
-                    left_child,
-                    right_child,
-                )
-            }
-            JoinOperator::RightAnti => {
-                bind_context = right_context;
-                self.bind_join_with_type(
-                    JoinType::RightAnti,
-                    join_conditions,
-                    left_child,
-                    right_child,
-                )
-            }
-        }?;
-        Ok((s_expr, bind_context))
+        })
     }
 
-    pub fn bind_join_with_type(
+    pub(crate) async fn bind_join_with_type(
         &mut self,
         mut join_type: JoinType,
         join_conditions: JoinConditions,
         mut left_child: SExpr,
         mut right_child: SExpr,
+        build_side_cache_info: Option<HashJoinBuildCacheInfo>,
     ) -> Result<SExpr> {
         let mut left_conditions = join_conditions.left_conditions;
         let mut right_conditions = join_conditions.right_conditions;
         let mut non_equi_conditions = join_conditions.non_equi_conditions;
         let other_conditions = join_conditions.other_conditions;
+
         if join_type == JoinType::Cross
             && (!left_conditions.is_empty() || !right_conditions.is_empty())
         {
@@ -204,15 +233,12 @@ impl Binder {
             &mut non_equi_conditions,
         )?;
 
-        for (left, right) in left_conditions.iter().zip(right_conditions.iter()) {
-            self.eq_scalars.push((left.clone(), right.clone()));
-        }
-
         let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
         let mut is_lateral = false;
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
-            let mut decorrelator = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
+            let mut decorrelator =
+                SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), Some(self.clone()));
             right_child = decorrelator.flatten_plan(
                 &right_child,
                 &right_prop.outer_columns,
@@ -233,6 +259,26 @@ impl Binder {
             is_lateral = true;
         }
 
+        let (left_child, right_child, join_type, left_conditions, right_conditions) =
+            // If there are cache indexes used in the expression scan context, we swap the left and right child
+            // to make left child as the build side.
+            if !self.expression_scan_context.used_cache_indexes.is_empty() {
+                (
+                    right_child,
+                    left_child,
+                    join_type.opposite(),
+                    right_conditions,
+                    left_conditions,
+                )
+            } else {
+                (
+                    left_child,
+                    right_child,
+                    join_type,
+                    left_conditions,
+                    right_conditions,
+                )
+            };
         let logical_join = Join {
             left_conditions,
             right_conditions,
@@ -243,6 +289,7 @@ impl Binder {
             need_hold_hash_table: false,
             is_lateral,
             single_to_inner: None,
+            build_side_cache_info,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),
@@ -337,55 +384,82 @@ impl Binder {
 
         Ok(())
     }
+
+    fn check_table_name_and_condition(
+        &self,
+        left_column_bindings: &[ColumnBinding],
+        right_column_bindings: &[ColumnBinding],
+        join: &databend_common_ast::ast::Join,
+    ) -> Result<()> {
+        check_duplicate_join_tables(left_column_bindings, right_column_bindings)?;
+
+        match &join.op {
+            JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter
+                if join.condition == JoinCondition::None =>
+            {
+                return Err(ErrorCode::SemanticError(
+                    "outer join should contain join conditions".to_string(),
+                ));
+            }
+            JoinOperator::CrossJoin if join.condition != JoinCondition::None => {
+                return Err(ErrorCode::SemanticError(
+                    "cross join should not contain join conditions".to_string(),
+                ));
+            }
+            _ => (),
+        };
+
+        Ok(())
+    }
 }
 
 // Wrap nullable for column binding depending on join type.
 fn wrap_nullable_for_column(
     join_type: &JoinOperator,
-    left_context: &BindContext,
-    right_context: &BindContext,
+    left_column_bindings: &[ColumnBinding],
+    right_column_bindings: &[ColumnBinding],
     bind_context: &mut BindContext,
 ) {
     match join_type {
         JoinOperator::LeftOuter => {
-            for column in left_context.all_column_bindings() {
+            for column in left_column_bindings {
                 bind_context.add_column_binding(column.clone());
             }
-            for column in right_context.all_column_bindings().iter() {
+            for column in right_column_bindings {
                 let mut nullable_column = column.clone();
                 nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
                 bind_context.add_column_binding(nullable_column);
             }
         }
         JoinOperator::RightOuter => {
-            for column in left_context.all_column_bindings() {
+            for column in left_column_bindings {
                 let mut nullable_column = column.clone();
                 nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
                 bind_context.add_column_binding(nullable_column);
             }
 
-            for column in right_context.all_column_bindings().iter() {
+            for column in right_column_bindings {
                 bind_context.add_column_binding(column.clone());
             }
         }
         JoinOperator::FullOuter => {
-            for column in left_context.all_column_bindings() {
+            for column in left_column_bindings {
                 let mut nullable_column = column.clone();
                 nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
                 bind_context.add_column_binding(nullable_column);
             }
 
-            for column in right_context.all_column_bindings().iter() {
+            for column in right_column_bindings {
                 let mut nullable_column = column.clone();
                 nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
                 bind_context.add_column_binding(nullable_column);
             }
         }
         _ => {
-            for column in left_context.all_column_bindings() {
+            for column in left_column_bindings {
                 bind_context.add_column_binding(column.clone());
             }
-            for column in right_context.all_column_bindings() {
+            for column in right_column_bindings {
                 bind_context.add_column_binding(column.clone());
             }
         }
@@ -393,17 +467,15 @@ fn wrap_nullable_for_column(
 }
 
 pub fn check_duplicate_join_tables(
-    left_context: &BindContext,
-    right_context: &BindContext,
+    left_column_bindings: &[ColumnBinding],
+    right_column_bindings: &[ColumnBinding],
 ) -> Result<()> {
-    let left_column_bindings = left_context.all_column_bindings();
     let left_table_name = if left_column_bindings.is_empty() {
         None
     } else {
         left_column_bindings[0].table_name.as_ref()
     };
 
-    let right_column_bindings = right_context.all_column_bindings();
     let right_table_name = if right_column_bindings.is_empty() {
         None
     } else {
@@ -430,8 +502,8 @@ struct JoinConditionResolver<'a> {
     m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     ctes_map: Box<IndexMap<String, CteInfo>>,
     join_op: JoinOperator,
-    left_context: &'a BindContext,
-    right_context: &'a BindContext,
+    left_column_bindings: &'a [ColumnBinding],
+    right_column_bindings: &'a [ColumnBinding],
     join_context: &'a mut BindContext,
     join_condition: &'a JoinCondition,
 }
@@ -445,8 +517,8 @@ impl<'a> JoinConditionResolver<'a> {
         m_cte_bound_ctx: HashMap<IndexType, BindContext>,
         ctes_map: Box<IndexMap<String, CteInfo>>,
         join_op: JoinOperator,
-        left_context: &'a BindContext,
-        right_context: &'a BindContext,
+        left_column_bindings: &'a [ColumnBinding],
+        right_column_bindings: &'a [ColumnBinding],
         join_context: &'a mut BindContext,
         join_condition: &'a JoinCondition,
     ) -> Self {
@@ -457,8 +529,8 @@ impl<'a> JoinConditionResolver<'a> {
             m_cte_bound_ctx,
             ctes_map,
             join_op,
-            left_context,
-            right_context,
+            left_column_bindings,
+            right_column_bindings,
             join_context,
             join_condition,
         }
@@ -520,8 +592,8 @@ impl<'a> JoinConditionResolver<'a> {
             JoinCondition::None => {
                 wrap_nullable_for_column(
                     &self.join_op,
-                    self.left_context,
-                    self.right_context,
+                    self.left_column_bindings,
+                    self.right_column_bindings,
                     self.join_context,
                 );
             }
@@ -583,8 +655,8 @@ impl<'a> JoinConditionResolver<'a> {
         }
         wrap_nullable_for_column(
             &self.join_op,
-            self.left_context,
-            self.right_context,
+            self.left_column_bindings,
+            self.right_column_bindings,
             self.join_context,
         );
         Ok(())
@@ -602,8 +674,8 @@ impl<'a> JoinConditionResolver<'a> {
         let mut join_context = (*self.join_context).clone();
         wrap_nullable_for_column(
             &self.join_op,
-            self.left_context,
-            self.right_context,
+            self.left_column_bindings,
+            self.right_column_bindings,
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
@@ -653,11 +725,11 @@ impl<'a> JoinConditionResolver<'a> {
     ) -> Result<()> {
         wrap_nullable_for_column(
             &self.join_op,
-            self.left_context,
-            self.right_context,
+            self.left_column_bindings,
+            self.right_column_bindings,
             self.join_context,
         );
-        let left_columns_len = self.left_context.columns.len();
+        let left_columns_len = self.left_column_bindings.len();
         for (span, join_key) in using_columns.iter() {
             let join_key_name = join_key.as_str();
             let left_scalar = if let Some(col_binding) = self.join_context.columns
@@ -757,8 +829,8 @@ impl<'a> JoinConditionResolver<'a> {
         let mut join_context = (*self.join_context).clone();
         wrap_nullable_for_column(
             &JoinOperator::Inner,
-            self.left_context,
-            self.right_context,
+            self.left_column_bindings,
+            self.right_column_bindings,
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
@@ -803,16 +875,14 @@ impl<'a> JoinConditionResolver<'a> {
 
     fn left_right_columns(&self) -> Result<(ColumnSet, ColumnSet)> {
         let left_columns: ColumnSet =
-            self.left_context
-                .all_column_bindings()
+            self.left_column_bindings
                 .iter()
                 .fold(ColumnSet::new(), |mut acc, v| {
                     acc.insert(v.index);
                     acc
                 });
         let right_columns: ColumnSet =
-            self.right_context
-                .all_column_bindings()
+            self.right_column_bindings
                 .iter()
                 .fold(ColumnSet::new(), |mut acc, v| {
                     acc.insert(v.index);
@@ -822,13 +892,40 @@ impl<'a> JoinConditionResolver<'a> {
     }
 
     fn find_using_columns(&self, using_columns: &mut Vec<(Span, String)>) -> Result<()> {
-        for left_column in self.left_context.all_column_bindings().iter() {
-            for right_column in self.right_context.all_column_bindings().iter() {
+        for left_column in self.left_column_bindings {
+            for right_column in self.right_column_bindings {
                 if left_column.column_name == right_column.column_name {
                     using_columns.push((None, left_column.column_name.clone()));
                 }
             }
         }
         Ok(())
+    }
+}
+
+fn join_type(join_type: &JoinOperator) -> JoinType {
+    match join_type {
+        JoinOperator::CrossJoin => JoinType::Cross,
+        JoinOperator::Inner => JoinType::Inner,
+        JoinOperator::LeftOuter => JoinType::Left,
+        JoinOperator::RightOuter => JoinType::Right,
+        JoinOperator::FullOuter => JoinType::Full,
+        JoinOperator::LeftSemi => JoinType::LeftSemi,
+        JoinOperator::RightSemi => JoinType::RightSemi,
+        JoinOperator::LeftAnti => JoinType::LeftAnti,
+        JoinOperator::RightAnti => JoinType::RightAnti,
+    }
+}
+
+fn join_bind_context(
+    join_type: &JoinType,
+    bind_context: BindContext,
+    left_context: BindContext,
+    right_context: BindContext,
+) -> BindContext {
+    match join_type {
+        JoinType::LeftSemi | JoinType::LeftAnti => left_context,
+        JoinType::RightSemi | JoinType::RightAnti => right_context,
+        _ => bind_context,
     }
 }

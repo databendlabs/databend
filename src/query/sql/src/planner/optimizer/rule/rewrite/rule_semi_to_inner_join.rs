@@ -126,6 +126,8 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         | RelOperator::ProjectSet(_)
         | RelOperator::MaterializedCte(_)
         | RelOperator::ConstantTableScan(_)
+        | RelOperator::ExpressionScan(_)
+        | RelOperator::CacheScan(_)
         | RelOperator::Udf(_)
         | RelOperator::Scan(_)
         | RelOperator::CteScan(_)

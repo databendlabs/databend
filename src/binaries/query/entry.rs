@@ -223,9 +223,18 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("Logging:");
     println!("    file: {}", conf.log.file);
     println!("    stderr: {}", conf.log.stderr);
-    println!("    otlp: {}", conf.log.otlp);
-    println!("    query: {}", conf.log.query);
-    println!("    tracing: {}", conf.log.tracing);
+    if conf.log.otlp.on {
+        println!("    otlp: {}", conf.log.otlp);
+    }
+    if conf.log.query.on {
+        println!("    query: {}", conf.log.query);
+    }
+    if conf.log.profile.on {
+        println!("    profile: {}", conf.log.profile);
+    }
+    if conf.log.structlog.on {
+        println!("    structlog: {}", conf.log.structlog);
+    }
 
     println!();
     println!(
@@ -355,6 +364,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             .await;
     }
     info!("Shutdown server.");
+    log::logger().flush();
     Ok(())
 }
 

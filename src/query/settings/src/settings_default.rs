@@ -576,6 +576,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("compact_max_block_selection", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "Limits the maximum number of blocks that can be selected during a compact operation.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of table recluster.",

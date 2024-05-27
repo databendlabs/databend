@@ -85,6 +85,12 @@ pub use physical_table_scan::TableScan;
 mod physical_async_func;
 pub use physical_async_func::AsyncFunction;
 
+mod physical_expression_scan;
+pub use physical_expression_scan::ExpressionScan;
+
+mod physical_cache_scan;
+pub use physical_cache_scan::CacheScan;
+
 mod physical_union_all;
 pub use physical_union_all::UnionAll;
 mod physical_window;
