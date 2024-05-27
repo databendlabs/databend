@@ -76,6 +76,7 @@ pub struct MergeInto {
     // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
+    pub enable_right_broadcast: bool,
 }
 
 impl std::fmt::Debug for MergeInto {
