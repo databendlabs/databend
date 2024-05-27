@@ -61,11 +61,13 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -594,6 +596,16 @@ impl TableContext for QueryContext {
 
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
         self.get_current_session().get_all_effective_roles().await
+    }
+
+    async fn validate_privilege(
+        &self,
+        object: &GrantObject,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        self.get_current_session()
+            .validate_privilege(object, privilege)
+            .await
     }
 
     fn get_current_session_id(&self) -> String {
