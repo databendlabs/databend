@@ -6,8 +6,10 @@ set -e
 
 echo "install k3d"
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.6.0 bash
+echo "k3d create registry"
+k3d registry create my-cluster --port 5111
 echo "k3d create cluster"
-k3d cluster create mycluster --registry-create mycluster-registry:0.0.0.0:5111
+k3d cluster create mycluster --registry-config scripts/ci/meta-chaos/my-registry.yaml
 
 echo "install kubectl"
 curl -LO https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl
@@ -15,7 +17,7 @@ chmod +x kubectl
 sudo mv kubectl /usr/local/bin/
 
 echo "build databend-meta image"
-ls ./target/
+ls ./target/debug
 echo "target $1"
 mkdir -p temp/distro/amd64
 #cp ./target/$1/databend-meta ./temp/distro/amd64/
@@ -23,8 +25,8 @@ cp ./target/debug/databend-meta ./temp/distro/amd64/
 #cp ./target/$1/release/databend-metactl ./temp/distro/amd64/
 #cp ./target/debug/databend-metactl ./temp/distro/amd64/
 docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/debian/meta.Dockerfile temp
-docker tag databend-meta:meta-chaos 127.0.0.1:5111/databend-meta
-docker push 127.0.0.1:5111/databend-meta
+docker tag databend-meta:meta-chaos k3d-my-cluster.localhost:5111/databend-meta
+docker push k3d-my-cluster.localhost:5111/databend-meta
 
 echo "install chaos mesh on k3d"
 curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
@@ -40,7 +42,7 @@ helm version
 
 echo "heml start meta cluster"
 helm repo add databend https://charts.databend.rs
-helm install my-release databend/databend-meta --namespace databend --create-namespace -f scripts/ci/meta-chaos/meta-ha.yaml --set Image=127.0.0.1:5111/databend-meta  --wait
+helm install my-release databend/databend-meta --namespace databend --create-namespace -f scripts/ci/meta-chaos/meta-ha.yaml --set image.repository=k3d-my-cluster.localhost:5111/databend-meta --set image.tag=latest databend-meta  --wait
 
 echo "check meta Running pods"
 MAX_WAIT_TIME=15

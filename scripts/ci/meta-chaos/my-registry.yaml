@@ -1,0 +1,5 @@
+mirrors:
+  "k3d-my-cluster.localhost:5111":
+    endpoint:
+      - http://k3d-my-cluster.localhost:5111
+      
