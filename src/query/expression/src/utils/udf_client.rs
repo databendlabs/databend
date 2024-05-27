@@ -66,7 +66,8 @@ impl UDFFlightClient {
             .await
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!(
-                    "Cannot connect to UDF Server {addr}: {err}"
+                    "Cannot connect to UDF Server {}: {:?}",
+                    addr, err
                 ))
             })?
             .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
