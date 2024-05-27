@@ -34,7 +34,6 @@ pub mod variant;
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
-use std::i32::MAX;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
