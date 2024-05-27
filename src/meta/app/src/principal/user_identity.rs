@@ -66,11 +66,7 @@ impl UserIdentity {
 
     /// Display should have a different implementation from encode(), one for human readable and the other for machine readable.
     pub fn display(&self) -> impl fmt::Display {
-        format!(
-            "'{}'@'{}'",
-            kvapi::KeyBuilder::escape_specified(&self.username, &Self::ESCAPE_CHARS),
-            kvapi::KeyBuilder::escape_specified(&self.hostname, &Self::ESCAPE_CHARS),
-        )
+        format!("'{}'@'{}'", &self.username, &self.hostname)
     }
 }
 
