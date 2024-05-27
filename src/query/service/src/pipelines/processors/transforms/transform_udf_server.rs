@@ -54,7 +54,7 @@ impl TransformUdfServer {
 }
 
 impl AsyncRetry for TransformUdfServer {
-    fn retry_on(&self, err: &databend_common_exception::ErrorCode) -> bool {
+    fn retry_on(&self, _err: &databend_common_exception::ErrorCode) -> bool {
         true
     }
 
