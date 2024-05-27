@@ -23,7 +23,6 @@ tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
 
 databend-common-ast = { path = "../../query/ast" }
-databend-common-exception = { path = "../../common/exception" }
 databend-common-expression = { path = "../../query/expression" }
 databend-common-formats = { path = "../../query/formats" }
 databend-common-functions = { path = "../../query/functions" }

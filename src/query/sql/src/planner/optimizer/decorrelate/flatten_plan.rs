@@ -66,7 +66,7 @@ impl SubqueryRewriter {
                 return Ok(plan.clone());
             }
             // Construct a Scan plan by correlated columns.
-            // Finally generate a cross join, so we finish flattening the subquery.
+            // Finally, generate a cross join, so we finish flattening the subquery.
             let mut metadata = self.metadata.write();
             // Currently, we don't support left plan's from clause contains subquery.
             // Such as: select t2.a from (select a + 1 as a from t) as t2 where (select sum(a) from t as t1 where t1.a < t2.a) = 1;
@@ -74,24 +74,55 @@ impl SubqueryRewriter {
                 .table_index_by_column_indexes(correlated_columns)
                 .unwrap();
             let mut data_types = Vec::with_capacity(correlated_columns.len());
+            let mut scalar_items = vec![];
+            let mut scan_columns = ColumnSet::new();
             for correlated_column in correlated_columns.iter() {
                 let column_entry = metadata.column(*correlated_column).clone();
                 let name = column_entry.name();
                 let data_type = column_entry.data_type();
                 data_types.push(data_type.clone());
-                self.derived_columns.insert(
-                    *correlated_column,
-                    metadata.add_derived_column(name.to_string(), data_type),
-                );
+                let derived_col = metadata.add_derived_column(name.to_string(), data_type, None);
+                self.derived_columns.insert(*correlated_column, derived_col);
+                if let ColumnEntry::DerivedColumn(derived_column) = &column_entry {
+                    if let Some(scalar) = &derived_column.scalar_expr {
+                        // Replace columns in `scalar` to derived columns.
+                        let mut scalar = scalar.clone();
+                        for col in scalar.used_columns().iter() {
+                            if let Some(new_col) = self.derived_columns.get(col) {
+                                scalar.replace_column(*col, *new_col)?;
+                            } else {
+                                scan_columns.insert(*col);
+                            }
+                        }
+                        scalar_items.push(ScalarItem {
+                            scalar,
+                            index: derived_col,
+                        });
+                    }
+                } else {
+                    scan_columns.insert(derived_col);
+                }
             }
             let mut logical_get = SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
-                    columns: self.derived_columns.values().cloned().collect(),
+                    columns: scan_columns,
                     ..Default::default()
                 }
                 .into(),
             ));
+            if !scalar_items.is_empty() {
+                // Wrap `EvalScalar` to `logical_get`.
+                logical_get = SExpr::create_unary(
+                    Arc::new(
+                        EvalScalar {
+                            items: scalar_items,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(logical_get),
+                );
+            }
             if self.ctx.get_cluster().is_empty() {
                 // Wrap logical get with distinct to eliminate duplicates rows.
                 let mut group_items = Vec::with_capacity(self.derived_columns.len());

@@ -74,7 +74,9 @@ fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams
         root,
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }
@@ -183,7 +185,9 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         external_id,
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }
@@ -201,7 +205,9 @@ fn parse_gcs_params(l: &mut UriLocation) -> Result<StorageParams> {
         credential: l.connection.get("credential").cloned().unwrap_or_default(),
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }
@@ -217,7 +223,9 @@ fn parse_ipfs_params(l: &mut UriLocation) -> Result<StorageParams> {
         root: "/ipfs/".to_string() + l.name.as_str(),
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }
@@ -254,7 +262,9 @@ fn parse_oss_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         server_side_encryption_key_id: "".to_string(),
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }
@@ -287,7 +297,9 @@ fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         root,
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }
@@ -312,7 +324,9 @@ fn parse_cos_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         root,
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }
@@ -357,7 +371,9 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
         name_node,
         root: l.path.clone(),
     });
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
     Ok(sp)
 }
 
@@ -391,7 +407,9 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
         delegation,
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }
@@ -426,7 +444,9 @@ fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<Storage
         token: l.connection.get("token").cloned().unwrap_or_default(),
     });
 
-    l.connection.check()?;
+    l.connection
+        .check()
+        .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
     Ok(sp)
 }

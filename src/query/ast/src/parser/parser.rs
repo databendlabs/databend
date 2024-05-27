@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-
 use super::input::ParseMode;
 use super::statement::insert_stmt;
 use super::statement::replace_stmt;
@@ -36,6 +33,8 @@ use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
 use crate::parser::Backtrace;
+use crate::ParseError;
+use crate::Result;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()
@@ -49,7 +48,7 @@ pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Optio
     #[cfg(debug_assertions)]
     {
         // Check that the statement can be displayed and reparsed without loss
-        let res: Result<(), ErrorCode> = try {
+        let res: Result<()> = try {
             let reparse_sql = stmt.stmt.to_string();
             let reparse_tokens = crate::parser::tokenize_sql(&reparse_sql)?;
             let reparsed = run_parser(
@@ -144,17 +143,15 @@ pub fn run_parser<O>(
             if is_complete || allow_partial {
                 Ok(res)
             } else {
-                Err(
-                    ErrorCode::SyntaxException("unable to parse rest of the sql".to_string())
-                        .set_span(transform_span(&rest[..1])),
-                )
+                Err(ParseError(
+                    transform_span(&rest[..1]),
+                    "unable to parse rest of the sql".to_string(),
+                ))
             }
         }
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
             let source = tokens[0].source;
-            Err(ErrorCode::SyntaxException(display_parser_error(
-                err, source,
-            )))
+            Err(ParseError(None, display_parser_error(err, source)))
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     }

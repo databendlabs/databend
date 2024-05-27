@@ -17,4 +17,4 @@ runs:
     - name: Chaos Test meta service
       shell: bash
       run: |
-        ./scripts/ci/ci-chaos-meta-tests.sh
+        ./scripts/ci/ci-chaos-meta-tests.sh ${{ inputs.target }}

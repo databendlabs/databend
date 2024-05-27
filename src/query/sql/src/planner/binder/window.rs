@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::WindowDefinition;
 use databend_common_ast::ast::WindowSpec;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 
 use super::select::SelectList;
 use crate::binder::ColumnBinding;
@@ -393,10 +393,11 @@ impl<'a> WindowRewriter<'a> {
             });
         }
 
-        let index = self
-            .metadata
-            .write()
-            .add_derived_column(window.display_name.clone(), window.func.return_type());
+        let index = self.metadata.write().add_derived_column(
+            window.display_name.clone(),
+            window.func.return_type(),
+            Some(ScalarExpr::WindowFunction(window.clone())),
+        );
 
         // create window info
         let window_info = WindowFunctionInfo {
@@ -468,10 +469,11 @@ impl<'a> WindowRewriter<'a> {
             Ok(col.clone())
         } else {
             let ty = arg.data_type()?;
-            let index = self
-                .metadata
-                .write()
-                .add_derived_column(name.to_string(), ty.clone());
+            let index = self.metadata.write().add_derived_column(
+                name.to_string(),
+                ty.clone(),
+                Some(arg.clone()),
+            );
 
             // Generate a ColumnBinding for each argument of aggregates
             let column = ColumnBindingBuilder::new(

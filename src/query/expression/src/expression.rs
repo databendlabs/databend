@@ -17,7 +17,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use databend_common_exception::Span;
+use databend_common_ast::Span;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;

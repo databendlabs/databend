@@ -92,8 +92,6 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
@@ -661,10 +659,7 @@ impl Binder {
                 let mut bind_context = BindContext::new();
                 let stmt = Statement::Query(Box::new(*query.clone()));
                 let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
-                // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
-                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
-                let optimized_plan = optimize(opt_ctx, select_plan).await?;
-                Some(Box::new(optimized_plan))
+                Some(Box::new(select_plan))
             } else {
                 None
             },

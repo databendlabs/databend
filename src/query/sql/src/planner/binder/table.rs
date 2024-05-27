@@ -42,6 +42,7 @@ use databend_common_ast::ast::TimeTravelPoint;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Span;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::StageTableInfo;
@@ -53,7 +54,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
@@ -451,10 +451,11 @@ impl Binder {
                         arguments: vec![scalar.clone()],
                     });
                     let data_type = field_expr.data_type()?;
-                    let index = self
-                        .metadata
-                        .write()
-                        .add_derived_column(field.clone(), data_type.clone());
+                    let index = self.metadata.write().add_derived_column(
+                        field.clone(),
+                        data_type.clone(),
+                        Some(field_expr.clone()),
+                    );
 
                     let column_binding = ColumnBindingBuilder::new(
                         field,
@@ -543,10 +544,11 @@ impl Binder {
                             } else {
                                 // Add result column to metadata
                                 let data_type = srf_result.data_type()?;
-                                let index = self
-                                    .metadata
-                                    .write()
-                                    .add_derived_column(srf.to_string(), data_type.clone());
+                                let index = self.metadata.write().add_derived_column(
+                                    srf.to_string(),
+                                    data_type.clone(),
+                                    Some(srf_result.clone()),
+                                );
                                 ColumnBindingBuilder::new(
                                     srf.to_string(),
                                     index,

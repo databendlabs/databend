@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Span;
-
 use crate::ast::*;
+use crate::Span;
 
 #[deprecated = "Use derive_visitor::VisitorMut instead"]
 pub trait VisitorMut: Sized {
@@ -624,7 +623,14 @@ pub trait VisitorMut: Sized {
 
     fn visit_grant(&mut self, _grant: &mut GrantStmt) {}
 
-    fn visit_show_grant(&mut self, _principal: &mut Option<PrincipalIdentity>) {}
+    fn visit_show_grant(
+        &mut self,
+        _principal: &mut Option<PrincipalIdentity>,
+        _show_options: &mut Option<ShowOptions>,
+    ) {
+    }
+
+    fn visit_show_object_priv(&mut self, _show: &mut ShowObjectPrivilegesStmt) {}
 
     fn visit_revoke(&mut self, _revoke: &mut RevokeStmt) {}
 
