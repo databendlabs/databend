@@ -161,6 +161,13 @@ struct Args {
     #[clap(short = 'n', long, help = "Force non-interactive mode")]
     non_interactive: bool,
 
+    #[clap(
+        short = 'A',
+        long,
+        help = "Disable loading tables and fields for auto-completion, which offers a quicker start"
+    )]
+    no_auto_complete: bool,
+
     #[clap(long, help = "Check for server status and exit")]
     check: bool,
 
@@ -318,6 +325,9 @@ pub async fn main() -> Result<()> {
 
     settings.merge_config(config.settings);
 
+    if args.no_auto_complete {
+        settings.no_auto_complete = true;
+    }
     if let Some(output) = args.output {
         settings.output_format = output;
     }
