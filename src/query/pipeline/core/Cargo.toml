@@ -22,6 +22,7 @@ futures = { workspace = true }
 minitrace = { workspace = true }
 petgraph = "0.6.2"
 serde = { workspace = true }
+log = "0.4.21"
 
 [dev-dependencies]
 serde = { workspace = true }

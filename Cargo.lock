@@ -3566,6 +3566,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "futures",
+ "log",
  "minitrace",
  "petgraph",
  "serde",
