@@ -2638,6 +2638,7 @@ dependencies = [
  "minitrace",
  "opendal",
  "poem",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "serfig",

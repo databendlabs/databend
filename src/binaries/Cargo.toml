@@ -61,6 +61,7 @@ log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 poem = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
@@ -90,6 +91,12 @@ test = false
 [[bin]]
 name = "databend-metactl"
 path = "metactl/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "databend-metaverifier"
+path = "metaverifier/main.rs"
 doctest = false
 test = false
 
