@@ -57,7 +57,7 @@ impl From<&str> for ExpandMode {
             "on" => ExpandMode::On,
             "off" => ExpandMode::Off,
             "auto" => ExpandMode::Auto,
-            _ => ExpandMode::Off,
+            _ => ExpandMode::Auto,
         }
     }
 }
@@ -237,7 +237,7 @@ impl Default for Settings {
             prompt: "{user}@{warehouse}/{database}> ".to_string(),
             output_format: OutputFormat::Table,
             quote_style: OutputQuoteStyle::Necessary,
-            expand: ExpandMode::Off,
+            expand: ExpandMode::Auto,
             show_progress: false,
             max_display_rows: 40,
             max_col_width: 1024 * 1024,
