@@ -49,7 +49,7 @@ pub struct PipelineBuilder {
     pub merge_into_probe_data_fields: Option<Vec<DataField>>,
     pub join_state: Option<Arc<HashJoinBuildState>>,
 
-    // Cte -> state, each cte has it's own state
+    // Cte -> state, each cte has its own state
     pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
 
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,

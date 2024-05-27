@@ -19,7 +19,7 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
-use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::{Indirection, SetExpr, SetOperator};
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
@@ -234,7 +234,7 @@ impl Binder {
         Ok((s_expr, bind_context))
     }
 
-    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+    pub(crate) fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
         let blocks = Arc::new(RwLock::new(vec![]));
         self.ctx
             .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
@@ -324,6 +324,38 @@ impl Binder {
         }
         Ok((s_expr, res_bind_context))
     }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_r_cte(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        table_name: &String,
+        alias: &Option<TableAlias>,
+        span: &Span,
+    ) -> Result<(SExpr, BindContext)> {
+        // Recursive cte's query must be a union(all)
+        match &cte_info.query.body {
+            SetExpr::SetOperation(set_expr) => {
+                if set_expr.op != SetOperator::Union {
+                    return Err(ErrorCode::SyntaxException(
+                        "Recursive CTE must contain a UNION(ALL) query".to_string(),
+                    ));
+                }
+                // Start to bind the recursive cte, it contains two parts: the non-recursive part and the recursive part.
+                // When binding the recursive part, we need to set `bind_recursive_cte` to true.
+                self.bind_set_expr(bind_context, &set_expr.left, &[], 0).await?;
+
+            }
+            _ => {
+                return Err(ErrorCode::SyntaxException(
+                    "Recursive CTE must contain a UNION(ALL) query".to_string(),
+                ));
+            }
+        }
+        todo!()
+    }
+
 
     // Bind materialized cte
     #[async_backtrace::framed]

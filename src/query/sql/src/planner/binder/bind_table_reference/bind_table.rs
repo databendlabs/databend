@@ -62,11 +62,18 @@ impl Binder {
         let ctes_map = self.ctes_map.clone();
         if let Some(cte_info) = ctes_map.get(&table_name) {
             if bind_cte {
-                return if !cte_info.materialized {
-                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                        .await
-                } else {
+                return if cte_info.materialized {
                     self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
+                        .await
+                } else if cte_info.recursive {
+                    if self.bind_recursive_cte {
+                        self.bind_cte_scan(cte_info)?;
+                    } else {
+                        self.bind_r_cte(bind_context, cte_info, &table_name, alias, span)
+                            .await
+                    }
+                } else {
+                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
                         .await
                 };
             }
