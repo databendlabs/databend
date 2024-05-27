@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::base::tokio::sync::RwLock;
@@ -60,7 +61,6 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryError;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
-use crate::sessions::short_sql;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::SessionType;

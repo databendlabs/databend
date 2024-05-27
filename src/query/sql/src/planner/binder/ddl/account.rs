@@ -17,8 +17,12 @@ use databend_common_ast::ast::AccountMgrLevel;
 use databend_common_ast::ast::AccountMgrSource;
 use databend_common_ast::ast::AlterUserStmt;
 use databend_common_ast::ast::CreateUserStmt;
+use databend_common_ast::ast::GrantObjectName;
 use databend_common_ast::ast::GrantStmt;
+use databend_common_ast::ast::PrincipalIdentity as AstPrincipalIdentity;
 use databend_common_ast::ast::RevokeStmt;
+use databend_common_ast::ast::ShowObjectPrivilegesStmt;
+use databend_common_ast::ast::ShowOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
@@ -28,6 +32,7 @@ use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_users::UserApiProvider;
 
+use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
 use crate::plans::AlterUserPlan;
 use crate::plans::CreateUserPlan;
@@ -36,6 +41,8 @@ use crate::plans::GrantRolePlan;
 use crate::plans::Plan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
+use crate::plans::RewriteKind;
+use crate::BindContext;
 use crate::Binder;
 
 impl Binder {
@@ -330,5 +337,79 @@ impl Binder {
         };
 
         Ok(Plan::AlterUser(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_account_grants(
+        &mut self,
+        bind_context: &mut BindContext,
+        principal: &Option<AstPrincipalIdentity>,
+        show_options: &Option<ShowOptions>,
+    ) -> Result<Plan> {
+        let query = if let Some(principal) = principal {
+            match principal {
+                AstPrincipalIdentity::User(user) => {
+                    format!("SELECT * FROM show_grants('user', '{}')", user.username)
+                }
+                AstPrincipalIdentity::Role(role) => {
+                    format!("SELECT * FROM show_grants('role', '{}')", role)
+                }
+            }
+        } else {
+            let name = self.ctx.get_current_user()?.name;
+            format!("SELECT * FROM show_grants('user', '{}')", name)
+        };
+
+        let (show_limit, limit_str) =
+            get_show_options(show_options, Some("object_name".to_string()));
+        let query = format!("{} {} {}", query, show_limit, limit_str,);
+
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_object_privileges(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowObjectPrivilegesStmt,
+    ) -> Result<Plan> {
+        let ShowObjectPrivilegesStmt {
+            object,
+            show_option,
+        } = stmt;
+
+        let catalog = self.ctx.get_current_catalog();
+        let query = match object {
+            GrantObjectName::Database(db) => {
+                format!(
+                    "SELECT * FROM show_grants('database', '{}', '{}')",
+                    db, catalog
+                )
+            }
+            GrantObjectName::Table(db, tb) => {
+                let db = if let Some(db) = db {
+                    db.to_string()
+                } else {
+                    self.ctx.get_current_database()
+                };
+                format!(
+                    "SELECT * FROM show_grants('table', '{}', '{}', '{}')",
+                    tb, catalog, db
+                )
+            }
+            GrantObjectName::UDF(name) => {
+                format!("SELECT * FROM show_grants('udf', '{}')", name)
+            }
+            GrantObjectName::Stage(name) => {
+                format!("SELECT * FROM show_grants('stage', '{}')", name)
+            }
+        };
+
+        let (show_limit, limit_str) = get_show_options(show_option, Some("name".to_string()));
+        let query = format!("{} {} {}", query, show_limit, limit_str,);
+
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)
+            .await
     }
 }

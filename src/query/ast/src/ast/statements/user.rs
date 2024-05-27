@@ -22,6 +22,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::AuthType;
 use crate::ast::CreateOption;
 use crate::ast::PrincipalIdentity;
+use crate::ast::ShowOptions;
 use crate::ast::UserIdentity;
 use crate::ast::UserPrivilegeType;
 
@@ -135,6 +136,50 @@ impl Display for RevokeStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowObjectPrivilegesStmt {
+    pub object: GrantObjectName,
+    pub show_option: Option<ShowOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum GrantObjectName {
+    Database(#[drive(skip)] String),
+    Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
+    UDF(#[drive(skip)] String),
+    Stage(#[drive(skip)] String),
+}
+
+impl Display for GrantObjectName {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            GrantObjectName::Database(database_name) => {
+                write!(f, "DATABASE {database_name}")
+            }
+            GrantObjectName::Table(database_name, table_name) => {
+                if let Some(database_name) = database_name {
+                    write!(f, "TABLE {database_name}.{table_name}")
+                } else {
+                    write!(f, "TABLE {table_name}")
+                }
+            }
+            GrantObjectName::UDF(udf) => write!(f, " UDF {udf}"),
+            GrantObjectName::Stage(stage) => write!(f, " STAGE {stage}"),
+        }
+    }
+}
+
+impl Display for ShowObjectPrivilegesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW GRANTS ON {}", self.object)?;
+
+        if let Some(show_option) = &self.show_option {
+            write!(f, " {show_option}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AccountMgrSource {
     Role {
@@ -158,48 +203,12 @@ impl Display for AccountMgrSource {
                 write!(f, " ")?;
                 write_comma_separated_list(f, privileges.iter().map(|p| p.to_string()))?;
                 write!(f, " ON")?;
-                match level {
-                    AccountMgrLevel::Global => write!(f, " *.*")?,
-                    AccountMgrLevel::Database(database_name) => {
-                        if let Some(database_name) = database_name {
-                            write!(f, " {database_name}.*")?;
-                        } else {
-                            write!(f, " *")?;
-                        }
-                    }
-                    AccountMgrLevel::Table(database_name, table_name) => {
-                        if let Some(database_name) = database_name {
-                            write!(f, " {database_name}.{table_name}")?;
-                        } else {
-                            write!(f, " {table_name}")?;
-                        }
-                    }
-                    AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}")?,
-                    AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}")?,
-                }
+                write!(f, " {}", level)?;
             }
             AccountMgrSource::ALL { level, .. } => {
                 write!(f, " ALL PRIVILEGES")?;
                 write!(f, " ON")?;
-                match level {
-                    AccountMgrLevel::Global => write!(f, " *.*")?,
-                    AccountMgrLevel::Database(database_name) => {
-                        if let Some(database_name) = database_name {
-                            write!(f, " {database_name}.*")?;
-                        } else {
-                            write!(f, " *")?;
-                        }
-                    }
-                    AccountMgrLevel::Table(database_name, table_name) => {
-                        if let Some(database_name) = database_name {
-                            write!(f, " {database_name}.{table_name}")?;
-                        } else {
-                            write!(f, " {table_name}")?;
-                        }
-                    }
-                    AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}")?,
-                    AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}")?,
-                }
+                write!(f, " {}", level)?;
             }
         }
         Ok(())
@@ -213,6 +222,30 @@ pub enum AccountMgrLevel {
     Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
     UDF(#[drive(skip)] String),
     Stage(#[drive(skip)] String),
+}
+
+impl Display for AccountMgrLevel {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            AccountMgrLevel::Global => write!(f, " *.*"),
+            AccountMgrLevel::Database(database_name) => {
+                if let Some(database_name) = database_name {
+                    write!(f, " {database_name}.*")
+                } else {
+                    write!(f, " *")
+                }
+            }
+            AccountMgrLevel::Table(database_name, table_name) => {
+                if let Some(database_name) = database_name {
+                    write!(f, " {database_name}.{table_name}")
+                } else {
+                    write!(f, " {table_name}")
+                }
+            }
+            AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}"),
+            AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]

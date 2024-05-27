@@ -43,6 +43,7 @@ use crate::rule;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
+    GrantObjectName(GrantObjectName),
     ShareGrantObjectName(ShareGrantObjectName),
     ShareName(String),
 }
@@ -1278,11 +1279,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_grants = map(
         rule! {
-            SHOW ~ GRANTS ~ #show_grant_option?
+            SHOW ~ GRANTS ~ #show_grant_option? ~ ^#show_options?
         },
-        |(_, _, show_grant_option)| match show_grant_option {
+        |(_, _, show_grant_option, opt_limit)| match show_grant_option {
             Some(ShowGrantOption::PrincipalIdentity(principal)) => Statement::ShowGrants {
                 principal: Some(principal),
+                show_options: opt_limit,
             },
             Some(ShowGrantOption::ShareGrantObjectName(object)) => {
                 Statement::ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt { object })
@@ -1290,7 +1292,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Some(ShowGrantOption::ShareName(share_name)) => {
                 Statement::ShowGrantsOfShare(ShowGrantsOfShareStmt { share_name })
             }
-            None => Statement::ShowGrants { principal: None },
+            None => Statement::ShowGrants {
+                principal: None,
+                show_options: opt_limit,
+            },
+            Some(ShowGrantOption::GrantObjectName(object)) => {
+                Statement::ShowObjectPrivileges(ShowObjectPrivilegesStmt {
+                    object,
+                    show_option: opt_limit,
+                })
+            }
         },
     );
     let revoke = map(
@@ -2905,6 +2916,40 @@ pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
     )(i)
 }
 
+pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
+    let database = map(
+        rule! {
+            DATABASE ~ #ident
+        },
+        |(_, database)| GrantObjectName::Database(database.to_string()),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            TABLE ~  #dot_separated_idents_1_to_2
+        },
+        |(_, (database, table))| {
+            GrantObjectName::Table(database.map(|db| db.to_string()), table.to_string())
+        },
+    );
+
+    let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
+        GrantObjectName::Stage(stage_name.to_string())
+    });
+
+    let udf = map(rule! { UDF ~ #ident}, |(_, udf_name)| {
+        GrantObjectName::UDF(udf_name.to_string())
+    });
+
+    rule!(
+        #database : "DATABASE <database>"
+        | #table : "TABLE <database>.<table>"
+        | #stage : "STAGE <stage_name>"
+        | #udf : "UDF <udf_name>"
+    )(i)
+}
+
 pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
     // *.*
     let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
@@ -3023,9 +3068,9 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 
     let share_object_name = map(
         rule! {
-            ON ~ #grant_share_object_name
+            ON ~ #on_object_name
         },
-        |(_, object_name)| ShowGrantOption::ShareGrantObjectName(object_name),
+        |(_, object_name)| ShowGrantOption::GrantObjectName(object_name),
     );
 
     let share_name = map(
@@ -3037,7 +3082,7 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
-        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name>}"
+        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> }"
         | #share_name: "OF SHARE <share_name>"
     )(i)
 }

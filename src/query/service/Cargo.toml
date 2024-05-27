@@ -174,7 +174,6 @@ tokio-stream = { workspace = true, features = ["net"] }
 toml = { version = "0.8", default-features = false }
 tonic = { workspace = true }
 typetag = { workspace = true }
-unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }

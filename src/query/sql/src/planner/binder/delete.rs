@@ -70,9 +70,7 @@ impl<'a> Binder {
             ..
         } = stamt;
 
-        if let Some(with) = &with {
-            self.add_cte(with, bind_context)?;
-        }
+        self.init_cte(bind_context, with)?;
 
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,
@@ -89,7 +87,7 @@ impl<'a> Binder {
             ));
         };
 
-        let (table_expr, mut context) = self.bind_single_table(bind_context, table).await?;
+        let (table_expr, mut context) = self.bind_table_reference(bind_context, table).await?;
 
         context.allow_internal_columns(false);
         let mut scalar_binder = ScalarBinder::new(
@@ -204,7 +202,7 @@ impl Binder {
         scan.columns.insert(row_id_index.unwrap());
         table_expr.plan = Arc::new(Scan(scan));
         let filter_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
-        let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
+        let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), None);
         let filter_expr = rewriter.rewrite(&filter_expr)?;
 
         Ok(SubqueryDesc {

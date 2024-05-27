@@ -35,15 +35,14 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'log_dir'                                  | 'null'                                                         | ''       |
 | 'log'     | 'log_level'                                | 'null'                                                         | ''       |
 | 'log'     | 'log_query_enabled'                        | 'null'                                                         | ''       |
-| 'log'     | 'otlp.endpoint'                            | 'http://127.0.0.1:4317'                                        | ''       |
 | 'log'     | 'otlp.level'                               | 'INFO'                                                         | ''       |
 | 'log'     | 'otlp.on'                                  | 'false'                                                        | ''       |
+| 'log'     | 'otlp.otlp_endpoint'                       | 'http://127.0.0.1:4317'                                        | ''       |
+| 'log'     | 'otlp.otlp_protocol'                       | 'grpc'                                                         | ''       |
 | 'log'     | 'profile.dir'                              | ''                                                             | ''       |
 | 'log'     | 'profile.on'                               | 'false'                                                        | ''       |
-| 'log'     | 'profile.otlp_endpoint'                    | ''                                                             | ''       |
 | 'log'     | 'query.dir'                                | ''                                                             | ''       |
 | 'log'     | 'query.on'                                 | 'false'                                                        | ''       |
-| 'log'     | 'query.otlp_endpoint'                      | ''                                                             | ''       |
 | 'log'     | 'query_enabled'                            | 'null'                                                         | ''       |
 | 'log'     | 'stderr.format'                            | 'text'                                                         | ''       |
 | 'log'     | 'stderr.level'                             | 'WARN'                                                         | ''       |
@@ -53,6 +52,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'tracing.capture_log_level'                | 'INFO'                                                         | ''       |
 | 'log'     | 'tracing.on'                               | 'false'                                                        | ''       |
 | 'log'     | 'tracing.otlp_endpoint'                    | 'http://127.0.0.1:4317'                                        | ''       |
+| 'log'     | 'tracing.otlp_protocol'                    | 'grpc'                                                         | ''       |
 | 'meta'    | 'auto_sync_interval'                       | '0'                                                            | ''       |
 | 'meta'    | 'client_timeout_in_second'                 | '10'                                                           | ''       |
 | 'meta'    | 'embedded_dir'                             | ''                                                             | ''       |

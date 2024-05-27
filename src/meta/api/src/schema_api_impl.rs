@@ -2282,12 +2282,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Batch get all table-name by id
         let seq_names = self.mget_kv(&id_name_kv_keys).await?;
-        let mut table_names = Vec::with_capacity(id_name_kv_keys.len());
+        let mut table_names = Vec::with_capacity(table_ids.len());
 
-        // None means table_name not found, maybe immutable table id. Ignore it
-        for seq_name in seq_names.into_iter().flatten() {
-            let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
-            table_names.push(Some(name_ident.table_name));
+        for seq_name in seq_names {
+            if let Some(seq_name) = seq_name {
+                let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
+                table_names.push(Some(name_ident.table_name));
+            } else {
+                table_names.push(None);
+            }
         }
 
         let mut meta_kv_keys = Vec::with_capacity(table_ids.len());
@@ -2346,12 +2349,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Batch get all table-name by id
         let seq_names = self.mget_kv(&kv_keys).await?;
-        let mut db_names = Vec::with_capacity(kv_keys.len());
+        // If multi drop/create db the capacity may not same
+        let mut db_names = Vec::with_capacity(db_ids.len());
 
-        // None means db_name not found, maybe immutable database id. Ignore it
-        for seq_name in seq_names.into_iter().flatten() {
-            let name_ident: DatabaseNameIdentRaw = deserialize_struct(&seq_name.data)?;
-            db_names.push(Some(name_ident.database_name().to_string()));
+        for seq_name in seq_names {
+            if let Some(seq_name) = seq_name {
+                let name_ident: DatabaseNameIdentRaw = deserialize_struct(&seq_name.data)?;
+                db_names.push(Some(name_ident.database_name().to_string()));
+            } else {
+                db_names.push(None);
+            }
         }
 
         let mut meta_kv_keys = Vec::with_capacity(db_ids.len());

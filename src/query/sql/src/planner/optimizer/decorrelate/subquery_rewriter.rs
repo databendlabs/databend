@@ -51,6 +51,7 @@ use crate::plans::SubqueryType;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::WindowFuncType;
+use crate::Binder;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -71,14 +72,16 @@ pub struct SubqueryRewriter {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) metadata: MetadataRef,
     pub(crate) derived_columns: HashMap<IndexType, IndexType>,
+    pub(crate) binder: Option<Binder>,
 }
 
 impl SubqueryRewriter {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef, binder: Option<Binder>) -> Self {
         Self {
             ctx,
             metadata,
             derived_columns: Default::default(),
+            binder,
         }
     }
 
@@ -180,6 +183,8 @@ impl SubqueryRewriter {
             | RelOperator::Scan(_)
             | RelOperator::CteScan(_)
             | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
             | RelOperator::AddRowNumber(_)
             | RelOperator::Exchange(_) => Ok(s_expr.clone()),
         }
@@ -522,6 +527,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 }
                 .into();
                 Ok((
@@ -593,6 +599,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -624,6 +631,7 @@ impl SubqueryRewriter {
             need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
+            build_side_cache_info: None,
         }
         .into();
 
