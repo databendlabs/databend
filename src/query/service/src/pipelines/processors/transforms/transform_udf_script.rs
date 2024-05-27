@@ -40,7 +40,7 @@ use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
 /// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
-#[cfg(feature = "ee")]
+#[cfg(feature = "python-udf")]
 static GLOBAL_PYTHON_RUNTIME: std::sync::LazyLock<Arc<RwLock<arrow_udf_python::Runtime>>> =
     std::sync::LazyLock::new(|| Arc::new(RwLock::new(arrow_udf_python::Runtime::new().unwrap())));
 
@@ -108,7 +108,7 @@ impl ScriptRuntime {
                     &func.func_name,
                 )
             }
-            #[cfg(feature = "ee")]
+            #[cfg(feature = "python-udf")]
             ScriptRuntime::Python => {
                 let code: &str = std::str::from_utf8(code)?;
                 let mut runtime = GLOBAL_PYTHON_RUNTIME.write();
@@ -120,7 +120,7 @@ impl ScriptRuntime {
                     &func.func_name,
                 )
             }
-            #[cfg(not(feature = "ee"))]
+            #[cfg(not(feature = "python-udf"))]
             ScriptRuntime::Python => {
                 return Err(ErrorCode::EnterpriseFeatureNotEnable(
                     "Failed to create python script udf",
@@ -148,7 +148,7 @@ impl ScriptRuntime {
                     ))
                 })?
             }
-            #[cfg(feature = "ee")]
+            #[cfg(feature = "python-udf")]
             ScriptRuntime::Python => {
                 let runtime = GLOBAL_PYTHON_RUNTIME.read();
                 runtime.call(&func.name, input_batch).map_err(|err| {
@@ -158,7 +158,7 @@ impl ScriptRuntime {
                     ))
                 })?
             }
-            #[cfg(not(feature = "ee"))]
+            #[cfg(not(feature = "python-udf"))]
             ScriptRuntime::Python => {
                 return Err(ErrorCode::EnterpriseFeatureNotEnable(
                     "Failed to execute python script udf",

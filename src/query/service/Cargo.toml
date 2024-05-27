@@ -14,7 +14,7 @@ test = true
 [features]
 default = ["simd", "z3-prove"]
 simd = ["databend-common-arrow/simd"]
-ee = ["arrow-udf-python"]
+python-udf = ["arrow-udf-python"]
 z3-prove = ["databend-common-sql/z3-prove"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 
