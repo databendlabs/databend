@@ -219,7 +219,7 @@ impl MergeIntoInterpreter {
 
         let insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
 
-        let mut row_id_idx = if !insert_only && !target_build_optimization {
+        let mut row_id_idx = if !insert_only {
             match meta_data
                 .read()
                 .row_id_index_by_table_index(*target_table_idx)

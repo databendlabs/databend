@@ -461,7 +461,6 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             == 0
         && flag
     {
-        new_columns_set.remove(&plan.row_id_index);
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
             is_distributed: false,
