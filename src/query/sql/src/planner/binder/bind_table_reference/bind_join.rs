@@ -923,6 +923,7 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::RightSemi => JoinType::RightSemi,
         JoinOperator::LeftAnti => JoinType::LeftAnti,
         JoinOperator::RightAnti => JoinType::RightAnti,
+        JoinOperator::AsofJoin => JoinType::AsOf,
     }
 }
 
