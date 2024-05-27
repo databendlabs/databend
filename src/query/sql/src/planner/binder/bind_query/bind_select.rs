@@ -68,7 +68,7 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
-        limit: usize,
+        limit: Option<usize>,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(hints) = &stmt.hints {
             if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
@@ -214,7 +214,7 @@ impl Binder {
                 &select_list,
                 &where_scalar,
                 &order_items.items,
-                limit,
+                limit.unwrap_or_default(),
             )?;
         }
 

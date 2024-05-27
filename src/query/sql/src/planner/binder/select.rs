@@ -125,9 +125,10 @@ impl Binder {
         op: &SetOperator,
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_expr, left_bind_context) = self.bind_set_expr(bind_context, left, &[], 0).await?;
+        let (left_expr, left_bind_context) =
+            self.bind_set_expr(bind_context, left, &[], None).await?;
         let (right_expr, right_bind_context) =
-            self.bind_set_expr(bind_context, right, &[], 0).await?;
+            self.bind_set_expr(bind_context, right, &[], None).await?;
 
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
