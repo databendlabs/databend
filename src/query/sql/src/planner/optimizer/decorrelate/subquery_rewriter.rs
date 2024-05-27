@@ -174,13 +174,15 @@ impl SubqueryRewriter {
             RelOperator::Limit(_)
             | RelOperator::Sort(_)
             | RelOperator::Udf(_)
-            | RelOperator::AsyncFunction(_) => Ok(SExpr::create_unary(
+            | RelOperator::AsyncFunction(_)
+            | RelOperator::RecursiveCte(_) => Ok(SExpr::create_unary(
                 Arc::new(s_expr.plan().clone()),
                 Arc::new(self.rewrite(s_expr.child(0)?)?),
             )),
 
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
+            | RelOperator::RecursiveCteScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)

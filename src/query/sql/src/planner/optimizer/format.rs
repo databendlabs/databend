@@ -73,6 +73,8 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
         RelOperator::Udf(_) => "Udf".to_string(),
         RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
+        RelOperator::RecursiveCte(_) => "RecursiveCTE".to_string(),
+        RelOperator::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
     }
 }
 

@@ -159,6 +159,7 @@ pub struct CteInfo {
     // Record how many times this cte is used
     pub used_count: usize,
     // If cte is materialized, save its columns
+    // If cte is recursive, save the recursive cte's anchor part's columns
     pub columns: Vec<ColumnBinding>,
 }
 

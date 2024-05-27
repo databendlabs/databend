@@ -70,7 +70,6 @@ impl Binder {
         let (left_child, mut left_context) =
             self.bind_table_reference(bind_context, &join.left).await?;
         let left_column_bindings = left_context.columns.clone();
-
         let cache_column_bindings = left_column_bindings.clone();
         let mut cache_column_indexes = Vec::with_capacity(cache_column_bindings.len());
         for column in cache_column_bindings.iter() {
@@ -90,7 +89,6 @@ impl Binder {
         let (right_child, right_context) = self
             .bind_table_reference(&mut left_context, &join.right)
             .await?;
-
         let right_column_bindings = right_context.columns.clone();
 
         let mut bind_context = bind_context.replace();

@@ -223,7 +223,8 @@ impl DPhpy {
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
             | RelOperator::Udf(_)
-            | RelOperator::Filter(_) => {
+            | RelOperator::Filter(_)
+            | RelOperator::RecursiveCte(_) => {
                 if join_child {
                     // If plan is filter, save it
                     if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
@@ -264,7 +265,8 @@ impl DPhpy {
             | RelOperator::CacheScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AsyncFunction(_)
-            | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
+            | RelOperator::MaterializedCte(_)
+            | RelOperator::RecursiveCteScan(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }
 

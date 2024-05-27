@@ -122,6 +122,8 @@ impl PhysicalPlanBuilder {
                 self.build_async_func(s_expr, async_func, required, stat_info)
                     .await
             }
+            RelOperator::RecursiveCte(_) => todo!(),
+            RelOperator::RecursiveCteScan(_) => todo!(),
         }
     }
 }

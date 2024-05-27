@@ -19,8 +19,10 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
-use databend_common_ast::ast::{Indirection, SetExpr, SetOperator};
+use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
@@ -70,6 +72,9 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
+use crate::plans::RecursiveCte;
+use crate::plans::RecursiveCteScan;
+use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -262,6 +267,26 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    pub(crate) async fn bind_r_cte_scan(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        alias_name: &Option<String>,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
+        new_bind_ctx.columns = cte_info.columns.clone();
+        if let Some(alias) = alias_name {
+            for col in new_bind_ctx.columns.iter_mut() {
+                col.table_name = Some(alias.clone());
+            }
+        }
+        Ok((
+            SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {}))),
+            new_bind_ctx,
+        ))
+    }
+
+    #[async_backtrace::framed]
     pub(crate) async fn bind_cte(
         &mut self,
         span: Span,
@@ -330,9 +355,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
-        table_name: &String,
-        alias: &Option<TableAlias>,
-        span: &Span,
+        cte_name: &String,
     ) -> Result<(SExpr, BindContext)> {
         // Recursive cte's query must be a union(all)
         match &cte_info.query.body {
@@ -344,8 +367,33 @@ impl Binder {
                 }
                 // Start to bind the recursive cte, it contains two parts: the non-recursive part and the recursive part.
                 // When binding the recursive part, we need to set `bind_recursive_cte` to true.
-                self.bind_set_expr(bind_context, &set_expr.left, &[], 0).await?;
-
+                let (left, mut left_bind_ctx) = self
+                    .bind_set_expr(bind_context, &set_expr.left, &[], 0)
+                    .await?;
+                // Add recursive cte's columns to cte info
+                let mut mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
+                for column in left_bind_ctx.columns.iter() {
+                    let col = ColumnBindingBuilder::new(
+                        column.column_name.clone(),
+                        column.index,
+                        column.data_type.clone(),
+                        Visibility::Visible,
+                    )
+                    .table_name(Some(cte_name.clone()))
+                    .build();
+                    mut_cte_info.columns.push(col);
+                }
+                self.set_bind_recursive_cte(true);
+                let (right, right_bind_ctx) = self
+                    .bind_set_expr(&mut left_bind_ctx, &set_expr.right, &[], 0)
+                    .await?;
+                self.set_bind_recursive_cte(false);
+                let recursive_cte_node = SExpr::create_binary(
+                    Arc::new(RelOperator::RecursiveCte(RecursiveCte {}).into()),
+                    Arc::new(left),
+                    Arc::new(right),
+                );
+                Ok((recursive_cte_node, bind_context.clone()))
             }
             _ => {
                 return Err(ErrorCode::SyntaxException(
@@ -353,9 +401,7 @@ impl Binder {
                 ));
             }
         }
-        todo!()
     }
-
 
     // Bind materialized cte
     #[async_backtrace::framed]

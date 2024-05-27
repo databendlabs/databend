@@ -35,12 +35,14 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::materialized_cte::MaterializedCte;
+use crate::plans::recursive_cte::RecursiveCte;
 use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::Exchange;
 use crate::plans::ProjectSet;
+use crate::plans::RecursiveCteScan;
 use crate::plans::Udf;
 use crate::plans::Window;
 
@@ -131,6 +133,8 @@ pub enum RelOperator {
     CacheScan(CacheScan),
     Udf(Udf),
     AsyncFunction(AsyncFunction),
+    RecursiveCte(RecursiveCte),
+    RecursiveCteScan(RecursiveCteScan),
 }
 
 impl Operator for RelOperator {
@@ -156,6 +160,8 @@ impl Operator for RelOperator {
             RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
+            RelOperator::RecursiveCte(rel_op) => rel_op.rel_op(),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -181,6 +187,8 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.arity(),
             RelOperator::Udf(rel_op) => rel_op.arity(),
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
+            RelOperator::RecursiveCte(rel_op) => rel_op.arity(),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.arity(),
         }
     }
 
@@ -206,6 +214,8 @@ impl Operator for RelOperator {
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::RecursiveCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -231,6 +241,8 @@ impl Operator for RelOperator {
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::RecursiveCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -256,6 +268,8 @@ impl Operator for RelOperator {
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::RecursiveCte(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
 
@@ -327,6 +341,12 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
+            RelOperator::RecursiveCte(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::RecursiveCteScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
         }
     }
 
@@ -395,6 +415,12 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::AsyncFunction(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::RecursiveCte(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::RecursiveCteScan(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
         }
@@ -721,6 +747,36 @@ impl TryFrom<RelOperator> for AsyncFunction {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to AsyncFunction",
             ))
+        }
+    }
+}
+
+impl TryFrom<RelOperator> for RecursiveCte {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::RecursiveCte(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to RecursiveCte",
+                value.rel_op()
+            )))
+        }
+    }
+}
+
+impl TryFrom<RelOperator> for RecursiveCteScan {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::RecursiveCteScan(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to RecursiveCteScan",
+                value.rel_op()
+            )))
         }
     }
 }
