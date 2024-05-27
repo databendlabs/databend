@@ -23,6 +23,8 @@ jsonb = { workspace = true }
 match-template = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
+tokio = { workspace = true }
+
 
 [dev-dependencies]
 itertools = { workspace = true }

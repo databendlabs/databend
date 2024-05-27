@@ -24,8 +24,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
+use databend_common_pipeline_transforms::processors::AsyncRetry;
+use databend_common_pipeline_transforms::processors::AsyncRetryWrapper;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
+use databend_common_pipeline_transforms::processors::RetryStrategy;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 
 use crate::pipelines::processors::InputPort;
@@ -44,10 +47,22 @@ impl TransformUdfServer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
-        Ok(AsyncTransformer::create(input, output, Self {
-            func_ctx,
-            funcs,
-        }))
+        let s = Self { func_ctx, funcs };
+        let retry_wrapper = AsyncRetryWrapper::create(s);
+        Ok(AsyncTransformer::create(input, output, retry_wrapper))
+    }
+}
+
+impl AsyncRetry for TransformUdfServer {
+    fn retry_on(&self, err: &databend_common_exception::ErrorCode) -> bool {
+        true
+    }
+
+    fn retry_strategy(&self) -> RetryStrategy {
+        RetryStrategy {
+            retry_times: 64,
+            retry_sleep_duration: Some(tokio::time::Duration::from_millis(500)),
+        }
     }
 }
 
