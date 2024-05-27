@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod leveled_store;
-pub(in crate::sm_v002) mod marked;
 #[allow(clippy::module_inception)]
 mod sm_v002;
 mod snapshot_stat;

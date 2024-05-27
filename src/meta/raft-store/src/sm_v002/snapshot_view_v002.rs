@@ -14,7 +14,6 @@
 
 use std::future;
 use std::io;
-use std::sync::Arc;
 
 use databend_common_meta_types::SeqNum;
 use databend_common_meta_types::SeqV;
@@ -23,13 +22,14 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 
 use crate::key_spaces::SMEntry;
+use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::ResultStream;
+use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
-use crate::sm_v002::leveled_store::map_api::AsMap;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::map_api::ResultStream;
-use crate::sm_v002::leveled_store::static_levels::StaticLevels;
-use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::state_machine::ExpireValue;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
@@ -38,16 +38,16 @@ use crate::state_machine::StateMachineMetaValue;
 /// A snapshot view of a state machine, which is static and not affected by further writing to the state machine.
 pub struct SnapshotViewV002 {
     /// The compacted snapshot data.
-    compacted: StaticLevels,
+    compacted: ImmutableLevels,
 
     /// Original non compacted snapshot data.
     ///
     /// This is kept just for debug.
-    original: StaticLevels,
+    original: ImmutableLevels,
 }
 
 impl SnapshotViewV002 {
-    pub fn new(top: StaticLevels) -> Self {
+    pub fn new(top: ImmutableLevels) -> Self {
         Self {
             compacted: top.clone(),
             original: top,
@@ -55,12 +55,12 @@ impl SnapshotViewV002 {
     }
 
     /// Return the data level of this snapshot
-    pub fn compacted(&self) -> StaticLevels {
+    pub fn compacted(&self) -> ImmutableLevels {
         self.compacted.clone()
     }
 
     /// The original, non compacted snapshot data.
-    pub fn original_ref(&self) -> &StaticLevels {
+    pub fn original_ref(&self) -> &ImmutableLevels {
         &self.original
     }
 
@@ -110,7 +110,7 @@ impl SnapshotViewV002 {
 
         data.replace_expire(bt);
 
-        self.compacted = StaticLevels::new([Arc::new(data)]);
+        self.compacted = ImmutableLevels::new([Immutable::new_from_level(data)]);
         Ok(())
     }
 

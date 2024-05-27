@@ -20,7 +20,7 @@ use databend_common_meta_types::NodeId;
 use databend_common_meta_types::StoredMembership;
 use log::debug;
 
-use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
+use crate::leveled_store::sys_data_api::SysDataApiRO;
 
 /// System data(non-user data).
 ///

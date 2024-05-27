@@ -46,7 +46,7 @@ impl Plan {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                s_expr.to_format_tree(metadata, verbose)?.format_pretty()
+                Ok(s_expr.to_format_tree(metadata, verbose)?.format_pretty()?)
             }
             Plan::Explain { kind, plan, .. } => {
                 let result = plan.format_indent(false)?;
@@ -143,7 +143,6 @@ impl Plan {
             // Account
             Plan::GrantRole(_) => Ok("GrantRole".to_string()),
             Plan::GrantPriv(_) => Ok("GrantPrivilege".to_string()),
-            Plan::ShowGrants(_) => Ok("ShowGrants".to_string()),
             Plan::RevokePriv(_) => Ok("RevokePrivilege".to_string()),
             Plan::RevokeRole(_) => Ok("RevokeRole".to_string()),
             Plan::CreateUser(_) => Ok("CreateUser".to_string()),
@@ -298,8 +297,10 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
             } => {
                 let metadata = &*metadata.read();
                 let res = s_expr.to_format_tree(metadata, false)?;
-                FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])
-                    .format_pretty()
+                Ok(
+                    FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])
+                        .format_pretty()?,
+                )
             }
             _ => Err(ErrorCode::Internal("Invalid create table plan")),
         },

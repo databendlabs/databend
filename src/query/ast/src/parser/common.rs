@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Range;
-use databend_common_exception::Span;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -36,6 +34,8 @@ use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::rule;
+use crate::Range;
+use crate::Span;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 

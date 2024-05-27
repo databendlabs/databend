@@ -21,7 +21,7 @@ use databend_common_formats::field_encoder::FieldEncoderValues;
 use databend_common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct JsonBlock {
     pub(crate) data: Vec<Vec<JsonValue>>,
 }

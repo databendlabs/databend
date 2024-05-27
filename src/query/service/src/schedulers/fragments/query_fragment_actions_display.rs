@@ -80,7 +80,7 @@ impl<'a> Display for QueryFragmentActionsWrap<'a> {
             let plan_display_string = fragment_action
                 .physical_plan
                 .format(self.metadata.clone(), Default::default())
-                .and_then(|node| node.format_pretty_with_prefix("    "))
+                .and_then(|node| Ok(node.format_pretty_with_prefix("    ")?))
                 .unwrap();
             write!(f, "{}", plan_display_string)?;
         }

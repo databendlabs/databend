@@ -53,6 +53,8 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::ShowUserFunctions
                             | RewriteKind::ShowTableFunctions
                             | RewriteKind::ShowUsers
+                            // show grants will access meta, can not true in mm.
+                            // | RewriteKind::ShowGrants
                             | RewriteKind::ShowStages
                             | RewriteKind::DescribeStage
                             | RewriteKind::ListStage
@@ -66,7 +68,6 @@ impl AccessChecker for ManagementModeAccess {
                 // Show.
                 Plan::ShowCreateDatabase(_)
                 | Plan::ShowCreateTable(_)
-                | Plan::ShowGrants(_)
 
                 // Set
                 | Plan::SetVariable(_)

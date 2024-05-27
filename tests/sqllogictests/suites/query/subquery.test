@@ -771,3 +771,47 @@ NULL 0
 
 statement ok
 drop table if exists t;
+
+statement ok
+drop table if exists push_log;
+
+statement ok
+drop table if exists merge_log;
+
+statement ok
+CREATE TABLE `push_log` (
+  `name` VARCHAR NULL,
+  `data_count` INT NULL,
+  `created_at` TIMESTAMP NULL
+) ENGINE = FUSE;
+
+statement ok
+CREATE TABLE `merge_log` (
+  `name` VARCHAR NULL,
+  `file_date` VARCHAR NULL,
+  `inserted_count` INT NULL,
+  `modified_count` INT NULL,
+  `created_at` TIMESTAMP NULL
+) ENGINE = FUSE;
+
+query
+SELECT
+  (SELECT MAX(created_at)
+   FROM merge_log
+   WHERE s.name=name
+   AND created_at >= s.push_time
+   AND created_at < s.push_time + 1) max_merge_time
+FROM (
+  SELECT
+    name,
+    DATE_FORMAT(created_at,'%Y-%m-%d') create_date,
+    STR_TO_DATE(DATE_FORMAT(created_at,'%Y-%m-%d'),'%Y-%m-%d') push_time
+  FROM push_log
+) s;
+----
+
+statement ok
+drop table push_log;
+
+statement ok
+drop table merge_log;

@@ -15,19 +15,16 @@
 use std::fmt;
 use std::io;
 
-use crate::sm_v002::leveled_store::map_api::MapKV;
-use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::map_api::MapKey;
+use crate::marked::Marked;
+
+/// Result type of a key-value pair and io Error used in a map.
+type KVResult<K> = Result<(K, Marked<<K as MapKey>::V>), io::Error>;
 
 /// Sort by key and internal_seq.
 /// Return `true` if `a` should be placed before `b`, e.g., `a` is smaller.
-pub(in crate::sm_v002) fn by_key_seq<K>(
-    r1: &Result<MapKV<K>, io::Error>,
-    r2: &Result<MapKV<K>, io::Error>,
-) -> bool
-where
-    K: MapKey + Ord + fmt::Debug,
-{
+pub(crate) fn by_key_seq<K>(r1: &KVResult<K>, r2: &KVResult<K>) -> bool
+where K: MapKey + Ord + fmt::Debug {
     match (r1, r2) {
         (Ok((k1, v1)), Ok((k2, v2))) => {
             assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
@@ -42,13 +39,10 @@ where
     }
 }
 
-/// Result type of a key-value pair and io Error used in a map.
-type KVResult<K> = Result<MapKV<K>, io::Error>;
-
 /// Return a Ok(combined) to merge two consecutive values,
 /// otherwise return Err((x,y)) to not to merge.
 #[allow(clippy::type_complexity)]
-pub(in crate::sm_v002) fn choose_greater<K>(
+pub(crate) fn choose_greater<K>(
     r1: KVResult<K>,
     r2: KVResult<K>,
 ) -> Result<KVResult<K>, (KVResult<K>, KVResult<K>)>

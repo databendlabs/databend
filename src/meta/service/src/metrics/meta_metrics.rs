@@ -52,6 +52,7 @@ pub mod server_metrics {
         leader_changes: Counter,
         applying_snapshot: Gauge,
         snapshot_key_num: Gauge,
+        db_size: Gauge,
         last_log_index: Gauge,
         last_seq: Gauge,
         current_term: Gauge,
@@ -72,6 +73,7 @@ pub mod server_metrics {
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
                 snapshot_key_num: Gauge::default(),
+                db_size: Gauge::default(),
                 last_log_index: Gauge::default(),
                 last_seq: Gauge::default(),
                 current_term: Gauge::default(),
@@ -110,6 +112,7 @@ pub mod server_metrics {
                 "snapshot key numbers",
                 metrics.snapshot_key_num.clone(),
             );
+            registry.register(key!("db_size"), "db size", metrics.db_size.clone());
             registry.register(
                 key!("proposals_applied"),
                 "proposals applied",
@@ -170,8 +173,12 @@ pub mod server_metrics {
         SERVER_METRICS.applying_snapshot.inc_by(cnt);
     }
 
-    pub fn set_snapshot_key_num(snapshot_key_num: i64) {
-        SERVER_METRICS.snapshot_key_num.set(snapshot_key_num);
+    pub fn set_snapshot_key_num(snapshot_key_num: u64) {
+        SERVER_METRICS.snapshot_key_num.set(snapshot_key_num as i64);
+    }
+
+    pub fn set_db_size(db_size: u64) {
+        SERVER_METRICS.db_size.set(db_size as i64);
     }
 
     pub fn set_proposals_applied(proposals_applied: u64) {

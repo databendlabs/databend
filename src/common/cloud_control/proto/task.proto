@@ -12,6 +12,7 @@ message ScheduleOptions {
   optional string cron = 2; // CRON = '0 2 * * *' means Every night at 2 AM. UTC time zone.
   optional string time_zone = 3; // "UTC..."
   ScheduleType schedule_type = 4;
+  optional uint64 milliseconds_interval = 5; // milliseconds level interval
 }
 
 message WarehouseOptions {

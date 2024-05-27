@@ -445,28 +445,34 @@ impl Dataframe {
     }
 
     pub async fn except(mut self, dataframe: Dataframe) -> Result<Self> {
-        let (s_expr, bind_context) = self.binder.bind_except(
-            None,
-            None,
-            self.bind_context,
-            dataframe.bind_context,
-            self.s_expr,
-            dataframe.s_expr,
-        )?;
+        let (s_expr, bind_context) = self
+            .binder
+            .bind_except(
+                None,
+                None,
+                self.bind_context,
+                dataframe.bind_context,
+                self.s_expr,
+                dataframe.s_expr,
+            )
+            .await?;
         self.s_expr = s_expr;
         self.bind_context = bind_context;
         Ok(self)
     }
 
     pub async fn intersect(mut self, dataframe: Dataframe) -> Result<Self> {
-        let (s_expr, bind_context) = self.binder.bind_intersect(
-            None,
-            None,
-            self.bind_context,
-            dataframe.bind_context,
-            self.s_expr,
-            dataframe.s_expr,
-        )?;
+        let (s_expr, bind_context) = self
+            .binder
+            .bind_intersect(
+                None,
+                None,
+                self.bind_context,
+                dataframe.bind_context,
+                self.s_expr,
+                dataframe.s_expr,
+            )
+            .await?;
         self.s_expr = s_expr;
         self.bind_context = bind_context;
         Ok(self)

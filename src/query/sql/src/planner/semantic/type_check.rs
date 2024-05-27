@@ -45,6 +45,7 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_ast::Span;
 use databend_common_async_functions::resolve_async_function;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
@@ -56,7 +57,6 @@ use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -4000,6 +4000,7 @@ impl<'a> TypeChecker<'a> {
             &mut bind_context,
             None,
             &values,
+            None,
         )
         .await?;
         assert_eq!(ctx.columns.len(), 1);

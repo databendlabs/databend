@@ -15,12 +15,12 @@
 use databend_common_meta_types::KVMeta;
 use futures_util::TryStreamExt;
 
-use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
-use crate::sm_v002::leveled_store::map_api::AsMap;
-use crate::sm_v002::leveled_store::map_api::MapApi;
-use crate::sm_v002::leveled_store::map_api::MapApiExt;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::leveled_map::LeveledMap;
+use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::map_api::MapApi;
+use crate::leveled_store::map_api::MapApiExt;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::marked::Marked;
 
 #[tokio::test]
 async fn test_freeze() -> anyhow::Result<()> {
@@ -51,9 +51,9 @@ async fn test_freeze() -> anyhow::Result<()> {
     ]);
 
     // Listing from the base level sees the old value.
-    let frozen = l.frozen_ref();
+    let immutables = l.immutable_levels_ref();
 
-    let got = frozen
+    let got = immutables
         .str_map()
         .range(s("")..)
         .await?
@@ -193,9 +193,9 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Check base level
 
-    let frozen = l.frozen_ref();
+    let immutables = l.immutable_levels_ref();
 
-    let strm = frozen.str_map().range(s("")..).await?;
+    let strm = immutables.str_map().range(s("")..).await?;
     let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //

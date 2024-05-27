@@ -34,45 +34,32 @@ impl StageTable {
     ) -> databend_common_exception::Result<()> {
         let settings = ctx.get_settings();
 
-        let single = self.table_info.stage_info.copy_options.single;
-        let max_file_size = if single {
-            usize::MAX
-        } else {
-            let max_file_size = self.table_info.stage_info.copy_options.max_file_size;
-            if max_file_size == 0 {
-                // 256M per file by default.
-                256 * 1024 * 1024
-            } else {
-                let mem_limit = (settings.get_max_memory_usage()? / 2) as usize;
-                max_file_size.min(mem_limit)
-            }
-        };
+        let fmt = self.table_info.stage_info.file_format_params.clone();
+        let mem_limit = settings.get_max_memory_usage()? as usize;
         let max_threads = settings.get_max_threads()? as usize;
 
         let op = StageTable::get_op(&self.table_info.stage_info)?;
-        let fmt = self.table_info.stage_info.file_format_params.clone();
         let uuid = uuid::Uuid::new_v4().to_string();
         let group_id = AtomicUsize::new(0);
         match fmt {
             FileFormatParams::Parquet(_) => append_data_to_parquet_files(
                 pipeline,
-                ctx.clone(),
                 self.table_info.clone(),
                 op,
-                max_file_size,
-                max_threads,
                 uuid,
                 &group_id,
+                mem_limit,
+                max_threads,
             )?,
             _ => append_data_to_row_based_files(
                 pipeline,
                 ctx.clone(),
                 self.table_info.clone(),
                 op,
-                max_file_size,
-                max_threads,
                 uuid,
                 &group_id,
+                mem_limit,
+                max_threads,
             )?,
         };
         if !self.table_info.stage_info.copy_options.detailed_output {

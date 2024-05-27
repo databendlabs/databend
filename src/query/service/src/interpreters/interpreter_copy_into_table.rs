@@ -106,7 +106,13 @@ impl CopyIntoTableInterpreter {
             .await?;
         let mut update_stream_meta_reqs = vec![];
         let (source, project_columns) = if let Some(ref query) = plan.query {
-            let (query_interpreter, update_stream_meta) = self.build_query(query).await?;
+            let query = if plan.enable_distributed {
+                query.remove_exchange_for_select()
+            } else {
+                *query.clone()
+            };
+
+            let (query_interpreter, update_stream_meta) = self.build_query(&query).await?;
             update_stream_meta_reqs = update_stream_meta;
             let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
 

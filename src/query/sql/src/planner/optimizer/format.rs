@@ -34,7 +34,7 @@ pub fn display_memo(memo: &Memo) -> Result<String> {
 
     let root = FormatTreeNode::with_children("Memo".to_string(), children);
 
-    root.format_pretty()
+    Ok(root.format_pretty()?)
 }
 
 pub fn display_rel_op(rel_op: &RelOperator) -> String {
@@ -68,6 +68,8 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::CteScan(_) => "CteScan".to_string(),
         RelOperator::MaterializedCte(_) => "MaterializedCte".to_string(),
         RelOperator::ConstantTableScan(_) => "ConstantTableScan".to_string(),
+        RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
+        RelOperator::CacheScan(_) => "CacheScan".to_string(),
         RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
         RelOperator::Udf(_) => "Udf".to_string(),
         RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),

@@ -487,13 +487,14 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Forbid leave the leader node via leader.
+/// This prevent from the leader leaving the cluster by itself,
+/// which may not be able to commit the second log: unregister the node.
+/// And this also obviously prevent removing the last node in a cluster.
 #[test(harness = meta_service_test_harness)]
 #[minitrace::trace]
-async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
-    // - Bring up a cluster of single node
-    // - Remove this node is not allowed.
-
-    let (log_index, tcs) = start_meta_node_cluster(btreeset![0], btreeset![]).await?;
+async fn test_meta_node_forbid_leave_leader_via_leader() -> anyhow::Result<()> {
+    let (log_index, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![]).await?;
     let all = test_context_nodes(&tcs);
 
     let leader_id = 0;
@@ -501,7 +502,7 @@ async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
 
     let leader = all[leader_id as usize].clone();
 
-    info!("--- leave voter node-10");
+    info!("--- fail to leave voter node-0");
     {
         let req = ForwardRequest {
             forward_to_leader: 0,
@@ -510,10 +511,14 @@ async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
             }),
         };
 
-        leader.handle_forwardable_request(req).await?;
+        let err = leader.handle_forwardable_request(req).await.unwrap_err();
+        assert_eq!(
+            "fail to leave: can not leave id=0 via itself, source: leave-via-self",
+            err.to_string()
+        );
 
         // wait for commit but it should not
-        sleep(Duration::from_millis(2000)).await;
+        sleep(Duration::from_millis(2_000)).await;
 
         leader
             .raft
@@ -524,15 +529,15 @@ async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
         leader
             .raft
             .wait(timeout())
-            .voter_ids(btreeset! {0}, "no node leaves the cluster")
+            .voter_ids(btreeset! {0,1,2}, "no node leaves the cluster")
             .await?;
     }
 
-    info!("--- check nodes list: node-1 is removed");
+    info!("--- check nodes list");
     {
         let nodes = leader.get_nodes().await;
         assert_eq!(
-            vec!["0"],
+            vec!["0", "1", "2"],
             nodes.iter().map(|x| x.name.clone()).collect::<Vec<_>>()
         );
     }

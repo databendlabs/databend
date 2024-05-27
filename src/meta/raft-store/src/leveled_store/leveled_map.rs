@@ -16,23 +16,22 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
-use std::sync::Arc;
 
 use databend_common_meta_types::KVMeta;
 
-use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::map_api::compacted_get;
-use crate::sm_v002::leveled_store::map_api::compacted_range;
-use crate::sm_v002::leveled_store::map_api::KVResultStream;
-use crate::sm_v002::leveled_store::map_api::MapApi;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::map_api::MarkedOf;
-use crate::sm_v002::leveled_store::map_api::Transition;
-use crate::sm_v002::leveled_store::ref_::Ref;
-use crate::sm_v002::leveled_store::ref_mut::RefMut;
-use crate::sm_v002::leveled_store::static_levels::StaticLevels;
-use crate::sm_v002::marked::Marked;
+use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::level::Level;
+use crate::leveled_store::map_api::compacted_get;
+use crate::leveled_store::map_api::compacted_range;
+use crate::leveled_store::map_api::KVResultStream;
+use crate::leveled_store::map_api::MapApi;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MarkedOf;
+use crate::leveled_store::map_api::Transition;
+use crate::leveled_store::ref_mut::RefMut;
+use crate::marked::Marked;
 
 /// State machine data organized in multiple levels.
 ///
@@ -46,39 +45,41 @@ pub struct LeveledMap {
     writable: Level,
 
     /// The immutable levels.
-    frozen: StaticLevels,
+    immutable_levels: ImmutableLevels,
 }
 
 impl LeveledMap {
     pub(crate) fn new(writable: Level) -> Self {
         Self {
             writable,
-            frozen: Default::default(),
+            immutable_levels: Default::default(),
         }
     }
 
     /// Return an iterator of all levels in reverse order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
+    pub(crate) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         [&self.writable]
             .into_iter()
-            .chain(self.frozen.iter_levels())
+            .chain(self.immutable_levels.iter_levels())
     }
 
-    /// Return the top level and an iterator of all frozen levels, in newest to oldest order.
-    pub(in crate::sm_v002) fn iter_shared_levels(
-        &self,
-    ) -> (Option<&Level>, impl Iterator<Item = &Arc<Level>>) {
-        (Some(&self.writable), self.frozen.iter_arc_levels())
+    /// Return the top level and an iterator of all immutable levels, in newest to oldest order.
+    pub(crate) fn iter_shared_levels(&self) -> (Option<&Level>, impl Iterator<Item = &Immutable>) {
+        (
+            Some(&self.writable),
+            self.immutable_levels.iter_immutable_levels(),
+        )
     }
 
     /// Freeze the current writable level and create a new empty writable level.
-    pub fn freeze_writable(&mut self) -> &StaticLevels {
+    pub fn freeze_writable(&mut self) -> &ImmutableLevels {
         let new_writable = self.writable.new_level();
 
-        let frozen = std::mem::replace(&mut self.writable, new_writable);
-        self.frozen.push(Arc::new(frozen));
+        let immutable = std::mem::replace(&mut self.writable, new_writable);
+        self.immutable_levels
+            .push(Immutable::new_from_level(immutable));
 
-        &self.frozen
+        &self.immutable_levels
     }
 
     /// Return an immutable reference to the top level i.e., the writable level.
@@ -92,22 +93,17 @@ impl LeveledMap {
     }
 
     /// Return a reference to the immutable levels.
-    pub fn frozen_ref(&self) -> &StaticLevels {
-        &self.frozen
+    pub fn immutable_levels_ref(&self) -> &ImmutableLevels {
+        &self.immutable_levels
     }
 
     /// Replace all immutable levels with the given one.
-    pub(crate) fn replace_frozen(&mut self, b: StaticLevels) {
-        self.frozen = b;
+    pub(crate) fn replace_immutable_levels(&mut self, b: ImmutableLevels) {
+        self.immutable_levels = b;
     }
 
     pub(crate) fn to_ref_mut(&mut self) -> RefMut {
-        RefMut::new(&mut self.writable, &self.frozen)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn to_ref(&self) -> Ref {
-        Ref::new(Some(&self.writable), &self.frozen)
+        RefMut::new(&mut self.writable, &self.immutable_levels)
     }
 }
 
@@ -116,7 +112,7 @@ impl<K> MapApiRO<K> for LeveledMap
 where
     K: MapKey + fmt::Debug,
     Level: MapApiRO<K>,
-    Arc<Level>: MapApiRO<K>,
+    Immutable: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
@@ -139,7 +135,7 @@ impl<K> MapApi<K> for LeveledMap
 where
     K: MapKey,
     Level: MapApi<K>,
-    Arc<Level>: MapApiRO<K>,
+    Immutable: MapApiRO<K>,
 {
     async fn set(
         &mut self,
