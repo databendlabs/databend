@@ -137,6 +137,10 @@ message UserInfo {
   repeated string password_fails = 8;
   optional string password_update_on = 9;
   optional string lockout_time = 10;
+  // The time user created.
+  optional string created_on = 11;
+  // The time user update.
+  optional string update_on = 12;
 }
 
 message UserIdentity {

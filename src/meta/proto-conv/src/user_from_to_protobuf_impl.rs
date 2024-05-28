@@ -322,19 +322,19 @@ impl FromToProto for mt::principal::UserInfo {
             hostname: p.hostname.clone(),
             auth_info: mt::principal::AuthInfo::from_pb(p.auth_info.ok_or_else(|| {
                 Incompatible {
-                    reason: "UserInfo.auth_info cannot be None".to_string(),
+                    reason: format!("USER {}: UserInfo.auth_info cannot be None", p.name.clone()),
                 }
             })?)?,
             grants: mt::principal::UserGrantSet::from_pb(p.grants.ok_or_else(|| {
                 Incompatible {
-                    reason: "UserInfo.grants cannot be None".to_string(),
+                    reason: format!("user {}: UserInfo.grants cannot be None", p.name.clone()),
                 }
             })?)?,
             quota: mt::principal::UserQuota::from_pb(p.quota.ok_or_else(|| Incompatible {
-                reason: "UserInfo.quota cannot be None".to_string(),
+                reason: format!("user {}: UserInfo.quota cannot be None", p.name.clone()),
             })?)?,
             option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| Incompatible {
-                reason: "UserInfo.option cannot be None".to_string(),
+                reason: format!("user {}: UserInfo.option cannot be None", p.name.clone()),
             })?)?,
             history_auth_infos: p
                 .history_auth_infos
@@ -353,6 +353,14 @@ impl FromToProto for mt::principal::UserInfo {
             lockout_time: match p.lockout_time {
                 Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
                 None => None,
+            },
+            created_on: match p.created_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
+            },
+            update_on: match p.update_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
             },
         })
     }
@@ -385,6 +393,8 @@ impl FromToProto for mt::principal::UserInfo {
                 Some(t) => Some(t.to_pb()?),
                 None => None,
             },
+            created_on: Some(self.created_on.to_pb()?),
+            update_on: Some(self.update_on.to_pb()?),
         })
     }
 }
