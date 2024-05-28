@@ -51,6 +51,8 @@ use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::ConstantExpr;
+use crate::plans::FunctionCall;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
@@ -383,6 +385,78 @@ pub fn parse_lambda_expr(
     )?;
 
     databend_common_base::runtime::block_on(type_checker.resolve(ast))
+}
+
+pub fn parse_cluster_keys(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    cluster_key_str: &str,
+) -> Result<Vec<Expr>> {
+    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        false,
+    )?;
+
+    let tokens = tokenize_sql(cluster_key_str)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1 {
+        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
+            ast_exprs = exprs.clone();
+        }
+    }
+
+    let mut exprs = Vec::with_capacity(ast_exprs.len());
+    for ast in ast_exprs {
+        let (scalar, data_type) =
+            *databend_common_base::runtime::block_on(type_checker.resolve(&ast))?;
+
+        let inner_type = data_type.remove_nullable();
+        let mut should_wrapper = false;
+        if inner_type == DataType::String {
+            if let ScalarExpr::FunctionCall(FunctionCall { func_name, .. }) = &scalar {
+                let origin_name = BUILTIN_FUNCTIONS
+                    .aliases
+                    .get(func_name)
+                    .unwrap_or(func_name);
+                should_wrapper = origin_name != "substr";
+            } else {
+                should_wrapper = true;
+            }
+        }
+        let scalar = if should_wrapper {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "substr".to_string(),
+                params: vec![],
+                arguments: vec![
+                    scalar,
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(1i64.into()),
+                    }),
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(8u64.into()),
+                    }),
+                ],
+            })
+        } else {
+            scalar
+        };
+
+        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+        exprs.push(expr);
+    }
+    Ok(exprs)
 }
 
 #[derive(Default)]

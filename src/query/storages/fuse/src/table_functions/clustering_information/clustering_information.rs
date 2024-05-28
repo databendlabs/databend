@@ -155,21 +155,24 @@ impl<'a> ClusteringInformation<'a> {
                 *depth = cmp::max(*depth, point_depth);
             });
 
-            start.iter().for_each(|&idx| {
-                unfinished_parts.insert(idx, (point_depth - 1, point_depth));
+            start.iter().for_each(|idx| {
+                if let Some(v) = unfinished_parts.remove(idx) {
+                    stats.push(v);
+                } else {
+                    unfinished_parts.insert(*idx, (point_depth - 1, point_depth));
+                }
             });
 
             end.iter().for_each(|idx| {
                 if let Some(v) = unfinished_parts.remove(idx) {
                     stats.push(v);
+                } else {
+                    warn!("clustering_information: please check your data and perform recluster to re-sort.");
+                    unfinished_parts.insert(*idx, (point_depth - 1, point_depth));
                 }
             });
         }
-        if !unfinished_parts.is_empty() {
-            warn!(
-                "clustering_information: unfinished_parts is not empty after calculate the blocks overlaps"
-            );
-        }
+        assert!(unfinished_parts.is_empty());
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;
