@@ -202,6 +202,8 @@ impl MergeIntoInterpreter {
             }
         }
 
+        log::info!("target build optimization is {}", target_build_optimization);
+
         // check mutability
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
         check_table.check_mutable()?;
@@ -219,7 +221,7 @@ impl MergeIntoInterpreter {
 
         let insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
 
-        let mut row_id_idx = if !insert_only {
+        let mut row_id_idx = if !insert_only && !target_build_optimization {
             match meta_data
                 .read()
                 .row_id_index_by_table_index(*target_table_idx)
