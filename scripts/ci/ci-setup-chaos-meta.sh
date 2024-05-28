@@ -56,7 +56,7 @@ helm install test databend/databend-meta \
 sleep 10
 kubectl -n databend wait \
     --for=condition=ready pod \
-    -l app.kubernetes.io/instance=meta-service \
+    -l app.kubernetes.io/name=databend-meta \
     --timeout 120s || true
 
 kubectl get pods -A -o wide
