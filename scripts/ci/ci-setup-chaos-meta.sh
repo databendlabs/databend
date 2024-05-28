@@ -60,3 +60,5 @@ kubectl -n databend wait \
     --timeout 120s || true
 
 kubectl get pods -A -o wide
+
+kubectl -n databend exec test-databend-meta-0 -- /databend-metactl --status
