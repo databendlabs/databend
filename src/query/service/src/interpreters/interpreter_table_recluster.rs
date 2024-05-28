@@ -162,7 +162,6 @@ impl Interpreter for ReclusterTableInterpreter {
 
             let mut build_res =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-            build_res.main_pipeline.add_lock_guard(lock_guard);
             assert!(build_res.main_pipeline.is_complete_pipeline()?);
             build_res.set_max_threads(max_threads);
 
@@ -177,6 +176,8 @@ impl Interpreter for ReclusterTableInterpreter {
             complete_executor.execute()?;
             // make sure the executor is dropped before the next loop.
             drop(complete_executor);
+            // make sure the lock guard is dropped before the next loop.
+            drop(lock_guard);
 
             let elapsed_time = SystemTime::now().duration_since(start).unwrap();
             times += 1;
