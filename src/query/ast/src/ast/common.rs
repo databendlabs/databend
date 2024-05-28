@@ -26,13 +26,9 @@ use crate::Span;
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct Identifier {
-    #[drive(skip)]
     pub span: Span,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub quote: Option<char>,
-    #[drive(skip)]
     pub is_hole: bool,
 }
 
@@ -74,11 +70,8 @@ impl Display for Identifier {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ColumnPosition {
-    #[drive(skip)]
     pub span: Span,
-    #[drive(skip)]
     pub pos: usize,
-    #[drive(skip)]
     pub name: String,
 }
 

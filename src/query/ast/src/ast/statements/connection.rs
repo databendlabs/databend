@@ -25,16 +25,13 @@ use crate::ast::Identifier;
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateConnectionStmt {
     pub name: Identifier,
-    #[drive(skip)]
     pub storage_type: String,
-    #[drive(skip)]
     pub storage_params: BTreeMap<String, String>,
     pub create_option: CreateOption,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropConnectionStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub name: Identifier,
 }
