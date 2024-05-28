@@ -6,6 +6,9 @@ set -ex
 
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
+sudo apt-get update
+sudo apt-get install -y libnss-myhostname
+
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.6.0 bash
 k3d registry create registry.localhost --port 0.0.0.0:5111 -i registry:latest
 k3d cluster create --config ./scripts/ci/meta-chaos/k3d.yaml meta-chaos
