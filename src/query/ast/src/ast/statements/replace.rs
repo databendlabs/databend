@@ -58,12 +58,12 @@ impl Display for ReplaceStmt {
             write!(f, ")")?;
         }
 
-        if !self.on_conflict_columns.is_empty() {
-            write!(f, " ON CONFLICT")?;
-            write!(f, " (")?;
-            write_comma_separated_list(f, &self.on_conflict_columns)?;
-            write!(f, ")")?;
-        }
+        // on_conflict_columns must be non-empty
+        write!(f, " ON CONFLICT")?;
+        write!(f, " (")?;
+        write_comma_separated_list(f, &self.on_conflict_columns)?;
+        write!(f, ")")?;
+
         if let Some(expr) = &self.delete_when {
             write!(f, " DELETE WHEN {expr}")?;
         }
