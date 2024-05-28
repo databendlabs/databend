@@ -19,7 +19,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,PYO3_PYTHON,LD_LIBRARY_PATH
 
     - name: Cross setup
       if: startsWith(inputs.target, 'aarch64-')

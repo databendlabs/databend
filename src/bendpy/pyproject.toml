@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "databend"
-requires-python = ">=3.7"
+requires-python = ">=3.12"
 description = "Databend Python Binding"
 classifiers = [
     "Programming Language :: Rust",
