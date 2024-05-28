@@ -3,7 +3,7 @@ kind: Simple
 metadata:
   name: single
 servers: 1
-image: rancher/k3s:v1.29.5-rc1+k3s1
+image: rancher/k3s:v1.29.5-k3s1
 ports:
   - port: 8888:80
     nodeFilters:
