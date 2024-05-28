@@ -5,6 +5,3 @@ include ./09_0023_replace_into.test
 
 statement ok
 set enable_distributed_replace_into = 0;
-
-include ./09_0023_replace_into.test
-
