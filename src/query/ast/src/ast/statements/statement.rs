@@ -319,12 +319,6 @@ pub enum Statement {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct StatementWithFormat {
-    pub(crate) stmt: Statement,
-    pub(crate) format: Option<String>,
-}
-
 impl Statement {
     pub fn to_mask_sql(&self) -> String {
         match self {
@@ -727,6 +721,22 @@ impl Display for Statement {
                 write!(f, " {priority}")?;
                 write!(f, " '{object_id}'")?;
             }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct StatementWithFormat {
+    pub(crate) stmt: Statement,
+    pub(crate) format: Option<String>,
+}
+
+impl Display for StatementWithFormat {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.stmt)?;
+        if let Some(format) = &self.format {
+            write!(f, " FORMAT {}", format)?;
         }
         Ok(())
     }

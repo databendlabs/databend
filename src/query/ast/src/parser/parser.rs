@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::input::ParseMode;
-use super::statement::insert_stmt;
-use super::statement::replace_stmt;
+use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
+use pretty_assertions::assert_eq;
+
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Statement;
+use crate::ast::StatementWithFormat;
 use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
@@ -28,12 +30,16 @@ use crate::parser::expr::expr;
 use crate::parser::expr::values_with_placeholder;
 use crate::parser::input::Dialect;
 use crate::parser::input::Input;
+use crate::parser::input::ParseMode;
+use crate::parser::statement::insert_stmt;
+use crate::parser::statement::replace_stmt;
 use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
 use crate::parser::Backtrace;
 use crate::ParseError;
+use crate::Range;
 use crate::Result;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
@@ -46,29 +52,7 @@ pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Optio
     let stmt = run_parser(tokens, dialect, ParseMode::Default, false, statement)?;
 
     #[cfg(debug_assertions)]
-    {
-        // Check that the statement can be displayed and reparsed without loss
-        let res: Result<()> = try {
-            let reparse_sql = stmt.stmt.to_string();
-            let reparse_tokens = crate::parser::tokenize_sql(&reparse_sql)?;
-            let reparsed = run_parser(
-                &reparse_tokens,
-                Dialect::PostgreSQL,
-                ParseMode::Default,
-                false,
-                statement,
-            )?;
-            let reparsed_sql = reparsed.stmt.to_string();
-            assert_eq!(reparse_sql, reparsed_sql, "AST:\n{:#?}", stmt.stmt);
-        };
-        res.unwrap_or_else(|e| {
-            let original_sql = tokens[0].source.to_string();
-            panic!(
-                "Failed to reparse SQL:\n{}\nAST:\n{:#?}\n{}",
-                original_sql, stmt.stmt, e
-            );
-        });
-    }
+    assert_reparse(tokens[0].source, stmt.clone());
 
     Ok((stmt.stmt, stmt.format))
 }
@@ -155,4 +139,44 @@ pub fn run_parser<O>(
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     }
+}
+
+/// Check that the statement can be displayed and reparsed without loss
+fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
+    let new_sql = stmt.to_string();
+    let new_tokens = crate::parser::tokenize_sql(&new_sql).unwrap();
+    let new_stmt = run_parser(
+        &new_tokens,
+        Dialect::PostgreSQL,
+        ParseMode::Default,
+        false,
+        statement,
+    )
+    .map_err(|err| panic!("{}", err.1))
+    .unwrap();
+    assert_eq!(
+        reset_span(stmt),
+        reset_span(new_stmt.clone()),
+        "\nleft:\n{}\nright:\n{}",
+        sql,
+        new_sql,
+    );
+}
+
+fn reset_span(mut stmt: StatementWithFormat) -> StatementWithFormat {
+    #[derive(VisitorMut)]
+    #[visitor(Range(enter))]
+    struct ResetSpan;
+
+    impl ResetSpan {
+        fn enter_range(&mut self, range: &mut Range) {
+            range.start = 0;
+            range.end = 0;
+        }
+    }
+
+    let mut visitor = ResetSpan;
+    stmt.drive_mut(&mut visitor);
+
+    stmt
 }

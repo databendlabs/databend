@@ -600,7 +600,7 @@ Explain {
 ---------- Input ----------
 explain pipeline select a from t1 ignore_result;
 ---------- Output ---------
-EXPLAIN PIPELINE SELECT a FROM t1
+EXPLAIN PIPELINE SELECT a FROM t1 IGNORE_RESULT
 ---------- AST ------------
 Explain {
     kind: Pipeline,
@@ -10168,7 +10168,7 @@ CreateRole {
 ---------- Input ----------
 create user `a'a` identified by '123'
 ---------- Output ---------
-CREATE USER 'a%27a'@'%' IDENTIFIED BY '123'
+CREATE USER 'a\'a'@'%' IDENTIFIED BY '123'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
