@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::{DateTime, Utc};
 use databend_common_exception::exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
@@ -41,10 +42,13 @@ fn test_user_info() -> Result<()> {
     let ser_old = serde_json::to_string(&old)?;
     let new = UserInfo::try_from(ser_old.into_bytes())?;
 
-    let expect = UserInfo::new("old-name", "old-host", AuthInfo::Password {
+    let mut expect = UserInfo::new("old-name", "old-host", AuthInfo::Password {
         hash_value: Vec::from("pwd"),
         hash_method: PasswordHashMethod::Sha256,
     });
+    expect.created_on = DateTime::<Utc>::default();
+    expect.update_on = DateTime::<Utc>::default();
+
     assert_eq!(new, expect);
 
     Ok(())

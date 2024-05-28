@@ -73,8 +73,8 @@ fn test_user_info() -> mt::principal::UserInfo {
         password_fails: vec![],
         password_update_on: None,
         lockout_time: None,
-        created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
-        update_on: DateTime::<Utc>::from_timestamp(1702603570, 0).unwrap(),
+        created_on: DateTime::<Utc>::default(),
+        update_on: DateTime::<Utc>::default(),
     }
 }
 
