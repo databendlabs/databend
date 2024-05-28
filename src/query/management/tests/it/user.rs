@@ -90,7 +90,7 @@ mod add {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_add_user() -> databend_common_exception::Result<()> {
         let test_user_name = "test_user";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let v = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -168,7 +168,7 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_seq_match() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -194,7 +194,7 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_do_not_care_seq() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -471,7 +471,7 @@ mod update {
 
     async fn test_update_user_normal(full: bool) -> databend_common_exception::Result<()> {
         let test_user_name = "name";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
 
         let test_key = format!(
             "__fd_users/tenant1/{}",
@@ -551,7 +551,7 @@ mod update {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_update_user_with_complete() -> databend_common_exception::Result<()> {
         let test_user_name = "name";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -600,7 +600,7 @@ mod set_user_privileges {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_grant_user_privileges() -> databend_common_exception::Result<()> {
         let test_user_name = "name";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
