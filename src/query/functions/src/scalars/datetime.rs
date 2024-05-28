@@ -895,14 +895,7 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<TimestampType, _, _>(
         "now",
         |_| FunctionDomain::Full,
-        |ctx| {
-            Value::Scalar(
-                ctx.func_ctx
-                    .now
-                    .with_timezone(&ctx.func_ctx.tz.tz)
-                    .timestamp_micros(),
-            )
-        },
+        |ctx| Value::Scalar(ctx.func_ctx.now.timestamp_micros()),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
