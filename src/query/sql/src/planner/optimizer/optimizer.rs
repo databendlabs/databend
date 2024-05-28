@@ -451,7 +451,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             .table_ctx
             .get_settings()
             .get_enable_distributed_merge_into()?;
-    let mut new_columns_set = plan.columns_set.clone();
+    let new_columns_set = plan.columns_set.clone();
     if change_join_order
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
@@ -461,7 +461,10 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             == 0
         && flag
     {
-        new_columns_set.remove(&plan.row_id_index);
+        // due to issue https://github.com/datafuselabs/databend/issues/15643,
+        // target build optimization of merge-into is disabled: here row_id column should be kept
+
+        // new_columns_set.remove(&plan.row_id_index);
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
             is_distributed: false,

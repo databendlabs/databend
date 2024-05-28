@@ -215,6 +215,8 @@ impl MergeIntoInterpreter {
             }
         }
 
+        log::info!("target build optimization is {}", target_build_optimization);
+
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), meta_data).await?;
 
         let table_name = table_name.clone();
