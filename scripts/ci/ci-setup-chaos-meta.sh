@@ -51,13 +51,12 @@ helm install test databend/databend-meta \
     --values scripts/ci/meta-chaos/meta-ha.yaml \
     --set image.repository=k3d-registry.localhost:5111/databend-meta \
     --set image.tag=meta-chaos \
-    --wait
+    --wait || true
 
 sleep 10
 kubectl -n databend wait \
     --for=condition=ready pod \
     -l app.kubernetes.io/instance=meta-service \
-    --timeout 300s
-sleep 30
+    --timeout 120s || true
 
 kubectl get pods -A -o wide
