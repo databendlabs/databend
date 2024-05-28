@@ -173,6 +173,12 @@ impl ReplaceInterpreter {
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let mut purge_info = None;
 
+        let is_multi_node = !self.ctx.get_cluster().is_empty();
+        let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
+        let is_source_distributed = is_multi_node
+            && !is_value_source
+            && self.ctx.get_settings().get_enable_distributed_replace()?;
+
         let ReplaceSourceCtx {
             mut root,
             select_ctx,
@@ -187,16 +193,10 @@ impl ReplaceInterpreter {
             )
             .await?;
 
-        let is_source_distributed = matches!(
-            root.as_ref(),
-            PhysicalPlan::Exchange(Exchange {
-                kind: FragmentKind::Merge,
-                ..
-            })
-        );
-
-        let replace_need_distributed =
-            is_source_distributed && self.ctx.get_settings().get_enable_distributed_replace()?;
+        let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
+        let replace_need_distributed = is_source_distributed
+            && self.ctx.get_settings().get_enable_distributed_replace()?
+            && !is_value_source;
 
         if let Some(s) = &select_ctx {
             let select_schema = s.select_schema.as_ref();
