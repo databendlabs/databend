@@ -35,8 +35,8 @@ mkdir -p distro/amd64
 cp ./target/"${BUILD_PROFILE}"/databend-meta ./distro/amd64/
 cp ./target/"${BUILD_PROFILE}"/databend-metactl ./distro/amd64/
 docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/debian/meta.Dockerfile .
-docker tag databend-meta:meta-chaos k3d-registry.localhost:5111/databend-meta
-docker push k3d-registry.localhost:5111/databend-meta
+docker tag databend-meta:meta-chaos k3d-registry.localhost:5111/databend-meta:meta-chaos
+docker push k3d-registry.localhost:5111/databend-meta:meta-chaos
 
 echo "install chaos mesh on k3d"
 curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
