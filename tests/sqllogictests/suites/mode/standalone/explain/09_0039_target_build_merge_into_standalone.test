@@ -60,7 +60,7 @@ explain merge into target_build_optimization as t1 using source_optimization as 
 MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
-├── target_build_optimization: true
+├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 └── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
@@ -135,7 +135,7 @@ explain merge into target_build_optimization as t1 using source_optimization as 
 MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
-├── target_build_optimization: true
+├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 └── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]

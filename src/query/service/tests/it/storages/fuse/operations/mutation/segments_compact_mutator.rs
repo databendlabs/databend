@@ -50,7 +50,6 @@ use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
 use databend_common_storages_fuse::statistics::StatisticsAccumulator;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
-use databend_query::locks::LockManager;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
@@ -262,10 +261,8 @@ async fn build_mutator(
         num_block_limit: None,
     };
 
-    let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
     let mut segment_mutator = SegmentCompactMutator::try_create(
         ctx.clone(),
-        table_lock,
         compact_params,
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
