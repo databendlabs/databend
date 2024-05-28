@@ -18,12 +18,12 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use geozero::error::GeozeroError;
 
 use crate::exception::ErrorCodeBacktrace;
 use crate::exception_backtrace::capture;
 use crate::ErrorCode;
-use crate::Span;
 
 #[derive(thiserror::Error)]
 enum OtherErrors {
@@ -31,7 +31,7 @@ enum OtherErrors {
 }
 
 impl Display for OtherErrors {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             OtherErrors::AnyHow { error } => write!(f, "{}", error),
         }
@@ -39,7 +39,7 @@ impl Display for OtherErrors {
 }
 
 impl Debug for OtherErrors {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             OtherErrors::AnyHow { error } => write!(f, "{:?}", error),
         }
@@ -231,6 +231,12 @@ impl From<std::string::FromUtf8Error> for ErrorCode {
     }
 }
 
+impl From<databend_common_ast::ParseError> for ErrorCode {
+    fn from(error: databend_common_ast::ParseError) -> Self {
+        ErrorCode::SyntaxException(error.1).set_span(error.0)
+    }
+}
+
 impl From<GeozeroError> for ErrorCode {
     fn from(value: GeozeroError) -> Self {
         ErrorCode::GeometryError(value.to_string())
@@ -276,7 +282,7 @@ pub struct SerializedError {
 }
 
 impl Display for SerializedError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "Code: {}, Text = {}.", self.code, self.message,)
     }
 }

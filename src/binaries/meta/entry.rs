@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,9 +37,12 @@ use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
+use databend_meta::metrics::server_metrics;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
 use databend_meta::version::METASRV_COMMIT_VERSION;
+use databend_meta::version::METASRV_GIT_SEMVER;
+use databend_meta::version::METASRV_GIT_SHA;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::info;
@@ -55,21 +57,6 @@ const CMD_KVAPI_PREFIX: &str = "kvapi::";
 pub async fn entry(conf: Config) -> anyhow::Result<()> {
     if run_cmd(&conf).await {
         return Ok(());
-    }
-
-    let mut _sentry_guard = None;
-    let bend_sentry_env = env::var("DATABEND_SENTRY_DSN").unwrap_or_else(|_| "".to_string());
-    if !bend_sentry_env.is_empty() {
-        // NOTE: `traces_sample_rate` is 0.0 by default, which disable sentry tracing
-        let traces_sample_rate = env::var("SENTRY_TRACES_SAMPLE_RATE").ok().map_or(0.0, |s| {
-            s.parse()
-                .unwrap_or_else(|_| panic!("`{}` was defined but could not be parsed", s))
-        });
-        _sentry_guard = Some(sentry::init((bend_sentry_env, sentry::ClientOptions {
-            release: databend_common_tracing::databend_semver!(),
-            traces_sample_rate,
-            ..Default::default()
-        })));
     }
 
     set_panic_hook();
@@ -145,8 +132,12 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Log:");
     println!("    File: {}", conf.log.file);
     println!("    Stderr: {}", conf.log.stderr);
-    println!("    OTLP: {}", conf.log.otlp);
-    println!("    Tracing: {}", conf.log.tracing);
+    if conf.log.otlp.on {
+        println!("    OpenTelemetry: {}", conf.log.otlp);
+    }
+    if conf.log.tracing.on {
+        println!("    Tracing: {}", conf.log.tracing);
+    }
     println!("Id: {}", conf.raft_config.id);
     println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
     println!("Raft Dir: {}", conf.raft_config.raft_dir);
@@ -176,6 +167,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     // HTTP API service.
     {
+        server_metrics::set_version(METASRV_GIT_SEMVER.to_string(), METASRV_GIT_SHA.to_string());
         let mut srv = HttpService::create(conf.clone(), meta_node.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");

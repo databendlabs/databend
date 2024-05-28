@@ -40,7 +40,7 @@ impl FragmentPlanPacket {
 }
 
 impl Debug for FragmentPlanPacket {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("FragmentPacket")
             .field("physical_plan", &self.physical_plan)
             .field("fragment_id", &self.fragment_id)

@@ -21,3 +21,4 @@ pub mod mysql;
 pub mod openai;
 pub mod session;
 pub mod storage;
+pub mod system;

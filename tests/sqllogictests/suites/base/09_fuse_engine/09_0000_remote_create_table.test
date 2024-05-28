@@ -43,6 +43,9 @@ statement error 1081
 CREATE TABLE t(a string null, b tuple(int, int)) cluster by(a,b)
 
 statement ok
+CREATE TABLE t(id int, tags map(string, variant)) cluster by (id, substr(md5(tags['uri']), 1, 4));
+
+statement ok
 DROP DATABASE db1
 
 statement ok

@@ -31,6 +31,7 @@ use databend_common_sql::IndexType;
 use super::PipelineBuilderData;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::MaterializedCteState;
+use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
@@ -52,6 +53,8 @@ pub struct PipelineBuilder {
     pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
 
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
+
+    pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
 }
 
 impl PipelineBuilder {
@@ -71,6 +74,7 @@ impl PipelineBuilder {
             cte_state: HashMap::new(),
             merge_into_probe_data_fields: None,
             join_state: None,
+            hash_join_states: HashMap::new(),
         }
     }
 
@@ -100,6 +104,13 @@ impl PipelineBuilder {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
             PhysicalPlan::MergeInto(v) if v.merge_type != MergeIntoType::FullOperation => Ok(None),
+
+            // hided plans in profile
+            PhysicalPlan::Shuffle(_) => Ok(None),
+            PhysicalPlan::ChunkCastSchema(_) => Ok(None),
+            PhysicalPlan::ChunkFillAndReorder(_) => Ok(None),
+            PhysicalPlan::ChunkMerge(_) => Ok(None),
+
             _ => {
                 let desc = plan.get_desc()?;
                 let plan_labels = plan.get_labels()?;
@@ -126,7 +137,6 @@ impl PipelineBuilder {
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
             PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
-            PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
             PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
@@ -150,6 +160,10 @@ impl PipelineBuilder {
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 self.build_materialized_cte(materialized_cte)
+            }
+            PhysicalPlan::CacheScan(cache_scan) => self.build_cache_scan(cache_scan),
+            PhysicalPlan::ExpressionScan(expression_scan) => {
+                self.build_expression_scan(expression_scan)
             }
 
             // Copy into.

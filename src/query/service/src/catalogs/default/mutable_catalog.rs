@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
@@ -97,6 +98,7 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -132,7 +134,7 @@ pub struct MutableCatalog {
 }
 
 impl Debug for MutableCatalog {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("MutableCatalog").finish_non_exhaustive()
     }
 }
@@ -511,7 +513,14 @@ impl Catalog for MutableCatalog {
                     table_info.desc,
                     req.copied_files.is_some()
                 );
-                Ok(self.ctx.meta.update_table_meta(req).await?)
+                let begin = Instant::now();
+                let res = self.ctx.meta.update_table_meta(req).await;
+                info!(
+                    "update table meta done. table id: {:?}, time used {:?}",
+                    table_info.ident,
+                    begin.elapsed()
+                );
+                Ok(res?)
             }
             DatabaseType::ShareDB(share_ident) => {
                 let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
@@ -522,8 +531,21 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_multi_table_meta(&self, reqs: UpdateMultiTableMetaReq) -> Result<()> {
-        Ok(self.ctx.meta.update_multi_table_meta(reqs).await?)
+    async fn update_multi_table_meta(
+        &self,
+        reqs: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        info!(
+            "updating multi table meta. number of tables: {}",
+            reqs.update_table_metas.len()
+        );
+        let begin = Instant::now();
+        let res = self.ctx.meta.update_multi_table_meta(reqs).await;
+        info!(
+            "update multi table meta done. time used {:?}",
+            begin.elapsed()
+        );
+        Ok(res?)
     }
 
     async fn set_table_column_mask_policy(

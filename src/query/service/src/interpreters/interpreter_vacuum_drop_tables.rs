@@ -158,8 +158,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .collect::<Vec<_>>();
 
         let handler = get_vacuum_handler();
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
         let files_opt = handler
             .do_vacuum_drop_tables(
+                threads_nums,
                 tables,
                 if self.plan.option.dry_run.is_some() {
                     Some(DRY_RUN_LIMIT)

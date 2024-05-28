@@ -14,6 +14,8 @@
 
 use databend_common_exception::Result;
 
+use super::physical_plans::CacheScan;
+use super::physical_plans::ExpressionScan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -46,7 +48,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -69,7 +70,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::TableScan(plan) => self.replace_table_scan(plan),
             PhysicalPlan::CteScan(plan) => self.replace_cte_scan(plan),
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
-            PhysicalPlan::Project(plan) => self.replace_project(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
@@ -101,6 +101,8 @@ pub trait PhysicalPlanReplacer {
             }
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
+            PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
+            PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
             PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
             PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
@@ -142,6 +144,14 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
     }
 
+    fn replace_expression_scan(&mut self, plan: &ExpressionScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ExpressionScan(plan.clone()))
+    }
+
+    fn replace_cache_scan(&mut self, plan: &CacheScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CacheScan(plan.clone()))
+    }
+
     fn replace_filter(&mut self, plan: &Filter) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
@@ -150,19 +160,6 @@ pub trait PhysicalPlanReplacer {
             projections: plan.projections.clone(),
             input: Box::new(input),
             predicates: plan.predicates.clone(),
-            stat_info: plan.stat_info.clone(),
-        }))
-    }
-
-    fn replace_project(&mut self, plan: &Project) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-
-        Ok(PhysicalPlan::Project(Project {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-            projections: plan.projections.clone(),
-            ignore_result: plan.ignore_result,
-            columns: plan.columns.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -260,6 +257,7 @@ pub trait PhysicalPlanReplacer {
             enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
+            build_side_cache_info: plan.build_side_cache_info.clone(),
         }))
     }
 
@@ -402,6 +400,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
             plan_id: plan.plan_id,
             input: Box::new(input),
+            project_columns: plan.project_columns.clone(),
             input_schema: plan.input_schema.clone(),
             to_stage_info: plan.to_stage_info.clone(),
         })))
@@ -615,6 +614,8 @@ impl PhysicalPlan {
                 | PhysicalPlan::ReplaceAsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
                 | PhysicalPlan::ConstantTableScan(_)
+                | PhysicalPlan::ExpressionScan(_)
+                | PhysicalPlan::CacheScan(_)
                 | PhysicalPlan::ReclusterSource(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
@@ -622,9 +623,6 @@ impl PhysicalPlan {
                 | PhysicalPlan::AsyncFunction(_)
                 | PhysicalPlan::UpdateSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Project(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::EvalScalar(plan) => {

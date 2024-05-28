@@ -218,14 +218,14 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                     } else {
                         parsed
                             .to_naive_datetime_with_offset(0)
-                            .map(|res| res.timestamp_micros())
+                            .map(|res| res.and_utc().timestamp_micros())
                     }
                 } else if parse_tz {
                     DateTime::parse_from_str(timestamp, format)
                         .map(|res| res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros())
                 } else {
                     NaiveDateTime::parse_from_str(timestamp, format)
-                        .map(|res| res.timestamp_micros())
+                        .map(|res| res.and_utc().timestamp_micros())
                 };
                 if let Ok(res) = res {
                     output.push(res);
@@ -306,6 +306,7 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
                     .unwrap(),
             )
             .naive_local()
+            .and_utc()
             .timestamp_micros();
 
         ts - epoch_time_with_ltz
@@ -894,25 +895,25 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<TimestampType, _, _>(
         "now",
         |_| FunctionDomain::Full,
-        |_| Value::Scalar(Utc::now().timestamp_micros()),
+        |ctx| Value::Scalar(ctx.func_ctx.now.timestamp_micros()),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "today",
         |_| FunctionDomain::Full,
-        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz)),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.now, ctx.func_ctx.tz)),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "yesterday",
         |_| FunctionDomain::Full,
-        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz) - 1),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.now, ctx.func_ctx.tz) - 1),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "tomorrow",
         |_| FunctionDomain::Full,
-        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz) + 1),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.now, ctx.func_ctx.tz) + 1),
     );
 }
 

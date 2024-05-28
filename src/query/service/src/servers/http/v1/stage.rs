@@ -15,9 +15,9 @@
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
+use http::StatusCode;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
-use poem::http::StatusCode;
 use poem::web::Json;
 use poem::web::Multipart;
 use poem::Request;
@@ -119,8 +119,7 @@ pub async fn upload_to_stage(
         let file_path = format!("{}/{}", args.relative_path, name)
             .trim_start_matches('/')
             .to_string();
-        let _ = op
-            .write(&file_path, bytes)
+        op.write(&file_path, bytes)
             .await
             .map_err(InternalServerError)?;
 

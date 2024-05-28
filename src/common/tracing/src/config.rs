@@ -61,7 +61,7 @@ pub struct FileConfig {
 }
 
 impl Display for FileConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "enabled={}, level={}, dir={}, format={}",
@@ -91,7 +91,7 @@ pub struct StderrConfig {
 }
 
 impl Display for StderrConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "enabled={}{}, level={}, format={}",
@@ -121,22 +121,15 @@ impl Default for StderrConfig {
 pub struct OTLPConfig {
     pub on: bool,
     pub level: String,
-    pub endpoint: String,
-    pub labels: BTreeMap<String, String>,
+    pub endpoint: OTLPEndpointConfig,
 }
 
 impl Display for OTLPConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let labels = self
-            .labels
-            .iter()
-            .map(|(k, v)| format!("{}:{}", k, v))
-            .collect::<Vec<_>>()
-            .join(",");
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, level={}, endpoint={}, labels={}",
-            self.on, self.level, self.endpoint, labels
+            "enabled={}, level={}, endpoint={}",
+            self.on, self.level, self.endpoint
         )
     }
 }
@@ -146,8 +139,7 @@ impl Default for OTLPConfig {
         Self {
             on: false,
             level: "INFO".to_string(),
-            endpoint: "http://127.0.0.1:4317".to_string(),
-            labels: BTreeMap::new(),
+            endpoint: OTLPEndpointConfig::default(),
         }
     }
 }
@@ -156,23 +148,16 @@ impl Default for OTLPConfig {
 pub struct QueryLogConfig {
     pub on: bool,
     pub dir: String,
-    pub otlp_endpoint: String,
-    pub labels: BTreeMap<String, String>,
+    pub otlp: Option<OTLPEndpointConfig>,
 }
 
 impl Display for QueryLogConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let labels = self
-            .labels
-            .iter()
-            .map(|(k, v)| format!("{}:{}", k, v))
-            .collect::<Vec<_>>()
-            .join(",");
-        write!(
-            f,
-            "enabled={}, dir={}, otlp_endpoint={}, labels={}",
-            self.on, self.dir, self.otlp_endpoint, labels,
-        )
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "enabled={}, dir={}", self.on, self.dir)?;
+        if let Some(endpoint) = &self.otlp {
+            write!(f, ", otlp={}", endpoint)?;
+        }
+        Ok(())
     }
 }
 
@@ -181,8 +166,7 @@ impl Default for QueryLogConfig {
         Self {
             on: false,
             dir: "".to_string(),
-            otlp_endpoint: "".to_string(),
-            labels: BTreeMap::new(),
+            otlp: None,
         }
     }
 }
@@ -191,23 +175,16 @@ impl Default for QueryLogConfig {
 pub struct ProfileLogConfig {
     pub on: bool,
     pub dir: String,
-    pub otlp_endpoint: String,
-    pub labels: BTreeMap<String, String>,
+    pub otlp: Option<OTLPEndpointConfig>,
 }
 
 impl Display for ProfileLogConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let labels = self
-            .labels
-            .iter()
-            .map(|(k, v)| format!("{}:{}", k, v))
-            .collect::<Vec<_>>()
-            .join(",");
-        write!(
-            f,
-            "enabled={}, dir={}, otlp_endpoint={}, labels={}",
-            self.on, self.dir, self.otlp_endpoint, labels,
-        )
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "enabled={}, dir={}", self.on, self.dir)?;
+        if let Some(endpoint) = &self.otlp {
+            write!(f, ", otlp={}", endpoint)?;
+        }
+        Ok(())
     }
 }
 
@@ -216,8 +193,7 @@ impl Default for ProfileLogConfig {
         Self {
             on: false,
             dir: "".to_string(),
-            otlp_endpoint: "".to_string(),
-            labels: BTreeMap::new(),
+            otlp: None,
         }
     }
 }
@@ -229,7 +205,7 @@ pub struct StructLogConfig {
 }
 
 impl Display for StructLogConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "enabled={}, dir={}", self.on, self.dir)
     }
 }
@@ -247,15 +223,15 @@ impl Default for StructLogConfig {
 pub struct TracingConfig {
     pub on: bool,
     pub capture_log_level: String,
-    pub otlp_endpoint: String,
+    pub otlp: OTLPEndpointConfig,
 }
 
 impl Display for TracingConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, capture_log_level={}, otlp_endpoint={}",
-            self.on, self.capture_log_level, self.otlp_endpoint
+            "enabled={}, capture_log_level={}, otlp={}",
+            self.on, self.capture_log_level, self.otlp
         )
     }
 }
@@ -265,7 +241,86 @@ impl Default for TracingConfig {
         Self {
             on: false,
             capture_log_level: "INFO".to_string(),
-            otlp_endpoint: "http://127.0.0.1:4317".to_string(),
+            otlp: OTLPEndpointConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OTLPProtocol {
+    Http,
+    Grpc,
+}
+
+impl Default for OTLPProtocol {
+    fn default() -> Self {
+        Self::Grpc
+    }
+}
+
+impl Display for OTLPProtocol {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            OTLPProtocol::Http => write!(f, "http"),
+            OTLPProtocol::Grpc => write!(f, "grpc"),
+        }
+    }
+}
+
+impl serde::Serialize for OTLPProtocol {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        serializer.serialize_str(match self {
+            OTLPProtocol::Http => "http",
+            OTLPProtocol::Grpc => "grpc",
+        })
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for OTLPProtocol {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        let protocol = String::deserialize(deserializer)?;
+        match protocol.as_str() {
+            "http" => Ok(OTLPProtocol::Http),
+            "grpc" => Ok(OTLPProtocol::Grpc),
+            _ => Err(serde::de::Error::custom(format!(
+                "unknown protocol: {}",
+                protocol
+            ))),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct OTLPEndpointConfig {
+    pub endpoint: String,
+    pub protocol: OTLPProtocol,
+    pub labels: BTreeMap<String, String>,
+}
+
+impl Display for OTLPEndpointConfig {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let labels = self
+            .labels
+            .iter()
+            .map(|(k, v)| format!("{}:{}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
+        write!(
+            f,
+            "[endpoint={}, protocol={}, labels={}]",
+            self.endpoint, self.protocol, labels
+        )
+    }
+}
+
+impl Default for OTLPEndpointConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: "http://127.0.0.1:4317".to_string(),
+            protocol: OTLPProtocol::Grpc,
+            labels: BTreeMap::new(),
         }
     }
 }

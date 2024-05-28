@@ -14,6 +14,7 @@
 
 mod backtrace;
 mod catch_unwind;
+mod defer;
 pub mod error_info;
 mod global_runtime;
 mod memory;
@@ -30,7 +31,7 @@ pub use backtrace::AsyncTaskItem;
 pub use catch_unwind::catch_unwind;
 pub use catch_unwind::drop_guard;
 pub use catch_unwind::CatchUnwindFuture;
-pub use error_info::ErrorInfo;
+pub use defer::defer;
 pub use global_runtime::GlobalIORuntime;
 pub use global_runtime::GlobalQueryRuntime;
 pub use memory::set_alloc_error_hook;
@@ -50,6 +51,7 @@ pub use runtime::TrySpawn;
 pub use runtime::GLOBAL_TASK;
 pub use runtime_tracker::LimitMemGuard;
 pub use runtime_tracker::ThreadTracker;
+pub use runtime_tracker::TrackingGuard;
 pub use runtime_tracker::TrackingPayload;
 pub use runtime_tracker::UnlimitedFuture;
 pub use thread::Thread;

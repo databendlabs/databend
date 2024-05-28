@@ -20,11 +20,11 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
+use databend_common_ast::span::pretty_print_error;
+use databend_common_ast::Span;
 use thiserror::Error;
 
 use crate::exception_backtrace::capture;
-use crate::span::pretty_print_error;
-use crate::Span;
 
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
@@ -219,7 +219,7 @@ impl ErrorCode {
 pub type Result<T, E = ErrorCode> = std::result::Result<T, E>;
 
 impl Debug for ErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}. Code: {}, Text = {}.",
@@ -253,7 +253,7 @@ impl Debug for ErrorCode {
 }
 
 impl Display for ErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}. Code: {}, Text = {}.",

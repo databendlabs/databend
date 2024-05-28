@@ -15,15 +15,15 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io;
 
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
-use databend_common_io::read_ewkb_srid;
 use geozero::wkb::Ewkb;
+use geozero::GeozeroGeometry;
+use geozero::ToGeos;
 use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
@@ -72,7 +72,7 @@ use crate::TableDataType;
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
 impl Debug for DataBlock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
 
@@ -91,7 +91,7 @@ impl Debug for DataBlock {
 }
 
 impl Display for DataBlock {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
 
@@ -111,7 +111,7 @@ impl Display for DataBlock {
 }
 
 impl<'a> Debug for ScalarRef<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[] :: Array(Nothing)"),
@@ -167,9 +167,9 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec())
-                    .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(s)).unwrap())
-                    .unwrap();
+                let ewkb = Ewkb(s.to_vec());
+                let geos = ewkb.to_geos().unwrap();
+                let geom = geos.to_ewkt(geos.srid()).unwrap();
                 write!(f, "{geom:?}")
             }
         }
@@ -177,7 +177,7 @@ impl<'a> Debug for ScalarRef<'a> {
 }
 
 impl Debug for Column {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Column::Null { len } => f.debug_struct("Null").field("len", len).finish(),
             Column::EmptyArray { len } => f.debug_struct("EmptyArray").field("len", len).finish(),
@@ -201,7 +201,7 @@ impl Debug for Column {
 }
 
 impl<'a> Display for ScalarRef<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
@@ -258,9 +258,9 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec())
-                    .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(s)).unwrap())
-                    .unwrap();
+                let ewkb = Ewkb(s.to_vec());
+                let geos = ewkb.to_geos().unwrap();
+                let geom = geos.to_ewkt(geos.srid()).unwrap();
                 write!(f, "'{geom}'")
             }
         }
@@ -268,13 +268,13 @@ impl<'a> Display for ScalarRef<'a> {
 }
 
 impl Display for Scalar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.as_ref())
     }
 }
 
 impl Debug for NumberScalar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             NumberScalar::UInt8(val) => write!(f, "{val}_u8"),
             NumberScalar::UInt16(val) => write!(f, "{val}_u16"),
@@ -291,7 +291,7 @@ impl Debug for NumberScalar {
 }
 
 impl Display for NumberScalar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             NumberScalar::UInt8(val) => write!(f, "{val}"),
             NumberScalar::UInt16(val) => write!(f, "{val}"),
@@ -308,7 +308,7 @@ impl Display for NumberScalar {
 }
 
 impl Debug for DecimalScalar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             DecimalScalar::Decimal128(val, size) => {
                 write!(
@@ -333,7 +333,7 @@ impl Debug for DecimalScalar {
 }
 
 impl Display for DecimalScalar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             DecimalScalar::Decimal128(val, size) => {
                 write!(f, "{}", display_decimal_128(*val, size.scale))
@@ -346,7 +346,7 @@ impl Display for DecimalScalar {
 }
 
 impl Debug for NumberColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             NumberColumn::UInt8(val) => f.debug_tuple("UInt8").field(val).finish(),
             NumberColumn::UInt16(val) => f.debug_tuple("UInt16").field(val).finish(),
@@ -375,7 +375,7 @@ impl Debug for NumberColumn {
 }
 
 impl Debug for DecimalColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             DecimalColumn::Decimal128(val, size) => f
                 .debug_tuple("Decimal128")
@@ -400,7 +400,7 @@ impl Debug for DecimalColumn {
 }
 
 impl Debug for BinaryColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("BinaryColumn")
             .field(
                 "data",
@@ -412,7 +412,7 @@ impl Debug for BinaryColumn {
 }
 
 impl Debug for StringColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("StringColumn")
             .field(
                 "data",
@@ -424,7 +424,7 @@ impl Debug for StringColumn {
 }
 
 impl<Index: ColumnIndex> Display for RawExpr<Index> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             RawExpr::Constant { scalar, .. } => write!(f, "{scalar}"),
             RawExpr::ColumnRef {
@@ -630,7 +630,7 @@ impl Display for NumberClass {
 }
 
 impl<Index: ColumnIndex> Display for Expr<Index> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
             Expr::ColumnRef { display_name, .. } => write!(f, "{display_name}"),
@@ -890,13 +890,13 @@ impl<'a, T: ValueType> Display for ValueRef<'a, T> {
 }
 
 impl Debug for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.signature)
     }
 }
 
 impl Debug for FunctionEval {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             FunctionEval::Scalar { .. } => write!(f, "FunctionEval::Scalar"),
             FunctionEval::SRF { .. } => write!(f, "FunctionEval::SRF"),
@@ -905,7 +905,7 @@ impl Debug for FunctionEval {
 }
 
 impl Display for FunctionSignature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}({}) :: {}",
@@ -917,7 +917,7 @@ impl Display for FunctionSignature {
 }
 
 impl Display for FunctionProperty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut properties = Vec::new();
         if self.non_deterministic {
             properties.push("non_deterministic");

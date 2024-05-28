@@ -48,7 +48,7 @@ pub fn set_backoff(
     // The initial retry delay in millisecond. By default,  it is 5 ms.
     let init_delay = init_retry_delay.unwrap_or(OCC_DEFAULT_BACKOFF_INIT_DELAY_MS);
 
-    // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
+    // The maximum back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
     // By default, it is 20 seconds.
     let max_delay = max_retry_delay.unwrap_or(OCC_DEFAULT_BACKOFF_MAX_DELAY_MS);
 
@@ -136,7 +136,6 @@ pub async fn read_block(
     reader: &BlockReader,
     block_meta: &BlockMeta,
     read_settings: &ReadSettings,
-    query_id: String,
 ) -> Result<DataBlock> {
     let merged_io_read_result = reader
         .read_columns_data_by_merge_io(
@@ -153,7 +152,7 @@ pub async fn read_block(
     let reader = reader.clone();
 
     GlobalIORuntime::instance()
-        .spawn(query_id, async move {
+        .spawn(async move {
             let column_chunks = merged_io_read_result.columns_chunks()?;
             reader.deserialize_chunks(
                 block_meta_ptr.location.0.as_str(),

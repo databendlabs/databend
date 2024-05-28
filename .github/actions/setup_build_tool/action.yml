@@ -8,7 +8,7 @@ inputs:
   bypass_env_vars:
     description: "Environment variables bypass to docker container"
     required: false
-    default: RUSTFLAGS,RUST_LOG
+    default: RUSTFLAGS,RUST_LOG,PYO3_PYTHON,LD_LIBRARY_PATH
 runs:
   using: "composite"
   steps:
@@ -28,6 +28,9 @@ runs:
         cat <<EOF >$BIN_LOCAL/build-tool
         #!/bin/bash
         script_name=\$(basename "\$0")
+        export PYO3_PYTHON=python3.12
+        export LD_LIBRARY_PATH=/usr/local/lib
+        export PYO3_CROSS_PYTHON_VERSION=3.12
         export INTERACTIVE=false
         export TARGET=${{ inputs.target }}
         export CARGO_INCREMENTAL=0

@@ -37,6 +37,7 @@ pub struct EvalScalar {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ScalarItem {
     pub scalar: ScalarExpr,
+    // The index of the derived column in metadata
     pub index: IndexType,
 }
 

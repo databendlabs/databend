@@ -14,6 +14,7 @@
 
 use std::io;
 use std::io::SeekFrom;
+use std::path::Path;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
@@ -21,12 +22,56 @@ use std::task::Poll;
 use tokio::fs;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncRead;
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeek;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
 use tokio::io::ReadBuf;
+
+/// A typed temporary snapshot data.
+pub struct TempSnapshotData {
+    inner: SnapshotData,
+}
+
+impl TempSnapshotData {
+    pub fn new(snapshot_data: SnapshotData) -> Self {
+        assert!(snapshot_data.is_temp());
+        TempSnapshotData {
+            inner: snapshot_data,
+        }
+    }
+
+    /// Commit the temp snapshot to a final snapshot file.
+    ///
+    /// It requires the input snapshot is a temp snapshot.
+    pub fn commit<P: AsRef<Path>>(self, final_path: P) -> Result<SnapshotData, io::Error> {
+        let final_path = final_path.as_ref().to_string_lossy().to_string();
+
+        std::fs::rename(self.inner.path(), &final_path).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!(
+                    "{}: while TempSnapshotData::commit(); temp path: {}; final path: {}",
+                    e,
+                    self.path(),
+                    final_path
+                ),
+            )
+        })?;
+
+        let d = SnapshotData::open(final_path)?;
+
+        Ok(d)
+    }
+
+    pub fn into_inner(self) -> SnapshotData {
+        self.inner
+    }
+
+    pub fn path(&self) -> &str {
+        self.inner.path()
+    }
+}
 
 pub struct SnapshotData {
     /// Whether it is a temp file that may contain partial data.
@@ -36,12 +81,23 @@ pub struct SnapshotData {
 }
 
 impl SnapshotData {
+    pub fn new(path: impl ToString, f: std::fs::File, is_temp: bool) -> Self {
+        SnapshotData {
+            is_temp,
+            path: path.to_string(),
+            f: fs::File::from_std(f),
+        }
+    }
+
     pub fn open(path: String) -> Result<Self, io::Error> {
         let f = std::fs::OpenOptions::new()
             .create(false)
             .create_new(false)
             .read(true)
-            .open(&path)?;
+            .open(&path)
+            .map_err(|e| {
+                io::Error::new(e.kind(), format!("{}: while open(); path: {}", e, path))
+            })?;
 
         Ok(SnapshotData {
             is_temp: false,
@@ -56,7 +112,10 @@ impl SnapshotData {
             .write(true)
             .read(true)
             .open(&path)
-            .await?;
+            .await
+            .map_err(|e| {
+                io::Error::new(e.kind(), format!("{}: while new_temp(); path: {}", e, path))
+            })?;
 
         Ok(SnapshotData {
             is_temp: true,
@@ -66,7 +125,12 @@ impl SnapshotData {
     }
 
     pub async fn data_size(&self) -> Result<u64, io::Error> {
-        self.f.metadata().await.map(|m| m.len())
+        self.f.metadata().await.map(|m| m.len()).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("{}: while data_size(); path: {}", e, self.path),
+            )
+        })
     }
 
     pub fn is_temp(&self) -> bool {
@@ -82,42 +146,38 @@ impl SnapshotData {
     }
 
     pub async fn sync_all(&mut self) -> Result<(), io::Error> {
-        self.f.flush().await?;
-        self.f.sync_all().await
-    }
+        self.f.flush().await.map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("{}: while flush(); path: {}", e, self.path),
+            )
+        })?;
 
-    pub async fn read_lines<T>(self: Box<SnapshotData>) -> Result<Vec<T>, io::Error>
-    where T: serde::de::DeserializeOwned {
-        let mut res = vec![];
-
-        let b = BufReader::new(self);
-        let mut lines = AsyncBufReadExt::lines(b);
-
-        while let Some(l) = lines.next_line().await? {
-            let ent: T = serde_json::from_str(&l)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            res.push(ent)
-        }
-
-        Ok(res)
+        self.f.sync_all().await.map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("{}: while sync_all(); path: {}", e, self.path),
+            )
+        })
     }
 
     pub async fn read_to_lines(self: Box<SnapshotData>) -> Result<Vec<String>, io::Error> {
         let mut res = vec![];
 
+        let path = self.path.clone();
+
         let b = BufReader::new(self);
         let mut lines = AsyncBufReadExt::lines(b);
 
-        while let Some(l) = lines.next_line().await? {
+        while let Some(l) = lines.next_line().await.map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("{}: while read_to_lines(); path: {}", e, path),
+            )
+        })? {
             res.push(l)
         }
 
-        Ok(res)
-    }
-
-    pub async fn read_to_string(self: &mut Box<SnapshotData>) -> Result<String, io::Error> {
-        let mut res = String::new();
-        self.f.read_to_string(&mut res).await?;
         Ok(res)
     }
 }

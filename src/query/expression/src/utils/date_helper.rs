@@ -341,7 +341,11 @@ macro_rules! impl_interval_year_month {
             ) -> Result<i64, String> {
                 let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
-                check_timestamp(NaiveDateTime::new(new_ts, ts.time()).timestamp_micros())
+                check_timestamp(
+                    NaiveDateTime::new(new_ts, ts.time())
+                        .and_utc()
+                        .timestamp_micros(),
+                )
             }
         }
     };
@@ -382,8 +386,8 @@ impl AddTimesImpl {
 }
 
 #[inline]
-pub fn today_date(tz: TzLUT) -> i32 {
-    let now = Utc::now().with_timezone(&tz.tz);
+pub fn today_date(now: DateTime<Utc>, tz: TzLUT) -> i32 {
+    let now = now.with_timezone(&tz.tz);
     NaiveDate::from_ymd_opt(now.year(), now.month(), now.day())
         .unwrap()
         .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())

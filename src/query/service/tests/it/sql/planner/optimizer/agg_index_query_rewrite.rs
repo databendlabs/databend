@@ -85,6 +85,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
         field_comments: vec![],
         as_select: None,
         cluster_key: None,
+        inverted_indexes: None,
     }
 }
 

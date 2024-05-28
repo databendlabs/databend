@@ -16,23 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io::Error;
-use std::io::ErrorKind;
-use std::io::Result;
-use std::str::FromStr;
 
-use databend_common_base::base::mask_string;
-use databend_common_exception::ErrorCode;
-use databend_common_io::escape_string_with_quote;
-use databend_common_meta_app::principal::CopyOptions;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
-use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
 use url::Url;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
@@ -41,6 +31,8 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableRef;
 use crate::ast::With;
+use crate::ParseError;
+use crate::Result;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -61,30 +53,19 @@ pub struct CopyIntoTableStmt {
     pub file_format: FileFormatOptions,
 
     // files to load
-    #[drive(skip)]
     pub files: Option<Vec<String>>,
-    #[drive(skip)]
     pub pattern: Option<String>,
-    #[drive(skip)]
     pub force: bool,
 
     // copy options
     /// TODO(xuanwo): parse into validation_mode directly.
-    #[drive(skip)]
     pub validation_mode: String,
-    #[drive(skip)]
     pub size_limit: usize,
-    #[drive(skip)]
     pub max_files: usize,
-    #[drive(skip)]
     pub split_size: usize,
-    #[drive(skip)]
     pub purge: bool,
-    #[drive(skip)]
     pub disable_variant_check: bool,
-    #[drive(skip)]
     pub return_failed_only: bool,
-    #[drive(skip)]
     pub on_error: String,
 }
 
@@ -105,40 +86,10 @@ impl CopyIntoTableStmt {
             CopyIntoTableOption::OnError(v) => self.on_error = v,
         }
     }
-
-    pub fn apply_to_copy_option(
-        &self,
-        copy_options: &mut CopyOptions,
-    ) -> databend_common_exception::Result<()> {
-        copy_options.on_error =
-            OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
-
-        if self.size_limit != 0 {
-            copy_options.size_limit = self.size_limit;
-        }
-
-        copy_options.split_size = self.split_size;
-        copy_options.purge = self.purge;
-        copy_options.disable_variant_check = self.disable_variant_check;
-        copy_options.return_failed_only = self.return_failed_only;
-
-        if self.max_files != 0 {
-            copy_options.max_files = self.max_files;
-        }
-
-        if !(copy_options.purge && self.force) && copy_options.max_files > COPY_MAX_FILES_PER_COMMIT
-        {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "max_files {} is too large, max_files should be less than {COPY_MAX_FILES_PER_COMMIT}",
-                copy_options.max_files
-            )));
-        }
-        Ok(())
-    }
 }
 
 impl Display for CopyIntoTableStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(cte) = &self.with {
             write!(f, "WITH {} ", cte)?;
         }
@@ -198,18 +149,14 @@ pub struct CopyIntoLocationStmt {
     pub hints: Option<Hint>,
     pub src: CopyIntoLocationSource,
     pub dst: FileLocation,
-    #[drive(skip)]
     pub file_format: FileFormatOptions,
-    #[drive(skip)]
     pub single: bool,
-    #[drive(skip)]
     pub max_file_size: usize,
-    #[drive(skip)]
     pub detailed_output: bool,
 }
 
 impl Display for CopyIntoLocationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(cte) = &self.with {
             write!(f, "WITH {} ", cte)?;
         }
@@ -251,7 +198,7 @@ pub enum CopyIntoTableSource {
 }
 
 impl Display for CopyIntoTableSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoTableSource::Location(location) => write!(f, "{location}"),
             CopyIntoTableSource::Query(query) => {
@@ -269,7 +216,7 @@ pub enum CopyIntoLocationSource {
 }
 
 impl Display for CopyIntoLocationSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoLocationSource::Query(query) => {
                 write!(f, "({query})")
@@ -285,7 +232,6 @@ impl Display for CopyIntoLocationSource {
 pub struct Connection {
     #[drive(skip)]
     visited_keys: HashSet<String>,
-    #[drive(skip)]
     pub conns: BTreeMap<String, String>,
 }
 
@@ -321,8 +267,8 @@ impl Connection {
             .collect();
 
         if !diffs.is_empty() {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
+            return Err(ParseError(
+                None,
                 format!(
                     "connection params invalid: expected [{}], got [{}]",
                     self.visited_keys
@@ -339,7 +285,7 @@ impl Connection {
 }
 
 impl Display for Connection {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if !self.conns.is_empty() {
             write!(f, " CONNECTION = ( ")?;
             write_comma_separated_string_map(f, &self.conns)?;
@@ -349,18 +295,25 @@ impl Display for Connection {
     }
 }
 
+/// Mask a string by "******", but keep `unmask_len` of suffix.
+fn mask_string(s: &str, unmask_len: usize) -> String {
+    if s.len() <= unmask_len {
+        s.to_string()
+    } else {
+        let mut ret = "******".to_string();
+        ret.push_str(&s[(s.len() - unmask_len)..]);
+        ret
+    }
+}
+
 /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
 ///
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UriLocation {
-    #[drive(skip)]
     pub protocol: String,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub path: String,
-    #[drive(skip)]
     pub part_prefix: String,
     pub connection: Connection,
 }
@@ -386,14 +339,14 @@ impl UriLocation {
         uri: String,
         part_prefix: String,
         conns: BTreeMap<String, String>,
-    ) -> databend_common_exception::Result<Self> {
+    ) -> Result<Self> {
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
             if !path.starts_with('/') {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Invalid uri: {}. fs location must start with 'fs:///'",
-                    uri
-                )));
+                return Err(ParseError(
+                    None,
+                    format!("Invalid uri: {}. fs location must start with 'fs:///'", uri),
+                ));
             }
             return Ok(UriLocation::new(
                 "fs".to_string(),
@@ -404,9 +357,8 @@ impl UriLocation {
             ));
         }
 
-        let parsed = Url::parse(&uri).map_err(|e| {
-            databend_common_exception::ErrorCode::BadArguments(format!("invalid uri {}", e))
-        })?;
+        let parsed =
+            Url::parse(&uri).map_err(|e| ParseError(None, format!("invalid uri {}", e)))?;
 
         let protocol = parsed.scheme().to_string();
 
@@ -419,7 +371,7 @@ impl UriLocation {
                     hostname.to_string()
                 }
             })
-            .ok_or_else(|| databend_common_exception::ErrorCode::BadArguments("invalid uri"))?;
+            .ok_or_else(|| ParseError(None, "invalid uri".to_string()))?;
 
         let path = if parsed.path().is_empty() {
             "/".to_string()
@@ -435,16 +387,19 @@ impl UriLocation {
             connection: Connection::new(conns),
         })
     }
+
+    pub fn mask(&self) -> Self {
+        Self {
+            connection: self.connection.mask(),
+            ..self.clone()
+        }
+    }
 }
 
 impl Display for UriLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
-        if f.alternate() {
-            write!(f, "{}", self.connection.mask())?;
-        } else {
-            write!(f, "{}", self.connection)?;
-        }
+        write!(f, "{}", self.connection)?;
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
@@ -464,12 +419,12 @@ impl Display for UriLocation {
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileLocation {
-    Stage(#[drive(skip)] String),
+    Stage(String),
     Uri(UriLocation),
 }
 
 impl Display for FileLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FileLocation::Uri(loc) => {
                 write!(f, "{}", loc)
@@ -505,7 +460,6 @@ pub enum CopyIntoLocationOption {
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct FileFormatOptions {
-    #[drive(skip)]
     pub options: BTreeMap<String, FileFormatValue>,
 }
 
@@ -513,24 +467,15 @@ impl FileFormatOptions {
     pub fn is_empty(&self) -> bool {
         self.options.is_empty()
     }
-
-    pub fn to_meta_ast(&self) -> FileFormatOptionsAst {
-        let options = self
-            .options
-            .iter()
-            .map(|(k, v)| (k.clone(), v.to_meta_value()))
-            .collect();
-        FileFormatOptionsAst { options }
-    }
 }
 
 impl Display for FileFormatOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write_comma_separated_map(f, &self.options)
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileFormatValue {
     Keyword(String),
     Bool(bool),
@@ -552,13 +497,13 @@ impl FileFormatValue {
 }
 
 impl Display for FileFormatValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FileFormatValue::Keyword(v) => write!(f, "{v}"),
             FileFormatValue::Bool(v) => write!(f, "{v}"),
             FileFormatValue::U64(v) => write!(f, "{v}"),
             FileFormatValue::String(v) => {
-                write!(f, "'{}'", escape_string_with_quote(v, Some('\'')))
+                write!(f, "{}", QuotedString(v, '\''))
             }
             FileFormatValue::StringList(v) => {
                 write!(f, "(")?;
@@ -566,7 +511,7 @@ impl Display for FileFormatValue {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "'{}'", escape_string_with_quote(s, Some('\'')))?;
+                    write!(f, "{}", QuotedString(s, '\''))?;
                 }
                 write!(f, ")")
             }

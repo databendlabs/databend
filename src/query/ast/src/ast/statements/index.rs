@@ -16,26 +16,24 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
+use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateIndexStmt {
     pub index_type: TableIndexType,
-    #[drive(skip)]
     pub create_option: CreateOption,
 
     pub index_name: Identifier,
 
     pub query: Box<Query>,
-    #[drive(skip)]
     pub sync_creation: bool,
 }
 
@@ -47,7 +45,7 @@ pub enum TableIndexType {
 }
 
 impl Display for TableIndexType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TableIndexType::Aggregating => {
                 write!(f, "AGGREGATING")
@@ -60,7 +58,7 @@ impl Display for TableIndexType {
 }
 
 impl Display for CreateIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -80,13 +78,12 @@ impl Display for CreateIndexStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropIndexStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub index: Identifier,
 }
 
 impl Display for DropIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP AGGREGATING INDEX")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -100,12 +97,11 @@ impl Display for DropIndexStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct RefreshIndexStmt {
     pub index: Identifier,
-    #[drive(skip)]
     pub limit: Option<u64>,
 }
 
 impl Display for RefreshIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "REFRESH AGGREGATING INDEX {index}", index = self.index)?;
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
@@ -116,7 +112,6 @@ impl Display for RefreshIndexStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateInvertedIndexStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
 
     pub index_name: Identifier,
@@ -126,14 +121,12 @@ pub struct CreateInvertedIndexStmt {
     pub table: Identifier,
 
     pub columns: Vec<Identifier>,
-    #[drive(skip)]
     pub sync_creation: bool,
-    #[drive(skip)]
     pub index_options: BTreeMap<String, String>,
 }
 
 impl Display for CreateInvertedIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
@@ -170,7 +163,6 @@ impl Display for CreateInvertedIndexStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropInvertedIndexStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub index_name: Identifier,
     pub catalog: Option<Identifier>,
@@ -179,7 +171,7 @@ pub struct DropInvertedIndexStmt {
 }
 
 impl Display for DropInvertedIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP INVERTED INDEX")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -204,12 +196,11 @@ pub struct RefreshInvertedIndexStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    #[drive(skip)]
     pub limit: Option<u64>,
 }
 
 impl Display for RefreshInvertedIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "REFRESH INVERTED INDEX")?;
         write!(f, " {}", self.index_name)?;
         write!(f, " ON ")?;

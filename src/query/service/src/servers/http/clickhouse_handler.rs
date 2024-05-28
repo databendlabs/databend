@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_stream::stream;
+use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc::Sender;
 use databend_common_base::base::tokio::task::JoinHandle;
@@ -35,6 +36,7 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use http::HeaderMap;
 use http::StatusCode;
 use log::debug;
@@ -63,7 +65,6 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::servers::http::middleware::sanitize_request_headers;
 use crate::servers::http::v1::HttpQueryContext;
-use crate::sessions::short_sql;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
@@ -152,7 +153,7 @@ async fn execute(
     //
     //  P.S. I think it will be better/more reasonable if we could avoid using pthread_join inside an async stack.
 
-    ctx.try_spawn(ctx.get_id(), {
+    ctx.try_spawn({
         let ctx = ctx.clone();
         async move {
             let mut data_stream = interpreter.execute(ctx.clone()).await?;
@@ -216,6 +217,7 @@ async fn execute(
                 handle.await.expect("must")
             }
 
+            let stream = stream.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
             Ok(Body::from_bytes_stream(stream).with_content_type(format_typ.get_content_type()))
         }
     })?
@@ -396,8 +398,7 @@ pub async fn clickhouse_handler_post(
                     .map_err(BadRequest)?;
                 let start = *start;
                 let sql_cloned = sql.clone();
-                let query_id = ctx.get_id();
-                handle = Some(ctx.spawn(query_id, async move {
+                handle = Some(ctx.spawn(async move {
                     gen_batches(
                         sql_cloned,
                         start,
@@ -449,8 +450,7 @@ pub async fn clickhouse_handler_post(
                     .map_err(BadRequest)?;
                 let start = *start;
                 let sql_cloned = sql.clone();
-                let query_id = ctx.get_id();
-                handle = Some(ctx.spawn(query_id, async move {
+                handle = Some(ctx.spawn(async move {
                     gen_batches(
                         sql_cloned,
                         start,

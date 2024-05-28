@@ -23,12 +23,16 @@ use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UnSetStmt {
+    pub session_level: bool,
     pub source: UnSetSource,
 }
 
 impl Display for UnSetStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UNSET ")?;
+        if self.session_level {
+            write!(f, "SESSION ")?;
+        }
         write!(f, "{}", self.source)
     }
 }

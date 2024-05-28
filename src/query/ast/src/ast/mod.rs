@@ -17,6 +17,7 @@ mod common;
 mod expr;
 mod format;
 mod query;
+pub mod quote;
 mod statements;
 mod visitors;
 

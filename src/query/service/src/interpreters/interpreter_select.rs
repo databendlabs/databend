@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+use std::hash::RandomState;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -22,6 +25,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_store::MetaStore;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -41,6 +45,8 @@ use databend_common_users::UserApiProvider;
 use log::error;
 use log::info;
 
+use crate::interpreters::common::query_build_update_stream_req;
+use crate::interpreters::common::StreamTableUpdates;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
@@ -50,7 +56,7 @@ use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
 
-/// Interpret SQL query with ne&w SQL planner
+/// Interpret SQL query with new SQL planner
 pub struct SelectInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
@@ -125,13 +131,75 @@ impl SelectInterpreter {
             }
         }
 
-        build_query_pipeline(
+        let mut build_res = build_query_pipeline(
             &self.ctx,
             &self.bind_context.columns,
             &physical_plan,
             self.ignore_result,
         )
-        .await
+        .await?;
+
+        // consume stream
+        if let Some(StreamTableUpdates {
+            update_table_metas,
+            table_infos,
+        }) = query_build_update_stream_req(&self.ctx, &self.metadata).await?
+        {
+            assert!(!update_table_metas.is_empty());
+
+            // defensively checks that all catalog names are identical
+            {
+                let mut iter = update_table_metas
+                    .iter()
+                    .map(|item| item.new_table_meta.catalog.as_str());
+                let first = iter.next().unwrap();
+                let all_of_the_same_catalog = iter.all(|item| item == first);
+                if !all_of_the_same_catalog {
+                    let cats: HashSet<&str, RandomState> = HashSet::from_iter(iter);
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Consuming streams of different catalogs are not support. catalogs are {:?}",
+                        cats
+                    )));
+                }
+            }
+
+            let catalog_name = update_table_metas[0].new_table_meta.catalog.as_str();
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let query_id = self.ctx.get_id();
+            let auto_commit = !self.ctx.txn_mgr().lock().is_active();
+            build_res.main_pipeline.set_on_finished(
+                move |(_profiles, may_error)| match may_error {
+                    Ok(_) => GlobalIORuntime::instance().block_on(async move {
+                        info!(
+                            "Updating the stream meta to consume data, query_id: {}",
+                            query_id
+                        );
+
+                        if auto_commit {
+                            info!("(auto) committing stream consumptions");
+                            // commit to meta server directly
+                            let r = UpdateMultiTableMetaReq {
+                                update_table_metas,
+                                copied_files: vec![],
+                                update_stream_metas: vec![],
+                                deduplicated_labels: vec![],
+                            };
+                            catalog.update_multi_table_meta(r).await.map(|_| ())
+                        } else {
+                            info!("(non-auto) committing stream consumptions");
+                            for (req, info) in
+                                update_table_metas.into_iter().zip(table_infos.into_iter())
+                            {
+                                catalog.update_table_meta(&info, req).await?;
+                            }
+                            Ok(())
+                        }
+                    }),
+                    Err(error_code) => Err(error_code.clone()),
+                },
+            );
+        }
+        Ok(build_res)
     }
 
     /// Add pipelines for writing query result cache.
@@ -255,14 +323,12 @@ impl Interpreter for SelectInterpreter {
 
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
+
         let query_plan = physical_plan
             .format(self.metadata.clone(), Default::default())?
             .format_pretty()?;
-        info!(
-            "Query id: {}, query plan: \n{}",
-            self.ctx.get_id(),
-            query_plan
-        );
+
+        info!("Query physical plan: \n{}", query_plan);
 
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());

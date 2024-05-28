@@ -589,3 +589,93 @@ output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
 output         : {'k1':'v1', 'k2':'v2'}
 
 
+ast            : map_contains_key({'a':1,'b':2,'c':3}, 'a')
+raw expr       : map_contains_key(map(array('a', 'b', 'c'), array(1, 2, 3)), 'a')
+checked expr   : map_contains_key<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), "a")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : map_contains_key({}, 'a')
+raw expr       : map_contains_key(map(array(), array()), 'a')
+checked expr   : map_contains_key<T0=String><Map(Nothing), T0>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), "a")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : map_contains_key({'a':1,'b':2,'c':3}, 'd')
+raw expr       : map_contains_key(map(array('a', 'b', 'c'), array(1, 2, 3)), 'd')
+checked expr   : map_contains_key<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), "d")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : map_contains_key({'a':NULL,'b':2,'c':NULL}, 'a')
+raw expr       : map_contains_key(map(array('a', 'b', 'c'), array(NULL, 2, NULL)), 'a')
+checked expr   : map_contains_key<T0=String, T1=UInt8 NULL><Map(T0, T1), T0>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))), "a")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : map_contains_key(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a')
+raw expr       : map_contains_key(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'a')
+checked expr   : map_contains_key<T0=String, T1=String NULL><Map(T0, T1), T0>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "a")
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output  |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | Boolean |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | true    |
+| Row 1  | 'b'         | 'e'         | 'y'         | 'v2'          | 'v5'                 | NULL                 | false   |
+| Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | false   |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                          |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                          |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                          |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] } |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }     |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }     |
+| Output | Boolean([0b_____001])                                                                                           |
++--------+-----------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_contains_key(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'd')
+raw expr       : map_contains_key(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'd')
+checked expr   : map_contains_key<T0=String, T1=String NULL><Map(T0, T1), T0>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "d")
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output  |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | Boolean |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | true    |
+| Row 1  | 'b'         | 'e'         | 'y'         | 'v2'          | 'v5'                 | NULL                 | false   |
+| Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | false   |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+---------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                          |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                          |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                          |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] } |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }     |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }     |
+| Output | Boolean([0b_____001])                                                                                           |
++--------+-----------------------------------------------------------------------------------------------------------------+
+
+

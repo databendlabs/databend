@@ -11,10 +11,10 @@ doctest = false
 test = true
 
 [dependencies]
-base64 = "0.21.0"
+base64 = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { path = "../../common/base" }
-http = "0.2"
+http = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.4.0"

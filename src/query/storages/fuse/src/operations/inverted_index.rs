@@ -107,8 +107,11 @@ impl FuseTable {
             MetaReaders::segment_info_reader(self.get_operator(), table_schema.clone());
 
         // If no segment locations are specified, iterates through all segments
-        let segment_locs = if let Some(segment_locs) = &segment_locs {
-            segment_locs.clone()
+        let segment_locs = if let Some(segment_locs) = segment_locs {
+            segment_locs
+                .into_iter()
+                .filter(|s| snapshot.segments.contains(s))
+                .collect()
         } else {
             snapshot.segments.clone()
         };
@@ -183,7 +186,7 @@ impl FuseTable {
         });
 
         pipeline.try_resize(1)?;
-        pipeline.add_sink(|input| InvertedIndexSink::try_create(input, ctx.clone(), block_nums))?;
+        pipeline.add_sink(|input| InvertedIndexSink::try_create(input, block_nums))?;
 
         Ok(())
     }
@@ -319,12 +322,8 @@ pub struct InvertedIndexSink {
 }
 
 impl InvertedIndexSink {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        ctx: Arc<dyn TableContext>,
-        block_nums: usize,
-    ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, ctx, InvertedIndexSink {
+    pub fn try_create(input: Arc<InputPort>, block_nums: usize) -> Result<ProcessorPtr> {
+        let sinker = AsyncSinker::create(input, InvertedIndexSink {
             block_nums: AtomicUsize::new(block_nums),
         });
         Ok(ProcessorPtr::create(sinker))

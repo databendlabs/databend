@@ -17,7 +17,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -26,6 +25,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
+use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -38,10 +38,8 @@ use crate::ast::UriLocation;
 pub struct ShowTablesStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
-    #[drive(skip)]
     pub with_history: bool,
 }
 
@@ -132,7 +130,6 @@ impl Display for ShowDropTablesStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTableStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -141,10 +138,8 @@ pub struct CreateTableStmt {
     pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Vec<Expr>,
-    #[drive(skip)]
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
-    #[drive(skip)]
     pub transient: bool,
 }
 
@@ -207,7 +202,6 @@ pub struct AttachTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub uri_location: UriLocation,
-    #[drive(skip)]
     pub read_only: bool,
 }
 
@@ -234,7 +228,7 @@ impl Display for AttachTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateTableSource {
-    Columns(Vec<ColumnDefinition>),
+    Columns(Vec<ColumnDefinition>, Option<Vec<InvertedIndexDefinition>>),
     Like {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
@@ -245,9 +239,13 @@ pub enum CreateTableSource {
 impl Display for CreateTableSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            CreateTableSource::Columns(columns) => {
+            CreateTableSource::Columns(columns, inverted_indexes) => {
                 write!(f, "(")?;
                 write_comma_separated_list(f, columns)?;
+                if let Some(inverted_indexes) = inverted_indexes {
+                    write!(f, ", ")?;
+                    write_comma_separated_list(f, inverted_indexes)?;
+                }
                 write!(f, ")")
             }
             CreateTableSource::Like {
@@ -283,12 +281,10 @@ impl Display for DescribeTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    #[drive(skip)]
     pub all: bool,
 }
 
@@ -335,7 +331,6 @@ impl Display for UndropTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub table_reference: TableReference,
     pub action: AlterTableAction,
@@ -366,7 +361,6 @@ pub enum AlterTableAction {
         new_column: Identifier,
     },
     ModifyTableComment {
-        #[drive(skip)]
         new_comment: String,
     },
     ModifyColumn {
@@ -380,17 +374,14 @@ pub enum AlterTableAction {
     },
     DropTableClusterKey,
     ReclusterTable {
-        #[drive(skip)]
         is_final: bool,
         selection: Option<Expr>,
-        #[drive(skip)]
         limit: Option<u64>,
     },
     FlashbackTo {
         point: TimeTravelPoint,
     },
     SetOptions {
-        #[drive(skip)]
         set_options: BTreeMap<String, String>,
     },
 }
@@ -475,7 +466,6 @@ impl Display for AddColumnOption {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct RenameTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -577,7 +567,6 @@ impl Display for VacuumDropTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTemporaryFiles {
-    #[drive(skip)]
     pub limit: Option<u64>,
     #[drive(skip)]
     pub retain: Option<Duration>,
@@ -611,7 +600,6 @@ pub struct OptimizeTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub action: OptimizeTableAction,
-    #[drive(skip)]
     pub limit: Option<u64>,
 }
 
@@ -709,7 +697,6 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTableOption {
-    #[drive(skip)]
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
 }
@@ -728,10 +715,8 @@ impl Display for VacuumTableOption {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumDropTableOption {
-    #[drive(skip)]
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
-    #[drive(skip)]
     pub limit: Option<usize>,
 }
 
@@ -818,7 +803,6 @@ pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -836,9 +820,57 @@ impl Display for ColumnDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct InvertedIndexDefinition {
+    pub index_name: Identifier,
+    pub columns: Vec<Identifier>,
+    pub sync_creation: bool,
+    pub index_options: BTreeMap<String, String>,
+}
+
+impl Display for InvertedIndexDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if !self.sync_creation {
+            write!(f, "ASYNC ")?;
+        }
+        write!(f, "INVERTED INDEX")?;
+        write!(f, " {}", self.index_name)?;
+        write!(f, " (")?;
+        write_comma_separated_list(f, &self.columns)?;
+        write!(f, ")")?;
+
+        if !self.index_options.is_empty() {
+            write!(f, " ")?;
+            write_space_separated_string_map(f, &self.index_options)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum CreateDefinition {
+    Column(ColumnDefinition),
+    InvertedIndex(InvertedIndexDefinition),
+}
+
+impl Display for CreateDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CreateDefinition::Column(column_def) => {
+                write!(f, "{}", column_def)?;
+            }
+            CreateDefinition::InvertedIndex(inverted_index_def) => {
+                write!(f, "{}", inverted_index_def)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ModifyColumnAction {
     // (column name id, masking policy name)
-    SetMaskingPolicy(Identifier, #[drive(skip)] String),
+    SetMaskingPolicy(Identifier, String),
     // column name id
     UnsetMaskingPolicy(Identifier),
     // vec<ColumnDefinition>

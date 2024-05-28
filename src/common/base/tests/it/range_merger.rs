@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 
 struct Array(Vec<std::ops::Range<u64>>);
 impl fmt::Display for Array {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for range in &self.0 {
             write!(f, "[{},{}] ", range.start, range.end)?;
         }

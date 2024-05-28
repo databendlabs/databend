@@ -22,19 +22,15 @@ use crate::ast::CopyIntoTableStmt;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreatePipeStmt {
-    #[drive(skip)]
     pub if_not_exists: bool,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub auto_ingest: bool,
-    #[drive(skip)]
     pub comments: String,
     pub copy_stmt: CopyIntoTableStmt,
 }
 
 impl Display for CreatePipeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE PIPE")?;
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
@@ -56,14 +52,12 @@ impl Display for CreatePipeStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropPipeStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
 }
 
 impl Display for DropPipeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP PIPE")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -74,21 +68,18 @@ impl Display for DropPipeStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescribePipeStmt {
-    #[drive(skip)]
     pub name: String,
 }
 
 impl Display for DescribePipeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE PIPE {}", self.name)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterPipeStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
     pub options: AlterPipeOptions,
 }
@@ -96,21 +87,17 @@ pub struct AlterPipeStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AlterPipeOptions {
     Set {
-        #[drive(skip)]
         execution_paused: Option<bool>,
-        #[drive(skip)]
         comments: Option<String>,
     },
     Refresh {
-        #[drive(skip)]
         prefix: Option<String>,
-        #[drive(skip)]
         modified_after: Option<String>,
     },
 }
 
 impl Display for AlterPipeOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AlterPipeOptions::Set {
                 execution_paused,
@@ -142,7 +129,7 @@ impl Display for AlterPipeOptions {
 }
 
 impl Display for AlterPipeStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER PIPE")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;

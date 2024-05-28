@@ -24,6 +24,8 @@ mod structlog;
 pub use crate::config::Config;
 pub use crate::config::FileConfig;
 pub use crate::config::OTLPConfig;
+pub use crate::config::OTLPEndpointConfig;
+pub use crate::config::OTLPProtocol;
 pub use crate::config::ProfileLogConfig;
 pub use crate::config::QueryLogConfig;
 pub use crate::config::StderrConfig;
@@ -44,40 +46,4 @@ pub fn closure_name<F: std::any::Any>() -> &'static str {
         .rsplit("::")
         .find(|name| *name != "{{closure}}")
         .unwrap()
-}
-
-/// Returns the intended databend semver for Sentry as an `Option<Cow<'static, str>>`.
-///
-/// This can be used with `sentry::ClientOptions` to set the databend semver.
-///
-/// # Examples
-///
-/// ```
-/// # #[macro_use] extern crate common_tracing;
-/// # fn main() {
-/// let _sentry = sentry::init(sentry::ClientOptions {
-///     release: databend_common_tracing::databend_semver!(),
-///     ..Default::default()
-/// });
-/// # }
-/// ```
-#[macro_export]
-macro_rules! databend_semver {
-    () => {{
-        use std::sync::Once;
-        static mut INIT: Once = Once::new();
-        static mut RELEASE: Option<String> = None;
-        unsafe {
-            INIT.call_once(|| {
-                RELEASE = option_env!("CARGO_PKG_NAME").and_then(|name| {
-                    option_env!("DATABEND_GIT_SEMVER")
-                        .map(|version| format!("{}@{}", name, version))
-                });
-            });
-            RELEASE.as_ref().map(|x| {
-                let release: &'static str = ::std::mem::transmute(x.as_str());
-                ::std::borrow::Cow::Borrowed(release)
-            })
-        }
-    }};
 }

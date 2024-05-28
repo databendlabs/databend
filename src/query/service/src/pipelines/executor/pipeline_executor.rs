@@ -20,10 +20,10 @@ use std::time::Instant;
 
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::defer;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::LockGuard;
@@ -180,6 +180,13 @@ impl PipelineExecutor {
     }
 
     pub fn execute(&self) -> Result<()> {
+        let instants = Instant::now();
+        let _guard = defer(move || {
+            info!(
+                "Pipeline executor finished, elapsed: {:?}",
+                instants.elapsed()
+            );
+        });
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.execute(),
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
@@ -233,7 +240,7 @@ impl PipelineExecutor {
         if !max_execute_time_in_seconds.is_zero() {
             let this_graph = Arc::downgrade(&query_wrapper.graph);
             let finished_notify = query_wrapper.finished_notify.clone();
-            GlobalIORuntime::instance().spawn(GLOBAL_TASK, async move {
+            GlobalIORuntime::instance().spawn(async move {
                 let finished_future = Box::pin(finished_notify.notified());
                 let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {

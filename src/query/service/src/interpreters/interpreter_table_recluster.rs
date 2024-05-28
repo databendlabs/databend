@@ -19,7 +19,6 @@ use std::time::SystemTime;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::TableExt;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -31,6 +30,7 @@ use databend_common_sql::executor::physical_plans::ReclusterSink;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReclusterTask;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -40,8 +40,6 @@ use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
-use crate::locks::LockExt;
-use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -107,12 +105,6 @@ impl Interpreter for ReclusterTableInterpreter {
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
-        let mut table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.table)
-            .await?;
-
-        // check mutability
-        table.check_mutable()?;
 
         let mut times = 0;
         let mut block_count = 0;
@@ -127,16 +119,23 @@ impl Interpreter for ReclusterTableInterpreter {
                 return Err(err);
             }
 
-            let table_info = table.get_table_info().clone();
+            // try add lock table.
+            let lock_guard = self
+                .ctx
+                .clone()
+                .acquire_table_lock(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?;
 
-            // check if the table is locked.
-            let table_lock = LockManager::create_table_lock(table_info.clone())?;
-            if !table_lock.wait_lock_expired(catalog.clone()).await? {
-                return Err(ErrorCode::TableAlreadyLocked(format!(
-                    "table '{}' is locked, please retry recluster later",
-                    self.plan.table
-                )));
-            }
+            let table = catalog
+                .get_table(&tenant, &self.plan.database, &self.plan.table)
+                .await?;
+            // check mutability
+            table.check_mutable()?;
 
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             let mutator = fuse_table
@@ -153,13 +152,12 @@ impl Interpreter for ReclusterTableInterpreter {
             block_count += mutator.recluster_blocks_count;
             let physical_plan = build_recluster_physical_plan(
                 mutator.tasks,
-                table_info,
+                table.get_table_info().clone(),
                 catalog.info(),
                 mutator.snapshot,
                 mutator.remained_blocks,
                 mutator.removed_segment_indexes,
                 mutator.removed_segment_summary,
-                true,
             )?;
 
             let mut build_res =
@@ -178,15 +176,16 @@ impl Interpreter for ReclusterTableInterpreter {
             complete_executor.execute()?;
             // make sure the executor is dropped before the next loop.
             drop(complete_executor);
+            // make sure the lock guard is dropped before the next loop.
+            drop(lock_guard);
 
             let elapsed_time = SystemTime::now().duration_since(start).unwrap();
             times += 1;
             // Status.
             {
                 let status = format!(
-                    "recluster: run recluster tasks:{} times, cost:{} sec",
-                    times,
-                    elapsed_time.as_secs()
+                    "recluster: run recluster tasks:{} times, cost:{:?}",
+                    times, elapsed_time
                 );
                 ctx.set_status_info(&status);
             }
@@ -197,16 +196,11 @@ impl Interpreter for ReclusterTableInterpreter {
 
             if elapsed_time >= timeout {
                 warn!(
-                    "Recluster stopped because the runtime was over {} secs",
-                    timeout.as_secs()
+                    "Recluster stopped because the runtime was over {:?}",
+                    timeout
                 );
                 break;
             }
-
-            // refresh table.
-            table = catalog
-                .get_table(&tenant, &self.plan.database, &self.plan.table)
-                .await?;
         }
 
         if block_count != 0 {
@@ -232,7 +226,6 @@ pub fn build_recluster_physical_plan(
     remained_blocks: Vec<Arc<BlockMeta>>,
     removed_segment_indexes: Vec<usize>,
     removed_segment_summary: Statistics,
-    need_lock: bool,
 ) -> Result<PhysicalPlan> {
     let is_distributed = tasks.len() > 1;
     let mut root = PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
@@ -261,7 +254,6 @@ pub fn build_recluster_physical_plan(
         removed_segment_indexes,
         removed_segment_summary,
         plan_id: u32::MAX,
-        need_lock,
     }));
     plan.adjust_plan_id(&mut 0);
     Ok(plan)

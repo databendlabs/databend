@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io::Cursor;
+use std::io::Read;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -198,15 +199,19 @@ impl TableSnapshot {
     /// the specified compression format, and deserializes it using the specified encoding format.
     /// Finally, it constructs a `TableSnapshot` object using the deserialized data and returns it.
     pub fn from_slice(buffer: &[u8]) -> Result<TableSnapshot> {
-        let mut cursor = Cursor::new(buffer);
-        let version = cursor.read_scalar::<u64>()?;
-        assert_eq!(version, TableSnapshot::VERSION);
-        let encoding = MetaEncoding::try_from(cursor.read_scalar::<u8>()?)?;
-        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
-        let snapshot_size: u64 = cursor.read_scalar::<u64>()?;
-
-        read_and_deserialize(&mut cursor, snapshot_size, &encoding, &compression)
+        Self::from_read(Cursor::new(buffer))
     }
+
+    pub fn from_read(mut r: impl Read) -> Result<TableSnapshot> {
+        let version = r.read_scalar::<u64>()?;
+        assert_eq!(version, TableSnapshot::VERSION);
+        let encoding = MetaEncoding::try_from(r.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(r.read_scalar::<u8>()?)?;
+        let snapshot_size: u64 = r.read_scalar::<u64>()?;
+
+        read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)
+    }
+
     #[inline]
     pub fn encoding() -> MetaEncoding {
         MetaEncoding::MessagePack

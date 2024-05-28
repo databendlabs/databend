@@ -35,6 +35,7 @@ use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
 use databend_common_sql::BindContext;
@@ -47,8 +48,8 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::RwLock;
 
-use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
@@ -112,7 +113,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Replace,
-                true,
+                LockTableOption::LockNoRetry,
             );
             hook_operator.execute(&mut pipeline.main_pipeline).await;
         }
@@ -334,7 +335,6 @@ impl ReplaceInterpreter {
             mutation_kind: MutationKind::Replace,
             update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
-            need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
         })));
@@ -431,7 +431,7 @@ impl ReplaceInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), metadata).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             ctx.clone(),

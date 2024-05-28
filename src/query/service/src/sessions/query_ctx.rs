@@ -28,6 +28,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use chrono::Utc;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -61,11 +62,13 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -75,7 +78,9 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::LockGuard;
 use databend_common_settings::Settings;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
@@ -102,6 +107,7 @@ use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
+use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
@@ -315,6 +321,35 @@ impl QueryContext {
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
     }
+
+    pub async fn acquire_table_lock(
+        self: Arc<Self>,
+        catalog_name: &str,
+        db_name: &str,
+        tbl_name: &str,
+        lock_opt: &LockTableOption,
+    ) -> Result<Option<LockGuard>> {
+        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
+        if !enabled_table_lock {
+            return Ok(None);
+        }
+
+        let catalog = self.get_catalog(catalog_name).await?;
+        let tbl = catalog
+            .get_table(&self.get_tenant(), db_name, tbl_name)
+            .await?;
+        if tbl.engine() != "FUSE" {
+            return Ok(None);
+        }
+
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
+        match lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
+            LockTableOption::NoLock => Ok(None),
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -407,7 +442,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        info!("{}: {}", self.get_id(), info);
+        info!("{}", info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -490,6 +525,16 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
+    fn get_enable_sort_spill(&self) -> bool {
+        self.shared.enable_sort_spill.load(Ordering::Acquire)
+    }
+
+    fn set_enable_sort_spill(&self, enable: bool) {
+        self.shared
+            .enable_sort_spill
+            .store(enable, Ordering::Release);
+    }
+
     // get a hint at the number of blocks that need to be compacted.
     fn get_compaction_num_block_hint(&self) -> u64 {
         self.shared
@@ -508,9 +553,21 @@ impl TableContext for QueryContext {
         self.shared.attach_query_str(kind, query);
     }
 
+    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
+        self.shared.attach_query_hash(text_hash, parameterized_hash);
+    }
+
     /// Get the session running query.
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
+        self.shared.get_query_parameterized_hash()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        self.shared.get_query_text_hash()
     }
 
     fn get_fragment_id(&self) -> usize {
@@ -574,6 +631,16 @@ impl TableContext for QueryContext {
         self.get_current_session().get_all_effective_roles().await
     }
 
+    async fn validate_privilege(
+        &self,
+        object: &GrantObject,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        self.get_current_session()
+            .validate_privilege(object, privilege)
+            .await
+    }
+
     fn get_current_session_id(&self) -> String {
         self.get_current_session().get_id()
     }
@@ -623,6 +690,7 @@ impl TableContext for QueryContext {
 
         let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
+        let now = Utc::now();
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;
@@ -632,6 +700,7 @@ impl TableContext for QueryContext {
 
         Ok(FunctionContext {
             tz,
+            now,
             rounding_mode,
             disable_variant_check,
 
@@ -1100,17 +1169,17 @@ impl TableContext for QueryContext {
 impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
-    fn try_spawn<T>(&self, name: impl Into<String>, task: T) -> Result<JoinHandle<T::Output>>
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        Ok(self.shared.try_get_runtime()?.spawn(name, task))
+        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 }
 
 impl std::fmt::Debug for QueryContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
     }
 }

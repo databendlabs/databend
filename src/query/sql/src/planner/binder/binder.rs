@@ -22,11 +22,11 @@ use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::ast::With;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -34,11 +34,14 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
 use log::warn;
 
 use super::Finder;
+use crate::binder::bind_query::ExpressionScanContext;
 use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
@@ -59,7 +62,6 @@ use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
-use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
@@ -79,22 +81,22 @@ use crate::Visibility;
 /// - Check semantic of query
 /// - Validate expressions
 /// - Build `Metadata`
+#[derive(Clone)]
 pub struct Binder {
     pub ctx: Arc<dyn TableContext>,
     pub dialect: Dialect,
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
-    // Save the equal scalar exprs for joins
-    // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c on a.x = c.x) ORDER BY x LIMIT 1
-    // The eq_scalars is [(a.x, b.x), (a.x, c.x)]
-    pub eq_scalars: Vec<(ScalarExpr, ScalarExpr)>,
     // Save the bound context for materialized cte, the key is cte_idx
     pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
     /// Use `IndexMap` because need to keep the insertion order
     /// Then wrap materialized ctes to main plan.
     pub ctes_map: Box<IndexMap<String, CteInfo>>,
+    /// The `ExpressionScanContext` is used to store the information of
+    /// expression scan and hash join build cache.
+    pub expression_scan_context: ExpressionScanContext,
 }
 
 impl<'a> Binder {
@@ -112,19 +114,10 @@ impl<'a> Binder {
             name_resolution_ctx,
             metadata,
             m_cte_bound_ctx: Default::default(),
-            eq_scalars: vec![],
             m_cte_bound_s_expr: Default::default(),
             ctes_map: Box::default(),
+            expression_scan_context: ExpressionScanContext::new(),
         }
-    }
-
-    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
-    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
-        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
-    }
-
-    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
-        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
     }
 
     #[async_backtrace::framed]
@@ -132,57 +125,14 @@ impl<'a> Binder {
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let start = Instant::now();
         self.ctx.set_status_info("binding");
-        let mut init_bind_context = BindContext::new();
-        let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
-        self.bind_query_index(&mut init_bind_context, &plan).await?;
+        let mut bind_context = BindContext::new();
+        let plan = self.bind_statement(&mut bind_context, stmt).await?;
+        self.bind_query_index(&mut bind_context, &plan).await?;
         self.ctx.set_status_info(&format!(
             "bind stmt to plan done, time used: {:?}",
             start.elapsed()
         ));
         Ok(plan)
-    }
-
-    pub(crate) async fn opt_hints_set_var(
-        &mut self,
-        bind_context: &mut BindContext,
-        hints: &Hint,
-    ) -> Result<()> {
-        let mut type_checker = TypeChecker::try_create(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            false,
-        )?;
-        let mut hint_settings: HashMap<String, String> = HashMap::new();
-        for hint in &hints.hints_list {
-            let variable = &hint.name.name;
-            let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
-
-            let scalar = wrap_cast(&scalar, &DataType::String);
-            let expr = scalar.as_expr()?;
-
-            let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-            match new_expr {
-                Expr::Constant { scalar, .. } => {
-                    let value = scalar.into_string().unwrap();
-                    if variable.to_lowercase().as_str() == "timezone" {
-                        let tz = value.trim_matches(|c| c == '\'' || c == '\"');
-                        tz.parse::<Tz>().map_err(|_| {
-                            ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
-                        })?;
-                    }
-                    hint_settings.entry(variable.to_string()).or_insert(value);
-                }
-                _ => {
-                    warn!("fold hints {:?} failed. value must be constant value", hint);
-                }
-            }
-        }
-
-        self.ctx.get_settings().set_batch_settings(&hint_settings)
     }
 
     #[async_recursion::async_recursion]
@@ -195,6 +145,7 @@ impl<'a> Binder {
         let plan = match stmt {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
                     if !cte_info.materialized || cte_info.used_count == 0 {
@@ -208,6 +159,10 @@ impl<'a> Binder {
                         Arc::new(s_expr),
                     );
                 }
+
+                // Remove unused cache columns and join conditions and construct ExpressionScan's child.
+                (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
+
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
                     Some(format_statement(stmt.clone())?)
                 } else {
@@ -339,9 +294,9 @@ impl<'a> Binder {
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
             Statement::DropUser { if_exists, user } => Plan::DropUser(Box::new(DropUserPlan {
                 if_exists: *if_exists,
-                user: user.clone(),
+                user: user.clone().into(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
@@ -443,9 +398,8 @@ impl<'a> Binder {
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
-            Statement::ShowGrants { principal } => Plan::ShowGrants(Box::new(ShowGrantsPlan {
-                principal: principal.clone(),
-            })),
+            Statement::ShowGrants { principal, show_options } => self.bind_show_account_grants(bind_context, principal, show_options).await?,
+            Statement::ShowObjectPrivileges(stmt) => self.bind_show_object_privileges(bind_context, stmt).await?,
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
@@ -456,9 +410,9 @@ impl<'a> Binder {
                     )));
                 }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
-                    create_option: *create_option,
+                    create_option: create_option.clone().into(),
                     name: name.clone(),
-                    file_format_params: file_format_options.to_meta_ast().try_into()?,
+                    file_format_params: FileFormatParams::try_from_reader( FileFormatOptionsReader::from_ast(file_format_options), false)?,
                 }))
             }
             Statement::DropFileFormat {
@@ -661,7 +615,79 @@ impl<'a> Binder {
                 self.bind_set_priority(priority, object_id).await?
             },
         };
+
+        match plan.kind() {
+            QueryKind::Query { .. } | QueryKind::Explain { .. } => {}
+            _ => {
+                let meta_data_guard = self.metadata.read();
+                let tables = meta_data_guard.tables();
+                for t in tables {
+                    if t.is_consume() {
+                        return Err(ErrorCode::SyntaxException(
+                            "WITH CONSUME only allowed in query",
+                        ));
+                    }
+                }
+            }
+        }
+
         Ok(plan)
+    }
+
+    pub(crate) fn normalize_identifier(&self, ident: &Identifier) -> Identifier {
+        normalize_identifier(ident, &self.name_resolution_ctx)
+    }
+
+    pub(crate) async fn opt_hints_set_var(
+        &mut self,
+        bind_context: &mut BindContext,
+        hints: &Hint,
+    ) -> Result<()> {
+        let mut type_checker = TypeChecker::try_create(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false,
+        )?;
+        let mut hint_settings: HashMap<String, String> = HashMap::new();
+        for hint in &hints.hints_list {
+            let variable = &hint.name.name;
+            let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
+
+            let scalar = wrap_cast(&scalar, &DataType::String);
+            let expr = scalar.as_expr()?;
+
+            let (new_expr, _) =
+                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            match new_expr {
+                Expr::Constant { scalar, .. } => {
+                    let value = scalar.into_string().unwrap();
+                    if variable.to_lowercase().as_str() == "timezone" {
+                        let tz = value.trim_matches(|c| c == '\'' || c == '\"');
+                        tz.parse::<Tz>().map_err(|_| {
+                            ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
+                        })?;
+                    }
+                    hint_settings.entry(variable.to_string()).or_insert(value);
+                }
+                _ => {
+                    warn!("fold hints {:?} failed. value must be constant value", hint);
+                }
+            }
+        }
+
+        self.ctx.get_settings().set_batch_settings(&hint_settings)
+    }
+
+    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
+    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
+        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
+    }
+
+    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
+        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
     }
 
     #[async_backtrace::framed]
@@ -686,11 +712,13 @@ impl<'a> Binder {
         &mut self,
         column_name: String,
         data_type: DataType,
+        scalar_expr: Option<ScalarExpr>,
     ) -> ColumnBinding {
-        let index = self
-            .metadata
-            .write()
-            .add_derived_column(column_name.clone(), data_type.clone());
+        let index = self.metadata.write().add_derived_column(
+            column_name.clone(),
+            data_type.clone(),
+            scalar_expr,
+        );
         ColumnBindingBuilder::new(column_name, index, Box::new(data_type), Visibility::Visible)
             .build()
     }
@@ -705,25 +733,19 @@ impl<'a> Binder {
     ) -> (String, String, String) {
         let catalog_name = catalog
             .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .map(|ident| self.normalize_identifier(ident).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database_name = database
             .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .map(|ident| self.normalize_identifier(ident).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let object_name = normalize_identifier(object, &self.name_resolution_ctx).name;
+        let object_name = self.normalize_identifier(object).name;
         (catalog_name, database_name, object_name)
     }
 
     /// Normalize <identifier>
     pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
         normalize_identifier(ident, &self.name_resolution_ctx).name
-    }
-
-    pub fn judge_equal_scalars(&self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
-        self.eq_scalars
-            .iter()
-            .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
     }
 
     pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
@@ -742,7 +764,7 @@ impl<'a> Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    // add check for SExpr to disable invalid source for copy/insert/merge/replace
+    #[allow(dead_code)]
     pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFCall(_));
         let mut finder = Finder::new(&f);
@@ -881,32 +903,5 @@ impl<'a> Binder {
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())
-    }
-
-    pub(crate) fn add_cte(&mut self, with: &With, bind_context: &mut BindContext) -> Result<()> {
-        for (idx, cte) in with.ctes.iter().enumerate() {
-            let table_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
-            if bind_context.cte_map_ref.contains_key(&table_name) {
-                return Err(ErrorCode::SemanticError(format!(
-                    "duplicate cte {table_name}"
-                )));
-            }
-            let cte_info = CteInfo {
-                columns_alias: cte
-                    .alias
-                    .columns
-                    .iter()
-                    .map(|c| normalize_identifier(c, &self.name_resolution_ctx).name)
-                    .collect(),
-                query: *cte.query.clone(),
-                materialized: cte.materialized,
-                cte_idx: idx,
-                used_count: 0,
-                columns: vec![],
-            };
-            self.ctes_map.insert(table_name.clone(), cte_info.clone());
-            bind_context.cte_map_ref.insert(table_name, cte_info);
-        }
-        Ok(())
     }
 }

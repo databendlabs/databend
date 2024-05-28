@@ -42,7 +42,6 @@ use opendal::Operator;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationLogEntry;
@@ -69,7 +68,6 @@ pub struct TableMutationAggregator {
     appended_statistics: Statistics,
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
-    abort_operation: AbortOperation,
 
     kind: MutationKind,
     start_time: Instant,
@@ -119,7 +117,6 @@ impl TableMutationAggregator {
             mutations: HashMap::new(),
             appended_segments: vec![],
             base_segments,
-            abort_operation: AbortOperation::default(),
             appended_statistics: Statistics::default(),
             removed_segment_indexes: vec![],
             removed_statistics: Statistics::default(),
@@ -136,10 +133,10 @@ impl TableMutationAggregator {
         // Refresh status
         {
             let status = format!(
-                "{}: run tasks:{}, cost:{} sec",
+                "{}: run tasks:{}, cost:{:?}",
                 self.kind,
                 self.finished_tasks,
-                self.start_time.elapsed().as_secs()
+                self.start_time.elapsed()
             );
             self.ctx.set_status_info(&status);
         }
@@ -148,7 +145,6 @@ impl TableMutationAggregator {
     pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
         match log_entry {
             MutationLogEntry::ReplacedBlock { index, block_meta } => {
-                self.abort_operation.add_block(&block_meta);
                 match self.mutations.entry(index.segment_idx) {
                     Entry::Occupied(mut v) => {
                         v.get_mut().push_replaced(index.block_idx, block_meta);
@@ -176,10 +172,8 @@ impl TableMutationAggregator {
             MutationLogEntry::AppendSegment {
                 segment_location,
                 format_version,
-                abort_operation,
                 summary,
             } => {
-                self.abort_operation.merge(abort_operation);
                 merge_statistics_mut(
                     &mut self.appended_statistics,
                     &summary,
@@ -216,6 +210,10 @@ impl TableMutationAggregator {
     pub async fn apply(&mut self) -> Result<CommitMeta> {
         let appended_segments = std::mem::take(&mut self.appended_segments);
         let appended_statistics = std::mem::take(&mut self.appended_statistics);
+
+        let mut new_segment_locs = Vec::new();
+        new_segment_locs.extend(appended_segments.clone());
+
         let conflict_resolve_context = match self.kind {
             MutationKind::Insert => ConflictResolveContext::AppendOnly((
                 SnapshotMerged {
@@ -237,14 +235,14 @@ impl TableMutationAggregator {
                     for result in results {
                         if let Some((location, summary)) = result.new_segment_info {
                             // replace the old segment location with the new one.
-                            self.abort_operation.add_segment(location.clone());
+                            let new_segment_loc = (location, SegmentInfo::VERSION);
+                            new_segment_locs.push(new_segment_loc.clone());
                             merge_statistics_mut(
                                 &mut merged_statistics,
                                 &summary,
                                 self.default_cluster_key_id,
                             );
-                            replaced_segments
-                                .insert(result.index, (location, SegmentInfo::VERSION));
+                            replaced_segments.insert(result.index, new_segment_loc);
                         } else {
                             self.removed_segment_indexes.push(result.index);
                         }
@@ -262,11 +260,11 @@ impl TableMutationAggregator {
                     {
                         count += chunk.len();
                         let status = format!(
-                            "{}: generate new segment files:{}/{}, cost:{} sec",
+                            "{}: generate new segment files:{}/{}, cost:{:?}",
                             self.kind,
                             count,
                             segment_indices.len(),
-                            start.elapsed().as_secs()
+                            start.elapsed()
                         );
                         self.ctx.set_status_info(&status);
                     }
@@ -290,11 +288,7 @@ impl TableMutationAggregator {
             }
         };
 
-        let meta = CommitMeta::new(
-            conflict_resolve_context,
-            std::mem::take(&mut self.abort_operation),
-            self.table_id,
-        );
+        let meta = CommitMeta::new(conflict_resolve_context, new_segment_locs, self.table_id);
         Ok(meta)
     }
 

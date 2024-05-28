@@ -328,10 +328,7 @@ fn test_schema_from_struct() -> Result<()> {
             "arraytuple:0:1",
             TableDataType::Number(NumberDataType::UInt64),
         ),
-        (
-            "nullarray:0",
-            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-        ),
+        ("nullarray:0", TableDataType::Number(NumberDataType::UInt64)),
         (
             "maparray:key",
             TableDataType::Number(NumberDataType::UInt64),

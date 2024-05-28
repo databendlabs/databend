@@ -58,7 +58,6 @@ use crate::IndexType;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
-use crate::DUMMY_COLUMN_INDEX;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
@@ -193,6 +192,7 @@ impl Binder {
             table: table_ident.clone(),
             alias: target_alias.clone(),
             temporal: None,
+            consume: false,
             pivot: None,
             unpivot: None,
         };
@@ -201,8 +201,10 @@ impl Binder {
         let source_data = source.transform_table_reference();
 
         // bind source data
-        let (mut source_expr, mut source_context) =
-            self.bind_single_table(bind_context, &source_data).await?;
+        let (mut source_expr, mut source_context) = self
+            .bind_table_reference(bind_context, &source_data)
+            .await?;
+
         // remove stream column.
         source_context
             .columns
@@ -224,11 +226,6 @@ impl Binder {
                 Arc::new(source_expr),
             );
         }
-        if !self.check_sexpr_top(&source_expr)? {
-            return Err(ErrorCode::SemanticError(
-                "replace source can't contain udf functions".to_string(),
-            ));
-        }
 
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
@@ -240,10 +237,9 @@ impl Binder {
                 let default_target_table_schema = table_schema.remove_computed_fields();
                 let mut update_columns =
                     HashMap::with_capacity(default_target_table_schema.num_fields());
-                let source_output_columns = &source_context.columns;
                 // we use Vec as the value, because there could be duplicate names
                 let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
-                for column in source_output_columns {
+                for column in source_context.columns.iter() {
                     name_map
                         .entry(column.column_name.clone())
                         .or_default()
@@ -292,7 +288,7 @@ impl Binder {
         // when the target table has been binded in bind_merge_into_source
         // bind table for target table
         let (mut target_expr, mut target_context) = self
-            .bind_single_table(&mut source_context, &target_table)
+            .bind_table_reference(bind_context, &target_table)
             .await?;
 
         if table.change_tracking_enabled() && merge_type != MergeIntoType::InsertOnly {
@@ -348,9 +344,9 @@ impl Binder {
         };
 
         let (join_sexpr, mut bind_ctx) = self
-            .bind_join(
+            .bind_merge_into_join(
                 bind_context,
-                target_context.clone(),
+                target_context,
                 source_context,
                 target_expr,
                 source_expr,
@@ -442,20 +438,8 @@ impl Binder {
                 .await?,
             );
         }
-        let mut split_idx = DUMMY_COLUMN_INDEX;
-        // find any target table column index for merge_into_split
-        for column in self
-            .metadata
-            .read()
-            .columns_by_table_index(table_index)
-            .iter()
-        {
-            if column.index() != row_id_index {
-                split_idx = column.index();
-                break;
-            }
-        }
-        assert!(split_idx != DUMMY_COLUMN_INDEX);
+
+        let split_idx = row_id_index;
 
         Ok(MergeInto {
             catalog: catalog_name.to_string(),
@@ -477,6 +461,7 @@ impl Binder {
             row_id_index,
             split_idx,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
+            enable_right_broadcast: false,
         })
     }
 

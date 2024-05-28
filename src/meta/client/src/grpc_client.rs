@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::str::FromStr;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -34,9 +35,10 @@ use databend_common_base::containers::ItemManager;
 use databend_common_base::containers::Pool;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::UnlimitedFuture;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientConf;
@@ -230,7 +232,7 @@ impl ItemManager for MetaChannelManager {
 /// The worker will be actually running in a dedicated runtime: `MetaGrpcClient.rt`.
 pub struct ClientHandle {
     /// For sending request to meta-client worker.
-    pub(crate) req_tx: Sender<message::ClientWorkerRequest>,
+    pub(crate) req_tx: Sender<(TrackingPayload, message::ClientWorkerRequest)>,
     /// Notify auto sync to stop.
     /// `oneshot::Receiver` impl `Drop` by sending a closed notification to the `Sender` half.
     #[allow(dead_code)]
@@ -268,12 +270,18 @@ impl ClientHandle {
 
             grpc_metrics::incr_meta_grpc_client_request_inflight(1);
 
-            let res = self.req_tx.send(req).await.map_err(|e| {
-                let cli_err = MetaClientError::ClientRuntimeError(
-                    AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
-                );
-                cli_err.into()
-            });
+            let tracking_payload = ThreadTracker::new_tracking_payload();
+            let res = self
+                .req_tx
+                .send((tracking_payload, req))
+                .await
+                .map_err(|e| {
+                    let cli_err = MetaClientError::ClientRuntimeError(
+                        AnyError::new(&e)
+                            .add_context(|| "when sending req to MetaGrpcClient worker"),
+                    );
+                    cli_err.into()
+                });
 
             if let Err(err) = res {
                 grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
@@ -360,7 +368,7 @@ pub struct MetaGrpcClient {
 }
 
 impl Debug for MetaGrpcClient {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut de = f.debug_struct("MetaGrpcClient");
         de.field("endpoints", &*self.endpoints.lock());
         de.field("auto_sync_interval", &self.auto_sync_interval);
@@ -431,32 +439,36 @@ impl MetaGrpcClient {
             rt: rt.clone(),
         });
 
-        rt.spawn(
-            GLOBAL_TASK,
-            UnlimitedFuture::create(Self::worker_loop(worker.clone(), rx)),
-        );
-        rt.spawn(
-            GLOBAL_TASK,
-            UnlimitedFuture::create(Self::auto_sync_endpoints(worker, one_tx)),
-        );
+        rt.spawn(UnlimitedFuture::create(Self::worker_loop(
+            worker.clone(),
+            rx,
+        )));
+        rt.spawn(UnlimitedFuture::create(Self::auto_sync_endpoints(
+            worker, one_tx,
+        )));
 
         Ok(handle)
     }
 
     /// A worker runs a receiving-loop to accept user-request to metasrv and deals with request in the dedicated runtime.
     #[minitrace::trace]
-    async fn worker_loop(self: Arc<Self>, mut req_rx: Receiver<message::ClientWorkerRequest>) {
+    async fn worker_loop(
+        self: Arc<Self>,
+        mut req_rx: Receiver<(TrackingPayload, message::ClientWorkerRequest)>,
+    ) {
         info!("MetaGrpcClient::worker spawned");
 
         loop {
             let recv_res = req_rx.recv().await;
-            let worker_request = match recv_res {
+            let (tracking_payload, worker_request) = match recv_res {
                 None => {
                     warn!("MetaGrpcClient handle closed. worker quit");
                     return;
                 }
                 Some(x) => x,
             };
+
+            let _guard = ThreadTracker::tracking(tracking_payload);
 
             debug!(worker_request :? =(&worker_request); "MetaGrpcClient worker handle request");
 
@@ -1083,8 +1095,7 @@ impl MetaGrpcClient {
             "MetaGrpcClient::transaction request"
         );
 
-        let req: Request<TxnRequest> = Request::new(txn.clone());
-        let req = databend_common_tracing::inject_span_to_tonic_request(req);
+        let req = traced_req(txn.clone());
 
         let mut client = self.make_established_client().await?;
         let result = client.transaction(req).await;
@@ -1095,8 +1106,7 @@ impl MetaGrpcClient {
                 if status_is_retryable(&s) {
                     self.choose_next_endpoint();
                     let mut client = self.make_established_client().await?;
-                    let req: Request<TxnRequest> = Request::new(txn);
-                    let req = databend_common_tracing::inject_span_to_tonic_request(req);
+                    let req = traced_req(txn);
                     let ret = client.transaction(req).await?.into_inner();
                     return Ok(ret);
                 } else {
@@ -1129,7 +1139,18 @@ impl MetaGrpcClient {
 /// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
 fn traced_req<T>(t: T) -> Request<T> {
     let req = Request::new(t);
-    databend_common_tracing::inject_span_to_tonic_request(req)
+    let mut req = databend_common_tracing::inject_span_to_tonic_request(req);
+
+    if let Some(query_id) = ThreadTracker::query_id() {
+        let key = tonic::metadata::AsciiMetadataKey::from_str("QueryID");
+        let value = tonic::metadata::AsciiMetadataValue::from_str(query_id);
+
+        if let Some((key, value)) = key.ok().zip(value.ok()) {
+            req.metadata_mut().insert(key, value);
+        }
+    }
+
+    req
 }
 
 fn status_is_retryable(status: &Status) -> bool {

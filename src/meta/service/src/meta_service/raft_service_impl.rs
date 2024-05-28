@@ -75,27 +75,6 @@ impl RaftServiceImpl {
         }
     }
 
-    async fn do_install_snapshot(
-        &self,
-        request: Request<RaftRequest>,
-    ) -> Result<Response<RaftReply>, Status> {
-        let addr = remote_addr(&request);
-
-        self.incr_meta_metrics_recv_bytes_from_peer(&request);
-        let _g = snapshot_recv_inflight(&addr).counter_guard();
-
-        let is_req = GrpcHelper::parse_req(request)?;
-
-        let res = self
-            .receive_chunked_snapshot(is_req)
-            .timed(observe_snapshot_recv_spent(&addr))
-            .await;
-
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
-
-        GrpcHelper::make_grpc_result(res)
-    }
-
     async fn do_install_snapshot_v1(
         &self,
         request: Request<SnapshotChunkRequest>,
@@ -271,14 +250,6 @@ impl RaftService for RaftServiceImpl {
         }
         .in_span(root)
         .await
-    }
-
-    async fn install_snapshot(
-        &self,
-        request: Request<RaftRequest>,
-    ) -> Result<Response<RaftReply>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
-        self.do_install_snapshot(request).in_span(root).await
     }
 
     async fn install_snapshot_v1(

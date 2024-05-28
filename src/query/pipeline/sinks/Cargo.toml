@@ -13,7 +13,6 @@ test = true
 
 [dependencies]
 databend-common-base = { path = "../../../common/base" }
-databend-common-catalog = { path = "../../catalog" }
 databend-common-exception = { path = "../../../common/exception" }
 databend-common-expression = { path = "../../expression" }
 databend-common-pipeline-core = { path = "../core" }

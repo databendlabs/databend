@@ -122,11 +122,14 @@ impl SelectExprBuilder {
                             let select_op =
                                 SelectOp::try_from_func_name(&function.signature.name).unwrap();
                             let select_op = if not { select_op.not() } else { select_op };
+                            let can_reorder =
+                                Self::can_reorder(&args[0]) && Self::can_reorder(&args[1]);
                             SelectExprBuildResult::new(SelectExpr::Compare((
                                 select_op,
                                 args.clone(),
                                 generics.clone(),
                             )))
+                            .can_reorder(can_reorder)
                         }
                         "not" => {
                             self.not_function = Some((id.clone(), function.clone()));
@@ -134,7 +137,7 @@ impl SelectExprBuilder {
                             if result.can_push_down_not {
                                 result
                             } else {
-                                SelectExprBuildResult::new(SelectExpr::Others(expr.clone()))
+                                self.other_select_expr(expr, not)
                             }
                         }
                         "like" => {
@@ -158,6 +161,7 @@ impl SelectExprBuilder {
                                     .can_push_down_not(false);
                                 }
                             };
+                            let can_reorder = Self::can_reorder(column);
                             if matches!(column_data_type, DataType::String | DataType::Nullable(box DataType::String))
                                 && let Scalar::String(like_str) = scalar
                             {
@@ -168,15 +172,17 @@ impl SelectExprBuilder {
                                     like_str.clone(),
                                     not,
                                 )))
+                                .can_reorder(can_reorder)
                             } else {
                                 SelectExprBuildResult::new(SelectExpr::Others(expr.clone()))
                                     .can_push_down_not(false)
+                                    .can_reorder(can_reorder)
                             }
                         }
                         "is_true" => self.build_select_expr(&args[0], not),
                         _ => self
                             .other_select_expr(expr, not)
-                            .can_reorder(Self::can_reorder(func_name)),
+                            .can_reorder(Self::can_reorder(expr)),
                     }
                 }
             }
@@ -207,13 +213,24 @@ impl SelectExprBuilder {
     // If a function may be use for filter short-circuiting, we can not perform filter reorder,
     // for example, for predicates `a != 0 and 3 / a > 1`，if we swap `a != 0` and `3 / a > 1`,
     // there will be a divide by zero error.
-    fn can_reorder(func_name: &str) -> bool {
-        // There may be other functions that can be used for filter short-circuiting.
-        if matches!(func_name, "cast" | "div" | "divide" | "modulo") || func_name.starts_with("to_")
-        {
-            return false;
+    pub fn can_reorder(expr: &Expr) -> bool {
+        match expr {
+            Expr::FunctionCall { function, args, .. } => {
+                let func_name = function.signature.name.as_str();
+                // There may be other functions that can be used for filter short-circuiting.
+                let mut can_reorder = !matches!(func_name, "cast" | "div" | "divide" | "modulo")
+                    && !func_name.starts_with("to_");
+                if can_reorder {
+                    for arg in args {
+                        can_reorder &= Self::can_reorder(arg);
+                    }
+                }
+                can_reorder
+            }
+            Expr::ColumnRef { .. } | Expr::Constant { .. } => true,
+            Expr::Cast { is_try, .. } if *is_try => true,
+            _ => false,
         }
-        true
     }
 
     fn other_select_expr(&self, expr: &Expr, not: bool) -> SelectExprBuildResult {

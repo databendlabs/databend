@@ -72,7 +72,7 @@ pub enum Feature {
 }
 
 impl Display for Feature {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Feature::LicenseInfo => write!(f, "license_info"),
             Feature::Vacuum => write!(f, "vacuum"),

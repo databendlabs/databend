@@ -18,6 +18,17 @@ statement ok
 create table tbl_01_0002(a int)
 
 statement ok
+insert into  tbl_01_0002 values    (1)
+
+statement error
+insert into  tbl_01_0002 values    (?,?,?)
+
+query TTT
+select query_text, query_hash, query_parameterized_hash from system.query_log where query_text='INSERT INTO tbl_01_0002 VALUES (?,?,?)' limit 1;
+----
+INSERT INTO tbl_01_0002 VALUES (?,?,?) 56531330ce650af109dc38ae2fe2a6a3 56531330ce650af109dc38ae2fe2a6a3
+
+statement ok
 insert into  tbl_01_0002 values(1)
 
 # TODO sometimes get empty result
@@ -41,6 +52,45 @@ select count(*) from tbl_01_0002 where a > 1
 
 # ----
 # 1
+
+statement ok
+select * from tbl_01_0002 where a=1;
+
+statement ok
+select * from tbl_01_0002   where a  = 1;
+
+statement ok
+select * from tbl_01_0002 where a=200;
+
+query T
+select count(query_text)>1 from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a = 1' and log_type_name='Finish' group by query_hash;
+----
+1
+
+query TTT
+select query_text, query_hash, query_parameterized_hash from system.query_log where query_hash='932d5555e275c38b46574f4adfa5e01b' limit 1;
+----
+INSERT INTO tbl_01_0002 VALUES (1) 932d5555e275c38b46574f4adfa5e01b 932d5555e275c38b46574f4adfa5e01b
+
+query B
+select count(query_text)>1 from system.query_log where query_text like 'INSERT INTO tbl_01_0002%' group by query_parameterized_hash having query_parameterized_hash='932d5555e275c38b46574f4adfa5e01b';
+----
+1
+
+query TTT
+select query_text, query_hash, query_parameterized_hash from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a = 200' and log_type_name='Finish' limit 1;
+----
+SELECT * FROM tbl_01_0002 WHERE a = 200 85fb553aed4b8a4669ff65065c97949e 6596e850da145a96c6ae8db33770f066
+
+query TTT
+select query_text, query_hash, query_parameterized_hash from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a = 1' and log_type_name='Finish' limit 1;
+----
+SELECT * FROM tbl_01_0002 WHERE a = 1 aecfa6aa7f16336ec7b840d8e3b4a723 6596e850da145a96c6ae8db33770f066
+
+query T
+select count(query_text)>1 from system.query_log where query_text like 'SELECT * FROM tbl_01_0002 WHERE a =%' and log_type_name='Finish' group by query_parameterized_hash;
+----
+1
 
 statement ok
 drop table tbl_01_0002

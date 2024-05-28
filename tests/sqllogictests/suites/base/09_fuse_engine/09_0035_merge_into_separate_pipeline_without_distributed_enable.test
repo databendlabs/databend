@@ -1,4 +1,13 @@
 statement ok
+drop database if exists db;
+
+statement ok
+create database db;
+
+statement ok
+use db;
+
+statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
@@ -140,7 +149,7 @@ merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t
 2 4
 
 query T
-select count(*) from fuse_block('default','t1_separate');
+select count(*) from fuse_block('db','t1_separate');
 ----
 1
 

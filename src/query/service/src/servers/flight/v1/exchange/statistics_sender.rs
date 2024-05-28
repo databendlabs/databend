@@ -49,7 +49,7 @@ impl StatisticsSender {
         let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
-        let handle = spawner.spawn(query_id, {
+        let handle = spawner.spawn({
             let query_id = query_id.to_string();
 
             async move {

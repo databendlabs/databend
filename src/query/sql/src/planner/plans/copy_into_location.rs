@@ -50,7 +50,7 @@ impl CopyIntoLocationPlan {
 }
 
 impl Debug for CopyIntoLocationPlan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "Copy into {:?}/{} from {:?}",

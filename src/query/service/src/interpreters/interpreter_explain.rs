@@ -30,6 +30,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::FunctionCall;
+use databend_common_sql::plans::MergeInto;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
@@ -37,8 +38,10 @@ use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
 
+use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use super::UpdateInterpreter;
+use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -117,6 +120,16 @@ impl Interpreter for ExplainInterpreter {
                     }
                     _ => self.explain_plan(&self.plan)?,
                 },
+                Plan::InsertMultiTable(plan) => {
+                    let physical_plan = InsertMultiTableInterpreter::try_create_static(
+                        self.ctx.clone(),
+                        *plan.clone(),
+                    )?
+                    .build_physical_plan()
+                    .await?;
+                    self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
+                        .await?
+                }
                 Plan::MergeInto(plan) => {
                     let mut res = self.explain_plan(&self.plan)?;
                     let input = self
@@ -180,7 +193,7 @@ impl Interpreter for ExplainInterpreter {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
                 let pipeline = match &self.plan {
-                    Plan::Query { .. } => {
+                    Plan::Query { .. } | Plan::MergeInto(_) => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
                         interpter.execute2().await?
@@ -205,6 +218,7 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
+                Plan::MergeInto(merge_into) => self.explain_merge_fragments(merge_into).await?,
                 Plan::Update(update) => self.explain_update_fragments(update.as_ref()).await?,
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
@@ -551,5 +565,22 @@ impl ExplainInterpreter {
             result.push(DataBlock::new_from_columns(vec![formatted_plan]));
         }
         Ok(vec![DataBlock::concat(&result)?])
+    }
+
+    async fn explain_merge_fragments(&self, merge_into: &MergeInto) -> Result<Vec<DataBlock>> {
+        let interpreter = MergeIntoInterpreter::try_create(self.ctx.clone(), merge_into.clone())?;
+        let (plan, _) = interpreter.build_physical_plan().await?;
+        let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
+
+        let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
+        root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
+
+        let display_string = fragments_actions
+            .display_indent(&merge_into.meta_data)
+            .to_string();
+
+        let line_split_result = display_string.lines().collect::<Vec<_>>();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 }

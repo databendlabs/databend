@@ -15,14 +15,11 @@ test = true
 default = ["simd"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 simd = ["databend-common-arrow/simd"]
-tokio-console = ["databend-common-tracing/console", "databend-common-base/tracing"]
 io-uring = [
     "sled/io_uring",
     "databend-common-meta-sled-store/io-uring",
     "databend-common-meta-raft-store/io-uring",
 ]
-
-enable-histogram = ["databend-common-metrics/enable-histogram"]
 
 [dependencies]
 # Workspace dependencies
@@ -53,6 +50,7 @@ derive_more = { workspace = true }
 feature-set = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
+http = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }

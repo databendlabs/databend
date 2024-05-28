@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
+use databend_common_ast::ast::CreateOption;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
@@ -24,7 +25,6 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::TypeName;
-use databend_common_meta_app::schema::CreateOption;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
@@ -200,7 +200,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             };
             column_defs.push(column_def);
         }
-        CreateTableSource::Columns(column_defs)
+        CreateTableSource::Columns(column_defs, None)
     }
 }
 

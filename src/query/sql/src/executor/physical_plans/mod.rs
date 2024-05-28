@@ -60,8 +60,6 @@ mod physical_merge_into;
 pub use physical_merge_into::*;
 mod physical_merge_into_add_row_number;
 pub use physical_merge_into_add_row_number::MergeIntoAddRowNumber;
-mod physical_project;
-pub use physical_project::Project;
 mod physical_project_set;
 pub use physical_project_set::ProjectSet;
 mod physical_range_join;
@@ -86,6 +84,12 @@ mod physical_table_scan;
 pub use physical_table_scan::TableScan;
 mod physical_async_func;
 pub use physical_async_func::AsyncFunction;
+
+mod physical_expression_scan;
+pub use physical_expression_scan::ExpressionScan;
+
+mod physical_cache_scan;
+pub use physical_cache_scan::CacheScan;
 
 mod physical_union_all;
 pub use physical_union_all::UnionAll;

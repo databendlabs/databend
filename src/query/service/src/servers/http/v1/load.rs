@@ -30,13 +30,13 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use futures::StreamExt;
+use http::StatusCode;
 use log::debug;
 use log::info;
 use log::warn;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
-use poem::http::StatusCode;
 use poem::web::Json;
 use poem::web::Multipart;
 use poem::Request;
@@ -187,8 +187,7 @@ pub async fn streaming_load(
                     *input_context_option = Some(input_context.clone());
                     info!("streaming load with file_format {:?}", input_context);
 
-                    let query_id = context.get_id();
-                    let handler = context.spawn(query_id, execute_query(context.clone(), plan));
+                    let handler = context.spawn(execute_query(context.clone(), plan));
                     let files = read_multi_part(multipart, tx, &input_context).await?;
 
                     match handler.await {

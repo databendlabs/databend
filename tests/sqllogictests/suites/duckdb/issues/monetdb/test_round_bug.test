@@ -1,5 +1,5 @@
 statement ok
-CREATE TABLE test_num_data (id integer, val decimal(18,10))
+CREATE OR REPLACE TABLE test_num_data (id integer, val decimal(18,10))
 
 ## todo @yangsongfeng
 ## statement error 1025

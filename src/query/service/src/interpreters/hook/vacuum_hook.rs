@@ -23,6 +23,7 @@ use databend_common_license::license_manager::get_license_manager;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_storage::DataOperator;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use opendal::Buffer;
 
 use crate::sessions::QueryContext;
 
@@ -57,7 +58,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
             {
                 let op = DataOperator::instance().operator();
                 op.create_dir(&format!("{}/", spill_prefix)).await?;
-                op.write(&format!("{}/finished", spill_prefix), vec![])
+                op.write(&format!("{}/finished", spill_prefix), Buffer::new())
                     .await?;
             }
 

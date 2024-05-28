@@ -28,6 +28,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
 use opendal::Operator;
 
@@ -40,6 +41,7 @@ pub trait BloomPruner {
         &self,
         index_location: &Option<Location>,
         index_length: u64,
+        column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
     ) -> bool;
 }
@@ -109,6 +111,7 @@ impl BloomPrunerCreator {
         &self,
         index_location: &Location,
         index_length: u64,
+        column_stats: &StatisticsOfColumns,
         column_ids_of_indexed_block: Vec<ColumnId>,
     ) -> Result<bool> {
         let version = index_location.1;
@@ -123,6 +126,7 @@ impl BloomPrunerCreator {
                 Ok::<_, ErrorCode>(acc)
             },
         )?;
+
         // load the relevant index columns
         let maybe_filter = index_location
             .read_block_filter(self.dal.clone(), &index_columns, index_length)
@@ -138,6 +142,7 @@ impl BloomPrunerCreator {
             .apply(
                 self.filter_expression.clone(),
                 &self.scalar_map,
+                column_stats,
                 self.data_schema.clone(),
             )? != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
@@ -158,11 +163,15 @@ impl BloomPruner for BloomPrunerCreator {
         &self,
         index_location: &Option<Location>,
         index_length: u64,
+        column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
     ) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
-            match self.apply(loc, index_length, column_ids).await {
+            match self
+                .apply(loc, index_length, column_stats, column_ids)
+                .await
+            {
                 Ok(v) => v,
                 Err(e) => {
                     // swallow exceptions intentionally, corrupted index should not prevent execution

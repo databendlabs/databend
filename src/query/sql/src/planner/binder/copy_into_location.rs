@@ -59,20 +59,9 @@ impl<'a> Binder {
                 }
             }
             CopyIntoLocationSource::Query(query) => {
-                if let Some(with) = &stmt.with {
-                    self.add_cte(with, bind_context)?;
-                }
-                let select_plan = self
-                    .bind_statement(bind_context, &Statement::Query(query.clone()))
-                    .await?;
-                if let Plan::Query { s_expr, .. } = &select_plan {
-                    if !self.check_sexpr_top(s_expr)? {
-                        return Err(ErrorCode::SemanticError(
-                            "copy into location source can't contain udf functions".to_string(),
-                        ));
-                    }
-                }
-                Ok(select_plan)
+                self.init_cte(bind_context, &stmt.with)?;
+                self.bind_statement(bind_context, &Statement::Query(query.clone()))
+                    .await
             }
         }?;
 

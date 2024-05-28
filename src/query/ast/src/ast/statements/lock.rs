@@ -22,13 +22,12 @@ use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowLocksStmt {
-    #[drive(skip)]
     pub in_account: bool,
     pub limit: Option<ShowLimit>,
 }
 
 impl Display for ShowLocksStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW LOCKS")?;
         if self.in_account {
             write!(f, " IN ACCOUNT")?;

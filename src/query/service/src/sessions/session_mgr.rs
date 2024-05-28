@@ -77,7 +77,7 @@ impl SessionManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
+    pub async fn create_session(&self, typ: SessionType) -> Result<Session> {
         if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
             let sessions = self.active_sessions.read();
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
@@ -92,7 +92,9 @@ impl SessionManager {
         let settings = Settings::create(tenant);
         settings.load_changes().await?;
 
-        self.create_with_settings(typ, settings)
+        let session = self.create_with_settings(typ, settings)?;
+
+        Ok(session)
     }
 
     pub fn try_upgrade_session(&self, session: Arc<Session>, typ_to: SessionType) -> Result<()> {
@@ -137,7 +139,7 @@ impl SessionManager {
         &self,
         typ: SessionType,
         settings: Arc<Settings>,
-    ) -> Result<Arc<Session>> {
+    ) -> Result<Session> {
         let id = uuid::Uuid::new_v4().to_string();
         let mysql_conn_id = match typ {
             SessionType::MySQL => Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed)),
@@ -145,13 +147,31 @@ impl SessionManager {
         };
 
         let session_ctx = SessionContext::try_create(settings, typ.clone())?;
-        let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
+        let session = Session::try_create(
+            id.clone(),
+            typ.clone(),
+            Box::new(session_ctx),
+            mysql_conn_id,
+        )?;
 
+        Ok(session)
+    }
+
+    /// Add session to the session manager.
+    ///
+    /// Return a shared reference to the session.
+    pub fn register_session(&self, session: Session) -> Result<Arc<Session>> {
+        let id = session.get_id();
+        let typ = session.get_type();
+        let mysql_conn_id = session.get_mysql_conn_id();
+
+        let session = Arc::new(session);
         self.try_add_session(session.clone(), typ.clone())?;
 
         if let SessionType::MySQL = typ {
             let mut mysql_conn_map = self.mysql_conn_map.write();
             self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
+
             mysql_conn_map.insert(mysql_conn_id, id);
         }
 
@@ -357,14 +377,18 @@ impl SessionManager {
 
         let mut queries_profiles = HashMap::new();
         for weak_ptr in active_sessions {
-            if let Some(session_ctx) = weak_ptr.upgrade().map(|x| x.session_ctx.clone()) {
-                if let Some(context_shared) = session_ctx.get_query_context_shared() {
-                    if let Some(executor) = context_shared.executor.read().upgrade() {
-                        queries_profiles.insert(
-                            context_shared.init_query_id.as_ref().read().clone(),
-                            executor.get_profiles(),
-                        );
-                    }
+            let Some(arc_sesssion) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_sesssion.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                if let Some(executor) = context_shared.executor.read().upgrade() {
+                    queries_profiles.insert(
+                        context_shared.init_query_id.as_ref().read().clone(),
+                        executor.get_profiles(),
+                    );
                 }
             }
         }

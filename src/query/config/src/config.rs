@@ -48,6 +48,8 @@ use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
 use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
+use databend_common_tracing::OTLPEndpointConfig as InnerOTLPEndpointConfig;
+use databend_common_tracing::OTLPProtocol;
 use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
 use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
@@ -56,6 +58,7 @@ use databend_common_tracing::TracingConfig as InnerTracingConfig;
 use databend_common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_with::with_prefix;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
@@ -70,8 +73,6 @@ use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::background_config::BackgroundConfig;
 use crate::DATABEND_COMMIT_VERSION;
-
-// FIXME: too much boilerplate here
 
 const CATALOG_HIVE: &str = "hive";
 
@@ -621,7 +622,7 @@ impl Default for GcsStorageConfig {
 }
 
 impl Debug for GcsStorageConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("GcsStorageConfig")
             .field("endpoint_url", &self.gcs_endpoint_url)
             .field("root", &self.gcs_root)
@@ -970,7 +971,7 @@ impl Default for ObsStorageConfig {
 }
 
 impl Debug for ObsStorageConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("ObsStorageConfig")
             .field("endpoint_url", &self.obs_endpoint_url)
             .field("bucket", &self.obs_bucket)
@@ -1934,14 +1935,14 @@ impl TryInto<InnerLogConfig> for LogConfig {
         }
 
         let otlp: InnerOTLPLogConfig = self.otlp.try_into()?;
-        if otlp.on && otlp.endpoint.is_empty() {
+        if otlp.on && otlp.endpoint.endpoint.is_empty() {
             return Err(ErrorCode::InvalidConfig(
                 "`endpoint` must be set when `otlp.on` is true".to_string(),
             ));
         }
 
         let mut query: InnerQueryLogConfig = self.query.try_into()?;
-        if query.on && query.dir.is_empty() && query.otlp_endpoint.is_empty() {
+        if query.on && query.dir.is_empty() && query.otlp.is_none() {
             if file.dir.is_empty() {
                 return Err(ErrorCode::InvalidConfig(
                     "`dir` or `file.dir` must be set when `query.dir` is empty".to_string(),
@@ -1952,7 +1953,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
         }
 
         let mut profile: InnerProfileLogConfig = self.profile.try_into()?;
-        if profile.on && profile.dir.is_empty() && profile.otlp_endpoint.is_empty() {
+        if profile.on && profile.dir.is_empty() && profile.otlp.is_none() {
             if file.dir.is_empty() {
                 return Err(ErrorCode::InvalidConfig(
                     "`dir` or `file.dir` must be set when `profile.dir` is empty".to_string(),
@@ -2149,19 +2150,9 @@ pub struct OTLPLogConfig {
     #[serde(rename = "level")]
     pub otlp_level: String,
 
-    /// Log OpenTelemetry OTLP endpoint
-    #[clap(
-        long = "log-otlp-endpoint",
-        value_name = "VALUE",
-        default_value = "http://127.0.0.1:4317"
-    )]
-    #[serde(rename = "endpoint")]
-    pub otlp_endpoint: String,
-
-    /// Log Labels
     #[clap(skip)]
-    #[serde(rename = "labels")]
-    pub otlp_labels: BTreeMap<String, String>,
+    #[serde(flatten, with = "prefix_otlp")]
+    pub otlp_endpoint: OTLPEndpointConfig,
 }
 
 impl Default for OTLPLogConfig {
@@ -2177,8 +2168,7 @@ impl TryInto<InnerOTLPLogConfig> for OTLPLogConfig {
         Ok(InnerOTLPLogConfig {
             on: self.otlp_on,
             level: self.otlp_level,
-            endpoint: self.otlp_endpoint,
-            labels: self.otlp_labels,
+            endpoint: self.otlp_endpoint.try_into()?,
         })
     }
 }
@@ -2188,8 +2178,7 @@ impl From<InnerOTLPLogConfig> for OTLPLogConfig {
         Self {
             otlp_on: inner.on,
             otlp_level: inner.level,
-            otlp_endpoint: inner.endpoint,
-            otlp_labels: inner.labels,
+            otlp_endpoint: inner.endpoint.into(),
         }
     }
 }
@@ -2206,19 +2195,9 @@ pub struct QueryLogConfig {
     #[serde(rename = "dir")]
     pub log_query_dir: String,
 
-    /// Query Log OpenTelemetry OTLP endpoint
-    #[clap(
-        long = "log-query-otlp-endpoint",
-        value_name = "VALUE",
-        default_value = ""
-    )]
-    #[serde(rename = "otlp_endpoint")]
-    pub log_query_otlp_endpoint: String,
-
-    /// Query Log Labels
     #[clap(skip)]
-    #[serde(rename = "labels")]
-    pub log_query_otlp_labels: BTreeMap<String, String>,
+    #[serde(flatten, with = "prefix_otlp")]
+    pub log_query_otlp: Option<OTLPEndpointConfig>,
 }
 
 impl Default for QueryLogConfig {
@@ -2234,8 +2213,7 @@ impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
         Ok(InnerQueryLogConfig {
             on: self.log_query_on,
             dir: self.log_query_dir,
-            otlp_endpoint: self.log_query_otlp_endpoint,
-            labels: self.log_query_otlp_labels,
+            otlp: self.log_query_otlp.map(|cfg| cfg.try_into()).transpose()?,
         })
     }
 }
@@ -2245,8 +2223,7 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
         Self {
             log_query_on: inner.on,
             log_query_dir: inner.dir,
-            log_query_otlp_endpoint: inner.otlp_endpoint,
-            log_query_otlp_labels: inner.labels,
+            log_query_otlp: inner.otlp.map(|cfg| cfg.into()),
         }
     }
 }
@@ -2263,19 +2240,9 @@ pub struct ProfileLogConfig {
     #[serde(rename = "dir")]
     pub log_profile_dir: String,
 
-    /// Profile Log OpenTelemetry OTLP endpoint
-    #[clap(
-        long = "log-profile-otlp-endpoint",
-        value_name = "VALUE",
-        default_value = ""
-    )]
-    #[serde(rename = "otlp_endpoint")]
-    pub log_profile_otlp_endpoint: String,
-
-    /// Profile Log Labels
     #[clap(skip)]
-    #[serde(rename = "labels")]
-    pub log_profile_otlp_labels: BTreeMap<String, String>,
+    #[serde(flatten, with = "prefix_otlp")]
+    pub log_profile_otlp: Option<OTLPEndpointConfig>,
 }
 
 impl Default for ProfileLogConfig {
@@ -2291,8 +2258,10 @@ impl TryInto<InnerProfileLogConfig> for ProfileLogConfig {
         Ok(InnerProfileLogConfig {
             on: self.log_profile_on,
             dir: self.log_profile_dir,
-            otlp_endpoint: self.log_profile_otlp_endpoint,
-            labels: self.log_profile_otlp_labels,
+            otlp: self
+                .log_profile_otlp
+                .map(|cfg| cfg.try_into())
+                .transpose()?,
         })
     }
 }
@@ -2302,8 +2271,7 @@ impl From<InnerProfileLogConfig> for ProfileLogConfig {
         Self {
             log_profile_on: inner.on,
             log_profile_dir: inner.dir,
-            log_profile_otlp_endpoint: inner.otlp_endpoint,
-            log_profile_otlp_labels: inner.labels,
+            log_profile_otlp: inner.otlp.map(|cfg| cfg.into()),
         }
     }
 }
@@ -2363,14 +2331,9 @@ pub struct TracingConfig {
     #[serde(rename = "capture_log_level")]
     pub tracing_capture_log_level: String,
 
-    /// Tracing otlp endpoint
-    #[clap(
-        long = "log-tracing-otlp-endpoint",
-        value_name = "VALUE",
-        default_value = "http://127.0.0.1:4317"
-    )]
-    #[serde(rename = "otlp_endpoint")]
-    pub tracing_otlp_endpoint: String,
+    #[clap(skip)]
+    #[serde(flatten, with = "prefix_otlp")]
+    pub tracing_otlp: OTLPEndpointConfig,
 }
 
 impl Default for TracingConfig {
@@ -2386,7 +2349,7 @@ impl TryInto<InnerTracingConfig> for TracingConfig {
         Ok(InnerTracingConfig {
             on: self.tracing_on,
             capture_log_level: self.tracing_capture_log_level,
-            otlp_endpoint: self.tracing_otlp_endpoint,
+            otlp: self.tracing_otlp.try_into()?,
         })
     }
 }
@@ -2396,7 +2359,52 @@ impl From<InnerTracingConfig> for TracingConfig {
         Self {
             tracing_on: inner.on,
             tracing_capture_log_level: inner.capture_log_level,
-            tracing_otlp_endpoint: inner.otlp_endpoint,
+            tracing_otlp: inner.otlp.into(),
+        }
+    }
+}
+
+with_prefix!(prefix_otlp "otlp_");
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct OTLPEndpointConfig {
+    /// Log OpenTelemetry OTLP endpoint
+    pub endpoint: String,
+
+    /// Log OpenTelemetry OTLP protocol
+    #[clap(skip)]
+    pub protocol: OTLPProtocol,
+
+    /// Log OpenTelemetry Labels
+    #[clap(skip)]
+    pub labels: BTreeMap<String, String>,
+}
+
+impl Default for OTLPEndpointConfig {
+    fn default() -> Self {
+        InnerOTLPEndpointConfig::default().into()
+    }
+}
+
+impl TryInto<InnerOTLPEndpointConfig> for OTLPEndpointConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerOTLPEndpointConfig> {
+        Ok(InnerOTLPEndpointConfig {
+            endpoint: self.endpoint,
+            protocol: self.protocol,
+            labels: self.labels,
+        })
+    }
+}
+
+impl From<InnerOTLPEndpointConfig> for OTLPEndpointConfig {
+    fn from(inner: InnerOTLPEndpointConfig) -> Self {
+        Self {
+            endpoint: inner.endpoint,
+            protocol: inner.protocol,
+            labels: inner.labels,
         }
     }
 }
@@ -2806,6 +2814,15 @@ pub struct CacheConfig {
     )]
     pub data_cache_storage: CacheStorageTypeConfig,
 
+    /// Policy of disk cache restart
+    #[clap(
+        long = "cache-data-cache-key-reload-policy",
+        value_name = "VALUE",
+        value_enum,
+        default_value_t
+    )]
+    pub data_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+
     /// Max size of external cache population queue length
     ///
     /// the items being queued reference table column raw data, which are
@@ -2887,6 +2904,22 @@ pub enum CacheStorageTypeConfig {
 impl Default for CacheStorageTypeConfig {
     fn default() -> Self {
         Self::None
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum DiskCacheKeyReloadPolicy {
+    // remove all the disk cache during restart
+    Reset,
+    // recovery the cache keys during restart,
+    // but cache capacity will not be checked
+    Fuzzy,
+}
+
+impl Default for DiskCacheKeyReloadPolicy {
+    fn default() -> Self {
+        Self::Reset
     }
 }
 
@@ -2991,6 +3024,7 @@ mod cache_config_converters {
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.try_into()?,
+                data_cache_key_reload_policy: value.data_cache_key_reload_policy.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
             })
@@ -3013,6 +3047,7 @@ mod cache_config_converters {
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
+                data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.into(),
@@ -3057,6 +3092,25 @@ mod cache_config_converters {
             match value {
                 inner::CacheStorageTypeConfig::None => CacheStorageTypeConfig::None,
                 inner::CacheStorageTypeConfig::Disk => CacheStorageTypeConfig::Disk,
+            }
+        }
+    }
+
+    impl TryFrom<DiskCacheKeyReloadPolicy> for inner::DiskCacheKeyReloadPolicy {
+        type Error = ErrorCode;
+        fn try_from(value: DiskCacheKeyReloadPolicy) -> std::result::Result<Self, Self::Error> {
+            Ok(match value {
+                DiskCacheKeyReloadPolicy::Reset => inner::DiskCacheKeyReloadPolicy::Reset,
+                DiskCacheKeyReloadPolicy::Fuzzy => inner::DiskCacheKeyReloadPolicy::Fuzzy,
+            })
+        }
+    }
+
+    impl From<inner::DiskCacheKeyReloadPolicy> for DiskCacheKeyReloadPolicy {
+        fn from(value: inner::DiskCacheKeyReloadPolicy) -> Self {
+            match value {
+                inner::DiskCacheKeyReloadPolicy::Reset => DiskCacheKeyReloadPolicy::Reset,
+                inner::DiskCacheKeyReloadPolicy::Fuzzy => DiskCacheKeyReloadPolicy::Fuzzy,
             }
         }
     }

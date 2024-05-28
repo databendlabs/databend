@@ -23,6 +23,7 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -35,6 +36,7 @@ use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
+use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
@@ -42,7 +44,6 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
-use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -57,6 +58,7 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
+use crate::plans::CacheSource;
 use crate::plans::JoinType;
 
 impl PhysicalPlan {
@@ -71,13 +73,12 @@ pub struct PhysicalPlanIndentFormatDisplay<'a> {
 }
 
 impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", "  ".repeat(self.indent))?;
 
         match self.node {
             PhysicalPlan::TableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::Filter(filter) => write!(f, "{}", filter)?,
-            PhysicalPlan::Project(project) => write!(f, "{}", project)?,
             PhysicalPlan::EvalScalar(eval_scalar) => write!(f, "{}", eval_scalar)?,
             PhysicalPlan::AggregateExpand(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
@@ -112,6 +113,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::ExpressionScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::CacheScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
@@ -138,25 +141,25 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
 }
 
 impl Display for TableScan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "TableScan: [{}]", self.source.source_info.desc())
     }
 }
 
 impl Display for CteScan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CteScan: [{}]", self.cte_idx.0)
     }
 }
 
 impl Display for MaterializedCte {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MaterializedCte")
     }
 }
 
 impl Display for ConstantTableScan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let columns = self
             .values
             .iter()
@@ -171,8 +174,41 @@ impl Display for ConstantTableScan {
     }
 }
 
-impl Display for Filter {
+impl Display for ExpressionScan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let columns = self
+            .values
+            .iter()
+            .enumerate()
+            .map(|(i, value)| {
+                let column = value
+                    .iter()
+                    .map(|val| val.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .join(", ");
+                format!("column {}: [{}]", i, column)
+            })
+            .collect::<Vec<String>>();
+
+        write!(f, "ExpressionScan: {}", columns.join(", "))
+    }
+}
+
+impl Display for CacheScan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.cache_source {
+            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
+                write!(
+                    f,
+                    "CacheScan: [cache_index: {}, column_indexes: {:?}]",
+                    cache_index, column_indexes
+                )
+            }
+        }
+    }
+}
+
+impl Display for Filter {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let predicates = self
             .predicates
             .iter()
@@ -183,26 +219,8 @@ impl Display for Filter {
     }
 }
 
-impl Display for Project {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Ok(input_schema) = self.input.output_schema() {
-            let project_columns_name = self
-                .projections
-                .iter()
-                .sorted()
-                .map(|idx| input_schema.field(*idx).name())
-                .cloned()
-                .collect::<Vec<String>>();
-
-            return write!(f, "Project: [{}]", project_columns_name.join(", "));
-        }
-
-        write!(f, "Project: [{:?}]", self.projections)
-    }
-}
-
 impl Display for Sort {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let scalars = self
             .order_by
             .iter()
@@ -220,7 +238,7 @@ impl Display for Sort {
 }
 
 impl Display for EvalScalar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let scalars = self
             .exprs
             .iter()
@@ -232,7 +250,7 @@ impl Display for EvalScalar {
 }
 
 impl Display for AggregateExpand {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let sets = self
             .grouping_sets
             .sets
@@ -251,7 +269,7 @@ impl Display for AggregateExpand {
 }
 
 impl Display for AggregateFinal {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let group_items = self
             .group_by
             .iter()
@@ -284,7 +302,7 @@ impl Display for AggregateFinal {
 }
 
 impl Display for AggregatePartial {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let group_items = self
             .group_by
             .iter()
@@ -317,27 +335,27 @@ impl Display for AggregatePartial {
 }
 
 impl Display for Window {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let window_id = self.plan_id;
         write!(f, "Window: [{}]", window_id)
     }
 }
 
 impl Display for Limit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let limit = self.limit.as_ref().cloned().unwrap_or(0);
         write!(f, "Limit: [{}], Offset: [{}]", limit, self.offset)
     }
 }
 
 impl Display for RowFetch {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "RowFetch: [{:?}]", self.cols_to_fetch)
     }
 }
 
 impl Display for HashJoin {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self.join_type {
             JoinType::Cross => {
                 write!(f, "CrossJoin")
@@ -375,13 +393,13 @@ impl Display for HashJoin {
 }
 
 impl Display for RangeJoin {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "IEJoin: {}", &self.join_type)
     }
 }
 
 impl Display for Exchange {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let keys = self
             .keys
             .iter()
@@ -393,7 +411,7 @@ impl Display for Exchange {
 }
 
 impl Display for ExchangeSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "Exchange Source: fragment id: [{:?}]",
@@ -403,7 +421,7 @@ impl Display for ExchangeSource {
 }
 
 impl Display for ExchangeSink {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "Exchange Sink: fragment id: [{:?}]",
@@ -413,48 +431,48 @@ impl Display for ExchangeSink {
 }
 
 impl Display for UnionAll {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UnionAll")
     }
 }
 
 impl Display for DistributedInsertSelect {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DistributedInsertSelect")
     }
 }
 
 impl Display for CompactSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CompactSource")
     }
 }
 
 impl Display for DeleteSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DeleteSource")
     }
 }
 
 impl Display for CommitSink {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CommitSink")
     }
 }
 impl Display for CopyIntoTable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CopyIntoTable")
     }
 }
 
 impl Display for CopyIntoLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CopyIntoLocation")
     }
 }
 
 impl Display for ProjectSet {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let scalars = self
             .srf_exprs
             .iter()
@@ -470,61 +488,61 @@ impl Display for ProjectSet {
 }
 
 impl Display for ReplaceAsyncSourcer {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "AsyncSourcer")
     }
 }
 
 impl Display for ReplaceDeduplicate {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Deduplicate")
     }
 }
 
 impl Display for ReplaceInto {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Replace")
     }
 }
 
 impl Display for MergeInto {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeInto")
     }
 }
 
 impl Display for MergeIntoAddRowNumber {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoAddRowNumber")
     }
 }
 
 impl Display for MergeIntoAppendNotMatched {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoAppendNotMatched")
     }
 }
 
 impl Display for ReclusterSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ReclusterSource")
     }
 }
 
 impl Display for ReclusterSink {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ReclusterSink")
     }
 }
 
 impl Display for UpdateSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UpdateSource")
     }
 }
 
 impl Display for Udf {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let scalars = self
             .udf_funcs
             .iter()
@@ -538,7 +556,7 @@ impl Display for Udf {
 }
 
 impl Display for AsyncFunction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "AsyncFunction: {}", self.display_name)
     }
 }

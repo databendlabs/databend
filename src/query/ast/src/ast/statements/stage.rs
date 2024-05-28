@@ -17,37 +17,31 @@ use std::default::Default;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
+use crate::ast::CreateOption;
 use crate::ast::FileFormatOptions;
 use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateStageStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
-    #[drive(skip)]
     pub stage_name: String,
 
     pub location: Option<UriLocation>,
 
     pub file_format_options: FileFormatOptions,
-    #[drive(skip)]
     pub on_error: String,
-    #[drive(skip)]
     pub size_limit: usize,
-    #[drive(skip)]
     pub validation_mode: String,
-    #[drive(skip)]
     pub comments: String,
 }
 
 impl Display for CreateStageStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE")?;
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, " OR REPLACE")?;
@@ -88,10 +82,10 @@ impl Display for CreateStageStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SelectStageOption {
-    Files(#[drive(skip)] Vec<String>),
-    Pattern(#[drive(skip)] String),
-    FileFormat(#[drive(skip)] String),
-    Connection(#[drive(skip)] BTreeMap<String, String>),
+    Files(Vec<String>),
+    Pattern(String),
+    FileFormat(String),
+    Connection(BTreeMap<String, String>),
 }
 
 impl SelectStageOptions {
@@ -111,13 +105,9 @@ impl SelectStageOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct SelectStageOptions {
-    #[drive(skip)]
     pub files: Option<Vec<String>>,
-    #[drive(skip)]
     pub pattern: Option<String>,
-    #[drive(skip)]
     pub file_format: Option<String>,
-    #[drive(skip)]
     pub connection: BTreeMap<String, String>,
 }
 
@@ -146,7 +136,7 @@ impl SelectStageOptions {
 // [ ENABLE_VIRTUAL_HOST_STYLE => true|false ]
 // )]
 impl Display for SelectStageOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, " (")?;
 
         if let Some(files) = self.files.as_ref() {

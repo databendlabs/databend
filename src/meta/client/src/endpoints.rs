@@ -120,7 +120,7 @@ impl Endpoints {
 }
 
 impl fmt::Display for Endpoints {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let keys = self.nodes.keys().map(|x| x.as_str()).join(", ");
         write!(f, "current:{:?}, all:[{}]", self.current, keys)
     }

@@ -20,12 +20,11 @@ use derive_visitor::DriveMut;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ExecuteImmediateStmt {
-    #[drive(skip)]
     pub script: String,
 }
 
 impl Display for ExecuteImmediateStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "EXECUTE IMMEDIATE $$\n{}\n$$", self.script)?;
         Ok(())
     }

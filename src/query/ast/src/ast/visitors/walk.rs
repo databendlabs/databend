@@ -503,7 +503,11 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             role_name,
         } => visitor.visit_drop_role(*if_exists, role_name),
         Statement::Grant(stmt) => visitor.visit_grant(stmt),
-        Statement::ShowGrants { principal } => visitor.visit_show_grant(principal),
+        Statement::ShowGrants {
+            principal,
+            show_options,
+        } => visitor.visit_show_grant(principal, show_options),
+        Statement::ShowObjectPrivileges(stmt) => visitor.visit_show_object_priv(stmt),
         Statement::Revoke(stmt) => visitor.visit_revoke(stmt),
         Statement::CreateUDF(stmt) => visitor.visit_create_udf(stmt),
         Statement::DropUDF {
@@ -584,7 +588,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Begin => {}
         Statement::Commit => {}
         Statement::Abort => {}
-        Statement::InsertMultiTable(_) => {}
+        Statement::InsertMultiTable(stmt) => visitor.visit_multi_table_insert(stmt),
         Statement::ExecuteImmediate(_) => {}
         Statement::CreateSequence(stmt) => visitor.visit_create_sequence(stmt),
         Statement::DropSequence(stmt) => visitor.visit_drop_sequence(stmt),

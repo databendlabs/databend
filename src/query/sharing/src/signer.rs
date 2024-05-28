@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use anyhow::Result;
+use bytes::Buf;
 use bytes::Bytes;
 use databend_common_auth::RefreshableToken;
 use databend_common_config::GlobalConfig;
@@ -29,10 +30,10 @@ use http::Method;
 use http::Request;
 use log::info;
 use moka::sync::Cache;
-use opendal::raw::AsyncBody;
 use opendal::raw::HttpClient;
 use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
+use opendal::Buffer;
 
 pub(crate) const TENANT_HEADER: &str = "X-DATABEND-TENANT";
 
@@ -49,7 +50,7 @@ pub struct SharedSigner {
 }
 
 impl Debug for SharedSigner {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("SharedSigner")
             .field("endpoint", &self.endpoint)
             .finish_non_exhaustive()
@@ -168,10 +169,10 @@ impl SharedSigner {
             .header(AUTHORIZATION, auth)
             .header(CONTENT_LENGTH, bs.len())
             .header(TENANT_HEADER, requester)
-            .body(AsyncBody::Bytes(bs))?;
+            .body(Buffer::from(bs))?;
         let resp = self.client.send(req).await?;
-        let bs = resp.into_body().bytes().await?;
-        let items: Vec<PresignResponseItem> = serde_json::from_slice(&bs)?;
+        let bs = resp.into_body();
+        let items: Vec<PresignResponseItem> = serde_json::from_reader(bs.reader())?;
 
         for item in items {
             self.cache.insert(

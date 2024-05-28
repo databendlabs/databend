@@ -12,11 +12,7 @@ test = true
 
 [dependencies] # In alphabetical order
 databend-common-arrow = { path = "../arrow" }
-
-# GitHub dependencies
-# TODO: Use the version from crates.io once
-# https://github.com/brendanzab/codespan/pull/331 is released.
-codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
+databend-common-ast = { path = "../../query/ast" }
 
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
@@ -25,7 +21,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145
 bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
-http = "0.2"
+http = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"

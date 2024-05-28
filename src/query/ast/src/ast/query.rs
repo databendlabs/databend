@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::Span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -28,11 +27,11 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
+use crate::Span;
 
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Query {
-    #[drive(skip)]
     pub span: Span,
     // With clause, common table expression
     pub with: Option<With>,
@@ -48,12 +47,11 @@ pub struct Query {
     pub offset: Option<Expr>,
 
     // If ignore the result (not output).
-    #[drive(skip)]
     pub ignore_result: bool,
 }
 
 impl Display for Query {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         // CTE, with clause
         if let Some(with) = &self.with {
             write!(f, "WITH {with} ")?;
@@ -85,15 +83,13 @@ impl Display for Query {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct With {
-    #[drive(skip)]
     pub span: Span,
-    #[drive(skip)]
     pub recursive: bool,
     pub ctes: Vec<CTE>,
 }
 
 impl Display for With {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.recursive {
             write!(f, "RECURSIVE ")?;
         }
@@ -105,16 +101,14 @@ impl Display for With {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CTE {
-    #[drive(skip)]
     pub span: Span,
     pub alias: TableAlias,
-    #[drive(skip)]
     pub materialized: bool,
     pub query: Box<Query>,
 }
 
 impl Display for CTE {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} AS ", self.alias)?;
         if self.materialized {
             write!(f, "MATERIALIZED ")?;
@@ -126,10 +120,8 @@ impl Display for CTE {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct SetOperation {
-    #[drive(skip)]
     pub span: Span,
     pub op: SetOperator,
-    #[drive(skip)]
     pub all: bool,
     pub left: Box<SetExpr>,
     pub right: Box<SetExpr>,
@@ -138,12 +130,9 @@ pub struct SetOperation {
 /// A subquery represented with `SELECT` statement
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct SelectStmt {
-    #[drive(skip)]
     pub span: Span,
     pub hints: Option<Hint>,
-    #[drive(skip)]
     pub distinct: bool,
-    #[drive(skip)]
     pub top_n: Option<u64>,
     // Result set of current subquery
     pub select_list: Vec<SelectTarget>,
@@ -164,7 +153,7 @@ pub struct SelectStmt {
 }
 
 impl Display for SelectStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         // SELECT clause
         write!(f, "SELECT ")?;
         if let Some(hints) = &self.hints {
@@ -235,6 +224,9 @@ impl Display for SelectStmt {
             write_comma_separated_list(f, windows)?;
         }
 
+        if let Some(quailfy) = &self.qualify {
+            write!(f, " QUALIFY {quailfy}")?;
+        }
         Ok(())
     }
 }
@@ -264,15 +256,11 @@ pub enum SetExpr {
     // UNION/EXCEPT/INTERSECT operator
     SetOperation(Box<SetOperation>),
     // Values clause
-    Values {
-        #[drive(skip)]
-        span: Span,
-        values: Vec<Vec<Expr>>,
-    },
+    Values { span: Span, values: Vec<Vec<Expr>> },
 }
 
 impl Display for SetExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SetExpr::Select(select_stmt) => {
                 write!(f, "{select_stmt}")?;
@@ -326,15 +314,13 @@ pub enum SetOperator {
 pub struct OrderByExpr {
     pub expr: Expr,
     /// `ASC` or `DESC`
-    #[drive(skip)]
     pub asc: Option<bool>,
     /// `NULLS FIRST` or `NULLS LAST`
-    #[drive(skip)]
     pub nulls_first: Option<bool>,
 }
 
 impl Display for OrderByExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.expr)?;
         if let Some(asc) = self.asc {
             if asc {
@@ -416,7 +402,7 @@ impl SelectTarget {
 }
 
 impl Display for SelectTarget {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SelectTarget::AliasedExpr { expr, alias } => {
                 write!(f, "{expr}")?;
@@ -479,11 +465,11 @@ pub enum Indirection {
     // Field name
     Identifier(Identifier),
     // Wildcard star
-    Star(#[drive(skip)] Span),
+    Star(Span),
 }
 
 impl Display for Indirection {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Indirection::Identifier(ident) => {
                 write!(f, "{ident}")?;
@@ -499,7 +485,7 @@ impl Display for Indirection {
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TimeTravelPoint {
-    Snapshot(#[drive(skip)] String),
+    Snapshot(String),
     Timestamp(Box<Expr>),
     Offset(Box<Expr>),
     Stream {
@@ -510,7 +496,7 @@ pub enum TimeTravelPoint {
 }
 
 impl Display for TimeTravelPoint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TimeTravelPoint::Snapshot(sid) => {
                 write!(f, "(SNAPSHOT => '{sid}')")?;
@@ -547,7 +533,7 @@ pub struct Pivot {
 }
 
 impl Display for Pivot {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
         write_comma_separated_list(f, &self.values)?;
         write!(f, "))")?;
@@ -563,7 +549,7 @@ pub struct Unpivot {
 }
 
 impl Display for Unpivot {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "UNPIVOT({} FOR {} IN (",
@@ -577,14 +563,13 @@ impl Display for Unpivot {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ChangesInterval {
-    #[drive(skip)]
     pub append_only: bool,
     pub at_point: TimeTravelPoint,
     pub end_point: Option<TimeTravelPoint>,
 }
 
 impl Display for ChangesInterval {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CHANGES (INFORMATION => ")?;
         if self.append_only {
             write!(f, "APPEND_ONLY")?;
@@ -606,7 +591,7 @@ pub enum TemporalClause {
 }
 
 impl Display for TemporalClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TemporalClause::TimeTravel(point) => {
                 write!(f, "AT {}", point)?;
@@ -624,22 +609,21 @@ impl Display for TemporalClause {
 pub enum TableReference {
     // Table name
     Table {
-        #[drive(skip)]
         span: Span,
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
+        /// whether consume the table
+        consume: bool,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
-        #[drive(skip)]
         span: Span,
         /// Whether the table function is a lateral table function
-        #[drive(skip)]
         lateral: bool,
         name: Identifier,
         params: Vec<Expr>,
@@ -648,21 +632,17 @@ pub enum TableReference {
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
-        #[drive(skip)]
         span: Span,
         /// Whether the subquery is a lateral subquery
-        #[drive(skip)]
         lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
     Join {
-        #[drive(skip)]
         span: Span,
         join: Join,
     },
     Location {
-        #[drive(skip)]
         span: Span,
         location: FileLocation,
         options: SelectStageOptions,
@@ -694,7 +674,7 @@ impl TableReference {
 }
 
 impl Display for TableReference {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TableReference::Table {
                 span: _,
@@ -703,6 +683,7 @@ impl Display for TableReference {
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot,
                 unpivot,
             } => {
@@ -713,6 +694,10 @@ impl Display for TableReference {
 
                 if let Some(temporal) = temporal {
                     write!(f, " {temporal}")?;
+                }
+
+                if *consume {
+                    write!(f, " WITH CONSUME")?;
                 }
 
                 if let Some(alias) = alias {
@@ -840,7 +825,7 @@ pub struct TableAlias {
 }
 
 impl Display for TableAlias {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", &self.name)?;
         if !self.columns.is_empty() {
             write!(f, "(")?;

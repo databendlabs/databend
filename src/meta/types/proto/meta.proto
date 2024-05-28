@@ -173,6 +173,7 @@ message ClusterStatus {
   repeated string voters = 15;
   repeated string non_voters = 16;
   uint64 last_seq = 17;
+  uint64 key_num = 18;
 }
 
 message ClientInfo {
@@ -242,7 +243,6 @@ service RaftService {
   // raft RPC
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
-  rpc InstallSnapshot(RaftRequest) returns (RaftReply);
   rpc InstallSnapshotV1(SnapshotChunkRequest) returns (RaftReply);
   rpc InstallSnapshotV2(stream SnapshotChunkRequestV2) returns (RaftReply);
   rpc Vote(RaftRequest) returns (RaftReply);

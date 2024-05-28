@@ -39,7 +39,6 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 
-use crate::locks::LockManager;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
@@ -170,6 +169,7 @@ impl PipelineBuilder {
                     })
                     .collect();
 
+                self.ctx.set_enable_sort_spill(false);
                 let sort_pipeline_builder =
                     SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
                         .with_partial_block_size(partial_block_size)
@@ -228,13 +228,6 @@ impl PipelineBuilder {
 
         let snapshot_gen =
             MutationGenerator::new(recluster_sink.snapshot.clone(), MutationKind::Recluster);
-        let lock = if recluster_sink.need_lock {
-            Some(LockManager::create_table_lock(
-                recluster_sink.table_info.clone(),
-            )?)
-        } else {
-            None
-        };
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -244,7 +237,6 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                lock.clone(),
                 None,
                 None,
             )

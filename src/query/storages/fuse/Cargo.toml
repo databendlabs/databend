@@ -55,7 +55,6 @@ futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = { workspace = true }
 log = { workspace = true }
-metrics = "0.20.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet_rs = { workspace = true }
@@ -73,4 +72,4 @@ uuid = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = { workspace = true }

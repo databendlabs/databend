@@ -20,9 +20,9 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 
@@ -53,7 +53,7 @@ impl<const REFKIND: usize> Hash for Ref<REFKIND> {
 }
 
 impl<const REFKIND: usize> Display for Ref<REFKIND> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}({})", self.display_name, self.index)
     }
 }
@@ -95,7 +95,7 @@ pub enum ScriptIR {
 }
 
 impl Display for ScriptIR {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ScriptIR::Query {
                 stmt: query,
@@ -134,7 +134,7 @@ pub enum ColumnAccess {
 }
 
 impl Display for ColumnAccess {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ColumnAccess::Position(index) => write!(f, "${}", index),
             ColumnAccess::Name(name) => write!(f, "\"{}\"", name),
@@ -143,7 +143,7 @@ impl Display for ColumnAccess {
 }
 
 impl Display for StatementTemplate {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.stmt)
     }
 }

@@ -604,13 +604,13 @@ jobs:
         with:
           name: test-sqlsmith
 
-  bindings_python:
-    if: inputs.stable
-    needs: create_release
-    uses: ./.github/workflows/bindings.python.yml
-    secrets: inherit
-    with:
-      tag: ${{ needs.create_release.outputs.version }}
+  # bindings_python:
+  #   if: inputs.stable
+  #   needs: create_release
+  #   uses: ./.github/workflows/bindings.python.yml
+  #   secrets: inherit
+  #   with:
+  #     tag: ${{ needs.create_release.outputs.version }}
 
   notify:
     runs-on: ubuntu-latest

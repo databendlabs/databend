@@ -56,7 +56,6 @@ use opendal::Operator;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::AbortOperation;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
@@ -83,8 +82,7 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc =
-                TransformSerializeSegment::new(ctx.clone(), input, output, self, block_thresholds);
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 
@@ -105,7 +103,6 @@ impl FuseTable {
                 update_stream_meta.clone(),
                 snapshot_gen.clone(),
                 input,
-                None,
                 None,
                 prev_snapshot_id,
                 deduplicated_label.clone(),
@@ -159,6 +156,7 @@ impl FuseTable {
             None,
         )
         .await;
+
         if need_to_save_statistics {
             let table_statistics_location: String = table_statistics_location.unwrap();
             match &res {
@@ -166,13 +164,10 @@ impl FuseTable {
                     table_statistics_location,
                     Arc::new(table_statistics.unwrap()),
                 ),
-                Err(e) => {
-                    if Self::no_side_effects_in_meta_store(e) {
-                        let _ = operator.delete(&table_statistics_location).await;
-                    }
-                }
+                Err(e) => info!("update_table_meta failed. {}", e),
             }
         }
+
         res
     }
 
@@ -235,30 +230,13 @@ impl FuseTable {
         };
 
         // 3. let's roll
-        let reply = catalog.update_table_meta(table_info, req).await;
-        match reply {
-            Ok(_) => {
-                TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
-                // try keep a hit file of last snapshot
-                Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
-                    .await;
-                Ok(())
-            }
-            Err(e) => {
-                // commit snapshot to meta server failed.
-                // figure out if the un-committed snapshot is safe to be removed.
-                if Self::no_side_effects_in_meta_store(&e) {
-                    // currently, only in this case (TableVersionMismatched),  we are SURE about
-                    // that the table state insides meta store has NOT been changed.
-                    info!(
-                        "removing uncommitted table snapshot at location {}, of table {}, {}",
-                        snapshot_location, table_info.desc, table_info.ident
-                    );
-                    let _ = operator.delete(&snapshot_location).await;
-                }
-                Err(e)
-            }
-        }
+        catalog.update_table_meta(table_info, req).await?;
+
+        // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
+        TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
+        Self::write_last_snapshot_hint(operator, location_generator, snapshot_location).await;
+
+        Ok(())
     }
 
     // Left a hint file which indicates the location of the latest snapshot
@@ -300,7 +278,6 @@ impl FuseTable {
         base_snapshot: Arc<TableSnapshot>,
         base_segments: &[Location],
         base_summary: Statistics,
-        abort_operation: AbortOperation,
         max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
@@ -388,9 +365,6 @@ impl FuseTable {
                                 concurrently_appended_segment_locations =
                                     &latest_snapshot.segments[range_of_newly_append];
                             } else {
-                                abort_operation
-                                    .abort(ctx.clone(), self.operator.clone())
-                                    .await?;
                                 metrics_inc_commit_mutation_unresolvable_conflict();
                                 break Err(ErrorCode::UnresolvableConflict(
                                     "segment compact conflict with other operations",
@@ -402,13 +376,10 @@ impl FuseTable {
                             continue;
                         }
                         None => {
-                            // Commit not fulfilled. try to abort the operations.
+                            // Commit not fulfilled, abort.
                             //
                             // Note that, here the last error we have seen is TableVersionMismatched,
                             // otherwise we should have been returned, thus it is safe to abort the operation here.
-                            abort_operation
-                                .abort(ctx.clone(), self.operator.clone())
-                                .await?;
                             break Err(ErrorCode::StorageOther(format!(
                                 "commit mutation failed after {} retries",
                                 retries

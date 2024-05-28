@@ -21,9 +21,9 @@ databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
-async-trait = { version = "0.1.77", package = "async-trait-fn" }
+async-trait = { workspace = true }
 bytes = { workspace = true }
-deltalake = { git = "https://github.com/delta-io/delta-rs", package = "deltalake-core", rev = "7f0454e" }
+deltalake = { git = "https://github.com/delta-io/delta-rs", package = "deltalake-core", rev = "81593e9" }
 flagset = "0.4"
 futures = "0.3"
 match-template = "0.0.1"

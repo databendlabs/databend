@@ -14,15 +14,10 @@ memory-profiling = [
     "databend-query/memory-profiling",
     "databend-common-base/memory-profiling",
 ]
+python-udf = ["databend-query/python-udf"]
 simd = ["databend-meta/simd", "databend-query/simd"]
 z3-prove = ["databend-query/z3-prove"]
 jemalloc = ["databend-common-base/jemalloc"]
-tokio-console = [
-    "databend-meta/tokio-console",
-    "databend-query/io-uring",
-    "databend-common-base/tracing",
-    "databend-common-tracing/console",
-]
 io-uring = [
     "databend-meta/io-uring",
     "databend-query/io-uring",
@@ -46,6 +41,7 @@ databend-common-meta-raft-store = { path = "../meta/raft-store" }
 databend-common-meta-sled-store = { path = "../meta/sled-store" }
 databend-common-meta-store = { path = "../meta/store" }
 databend-common-meta-types = { path = "../meta/types" }
+databend-common-metrics = { path = "../common/metrics" }
 databend-common-storage = { path = "../common/storage" }
 databend-common-tracing = { path = "../common/tracing" }
 databend-enterprise-query = { path = "../query/ee" }
@@ -66,13 +62,6 @@ log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 poem = { workspace = true }
-sentry = { version = "0.32.2", default-features = false, features = [
-    "backtrace",
-    "contexts",
-    "panic",
-    "reqwest",
-    "rustls",
-] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }

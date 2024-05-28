@@ -139,7 +139,7 @@ where
     T: Debug + Clone + PartialEq,
     ID: Debug + Clone + PartialEq,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "id: {:?}", self.ident)?;
         write!(f, "prev: {:?}", self.prev)?;
         write!(f, "result: {:?}", self.result)

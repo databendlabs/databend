@@ -47,10 +47,12 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
@@ -548,9 +550,27 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_enable_sort_spill(&self) -> bool {
+        todo!()
+    }
+    fn set_enable_sort_spill(&self, _enable: bool) {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
+    fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
+        todo!()
+    }
 
     fn get_query_str(&self) -> String {
+        todo!()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        todo!()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
         todo!()
     }
 
@@ -601,6 +621,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
+
+    async fn validate_privilege(
+        &self,
+        _object: &GrantObject,
+        _privilege: UserPrivilegeType,
+    ) -> Result<()> {
         todo!()
     }
 

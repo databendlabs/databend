@@ -64,7 +64,6 @@ fn find_join(plan: &PhysicalPlan) -> Result<HashJoin> {
     match plan {
         PhysicalPlan::HashJoin(join) => Ok(join.clone()),
         PhysicalPlan::Filter(plan) => find_join(plan.input.as_ref()),
-        PhysicalPlan::Project(plan) => find_join(plan.input.as_ref()),
         PhysicalPlan::EvalScalar(plan) => find_join(plan.input.as_ref()),
         PhysicalPlan::ProjectSet(plan) => find_join(plan.input.as_ref()),
         PhysicalPlan::AggregateExpand(plan) => find_join(plan.input.as_ref()),
@@ -92,6 +91,7 @@ async fn join_build_state(
         &join.probe_to_build,
         false,
         true,
+        None,
     )?;
     let build_state = HashJoinBuildState::try_create(
         ctx.clone(),

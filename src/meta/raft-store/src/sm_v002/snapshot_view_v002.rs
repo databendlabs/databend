@@ -14,7 +14,6 @@
 
 use std::future;
 use std::io;
-use std::sync::Arc;
 
 use databend_common_meta_types::SeqNum;
 use databend_common_meta_types::SeqV;
@@ -22,14 +21,15 @@ use databend_common_meta_types::SnapshotMeta;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 
-use crate::key_spaces::RaftStoreEntry;
+use crate::key_spaces::SMEntry;
+use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::map_api::MapApiRO;
+use crate::leveled_store::map_api::ResultStream;
+use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
-use crate::sm_v002::leveled_store::map_api::AsMap;
-use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::map_api::ResultStream;
-use crate::sm_v002::leveled_store::static_levels::StaticLevels;
-use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::state_machine::ExpireValue;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
@@ -38,16 +38,16 @@ use crate::state_machine::StateMachineMetaValue;
 /// A snapshot view of a state machine, which is static and not affected by further writing to the state machine.
 pub struct SnapshotViewV002 {
     /// The compacted snapshot data.
-    compacted: StaticLevels,
+    compacted: ImmutableLevels,
 
     /// Original non compacted snapshot data.
     ///
     /// This is kept just for debug.
-    original: StaticLevels,
+    original: ImmutableLevels,
 }
 
 impl SnapshotViewV002 {
-    pub fn new(top: StaticLevels) -> Self {
+    pub fn new(top: ImmutableLevels) -> Self {
         Self {
             compacted: top.clone(),
             original: top,
@@ -55,12 +55,12 @@ impl SnapshotViewV002 {
     }
 
     /// Return the data level of this snapshot
-    pub fn compacted(&self) -> StaticLevels {
+    pub fn compacted(&self) -> ImmutableLevels {
         self.compacted.clone()
     }
 
     /// The original, non compacted snapshot data.
-    pub fn original_ref(&self) -> &StaticLevels {
+    pub fn original_ref(&self) -> &ImmutableLevels {
         &self.original
     }
 
@@ -110,20 +110,20 @@ impl SnapshotViewV002 {
 
         data.replace_expire(bt);
 
-        self.compacted = StaticLevels::new([Arc::new(data)]);
+        self.compacted = ImmutableLevels::new([Immutable::new_from_level(data)]);
         Ok(())
     }
 
-    /// Export all its data in RaftStoreEntry format.
-    // pub async fn export(&self) -> Result<impl Stream<Item = RaftStoreEntry> + '_, io::Error> {
-    pub async fn export(&self) -> Result<ResultStream<RaftStoreEntry>, io::Error> {
+    /// Export all its data in SMEntry format.
+    // pub async fn export(&self) -> Result<impl Stream<Item = SMEntry> + '_, io::Error> {
+    pub async fn export(&self) -> Result<ResultStream<SMEntry>, io::Error> {
         let d = self.compacted.newest().unwrap();
 
         let mut sm_meta = vec![];
 
         // Data header to identify snapshot version
 
-        sm_meta.push(RaftStoreEntry::DataHeader {
+        sm_meta.push(SMEntry::DataHeader {
             key: OnDisk::KEY_HEADER.to_string(),
             value: Header::this_version(),
         });
@@ -131,7 +131,7 @@ impl SnapshotViewV002 {
         // Last applied
 
         if let Some(last_applied) = d.last_applied_ref() {
-            sm_meta.push(RaftStoreEntry::StateMachineMeta {
+            sm_meta.push(SMEntry::StateMachineMeta {
                 key: StateMachineMetaKey::LastApplied,
                 value: StateMachineMetaValue::LogId(*last_applied),
             })
@@ -141,7 +141,7 @@ impl SnapshotViewV002 {
 
         {
             let last_membership = d.last_membership_ref();
-            sm_meta.push(RaftStoreEntry::StateMachineMeta {
+            sm_meta.push(SMEntry::StateMachineMeta {
                 key: StateMachineMetaKey::LastMembership,
                 value: StateMachineMetaValue::Membership(last_membership.clone()),
             })
@@ -149,7 +149,7 @@ impl SnapshotViewV002 {
 
         // Sequence
 
-        sm_meta.push(RaftStoreEntry::Sequences {
+        sm_meta.push(SMEntry::Sequences {
             // Use this fixed key `generic-kv` for back compatibility:
             // Only this key is used.
             key: s("generic-kv"),
@@ -159,7 +159,7 @@ impl SnapshotViewV002 {
         // Nodes
 
         for (node_id, node) in d.nodes_ref().iter() {
-            sm_meta.push(RaftStoreEntry::Nodes {
+            sm_meta.push(SMEntry::Nodes {
                 key: *node_id,
                 value: node.clone(),
             })
@@ -170,7 +170,7 @@ impl SnapshotViewV002 {
         let strm = self.compacted.str_map().range(..).await?;
         let kv_iter = strm.try_filter_map(|(k, v)| {
             let seqv: Option<SeqV<_>> = v.into();
-            let ent = seqv.map(|value| RaftStoreEntry::GenericKV { key: k, value });
+            let ent = seqv.map(|value| SMEntry::GenericKV { key: k, value });
             future::ready(Ok(ent))
         });
 
@@ -179,7 +179,7 @@ impl SnapshotViewV002 {
         let strm = self.compacted.expire_map().range(..).await?;
         let expire_iter = strm.try_filter_map(|(k, v)| {
             let exp_val: Option<ExpireValue> = v.into();
-            let ent = exp_val.map(|value| RaftStoreEntry::Expire { key: k, value });
+            let ent = exp_val.map(|value| SMEntry::Expire { key: k, value });
             future::ready(Ok(ent))
         });
 

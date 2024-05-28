@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::schema::CreateOption;
 use pretty::RcDoc;
 
 use super::expr::pretty_expr;
@@ -25,6 +24,7 @@ use crate::ast::AddColumnOption;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
+use crate::ast::CreateOption;
 use crate::ast::CreateStreamStmt;
 use crate::ast::CreateTableSource;
 use crate::ast::CreateTableStmt;
@@ -113,14 +113,27 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
 
 fn pretty_table_source(source: CreateTableSource) -> RcDoc<'static> {
     match source {
-        CreateTableSource::Columns(columns) => RcDoc::space().append(parenthesized(
-            interweave_comma(
-                columns
-                    .into_iter()
-                    .map(|column| RcDoc::text(column.to_string())),
-            )
-            .group(),
-        )),
+        CreateTableSource::Columns(columns, inverted_indexes) => RcDoc::space()
+            .append(parenthesized(
+                interweave_comma(
+                    columns
+                        .into_iter()
+                        .map(|column| RcDoc::text(column.to_string())),
+                )
+                .group(),
+            ))
+            .append(if let Some(inverted_indexes) = inverted_indexes {
+                parenthesized(
+                    interweave_comma(
+                        inverted_indexes
+                            .into_iter()
+                            .map(|inverted_index| RcDoc::text(inverted_index.to_string())),
+                    )
+                    .group(),
+                )
+            } else {
+                RcDoc::nil()
+            }),
         CreateTableSource::Like {
             catalog,
             database,

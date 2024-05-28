@@ -71,7 +71,14 @@ impl VirtualColumnReader {
         read_settings: &ReadSettings,
         loc: &str,
     ) -> Option<VirtualMergeIOReadResult> {
-        let mut reader = self.reader.operator.blocking().reader(loc).ok()?;
+        let meta = self.reader.operator.blocking().stat(loc).ok()?;
+        let mut reader = self
+            .reader
+            .operator
+            .blocking()
+            .reader(loc)
+            .ok()?
+            .into_std_read(0..meta.content_length());
 
         let metadata = pread::read_metadata(&mut reader).ok()?;
         debug_assert_eq!(metadata.row_groups.len(), 1);
@@ -113,9 +120,12 @@ impl VirtualColumnReader {
         read_settings: &ReadSettings,
         loc: &str,
     ) -> Option<VirtualMergeIOReadResult> {
-        let mut reader = self.reader.operator.reader(loc).await.ok()?;
+        let meta = self.reader.operator.stat(loc).await.ok()?;
+        let reader = self.reader.operator.reader(loc).await.ok()?;
 
-        let metadata = pread::read_metadata_async(&mut reader).await.ok()?;
+        let metadata = pread::read_metadata_async(reader, meta.content_length())
+            .await
+            .ok()?;
         let schema = infer_schema_with_extension(&metadata).ok()?;
         debug_assert_eq!(metadata.row_groups.len(), 1);
         let row_group = &metadata.row_groups[0];

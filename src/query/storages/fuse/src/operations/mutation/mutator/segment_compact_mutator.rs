@@ -15,20 +15,18 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
-use metrics::gauge;
 use opendal::Operator;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::common::AbortOperation;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
@@ -47,7 +45,6 @@ pub struct SegmentCompactionState {
 
 pub struct SegmentCompactMutator {
     ctx: Arc<dyn TableContext>,
-    lock: Arc<dyn Lock>,
     compact_params: CompactOptions,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
@@ -58,7 +55,6 @@ pub struct SegmentCompactMutator {
 impl SegmentCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        lock: Arc<dyn Lock>,
         compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
@@ -66,7 +62,6 @@ impl SegmentCompactMutator {
     ) -> Result<Self> {
         Ok(Self {
             ctx,
-            lock,
             compact_params,
             data_accessor: operator,
             location_generator,
@@ -122,10 +117,7 @@ impl SegmentCompactMutator {
             })
             .await?;
 
-        gauge!(
-            "fuse_compact_segments_select_duration_second",
-            select_begin.elapsed(),
-        );
+        metrics_set_compact_segments_select_duration_second(select_begin.elapsed());
 
         Ok(self.has_compaction())
     }
@@ -137,16 +129,9 @@ impl SegmentCompactMutator {
             return Ok(());
         }
 
-        let abort_action = AbortOperation {
-            segments: self.compaction.new_segment_paths.clone(),
-            ..Default::default()
-        };
-
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-        let _guard = self.lock.try_lock(self.ctx.clone()).await?;
 
         fuse_table
             .commit_mutation(
@@ -154,7 +139,6 @@ impl SegmentCompactMutator {
                 self.compact_params.base_snapshot.clone(),
                 &self.compaction.segments_locations,
                 statistics,
-                abort_action,
                 None,
             )
             .await
@@ -269,10 +253,10 @@ impl<'a> SegmentCompactor<'a> {
             // Status.
             {
                 let status = format!(
-                    "compact segment: read segment files:{}/{}, cost:{} sec",
+                    "compact segment: read segment files:{}/{}, cost:{:?}",
                     checked_end_at,
                     number_segments,
-                    start.elapsed().as_secs()
+                    start.elapsed()
                 );
                 info!("{}", &status);
                 (status_callback)(status);

@@ -97,7 +97,7 @@ impl JoinType {
 }
 
 impl Display for JoinType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             JoinType::Inner => {
                 write!(f, "INNER")
@@ -142,6 +142,12 @@ impl Display for JoinType {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct HashJoinBuildCacheInfo {
+    pub cache_idx: usize,
+    pub columns: Vec<usize>,
+}
+
 /// Join operator. We will choose hash join by default.
 /// In the case that using hash join, the right child
 /// is always the build side, and the left child is always
@@ -162,6 +168,7 @@ pub struct Join {
     // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
     pub single_to_inner: Option<JoinType>,
+    pub build_side_cache_info: Option<HashJoinBuildCacheInfo>,
 }
 
 impl Default for Join {
@@ -176,6 +183,7 @@ impl Default for Join {
             need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
+            build_side_cache_info: None,
         }
     }
 }

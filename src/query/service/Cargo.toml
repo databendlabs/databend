@@ -14,11 +14,10 @@ test = true
 [features]
 default = ["simd", "z3-prove"]
 simd = ["databend-common-arrow/simd"]
-
+python-udf = ["arrow-udf-python"]
 z3-prove = ["databend-common-sql/z3-prove"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 
-tokio-console = ["databend-common-tracing/console", "databend-common-base/tracing"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 io-uring = [
@@ -104,6 +103,7 @@ jsonb = { workspace = true }
 
 # Crates.io dependencies
 arrow-udf-js = { workspace = true }
+arrow-udf-python = { package = "arrow-udf-python", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0", optional = true }
 arrow-udf-wasm = { workspace = true }
 
 arrow-array = { workspace = true }
@@ -126,12 +126,12 @@ ctor = "0.1.26"
 dashmap = { workspace = true }
 derive-visitor = { workspace = true }
 ethnum = { workspace = true }
+flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-h2 = "0.3.26"
-headers = "0.3.8"
+headers = "0.4.0"
 highway = "1.1"
-http = "0.2.8"
+http = { workspace = true }
 humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = { workspace = true }
@@ -139,29 +139,29 @@ jwt-simple = "0.11.0"
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = { workspace = true }
-metrics = "0.20.1"
+md-5 = "0.10.5"
 minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
 num_cpus = "1.16.0"
 once_cell = { workspace = true }
 opendal = { workspace = true }
-opensrv-mysql = { version = "0.5.0", features = ["tls"] }
-opentelemetry = { version = "0.21", features = ["trace", "logs"] }
-opentelemetry-http = "0.10.0"
-opentelemetry_sdk = { version = "0.21", features = ["trace", "logs", "rt-tokio"] }
+opensrv-mysql = { version = "0.7.0", features = ["tls"] }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"
-petgraph = "0.6.2"
+petgraph = { version = "0.6.2", features = ["serde-1"] }
 pin-project-lite = "0.2.9"
 poem = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
-rustls = "0.21.11"
-rustls-pemfile = "1.0.2"
-rustyline = "11.0.0"
+rustls = "0.22"
+rustls-pemfile = "2"
+rustls-pki-types = "1"
+rustyline = "14"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
@@ -172,10 +172,9 @@ tempfile = "3.4.0"
 time = "0.3.14"
 tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
-toml = { version = "0.7.3", default-features = false }
+toml = { version = "0.8", default-features = false }
 tonic = { workspace = true }
 typetag = { workspace = true }
-unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
@@ -184,10 +183,10 @@ xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"
 arrow-cast = { workspace = true }
 ordered-float = { workspace = true }
 
-criterion = "0.4"
+criterion = { workspace = true }
 goldenfile = "1.4"
 hex = "0.4.3"
-jwt-simple = "0.11.0"
+jwt-simple = "0.12"
 maplit = "1.0.2"
 mysql_async = { workspace = true }
 num = "0.4.0"
@@ -199,10 +198,10 @@ temp-env = "0.3.0"
 tempfile = "3.4.0"
 tower = "0.4.13"
 url = "2.3.1"
-wiremock = "0.5.14"
+wiremock = "0.6"
 
 [build-dependencies]
 databend-common-building = { path = "../../common/building" }
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "md-5"]

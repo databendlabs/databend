@@ -29,7 +29,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_txn::TxnManagerRef;
-use log::warn;
 use parking_lot::Mutex;
 use tokio::task;
 
@@ -49,7 +48,7 @@ pub(crate) enum RemoveReason {
 }
 
 impl Display for RemoveReason {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", format!("{self:?}").to_lowercase())
     }
 }
@@ -135,7 +134,7 @@ impl HttpQueryManager {
         // it may cannot destroy with final or kill when we hold ref of Arc<HttpQuery>
         let http_query_weak = Arc::downgrade(&query);
 
-        GlobalIORuntime::instance().spawn(query_id, async move {
+        GlobalIORuntime::instance().spawn(async move {
             loop {
                 let expire_res = match http_query_weak.upgrade() {
                     None => {
@@ -150,19 +149,13 @@ impl HttpQueryManager {
                             "http query {} timeout after {} s",
                             &query_id_clone, query_result_timeout_secs
                         );
-                        match self_clone.remove_query(&query_id_clone, RemoveReason::Timeout) {
-                            Some(_) => {
-                                warn!("{msg}");
-                                if let Some(query) = http_query_weak.upgrade() {
-                                    if query.check_removed().is_none() {
-                                        query.kill(ErrorCode::AbortedQuery(&msg)).await;
-                                    }
-                                }
-                            }
-                            None => {
-                                warn!("{msg}, but already evict, too many queries?");
-                            }
-                        };
+                        _ = self_clone
+                            .remove_query(
+                                &query_id_clone,
+                                RemoveReason::Timeout,
+                                ErrorCode::AbortedQuery(&msg),
+                            )
+                            .await;
                         break;
                     }
                     ExpireResult::Sleep(t) => {
@@ -177,26 +170,24 @@ impl HttpQueryManager {
     }
 
     #[async_backtrace::framed]
-    pub(crate) fn remove_query(
+    pub(crate) async fn remove_query(
         self: &Arc<Self>,
         query_id: &str,
         reason: RemoveReason,
+        error: ErrorCode,
     ) -> Option<Arc<HttpQuery>> {
         // deref at once to avoid holding DashMap shard guard for too long.
         let query = self.queries.get(query_id).map(|q| q.clone());
-        query.map(|q| {
-            let not_removed_yet = !q.mark_removed(reason);
-            let to_evict = not_removed_yet
-                .then(|| {
-                    let mut queue = self.removed_queries.lock();
-                    queue.push(q.id.to_string())
-                })
-                .flatten();
-            if let Some(qid) = to_evict {
-                self.queries.remove(&qid);
+        if let Some(q) = &query {
+            if q.mark_removed(reason) {
+                q.kill(error).await;
+                let mut queue = self.removed_queries.lock();
+                if let Some(to_evict) = queue.push(q.id.to_string()) {
+                    self.queries.remove(&to_evict);
+                };
             }
-            q.clone()
-        })
+        }
+        query
     }
 
     #[async_backtrace::framed]
@@ -210,7 +201,7 @@ impl HttpQueryManager {
         let deleter = {
             let self_clone = self.clone();
             let last_query_id_clone = last_query_id.clone();
-            GlobalIORuntime::instance().spawn(last_query_id.clone(), async move {
+            GlobalIORuntime::instance().spawn(async move {
                 sleep(Duration::from_secs(timeout_secs)).await;
                 if self_clone.get_txn(&last_query_id_clone).is_some() {
                     log::info!(

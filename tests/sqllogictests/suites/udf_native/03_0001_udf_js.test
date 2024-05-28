@@ -1,5 +1,5 @@
 statement ok
-CREATE FUNCTION gcd_js (INT, INT) RETURNS BIGINT LANGUAGE javascript HANDLER = 'gcd_js' AS $$
+CREATE OR REPLACE FUNCTION gcd_js (INT, INT) RETURNS BIGINT LANGUAGE javascript HANDLER = 'gcd_js' AS $$
 export function gcd_js(a, b) {
     while (b != 0) {
         let t = b;
@@ -11,7 +11,18 @@ export function gcd_js(a, b) {
 $$
 
 query F
-select number, gcd_js(number * 3, number * 6) from numbers(5) where number > 0 order by 1;
+select number, gcd_js(number * 3, number * 6) from numbers(5) where number > 0 order by 1
+----
+1 3
+2 6
+3 9
+4 12
+
+statement ok
+CREATE OR REPLACE FUNCTION gcd_js_v2 (INT, INT) RETURNS BIGINT LANGUAGE javascript HANDLER = 'gcd_js' AS '@data/udf/gcd.js'
+
+query F
+select number, gcd_js_v2(number * 3, number * 6) from numbers(5) where number > 0 order by 1
 ----
 1 3
 2 6

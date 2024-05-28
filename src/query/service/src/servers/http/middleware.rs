@@ -32,16 +32,16 @@ use headers::authorization::Credentials;
 use http::header::AUTHORIZATION;
 use http::HeaderMap;
 use http::HeaderValue;
+use http::StatusCode;
 use log::error;
 use log::warn;
 use minitrace::func_name;
 use opentelemetry::baggage::BaggageExt;
+use opentelemetry::propagation::Extractor;
 use opentelemetry::propagation::TextMapPropagator;
-use opentelemetry_http::HeaderExtractor;
 use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
-use poem::http::StatusCode;
 use poem::Addr;
 use poem::Body;
 use poem::Endpoint;
@@ -72,6 +72,22 @@ pub struct HTTPSessionMiddleware {
 impl HTTPSessionMiddleware {
     pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
         HTTPSessionMiddleware { kind, auth_manager }
+    }
+}
+
+pub struct HeaderExtractor<'a>(pub &'a http::HeaderMap);
+impl<'a> Extractor for HeaderExtractor<'a> {
+    /// Get a value for a key from the HeaderMap.  If the value is not valid ASCII, returns None.
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|value| value.to_str().ok())
+    }
+
+    /// Collect all the keys from the HeaderMap.
+    fn keys(&self) -> Vec<&str> {
+        self.0
+            .keys()
+            .map(|value| value.as_str())
+            .collect::<Vec<_>>()
     }
 }
 
@@ -222,19 +238,23 @@ impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
         let credential = get_credential(req, self.kind)?;
+
         let session_manager = SessionManager::instance();
-        let session = session_manager.create_session(SessionType::Dummy).await?;
-        let ctx = session.create_query_context().await?;
+
+        let mut session = session_manager.create_session(SessionType::Dummy).await?;
+
         if let Some(tenant_id) = req.headers().get("X-DATABEND-TENANT") {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
             let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
             session.set_current_tenant(tenant);
         }
-        let node_id = ctx.get_cluster().local_id.clone();
 
-        self.auth_manager
-            .auth(ctx.get_current_session(), &credential)
-            .await?;
+        self.auth_manager.auth(&mut session, &credential).await?;
+
+        let session = session_manager.register_session(session)?;
+
+        let ctx = session.create_query_context().await?;
+        let node_id = ctx.get_cluster().local_id.clone();
 
         let deduplicate_label = req
             .headers()
@@ -267,7 +287,6 @@ impl<E> HTTPSessionEndpoint<E> {
     }
 }
 
-#[poem::async_trait]
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = Response;
 
@@ -294,7 +313,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     self.ep.call(req).await
                 }
                 Err(err) => match err.code() {
-                    ErrorCode::AUTHENTICATE_FAILURE => {
+                    ErrorCode::AUTHENTICATE_FAILURE | ErrorCode::UNKNOWN_USER => {
                         warn!(
                             "http auth failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
@@ -336,7 +355,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     }
 }
 
-pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
+pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<String, String> {
     let sensitive_headers = ["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()
@@ -377,7 +396,6 @@ pub struct MetricsMiddlewareEndpoint<E> {
     ep: E,
 }
 
-#[poem::async_trait]
 impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
     type Output = Response;
 

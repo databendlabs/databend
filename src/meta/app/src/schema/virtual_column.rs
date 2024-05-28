@@ -42,7 +42,7 @@ pub struct CreateVirtualColumnReq {
 }
 
 impl Display for CreateVirtualColumnReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "create_virtual_column ({:?}) for {}",
@@ -63,7 +63,7 @@ pub struct UpdateVirtualColumnReq {
 }
 
 impl Display for UpdateVirtualColumnReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
             "update_virtual_column ({:?}) for {}",
@@ -83,7 +83,7 @@ pub struct DropVirtualColumnReq {
 }
 
 impl Display for DropVirtualColumnReq {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "drop_virtual_column for {}", self.name_ident.display())
     }
 }

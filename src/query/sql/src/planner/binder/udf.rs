@@ -41,7 +41,8 @@ use crate::Binder;
 
 impl Binder {
     fn is_allowed_language(language: &str) -> bool {
-        let allowed_languages: HashSet<&str> = ["javascript", "wasm"].iter().cloned().collect();
+        let allowed_languages: HashSet<&str> =
+            ["javascript", "wasm", "python"].iter().cloned().collect();
         allowed_languages.contains(&language.to_lowercase().as_str())
     }
 
@@ -148,7 +149,7 @@ impl Binder {
 
                 if !Self::is_allowed_language(language) {
                     return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}', must be javascript or wasm"
+                        "Unallowed UDF language '{language}', must be python, javascript or wasm"
                     )));
                 }
 
@@ -182,7 +183,7 @@ impl Binder {
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
         Ok(Plan::CreateUDF(Box::new(CreateUDFPlan {
-            create_option: stmt.create_option,
+            create_option: stmt.create_option.clone().into(),
             udf,
         })))
     }

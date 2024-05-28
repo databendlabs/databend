@@ -22,6 +22,7 @@ use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::EmptyMapType;
@@ -308,6 +309,22 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
+
+    registry.register_2_arg_core::<EmptyMapType, GenericType<0>, BooleanType, _, _>(
+        "map_contains_key",
+        |_, _, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(false),
+    );
+
+    registry
+        .register_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, BooleanType, _, _>(
+            "map_contains_key",
+            |_, _, _| FunctionDomain::Full,
+            |map, key, _| {
+                map.iter()
+                    .any(|(k, _)| k == key)
+            },
+        );
 }
 
 fn map_delete_fn(args: &[ValueRef<AnyType>], _ctx: &mut EvalContext) -> Value<AnyType> {

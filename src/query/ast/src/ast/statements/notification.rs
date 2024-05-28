@@ -20,21 +20,16 @@ use derive_visitor::DriveMut;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateNotificationStmt {
-    #[drive(skip)]
     pub if_not_exists: bool,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub notification_type: String,
-    #[drive(skip)]
     pub enabled: bool,
     pub webhook_opts: Option<NotificationWebhookOptions>,
-    #[drive(skip)]
     pub comments: Option<String>,
 }
 
 impl Display for CreateNotificationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE NOTIFICATION INTEGRATION")?;
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
@@ -54,16 +49,13 @@ impl Display for CreateNotificationStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct NotificationWebhookOptions {
-    #[drive(skip)]
     pub url: Option<String>,
-    #[drive(skip)]
     pub method: Option<String>,
-    #[drive(skip)]
     pub authorization_header: Option<String>,
 }
 
 impl Display for NotificationWebhookOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let NotificationWebhookOptions {
             url,
             method,
@@ -110,14 +102,12 @@ impl FromIterator<(String, String)> for NotificationWebhookOptions {
 // drop notification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropNotificationStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
 }
 
 impl Display for DropNotificationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP NOTIFICATION INTEGRATION")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
@@ -129,11 +119,8 @@ impl Display for DropNotificationStmt {
 // alter notification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterNotificationStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub options: AlterNotificationOptions,
 }
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -142,10 +129,8 @@ pub enum AlterNotificationOptions {
 }
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterNotificationSetOptions {
-    #[drive(skip)]
     pub enabled: Option<bool>,
     pub webhook_opts: Option<NotificationWebhookOptions>,
-    #[drive(skip)]
     pub comments: Option<String>,
 }
 
@@ -176,7 +161,7 @@ impl AlterNotificationSetOptions {
 }
 
 impl Display for AlterNotificationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER NOTIFICATION INTEGRATION {}", self.name)?;
         match &self.options {
             AlterNotificationOptions::Set(set_opts) => {
@@ -199,12 +184,11 @@ impl Display for AlterNotificationStmt {
 // describe notification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DescribeNotificationStmt {
-    #[drive(skip)]
     pub name: String,
 }
 
 impl Display for DescribeNotificationStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE NOTIFICATION INTEGRATION {}", self.name)
     }
 }

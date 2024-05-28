@@ -15,19 +15,18 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
+use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateViewStmt {
-    #[drive(skip)]
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -92,7 +91,6 @@ impl Display for AlterViewStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropViewStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -119,10 +117,8 @@ impl Display for DropViewStmt {
 pub struct ShowViewsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
-    #[drive(skip)]
     pub with_history: bool,
 }
 

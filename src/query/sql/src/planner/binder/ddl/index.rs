@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
+use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateIndexStmt;
 use databend_common_ast::ast::CreateInvertedIndexStmt;
@@ -30,7 +33,9 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchemaRef;
 use databend_common_license::license::Feature::AggregateIndex;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -47,6 +52,7 @@ use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::DropTableIndexPlan;
+use crate::plans::LockTableOption;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
@@ -56,6 +62,44 @@ use crate::BindContext;
 use crate::MetadataRef;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
+
+// valid values for inverted index option tokenizer
+static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("english");
+    r.insert("chinese");
+    r
+});
+
+// valid values for inverted index option filter
+static INDEX_FILTER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("english_stop");
+    r.insert("english_stemmer");
+    r.insert("chinese_stop");
+    r
+});
+
+// valid values for inverted index record option
+static INDEX_RECORD_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("basic");
+    r.insert("freq");
+    r.insert("position");
+    r
+});
+
+fn is_valid_tokenizer_values<S: AsRef<str>>(opt_val: S) -> bool {
+    INDEX_TOKENIZER_VALUES.contains(opt_val.as_ref())
+}
+
+fn is_valid_filter_values<S: AsRef<str>>(opt_val: S) -> bool {
+    INDEX_FILTER_VALUES.contains(opt_val.as_ref())
+}
+
+fn is_valid_index_record_values<S: AsRef<str>>(opt_val: S) -> bool {
+    INDEX_RECORD_VALUES.contains(opt_val.as_ref())
+}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -215,7 +259,7 @@ impl Binder {
         Self::rewrite_query_with_database(&mut query, table_entry.database());
 
         let plan = CreateIndexPlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             index_type: *index_type,
             index_name,
             original_query: original_query.to_string(),
@@ -380,6 +424,30 @@ impl Binder {
             )));
         }
         let table_schema = table.schema();
+        let table_id = table.get_id();
+        let index_name = self.normalize_object_identifier(index_name);
+        let column_ids = self
+            .validate_inverted_index_columns(table_schema, columns)
+            .await?;
+        let index_options = self.validate_inverted_index_options(index_options).await?;
+
+        let plan = CreateTableIndexPlan {
+            create_option: create_option.clone().into(),
+            catalog,
+            index_name,
+            column_ids,
+            table_id,
+            sync_creation: *sync_creation,
+            index_options,
+        };
+        Ok(Plan::CreateTableIndex(Box::new(plan)))
+    }
+
+    pub(in crate::planner::binder) async fn validate_inverted_index_columns(
+        &self,
+        table_schema: TableSchemaRef,
+        columns: &[Identifier],
+    ) -> Result<Vec<ColumnId>> {
         let mut column_set = BTreeSet::new();
         for column in columns {
             match table_schema.field_with_name(&column.name) {
@@ -409,20 +477,58 @@ impl Binder {
             }
         }
         let column_ids = Vec::from_iter(column_set.into_iter());
+        Ok(column_ids)
+    }
 
-        let table_id = table.get_id();
-        let index_name = self.normalize_object_identifier(index_name);
-
-        let plan = CreateTableIndexPlan {
-            create_option: *create_option,
-            catalog,
-            index_name,
-            column_ids,
-            table_id,
-            sync_creation: *sync_creation,
-            index_options: index_options.clone(),
-        };
-        Ok(Plan::CreateTableIndex(Box::new(plan)))
+    pub(in crate::planner::binder) async fn validate_inverted_index_options(
+        &self,
+        index_options: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, String>> {
+        let mut options = BTreeMap::new();
+        for (opt, val) in index_options.iter() {
+            let key = opt.to_lowercase();
+            let value = val.to_lowercase();
+            match key.as_str() {
+                "tokenizer" => {
+                    if !is_valid_tokenizer_values(&value) {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{value}` is invalid index tokenizer",
+                        )));
+                    }
+                    options.insert("tokenizer".to_string(), value.to_string());
+                }
+                "filters" => {
+                    let raw_filters: Vec<&str> = value.split(',').collect();
+                    let mut filters = Vec::with_capacity(raw_filters.len());
+                    for raw_filter in raw_filters {
+                        let filter = raw_filter.trim();
+                        if !is_valid_filter_values(filter) {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{filter}` is invalid index filters",
+                            )));
+                        }
+                        filters.push(filter);
+                    }
+                    options.insert("filters".to_string(), filters.join(",").to_string());
+                }
+                "index_record" => {
+                    if !is_valid_index_record_values(&value) {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{value}` is invalid index record option",
+                        )));
+                    }
+                    // convert to a JSON string, for `IndexRecordOption` deserialize
+                    let index_record_val = format!("\"{}\"", value);
+                    options.insert("index_record".to_string(), index_record_val);
+                }
+                _ => {
+                    return Err(ErrorCode::IndexOptionInvalid(format!(
+                        "index option `{key}` is invalid key for create inverted index statement",
+                    )));
+                }
+            }
+        }
+        Ok(options)
     }
 
     #[async_backtrace::framed]
@@ -485,7 +591,7 @@ impl Binder {
             table,
             index_name,
             segment_locs: None,
-            need_lock: true,
+            lock_opt: LockTableOption::LockWithRetry,
         };
         Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }

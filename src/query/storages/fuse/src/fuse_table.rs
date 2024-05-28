@@ -19,7 +19,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::StorageDescription;
-use databend_common_catalog::lock::Lock;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -33,6 +32,7 @@ use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
@@ -368,7 +368,8 @@ impl FuseTable {
                 let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
                 match self.operator.read(url).await {
                     Ok(data) => {
-                        let s = str::from_utf8(&data)?;
+                        let bs = data.to_vec();
+                        let s = str::from_utf8(&bs)?;
                         Ok(Some(s.to_string()))
                     }
                     Err(e) => {
@@ -385,7 +386,7 @@ impl FuseTable {
                     let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
                     let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
                     let snapshot_loc = {
-                        let hint_content = self.operator.read(&hint).await?;
+                        let hint_content = self.operator.read(&hint).await?.to_vec();
                         let snapshot_full_path = String::from_utf8(hint_content)?;
                         let operator_info = self.operator.info();
                         snapshot_full_path[operator_info.root().len()..].to_string()
@@ -802,9 +803,15 @@ impl Table for FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn navigate_to(&self, navigation: &TimeNavigation) -> Result<Arc<dyn Table>> {
+    async fn navigate_to(
+        &self,
+        navigation: &TimeNavigation,
+        abort_checker: AbortChecker,
+    ) -> Result<Arc<dyn Table>> {
         match navigation {
-            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(point).await?),
+            TimeNavigation::TimeTravel(point) => {
+                Ok(self.navigate_to_point(point, abort_checker).await?)
+            }
             TimeNavigation::Changes {
                 append_only,
                 at,
@@ -812,12 +819,15 @@ impl Table for FuseTable {
                 desc,
             } => {
                 let mut end_point = if let Some(end) = end {
-                    self.navigate_to_point(end).await?.as_ref().clone()
+                    self.navigate_to_point(end, abort_checker.clone())
+                        .await?
+                        .as_ref()
+                        .clone()
                 } else {
                     self.clone()
                 };
                 let changes_desc = end_point
-                    .get_change_descriptor(*append_only, desc.clone(), Some(at))
+                    .get_change_descriptor(*append_only, desc.clone(), Some(at), abort_checker)
                     .await?;
                 end_point.changes_desc = Some(changes_desc);
                 Ok(Arc::new(end_point))
@@ -831,6 +841,7 @@ impl Table for FuseTable {
         _ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
+        _consume: bool,
     ) -> Result<String> {
         let Some(ChangesDesc {
             seq,
@@ -870,10 +881,9 @@ impl Table for FuseTable {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
-        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
-        self.do_compact_segments(ctx, lock, limit).await
+        self.do_compact_segments(ctx, limit).await
     }
 
     #[async_backtrace::framed]
@@ -891,7 +901,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         point: NavigationDescriptor,
     ) -> Result<()> {
-        self.do_revert_to(ctx.as_ref(), point).await
+        self.do_revert_to(ctx, point).await
     }
 
     fn support_prewhere(&self) -> bool {

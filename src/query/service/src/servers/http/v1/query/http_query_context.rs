@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use http::StatusCode;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
@@ -25,8 +24,9 @@ use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
+#[derive(Clone)]
 pub struct HttpQueryContext {
-    session: Arc<Session>,
+    pub session: Arc<Session>,
     pub query_id: String,
     pub node_id: String,
     pub deduplicate_label: Option<String>,
@@ -69,7 +69,7 @@ impl HttpQueryContext {
         SessionManager::instance()
             .try_upgrade_session(self.session.clone(), session_type.clone())
             .map_err(|err| {
-                poem::Error::from_string(err.message(), StatusCode::TOO_MANY_REQUESTS)
+                poem::Error::from_string(err.message(), poem::http::StatusCode::TOO_MANY_REQUESTS)
             })?;
         Ok(self.session.clone())
     }
@@ -103,7 +103,6 @@ impl HttpQueryContext {
     }
 }
 
-#[async_trait::async_trait]
 impl<'a> FromRequest<'a> for &'a HttpQueryContext {
     #[async_backtrace::framed]
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {

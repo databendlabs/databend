@@ -16,13 +16,11 @@
 
 use std::fmt::Display;
 
-use databend_common_exception::Result;
-use databend_common_exception::Span;
-use databend_common_meta_app::principal::PrincipalIdentity;
-use databend_common_meta_app::principal::UserIdentity;
 use itertools::Itertools;
 
 use crate::ast::*;
+use crate::Result;
+use crate::Span;
 
 pub fn format_statement(stmt: Statement) -> Result<String> {
     let mut visitor = AstFormatVisitor::new();
@@ -65,7 +63,7 @@ impl AstFormatContext {
 }
 
 impl Display for AstFormatContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self.alias {
             Some(alias) => {
                 if self.children_num > 0 {
@@ -1050,7 +1048,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt) {
-        let name = format!("UnSet {}", stmt);
+        let name = if stmt.session_level {
+            format!("UnSet SESSION {}", stmt)
+        } else {
+            format!("UnSet {}", stmt)
+        };
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
@@ -1082,6 +1084,58 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         };
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_multi_table_insert(&mut self, insert: &'ast InsertMultiTableStmt) {
+        let mut nodes = Vec::new();
+
+        if insert.is_first {
+            for when_clause in &insert.when_clauses {
+                self.visit_expr(&when_clause.condition);
+                let mut children = vec![self.children.pop().unwrap()];
+                let into_nodes =
+                    self.visit_multi_table_insert_into_clause(&when_clause.into_clauses);
+
+                children.extend(into_nodes);
+
+                let format_ctx = AstFormatContext::with_children("WHEN".to_owned(), children.len());
+                let when_node = FormatTreeNode::with_children(format_ctx, children);
+                nodes.push(when_node);
+            }
+
+            if let Some(else_clause) = &insert.else_clause {
+                let into_nodes =
+                    self.visit_multi_table_insert_into_clause(&else_clause.into_clauses);
+                let format_ctx =
+                    AstFormatContext::with_children("ELSE".to_owned(), into_nodes.len());
+                let else_node = FormatTreeNode::with_children(format_ctx, into_nodes);
+                nodes.push(else_node)
+            }
+        } else {
+            let into_nodes = self.visit_multi_table_insert_into_clause(&insert.into_clauses);
+            let format_ctx = AstFormatContext::with_children("INTO".to_owned(), into_nodes.len());
+            let else_node = FormatTreeNode::with_children(format_ctx, into_nodes);
+            nodes.push(else_node);
+        }
+
+        self.visit_query(&insert.source);
+        nodes.push(self.children.pop().unwrap());
+
+        let mut multi_table_insert_node = if insert.overwrite {
+            "INSERT OVERWRITE".to_string()
+        } else {
+            "INSERT".to_string()
+        };
+
+        if insert.is_first {
+            multi_table_insert_node = format!("{} FIRST", multi_table_insert_node);
+        } else {
+            multi_table_insert_node = format!("{} ALL", multi_table_insert_node);
+        }
+
+        let format_ctx = AstFormatContext::with_children(multi_table_insert_node, nodes.len());
+        let node = FormatTreeNode::with_children(format_ctx, nodes);
         self.children.push(node);
     }
 
@@ -1416,11 +1470,17 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_create_table_source(&mut self, source: &'ast CreateTableSource) {
         match source {
-            CreateTableSource::Columns(columns) => {
+            CreateTableSource::Columns(columns, inverted_indexes) => {
                 let mut children = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     self.visit_column_definition(column);
                     children.push(self.children.pop().unwrap());
+                }
+                if let Some(inverted_indexes) = inverted_indexes {
+                    for inverted_index in inverted_indexes {
+                        self.visit_inverted_index_definition(inverted_index);
+                        children.push(self.children.pop().unwrap());
+                    }
                 }
                 let name = "ColumnsDefinition".to_string();
                 let format_ctx = AstFormatContext::with_children(name, children.len());
@@ -1450,6 +1510,26 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let name = format!("ColumnDefinition {}", column_definition.name);
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![type_node]);
+        self.children.push(node);
+    }
+
+    fn visit_inverted_index_definition(
+        &mut self,
+        inverted_index_definition: &'ast InvertedIndexDefinition,
+    ) {
+        let mut column_nodes = Vec::with_capacity(inverted_index_definition.columns.len());
+        for column in &inverted_index_definition.columns {
+            let column_name = format!("Column {}", column);
+            let column_format_ctx = AstFormatContext::new(column_name);
+            let column_node = FormatTreeNode::new(column_format_ctx);
+            column_nodes.push(column_node);
+        }
+        let name = format!(
+            "InvertedIndexDefinition {}",
+            inverted_index_definition.index_name
+        );
+        let format_ctx = AstFormatContext::with_children(name, column_nodes.len());
+        let node = FormatTreeNode::with_children(format_ctx, column_nodes);
         self.children.push(node);
     }
 
@@ -2000,11 +2080,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_create_user(&mut self, stmt: &'ast CreateUserStmt) {
         let mut children = Vec::new();
-        let user_name = format!("User {}", stmt.user.display());
+        let user_name = format!("User {}", stmt.user);
         let user_format_ctx = AstFormatContext::new(user_name);
         children.push(FormatTreeNode::new(user_format_ctx));
         if let Some(auth_type) = &stmt.auth_option.auth_type {
-            let auth_type_name = format!("AuthType {}", auth_type.to_str());
+            let auth_type_name = format!("AuthType {}", auth_type);
             let auth_type_format_ctx = AstFormatContext::new(auth_type_name);
             children.push(FormatTreeNode::new(auth_type_format_ctx));
         }
@@ -2039,13 +2119,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_alter_user(&mut self, stmt: &'ast AlterUserStmt) {
         let mut children = Vec::new();
         if let Some(user) = &stmt.user {
-            let user_name = format!("User {}", user.display());
+            let user_name = format!("User {}", user);
             let user_format_ctx = AstFormatContext::new(user_name);
             children.push(FormatTreeNode::new(user_format_ctx));
         }
         if let Some(auth_option) = &stmt.auth_option {
             if let Some(auth_type) = &auth_option.auth_type {
-                let auth_type_name = format!("AuthType {}", auth_type.to_str());
+                let auth_type_name = format!("AuthType {}", auth_type);
                 let auth_type_format_ctx = AstFormatContext::new(auth_type_name);
                 children.push(FormatTreeNode::new(auth_type_format_ctx));
             }
@@ -2079,7 +2159,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_drop_user(&mut self, _if_exists: bool, user: &'ast UserIdentity) {
-        let user_name = format!("User {}", user.display());
+        let user_name = format!("User {}", user);
         let user_format_ctx = AstFormatContext::new(user_name);
         let child = FormatTreeNode::new(user_format_ctx);
 
@@ -2144,7 +2224,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
         };
         let principal_name = match &grant.principal {
-            PrincipalIdentity::User(user) => format!("User {}", user.display()),
+            PrincipalIdentity::User(user) => format!("User {}", user),
             PrincipalIdentity::Role(role) => format!("Role {}", role),
         };
         let principal_format_ctx = AstFormatContext::new(principal_name);
@@ -2156,15 +2236,31 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_grant(&mut self, principal: &'ast Option<PrincipalIdentity>) {
+    fn visit_show_grant(
+        &mut self,
+        principal: &'ast Option<PrincipalIdentity>,
+        show_options: &'ast Option<ShowOptions>,
+    ) {
         let mut children = Vec::new();
         if let Some(principal) = &principal {
             let principal_name = match principal {
-                PrincipalIdentity::User(user) => format!("User {}", user.display()),
+                PrincipalIdentity::User(user) => format!("User {}", user),
                 PrincipalIdentity::Role(role) => format!("Role {}", role),
             };
             let principal_format_ctx = AstFormatContext::new(principal_name);
             children.push(FormatTreeNode::new(principal_format_ctx));
+        }
+        if let Some(show_options) = show_options {
+            if let Some(show_limit) = &show_options.show_limit {
+                self.visit_show_limit(show_limit);
+                children.push(self.children.pop().unwrap());
+            }
+            if let Some(limit) = show_options.limit {
+                let name = format!("Limit {}", limit);
+                let limit_format_ctx = AstFormatContext::new(name);
+                let node = FormatTreeNode::new(limit_format_ctx);
+                children.push(node);
+            }
         }
         let name = "ShowGrant".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
@@ -2198,7 +2294,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
         };
         let principal_name = match &revoke.principal {
-            PrincipalIdentity::User(user) => format!("User {}", user.display()),
+            PrincipalIdentity::User(user) => format!("User {}", user),
             PrincipalIdentity::Role(role) => format!("Role {}", role),
         };
         let principal_format_ctx = AstFormatContext::new(principal_name);
@@ -3126,6 +3222,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 table,
                 alias,
                 temporal,
+                consume,
                 pivot,
                 unpivot,
             } => {
@@ -3140,6 +3237,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     name.push('.');
                 }
                 name.push_str(&table.to_string());
+
+                if *consume {
+                    name.push_str(" WithConsume");
+                }
 
                 if let Some(pivot) = pivot {
                     name.push(' ');
@@ -3388,5 +3489,36 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
+    }
+}
+
+impl AstFormatVisitor {
+    fn visit_multi_table_insert_into_clause<'ast>(
+        &'ast mut self,
+        clauses: &'ast [IntoClause],
+    ) -> Vec<FormatTreeNode<AstFormatContext>> {
+        let mut into_nodes = Vec::new();
+        for insert in clauses {
+            let mut nodes = Vec::new();
+            self.visit_table_ref(&insert.catalog, &insert.database, &insert.table);
+            nodes.push(self.children.pop().unwrap());
+            if !insert.target_columns.is_empty() {
+                let mut columns_children = Vec::with_capacity(insert.target_columns.len());
+                for column in insert.target_columns.iter() {
+                    self.visit_identifier(column);
+                    columns_children.push(self.children.pop().unwrap());
+                }
+                let columns_format_ctx =
+                    AstFormatContext::with_children("Columns".to_owned(), columns_children.len());
+                let columns_node =
+                    FormatTreeNode::with_children(columns_format_ctx, columns_children);
+                nodes.push(columns_node);
+            }
+
+            let format_ctx = AstFormatContext::with_children("INTO".to_owned(), nodes.len());
+            let into_node = FormatTreeNode::with_children(format_ctx, nodes);
+            into_nodes.push(into_node)
+        }
+        into_nodes
     }
 }

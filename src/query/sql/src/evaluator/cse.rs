@@ -15,7 +15,8 @@
 use std::collections::HashMap;
 
 use databend_common_expression::Expr;
-use log::info;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use log::debug;
 
 use super::BlockOperator;
 use crate::optimizer::ColumnSet;
@@ -63,7 +64,7 @@ pub fn apply_cse(
                         let mut expr_cloned = cse_candidate.clone();
                         perform_cse_replacement(&mut expr_cloned, &cse_replacements);
 
-                        info!(
+                        debug!(
                             "cse_candidate: {}, temp_expr: {}",
                             expr_cloned.sql_display(),
                             temp_expr.sql_display()
@@ -117,6 +118,9 @@ pub fn apply_cse(
 /// `count_expressions` recursively counts the occurrences of expressions in an expression tree
 /// and stores the count in a HashMap.
 fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
+    if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        return;
+    }
     match expr {
         Expr::FunctionCall { function, .. } if function.signature.name == "if" => {}
         Expr::FunctionCall { function, .. } if function.signature.name == "is_not_error" => {}

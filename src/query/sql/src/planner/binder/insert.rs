@@ -23,18 +23,19 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::BindContext;
+
 impl Binder {
     pub fn schema_project(
         &self,
@@ -85,9 +86,9 @@ impl Binder {
             overwrite,
             ..
         } = stmt;
-        if let Some(with) = &with {
-            self.add_cte(with, bind_context)?;
-        }
+
+        self.init_cte(bind_context, with)?;
+
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
         let table = self
@@ -117,7 +118,10 @@ impl Binder {
                 on_error_mode,
                 start,
             } => {
-                let params = settings.to_meta_ast().try_into()?;
+                let params = FileFormatParams::try_from_reader(
+                    FileFormatOptionsReader::from_ast(&settings),
+                    false,
+                )?;
                 Ok(InsertInputSource::StreamingWithFileFormat {
                     format: params,
                     start,
@@ -173,19 +177,7 @@ impl Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
-                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
-                    .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
-
-                if let Plan::Query { s_expr, .. } = &select_plan {
-                    if !self.check_sexpr_top(s_expr)? {
-                        return Err(ErrorCode::SemanticError(
-                            "insert source can't contain udf functions".to_string(),
-                        ));
-                    }
-                }
-
-                let optimized_plan = optimize(opt_ctx, select_plan).await?;
-                Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
+                Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
         };
 

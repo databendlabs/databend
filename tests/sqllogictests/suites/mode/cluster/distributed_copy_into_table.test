@@ -1,26 +1,12 @@
 statement ok
 set enable_distributed_copy_into = 1;
 
-statement ok
-drop table if exists test_order;
 
 statement ok
-drop table if exists random_source;
+create or replace stage st FILE_FORMAT = (TYPE = CSV);
 
 statement ok
-drop stage if exists test_stage;
-
-statement ok
-drop table if exists parquet_table;
-
-statement ok
-drop stage if exists parquet_stage;
-
-statement ok
-create stage st FILE_FORMAT = (TYPE = CSV);
-
-statement ok
-create table table_random(a int not null,b string not null,c string not null) ENGINE = Random;
+create or replace table table_random(a int not null,b string not null,c string not null) ENGINE = Random;
 
 statement ok
 copy into @st from (select a,b,c from table_random limit 1000000);
@@ -47,7 +33,7 @@ statement ok
 copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-create table t(a int not null,b string not null,c string not null);
+create or replace table t(a int not null,b string not null,c string not null);
 
 statement ok
 copy into t from @st force = true;
@@ -74,10 +60,10 @@ statement ok
 set enable_distributed_copy_into = 1;
 
 statement ok
-create table t_query(a int not null,b string not null,c string not null);
+create or replace table t_query(a int not null,b string not null,c string not null);
 
 statement ok
-create stage st_query FILE_FORMAT = (TYPE = TSV);
+create or replace stage st_query FILE_FORMAT = (TYPE = TSV);
 
 statement ok
 copy into @st_query from (select a,b,c from table_random limit 1000000);
@@ -100,10 +86,10 @@ select count(*) from t_query;
 
 ## add parquet_file_test
 statement ok
-create table parquet_table(a int not null,b string not null,c string not null);
+create or replace table parquet_table(a int not null,b string not null,c string not null);
 
 statement ok
-create stage parquet_stage file_format = (type = parquet);
+create or replace stage parquet_stage file_format = (type = parquet);
 
 statement ok
 copy into @parquet_stage from (select a,b,c from table_random limit 100000);
@@ -148,10 +134,10 @@ select count(*) from parquet_table;
 # make sure it's distributed.
 
 statement ok
-create table t_query2(a int not null,b string not null,c string not null);
+create or replace table t_query2(a int not null,b string not null,c string not null);
 
 statement ok
-create stage st_query2 FILE_FORMAT = (TYPE = TSV);
+create or replace stage st_query2 FILE_FORMAT = (TYPE = TSV);
 
 statement ok
 copy into @st_query2 from (select a,b,c from table_random limit 10);
@@ -178,13 +164,13 @@ select block_count from fuse_snapshot('default','t_query2') limit 1;
 
 #test cluster key
 statement ok
-create table test_order(a int not null,b string not null,c timestamp not null) cluster by(to_yyyymmdd(c),a);
+create or replace table test_order(a int not null,b string not null,c timestamp not null) cluster by(to_yyyymmdd(c),a);
 
 statement ok
-create table random_source like test_order Engine = Random;
+create or replace table random_source like test_order Engine = Random;
 
 statement ok
-create stage test_stage;
+create or replace stage test_stage;
 
 statement ok
 copy into @test_stage from (select * from random_source limit 4000000) FILE_FORMAT=(type=parquet);

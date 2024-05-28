@@ -33,7 +33,6 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::binder::resolve_file_location;
 use databend_common_storage::init_stage_operator;
-use databend_common_storage::read_parquet_schema_async;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storage::StageFilesInfo;
 use opendal::Scheme;
@@ -128,22 +127,15 @@ impl AsyncSource for ParquetInferSchemaSource {
             Some(f) => self.ctx.get_file_format(f).await?,
             None => stage_info.file_format_params.clone(),
         };
-        let use_parquet2 = self.ctx.get_settings().get_use_parquet2()?;
         let schema = match file_format_params.get_type() {
             StageFileFormatType::Parquet => {
-                if use_parquet2 {
-                    let arrow_schema =
-                        read_parquet_schema_async(&operator, &first_file.path).await?;
-                    TableSchema::try_from(&arrow_schema)?
-                } else {
-                    let arrow_schema = read_parquet_schema_async_rs(
-                        &operator,
-                        &first_file.path,
-                        Some(first_file.size),
-                    )
-                    .await?;
-                    TableSchema::try_from(&arrow_schema)?
-                }
+                let arrow_schema = read_parquet_schema_async_rs(
+                    &operator,
+                    &first_file.path,
+                    Some(first_file.size),
+                )
+                .await?;
+                TableSchema::try_from(&arrow_schema)?
             }
             _ => {
                 return Err(ErrorCode::BadArguments(

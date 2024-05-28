@@ -17,10 +17,13 @@ use std::fmt::Formatter;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 
+use databend_common_base::runtime::defer;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::info;
 use petgraph::matrix_graph::Zero;
 
 use crate::pipe::Pipe;
@@ -69,7 +72,7 @@ pub struct Pipeline {
 }
 
 impl Debug for Pipeline {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", &self.pipes)
     }
 }
@@ -440,10 +443,24 @@ impl Pipeline {
         }
     }
 
+    #[track_caller]
     pub fn set_on_init<F: FnOnce() -> Result<()> + Send + Sync + 'static>(&mut self, f: F) {
+        let location = std::panic::Location::caller();
         if let Some(old_on_init) = self.on_init.take() {
             self.on_init = Some(Box::new(move || {
                 old_on_init()?;
+                let instants = Instant::now();
+
+                let _guard = defer(move || {
+                    info!(
+                        "OnFinished callback elapsed: {:?} while in {}:{}:{}",
+                        instants.elapsed(),
+                        location.file(),
+                        location.line(),
+                        location.column()
+                    );
+                });
+
                 f()
             }));
 
@@ -453,33 +470,59 @@ impl Pipeline {
         self.on_init = Some(Box::new(f));
     }
 
+    #[track_caller]
     pub fn set_on_finished<
         F: FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static,
     >(
         &mut self,
         f: F,
     ) {
+        let location = std::panic::Location::caller();
         if let Some(on_finished) = self.on_finished.take() {
             self.on_finished = Some(Box::new(move |(profiles, may_error)| {
                 on_finished((profiles, may_error))?;
+                let instants = Instant::now();
+                let _guard = defer(move || {
+                    info!(
+                        "OnFinished callback elapsed: {:?} while in {}:{}:{}",
+                        instants.elapsed(),
+                        location.file(),
+                        location.line(),
+                        location.column()
+                    );
+                });
+
                 f((profiles, may_error))
             }));
-
             return;
         }
 
         self.on_finished = Some(Box::new(f));
     }
 
+    #[track_caller]
     pub fn push_front_on_finished_callback<
         F: FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static,
     >(
         &mut self,
         f: F,
     ) {
+        let location = std::panic::Location::caller();
         if let Some(on_finished) = self.on_finished.take() {
             self.on_finished = Some(Box::new(move |(profiles, may_error)| {
+                let instants = Instant::now();
+                let guard = defer(move || {
+                    info!(
+                        "OnFinished callback elapsed: {:?} while in {}:{}:{}",
+                        instants.elapsed(),
+                        location.file(),
+                        location.line(),
+                        location.column()
+                    );
+                });
+
                 f((profiles, may_error))?;
+                drop(guard);
                 on_finished((profiles, may_error))
             }));
 

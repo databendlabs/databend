@@ -27,9 +27,9 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
@@ -107,10 +107,13 @@ impl Binder {
                 ScalarExpr::AsyncFunctionCall(async_func) => self.create_derived_column_binding(
                     async_func.display_name.clone(),
                     async_func.return_type.as_ref().clone(),
+                    Some(item.scalar.clone()),
                 ),
-                _ => {
-                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
-                }
+                _ => self.create_derived_column_binding(
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                    Some(item.scalar.clone()),
+                ),
             };
 
             if is_grouping_sets_item {

@@ -32,6 +32,7 @@ use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
@@ -52,6 +53,7 @@ use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_base::base::uuid::Uuid;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -67,6 +69,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
 use databend_common_storages_delta::DeltaTable;
@@ -89,8 +92,6 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
@@ -106,6 +107,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::LockTableOption;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
@@ -472,7 +474,7 @@ impl Binder {
         }
 
         // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns(cols)) = &source {
+        if let Some(CreateTableSource::Columns(cols, _)) = &source {
             if cols
                 .iter()
                 .any(|col| matches!(col.data_type, TypeName::Geometry))
@@ -487,7 +489,7 @@ impl Binder {
         }
 
         // Build table schema
-        let (schema, field_comments) = match (&source, &as_query) {
+        let (schema, field_comments, inverted_indexes) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
                 self.analyze_create_table_schema(source).await?
@@ -508,11 +510,11 @@ impl Binder {
                     .collect::<Result<Vec<_>>>()?;
                 let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
-                (schema, vec![])
+                (schema, vec![], None)
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
-                let (source_schema, source_comments) =
+                let (source_schema, source_comments, inverted_indexes) =
                     self.analyze_create_table_schema(source).await?;
                 let mut init_bind_context = BindContext::new();
                 let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
@@ -530,7 +532,7 @@ impl Binder {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
                 }
                 Self::validate_create_table_schema(&source_schema)?;
-                (source_schema, source_comments)
+                (source_schema, source_comments, inverted_indexes)
             }
             _ => {
                 match engine {
@@ -544,7 +546,7 @@ impl Binder {
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
-                        (Arc::new(table_schema), vec![])
+                        (Arc::new(table_schema), vec![], None)
                     }
                     Engine::Delta => {
                         let sp =
@@ -556,7 +558,7 @@ impl Binder {
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
                         engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
-                        (Arc::new(table_schema), vec![])
+                        (Arc::new(table_schema), vec![], None)
                     }
                     _ => Err(ErrorCode::BadArguments(
                         "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG/DELTA table engine",
@@ -621,6 +623,11 @@ impl Binder {
                     default_compression.to_owned(),
                 );
             }
+        } else if inverted_indexes.is_some() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table engine {} does not support create inverted index",
+                engine
+            )));
         }
 
         let cluster_key = {
@@ -635,7 +642,7 @@ impl Binder {
         };
 
         let plan = CreateTablePlan {
-            create_option: *create_option,
+            create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
             catalog: catalog.clone(),
             database: database.clone(),
@@ -653,13 +660,11 @@ impl Binder {
                 let mut bind_context = BindContext::new();
                 let stmt = Statement::Query(Box::new(*query.clone()));
                 let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
-                // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
-                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
-                let optimized_plan = optimize(opt_ctx, select_plan).await?;
-                Some(Box::new(optimized_plan))
+                Some(Box::new(select_plan))
             } else {
                 None
             },
+            inverted_indexes,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
     }
@@ -697,7 +702,7 @@ impl Binder {
         // keep a copy of table data uri_location, will be used in "show create table"
         options.insert(
             OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
-            format!("{:#}", stmt.uri_location),
+            format!("{}", stmt.uri_location.mask()),
         );
 
         let mut uri = stmt.uri_location.clone();
@@ -732,6 +737,7 @@ impl Binder {
             field_comments: vec![],
             cluster_key: None,
             as_select: None,
+            inverted_indexes: None,
         })))
     }
 
@@ -1110,7 +1116,7 @@ impl Binder {
             table,
             action,
             limit: limit.map(|v| v as usize),
-            need_lock: true,
+            lock_opt: LockTableOption::LockWithRetry,
         })))
     }
 
@@ -1387,13 +1393,61 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    async fn analyze_inverted_indexes(
+        &self,
+        table_schema: TableSchemaRef,
+        inverted_index_defs: &[InvertedIndexDefinition],
+    ) -> Result<BTreeMap<String, TableIndex>> {
+        let mut inverted_indexes = BTreeMap::new();
+        for inverted_index_def in inverted_index_defs {
+            let name = self.normalize_object_identifier(&inverted_index_def.index_name);
+            if inverted_indexes.contains_key(&name) {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Duplicated inverted index name: {}",
+                    name
+                )));
+            }
+            let column_ids = self
+                .validate_inverted_index_columns(table_schema.clone(), &inverted_index_def.columns)
+                .await?;
+            let options = self
+                .validate_inverted_index_options(&inverted_index_def.index_options)
+                .await?;
+
+            let inverted_index = TableIndex {
+                name: name.clone(),
+                column_ids,
+                sync_creation: inverted_index_def.sync_creation,
+                version: Uuid::new_v4().simple().to_string(),
+                options,
+            };
+            inverted_indexes.insert(name, inverted_index);
+        }
+        Ok(inverted_indexes)
+    }
+
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource,
-    ) -> Result<(TableSchemaRef, Vec<String>)> {
+    ) -> Result<(
+        TableSchemaRef,
+        Vec<String>,
+        Option<BTreeMap<String, TableIndex>>,
+    )> {
         match source {
-            CreateTableSource::Columns(columns) => {
-                self.analyze_create_table_schema_by_columns(columns).await
+            CreateTableSource::Columns(columns, inverted_index_defs) => {
+                let (schema, comments) =
+                    self.analyze_create_table_schema_by_columns(columns).await?;
+                let inverted_indexes = if let Some(inverted_index_defs) = inverted_index_defs {
+                    let inverted_indexes = self
+                        .analyze_inverted_indexes(schema.clone(), inverted_index_defs)
+                        .await?;
+                    Some(inverted_indexes)
+                } else {
+                    None
+                };
+                Ok((schema, comments, inverted_indexes))
             }
             CreateTableSource::Like {
                 catalog,
@@ -1408,14 +1462,14 @@ impl Binder {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
                         let mut planner = Planner::new(self.ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
-                        Ok((infer_table_schema(&plan.schema())?, vec![]))
+                        Ok((infer_table_schema(&plan.schema())?, vec![], None))
                     } else {
                         Err(ErrorCode::Internal(
                             "Logical error, View Table must have a SelectQuery inside.",
                         ))
                     }
                 } else {
-                    Ok((table.schema(), table.field_comments().clone()))
+                    Ok((table.schema(), table.field_comments().clone(), None))
                 }
             }
         }

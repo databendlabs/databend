@@ -29,8 +29,8 @@ use databend_common_ast::parser::script::script_stmts;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::ParseMode;
+use databend_common_ast::Range;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Range;
 use databend_common_exception::Result;
 use databend_common_script::compile;
 use databend_common_script::ir::ColumnAccess;
@@ -731,7 +731,7 @@ impl MockSet {
 }
 
 impl Display for MockSet {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "(")?;
         for (i, name) in self.column_names.iter().enumerate() {
             if i > 0 {

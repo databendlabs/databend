@@ -223,7 +223,7 @@ impl<'de, Method: HashMethodBounds, V: Send + Sync + 'static> serde::Deserialize
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta<Method, V> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AggregateMeta::HashTable(_) => f.debug_struct("AggregateMeta::HashTable").finish(),
             AggregateMeta::Partitioned { .. } => {
@@ -233,7 +233,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
             AggregateMeta::Spilling(_) => f.debug_struct("Aggregate::Spilling").finish(),
-            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilling").finish(),
+            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
             AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
             AggregateMeta::AggregatePayload(_) => {
                 f.debug_struct("AggregateMeta:AggregatePayload").finish()

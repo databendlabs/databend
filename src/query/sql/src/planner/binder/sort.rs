@@ -161,6 +161,7 @@ impl Binder {
                                 self.create_derived_column_binding(
                                     format!("{:#}", order.expr),
                                     rewrite_scalar.data_type()?,
+                                    Some(rewrite_scalar.clone()),
                                 )
                             };
                         let item = ScalarItem {
@@ -248,62 +249,6 @@ impl Binder {
         };
         new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
         Ok(new_expr)
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_order_by_for_set_operation(
-        &mut self,
-        bind_context: &mut BindContext,
-        child: SExpr,
-        order_by: &[OrderByExpr],
-    ) -> Result<SExpr> {
-        let mut scalar_binder = ScalarBinder::new(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
-        );
-        let mut order_by_items = Vec::with_capacity(order_by.len());
-        for order in order_by.iter() {
-            match order.expr {
-                Expr::ColumnRef { .. } => {
-                    let scalar = scalar_binder.bind(&order.expr).await?.0;
-                    match scalar {
-                        ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) => {
-                            let order_by_item = SortItem {
-                                index: column.index,
-                                asc: order.asc.unwrap_or(true),
-                                nulls_first: order.nulls_first.unwrap_or(false),
-                            };
-                            order_by_items.push(order_by_item);
-                        }
-                        _ => {
-                            return Err(ErrorCode::Internal("scalar should be BoundColumnRef")
-                                .set_span(order.expr.span()));
-                        }
-                    }
-                }
-                _ => {
-                    return Err(
-                        ErrorCode::SemanticError("can only order by column".to_string())
-                            .set_span(order.expr.span()),
-                    );
-                }
-            }
-        }
-        let sort_plan = Sort {
-            items: order_by_items,
-            limit: None,
-            after_exchange: None,
-            pre_projection: None,
-        };
-        Ok(SExpr::create_unary(
-            Arc::new(sort_plan.into()),
-            Arc::new(child),
-        ))
     }
 
     #[allow(clippy::only_used_in_recursion)]
