@@ -49,14 +49,14 @@ impl UserMgr {
     }
 
     /// Create a string key to store a user@host into meta-service.
-    fn user_key(&self, username: &str, hostname: &str) -> String {
-        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), username, hostname);
+    fn user_key(&self, username: &str) -> String {
+        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), username);
         ident.to_string_key()
     }
 
     /// Create a prefix `<PREFIX>/<tenant>/` for listing
     fn user_prefix(&self) -> String {
-        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), "dummy", "dummy");
+        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), "dummy");
         ident.tenant_prefix()
     }
 
@@ -66,7 +66,7 @@ impl UserMgr {
         user_info: &UserInfo,
         seq: MatchSeq,
     ) -> databend_common_exception::Result<u64> {
-        let key = self.user_key(&user_info.name, &user_info.hostname);
+        let key = self.user_key(&user_info.name);
 
         let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
@@ -94,7 +94,7 @@ impl UserApi for UserMgr {
         user_info: UserInfo,
         create_option: &CreateOption,
     ) -> databend_common_exception::Result<()> {
-        let key = self.user_key(&user_info.name, &user_info.hostname);
+        let key = self.user_key(&user_info.name);
         let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = &self.kv_api;
@@ -107,7 +107,7 @@ impl UserApi for UserMgr {
             if res.prev.is_some() {
                 return Err(ErrorCode::UserAlreadyExists(format!(
                     "User {} already exists.",
-                    user_info.identity().display()
+                    user_info.identity().identity()
                 )));
             }
         }
@@ -118,11 +118,11 @@ impl UserApi for UserMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>> {
-        let key = self.user_key(&user.username, &user.hostname);
+        let key = self.user_key(&user.username);
 
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
+            ErrorCode::UnknownUser(format!("User {} does not exist.", user.identity()))
         })?;
 
         match seq.match_seq(&seq_value) {
@@ -132,7 +132,7 @@ impl UserApi for UserMgr {
             )),
             Err(_) => Err(ErrorCode::UnknownUser(format!(
                 "User {} does not exist.",
-                user.display()
+                user.identity()
             ))),
         }
     }
@@ -179,7 +179,7 @@ impl UserApi for UserMgr {
 
     #[async_backtrace::framed]
     async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()> {
-        let key = self.user_key(&user.username, &user.hostname);
+        let key = self.user_key(&user.username);
         let res = self
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
@@ -189,7 +189,7 @@ impl UserApi for UserMgr {
         } else {
             Err(ErrorCode::UnknownUser(format!(
                 "Cannot delete user {}. User does not exist or invalid operation.",
-                user.display()
+                user.identity()
             )))
         }
     }
