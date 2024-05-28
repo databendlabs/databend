@@ -320,6 +320,9 @@ statement ok
 DROP TABLE test;
 
 statement ok
+remove @test_stage
+
+statement ok
 drop stage test_stage
 
 ###############################################################
