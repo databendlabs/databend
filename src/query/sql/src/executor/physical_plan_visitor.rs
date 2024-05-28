@@ -14,7 +14,7 @@
 
 use databend_common_exception::Result;
 
-use super::physical_plans::CacheScan;
+use super::physical_plans::{CacheScan, RecursiveCte, RecursiveCteScan};
 use super::physical_plans::ExpressionScan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
@@ -69,6 +69,7 @@ pub trait PhysicalPlanReplacer {
         match plan {
             PhysicalPlan::TableScan(plan) => self.replace_table_scan(plan),
             PhysicalPlan::CteScan(plan) => self.replace_cte_scan(plan),
+            PhysicalPlan::RecursiveCteScan(plan) => self.replace_recursive_cte_scan(plan),
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
@@ -83,6 +84,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExchangeSource(plan) => self.replace_exchange_source(plan),
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
+            PhysicalPlan::RecursiveCte(plan) => self.replace_recursive_cte(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
@@ -138,6 +140,10 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_cte_scan(&mut self, plan: &CteScan) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::CteScan(plan.clone()))
+    }
+
+    fn replace_recursive_cte_scan(&mut self, plan: &RecursiveCteScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::RecursiveCteScan(plan.clone()))
     }
 
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
@@ -376,6 +382,16 @@ pub trait PhysicalPlanReplacer {
             schema: plan.schema.clone(),
             pairs: plan.pairs.clone(),
             stat_info: plan.stat_info.clone(),
+        }))
+    }
+
+    fn replace_recursive_cte(&mut self, plan: &RecursiveCte) -> Result<PhysicalPlan> {
+        let left = self.replace(&plan.left)?;
+        let right = self.replace(&plan.right)?;
+        Ok(PhysicalPlan::RecursiveCte(RecursiveCte {
+            plan_id: plan.plan_id,
+            left: Box::new(left),
+            right: Box::new(right),
         }))
     }
 
@@ -621,7 +637,8 @@ impl PhysicalPlan {
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::DeleteSource(_)
                 | PhysicalPlan::AsyncFunction(_)
-                | PhysicalPlan::UpdateSource(_) => {}
+                | PhysicalPlan::UpdateSource(_)
+                | PhysicalPlan::RecursiveCteScan(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -668,6 +685,10 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::ProjectSet(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
+                }
+                PhysicalPlan::RecursiveCte(plan) => {
+                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::CopyIntoTable(plan) => match &plan.source {
                     CopyIntoTableSource::Query(input) => {

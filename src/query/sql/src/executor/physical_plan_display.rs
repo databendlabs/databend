@@ -119,6 +119,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
+            PhysicalPlan::RecursiveCte(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::RecursiveCteScan(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Duplicate(_) => "Duplicate".fmt(f)?,
             PhysicalPlan::Shuffle(_) => "Shuffle".fmt(f)?,
             PhysicalPlan::ChunkFilter(_) => "ChunkFilter".fmt(f)?,

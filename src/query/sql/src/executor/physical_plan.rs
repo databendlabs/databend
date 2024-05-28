@@ -60,6 +60,8 @@ use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
 use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::RecursiveCte;
+use crate::executor::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
@@ -96,6 +98,8 @@ pub enum PhysicalPlan {
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
     Udf(Udf),
+    RecursiveCte(RecursiveCte),
+    RecursiveCteScan(RecursiveCteScan),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -145,7 +149,7 @@ pub enum PhysicalPlan {
     ChunkMerge(Box<ChunkMerge>),
     ChunkCommitInsert(Box<ChunkCommitInsert>),
 
-    // async function call
+    /// async function call
     AsyncFunction(AsyncFunction),
 }
 
@@ -260,6 +264,16 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::RecursiveCte(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.left.adjust_plan_id(next_id);
+                plan.right.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::RecursiveCteScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
             }
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 plan.plan_id = *next_id;
@@ -418,6 +432,8 @@ impl PhysicalPlan {
             PhysicalPlan::ExpressionScan(v) => v.plan_id,
             PhysicalPlan::CacheScan(v) => v.plan_id,
             PhysicalPlan::Udf(v) => v.plan_id,
+            PhysicalPlan::RecursiveCte(v) => v.plan_id,
+            PhysicalPlan::RecursiveCteScan(v) => v.plan_id,
             PhysicalPlan::DeleteSource(v) => v.plan_id,
             PhysicalPlan::MergeInto(v) => v.plan_id,
             PhysicalPlan::MergeIntoAddRowNumber(v) => v.plan_id,
@@ -472,6 +488,8 @@ impl PhysicalPlan {
             PhysicalPlan::ExpressionScan(plan) => plan.output_schema(),
             PhysicalPlan::CacheScan(plan) => plan.output_schema(),
             PhysicalPlan::Udf(plan) => plan.output_schema(),
+            PhysicalPlan::RecursiveCte(plan) => plan.output_schema(),
+            PhysicalPlan::RecursiveCteScan(plan) => plan.output_schema(),
             PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
             PhysicalPlan::MergeIntoAddRowNumber(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
@@ -518,6 +536,8 @@ impl PhysicalPlan {
             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
             PhysicalPlan::Exchange(_) => "Exchange".to_string(),
             PhysicalPlan::UnionAll(_) => "UnionAll".to_string(),
+            PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
+            PhysicalPlan::RecursiveCte(_) => "RecursiveCte".to_string(),
             PhysicalPlan::DistributedInsertSelect(_) => "DistributedInsertSelect".to_string(),
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
@@ -561,6 +581,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CteScan(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CacheScan(_)
+            | PhysicalPlan::RecursiveCteScan(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::DeleteSource(_)
@@ -587,6 +608,7 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
+            PhysicalPlan::RecursiveCte(plan) => Box::new(std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref()))),
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
@@ -643,6 +665,7 @@ impl PhysicalPlan {
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::UnionAll(_)
+            | PhysicalPlan::RecursiveCte(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
             | PhysicalPlan::RangeJoin(_)
@@ -664,6 +687,7 @@ impl PhysicalPlan {
             | PhysicalPlan::ExpressionScan(_)
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::CteScan(_)
+            | PhysicalPlan::RecursiveCteScan(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
             | PhysicalPlan::UpdateSource(_)

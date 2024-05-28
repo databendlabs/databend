@@ -341,6 +341,8 @@ fn to_format_tree(
             ))
         }
         PhysicalPlan::AsyncFunction(plan) => async_function_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::RecursiveCte(plan) => todo!(),
+        PhysicalPlan::RecursiveCteScan(plan) => todo!(),
     }
 }
 

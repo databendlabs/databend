@@ -165,6 +165,10 @@ impl PipelineBuilder {
             PhysicalPlan::ExpressionScan(expression_scan) => {
                 self.build_expression_scan(expression_scan)
             }
+            PhysicalPlan::RecursiveCte(recursive_cte) => self.build_recursive_cte(recursive_cte),
+            PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
+                self.build_recursive_cte_scan(recursive_cte_scan)
+            }
 
             // Copy into.
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
