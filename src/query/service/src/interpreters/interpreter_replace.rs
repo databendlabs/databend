@@ -168,11 +168,6 @@ impl ReplaceInterpreter {
             ))
         });
 
-        let is_multi_node = !self.ctx.get_cluster().is_empty();
-        let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
-        let is_distributed = is_multi_node
-            && !is_value_source
-            && self.ctx.get_settings().get_enable_distributed_replace()?;
         let table_is_empty = base_snapshot.segments.is_empty();
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let mut purge_info = None;
@@ -190,6 +185,18 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
+
+        let is_source_distributed = matches!(
+            root.as_ref(),
+            PhysicalPlan::Exchange(Exchange {
+                kind: FragmentKind::Merge,
+                ..
+            })
+        );
+
+        let replace_need_distributed =
+            is_source_distributed && self.ctx.get_settings().get_enable_distributed_replace()?;
+
         if let Some(s) = &select_ctx {
             let select_schema = s.select_schema.as_ref();
             // validate schema
@@ -253,7 +260,7 @@ impl ReplaceInterpreter {
         };
 
         // remove top exchange
-        if is_distributed {
+        if replace_need_distributed {
             if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
                 root = input.clone();
             }
@@ -316,7 +323,8 @@ impl ReplaceInterpreter {
             need_insert: true,
             plan_id: u32::MAX,
         })));
-        if is_distributed {
+
+        if replace_need_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: root,
