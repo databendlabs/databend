@@ -28,6 +28,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use chrono::Utc;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -657,6 +658,7 @@ impl TableContext for QueryContext {
 
         let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
+        let now = Utc::now();
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;
@@ -666,6 +668,7 @@ impl TableContext for QueryContext {
 
         Ok(FunctionContext {
             tz,
+            now,
             rounding_mode,
             disable_variant_check,
 
