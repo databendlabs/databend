@@ -93,6 +93,7 @@ impl Operator for ExpressionScan {
             outer_columns: self.used_columns()?,
             used_columns: self.used_columns()?,
             orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

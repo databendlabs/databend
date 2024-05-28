@@ -470,6 +470,7 @@ impl<'a> WindowRewriter<'a> {
             Ok(col.clone())
         } else {
             let ty = arg.data_type()?;
+
             let index = self.metadata.write().add_derived_column(
                 name.to_string(),
                 ty.clone(),
