@@ -4,5 +4,7 @@
 
 set -e
 
-echo "setting up meta chaos with target $1.."
-./scripts/ci/ci-setup-chaos-meta.sh $1
+BUILD_PROFILE=${BUILD_PROFILE:-debug}
+
+echo "setting up meta chaos.."
+./scripts/ci/ci-setup-chaos-meta.sh

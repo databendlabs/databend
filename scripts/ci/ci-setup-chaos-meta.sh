@@ -2,68 +2,59 @@
 # Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
-set -e
+set -ex
 
-echo "install k3d"
+BUILD_PROFILE=${BUILD_PROFILE:-debug}
+
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.6.0 bash
-echo "k3d create registry"
-k3d registry create my-cluster --port 5111
-echo "k3d create cluster"
-k3d cluster create mycluster --registry-config scripts/ci/meta-chaos/my-registry.yaml
+k3d registry create k3d-registry --port 0.0.0.0:5111 -i registry:latest
+k3d cluster create --config ./scripts/ci/meta-chaos/k3d.yaml meta-chaos
 
-echo "install kubectl"
-curl -LO https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl
-chmod +x kubectl
-sudo mv kubectl /usr/local/bin/
+if kubectl version --client; then
+    echo "kubectl client already installed"
+else
+    echo "install kubectl client"
+    curl -LO "https://dl.k8s.io/release/v1.29.5/bin/linux/amd64/kubectl"
+    chmod +x kubectl
+    sudo mv kubectl /usr/local/bin/
+fi
 
-echo "build databend-meta image"
-ls ./target/debug
-echo "target $1"
-mkdir -p temp/distro/amd64
-#cp ./target/$1/databend-meta ./temp/distro/amd64/
-cp ./target/debug/databend-meta ./temp/distro/amd64/
-#cp ./target/$1/release/databend-metactl ./temp/distro/amd64/
-#cp ./target/debug/databend-metactl ./temp/distro/amd64/
-docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/debian/meta.Dockerfile temp
-docker tag databend-meta:meta-chaos k3d-my-cluster.localhost:5111/databend-meta
-docker push k3d-my-cluster.localhost:5111/databend-meta
+if helm version; then
+    echo "helm already installed"
+else
+    echo "install helm"
+    curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    chmod 700 get_helm.sh
+    ./get_helm.sh
+fi
+
+ls -lh ./target/"${BUILD_PROFILE}"
+mkdir -p distro/amd64
+cp ./target/"${BUILD_PROFILE}"/databend-meta ./distro/amd64/
+cp ./target/"${BUILD_PROFILE}"/databend-metactl ./distro/amd64/
+docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/debian/meta.Dockerfile .
+docker tag databend-meta:meta-chaos k3d-registry.localhost:5111/databend-meta
+docker push k3d-registry.localhost:5111/databend-meta
 
 echo "install chaos mesh on k3d"
 curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
 
-echo "kubectl get pods"
-kubectl get pods -o wide
-echo "kubectl delete pvc"
-kubectl delete pvc --namespace databend data-my-release-databend-meta-0 data-my-release-databend-meta-1 data-my-release-databend-meta-2 --ignore-not-found >/dev/null
+kubectl get pods -A -o wide
+kubectl get pvc A
+# kubectl delete pvc --namespace databend data-my-release-databend-meta-0 data-my-release-databend-meta-1 data-my-release-databend-meta-2 --ignore-not-found >/dev/null
 
-echo "install helm"
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-helm version
-
-echo "heml start meta cluster"
 helm repo add databend https://charts.databend.rs
-helm install my-release databend/databend-meta --namespace databend --create-namespace -f scripts/ci/meta-chaos/meta-ha.yaml --set image.repository=k3d-my-cluster.localhost:5111/databend-meta --set image.tag=latest databend-meta --wait
+helm install test databend/databend-meta \
+    --namespace databend \
+    --create-namespace \
+    --values scripts/ci/meta-chaos/meta-ha.yaml \
+    --set image.repository=k3d-registry.localhost:5111/databend-meta \
+    --set image.tag=meta-chaos \
+    --wait
 
-echo "check meta Running pods"
-MAX_WAIT_TIME=15
-countdown=$MAX_WAIT_TIME
-
-while [ $countdown -gt 0 ]; do
-    kubectl logs --namespace databend my-release-databend-meta-0 | tail -n 50
-    output=$(kubectl get pods -o wide --namespace databend | grep Running)
-
-    LINE_COUNT=$(echo "$output" | wc -l)
-
-    if [ $LINE_COUNT -eq 3 ]; then
-        echo "Success: The output has exactly 3 Running pods."
-        exit 0
-    fi
-
-    echo "try to check meta Running pods again.."
-    ((countdown--))
-
-    sleep 1
-done
-
-echo "Error: Timeout after $MAX_WAIT_TIME seconds."
-exit 1
+sleep 10
+kubectl -n databend wait \
+    --for=condition=ready pod \
+    -l app.kubernetes.io/instance=meta-service \
+    --timeout 300s
+sleep 30
