@@ -14,10 +14,15 @@
 
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::sync::Arc;
 
+use databend_common_expression::types::map::KvColumn;
+use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::EmptyMapType;
 use databend_common_expression::types::GenericType;
@@ -26,11 +31,21 @@ use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use databend_common_hashtable::StackHashSet;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -234,44 +249,163 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| (),
     );
 
-    registry.register_passthrough_nullable_2_arg(
-        "map_delete",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<
-            MapType<GenericType<0>, GenericType<1>>,
-            ArrayType<GenericType<0>>,
-            MapType<GenericType<0>, GenericType<1>>,
-        >(|input_map, input_keys, output_map, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output_map.len()) {
-                    output_map.commit_row();
-                    return;
+    registry.register_function_factory("map_delete", |_, arg_types| {
+        log::info!("Registering 'map_delete' function");
+
+        if arg_types.len() != 2 {
+            log::info!(
+                "Invalid number of arguments. Expected 2, got {}",
+                arg_types.len()
+            );
+            return None;
+        }
+
+        log::info!("Argument types: {:#?}", arg_types);
+        log::info!("First argument type: {:#?}", arg_types.first()?);
+
+        let (key_type, value_type) = match arg_types.first()? {
+            DataType::Map(box DataType::Tuple(type_tuple)) => {
+                log::info!("Map argument type: {:#?}", type_tuple);
+                if type_tuple.len() == 2 {
+                    (type_tuple[0].clone(), type_tuple[1].clone())
+                } else {
+                    log::info!(
+                        "Invalid map tuple length. Expected 2, got {}",
+                        type_tuple.len()
+                    );
+                    return None;
                 }
             }
-
-            let mut detect_valid_key_list = Vec::new();
-            let mut input_key_list = Vec::new();
-            for key in input_keys.iter() {
-                input_key_list.push(key);
+            _ => {
+                log::info!("Expected map argument, got {:#?}", arg_types.first());
+                return None;
             }
+        };
 
-            input_map
-                .iter()
-                .enumerate()
-                .for_each(|(index, (map_key, _map_value))| {
-                    if !input_key_list.contains(&map_key) {
-                        detect_valid_key_list.push((map_key.clone(), index));
+        let key_array_type = match arg_types.get(1)? {
+            DataType::Array(box key_type) => key_type.clone(),
+            _ => {
+                log::info!("Expected array argument, got {:#?}", arg_types.get(1));
+                return None;
+            }
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "map_delete".to_string(),
+                args_type: vec![
+                    DataType::Map(Box::new(DataType::Tuple(vec![
+                        key_type.clone(),
+                        value_type.clone(),
+                    ]))),
+                    DataType::Array(Box::new(key_array_type)),
+                ],
+                return_type: DataType::Map(Box::new(DataType::Tuple(vec![key_type, value_type]))),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(map_delete_fn),
+            },
+        }))
+    });
+}
+
+fn map_delete_fn(args: &[ValueRef<AnyType>], _ctx: &mut EvalContext) -> Value<AnyType> {
+    let input_length = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
+    let mut output_map_builder = ColumnBuilder::EmptyMap { len: 0 };
+
+    for idx in 0..(input_length.unwrap_or(1)) {
+        let (input_map_type, input_map) = match &args[0] {
+            ValueRef::Scalar(ScalarRef::Map(map)) => {
+                let input_map_type = map.data_type();
+                log::info!("Input map type for scalar argument: {:#?}", input_map_type);
+                let input_map: KvColumn<AnyType, AnyType> =
+                    KvPair::try_downcast_column(map).unwrap();
+                log::info!("Input map for scalar argument: {:#?}", &input_map);
+                (input_map_type, input_map)
+            }
+            ValueRef::Column(Column::Map(map)) => {
+                let inner_val = unsafe { map.index_unchecked(idx) };
+                let input_map: KvColumn<AnyType, AnyType> =
+                    KvPair::try_downcast_column(&inner_val).unwrap();
+
+                let input_map_type = DataType::Tuple(vec![
+                    input_map.keys.data_type(),
+                    input_map.values.data_type(),
+                ]);
+                log::info!("Input map type for column argument: {:#?}", input_map_type);
+                log::info!("Input map for column argument: {:#?}", &input_map);
+                (input_map_type, input_map)
+            }
+            _ => unreachable!("TODO, Other context need to be handled"),
+        };
+
+        log::info!("*** Processing input map ***");
+        log::info!("Input map: {:#?}", input_map);
+        input_map
+            .iter()
+            .for_each(|(key, value)| log::info!("Key: {:#?}, Value: {:#?}", key, value));
+
+        if output_map_builder.len() == 0 {
+            output_map_builder = ColumnBuilder::with_capacity(
+                &DataType::Map(Box::new(input_map_type.clone())),
+                input_length.unwrap_or(1),
+            );
+        }
+
+        let mut filtered_kv_builder =
+            ColumnBuilder::with_capacity(&input_map_type, input_length.unwrap_or(1));
+
+        if args.len() == 2 {
+            match &args[1] {
+                ValueRef::Scalar(ScalarRef::Array(keys_to_delete)) => {
+                    log::info!(
+                        "Keys to delete: {:#?}, DataType: {:#?}",
+                        keys_to_delete,
+                        keys_to_delete.data_type(),
+                    );
+
+                    match keys_to_delete.data_type() {
+                        DataType::String => {
+                            let mut delete_key_list = Vec::new();
+
+                            let keys_to_delete_column =
+                                StringType::try_downcast_column(keys_to_delete).unwrap();
+
+                            keys_to_delete_column.iter().for_each(|key| {
+                                log::info!("Key to delete: {:#?}", key);
+                                delete_key_list.push(key);
+                            });
+
+                            input_map.iter().for_each(|(map_key, map_value)| {
+                                if !delete_key_list
+                                    .contains(&StringType::try_downcast_scalar(&map_key).unwrap())
+                                {
+                                    filtered_kv_builder.push(ScalarRef::Tuple(vec![
+                                        map_key.clone(),
+                                        map_value.clone(),
+                                    ]))
+                                }
+                            });
+                        }
+                        unsupported_key_type => unreachable!(
+                            "TODO :: map_delete Input key type {:#?} not supported",
+                            unsupported_key_type
+                        ),
                     }
-                });
-
-            if !detect_valid_key_list.is_empty() {
-                detect_valid_key_list.iter().for_each(|(key, index)| {
-                    let (_, map_value) = input_map.index(*index).unwrap();
-                    output_map.put_item((key.clone(), map_value.clone()));
-                });
+                }
+                _ => unreachable!("Invalid argument: {:#?}", &args[1]),
             }
+        }
+        output_map_builder.push(ScalarRef::Map(filtered_kv_builder.build()));
+    }
 
-            output_map.commit_row();
-        }),
-    );
+    match input_length {
+        Some(_) => Value::Column(output_map_builder.build()),
+        None => Value::Scalar(output_map_builder.build_scalar()),
+    }
 }

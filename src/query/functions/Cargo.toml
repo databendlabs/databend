@@ -54,6 +54,7 @@ ordered-float = { workspace = true, features = [
     "rand",
 ] }
 #proj = { version = "0.27.2", features = ["geo-types", "bundled_proj"] }
+log = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"
