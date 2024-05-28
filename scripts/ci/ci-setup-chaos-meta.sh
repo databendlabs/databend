@@ -41,7 +41,6 @@ curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
 
 kubectl get pods -A -o wide
 kubectl get pvc A
-# kubectl delete pvc --namespace databend data-my-release-databend-meta-0 data-my-release-databend-meta-1 data-my-release-databend-meta-2 --ignore-not-found >/dev/null
 
 helm repo add databend https://charts.databend.rs
 helm install test databend/databend-meta \
