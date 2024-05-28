@@ -80,6 +80,7 @@ Options:
       --set <SET>                  Settings, overrides settings in DSN
       --dsn <DSN>                  Data source name [env: BENDSQL_DSN]
   -n, --non-interactive            Force non-interactive mode
+  -A, --no-auto-complete           Disable loading tables and fields for auto-completion, which offers a quicker start
       --check                      Check for server status and exit
       --query=<QUERY>              Query to execute
   -d, --data <DATA>                Data to load, @file or @- for stdin
@@ -110,9 +111,8 @@ connect_timeout = "30s"
 [settings]
 display_pretty_sql = true
 progress_color = "green"
-expand = "off"
+no_auto_complete = true
 prompt = ":) "
-
 ```
 
 - Connection section
@@ -134,6 +134,7 @@ prompt = ":) "
 | `progress_color`     | The color to use for the progress bar.                                              |
 | `show_progress`      | Whether to show a progress bar when executing queries.                              |
 | `show_stats`         | Whether to show statistics after executing queries.                                 |
+| `no_auto_complete`   | Whether to disable loading tables and fields for auto-completion on startup.        |
 | `max_display_rows`   | The maximum number of rows to display in table output format.                       |
 | `max_width`          | Limit display render box max width, 0 means default to the size of the terminal.    |
 | `max_col_width`      | Limit display render each column max width, smaller than 3 means disable the limit. |
