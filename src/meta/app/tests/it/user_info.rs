@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_exception::exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;

@@ -147,7 +147,9 @@ mod add {
 
             let api = Arc::new(api);
             let user_mgr = UserMgr::create(api, &Tenant::new_literal("tenant1"));
-            let res = user_mgr.add_user(user_info.clone(), &CreateOption::Create).await;
+            let res = user_mgr
+                .add_user(user_info.clone(), &CreateOption::Create)
+                .await;
 
             assert_eq!(res.unwrap_err().code(), ErrorCode::USER_ALREADY_EXISTS);
         }
