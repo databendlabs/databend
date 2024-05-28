@@ -85,25 +85,6 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
         }
     }
 
-    #[cfg(feature = "z3-prove")]
-    {
-        let constraint_set = crate::optimizer::ConstraintSet::new(&filter.predicates);
-        let left_columns = join_rel_expr
-            .derive_relational_prop_child(0)?
-            .output_columns
-            .clone();
-        let right_columns = join_rel_expr
-            .derive_relational_prop_child(1)?
-            .output_columns
-            .clone();
-        can_filter_left_null |= left_columns
-            .iter()
-            .any(|col| constraint_set.is_null_reject(col));
-        can_filter_right_null |= right_columns
-            .iter()
-            .any(|col| constraint_set.is_null_reject(col));
-    }
-
     let original_join_type = join.join_type.clone();
     join.join_type =
         eliminate_outer_join_type(join.join_type, can_filter_left_null, can_filter_right_null);
