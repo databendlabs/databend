@@ -461,6 +461,10 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             == 0
         && flag
     {
+        // due to issue https://github.com/datafuselabs/databend/issues/15643,
+        // target build optimization of merge-into is disabled: here row_id column should be kept
+
+        // new_columns_set.remove(&plan.row_id_index);
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
             is_distributed: false,
