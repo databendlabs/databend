@@ -34,7 +34,7 @@ curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
 echo "kubectl get pods"
 kubectl get pods -o wide
 echo "kubectl delete pvc"
-kubectl delete pvc --namespace databend  data-my-release-databend-meta-0 data-my-release-databend-meta-1 data-my-release-databend-meta-2 > /dev/null --ignore-not-found 
+kubectl delete pvc --namespace databend data-my-release-databend-meta-0 data-my-release-databend-meta-1 data-my-release-databend-meta-2 --ignore-not-found >/dev/null
 
 echo "install helm"
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -42,7 +42,7 @@ helm version
 
 echo "heml start meta cluster"
 helm repo add databend https://charts.databend.rs
-helm install my-release databend/databend-meta --namespace databend --create-namespace -f scripts/ci/meta-chaos/meta-ha.yaml --set image.repository=k3d-my-cluster.localhost:5111/databend-meta --set image.tag=latest databend-meta  --wait
+helm install my-release databend/databend-meta --namespace databend --create-namespace -f scripts/ci/meta-chaos/meta-ha.yaml --set image.repository=k3d-my-cluster.localhost:5111/databend-meta --set image.tag=latest databend-meta --wait
 
 echo "check meta Running pods"
 MAX_WAIT_TIME=15
