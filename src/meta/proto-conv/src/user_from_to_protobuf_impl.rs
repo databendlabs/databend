@@ -322,19 +322,19 @@ impl FromToProto for mt::principal::UserInfo {
             hostname: p.hostname.clone(),
             auth_info: mt::principal::AuthInfo::from_pb(p.auth_info.ok_or_else(|| {
                 Incompatible {
-                    reason: format!("USER {}: UserInfo.auth_info cannot be None", p.name.clone()),
+                    reason: format!("USER {}: UserInfo.auth_info cannot be None", &p.name),
                 }
             })?)?,
             grants: mt::principal::UserGrantSet::from_pb(p.grants.ok_or_else(|| {
                 Incompatible {
-                    reason: format!("user {}: UserInfo.grants cannot be None", p.name.clone()),
+                    reason: format!("user {}: UserInfo.grants cannot be None", &p.name),
                 }
             })?)?,
             quota: mt::principal::UserQuota::from_pb(p.quota.ok_or_else(|| Incompatible {
-                reason: format!("user {}: UserInfo.quota cannot be None", p.name.clone()),
+                reason: format!("user {}: UserInfo.quota cannot be None", &p.name),
             })?)?,
             option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| Incompatible {
-                reason: format!("user {}: UserInfo.option cannot be None", p.name.clone()),
+                reason: format!("user {}: UserInfo.option cannot be None", &p.name),
             })?)?,
             history_auth_infos: p
                 .history_auth_infos

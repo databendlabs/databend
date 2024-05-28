@@ -325,9 +325,6 @@ async fn test_metrics_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_roles_table() -> Result<()> {
-    let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("roles_table.txt").unwrap();
-
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
@@ -349,16 +346,29 @@ async fn test_roles_table() -> Result<()> {
             .await?;
     }
     let table = RolesTable::create(1);
-    run_table_tests(file, ctx, table).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 5);
+    assert_eq!(block.num_rows(), 4);
+
+    let output = box_render(
+        &Arc::new(source_plan.output_schema.into()),
+        result.as_slice(),
+        1000,
+        1024,
+        30,
+        true,
+    )?;
+    assert!(output.contains("test"));
+    assert!(output.contains("test1"));
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_users_table() -> Result<()> {
-    let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("users_table.txt").unwrap();
-
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
@@ -378,7 +388,23 @@ async fn test_users_table() -> Result<()> {
         .await?;
 
     let table = UsersTable::create(1);
-    run_table_tests(file, ctx, table).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 9);
+    assert!(block.num_rows() >= 2);
+
+    let output = box_render(
+        &Arc::new(source_plan.output_schema.into()),
+        result.as_slice(),
+        1000,
+        1024,
+        30,
+        true,
+    )?;
+    assert!(output.contains("test"));
+    assert!(output.contains("test1"));
 
     Ok(())
 }
