@@ -37,6 +37,7 @@ use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::field_default_value;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
@@ -549,7 +550,12 @@ impl Interpreter for ModifyTableColumnInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(catalog_name, db_name, tbl_name)
+            .acquire_table_lock(
+                catalog_name,
+                db_name,
+                tbl_name,
+                &LockTableOption::LockWithRetry,
+            )
             .await?;
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;

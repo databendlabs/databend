@@ -30,6 +30,7 @@ use databend_common_sql::executor::physical_plans::ReclusterSink;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReclusterTask;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -122,7 +123,12 @@ impl Interpreter for ReclusterTableInterpreter {
             let lock_guard = self
                 .ctx
                 .clone()
-                .acquire_table_lock(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .acquire_table_lock(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                    &LockTableOption::LockWithRetry,
+                )
                 .await?;
 
             let table = catalog

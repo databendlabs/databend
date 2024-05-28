@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::TableExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::TruncateTablePlan;
 
 use crate::interpreters::Interpreter;
@@ -74,7 +75,12 @@ impl Interpreter for TruncateTableInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(&self.catalog_name, &self.database_name, &self.table_name)
+            .acquire_table_lock(
+                &self.catalog_name,
+                &self.database_name,
+                &self.table_name,
+                &LockTableOption::LockWithRetry,
+            )
             .await?;
 
         let table = self

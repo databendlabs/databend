@@ -117,7 +117,12 @@ impl Interpreter for DeleteInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(catalog_name, db_name, tbl_name)
+            .acquire_table_lock(
+                catalog_name,
+                db_name,
+                tbl_name,
+                &LockTableOption::LockWithRetry,
+            )
             .await?;
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;

@@ -149,7 +149,12 @@ impl MergeIntoInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(catalog, database, table_name)
+            .acquire_table_lock(
+                catalog,
+                database,
+                table_name,
+                &LockTableOption::LockWithRetry,
+            )
             .await?;
 
         let table = self.ctx.get_table(catalog, database, table_name).await?;

@@ -101,7 +101,12 @@ impl Interpreter for UpdateInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(catalog_name, db_name, tbl_name)
+            .acquire_table_lock(
+                catalog_name,
+                db_name,
+                tbl_name,
+                &LockTableOption::LockWithRetry,
+            )
             .await?;
 
         // build physical plan.

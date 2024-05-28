@@ -60,7 +60,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock_with_opt(
+            .acquire_table_lock(
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,

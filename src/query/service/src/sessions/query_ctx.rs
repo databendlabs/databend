@@ -324,30 +324,6 @@ impl QueryContext {
         catalog_name: &str,
         db_name: &str,
         tbl_name: &str,
-    ) -> Result<Option<LockGuard>> {
-        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
-        if !enabled_table_lock {
-            return Ok(None);
-        }
-
-        let catalog = self.get_catalog(catalog_name).await?;
-        let tbl = catalog
-            .get_table(&self.get_tenant(), db_name, tbl_name)
-            .await?;
-        if tbl.engine() != "FUSE" {
-            return Ok(None);
-        }
-
-        // Add table lock.
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        table_lock.try_lock(self).await
-    }
-
-    pub async fn acquire_table_lock_with_opt(
-        self: Arc<Self>,
-        catalog_name: &str,
-        db_name: &str,
-        tbl_name: &str,
         lock_opt: &LockTableOption,
     ) -> Result<Option<LockGuard>> {
         let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
@@ -366,8 +342,8 @@ impl QueryContext {
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         match lock_opt {
-            LockTableOption::LockNoRetry => table_lock.try_lock_no_retry(self).await,
-            LockTableOption::LockWithRetry => table_lock.try_lock(self).await,
+            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
             LockTableOption::NoLock => Ok(None),
         }
     }

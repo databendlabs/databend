@@ -55,11 +55,11 @@ impl Lock for TableLock {
         &self.table_info.tenant
     }
 
-    async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>> {
-        self.lock_mgr.try_lock(ctx, self).await
-    }
-
-    async fn try_lock_no_retry(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>> {
-        self.lock_mgr.try_lock_no_retry(ctx, self).await
+    async fn try_lock(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        should_retry: bool,
+    ) -> Result<Option<LockGuard>> {
+        self.lock_mgr.try_lock(ctx, self, should_retry).await
     }
 }
