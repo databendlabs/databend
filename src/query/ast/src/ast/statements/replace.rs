@@ -52,15 +52,15 @@ impl Display for ReplaceStmt {
                 .chain(Some(&self.table)),
         )?;
         if !self.columns.is_empty() {
-            write!(f, "(")?;
+            write!(f, " (")?;
             write_comma_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
         write!(f, " ON CONFLICT")?;
         if !self.on_conflict_columns.is_empty() {
-            write!(f, "(")?;
+            write!(f, " (")?;
             write_comma_separated_list(f, &self.on_conflict_columns)?;
-            write!(f, ") ")?;
+            write!(f, ")")?;
         }
         if let Some(expr) = &self.delete_when {
             write!(f, " DELETE WHEN {expr}")?;

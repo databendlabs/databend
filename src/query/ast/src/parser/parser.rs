@@ -61,7 +61,7 @@ pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Optio
             let reparsed_sql = reparsed.stmt.to_string();
             assert_eq!(reparse_sql, reparsed_sql, "AST:\n{:#?}", stmt.stmt);
 
-            if !matches!(stmt, Statement::Explain { .. }) && reparse_sql.len() <= 10_000 {
+            if !matches!(stmt.stmt, Statement::Explain { .. }) && reparse_sql.len() <= 10_000 {
                 let explain_sql = format!("EXPLAIN {reparsed_sql}");
                 let reparse_explain_tokens = crate::parser::tokenize_sql(&explain_sql)?;
                 let reparsed_explain = run_parser(

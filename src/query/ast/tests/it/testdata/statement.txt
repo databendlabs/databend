@@ -514,6 +514,167 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+replace into test on(c) select sum(c) as c from source group by v;
+---------- Output ---------
+REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
+---------- AST ------------
+Replace(
+    ReplaceStmt {
+        hints: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..17,
+            ),
+            name: "test",
+            quote: None,
+            is_hole: false,
+        },
+        on_conflict_columns: [
+            Identifier {
+                span: Some(
+                    21..22,
+                ),
+                name: "c",
+                quote: None,
+                is_hole: false,
+            },
+        ],
+        columns: [],
+        source: Select {
+            query: Query {
+                span: Some(
+                    24..65,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            24..65,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        top_n: None,
+                        select_list: [
+                            AliasedExpr {
+                                expr: FunctionCall {
+                                    span: Some(
+                                        31..37,
+                                    ),
+                                    func: FunctionCall {
+                                        distinct: false,
+                                        name: Identifier {
+                                            span: Some(
+                                                31..34,
+                                            ),
+                                            name: "sum",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                        args: [
+                                            ColumnRef {
+                                                span: Some(
+                                                    35..36,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                35..36,
+                                                            ),
+                                                            name: "c",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                        ],
+                                        params: [],
+                                        window: None,
+                                        lambda: None,
+                                    },
+                                },
+                                alias: Some(
+                                    Identifier {
+                                        span: Some(
+                                            41..42,
+                                        ),
+                                        name: "c",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                ),
+                            },
+                        ],
+                        from: [
+                            Table {
+                                span: Some(
+                                    48..54,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        48..54,
+                                    ),
+                                    name: "source",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                alias: None,
+                                temporal: None,
+                                consume: false,
+                                pivot: None,
+                                unpivot: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: Some(
+                            Normal(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            64..65,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        64..65,
+                                                    ),
+                                                    name: "v",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                        ),
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        },
+        delete_when: None,
+    },
+)
+
+
+---------- Input ----------
 explain pipeline select a from b;
 ---------- Output ---------
 EXPLAIN PIPELINE SELECT a FROM b
@@ -592,6 +753,171 @@ Explain {
             limit: [],
             offset: None,
             ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+explain replace into test on(c) select sum(c) as c from source group by v;
+---------- Output ---------
+EXPLAIN REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
+---------- AST ------------
+Explain {
+    kind: Plan,
+    options: [],
+    query: Replace(
+        ReplaceStmt {
+            hints: None,
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    21..25,
+                ),
+                name: "test",
+                quote: None,
+                is_hole: false,
+            },
+            on_conflict_columns: [
+                Identifier {
+                    span: Some(
+                        29..30,
+                    ),
+                    name: "c",
+                    quote: None,
+                    is_hole: false,
+                },
+            ],
+            columns: [],
+            source: Select {
+                query: Query {
+                    span: Some(
+                        32..73,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                32..73,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: FunctionCall {
+                                        span: Some(
+                                            39..45,
+                                        ),
+                                        func: FunctionCall {
+                                            distinct: false,
+                                            name: Identifier {
+                                                span: Some(
+                                                    39..42,
+                                                ),
+                                                name: "sum",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
+                                            args: [
+                                                ColumnRef {
+                                                    span: Some(
+                                                        43..44,
+                                                    ),
+                                                    column: ColumnRef {
+                                                        database: None,
+                                                        table: None,
+                                                        column: Name(
+                                                            Identifier {
+                                                                span: Some(
+                                                                    43..44,
+                                                                ),
+                                                                name: "c",
+                                                                quote: None,
+                                                                is_hole: false,
+                                                            },
+                                                        ),
+                                                    },
+                                                },
+                                            ],
+                                            params: [],
+                                            window: None,
+                                            lambda: None,
+                                        },
+                                    },
+                                    alias: Some(
+                                        Identifier {
+                                            span: Some(
+                                                49..50,
+                                            ),
+                                            name: "c",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            ],
+                            from: [
+                                Table {
+                                    span: Some(
+                                        56..62,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            56..62,
+                                        ),
+                                        name: "source",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    consume: false,
+                                    pivot: None,
+                                    unpivot: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: Some(
+                                Normal(
+                                    [
+                                        ColumnRef {
+                                            span: Some(
+                                                72..73,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            72..73,
+                                                        ),
+                                                        name: "v",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            },
+            delete_when: None,
         },
     ),
 }
