@@ -60,6 +60,20 @@ pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Optio
             )?;
             let reparsed_sql = reparsed.stmt.to_string();
             assert_eq!(reparse_sql, reparsed_sql, "AST:\n{:#?}", stmt.stmt);
+
+            if !matches!(stmt, Statement::Explain { .. }) && reparse_sql.len() <= 10_000 {
+                let explain_sql = format!("EXPLAIN {reparsed_sql}");
+                let reparse_explain_tokens = crate::parser::tokenize_sql(&explain_sql)?;
+                let reparsed_explain = run_parser(
+                    &reparse_explain_tokens,
+                    Dialect::PostgreSQL,
+                    ParseMode::Default,
+                    false,
+                    statement,
+                )?;
+                let reparsed_explain_sql = reparsed_explain.stmt.to_string();
+                assert_eq!(explain_sql, reparsed_explain_sql, "AST:\n{:#?}", stmt.stmt);
+            }
         };
         res.unwrap_or_else(|e| {
             let original_sql = tokens[0].source.to_string();
