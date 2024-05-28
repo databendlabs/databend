@@ -28,6 +28,8 @@ use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -171,6 +173,15 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         let res = self.ctx.meta.undrop_table(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn rollback_uncommitted_table_meta(
+        &self,
+        req: RollbackUncommittedTableMetaReq,
+    ) -> Result<RollbackUncommittedTableMetaReply> {
+        let res = self.ctx.meta.rollback_uncommitted_table_meta(req).await?;
         Ok(res)
     }
 

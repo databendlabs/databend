@@ -143,6 +143,8 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -1875,6 +1877,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             if let Some(last_table_id) = tb_id_list.last() {
                 if *last_table_id != table_id {
+                    error!(
+                        "rename_table {:?} but last table id confilct, id list last: {}, current: {}",
+                        req.name_ident, last_table_id, table_id
+                    );
                     return Err(KVAppError::AppError(AppError::UnknownTable(
                         UnknownTable::new(
                             &req.name_ident.table_name,
@@ -2433,6 +2439,132 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         None
                     },
                 });
+            }
+        }
+    }
+
+    #[minitrace::trace]
+    async fn rollback_uncommitted_table_meta(
+        &self,
+        req: RollbackUncommittedTableMetaReq,
+    ) -> Result<RollbackUncommittedTableMetaReply, KVAppError> {
+        let table_id = req.table_id;
+        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
+
+        let db_id = req.db_id;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            let tbid = TableId { table_id };
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+            if tb_meta_seq == 0 || tb_meta.is_none() {
+                error!(
+                    "rollback_uncommitted_table_meta {} by table id {} but cannot find table meta",
+                    req.table_name, table_id
+                );
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(
+                        table_id,
+                        "rollback_uncommitted_table_meta failed to find valid tb_meta",
+                    ),
+                )));
+            }
+            let tb_meta = tb_meta.unwrap();
+            if tb_meta.drop_on.is_none() {
+                error!(
+                    "rollback_uncommitted_table_meta {} by table id {} but table meta has been committed",
+                    req.table_name, table_id
+                );
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(
+                        table_id,
+                        "rollback_uncommitted_table_meta failed to find valid tb_meta",
+                    ),
+                )));
+            }
+
+            // Get db name, tenant name and related info for tx.
+            let table_id_to_name = TableIdToName { table_id };
+            let (_, table_name_opt): (_, Option<DBIdTableName>) =
+                get_pb_value(self, &table_id_to_name).await?;
+
+            let dbid_tbname = if let Some(db_id_table_name) = table_name_opt {
+                db_id_table_name
+            } else {
+                let dbid_tbname = DBIdTableName {
+                    db_id,
+                    table_name: req.table_name.clone(),
+                };
+                warn!(
+                    "rollback_uncommitted_table_meta cannot find {:?}, use {:?} instead",
+                    table_id_to_name, dbid_tbname
+                );
+
+                dbid_tbname
+            };
+
+            // get table id list from _fd_table_id_list/db_id/table_name
+            let dbid_tbname_idlist = TableIdHistoryIdent {
+                database_id: db_id,
+                table_name: dbid_tbname.table_name.clone(),
+            };
+            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
+                get_pb_value(self, &dbid_tbname_idlist).await?;
+            if tb_id_list_seq == 0 {
+                error!(
+                    "rollback_uncommitted_table_meta {} by table id {} but table_id_list is empty",
+                    req.table_name, table_id
+                );
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(
+                        table_id,
+                        "rollback_uncommitted_table_meta failed to find valid tb_meta",
+                    ),
+                )));
+            }
+
+            let mut tb_id_list = tb_id_list_opt.unwrap();
+            let index = tb_id_list.id_list.iter().position(|&x| x == table_id);
+            if let Some(index) = index {
+                tb_id_list.id_list.remove(index);
+            } else {
+                error!(
+                    "rollback_uncommitted_table_meta {} by table id {} but cannot find table id in table_id_list",
+                    req.table_name, table_id
+                );
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(
+                        table_id,
+                        "rollback_uncommitted_table_meta failed to find valid tb_meta",
+                    ),
+                )));
+            }
+
+            let condition = vec![
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
+            ];
+            let if_then = vec![
+                txn_op_del(&tbid),
+                txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?),
+            ];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                id :? =(&table_id),
+                succ = succ;
+                "rollback_uncommitted_table_meta"
+            );
+            if succ {
+                return Ok(RollbackUncommittedTableMetaReply {});
             }
         }
     }

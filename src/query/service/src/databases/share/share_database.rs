@@ -28,6 +28,8 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -150,6 +152,17 @@ impl Database for ShareDatabase {
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot undrop table from a shared database".to_string(),
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn rollback_uncommitted_table_meta(
+        &self,
+        _req: RollbackUncommittedTableMetaReq,
+    ) -> Result<RollbackUncommittedTableMetaReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot rollback_uncommitted_table_meta from a shared database"
+                .to_string(),
         ))
     }
 

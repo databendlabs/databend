@@ -70,6 +70,8 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -310,6 +312,15 @@ impl Catalog for ImmutableCatalog {
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot rename table in system database",
+        ))
+    }
+
+    async fn rollback_uncommitted_table_meta(
+        &self,
+        _req: RollbackUncommittedTableMetaReq,
+    ) -> Result<RollbackUncommittedTableMetaReply> {
+        Err(ErrorCode::Unimplemented(
+            "cannot rollback_uncommitted_table_meta in system database",
         ))
     }
 

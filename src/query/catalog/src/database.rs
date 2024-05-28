@@ -26,6 +26,8 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -129,6 +131,16 @@ pub trait Database: DynClone + Sync + Send {
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement undrop_table in {} Database",
+            self.name()
+        )))
+    }
+
+    async fn rollback_uncommitted_table_meta(
+        &self,
+        _req: RollbackUncommittedTableMetaReq,
+    ) -> Result<RollbackUncommittedTableMetaReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement rollback_uncommitted_table_meta in {} Database",
             self.name()
         )))
     }

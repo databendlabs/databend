@@ -33,6 +33,7 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -273,9 +274,28 @@ impl CreateTableInterpreter {
         pipeline
             .main_pipeline
             .push_front_on_finished_callback(move |(_profiles, err)| {
-                if err.is_ok() {
-                    let qualified_table_name = format!("{}.{}", db_name, table_name);
-                    let undrop_fut = async move {
+                let qualified_table_name = format!("{}.{}", db_name, table_name);
+
+                if let Err(e) = err {
+                    error!("create_table_as_select {} error: {}, rollback table meta data by table id {}", qualified_table_name, e, table_id);
+                    let fut = async move {
+                        let drop_by_id = RollbackUncommittedTableMetaReq {
+                            db_id,
+                            db_name,
+                            tenant,
+                            table_id,
+                            table_name,
+                        };
+                        catalog.rollback_uncommitted_table_meta(drop_by_id).await
+                    };
+
+                    GlobalIORuntime::instance().block_on(fut).map_err(|e| {
+                        info!("create {} as select failed. {:?}", qualified_table_name, e);
+                        e
+                    })?;
+                } else {
+                    info!("create_table_as_select {} success, commit table meta data by table id {}", qualified_table_name, table_id);
+                    let fut = async move {
                         let undrop_by_id = UndropTableByIdReq {
                             name_ident: TableNameIdent {
                                 tenant,
@@ -289,12 +309,11 @@ impl CreateTableInterpreter {
                         };
                         catalog.undrop_table_by_id(undrop_by_id).await
                     };
-                    GlobalIORuntime::instance()
-                        .block_on(undrop_fut)
-                        .map_err(|e| {
-                            info!("create {} as select failed. {:?}", qualified_table_name, e);
-                            e
-                        })?;
+
+                    GlobalIORuntime::instance().block_on(fut).map_err(|e| {
+                        info!("create {} as select failed. {:?}", qualified_table_name, e);
+                        e
+                    })?;
                 }
 
                 Ok(())

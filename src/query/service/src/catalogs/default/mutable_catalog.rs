@@ -84,6 +84,8 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
+use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -479,6 +481,14 @@ impl Catalog for MutableCatalog {
     async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
         let res = self.ctx.meta.undrop_table_by_id(req).await?;
         Ok(res)
+    }
+
+    async fn rollback_uncommitted_table_meta(
+        &self,
+        req: RollbackUncommittedTableMetaReq,
+    ) -> Result<RollbackUncommittedTableMetaReply> {
+        let db = self.get_database(&req.tenant, &req.db_name).await?;
+        db.rollback_uncommitted_table_meta(req).await
     }
 
     #[async_backtrace::framed]

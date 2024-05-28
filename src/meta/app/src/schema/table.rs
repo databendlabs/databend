@@ -579,6 +579,34 @@ pub struct DropTableReply {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RollbackUncommittedTableMetaReq {
+    pub tenant: Tenant,
+
+    pub db_name: String,
+
+    pub table_id: MetaId,
+
+    pub table_name: String,
+
+    pub db_id: MetaId,
+}
+
+impl RollbackUncommittedTableMetaReq {
+    pub fn table_id(&self) -> MetaId {
+        self.table_id
+    }
+}
+
+impl Display for RollbackUncommittedTableMetaReq {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "rollback_uncommitted_table_meta:{}", self.table_id(),)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RollbackUncommittedTableMetaReply {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReq {
     pub name_ident: TableNameIdent,
 }
