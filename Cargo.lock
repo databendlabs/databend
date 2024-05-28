@@ -5129,16 +5129,18 @@ dependencies = [
 
 [[package]]
 name = "derive-visitor"
-version = "0.3.0"
-source = "git+https://github.com/andylokandy/derive-visitor.git?rev=c07c6b6#c07c6b6095f2f137223cbe4b25ff4c19ecde4234"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d47165df83b9707cbada3216607a5d66125b6a66906de0bc1216c0669767ca9e"
 dependencies = [
  "derive-visitor-macros",
 ]
 
 [[package]]
 name = "derive-visitor-macros"
-version = "0.3.0"
-source = "git+https://github.com/andylokandy/derive-visitor.git?rev=c07c6b6#c07c6b6095f2f137223cbe4b25ff4c19ecde4234"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "427b39a85fecafea16b1a5f3f50437151022e35eb4fe038107f08adbf7f8def6"
 dependencies = [
  "convert_case 0.4.0",
  "itertools 0.10.5",

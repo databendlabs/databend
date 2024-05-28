@@ -31,7 +31,7 @@ use crate::ast::WarehouseOptions;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TargetLag {
-    IntervalSecs(#[drive(skip)] u64),
+    IntervalSecs(u64),
     Downstream,
 }
 
@@ -93,7 +93,6 @@ impl Display for InitializeMode {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDynamicTableStmt {
     pub create_option: CreateOption,
-    #[drive(skip)]
     pub transient: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -106,7 +105,6 @@ pub struct CreateDynamicTableStmt {
     pub refresh_mode: RefreshMode,
     pub initialize: InitializeMode,
 
-    #[drive(skip)]
     pub table_options: BTreeMap<String, String>,
     pub as_query: Box<Query>,
 }

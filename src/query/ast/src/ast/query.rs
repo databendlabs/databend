@@ -32,7 +32,6 @@ use crate::Span;
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Query {
-    #[drive(skip)]
     pub span: Span,
     // With clause, common table expression
     pub with: Option<With>,
@@ -48,7 +47,6 @@ pub struct Query {
     pub offset: Option<Expr>,
 
     // If ignore the result (not output).
-    #[drive(skip)]
     pub ignore_result: bool,
 }
 
@@ -85,9 +83,7 @@ impl Display for Query {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct With {
-    #[drive(skip)]
     pub span: Span,
-    #[drive(skip)]
     pub recursive: bool,
     pub ctes: Vec<CTE>,
 }
@@ -105,10 +101,8 @@ impl Display for With {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CTE {
-    #[drive(skip)]
     pub span: Span,
     pub alias: TableAlias,
-    #[drive(skip)]
     pub materialized: bool,
     pub query: Box<Query>,
 }
@@ -126,10 +120,8 @@ impl Display for CTE {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct SetOperation {
-    #[drive(skip)]
     pub span: Span,
     pub op: SetOperator,
-    #[drive(skip)]
     pub all: bool,
     pub left: Box<SetExpr>,
     pub right: Box<SetExpr>,
@@ -138,12 +130,9 @@ pub struct SetOperation {
 /// A subquery represented with `SELECT` statement
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct SelectStmt {
-    #[drive(skip)]
     pub span: Span,
     pub hints: Option<Hint>,
-    #[drive(skip)]
     pub distinct: bool,
-    #[drive(skip)]
     pub top_n: Option<u64>,
     // Result set of current subquery
     pub select_list: Vec<SelectTarget>,
@@ -267,11 +256,7 @@ pub enum SetExpr {
     // UNION/EXCEPT/INTERSECT operator
     SetOperation(Box<SetOperation>),
     // Values clause
-    Values {
-        #[drive(skip)]
-        span: Span,
-        values: Vec<Vec<Expr>>,
-    },
+    Values { span: Span, values: Vec<Vec<Expr>> },
 }
 
 impl Display for SetExpr {
@@ -329,10 +314,8 @@ pub enum SetOperator {
 pub struct OrderByExpr {
     pub expr: Expr,
     /// `ASC` or `DESC`
-    #[drive(skip)]
     pub asc: Option<bool>,
     /// `NULLS FIRST` or `NULLS LAST`
-    #[drive(skip)]
     pub nulls_first: Option<bool>,
 }
 
@@ -482,7 +465,7 @@ pub enum Indirection {
     // Field name
     Identifier(Identifier),
     // Wildcard star
-    Star(#[drive(skip)] Span),
+    Star(Span),
 }
 
 impl Display for Indirection {
@@ -502,7 +485,7 @@ impl Display for Indirection {
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TimeTravelPoint {
-    Snapshot(#[drive(skip)] String),
+    Snapshot(String),
     Timestamp(Box<Expr>),
     Offset(Box<Expr>),
     Stream {
@@ -580,7 +563,6 @@ impl Display for Unpivot {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ChangesInterval {
-    #[drive(skip)]
     pub append_only: bool,
     pub at_point: TimeTravelPoint,
     pub end_point: Option<TimeTravelPoint>,
@@ -627,7 +609,6 @@ impl Display for TemporalClause {
 pub enum TableReference {
     // Table name
     Table {
-        #[drive(skip)]
         span: Span,
         catalog: Option<Identifier>,
         database: Option<Identifier>,
@@ -635,17 +616,14 @@ pub enum TableReference {
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
         /// whether consume the table
-        #[drive(skip)]
         consume: bool,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
-        #[drive(skip)]
         span: Span,
         /// Whether the table function is a lateral table function
-        #[drive(skip)]
         lateral: bool,
         name: Identifier,
         params: Vec<Expr>,
@@ -654,21 +632,17 @@ pub enum TableReference {
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
-        #[drive(skip)]
         span: Span,
         /// Whether the subquery is a lateral subquery
-        #[drive(skip)]
         lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
     Join {
-        #[drive(skip)]
         span: Span,
         join: Join,
     },
     Location {
-        #[drive(skip)]
         span: Span,
         location: FileLocation,
         options: SelectStageOptions,
