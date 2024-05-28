@@ -1,0 +1,10 @@
+statement ok
+set enable_distributed_replace_into = 1;
+
+include ./09_0033_distributed_merge_into_without_enable.test
+
+statement ok
+set enable_distributed_replace_into = 0;
+
+include ./09_0033_distributed_merge_into_without_enable.test
+

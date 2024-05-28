@@ -1,7 +1,4 @@
 statement ok
-set enable_distributed_replace_into = 1;
-
-statement ok
 DROP DATABASE IF EXISTS db_09_0023
 
 statement ok
@@ -507,6 +504,29 @@ select * from t order by c;
 ----
 2
 3
+
+statement ok
+create or replace table test (c int);
+
+statement ok
+create or replace table source (c int, v string);
+
+statement ok
+insert into source select number as c, number::string from numbers(100000);
+
+statement ok
+replace into test on(c) select sum(c) as c from source group by v; 
+
+statement ok
+replace into test on(c) select sum(c) as c from source group by v; 
+
+query I
+select sum(c) from test;
+----
+4999950000
+
+statement ok
+explain replace into test on(c) select sum(c) as c from source group by v;
 
 statement ok
 DROP DATABASE db_09_0023

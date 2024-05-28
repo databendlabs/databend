@@ -253,10 +253,10 @@ impl ReplaceInterpreter {
         };
 
         // remove top exchange
-        if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
-            root = input.clone();
-        }
         if is_distributed {
+            if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
+                root = input.clone();
+            }
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: root,
