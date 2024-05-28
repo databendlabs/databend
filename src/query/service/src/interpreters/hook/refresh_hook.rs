@@ -25,6 +25,7 @@ use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
 use databend_common_sql::plans::RefreshTableIndexPlan;
@@ -57,7 +58,7 @@ pub async fn hook_refresh(
     ctx: Arc<QueryContext>,
     pipeline: &mut Pipeline,
     desc: RefreshDesc,
-    need_lock: bool,
+    lock_opt: LockTableOption,
 ) {
     if pipeline.is_empty() {
         return;
@@ -66,7 +67,7 @@ pub async fn hook_refresh(
     pipeline.set_on_finished(move |(_profiles, err)| {
         if err.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
-            match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc, need_lock)) {
+            match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc, lock_opt)) {
                 Ok(_) => {
                     info!("execute refresh job successfully.");
                 }
@@ -79,7 +80,11 @@ pub async fn hook_refresh(
     });
 }
 
-async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) -> Result<()> {
+async fn do_refresh(
+    ctx: Arc<QueryContext>,
+    desc: RefreshDesc,
+    lock_opt: LockTableOption,
+) -> Result<()> {
     let table = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;
@@ -99,7 +104,7 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) 
 
     // Generate sync inverted indexes.
     let inverted_index_plans =
-        generate_refresh_inverted_index_plan(ctx.clone(), &desc, table.clone(), need_lock).await?;
+        generate_refresh_inverted_index_plan(ctx.clone(), &desc, table.clone(), lock_opt).await?;
     plans.extend_from_slice(&inverted_index_plans);
 
     // Generate virtual columns.
@@ -263,7 +268,7 @@ async fn generate_refresh_inverted_index_plan(
     ctx: Arc<QueryContext>,
     desc: &RefreshDesc,
     table: Arc<dyn Table>,
-    need_lock: bool,
+    lock_opt: LockTableOption,
 ) -> Result<Vec<Plan>> {
     let segment_locs = ctx.get_segment_locations()?;
     let mut plans = vec![];
@@ -279,7 +284,7 @@ async fn generate_refresh_inverted_index_plan(
             table: desc.table.clone(),
             index_name: index.name.clone(),
             segment_locs: Some(segment_locs.clone()),
-            need_lock,
+            lock_opt: lock_opt.clone(),
         };
         plans.push(Plan::RefreshTableIndex(Box::new(plan)));
     }

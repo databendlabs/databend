@@ -31,6 +31,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_stage::StageTable;
 use log::debug;
@@ -392,7 +393,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
                 MutationKind::Insert,
-                true,
+                LockTableOption::LockNoRetry,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }

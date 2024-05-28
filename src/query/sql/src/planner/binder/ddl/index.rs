@@ -52,6 +52,7 @@ use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::DropTableIndexPlan;
+use crate::plans::LockTableOption;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
@@ -590,7 +591,7 @@ impl Binder {
             table,
             index_name,
             segment_locs: None,
-            need_lock: true,
+            lock_opt: LockTableOption::LockWithRetry,
         };
         Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }
