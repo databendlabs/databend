@@ -40,7 +40,7 @@ echo "install chaos mesh on k3d"
 curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
 
 kubectl get pods -A -o wide
-kubectl get pvc A
+kubectl get pvc -A
 
 helm repo add databend https://charts.databend.rs
 helm install test databend/databend-meta \
@@ -57,3 +57,5 @@ kubectl -n databend wait \
     -l app.kubernetes.io/instance=meta-service \
     --timeout 300s
 sleep 30
+
+kubectl get pods -A -o wide
