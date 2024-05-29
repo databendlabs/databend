@@ -171,8 +171,8 @@ impl ReplaceInterpreter {
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
-        let is_select = matches!(self.plan.source, InsertInputSource::SelectPlan(_));
-
+        let is_source_select_distributed =
+            is_multi_node && matches!(self.plan.source, InsertInputSource::SelectPlan(_));
         let is_distributed = is_multi_node
             && !is_value_source
             && self.ctx.get_settings().get_enable_distributed_replace()?;
@@ -256,6 +256,7 @@ impl ReplaceInterpreter {
         };
 
         // remove top exchange merge plan
+        let old_root = root.clone();
         if let PhysicalPlan::Exchange(Exchange {
             input,
             kind: FragmentKind::Merge,
@@ -274,6 +275,8 @@ impl ReplaceInterpreter {
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
             }));
+        } else if is_source_select_distributed {
+            root = old_root.clone();
         }
 
         let max_num_pruning_columns = self
