@@ -251,34 +251,19 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_function_factory("map_delete", |_, arg_types| {
-        log::info!("Registering 'map_delete' function");
-
         if arg_types.len() != 2 {
-            log::info!(
-                "Invalid number of arguments. Expected 2, got {}",
-                arg_types.len()
-            );
             return None;
         }
 
-        log::info!("Argument types: {:#?}", arg_types);
-        log::info!("First argument type: {:#?}", arg_types.first()?);
-
         let (key_type, value_type) = match arg_types.first()? {
             DataType::Map(box DataType::Tuple(type_tuple)) => {
-                log::info!("Map argument type: {:#?}", type_tuple);
                 if type_tuple.len() == 2 {
                     (type_tuple[0].clone(), type_tuple[1].clone())
                 } else {
-                    log::info!(
-                        "Invalid map tuple length. Expected 2, got {}",
-                        type_tuple.len()
-                    );
                     return None;
                 }
             }
             _ => {
-                log::info!("Expected map argument, got {:#?}", arg_types.first());
                 return None;
             }
         };
@@ -286,7 +271,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         let key_array_type = match arg_types.get(1)? {
             DataType::Array(box key_type) => key_type.clone(),
             _ => {
-                log::info!("Expected array argument, got {:#?}", arg_types.get(1));
                 return None;
             }
         };
@@ -339,13 +323,11 @@ fn map_delete_fn(args: &[ValueRef<AnyType>], _ctx: &mut EvalContext) -> Value<An
         let (input_map_type, input_map) = match &args[0] {
             ValueRef::Scalar(ScalarRef::Map(map)) => {
                 let input_map_type = map.data_type();
-                log::info!("Input map type for scalar argument: {:#?}", input_map_type);
                 let input_map: KvColumn<AnyType, AnyType> =
                     KvPair::try_downcast_column(map).unwrap();
-                log::info!("Input map for scalar argument: {:#?}", &input_map);
                 (input_map_type, input_map)
             }
-            ValueRef::Column(Column::Map(map)) => {
+            ValueRef::Column(Column::Map(box map)) => {
                 let inner_val = unsafe { map.index_unchecked(idx) };
                 let input_map: KvColumn<AnyType, AnyType> =
                     KvPair::try_downcast_column(&inner_val).unwrap();
@@ -354,18 +336,10 @@ fn map_delete_fn(args: &[ValueRef<AnyType>], _ctx: &mut EvalContext) -> Value<An
                     input_map.keys.data_type(),
                     input_map.values.data_type(),
                 ]);
-                log::info!("Input map type for column argument: {:#?}", input_map_type);
-                log::info!("Input map for column argument: {:#?}", &input_map);
                 (input_map_type, input_map)
             }
             _ => unreachable!("TODO, Other context need to be handled"),
         };
-
-        log::info!("*** Processing input map ***");
-        log::info!("Input map: {:#?}", input_map);
-        input_map
-            .iter()
-            .for_each(|(key, value)| log::info!("Key: {:#?}, Value: {:#?}", key, value));
 
         if output_map_builder.len() == 0 {
             output_map_builder = ColumnBuilder::with_capacity(
@@ -380,12 +354,6 @@ fn map_delete_fn(args: &[ValueRef<AnyType>], _ctx: &mut EvalContext) -> Value<An
         if args.len() == 2 {
             match &args[1] {
                 ValueRef::Scalar(ScalarRef::Array(keys_to_delete)) => {
-                    log::info!(
-                        "Keys to delete: {:#?}, DataType: {:#?}",
-                        keys_to_delete,
-                        keys_to_delete.data_type(),
-                    );
-
                     match keys_to_delete.data_type() {
                         DataType::String => {
                             let mut delete_key_list = Vec::new();
@@ -394,7 +362,6 @@ fn map_delete_fn(args: &[ValueRef<AnyType>], _ctx: &mut EvalContext) -> Value<An
                                 StringType::try_downcast_column(keys_to_delete).unwrap();
 
                             keys_to_delete_column.iter().for_each(|key| {
-                                log::info!("Key to delete: {:#?}", key);
                                 delete_key_list.push(key);
                             });
 

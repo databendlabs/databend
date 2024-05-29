@@ -3093,7 +3093,6 @@ dependencies = [
  "jsonb",
  "lexical-core",
  "libm",
- "log",
  "match-template",
  "md-5",
  "memchr",
