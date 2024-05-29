@@ -64,7 +64,7 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             .do_vacuum_temporary_files(
                 temporary_files_prefix,
                 self.plan.retain,
-                self.plan.limit.map(|x| x as usize),
+                self.plan.limit.map(|x| x as usize).unwrap_or(usize::MAX),
             )
             .await?;
 
