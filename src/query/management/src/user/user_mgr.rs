@@ -30,6 +30,7 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
+use log::error;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -145,12 +146,25 @@ impl UserApi for UserMgr {
 
         let mut r = vec![];
         for (_key, val) in values {
-            let u = deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "")?;
-
-            r.push(SeqV::new(val.seq, u));
+            match deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "") {
+                Ok(u) => r.push(SeqV::new(val.seq, u)),
+                Err(e) => error!(
+                    "get_users cannot deserialize data {:?} with err {}",
+                    val.data, e
+                ),
+            }
         }
 
         Ok(r)
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn get_user_nums(&self) -> Result<usize> {
+        let user_prefix = self.user_prefix();
+        let values = self.kv_api.prefix_list_kv(user_prefix.as_str()).await?;
+
+        Ok(values.len())
     }
 
     #[async_backtrace::framed]

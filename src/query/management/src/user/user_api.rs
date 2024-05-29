@@ -27,6 +27,8 @@ pub trait UserApi: Sync + Send {
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
 
+    async fn get_user_nums(&self) -> Result<usize>;
+
     /// General user's grants update.
     ///
     /// It fetches the user that matches the specified seq number, update it in place, then write it back with the seq it sees.

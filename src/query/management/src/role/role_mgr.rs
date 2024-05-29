@@ -198,6 +198,14 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
+    async fn get_role_nums(&self) -> Result<usize, ErrorCode> {
+        let role_prefix = self.role_prefix();
+        let values = self.kv_api.prefix_list_kv(role_prefix.as_str()).await?;
+        Ok(values.len())
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
         let object_owner_prefix = self.ownership_object_prefix();
         let values = self

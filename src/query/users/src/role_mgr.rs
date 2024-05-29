@@ -65,6 +65,18 @@ impl UserApiProvider {
         Ok(roles)
     }
 
+    // Get the tenant all role nums in meta.
+    #[async_backtrace::framed]
+    pub async fn get_role_nums(&self, tenant: &Tenant) -> Result<usize> {
+        let builtin_roles = self.builtin_roles();
+        let meta_role_nums = self
+            .role_api(tenant)
+            .get_role_nums()
+            .await
+            .map_err(|e| e.add_message_back("(while get_role_nums)"))?;
+        Ok(builtin_roles.len() + meta_role_nums)
+    }
+
     // Currently we have to built account_admin role in query:
     // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
     //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.

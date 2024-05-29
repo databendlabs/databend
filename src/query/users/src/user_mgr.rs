@@ -133,6 +133,16 @@ impl UserApiProvider {
         }
     }
 
+    // Get the tenant all user nums.
+    #[async_backtrace::framed]
+    pub async fn get_user_nums(&self, tenant: &Tenant) -> Result<usize> {
+        let client = self.user_api(tenant);
+        match client.get_user_nums().await {
+            Err(e) => Err(e.add_message_back("(while get_user_nums).")),
+            Ok(nums) => Ok(nums),
+        }
+    }
+
     // Add a new user info.
     #[async_backtrace::framed]
     pub async fn add_user(
