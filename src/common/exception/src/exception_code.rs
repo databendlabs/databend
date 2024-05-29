@@ -282,6 +282,8 @@ build_exceptions! {
     /// data mask error codes
     DatamaskAlreadyExists(2321),
 
+    CommitTableMetaError(2322),
+
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

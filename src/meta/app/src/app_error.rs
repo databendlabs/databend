@@ -167,6 +167,22 @@ impl UndropDbHasNoHistory {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CommitTableMetaError: {table_name} while {context}")]
+pub struct CommitTableMetaError {
+    table_name: String,
+    context: String,
+}
+
+impl CommitTableMetaError {
+    pub fn new(table_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -1030,6 +1046,9 @@ pub enum AppError {
     DuplicatedUpsertFiles(#[from] DuplicatedUpsertFiles),
 
     #[error(transparent)]
+    CommitTableMetaError(#[from] CommitTableMetaError),
+
+    #[error(transparent)]
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
@@ -1291,6 +1310,12 @@ impl AppErrorMessage for UnknownStreamId {}
 impl AppErrorMessage for MultiStmtTxnCommitFailed {}
 
 impl AppErrorMessage for DuplicatedUpsertFiles {}
+
+impl AppErrorMessage for CommitTableMetaError {
+    fn message(&self) -> String {
+        format!("Commit table '{}' fail", self.table_name)
+    }
+}
 
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
@@ -1635,6 +1660,7 @@ impl From<AppError> for ErrorCode {
             AppError::UndropDbWithNoDropTime(err) => {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
+            AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
             AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {

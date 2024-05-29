@@ -25,6 +25,7 @@ use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CatalogAlreadyExists;
+use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
 use databend_common_meta_app::app_error::CreateIndexWithDropTime;
 use databend_common_meta_app::app_error::CreateTableWithDropTime;
@@ -2531,12 +2532,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 table_name: tenant_dbname_tbname.table_name.clone(),
             };
 
-            let (dbid_tbname_seq, prev_table_id) = get_u64_value(self, &dbid_tbname).await?;
-            let prev_table_id = if dbid_tbname_seq == 0 {
-                None
-            } else {
-                Some(prev_table_id)
-            };
+            let (dbid_tbname_seq, _table_id) = get_u64_value(self, &dbid_tbname).await?;
 
             // get table id list from _fd_table_id_list/db_id/table_name
 
@@ -2569,11 +2565,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                 v.unwrap_or_default()
             };
-            if orphan_tb_id_list.seq == 0 || orphan_tb_id_list.data.id_list.len() > 1 {
+            if orphan_tb_id_list.data.id_list.len() != 1 {
                 error!("table {:?} orphan list is empty", tenant_dbname_tbname);
-                let exist_err = TableAlreadyExists::new(
+                let exist_err = CommitTableMetaError::new(
                     tenant_dbname_tbname.table_name.clone(),
-                    format!("commit_table_meta: {}", tenant_dbname_tbname),
+                    "orphan list length != 1".to_string(),
                 );
                 return Err(KVAppError::AppError(AppError::from(exist_err)));
             }
@@ -2586,14 +2582,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 v.unwrap_or_default()
             };
 
-            if req.prev_table_id != prev_table_id {
+            if tb_id_list.data.id_list.last() != req.prev_table_id.as_ref() {
                 error!(
                     "table {:?} table id list has been changed",
                     tenant_dbname_tbname
                 );
-                let exist_err = TableAlreadyExists::new(
+                let exist_err = CommitTableMetaError::new(
                     tenant_dbname_tbname.table_name.clone(),
-                    format!("commit_table_meta: {}", tenant_dbname_tbname),
+                    "prev_table_id has been changed".to_string(),
                 );
                 return Err(KVAppError::AppError(AppError::from(exist_err)));
             }
