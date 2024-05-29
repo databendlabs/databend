@@ -256,7 +256,6 @@ impl ReplaceInterpreter {
         };
 
         // remove top exchange merge plan
-        let old_root = root.clone();
         if let PhysicalPlan::Exchange(Exchange {
             input,
             kind: FragmentKind::Merge,
@@ -275,8 +274,15 @@ impl ReplaceInterpreter {
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
             }));
-        } else if is_source_select_distributed {
-            root = old_root.clone();
+        } else {
+            root = Box::new(PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: root,
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            }));
         }
 
         let max_num_pruning_columns = self
