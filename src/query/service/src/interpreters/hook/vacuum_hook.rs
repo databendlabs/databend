@@ -32,30 +32,29 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     let settings = query_ctx.get_settings();
     let spill_prefix = query_spill_prefix(tenant.tenant_name(), &query_ctx.get_id());
     let license_manager = get_license_manager();
+    let vacuum_limit = settings.get_max_vacuum_temp_files_after_query()?;
 
-    if license_manager
-        .manager
-        .check_enterprise_enabled(query_ctx.get_license_key(), Vacuum)
-        .is_ok()
+    // disable all s3 operator if vacuum limit = 0
+    if vacuum_limit != 0
+        && license_manager
+            .manager
+            .check_enterprise_enabled(query_ctx.get_license_key(), Vacuum)
+            .is_ok()
     {
         let handler = get_vacuum_handler();
 
         let _ = GlobalIORuntime::instance().block_on(async move {
-            let vacuum_limit = match settings.get_max_vacuum_temp_files_after_query()? {
-                0 => None,
-                v => Some(v as usize),
-            };
             let removed_files = handler
                 .do_vacuum_temporary_files(
                     spill_prefix.clone(),
                     Some(Duration::from_secs(0)),
-                    vacuum_limit,
+                    vacuum_limit as usize,
                 )
                 .await;
 
-            if (removed_files.is_ok() && vacuum_limit.is_none())
-                && !matches!(removed_files, Ok(res) if Some(res) != vacuum_limit)
+            if vacuum_limit != 0 && matches!(removed_files, Ok(res) if res == vacuum_limit as usize)
             {
+                // Have not been removed files
                 let op = DataOperator::instance().operator();
                 op.create_dir(&format!("{}/", spill_prefix)).await?;
                 op.write(&format!("{}/finished", spill_prefix), Buffer::new())
