@@ -319,6 +319,30 @@ fn map_delete_fn(args: &[ValueRef<AnyType>], _ctx: &mut EvalContext) -> Value<An
 
     let mut output_map_builder = ColumnBuilder::EmptyMap { len: 0 };
 
+    let delete_key_list = if args.len() == 2 {
+        match &args[1] {
+            ValueRef::Scalar(ScalarRef::Array(keys_to_delete)) => {
+                match keys_to_delete.data_type() {
+                    DataType::String => {
+                        let keys_to_delete_column =
+                            StringType::try_downcast_column(keys_to_delete).unwrap();
+                        keys_to_delete_column
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect()
+                    }
+                    unsupported_key_type => unreachable!(
+                        "TODO :: map_delete Input key type {:#?} not supported",
+                        unsupported_key_type
+                    ),
+                }
+            }
+            _ => unreachable!("Invalid argument: {:#?}", &args[1]),
+        }
+    } else {
+        Vec::new()
+    };
+
     for idx in 0..(input_length.unwrap_or(1)) {
         let (input_map_type, input_map) = match &args[0] {
             ValueRef::Scalar(ScalarRef::Map(map)) => {
@@ -351,40 +375,16 @@ fn map_delete_fn(args: &[ValueRef<AnyType>], _ctx: &mut EvalContext) -> Value<An
         let mut filtered_kv_builder =
             ColumnBuilder::with_capacity(&input_map_type, input_length.unwrap_or(1));
 
-        if args.len() == 2 {
-            match &args[1] {
-                ValueRef::Scalar(ScalarRef::Array(keys_to_delete)) => {
-                    match keys_to_delete.data_type() {
-                        DataType::String => {
-                            let mut delete_key_list = Vec::new();
-
-                            let keys_to_delete_column =
-                                StringType::try_downcast_column(keys_to_delete).unwrap();
-
-                            keys_to_delete_column.iter().for_each(|key| {
-                                delete_key_list.push(key);
-                            });
-
-                            input_map.iter().for_each(|(map_key, map_value)| {
-                                if !delete_key_list
-                                    .contains(&StringType::try_downcast_scalar(&map_key).unwrap())
-                                {
-                                    filtered_kv_builder.push(ScalarRef::Tuple(vec![
-                                        map_key.clone(),
-                                        map_value.clone(),
-                                    ]))
-                                }
-                            });
-                        }
-                        unsupported_key_type => unreachable!(
-                            "TODO :: map_delete Input key type {:#?} not supported",
-                            unsupported_key_type
-                        ),
-                    }
-                }
-                _ => unreachable!("Invalid argument: {:#?}", &args[1]),
+        input_map.iter().for_each(|(map_key, map_value)| {
+            if !delete_key_list.contains(
+                &StringType::try_downcast_scalar(&map_key)
+                    .unwrap()
+                    .to_string(),
+            ) {
+                filtered_kv_builder.push(ScalarRef::Tuple(vec![map_key.clone(), map_value.clone()]))
             }
-        }
+        });
+
         output_map_builder.push(ScalarRef::Map(filtered_kv_builder.build()));
     }
 
