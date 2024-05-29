@@ -28,6 +28,7 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -51,8 +52,6 @@ use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::ConstantExpr;
-use crate::plans::FunctionCall;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
@@ -416,44 +415,43 @@ pub fn parse_cluster_keys(
 
     let mut exprs = Vec::with_capacity(ast_exprs.len());
     for ast in ast_exprs {
-        let (scalar, data_type) =
-            *databend_common_base::runtime::block_on(type_checker.resolve(&ast))?;
+        let (scalar, _) = *databend_common_base::runtime::block_on(type_checker.resolve(&ast))?;
+        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
 
-        let inner_type = data_type.remove_nullable();
+        let inner_type = expr.data_type().remove_nullable();
         let mut should_wrapper = false;
         if inner_type == DataType::String {
-            if let ScalarExpr::FunctionCall(FunctionCall { func_name, .. }) = &scalar {
-                let origin_name = BUILTIN_FUNCTIONS
-                    .aliases
-                    .get(func_name)
-                    .unwrap_or(func_name);
-                should_wrapper = origin_name != "substr";
+            if let Expr::FunctionCall { function, .. } = &expr {
+                should_wrapper = function.signature.name != "substr";
             } else {
                 should_wrapper = true;
             }
         }
-        let scalar = if should_wrapper {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "substr".to_string(),
-                params: vec![],
-                arguments: vec![
-                    scalar,
-                    ScalarExpr::ConstantExpr(ConstantExpr {
-                        span: None,
-                        value: Scalar::Number(1i64.into()),
-                    }),
-                    ScalarExpr::ConstantExpr(ConstantExpr {
-                        span: None,
-                        value: Scalar::Number(8u64.into()),
-                    }),
-                ],
-            })
-        } else {
-            scalar
-        };
 
-        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+        // If the cluster key type is string, use substr to truncate the first 8 digits.
+        let expr = if should_wrapper {
+            check_function(
+                None,
+                "substr",
+                &[],
+                &[
+                    expr,
+                    Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number(1i64.into()),
+                        data_type: DataType::Number(NumberDataType::Int64),
+                    },
+                    Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number(8u64.into()),
+                        data_type: DataType::Number(NumberDataType::UInt64),
+                    },
+                ],
+                &BUILTIN_FUNCTIONS,
+            )?
+        } else {
+            expr
+        };
         exprs.push(expr);
     }
     Ok(exprs)
