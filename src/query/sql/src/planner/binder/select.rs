@@ -124,9 +124,25 @@ impl Binder {
         right: &SetExpr,
         op: &SetOperator,
         all: &bool,
+        cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_expr, left_bind_context) =
+        let (left_expr, mut left_bind_context) =
             self.bind_set_expr(bind_context, left, &[], None).await?;
+        if let Some(cte_name) = cte_name.as_ref() {
+            // Add recursive cte's columns to cte info
+            let mut mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
+            for column in left_bind_context.columns.iter() {
+                let col = ColumnBindingBuilder::new(
+                    column.column_name.clone(),
+                    column.index,
+                    column.data_type.clone(),
+                    Visibility::Visible,
+                )
+                .table_name(Some(cte_name.clone()))
+                .build();
+                mut_cte_info.columns.push(col);
+            }
+        }
         let (right_expr, right_bind_context) =
             self.bind_set_expr(bind_context, right, &[], None).await?;
 
@@ -169,6 +185,7 @@ impl Binder {
                 left_expr,
                 right_expr,
                 false,
+                cte_name,
             ),
             (SetOperator::Union, false) => self.bind_union(
                 left.span(),
@@ -178,6 +195,7 @@ impl Binder {
                 left_expr,
                 right_expr,
                 true,
+                cte_name,
             ),
             _ => Err(ErrorCode::Unimplemented(
                 "Unsupported query type, currently, databend only support intersect distinct and except distinct",
@@ -195,6 +213,7 @@ impl Binder {
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
+        cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let mut coercion_types = Vec::with_capacity(left_context.columns.len());
         for (left_col, right_col) in left_context
@@ -232,7 +251,7 @@ impl Binder {
             coercion_types,
         )?;
 
-        let union_plan = UnionAll { pairs };
+        let union_plan = UnionAll { pairs, cte_name };
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),
             Arc::new(left_expr),

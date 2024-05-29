@@ -23,6 +23,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
+use jsonb::to_string;
 
 use super::physical_plans::AsyncFunction;
 use super::physical_plans::CacheScan;
@@ -252,6 +253,9 @@ fn to_format_tree(
             format_merge_into_append_not_matched(plan, metadata, profs)
         }
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
+        PhysicalPlan::RecursiveCteScan(_) => {
+            Ok(FormatTreeNode::new("RecursiveCTEScan".to_string()))
+        }
         PhysicalPlan::MaterializedCte(plan) => {
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
@@ -1199,10 +1203,13 @@ fn union_all_to_format_tree(
         to_format_tree(&plan.right, metadata, profs)?,
     ]);
 
-    Ok(FormatTreeNode::with_children(
-        "UnionAll".to_string(),
-        children,
-    ))
+    let root = if let Some(cte_name) = &plan.cte_name {
+        format!("UnionAll(recursive cte: {:?})", cte_name)
+    } else {
+        "UnionAll".to_string()
+    };
+
+    Ok(FormatTreeNode::with_children(root, children))
 }
 
 fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {

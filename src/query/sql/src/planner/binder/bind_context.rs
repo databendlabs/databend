@@ -154,10 +154,11 @@ pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
     pub materialized: bool,
+    pub recursive: bool,
     pub cte_idx: IndexType,
     // Record how many times this cte is used
     pub used_count: usize,
-    // If cte is materialized, save it's columns
+    // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
 }
 

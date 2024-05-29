@@ -111,6 +111,9 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             }
             PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => write!(f, "{}", add_row_number)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
+            PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
+                write!(f, "{}", recursive_cte_scan)?
+            }
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ExpressionScan(scan) => write!(f, "{}", scan)?,

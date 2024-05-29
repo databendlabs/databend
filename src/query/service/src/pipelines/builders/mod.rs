@@ -31,6 +31,7 @@ mod builder_merge_into;
 mod builder_on_finished;
 mod builder_project;
 mod builder_recluster;
+mod builder_recursive_cte;
 mod builder_replace_into;
 mod builder_row_fetch;
 mod builder_scalar;

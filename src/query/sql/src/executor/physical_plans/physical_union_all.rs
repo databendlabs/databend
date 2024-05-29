@@ -43,6 +43,7 @@ pub struct UnionAll {
     pub right: Box<PhysicalPlan>,
     pub pairs: Vec<(String, String)>,
     pub schema: DataSchemaRef,
+    pub cte_name: Option<String>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -186,6 +187,7 @@ impl PhysicalPlanBuilder {
             pairs,
             schema: DataSchemaRefExt::create(fields),
 
+            cte_name: union_all.cte_name.clone(),
             stat_info: Some(stat_info),
         }))
     }

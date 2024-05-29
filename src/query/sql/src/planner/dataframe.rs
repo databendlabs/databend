@@ -531,6 +531,7 @@ impl Dataframe {
             self.s_expr,
             dataframe.s_expr,
             false,
+            None,
         )?;
         self.s_expr = s_expr;
         self.bind_context = bind_context;
@@ -546,6 +547,7 @@ impl Dataframe {
             self.s_expr,
             dataframe.s_expr,
             true,
+            None,
         )?;
         self.s_expr = s_expr;
         self.bind_context = bind_context;

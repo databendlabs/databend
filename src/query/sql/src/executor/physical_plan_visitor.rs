@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
+use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -69,6 +70,7 @@ pub trait PhysicalPlanReplacer {
         match plan {
             PhysicalPlan::TableScan(plan) => self.replace_table_scan(plan),
             PhysicalPlan::CteScan(plan) => self.replace_cte_scan(plan),
+            PhysicalPlan::RecursiveCteScan(plan) => self.replace_recursive_cte_scan(plan),
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
@@ -138,6 +140,10 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_cte_scan(&mut self, plan: &CteScan) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::CteScan(plan.clone()))
+    }
+
+    fn replace_recursive_cte_scan(&mut self, plan: &RecursiveCteScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::RecursiveCteScan(plan.clone()))
     }
 
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
@@ -377,6 +383,7 @@ pub trait PhysicalPlanReplacer {
             schema: plan.schema.clone(),
             pairs: plan.pairs.clone(),
             stat_info: plan.stat_info.clone(),
+            cte_name: plan.cte_name.clone(),
         }))
     }
 
@@ -614,6 +621,7 @@ impl PhysicalPlan {
                 PhysicalPlan::TableScan(_)
                 | PhysicalPlan::ReplaceAsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
+                | PhysicalPlan::RecursiveCteScan(_)
                 | PhysicalPlan::ConstantTableScan(_)
                 | PhysicalPlan::ExpressionScan(_)
                 | PhysicalPlan::CacheScan(_)

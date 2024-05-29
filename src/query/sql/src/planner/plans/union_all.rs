@@ -33,6 +33,9 @@ use crate::IndexType;
 pub struct UnionAll {
     // Pairs of unioned columns
     pub pairs: Vec<(IndexType, IndexType)>,
+    // Recursive cte name
+    // If union is used in recursive cte, it's `Some`.
+    pub cte_name: Option<String>,
 }
 
 impl UnionAll {
@@ -43,6 +46,10 @@ impl UnionAll {
             used_columns.insert(*right);
         }
         Ok(used_columns)
+    }
+
+    pub fn set_cte_name(&mut self, name: String) {
+        self.cte_name = Some(name);
     }
 }
 

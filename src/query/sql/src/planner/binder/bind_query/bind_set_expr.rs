@@ -41,6 +41,7 @@ impl Binder {
                     &set_operation.right,
                     &set_operation.op,
                     &set_operation.all,
+                    None,
                 ))
                 .await
             }
