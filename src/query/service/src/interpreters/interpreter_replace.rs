@@ -35,6 +35,7 @@ use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
 use databend_common_sql::BindContext;
@@ -112,7 +113,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Replace,
-                true,
+                LockTableOption::LockNoRetry,
             );
             hook_operator.execute(&mut pipeline.main_pipeline).await;
         }
@@ -170,6 +171,8 @@ impl ReplaceInterpreter {
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
+        let is_select = matches!(self.plan.source, InsertInputSource::SelectPlan(_));
+
         let is_distributed = is_multi_node
             && !is_value_source
             && self.ctx.get_settings().get_enable_distributed_replace()?;
@@ -252,10 +255,16 @@ impl ReplaceInterpreter {
             None
         };
 
-        // remove top exchange
-        if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
+        // remove top exchange merge plan
+        if let PhysicalPlan::Exchange(Exchange {
+            input,
+            kind: FragmentKind::Merge,
+            ..
+        }) = root.as_ref()
+        {
             root = input.clone();
         }
+
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
@@ -299,6 +308,7 @@ impl ReplaceInterpreter {
                 plan_id: u32::MAX,
             },
         )));
+
         root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
@@ -316,6 +326,7 @@ impl ReplaceInterpreter {
             need_insert: true,
             plan_id: u32::MAX,
         })));
+
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
@@ -326,6 +337,7 @@ impl ReplaceInterpreter {
                 ignore_exchange: false,
             }));
         }
+
         root = Box::new(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: root,
             snapshot: base_snapshot,
@@ -334,7 +346,6 @@ impl ReplaceInterpreter {
             mutation_kind: MutationKind::Replace,
             update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
-            need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
         })));
