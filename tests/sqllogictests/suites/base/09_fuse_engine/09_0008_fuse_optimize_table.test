@@ -762,6 +762,25 @@ insert into test_abc select * from test_abc_random limit 1000;
 statement ok
 alter table test_abc recluster final;
 
+
+statement ok
+create table t14(a string, b string) cluster by(a,b)
+
+statement ok
+insert into t14 values('123456789', 'abc');
+
+statement ok
+insert into t14 values('12345678', 'efg');
+
+statement ok
+alter table t14 recluster
+
+query TIIIFFT
+select * from clustering_information('db_09_0008','t14')
+----
+(a, b) 1 0 0 0.0 1.0 {"00001":1}
+
+
 statement ok
 DROP DATABASE db_09_0008
 

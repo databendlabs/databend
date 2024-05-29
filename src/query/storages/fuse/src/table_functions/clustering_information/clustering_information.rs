@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::compare_scalars;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -31,7 +32,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use itertools::Itertools;
 use jsonb::Value as JsonbValue;
 use log::warn;
 use serde_json::json;
@@ -39,7 +39,6 @@ use serde_json::Value as JsonValue;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
-use crate::table_functions::cmp_with_null;
 use crate::FuseTable;
 use crate::Table;
 
@@ -144,10 +143,11 @@ impl<'a> ClusteringInformation<'a> {
         // key: the block index.
         // value: (overlaps, depth).
         let mut unfinished_parts: HashMap<u64, (usize, usize)> = HashMap::new();
-        for (_, (start, end)) in points_map
-            .into_iter()
-            .sorted_by(|(a, _), (b, _)| a.iter().cmp_by(b.iter(), cmp_with_null))
-        {
+        let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
+        let indices = compare_scalars(keys, &self.table.cluster_key_types(self.ctx.clone()))?;
+        for idx in indices.into_iter() {
+            let start = &values[idx as usize].0;
+            let end = &values[idx as usize].1;
             let point_depth = unfinished_parts.len() + start.len();
 
             unfinished_parts.values_mut().for_each(|(overlaps, depth)| {
@@ -156,23 +156,21 @@ impl<'a> ClusteringInformation<'a> {
             });
 
             start.iter().for_each(|idx| {
-                if let Some(v) = unfinished_parts.remove(idx) {
-                    stats.push(v);
-                } else {
-                    unfinished_parts.insert(*idx, (point_depth - 1, point_depth));
-                }
+                unfinished_parts.insert(*idx, (point_depth - 1, point_depth));
             });
 
             end.iter().for_each(|idx| {
                 if let Some(v) = unfinished_parts.remove(idx) {
                     stats.push(v);
-                } else {
-                    warn!("clustering_information: please check your data and perform recluster to re-sort.");
-                    unfinished_parts.insert(*idx, (point_depth - 1, point_depth));
                 }
             });
         }
-        assert!(unfinished_parts.is_empty());
+        if !unfinished_parts.is_empty() {
+            warn!(
+                "clustering_information: please check your data and perform recluster to resort."
+            );
+            unclustered_block_count += unfinished_parts.len() as u64;
+        }
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;
