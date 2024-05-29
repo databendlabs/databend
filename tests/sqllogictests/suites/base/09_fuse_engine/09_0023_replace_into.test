@@ -285,7 +285,7 @@ statement ok
 insert into tmp(id,name,age) values (1,'2',3), (4, '5', 6);
 
 statement ok
-CREATE STAGE IF NOT EXISTS test_stage;
+CREATE OR REPLACE STAGE test_stage;
 
 statement ok
 CREATE TABLE test(id INTEGER not null, name VARCHAR not null, age INT not null);
