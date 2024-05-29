@@ -182,7 +182,7 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
-        let values = self.get_raw_roles().await?;
+        let values = self.get_raw_meta_roles().await?;
 
         let mut r = vec![];
 
@@ -198,7 +198,7 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_raw_roles(&self) -> Result<ListKVReply, ErrorCode> {
+    async fn get_raw_meta_roles(&self) -> Result<ListKVReply, ErrorCode> {
         let role_prefix = self.role_prefix();
         Ok(self.kv_api.prefix_list_kv(role_prefix.as_str()).await?)
     }
