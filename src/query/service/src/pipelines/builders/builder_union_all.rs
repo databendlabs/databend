@@ -26,6 +26,9 @@ use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
     pub fn build_union_all(&mut self, union_all: &UnionAll) -> Result<()> {
+        if union_all.cte_name.is_some() {
+            self.build_recursive_cte_source(union_all)?;
+        }
         self.build_pipeline(&union_all.left)?;
         let union_all_receiver = self.expand_union_all(&union_all.right)?;
         self.main_pipeline
