@@ -181,7 +181,7 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
+    async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
         let values = self.get_raw_roles().await?;
 
         let mut r = vec![];

@@ -51,7 +51,7 @@ impl UserApiProvider {
         let builtin_roles = self.builtin_roles();
         let seq_roles = self
             .role_api(tenant)
-            .get_roles()
+            .get_meta_roles()
             .await
             .map_err(|e| e.add_message_back("(while get roles)."))?;
         // overwrite the builtin roles.
@@ -63,18 +63,6 @@ impl UserApiProvider {
         roles.extend(builtin_roles.values().cloned());
         roles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(roles)
-    }
-
-    // Get the tenant all role nums in meta.
-    #[async_backtrace::framed]
-    pub async fn get_role_nums(&self, tenant: &Tenant) -> Result<usize> {
-        let builtin_roles = self.builtin_roles();
-        let meta_role_nums = self
-            .role_api(tenant)
-            .get_raw_roles()
-            .await
-            .map_err(|e| e.add_message_back("(while get_role_nums)"))?;
-        Ok(builtin_roles.len() + meta_role_nums.len())
     }
 
     // Currently we have to built account_admin role in query:

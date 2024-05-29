@@ -28,6 +28,7 @@ pub trait UserApi: Sync + Send {
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
 
+    /// Just get user count in meta
     async fn get_raw_users(&self) -> Result<ListKVReply>;
 
     /// General user's grants update.
