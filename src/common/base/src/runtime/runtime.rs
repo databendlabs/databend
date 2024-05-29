@@ -152,7 +152,7 @@ impl Runtime {
                 }
             }
 
-            runtime_builder.thread_stack_size(30 * 1024 * 1024);
+            runtime_builder.thread_stack_size(20 * 1024 * 1024);
         }
 
         Self::create(
