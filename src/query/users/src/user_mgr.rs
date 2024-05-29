@@ -137,9 +137,9 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_user_nums(&self, tenant: &Tenant) -> Result<usize> {
         let client = self.user_api(tenant);
-        match client.get_user_nums().await {
+        match client.get_raw_users().await {
             Err(e) => Err(e.add_message_back("(while get_user_nums).")),
-            Ok(nums) => Ok(nums),
+            Ok(nums) => Ok(nums.len()),
         }
     }
 

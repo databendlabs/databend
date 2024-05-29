@@ -71,10 +71,10 @@ impl UserApiProvider {
         let builtin_roles = self.builtin_roles();
         let meta_role_nums = self
             .role_api(tenant)
-            .get_role_nums()
+            .get_raw_roles()
             .await
             .map_err(|e| e.add_message_back("(while get_role_nums)"))?;
-        Ok(builtin_roles.len() + meta_role_nums)
+        Ok(builtin_roles.len() + meta_role_nums.len())
     }
 
     // Currently we have to built account_admin role in query:

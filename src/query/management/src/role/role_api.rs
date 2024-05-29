@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
@@ -28,7 +29,7 @@ pub trait RoleApi: Sync + Send {
 
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
 
-    async fn get_role_nums(&self) -> Result<usize>;
+    async fn get_raw_roles(&self) -> Result<ListKVReply>;
 
     async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>>;
 
