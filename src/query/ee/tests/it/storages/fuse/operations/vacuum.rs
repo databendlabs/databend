@@ -126,12 +126,7 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     );
 
     tokio::time::sleep(Duration::from_secs(2)).await;
-    do_vacuum_temporary_files(
-        "test_dir/".to_string(),
-        Some(Duration::from_secs(2)),
-        Some(1),
-    )
-    .await?;
+    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), 1).await?;
 
     assert_eq!(2, operator.list("test_dir/").await?.len());
 
@@ -141,16 +136,11 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
         .write("test_dir/test5/finished", vec![1, 2])
         .await?;
 
-    do_vacuum_temporary_files(
-        "test_dir/".to_string(),
-        Some(Duration::from_secs(2)),
-        Some(2),
-    )
-    .await?;
+    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), 2).await?;
     assert_eq!(operator.list("test_dir/").await?.len(), 2);
 
     tokio::time::sleep(Duration::from_secs(3)).await;
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(3)), None).await?;
+    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(3)), 1000).await?;
     assert!(operator.list_with("test_dir/").await?.is_empty());
 
     Ok(())
