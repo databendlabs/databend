@@ -39,6 +39,7 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
@@ -112,7 +113,6 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
-use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
@@ -1988,18 +1988,18 @@ impl SchemaApiTestSuite {
             assert!(old_db.ident.seq < cur_db.ident.seq);
             assert!(create_table_as_dropped_resp.table_id >= 1, "table id >= 1");
 
-            // -- verify this table is un-droppable
+            // -- verify this table is committpable
 
             {
-                let undrop_table_req = UndropTableByIdReq {
+                let commit_table_req = CommitTableMetaReq {
                     name_ident: create_table_req.name_ident.clone(),
                     db_id: create_table_as_dropped_resp.db_id,
                     table_id: create_table_as_dropped_resp.table_id,
-                    table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
-                    force_replace: true,
+                    prev_table_id: create_table_as_dropped_resp.prev_table_id,
+                    orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
                 };
 
-                mt.undrop_table_by_id(undrop_table_req).await?;
+                mt.commit_table_meta(commit_table_req).await?;
                 let req = GetTableReq::new(&tenant, db_name, tbl_name);
                 // after "un-drop", table should be visible
                 let tbl = mt.get_table(req).await?;
@@ -2007,26 +2007,7 @@ impl SchemaApiTestSuite {
                 assert_eq!(tbl.ident.table_id, create_table_as_dropped_resp.table_id);
             }
 
-            {
-                // if there is already a table with same name that is visible
-                // undrop-table-by-id with force_replace set to false should fail.
-                let undrop_table_req = UndropTableByIdReq {
-                    name_ident: create_table_req.name_ident.clone(),
-                    db_id: create_table_as_dropped_resp.db_id,
-                    table_id: create_table_as_dropped_resp.table_id,
-                    table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
-                    force_replace: false,
-                };
-
-                let res = mt.undrop_table_by_id(undrop_table_req).await;
-                assert!(matches!(
-                    res.unwrap_err(),
-                    KVAppError::AppError(AppError::UndropTableAlreadyExists(_))
-                ));
-            }
-
             // -- create if not exist (as dropped) should work as expected
-
             {
                 // recall that there is table of same name existing
                 // case 1: table exists
