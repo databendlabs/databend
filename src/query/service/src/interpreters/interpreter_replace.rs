@@ -255,6 +255,8 @@ impl ReplaceInterpreter {
 
         // remove top exchange merge plan
         let mut is_exchange = false;
+        let is_stage_source = matches!(self.plan.source, InsertInputSource::Stage(_));
+
         if let PhysicalPlan::Exchange(Exchange {
             input,
             kind: FragmentKind::Merge,
@@ -274,7 +276,7 @@ impl ReplaceInterpreter {
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
             }));
-        } else if is_exchange {
+        } else if is_exchange && !is_stage_source {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: root,
