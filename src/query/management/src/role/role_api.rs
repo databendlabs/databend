@@ -30,7 +30,7 @@ pub trait RoleApi: Sync + Send {
     /// get all roles that store in meta
     async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
 
-    async fn get_raw_roles(&self) -> Result<ListKVReply>;
+    async fn get_raw_meta_roles(&self) -> Result<ListKVReply>;
 
     async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>>;
 
