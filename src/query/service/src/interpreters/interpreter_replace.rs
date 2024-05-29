@@ -175,9 +175,9 @@ impl ReplaceInterpreter {
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
-        let is_source_distributed = is_multi_node
-            && !is_value_source
-            && self.ctx.get_settings().get_enable_distributed_replace()?;
+        let is_source_distributed = is_multi_node && !is_value_source;
+        let replace_need_distributed =
+            is_source_distributed && self.ctx.get_settings().get_enable_distributed_replace()?;
 
         let ReplaceSourceCtx {
             mut root,
@@ -192,11 +192,6 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
-
-        let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
-        let replace_need_distributed = is_source_distributed
-            && self.ctx.get_settings().get_enable_distributed_replace()?
-            && !is_value_source;
 
         if let Some(s) = &select_ctx {
             let select_schema = s.select_schema.as_ref();

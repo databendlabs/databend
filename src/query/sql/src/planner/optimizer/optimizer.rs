@@ -243,9 +243,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
                     plan.source = InsertInputSource::SelectPlan(Box::new(optimized_plan));
                 }
                 InsertInputSource::Stage(p) => {
-                    // seems we can't optimize this
-                    // let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
-                    let optimized_plan = *p.clone();
+                    let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
                     plan.source = InsertInputSource::Stage(Box::new(optimized_plan));
                 }
                 _ => {}
