@@ -238,6 +238,7 @@ pub struct RestAPIRows {
     client: APIClient,
     schema: SchemaRef,
     data: VecDeque<Vec<String>>,
+    stats: Option<ServerStats>,
     query_id: String,
     next_uri: Option<String>,
     next_page: Option<PageFut>,
@@ -252,6 +253,7 @@ impl RestAPIRows {
             next_uri: resp.next_uri,
             schema: Arc::new(schema.clone()),
             data: resp.data.into(),
+            stats: Some(ServerStats::from(resp.stats)),
             next_page: None,
         };
         Ok((schema, rows))
@@ -262,6 +264,9 @@ impl Stream for RestAPIRows {
     type Item = Result<RowWithStats>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if let Some(ss) = self.stats.take() {
+            return Poll::Ready(Some(Ok(RowWithStats::Stats(ss))));
+        }
         if let Some(row) = self.data.pop_front() {
             let row = Row::try_from((self.schema.clone(), &row))?;
             return Poll::Ready(Some(Ok(RowWithStats::Row(row))));
@@ -276,8 +281,8 @@ impl Stream for RestAPIRows {
                     self.query_id = resp.id;
                     self.next_uri = resp.next_uri;
                     self.next_page = None;
-                    let ss = ServerStats::from(resp.stats);
-                    Poll::Ready(Some(Ok(RowWithStats::Stats(ss))))
+                    self.stats = Some(ServerStats::from(resp.stats));
+                    self.poll_next(cx)
                 }
                 Poll::Ready(Err(e)) => {
                     self.next_page = None;
