@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
@@ -33,10 +37,11 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnSet;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
-pub fn outer_join_to_inner_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
+pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(SExpr, bool)> {
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     if !join.join_type.is_outer_join() {
         return Ok((s_expr.clone(), false));
@@ -57,7 +62,8 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
                 if can_filter_null(
                     predicate,
                     &left_prop.output_columns,
-                    &right_prop.output_columns,
+                    &join.join_type,
+                    metadata.clone(),
                 )? =>
             {
                 can_filter_left_null = true;
@@ -65,21 +71,30 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
             JoinPredicate::Right(_)
                 if can_filter_null(
                     predicate,
-                    &left_prop.output_columns,
                     &right_prop.output_columns,
+                    &join.join_type,
+                    metadata.clone(),
                 )? =>
             {
                 can_filter_right_null = true;
             }
-            JoinPredicate::Both { .. }
+            JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
                 if can_filter_null(
                     predicate,
                     &left_prop.output_columns,
+                    &join.join_type,
+                    metadata.clone(),
+                )? {
+                    can_filter_left_null = true;
+                }
+                if can_filter_null(
+                    predicate,
                     &right_prop.output_columns,
-                )? =>
-            {
-                can_filter_left_null = true;
-                can_filter_right_null = true;
+                    &join.join_type,
+                    metadata.clone(),
+                )? {
+                    can_filter_right_null = true;
+                }
             }
             _ => (),
         }
@@ -137,33 +152,35 @@ fn eliminate_outer_join_type(
 
 pub fn can_filter_null(
     predicate: &ScalarExpr,
-    left_output_columns: &ColumnSet,
-    right_output_columns: &ColumnSet,
+    columns_can_be_replaced: &ColumnSet,
+    join_type: &JoinType,
+    metadata: MetadataRef,
 ) -> Result<bool> {
+    if !matches!(join_type, JoinType::Left | JoinType::Right | JoinType::Full) {
+        return Ok(true);
+    }
+
     struct ReplaceColumnBindingsNull<'a> {
         can_replace: bool,
-        left_output_columns: &'a ColumnSet,
-        right_output_columns: &'a ColumnSet,
+        columns_can_be_replaced: &'a ColumnSet,
     }
 
     impl<'a> ReplaceColumnBindingsNull<'a> {
-        fn replace(
-            &mut self,
-            expr: &mut ScalarExpr,
-            column_set: &mut Option<ColumnSet>,
-        ) -> Result<()> {
+        fn replace(&mut self, expr: &mut ScalarExpr) -> Result<()> {
             if !self.can_replace {
                 return Ok(());
             }
             match expr {
                 ScalarExpr::BoundColumnRef(column_ref) => {
-                    if let Some(column_set) = column_set {
-                        column_set.insert(column_ref.column.index);
+                    if self
+                        .columns_can_be_replaced
+                        .contains(&column_ref.column.index)
+                    {
+                        *expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: None,
+                            value: Scalar::Null,
+                        });
                     }
-                    *expr = ScalarExpr::ConstantExpr(ConstantExpr {
-                        span: None,
-                        value: Scalar::Null,
-                    });
                     Ok(())
                 }
                 ScalarExpr::FunctionCall(func) => {
@@ -177,40 +194,13 @@ pub fn can_filter_null(
                         return Ok(());
                     }
 
-                    if func.func_name != "or" {
-                        for expr in &mut func.arguments {
-                            self.replace(expr, column_set)?;
-                        }
-                        return Ok(());
-                    }
-
-                    let mut children_columns_set = Some(ColumnSet::new());
                     for expr in &mut func.arguments {
-                        self.replace(expr, &mut children_columns_set)?;
-                    }
-
-                    let mut has_left = false;
-                    let mut has_right = false;
-                    let children_columns_set = children_columns_set.unwrap();
-                    for column in children_columns_set.iter() {
-                        if self.left_output_columns.contains(column) {
-                            has_left = true;
-                        } else if self.right_output_columns.contains(column) {
-                            has_right = true;
-                        }
-                    }
-                    if has_left && has_right {
-                        self.can_replace = false;
-                        return Ok(());
-                    }
-
-                    if let Some(column_set) = column_set {
-                        *column_set = column_set.union(&children_columns_set).cloned().collect();
+                        self.replace(expr)?;
                     }
 
                     Ok(())
                 }
-                ScalarExpr::CastExpr(cast) => self.replace(&mut cast.argument, column_set),
+                ScalarExpr::CastExpr(cast) => self.replace(&mut cast.argument),
                 ScalarExpr::ConstantExpr(_) => Ok(()),
                 _ => {
                     self.can_replace = false;
@@ -223,14 +213,18 @@ pub fn can_filter_null(
     // Replace the column bindings of predicate with `Scalar::Null` and evaluate the result.
     let mut replace = ReplaceColumnBindingsNull {
         can_replace: true,
-        left_output_columns,
-        right_output_columns,
+        columns_can_be_replaced,
     };
     let mut null_scalar_expr = predicate.clone();
-    replace.replace(&mut null_scalar_expr, &mut None).unwrap();
+    replace.replace(&mut null_scalar_expr).unwrap();
     if replace.can_replace {
-        let expr = convert_scalar_expr_to_expr(null_scalar_expr)?;
+        let columns = null_scalar_expr.columns_and_data_types(metadata);
+        let expr = convert_scalar_expr_to_expr(null_scalar_expr, columns)?;
         let func_ctx = &FunctionContext::default();
+        let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+        if expr.contains_column_ref() {
+            return Ok(false);
+        }
         let data_block = DataBlock::empty();
         let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
         if let Value::Scalar(scalar) = evaluator.run(&expr)? {
@@ -244,8 +238,15 @@ pub fn can_filter_null(
 }
 
 // Convert `ScalarExpr` to `Expr`.
-fn convert_scalar_expr_to_expr(scalar_expr: ScalarExpr) -> Result<Expr> {
-    let schema = Arc::new(DataSchema::new(vec![]));
+fn convert_scalar_expr_to_expr(
+    scalar_expr: ScalarExpr,
+    columns: HashMap<usize, DataType>,
+) -> Result<Expr> {
+    let fields = columns
+        .into_iter()
+        .map(|(index, data_type)| DataField::new(index.to_string().as_str(), data_type))
+        .collect();
+    let schema = Arc::new(DataSchema::new(fields));
     let remote_expr = scalar_expr
         .type_check(schema.as_ref())?
         .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap())
