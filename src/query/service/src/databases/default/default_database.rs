@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseInfo;
@@ -28,8 +30,6 @@ use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -177,11 +177,8 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn rollback_uncommitted_table_meta(
-        &self,
-        req: RollbackUncommittedTableMetaReq,
-    ) -> Result<RollbackUncommittedTableMetaReply> {
-        let res = self.ctx.meta.rollback_uncommitted_table_meta(req).await?;
+    async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        let res = self.ctx.meta.commit_table_meta(req).await?;
         Ok(res)
     }
 

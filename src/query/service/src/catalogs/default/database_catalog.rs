@@ -26,6 +26,8 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -78,8 +80,6 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -492,15 +492,10 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.undrop_database(req).await
     }
 
-    async fn rollback_uncommitted_table_meta(
-        &self,
-        req: RollbackUncommittedTableMetaReq,
-    ) -> Result<RollbackUncommittedTableMetaReply> {
-        info!("rollback_uncommitted_table_meta from req:{:?}", req);
+    async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        info!("commit_table_meta from req:{:?}", req);
 
-        self.mutable_catalog
-            .rollback_uncommitted_table_meta(req)
-            .await
+        self.mutable_catalog.commit_table_meta(req).await
     }
 
     #[async_backtrace::framed]

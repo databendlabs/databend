@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseInfo;
@@ -26,8 +28,6 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -135,12 +135,9 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
-    async fn rollback_uncommitted_table_meta(
-        &self,
-        _req: RollbackUncommittedTableMetaReq,
-    ) -> Result<RollbackUncommittedTableMetaReply> {
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement rollback_uncommitted_table_meta in {} Database",
+            "UnImplement commit_table_meta in {} Database",
             self.name()
         )))
     }

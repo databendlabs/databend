@@ -537,6 +537,8 @@ pub struct CreateTableReply {
     pub db_id: u64,
     pub new_table: bool,
     pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
+    pub prev_table_id: Option<u64>,
+    pub orphan_table_name: Option<String>,
 }
 
 /// Drop table by id.
@@ -579,32 +581,28 @@ pub struct DropTableReply {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RollbackUncommittedTableMetaReq {
-    pub tenant: Tenant,
-
-    pub db_name: String,
-
-    pub table_id: MetaId,
-
-    pub table_name: String,
-
+pub struct CommitTableMetaReq {
+    pub name_ident: TableNameIdent,
     pub db_id: MetaId,
+    pub table_id: MetaId,
+    pub prev_table_id: Option<MetaId>,
+    pub orphan_table_name: Option<String>,
 }
 
-impl RollbackUncommittedTableMetaReq {
+impl CommitTableMetaReq {
     pub fn table_id(&self) -> MetaId {
         self.table_id
     }
 }
 
-impl Display for RollbackUncommittedTableMetaReq {
+impl Display for CommitTableMetaReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "rollback_uncommitted_table_meta:{}", self.table_id(),)
+        write!(f, "commit_table_meta:{}", self.table_id(),)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RollbackUncommittedTableMetaReply {}
+pub struct CommitTableMetaReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReq {

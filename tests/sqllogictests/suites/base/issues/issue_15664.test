@@ -21,9 +21,16 @@ alter table test_table rename to test_table_1;
 statement ok
 insert into test_table_1 values(10);
 
-
 query I
 select * from test_table_1 order by 1;
 ----
 1
 10
+
+statement ok
+CREATE OR REPLACE TABLE test_table as select 2;
+
+query I
+select * from test_table;
+----
+2

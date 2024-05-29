@@ -19,6 +19,8 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseInfo;
@@ -28,8 +30,6 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -156,13 +156,9 @@ impl Database for ShareDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn rollback_uncommitted_table_meta(
-        &self,
-        _req: RollbackUncommittedTableMetaReq,
-    ) -> Result<RollbackUncommittedTableMetaReply> {
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         Err(ErrorCode::PermissionDenied(
-            "Permission denied, cannot rollback_uncommitted_table_meta from a shared database"
-                .to_string(),
+            "Permission denied, cannot commit_table_meta from a shared database".to_string(),
         ))
     }
 

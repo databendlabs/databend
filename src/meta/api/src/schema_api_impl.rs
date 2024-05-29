@@ -69,6 +69,8 @@ use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateCatalogReply;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -143,8 +145,6 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReply;
-use databend_common_meta_app::schema::RollbackUncommittedTableMetaReq;
 use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -258,6 +258,7 @@ use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
 
 const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
+pub const ORPHAN_POSTFIX: &str = "orphan";
 
 /// SchemaApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls SchemaApi.
@@ -1538,17 +1539,42 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         // fixed
-        let key_table_id_list = TableIdHistoryIdent {
-            database_id: db_id.data,
-            table_name: req.name_ident.table_name.clone(),
+        let (key_table_id_list, orphan_table_name) = if req.as_dropped {
+            // if req.as_dropped, append new table id to orphan table id list
+            let now = Utc::now().timestamp_micros();
+            let table_name = format!("{}@{}", ORPHAN_POSTFIX, now);
+            (
+                TableIdHistoryIdent {
+                    database_id: db_id.data,
+                    table_name: table_name.clone(),
+                },
+                Some(table_name),
+            )
+        } else {
+            (
+                TableIdHistoryIdent {
+                    database_id: db_id.data,
+                    table_name: req.name_ident.table_name.clone(),
+                },
+                None,
+            )
         };
 
         // The keys of values to re-fetch for every retry in this txn.
-        let keys = vec![
+        let mut keys = vec![
             key_dbid.to_string_key(),
             key_dbid_tbname.to_string_key(),
             key_table_id_list.to_string_key(),
         ];
+        if req.as_dropped {
+            keys.push(
+                TableIdHistoryIdent {
+                    database_id: db_id.data,
+                    table_name: req.name_ident.table_name.clone(),
+                }
+                .to_string_key(),
+            );
+        }
 
         // Initialize required key-values
         let mut data = {
@@ -1637,6 +1663,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                 db_id: db_id.data,
                                 new_table: false,
                                 spec_vec: None,
+                                prev_table_id: None,
+                                orphan_table_name: None,
                             });
                         }
                         CreateOption::CreateOrReplace => {
@@ -1675,6 +1703,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 v.unwrap_or_default()
             };
 
+            let prev_table_id = if req.as_dropped {
+                let d = data.remove(0);
+                let (_k, v) = deserialize_struct_get_response::<TableIdHistoryIdent>(d)?;
+
+                let v: SeqV<TableIdList> = v.unwrap_or_default();
+                v.data.id_list.last().copied()
+            } else {
+                None
+            };
+
             // Table id is unique and does not need to re-generate in every loop.
             let key_table_id = match &maybe_key_table_id {
                 None => {
@@ -1697,6 +1735,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             {
                 // append new table_id into list
+                if req.as_dropped && !tb_id_list.data.is_empty() {
+                    error!(
+                        "table {:?} orphan list is not empty",
+                        tenant_dbname_tbname.table_name
+                    );
+                    let exist_err = TableAlreadyExists::new(
+                        tenant_dbname_tbname.table_name.clone(),
+                        format!("create_table: {}", tenant_dbname_tbname.table_name),
+                    );
+                    return Err(KVAppError::AppError(AppError::from(exist_err)));
+                }
                 tb_id_list.data.append(table_id);
                 let dbid_tbname_seq = opt.1;
 
@@ -1775,6 +1824,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         } else {
                             None
                         },
+                        prev_table_id,
+                        orphan_table_name,
                     });
                 } else {
                     // re-run txn with re-fetched data
@@ -2443,128 +2494,178 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
+    // make table meta visible by:
+    // 1. move table id from orphan table id list to table id list
+    // 2. set table meta.drop_on as None
     #[minitrace::trace]
-    async fn rollback_uncommitted_table_meta(
+    async fn commit_table_meta(
         &self,
-        req: RollbackUncommittedTableMetaReq,
-    ) -> Result<RollbackUncommittedTableMetaReply, KVAppError> {
+        req: CommitTableMetaReq,
+    ) -> Result<CommitTableMetaReply, KVAppError> {
         let table_id = req.table_id;
         debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
 
-        let db_id = req.db_id;
+        let tenant_dbname_tbname = &req.name_ident;
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            let tbid = TableId { table_id };
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-            if tb_meta_seq == 0 || tb_meta.is_none() {
-                error!(
-                    "rollback_uncommitted_table_meta {} by table id {} but cannot find table meta",
-                    req.table_name, table_id
-                );
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(
-                        table_id,
-                        "rollback_uncommitted_table_meta failed to find valid tb_meta",
-                    ),
-                )));
-            }
-            let tb_meta = tb_meta.unwrap();
-            if tb_meta.drop_on.is_none() {
-                error!(
-                    "rollback_uncommitted_table_meta {} by table id {} but table meta has been committed",
-                    req.table_name, table_id
-                );
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(
-                        table_id,
-                        "rollback_uncommitted_table_meta failed to find valid tb_meta",
-                    ),
+            // Get db by name to ensure presence
+
+            let (db_meta_seq, db_meta) =
+                get_db_by_id_or_err(self, req.db_id, "commit_table_meta").await?;
+            let db_id = req.db_id;
+
+            // cannot operate on shared database
+            if let Some(from_share) = db_meta.from_share {
+                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
                 )));
             }
 
-            // Get db name, tenant name and related info for tx.
-            let table_id_to_name = TableIdToName { table_id };
-            let (_, table_name_opt): (_, Option<DBIdTableName>) =
-                get_pb_value(self, &table_id_to_name).await?;
+            // Get table by tenant,db_id, table_name to assert presence.
 
-            let dbid_tbname = if let Some(db_id_table_name) = table_name_opt {
-                db_id_table_name
+            let dbid_tbname = DBIdTableName {
+                db_id,
+                table_name: tenant_dbname_tbname.table_name.clone(),
+            };
+
+            let (dbid_tbname_seq, prev_table_id) = get_u64_value(self, &dbid_tbname).await?;
+            let prev_table_id = if dbid_tbname_seq == 0 {
+                None
             } else {
-                let dbid_tbname = DBIdTableName {
-                    db_id,
-                    table_name: req.table_name.clone(),
-                };
-                warn!(
-                    "rollback_uncommitted_table_meta cannot find {:?}, use {:?} instead",
-                    table_id_to_name, dbid_tbname
-                );
-
-                dbid_tbname
+                Some(prev_table_id)
             };
 
             // get table id list from _fd_table_id_list/db_id/table_name
+
+            let orphan_dbid_tbname_idlist = TableIdHistoryIdent {
+                database_id: db_id,
+                table_name: req.orphan_table_name.clone().unwrap(),
+            };
             let dbid_tbname_idlist = TableIdHistoryIdent {
                 database_id: db_id,
-                table_name: dbid_tbname.table_name.clone(),
+                table_name: tenant_dbname_tbname.table_name.clone(),
             };
-            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
-                get_pb_value(self, &dbid_tbname_idlist).await?;
-            if tb_id_list_seq == 0 {
-                error!(
-                    "rollback_uncommitted_table_meta {} by table id {} but table_id_list is empty",
-                    req.table_name, table_id
-                );
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(
-                        table_id,
-                        "rollback_uncommitted_table_meta failed to find valid tb_meta",
-                    ),
-                )));
-            }
 
-            let mut tb_id_list = tb_id_list_opt.unwrap();
-            let index = tb_id_list.id_list.iter().position(|&x| x == table_id);
-            if let Some(index) = index {
-                tb_id_list.id_list.remove(index);
-            } else {
-                error!(
-                    "rollback_uncommitted_table_meta {} by table id {} but cannot find table id in table_id_list",
-                    req.table_name, table_id
-                );
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(
-                        table_id,
-                        "rollback_uncommitted_table_meta failed to find valid tb_meta",
-                    ),
-                )));
-            }
-
-            let condition = vec![
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
-            ];
-            let if_then = vec![
-                txn_op_del(&tbid),
-                txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?),
+            let keys = vec![
+                orphan_dbid_tbname_idlist.to_string_key(),
+                dbid_tbname_idlist.to_string_key(),
             ];
 
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
+            let mut data = {
+                let values = self.mget_kv(&keys).await?;
+                keys.iter()
+                    .zip(values.into_iter())
+                    .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
+                    .collect::<Vec<_>>()
             };
-            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            let orphan_tb_id_list = {
+                let d = data.remove(0);
+                let (k, v) = deserialize_struct_get_response::<TableIdHistoryIdent>(d)?;
+                assert_eq!(orphan_dbid_tbname_idlist, k);
+
+                v.unwrap_or_default()
+            };
+            if orphan_tb_id_list.seq == 0 || orphan_tb_id_list.data.id_list.len() > 1 {
+                error!("table {:?} orphan list is empty", tenant_dbname_tbname);
+                let exist_err = TableAlreadyExists::new(
+                    tenant_dbname_tbname.table_name.clone(),
+                    format!("commit_table_meta: {}", tenant_dbname_tbname),
+                );
+                return Err(KVAppError::AppError(AppError::from(exist_err)));
+            }
+
+            let mut tb_id_list = {
+                let d = data.remove(0);
+                let (k, v) = deserialize_struct_get_response::<TableIdHistoryIdent>(d)?;
+                assert_eq!(dbid_tbname_idlist, k);
+
+                v.unwrap_or_default()
+            };
+
+            if req.prev_table_id != prev_table_id {
+                error!(
+                    "table {:?} table id list has been changed",
+                    tenant_dbname_tbname
+                );
+                let exist_err = TableAlreadyExists::new(
+                    tenant_dbname_tbname.table_name.clone(),
+                    format!("commit_table_meta: {}", tenant_dbname_tbname),
+                );
+                return Err(KVAppError::AppError(AppError::from(exist_err)));
+            }
+
+            let table_id = match orphan_tb_id_list.data.id_list.last() {
+                Some(table_id) => *table_id,
+                None => {
+                    return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
+                        UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
+                    )));
+                }
+            };
+            tb_id_list.data.id_list.push(table_id);
+
+            // get tb_meta of the last table id
+            let tbid = TableId { table_id };
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
 
             debug!(
-                id :? =(&table_id),
-                succ = succ;
-                "rollback_uncommitted_table_meta"
+                ident :% =(&tbid),
+                name :% =(tenant_dbname_tbname);
+                "commit_table_meta"
             );
-            if succ {
-                return Ok(RollbackUncommittedTableMetaReply {});
+
+            {
+                // reset drop on time
+                let mut tb_meta = tb_meta.unwrap();
+                // undrop a table with no drop_on time
+                if tb_meta.drop_on.is_none() {
+                    return Err(KVAppError::AppError(AppError::UndropTableWithNoDropTime(
+                        UndropTableWithNoDropTime::new(&tenant_dbname_tbname.table_name),
+                    )));
+                }
+                tb_meta.drop_on = None;
+
+                let txn_req = TxnRequest {
+                    condition: vec![
+                        // db has not to change, i.e., no new table is created.
+                        // Renaming db is OK and does not affect the seq of db_meta.
+                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
+                        // still this table id
+                        txn_cond_seq(&dbid_tbname, Eq, dbid_tbname_seq),
+                        // table is not changed
+                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                        txn_cond_seq(&orphan_dbid_tbname_idlist, Eq, orphan_tb_id_list.seq),
+                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list.seq),
+                    ],
+                    if_then: vec![
+                        // Changing a table in a db has to update the seq of db_meta,
+                        // to block the batch-delete-tables when deleting a db.
+                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
+                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
+                        // txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
+                        txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
+                        txn_op_del(&orphan_dbid_tbname_idlist),         // del orphan table idlist
+                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list.data)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                    ],
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    name :? =(tenant_dbname_tbname),
+                    id :? =(&tbid),
+                    succ = succ;
+                    "commit_table_meta"
+                );
+
+                if succ {
+                    return Ok(CommitTableMetaReply {});
+                }
             }
         }
     }
