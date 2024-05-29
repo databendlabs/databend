@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -34,6 +35,7 @@ use crate::binder::ColumnBinding;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::IndexType;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ScalarExpr {
@@ -178,6 +180,39 @@ impl ScalarExpr {
         let mut visitor = ReplaceColumnVisitor { old, new };
         visitor.visit(self)?;
         Ok(())
+    }
+
+    pub fn columns_and_data_types(&self, metadata: MetadataRef) -> HashMap<usize, DataType> {
+        struct UsedColumnsVisitor {
+            columns: HashMap<IndexType, DataType>,
+            metadata: MetadataRef,
+        }
+
+        impl<'a> Visitor<'a> for UsedColumnsVisitor {
+            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
+                self.columns
+                    .insert(col.column.index, *col.column.data_type.clone());
+                Ok(())
+            }
+
+            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+                for idx in subquery.outer_columns.iter() {
+                    self.columns
+                        .insert(*idx, self.metadata.read().column(*idx).data_type());
+                }
+                if let Some(child_expr) = subquery.child_expr.as_ref() {
+                    self.visit(child_expr)?;
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = UsedColumnsVisitor {
+            columns: HashMap::new(),
+            metadata,
+        };
+        visitor.visit(self).unwrap();
+        visitor.columns
     }
 
     pub fn has_one_column_ref(&self) -> bool {

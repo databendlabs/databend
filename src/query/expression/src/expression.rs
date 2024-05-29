@@ -530,6 +530,16 @@ impl<Index: ColumnIndex> Expr<Index> {
             }
         }
     }
+
+    pub fn contains_column_ref(&self) -> bool {
+        match self {
+            Expr::ColumnRef { .. } => true,
+            Expr::Constant { .. } => false,
+            Expr::Cast { expr, .. } => expr.contains_column_ref(),
+            Expr::FunctionCall { args, .. } => args.iter().any(Expr::contains_column_ref),
+            Expr::LambdaFunctionCall { args, .. } => args.iter().any(Expr::contains_column_ref),
+        }
+    }
 }
 
 impl<Index: ColumnIndex> RemoteExpr<Index> {
