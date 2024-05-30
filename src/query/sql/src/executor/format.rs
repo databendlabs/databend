@@ -23,7 +23,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
-use jsonb::to_string;
 
 use super::physical_plans::AsyncFunction;
 use super::physical_plans::CacheScan;
