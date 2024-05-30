@@ -308,7 +308,7 @@ pub enum Statement {
     // Stored procedures
     ExecuteImmediate(ExecuteImmediateStmt),
 
-    // sequence
+    // Sequence
     CreateSequence(CreateSequenceStmt),
     DropSequence(DropSequenceStmt),
 
