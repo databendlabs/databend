@@ -28,7 +28,6 @@ use crate::ast::ShareNameIdent;
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowDatabasesStmt {
     pub catalog: Option<Identifier>,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
 }
@@ -102,7 +101,6 @@ impl Display for CreateDatabaseStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropDatabaseStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Identifier,
@@ -136,7 +134,6 @@ impl Display for UndropDatabaseStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterDatabaseStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Identifier,
@@ -182,8 +179,6 @@ impl Display for DatabaseEngine {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct SQLProperty {
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub value: String,
 }

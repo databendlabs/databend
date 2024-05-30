@@ -107,8 +107,11 @@ impl FuseTable {
             MetaReaders::segment_info_reader(self.get_operator(), table_schema.clone());
 
         // If no segment locations are specified, iterates through all segments
-        let segment_locs = if let Some(segment_locs) = &segment_locs {
-            segment_locs.clone()
+        let segment_locs = if let Some(segment_locs) = segment_locs {
+            segment_locs
+                .into_iter()
+                .filter(|s| snapshot.segments.contains(s))
+                .collect()
         } else {
             snapshot.segments.clone()
         };

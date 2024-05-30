@@ -22,13 +22,9 @@ use crate::ast::CopyIntoTableStmt;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreatePipeStmt {
-    #[drive(skip)]
     pub if_not_exists: bool,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub auto_ingest: bool,
-    #[drive(skip)]
     pub comments: String,
     pub copy_stmt: CopyIntoTableStmt,
 }
@@ -56,9 +52,7 @@ impl Display for CreatePipeStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropPipeStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
 }
 
@@ -74,7 +68,6 @@ impl Display for DropPipeStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescribePipeStmt {
-    #[drive(skip)]
     pub name: String,
 }
 
@@ -86,9 +79,7 @@ impl Display for DescribePipeStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterPipeStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
     pub options: AlterPipeOptions,
 }
@@ -96,15 +87,11 @@ pub struct AlterPipeStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AlterPipeOptions {
     Set {
-        #[drive(skip)]
         execution_paused: Option<bool>,
-        #[drive(skip)]
         comments: Option<String>,
     },
     Refresh {
-        #[drive(skip)]
         prefix: Option<String>,
-        #[drive(skip)]
         modified_after: Option<String>,
     },
 }

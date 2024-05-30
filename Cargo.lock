@@ -2923,16 +2923,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-constraint"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "databend-common-ast",
- "goldenfile",
- "z3",
-]
-
-[[package]]
 name = "databend-common-datavalues"
 version = "0.1.0"
 dependencies = [
@@ -3738,7 +3728,6 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-compress",
  "databend-common-config",
- "databend-common-constraint",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
@@ -4724,6 +4713,7 @@ dependencies = [
  "rustyline",
  "serde",
  "serde_json",
+ "serde_stacker",
  "serde_urlencoded",
  "socket2 0.5.6",
  "strength_reduce",
@@ -5129,16 +5119,18 @@ dependencies = [
 
 [[package]]
 name = "derive-visitor"
-version = "0.3.0"
-source = "git+https://github.com/andylokandy/derive-visitor.git?rev=c07c6b6#c07c6b6095f2f137223cbe4b25ff4c19ecde4234"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d47165df83b9707cbada3216607a5d66125b6a66906de0bc1216c0669767ca9e"
 dependencies = [
  "derive-visitor-macros",
 ]
 
 [[package]]
 name = "derive-visitor-macros"
-version = "0.3.0"
-source = "git+https://github.com/andylokandy/derive-visitor.git?rev=c07c6b6#c07c6b6095f2f137223cbe4b25ff4c19ecde4234"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "427b39a85fecafea16b1a5f3f50437151022e35eb4fe038107f08adbf7f8def6"
 dependencies = [
  "convert_case 0.4.0",
  "itertools 0.10.5",
@@ -12632,6 +12624,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_stacker"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "babfccff5773ff80657f0ecf553c7c516bdc2eb16389c0918b36b73e7015276e"
+dependencies = [
+ "serde",
+ "stacker",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15772,26 +15774,6 @@ name = "yansi"
 version = "1.0.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1367295b8f788d371ce2dbc842c7b709c73ee1364d30351dd300ec2203b12377"
-
-[[package]]
-name = "z3"
-version = "0.12.1"
-source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
-dependencies = [
- "log",
- "num",
- "z3-sys",
-]
-
-[[package]]
-name = "z3-sys"
-version = "0.8.1"
-source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
-dependencies = [
- "bindgen 0.69.4",
- "cmake",
- "pkg-config",
-]
 
 [[package]]
 name = "z85"

@@ -17,11 +17,11 @@ use derive_visitor::DriveMut;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum ExplainKind {
-    Ast(#[drive(skip)] String),
-    Syntax(#[drive(skip)] String),
+    Ast(String),
+    Syntax(String),
     // The display string will be filled by optimizer, as we
     // don't want to expose `Memo` to other crates.
-    Memo(#[drive(skip)] String),
+    Memo(String),
     Graph,
     Pipeline,
     Fragments,

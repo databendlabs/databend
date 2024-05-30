@@ -26,7 +26,6 @@ pub struct ShowColumnsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
 }
