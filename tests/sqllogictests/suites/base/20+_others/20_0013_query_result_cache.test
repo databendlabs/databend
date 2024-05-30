@@ -322,4 +322,13 @@ statement ok
 SET enable_query_result_cache = 0;
 
 statement ok
+create table tt(a int);
+
+statement ok
+select * from tt;
+
+statement ok
+select * from tt;
+
+statement ok
 DROP DATABASE db20_13;
