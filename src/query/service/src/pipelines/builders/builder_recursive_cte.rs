@@ -32,8 +32,9 @@ impl PipelineBuilder {
                     union_all.clone(),
                 )
             },
-            max_threads as usize,
-        )
+            1,
+        )?;
+        self.main_pipeline.resize(max_threads as usize, true)
     }
 
     pub fn build_recursive_cte_scan(&mut self, r_cte_scan: &RecursiveCteScan) -> Result<()> {
@@ -46,7 +47,8 @@ impl PipelineBuilder {
                     r_cte_scan.cte_name.clone(),
                 )
             },
-            max_threads as usize,
-        )
+            1,
+        )?;
+        self.main_pipeline.resize(max_threads as usize, true)
     }
 }

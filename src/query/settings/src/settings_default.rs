@@ -296,6 +296,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("max_cte_recursive_depth", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Max recursive depth for recursive cte",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",

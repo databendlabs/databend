@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -37,7 +38,7 @@ pub struct TransformRecursiveCteSource {
     ctx: Arc<QueryContext>,
     union_plan: UnionAll,
     output_data: Option<DataBlock>,
-    executor: Option<PullingExecutorStream>,
+    executor: Option<PipelinePullingExecutor>,
     finished: bool,
     recursive_step: usize,
     rows_in_recursive: usize,
@@ -67,6 +68,15 @@ impl TransformRecursiveCteSource {
     }
 
     async fn build_union(&mut self) -> Result<()> {
+        if self
+            .ctx
+            .get_settings()
+            .get_max_cte_recursive_depth()
+            .unwrap()
+            < self.recursive_step
+        {
+            return Err(ErrorCode::Internal("Recursive depth is reached"));
+        }
         let plan = if self.recursive_step == 0 {
             self.union_plan.left.clone()
         } else {
@@ -77,7 +87,7 @@ impl TransformRecursiveCteSource {
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
         self.ctx.set_executor(pulling_executor.get_inner())?;
-        self.executor = Some(PullingExecutorStream::create(pulling_executor)?);
+        self.executor = Some(pulling_executor);
         Ok(())
     }
 }
@@ -90,30 +100,27 @@ impl AsyncSource for TransformRecursiveCteSource {
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let mut res = None;
-        if !self.finished {
-            if self.executor.is_none() {
-                self.build_union().await?;
-            }
-            // Todo: improve here to make it streaming.
-            let data = DataBlock::concat(
-                &self
-                    .executor
-                    .take()
-                    .unwrap()
-                    .try_collect::<Vec<DataBlock>>()
-                    .await?,
-            )?;
+        if self.executor.is_none() {
+            self.build_union().await?;
+        }
+        // Todo: improve here to make it streaming.
+        let data = PullingExecutorStream::create(self.executor.take().unwrap())?
+            .try_collect::<Vec<DataBlock>>()
+            .await?;
+        if data.is_empty() {
+            self.ctx.update_recursive_cte_scan(&self.cte_name, vec![])?;
+            return Ok(None);
+        }
+        let data = DataBlock::concat(&data)?;
 
-            let row_size = data.num_rows();
-            self.rows_in_recursive += row_size;
-            if row_size > 0 {
-                // Prepare the data of next round recursive.
-                self.ctx
-                    .update_recursive_cte_scan(&self.cte_name, vec![data.clone()])?;
-                res = Some(data);
-            } else {
-                self.finished = true;
-            }
+        let row_size = data.num_rows();
+        if row_size > 0 {
+            // Prepare the data of next round recursive.
+            self.ctx
+                .update_recursive_cte_scan(&self.cte_name, vec![data.clone()])?;
+            res = Some(data);
+        } else {
+            self.ctx.update_recursive_cte_scan(&self.cte_name, vec![])?;
         }
         Ok(res)
     }
