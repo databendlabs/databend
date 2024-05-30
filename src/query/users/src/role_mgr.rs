@@ -51,7 +51,7 @@ impl UserApiProvider {
         let builtin_roles = self.builtin_roles();
         let seq_roles = self
             .role_api(tenant)
-            .get_roles()
+            .get_meta_roles()
             .await
             .map_err(|e| e.add_message_back("(while get roles)."))?;
         // overwrite the builtin roles.
