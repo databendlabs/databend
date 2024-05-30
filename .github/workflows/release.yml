@@ -252,7 +252,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           ref: ${{ needs.create_release.outputs.version }}
       - name: Download artifact
         uses: ./.github/actions/artifact_download
@@ -323,7 +322,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           ref: ${{ needs.create_release.outputs.version }}
       - name: Download artifact
         uses: ./.github/actions/artifact_download
