@@ -24,7 +24,6 @@ use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::FuseTable;
 
-use crate::locks::LockManager;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -66,11 +65,6 @@ impl PipelineBuilder {
         }
 
         let snapshot_gen = MutationGenerator::new(plan.snapshot.clone(), plan.mutation_kind);
-        let lock = if plan.need_lock {
-            Some(LockManager::create_table_lock(plan.table_info.clone())?)
-        } else {
-            None
-        };
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -80,7 +74,6 @@ impl PipelineBuilder {
                 snapshot_gen.clone(),
                 input,
                 None,
-                lock.clone(),
                 None,
                 plan.deduplicated_label.clone(),
             )

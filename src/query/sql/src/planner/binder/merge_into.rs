@@ -58,7 +58,6 @@ use crate::IndexType;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
-use crate::DUMMY_COLUMN_INDEX;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
@@ -439,20 +438,8 @@ impl Binder {
                 .await?,
             );
         }
-        let mut split_idx = DUMMY_COLUMN_INDEX;
-        // find any target table column index for merge_into_split
-        for column in self
-            .metadata
-            .read()
-            .columns_by_table_index(table_index)
-            .iter()
-        {
-            if column.index() != row_id_index {
-                split_idx = column.index();
-                break;
-            }
-        }
-        assert!(split_idx != DUMMY_COLUMN_INDEX);
+
+        let split_idx = row_id_index;
 
         Ok(MergeInto {
             catalog: catalog_name.to_string(),
@@ -474,6 +461,7 @@ impl Binder {
             row_id_index,
             split_idx,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
+            enable_right_broadcast: false,
         })
     }
 

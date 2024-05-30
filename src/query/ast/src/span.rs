@@ -16,9 +16,14 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+use serde::Deserialize;
+use serde::Serialize;
+
 pub type Span = Option<Range>;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Drive, DriveMut)]
 pub struct Range {
     pub start: u32,
     pub end: u32,

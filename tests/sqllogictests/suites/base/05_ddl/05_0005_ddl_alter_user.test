@@ -13,8 +13,18 @@ DROP USER IF EXISTS 'test-i'
 statement ok
 CREATE USER 'test-e' IDENTIFIED BY 'password'
 
+query T
+select created_on=update_on from system.users where name='test-e';
+----
+1
+
 statement ok
 ALTER USER 'test-e' IDENTIFIED BY 'new-password'
+
+query T
+select created_on=update_on from system.users where name='test-e';
+----
+0
 
 statement ok
 ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password2'

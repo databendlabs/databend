@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
-
 use bstr::ByteSlice;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -35,10 +33,11 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
-use databend_common_io::read_ewkb_srid;
 use databend_common_io::GeometryDataType;
 use geozero::wkb::Ewkb;
 use geozero::CoordDimensions;
+use geozero::GeozeroGeometry;
+use geozero::ToGeos;
 use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
@@ -318,11 +317,11 @@ impl FieldEncoderValues {
             .to_vec(),
             GeometryDataType::WKT => Ewkb(v.to_vec()).to_wkt().unwrap().as_bytes().to_vec(),
             GeometryDataType::EWKB => hex::encode_upper(v).as_bytes().to_vec(),
-            GeometryDataType::EWKT => Ewkb(v.to_vec())
-                .to_ewkt(read_ewkb_srid(&mut io::Cursor::new(&v)).unwrap())
-                .unwrap()
-                .as_bytes()
-                .to_vec(),
+            GeometryDataType::EWKT => {
+                let ewkb = Ewkb(v.to_vec());
+                let geos = ewkb.to_geos().unwrap();
+                geos.to_ewkt(geos.srid()).unwrap().as_bytes().to_vec()
+            }
             GeometryDataType::GEOJSON => Ewkb(v.to_vec()).to_json().unwrap().as_bytes().to_vec(),
         };
 

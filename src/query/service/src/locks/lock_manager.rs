@@ -95,6 +95,7 @@ impl LockManager {
         self: &Arc<Self>,
         ctx: Arc<dyn TableContext>,
         lock: &T,
+        should_retry: bool,
     ) -> Result<Option<LockGuard>> {
         let user = ctx.get_current_user()?.name;
         let node = ctx.get_cluster().local_id.clone();
@@ -105,10 +106,10 @@ impl LockManager {
 
         let tenant_name = lock.tenant_name();
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-
+        let table_id = lock.get_table_id();
         let lock_key = LockKey::Table {
             tenant: tenant.clone(),
-            table_id: lock.get_table_id(),
+            table_id,
         };
 
         let req = CreateLockRevReq::new(lock_key.clone(), user, node, query_id, expire_secs);
@@ -117,7 +118,7 @@ impl LockManager {
         let res = catalog.create_lock_revision(req).await?;
         let revision = res.revision;
         // metrics.
-        record_created_lock_nums(lock.lock_type().to_string(), lock.get_table_id(), 1);
+        record_created_lock_nums(lock.lock_type().to_string(), table_id, 1);
 
         let lock_holder = Arc::new(LockHolder::default());
         lock_holder
@@ -147,18 +148,26 @@ impl LockManager {
 
             if position == 0 {
                 // The lock is acquired by current session.
-
                 let extend_table_lock_req =
                     ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, true);
 
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
-                record_acquired_lock_nums(lock.lock_type().to_string(), lock.get_table_id(), 1);
+                record_acquired_lock_nums(lock.lock_type().to_string(), table_id, 1);
                 break;
             }
 
-            let watch_delete_ident =
-                TableLockIdent::new(&tenant, lock.get_table_id(), reply[position - 1].0);
+            // if no need retry, return error directly.
+            if !should_retry {
+                catalog
+                    .delete_lock_revision(delete_table_lock_req.clone())
+                    .await?;
+                return Err(ErrorCode::TableAlreadyLocked(
+                    "table is locked by other session, please retry later".to_string(),
+                ));
+            }
+
+            let watch_delete_ident = TableLockIdent::new(&tenant, table_id, reply[position - 1].0);
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest {

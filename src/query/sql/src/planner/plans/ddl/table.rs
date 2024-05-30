@@ -205,13 +205,20 @@ pub struct OptimizeTablePlan {
     pub table: String,
     pub action: OptimizeTableAction,
     pub limit: Option<usize>,
-    pub need_lock: bool,
+    pub lock_opt: LockTableOption,
 }
 
 impl OptimizeTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LockTableOption {
+    NoLock,
+    LockWithRetry,
+    LockNoRetry,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

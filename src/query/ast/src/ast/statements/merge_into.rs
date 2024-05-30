@@ -52,7 +52,6 @@ impl Display for MergeUpdateExpr {
 pub enum MatchOperation {
     Update {
         update_list: Vec<MergeUpdateExpr>,
-        #[drive(skip)]
         is_star: bool,
     },
     Delete,
@@ -68,7 +67,6 @@ pub struct MatchedClause {
 pub struct InsertOperation {
     pub columns: Option<Vec<Identifier>>,
     pub values: Vec<Expr>,
-    #[drive(skip)]
     pub is_star: bool,
 }
 
@@ -218,9 +216,7 @@ impl MergeIntoStmt {
 pub enum MergeSource {
     StreamingV2 {
         settings: FileFormatOptions,
-        #[drive(skip)]
         on_error_mode: Option<String>,
-        #[drive(skip)]
         start: usize,
     },
 
@@ -238,11 +234,8 @@ pub enum MergeSource {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct StreamingSource {
-    #[drive(skip)]
     settings: BTreeMap<String, String>,
-    #[drive(skip)]
     on_error_mode: Option<String>,
-    #[drive(skip)]
     start: usize,
 }
 

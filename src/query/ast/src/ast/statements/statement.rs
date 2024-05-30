@@ -77,12 +77,10 @@ pub enum Statement {
 
     KillStmt {
         kill_target: KillTarget,
-        #[drive(skip)]
         object_id: String,
     },
 
     SetVariable {
-        #[drive(skip)]
         is_global: bool,
         variable: Identifier,
         value: Box<Expr>,
@@ -91,9 +89,7 @@ pub enum Statement {
     UnSetVariable(UnSetStmt),
 
     SetRole {
-        #[drive(skip)]
         is_default: bool,
-        #[drive(skip)]
         role_name: String,
     },
 
@@ -182,21 +178,16 @@ pub enum Statement {
     CreateUser(CreateUserStmt),
     AlterUser(AlterUserStmt),
     DropUser {
-        #[drive(skip)]
         if_exists: bool,
         user: UserIdentity,
     },
     ShowRoles,
     CreateRole {
-        #[drive(skip)]
         if_not_exists: bool,
-        #[drive(skip)]
         role_name: String,
     },
     DropRole {
-        #[drive(skip)]
         if_exists: bool,
-        #[drive(skip)]
         role_name: String,
     },
     Grant(GrantStmt),
@@ -210,7 +201,6 @@ pub enum Statement {
     // UDF
     CreateUDF(CreateUDFStmt),
     DropUDF {
-        #[drive(skip)]
         if_exists: bool,
         udf_name: Identifier,
     },
@@ -220,25 +210,18 @@ pub enum Statement {
     CreateStage(CreateStageStmt),
     ShowStages,
     DropStage {
-        #[drive(skip)]
         if_exists: bool,
-        #[drive(skip)]
         stage_name: String,
     },
     DescribeStage {
-        #[drive(skip)]
         stage_name: String,
     },
     RemoveStage {
-        #[drive(skip)]
         location: String,
-        #[drive(skip)]
         pattern: String,
     },
     ListStage {
-        #[drive(skip)]
         location: String,
-        #[drive(skip)]
         pattern: Option<String>,
     },
     // Connection
@@ -250,14 +233,11 @@ pub enum Statement {
     // UserDefinedFileFormat
     CreateFileFormat {
         create_option: CreateOption,
-        #[drive(skip)]
         name: String,
         file_format_options: FileFormatOptions,
     },
     DropFileFormat {
-        #[drive(skip)]
         if_exists: bool,
-        #[drive(skip)]
         name: String,
     },
     ShowFileFormats,
@@ -335,12 +315,11 @@ pub enum Statement {
     // Set priority for query
     SetPriority {
         priority: Priority,
-        #[drive(skip)]
         object_id: String,
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct StatementWithFormat {
     pub(crate) stmt: Statement,
     pub(crate) format: Option<String>,

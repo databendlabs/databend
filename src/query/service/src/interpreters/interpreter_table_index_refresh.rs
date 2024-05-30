@@ -25,7 +25,6 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 
 use crate::interpreters::Interpreter;
-use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -57,10 +56,24 @@ impl Interpreter for RefreshTableIndexInterpreter {
             .manager
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
 
+        // Add table lock.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.table,
+                &self.plan.lock_opt,
+            )
+            .await?;
+
         let table = self
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
+        // check mutability
+        table.check_mutable()?;
 
         let index_name = self.plan.index_name.clone();
         let segment_locs = self.plan.segment_locs.clone();
@@ -89,24 +102,8 @@ impl Interpreter for RefreshTableIndexInterpreter {
         let index_version = index.version.clone();
         let index_schema = TableSchemaRefExt::create(index_fields);
 
-        // Add table lock if need.
-        let lock_guard = if self.plan.need_lock {
-            let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
-            let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-            Some(lock_guard)
-        } else {
-            None
-        };
-
-        // refresh table.
-        let table = table.refresh(self.ctx.as_ref()).await?;
-        // check mutability
-        table.check_mutable()?;
-
         let mut build_res = PipelineBuildResult::create();
-        if let Some(lock_guard) = lock_guard {
-            build_res.main_pipeline.add_lock_guard(lock_guard);
-        }
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table

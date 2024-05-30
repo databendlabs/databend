@@ -53,30 +53,19 @@ pub struct CopyIntoTableStmt {
     pub file_format: FileFormatOptions,
 
     // files to load
-    #[drive(skip)]
     pub files: Option<Vec<String>>,
-    #[drive(skip)]
     pub pattern: Option<String>,
-    #[drive(skip)]
     pub force: bool,
 
     // copy options
     /// TODO(xuanwo): parse into validation_mode directly.
-    #[drive(skip)]
     pub validation_mode: String,
-    #[drive(skip)]
     pub size_limit: usize,
-    #[drive(skip)]
     pub max_files: usize,
-    #[drive(skip)]
     pub split_size: usize,
-    #[drive(skip)]
     pub purge: bool,
-    #[drive(skip)]
     pub disable_variant_check: bool,
-    #[drive(skip)]
     pub return_failed_only: bool,
-    #[drive(skip)]
     pub on_error: String,
 }
 
@@ -160,13 +149,9 @@ pub struct CopyIntoLocationStmt {
     pub hints: Option<Hint>,
     pub src: CopyIntoLocationSource,
     pub dst: FileLocation,
-    #[drive(skip)]
     pub file_format: FileFormatOptions,
-    #[drive(skip)]
     pub single: bool,
-    #[drive(skip)]
     pub max_file_size: usize,
-    #[drive(skip)]
     pub detailed_output: bool,
 }
 
@@ -247,7 +232,6 @@ impl Display for CopyIntoLocationSource {
 pub struct Connection {
     #[drive(skip)]
     visited_keys: HashSet<String>,
-    #[drive(skip)]
     pub conns: BTreeMap<String, String>,
 }
 
@@ -327,13 +311,9 @@ fn mask_string(s: &str, unmask_len: usize) -> String {
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UriLocation {
-    #[drive(skip)]
     pub protocol: String,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub path: String,
-    #[drive(skip)]
     pub part_prefix: String,
     pub connection: Connection,
 }
@@ -439,7 +419,7 @@ impl Display for UriLocation {
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileLocation {
-    Stage(#[drive(skip)] String),
+    Stage(String),
     Uri(UriLocation),
 }
 
@@ -480,7 +460,6 @@ pub enum CopyIntoLocationOption {
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct FileFormatOptions {
-    #[drive(skip)]
     pub options: BTreeMap<String, FileFormatValue>,
 }
 
@@ -496,7 +475,7 @@ impl Display for FileFormatOptions {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileFormatValue {
     Keyword(String),
     Bool(bool),

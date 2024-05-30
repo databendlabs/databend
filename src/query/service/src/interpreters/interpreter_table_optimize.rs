@@ -21,9 +21,7 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactTarget;
 use databend_common_catalog::table::CompactionLimits;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -43,8 +41,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
-use crate::locks::LockExt;
-use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -79,20 +75,14 @@ impl Interpreter for OptimizeTableInterpreter {
         let plan = self.plan.clone();
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let tenant = self.ctx.get_tenant();
-        let table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.table)
-            .await?;
-        // check mutability
-        table.check_mutable()?;
 
         match self.plan.action.clone() {
             OptimizeTableAction::CompactBlocks(limit) => {
-                self.build_pipeline(catalog, table, CompactTarget::Blocks(limit), false)
+                self.build_pipeline(catalog, CompactTarget::Blocks(limit), false)
                     .await
             }
             OptimizeTableAction::CompactSegments => {
-                self.build_pipeline(catalog, table, CompactTarget::Segments, false)
+                self.build_pipeline(catalog, CompactTarget::Segments, false)
                     .await
             }
             OptimizeTableAction::Purge(point) => {
@@ -100,7 +90,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 Ok(PipelineBuildResult::create())
             }
             OptimizeTableAction::All => {
-                self.build_pipeline(catalog, table, CompactTarget::Blocks(None), true)
+                self.build_pipeline(catalog, CompactTarget::Blocks(None), true)
                     .await
             }
         }
@@ -114,7 +104,6 @@ impl OptimizeTableInterpreter {
         snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         is_distributed: bool,
-        need_lock: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
@@ -144,7 +133,6 @@ impl OptimizeTableInterpreter {
             mutation_kind: MutationKind::Compact,
             update_stream_meta: vec![],
             merge_meta,
-            need_lock,
             deduplicated_label: None,
             plan_id: u32::MAX,
         })))
@@ -153,26 +141,31 @@ impl OptimizeTableInterpreter {
     async fn build_pipeline(
         &self,
         catalog: Arc<dyn Catalog>,
-        mut table: Arc<dyn Table>,
         target: CompactTarget,
         need_purge: bool,
     ) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let table_info = table.get_table_info().clone();
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.table,
+                &self.plan.lock_opt,
+            )
+            .await?;
 
-        // check if the table is locked.
-        let table_lock = LockManager::create_table_lock(table_info.clone())?;
-        if self.plan.need_lock && !table_lock.wait_lock_expired(catalog.clone()).await? {
-            return Err(ErrorCode::TableAlreadyLocked(format!(
-                "table '{}' is locked, please retry compaction later",
-                self.plan.table
-            )));
-        }
+        let mut table = catalog
+            .get_table(&tenant, &self.plan.database, &self.plan.table)
+            .await?;
+        // check mutability
+        table.check_mutable()?;
 
         let compaction_limits = match target {
             CompactTarget::Segments => {
                 table
-                    .compact_segments(self.ctx.clone(), table_lock, self.plan.limit)
+                    .compact_segments(self.ctx.clone(), self.plan.limit)
                     .await?;
                 return Ok(PipelineBuildResult::create());
             }
@@ -194,11 +187,10 @@ impl OptimizeTableInterpreter {
         let mut compact_pipeline = if let Some((parts, snapshot)) = res {
             let physical_plan = Self::build_physical_plan(
                 parts,
-                table_info,
+                table.get_table_info().clone(),
                 snapshot,
                 catalog_info,
                 compact_is_distributed,
-                self.plan.need_lock,
             )?;
 
             let build_res =
@@ -247,7 +239,6 @@ impl OptimizeTableInterpreter {
                         mutator.remained_blocks,
                         mutator.removed_segment_indexes,
                         mutator.removed_segment_summary,
-                        self.plan.need_lock,
                     )?;
 
                     build_res =
@@ -291,6 +282,7 @@ impl OptimizeTableInterpreter {
             }
         }
 
+        build_res.main_pipeline.add_lock_guard(lock_guard);
         Ok(build_res)
     }
 }
@@ -306,6 +298,8 @@ async fn purge(
     let table = catalog
         .get_table(&ctx.get_tenant(), &plan.database, &plan.table)
         .await?;
+    // check mutability
+    table.check_mutable()?;
 
     let keep_latest = true;
     let res = table

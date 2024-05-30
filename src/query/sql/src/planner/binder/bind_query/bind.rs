@@ -45,13 +45,8 @@ impl Binder {
         let (limit, offset) = self.extract_limit_and_offset(query)?;
 
         // Bind query body.
-        let (mut s_expr, mut bind_context) = Box::pin(self.bind_set_expr(
-            bind_context,
-            &query.body,
-            &query.order_by,
-            limit.unwrap_or_default(),
-        ))
-        .await?;
+        let (mut s_expr, mut bind_context) =
+            Box::pin(self.bind_set_expr(bind_context, &query.body, &query.order_by, limit)).await?;
 
         // Bind order by for `SetOperation` and `Values`.
         s_expr = self
