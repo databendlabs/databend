@@ -100,6 +100,7 @@ impl Interpreter for ExplainInterpreter {
                         .await?
                 }
                 Plan::Insert(insert_plan) => insert_plan.explain(self.config.verbose).await?,
+                Plan::Replace(replace_plan) => replace_plan.explain(self.config.verbose).await?,
                 Plan::CreateTable(plan) => match &plan.as_select {
                     Some(box Plan::Query {
                         s_expr,
