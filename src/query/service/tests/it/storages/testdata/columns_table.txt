@@ -84,12 +84,14 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'created_on'                      | 'system'             | 'notification_history' | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'notifications'        | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'password_policies'    | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'created_on'                      | 'system'             | 'roles'                | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'stages'               | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'streams'              | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'tables'               | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'tables_with_history'  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'tasks'                | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'user_functions'       | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'created_on'                      | 'system'             | 'users'                | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'created_on'                      | 'system'             | 'views'                | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'views_with_history'   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'virtual_columns'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
@@ -437,6 +439,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'type'                            | 'system'             | 'notifications'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'type'                            | 'system'             | 'processes'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'type'                            | 'system'             | 'settings'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'update_on'                       | 'system'             | 'roles'                | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'update_on'                       | 'system'             | 'users'                | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'updated_on'                      | 'system'             | 'background_tasks'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'updated_on'                      | 'system'             | 'indexes'              | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'updated_on'                      | 'system'             | 'password_policies'    | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |

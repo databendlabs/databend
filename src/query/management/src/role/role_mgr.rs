@@ -357,6 +357,7 @@ impl RoleApi for RoleMgr {
                         &grant_object,
                         make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                     );
+                    old_role_info.update_role_time();
                     condition.push(txn_cond_seq(&old_key, Eq, old_seq));
                     if_then.push(txn_op_put(
                         &old_key,
@@ -377,6 +378,7 @@ impl RoleApi for RoleMgr {
                     &grant_object,
                     make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                 );
+                new_role_info.update_role_time();
                 condition.push(txn_cond_seq(&new_key, Eq, new_seq));
                 if_then.push(txn_op_put(
                     &new_key,
@@ -450,6 +452,7 @@ impl RoleApi for RoleMgr {
                     &grant_object,
                     make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                 );
+                old_role_info.update_role_time();
                 condition.push(txn_cond_seq(&old_key, Eq, old_seq));
                 if_then.push(txn_op_put(
                     &old_key,

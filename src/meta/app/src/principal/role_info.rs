@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use anyerror::AnyError;
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
@@ -28,6 +30,8 @@ pub struct RoleInfo {
     pub name: String,
 
     pub grants: UserGrantSet,
+    pub created_on: DateTime<Utc>,
+    pub update_on: DateTime<Utc>,
 }
 
 /// Error when ser/de RoleInfo
@@ -39,14 +43,21 @@ pub struct RoleInfoSerdeError {
 
 impl RoleInfo {
     pub fn new(name: &str) -> Self {
+        let now = Utc::now();
         Self {
             name: name.to_string(),
             grants: UserGrantSet::empty(),
+            created_on: now,
+            update_on: now,
         }
     }
 
     pub fn identity(&self) -> &str {
         &self.name
+    }
+
+    pub fn update_role_time(&mut self) {
+        self.update_on = Utc::now()
     }
 }
 

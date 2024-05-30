@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
@@ -72,6 +73,7 @@ impl Interpreter for CreateUserInterpreter {
             )));
         };
 
+        let now = Utc::now();
         let user_info = UserInfo {
             auth_info: plan.auth_info.clone(),
             name: plan.user.username,
@@ -83,6 +85,9 @@ impl Interpreter for CreateUserInterpreter {
             password_fails: Vec::new(),
             password_update_on: plan.password_update_on,
             lockout_time: None,
+
+            created_on: now,
+            update_on: now,
         };
         user_mgr
             .add_user(&tenant, user_info, &plan.create_option)
