@@ -250,7 +250,7 @@ impl OptimizeTableInterpreter {
                     let start = SystemTime::now();
                     build_res
                         .main_pipeline
-                        .set_on_finished(move |(_profiles, may_error)| match may_error {
+                        .set_on_finished(move |info| match &info.res {
                             Ok(_) => InterpreterClusteringHistory::write_log(
                                 &ctx,
                                 start,
@@ -274,7 +274,7 @@ impl OptimizeTableInterpreter {
             } else {
                 build_res
                     .main_pipeline
-                    .set_on_finished(move |(_profiles, may_error)| match may_error {
+                    .set_on_finished(move |info| match &info.res {
                         Ok(_) => GlobalIORuntime::instance()
                             .block_on(async move { purge(ctx, catalog, plan, None).await }),
                         Err(error_code) => Err(error_code.clone()),

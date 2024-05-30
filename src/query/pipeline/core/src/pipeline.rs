@@ -26,6 +26,7 @@ use databend_common_exception::Result;
 use log::info;
 use petgraph::matrix_graph::Zero;
 
+use crate::callback::ExecutionInfo;
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
 use crate::processors::DuplicateProcessor;
@@ -37,7 +38,6 @@ use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::LockGuard;
-use crate::PlanProfile;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -79,8 +79,7 @@ impl Debug for Pipeline {
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
-pub type FinishedCallback =
-    Box<dyn FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static>;
+pub type FinishedCallback = Box<dyn FnOnce(&ExecutionInfo) -> Result<()> + Send + Sync + 'static>;
 
 pub type DynTransformBuilder = Box<dyn Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>>;
 
@@ -471,16 +470,14 @@ impl Pipeline {
     }
 
     #[track_caller]
-    pub fn set_on_finished<
-        F: FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static,
-    >(
+    pub fn set_on_finished<F: FnOnce(&ExecutionInfo) -> Result<()> + Send + Sync + 'static>(
         &mut self,
         f: F,
     ) {
         let location = std::panic::Location::caller();
         if let Some(on_finished) = self.on_finished.take() {
-            self.on_finished = Some(Box::new(move |(profiles, may_error)| {
-                on_finished((profiles, may_error))?;
+            self.on_finished = Some(Box::new(move |info| {
+                on_finished(info)?;
                 let instants = Instant::now();
                 let _guard = defer(move || {
                     info!(
@@ -492,7 +489,7 @@ impl Pipeline {
                     );
                 });
 
-                f((profiles, may_error))
+                f(info)
             }));
             return;
         }
@@ -502,14 +499,14 @@ impl Pipeline {
 
     #[track_caller]
     pub fn push_front_on_finished_callback<
-        F: FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static,
+        F: FnOnce(&ExecutionInfo) -> Result<()> + Send + Sync + 'static,
     >(
         &mut self,
         f: F,
     ) {
         let location = std::panic::Location::caller();
         if let Some(on_finished) = self.on_finished.take() {
-            self.on_finished = Some(Box::new(move |(profiles, may_error)| {
+            self.on_finished = Some(Box::new(move |info| {
                 let instants = Instant::now();
                 let guard = defer(move || {
                     info!(
@@ -521,9 +518,9 @@ impl Pipeline {
                     );
                 });
 
-                f((profiles, may_error))?;
+                f(info)?;
                 drop(guard);
-                on_finished((profiles, may_error))
+                on_finished(info)
             }));
 
             return;
@@ -570,7 +567,7 @@ impl Drop for Pipeline {
                     "Pipeline illegal state: not successfully shutdown.",
                 ));
 
-                let _ = (on_finished)((&vec![], &cause));
+                let _ = on_finished(&ExecutionInfo::create(cause, vec![]));
             }
         })
     }

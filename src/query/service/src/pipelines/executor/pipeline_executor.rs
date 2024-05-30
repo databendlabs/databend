@@ -26,6 +26,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
@@ -43,8 +44,7 @@ use crate::pipelines::executor::RunningGraph;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
-pub type FinishedCallback =
-    Box<dyn FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static>;
+pub type FinishedCallback = Box<dyn FnOnce(&ExecutionInfo) -> Result<()> + Send + Sync + 'static>;
 
 pub struct QueryWrapper {
     graph: Arc<RunningGraph>,
@@ -212,19 +212,18 @@ impl PipelineExecutor {
                     None => {
                         let guard = query_wrapper.on_finished_callback.lock().take();
                         if let Some(on_finished_callback) = guard {
-                            catch_unwind(move || {
-                                on_finished_callback((&self.get_plans_profile(), &Ok(())))
-                            })??;
+                            let info = ExecutionInfo::create(Ok(()), self.get_plans_profile());
+                            catch_unwind(move || on_finished_callback(&info))??;
                         }
                         Ok(())
                     }
                     Some(cause) => {
                         let guard = query_wrapper.on_finished_callback.lock().take();
-                        let cause_clone = cause.clone();
                         if let Some(on_finished_callback) = guard {
-                            catch_unwind(move || {
-                                on_finished_callback((&self.get_plans_profile(), &Err(cause_clone)))
-                            })??;
+                            let cause = cause.clone();
+                            let profiling = self.get_plans_profile();
+                            let info = ExecutionInfo::create(Err(cause), profiling);
+                            catch_unwind(move || on_finished_callback(&info))??;
                         }
                         Err(cause)
                     }

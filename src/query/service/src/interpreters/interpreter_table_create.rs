@@ -272,8 +272,8 @@ impl CreateTableInterpreter {
 
         pipeline
             .main_pipeline
-            .push_front_on_finished_callback(move |(_profiles, err)| {
-                if err.is_ok() {
+            .push_front_on_finished_callback(move |info| {
+                if info.res.is_ok() {
                     let qualified_table_name = format!("{}.{}", db_name, table_name);
                     let undrop_fut = async move {
                         let undrop_by_id = UndropTableByIdReq {

@@ -167,8 +167,9 @@ impl SelectInterpreter {
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             let query_id = self.ctx.get_id();
             let auto_commit = !self.ctx.txn_mgr().lock().is_active();
-            build_res.main_pipeline.set_on_finished(
-                move |(_profiles, may_error)| match may_error {
+            build_res
+                .main_pipeline
+                .set_on_finished(move |info| match &info.res {
                     Ok(_) => GlobalIORuntime::instance().block_on(async move {
                         info!(
                             "Updating the stream meta to consume data, query_id: {}",
@@ -196,8 +197,7 @@ impl SelectInterpreter {
                         }
                     }),
                     Err(error_code) => Err(error_code.clone()),
-                },
-            );
+                });
         }
         Ok(build_res)
     }

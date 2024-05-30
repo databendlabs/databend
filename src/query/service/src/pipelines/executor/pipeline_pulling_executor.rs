@@ -129,7 +129,7 @@ impl PipelinePullingExecutor {
             )))
         })?;
 
-        pipeline.set_on_finished(move |_may_error| {
+        pipeline.set_on_finished(move |_info| {
             drop(tx);
             Ok(())
         });

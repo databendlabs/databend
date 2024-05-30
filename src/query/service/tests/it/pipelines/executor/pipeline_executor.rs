@@ -99,7 +99,7 @@ fn create_pipeline() -> (Arc<AtomicBool>, Pipeline) {
     pipeline.set_on_init(|| Err(ErrorCode::Internal("test failure")));
     pipeline.set_on_finished({
         let called_finished = called_finished.clone();
-        move |_may_error| {
+        move |info| {
             called_finished.fetch_or(true, Ordering::SeqCst);
             Ok(())
         }

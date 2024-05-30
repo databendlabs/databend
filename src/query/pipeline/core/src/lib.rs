@@ -19,6 +19,7 @@
 
 pub mod processors;
 
+mod callback;
 mod input_error;
 mod lock_guard;
 mod pipe;
@@ -26,6 +27,7 @@ mod pipeline;
 mod pipeline_display;
 mod unsafe_cell_wrap;
 
+pub use callback::ExecutionInfo;
 pub use input_error::InputError;
 pub use lock_guard::LockGuard;
 pub use lock_guard::UnlockApi;
