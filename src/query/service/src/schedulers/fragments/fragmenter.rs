@@ -162,9 +162,6 @@ impl PhysicalPlanReplacer for Fragmenter {
 
     fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        if !plan.change_join_order {
-            self.state = State::SelectLeaf;
-        }
         Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
             input: Box::new(input),
             ..plan.clone()
@@ -232,7 +229,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         // Consume current fragments to prevent them being consumed by `probe_input`.
         fragments.append(&mut self.fragments);
         let probe_input = self.replace(plan.probe.as_ref())?;
-
         fragments.append(&mut self.fragments);
         self.fragments = fragments;
 

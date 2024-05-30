@@ -27,7 +27,7 @@ impl Binder {
         bind_context: &mut BindContext,
         set_expr: &SetExpr,
         order_by: &[OrderByExpr],
-        limit: usize,
+        limit: Option<usize>,
     ) -> Result<(SExpr, BindContext)> {
         match set_expr {
             SetExpr::Select(stmt) => {

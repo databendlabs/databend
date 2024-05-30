@@ -414,7 +414,10 @@ impl TryFrom<RelOperator> for Scan {
         if let RelOperator::Scan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Scan"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Scan",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -432,9 +435,10 @@ impl TryFrom<RelOperator> for CteScan {
         if let RelOperator::CteScan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to CteScan",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to CteScan",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -452,9 +456,10 @@ impl TryFrom<RelOperator> for MaterializedCte {
         if let RelOperator::MaterializedCte(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to MaterializedCte",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to MaterializedCte",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -471,9 +476,10 @@ impl TryFrom<RelOperator> for Join {
         if let RelOperator::Join(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to LogicalJoin",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Join",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -490,9 +496,10 @@ impl TryFrom<RelOperator> for EvalScalar {
         if let RelOperator::EvalScalar(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to EvalScalar",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to EvalScalar",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -509,7 +516,10 @@ impl TryFrom<RelOperator> for Filter {
         if let RelOperator::Filter(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Filter"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Filter",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -526,9 +536,10 @@ impl TryFrom<RelOperator> for Aggregate {
         if let RelOperator::Aggregate(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to Aggregate",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Aggregate",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -545,7 +556,10 @@ impl TryFrom<RelOperator> for Window {
         if let RelOperator::Window(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Window"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Window",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -562,7 +576,10 @@ impl TryFrom<RelOperator> for Sort {
         if let RelOperator::Sort(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Sort"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Sort",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -579,7 +596,10 @@ impl TryFrom<RelOperator> for Limit {
         if let RelOperator::Limit(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Limit"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Limit",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -596,9 +616,10 @@ impl TryFrom<RelOperator> for Exchange {
         if let RelOperator::Exchange(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to Exchange",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Exchange",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -615,9 +636,10 @@ impl TryFrom<RelOperator> for UnionAll {
         if let RelOperator::UnionAll(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to UnionAll",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to UnionAll",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -634,9 +656,10 @@ impl TryFrom<RelOperator> for DummyTableScan {
         if let RelOperator::DummyTableScan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to DummyTableScan",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to DummyTableScan",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -654,9 +677,10 @@ impl TryFrom<RelOperator> for ProjectSet {
         if let RelOperator::ProjectSet(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to ProjectSet",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to ProjectSet",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -680,9 +704,10 @@ impl TryFrom<RelOperator> for ConstantTableScan {
         if let RelOperator::ConstantTableScan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to ConstantTableScan",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to ConstantTableScan",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -700,7 +725,10 @@ impl TryFrom<RelOperator> for Udf {
         if let RelOperator::Udf(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Udf"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Udf",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -718,9 +746,10 @@ impl TryFrom<RelOperator> for AsyncFunction {
         if let RelOperator::AsyncFunction(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to AsyncFunction",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to AsyncFunction",
+                value.rel_op()
+            )))
         }
     }
 }

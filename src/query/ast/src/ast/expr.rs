@@ -39,58 +39,46 @@ use crate::Span;
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        #[drive(skip)]
         span: Span,
         column: ColumnRef,
     },
     /// `IS [ NOT ] NULL` expression
     IsNull {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
-        #[drive(skip)]
         not: bool,
     },
     /// `IS [NOT] DISTINCT` expression
     IsDistinctFrom {
-        #[drive(skip)]
         span: Span,
         left: Box<Expr>,
         right: Box<Expr>,
-        #[drive(skip)]
         not: bool,
     },
     /// `[ NOT ] IN (expr, ...)`
     InList {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         list: Vec<Expr>,
-        #[drive(skip)]
         not: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         subquery: Box<Query>,
-        #[drive(skip)]
         not: bool,
     },
     /// `BETWEEN ... AND ...`
     Between {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         low: Box<Expr>,
         high: Box<Expr>,
-        #[drive(skip)]
         not: bool,
     },
     /// Binary operation
     BinaryOp {
-        #[drive(skip)]
         span: Span,
         op: BinaryOperator,
         left: Box<Expr>,
@@ -98,7 +86,6 @@ pub enum Expr {
     },
     /// JSON operation
     JsonOp {
-        #[drive(skip)]
         span: Span,
         op: JsonOperator,
         left: Box<Expr>,
@@ -106,51 +93,43 @@ pub enum Expr {
     },
     /// Unary operation
     UnaryOp {
-        #[drive(skip)]
         span: Span,
         op: UnaryOperator,
         expr: Box<Expr>,
     },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         target_type: TypeName,
-        #[drive(skip)]
         pg_style: bool,
     },
     /// `TRY_CAST` expression`
     TryCast {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         target_type: TypeName,
     },
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
-        #[drive(skip)]
         span: Span,
         kind: IntervalKind,
         expr: Box<Expr>,
     },
     /// DATE_PART(IntervalKind, <expr>)
     DatePart {
-        #[drive(skip)]
         span: Span,
         kind: IntervalKind,
         expr: Box<Expr>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
-        #[drive(skip)]
         span: Span,
         substr_expr: Box<Expr>,
         str_expr: Box<Expr>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         substring_from: Box<Expr>,
@@ -160,7 +139,6 @@ pub enum Expr {
     /// Or
     /// TRIM(<expr>)
     Trim {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING], <expr>)
@@ -168,31 +146,26 @@ pub enum Expr {
     },
     /// A literal value, such as string, number, date or NULL
     Literal {
-        #[drive(skip)]
         span: Span,
         value: Literal,
     },
     /// `COUNT(*)` expression
     CountAll {
-        #[drive(skip)]
         span: Span,
         window: Option<Window>,
     },
     /// `(foo, bar)`
     Tuple {
-        #[drive(skip)]
         span: Span,
         exprs: Vec<Expr>,
     },
     /// Scalar/Agg/Window function call
     FunctionCall {
-        #[drive(skip)]
         span: Span,
         func: FunctionCall,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
-        #[drive(skip)]
         span: Span,
         operand: Option<Box<Expr>>,
         conditions: Vec<Expr>,
@@ -201,70 +174,58 @@ pub enum Expr {
     },
     /// `EXISTS` expression
     Exists {
-        #[drive(skip)]
         span: Span,
         /// Indicate if this is a `NOT EXISTS`
-        #[drive(skip)]
         not: bool,
         subquery: Box<Query>,
     },
     /// Scalar/ANY/ALL/SOME subquery
     Subquery {
-        #[drive(skip)]
         span: Span,
         modifier: Option<SubqueryModifier>,
         subquery: Box<Query>,
     },
     /// Access elements of `Array`, `Map` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         accessor: MapAccessor,
     },
     /// The `Array` expr
     Array {
-        #[drive(skip)]
         span: Span,
         exprs: Vec<Expr>,
     },
     /// The `Map` expr
     Map {
-        #[drive(skip)]
         span: Span,
         kvs: Vec<(Literal, Expr)>,
     },
     /// The `Interval 1 DAY` expr
     Interval {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         unit: IntervalKind,
     },
     DateAdd {
-        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         interval: Box<Expr>,
         date: Box<Expr>,
     },
     DateSub {
-        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         interval: Box<Expr>,
         date: Box<Expr>,
     },
     DateTrunc {
-        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         date: Box<Expr>,
     },
     Hole {
-        #[drive(skip)]
         span: Span,
-        #[drive(skip)]
         name: String,
     },
 }
@@ -790,19 +751,17 @@ impl Display for SubqueryModifier {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Literal {
-    UInt64(#[drive(skip)] u64),
-    Float64(#[drive(skip)] f64),
+    UInt64(u64),
+    Float64(f64),
     Decimal256 {
         #[drive(skip)]
         value: i256,
-        #[drive(skip)]
         precision: u8,
-        #[drive(skip)]
         scale: u8,
     },
     // Quoted string literal value
-    String(#[drive(skip)] String),
-    Boolean(#[drive(skip)] bool),
+    String(String),
+    Boolean(bool),
     Null,
 }
 
@@ -838,7 +797,6 @@ impl Display for Literal {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct FunctionCall {
     /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
-    #[drive(skip)]
     pub distinct: bool,
     pub name: Identifier,
     pub args: Vec<Expr>,
@@ -886,10 +844,7 @@ pub enum MapAccessor {
     /// `[0][1]`
     Bracket { key: Box<Expr> },
     /// `.1`
-    DotNumber {
-        #[drive(skip)]
-        key: u64,
-    },
+    DotNumber { key: u64 },
     /// `:a:b`
     Colon { key: Identifier },
 }
@@ -908,9 +863,7 @@ pub enum TypeName {
     Float32,
     Float64,
     Decimal {
-        #[drive(skip)]
         precision: u8,
-        #[drive(skip)]
         scale: u8,
     },
     Date,
@@ -924,7 +877,6 @@ pub enum TypeName {
     },
     Bitmap,
     Tuple {
-        #[drive(skip)]
         fields_name: Option<Vec<String>>,
         fields_type: Vec<TypeName>,
     },

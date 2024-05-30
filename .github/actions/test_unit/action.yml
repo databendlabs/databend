@@ -7,7 +7,7 @@ runs:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
-        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE,PYO3_PYTHON,LD_LIBRARY_PATH
 
     - shell: bash
       run: |

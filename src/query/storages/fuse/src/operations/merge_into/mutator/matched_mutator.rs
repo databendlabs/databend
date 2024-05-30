@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use ahash::AHashMap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -34,9 +33,9 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
 use databend_common_sql::StreamContext;
@@ -182,12 +181,19 @@ impl MatchedAggregator {
         let start = Instant::now();
         // data_block is from matched_split, so there is only one column.
         // that's row_id
-        let row_ids = get_row_id(&data_block, 0)?;
+        let row_id_col = data_block.get_by_offset(0);
+        debug_assert!(
+            row_id_col.data_type.remove_nullable() == DataType::Number(NumberDataType::UInt64)
+        );
+        let row_ids = row_id_col
+            .value
+            .convert_to_full_column(&row_id_col.data_type, data_block.num_rows());
         let row_id_kind = RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
         match row_id_kind {
             RowIdKind::Update => {
-                for row_id in row_ids {
-                    let (prefix, offset) = split_row_id(row_id);
+                for row_id in row_ids.iter() {
+                    let (prefix, offset) =
+                        split_row_id(row_id.as_number().unwrap().into_u_int64().unwrap());
                     if !self
                         .block_mutation_row_offset
                         .entry(prefix)
@@ -202,8 +208,9 @@ impl MatchedAggregator {
                 }
             }
             RowIdKind::Delete => {
-                for row_id in row_ids {
-                    let (prefix, offset) = split_row_id(row_id);
+                for row_id in row_ids.iter() {
+                    let (prefix, offset) =
+                        split_row_id(row_id.as_number().unwrap().into_u_int64().unwrap());
                     let value = self.block_mutation_row_offset.get(&prefix);
                     if value.is_none() {
                         self.ctx.add_merge_status(MergeStatus {
@@ -475,17 +482,5 @@ impl AggregationContext {
         };
 
         Ok(Some(mutation))
-    }
-}
-
-pub(crate) fn get_row_id(data_block: &DataBlock, row_id_idx: usize) -> Result<Buffer<u64>> {
-    let row_id_col = data_block.get_by_offset(row_id_idx);
-    match row_id_col.value.as_column() {
-        Some(Column::Nullable(boxed)) => match &boxed.column {
-            Column::Number(NumberColumn::UInt64(data)) => Ok(data.clone()),
-            _ => Err(ErrorCode::BadArguments("row id is not uint64")),
-        },
-        Some(Column::Number(NumberColumn::UInt64(data))) => Ok(data.clone()),
-        _ => Err(ErrorCode::BadArguments("row id is not uint64")),
     }
 }

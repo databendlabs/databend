@@ -265,11 +265,11 @@ async fn show_account_grants(
 ) -> Result<Option<DataBlock>> {
     let tenant = ctx.get_tenant();
     let current_user = ctx.get_current_user()?;
-    let has_grant_priv = current_user
-        .grants
-        .entries()
-        .iter()
-        .any(|entry| entry.verify_privilege(&GrantObject::Global, UserPrivilegeType::Grant));
+    let has_grant_priv = ctx
+        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant)
+        .await
+        .is_ok();
+
     // TODO: add permission check on reading user grants
     let (grant_to, name, identity, grant_set) = match grant_type {
         "user" => {
