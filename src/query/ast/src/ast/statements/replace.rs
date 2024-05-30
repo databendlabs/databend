@@ -51,17 +51,19 @@ impl Display for ReplaceStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
+
         if !self.columns.is_empty() {
-            write!(f, "(")?;
+            write!(f, " (")?;
             write_comma_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
+
+        // on_conflict_columns must be non-empty
         write!(f, " ON CONFLICT")?;
-        if !self.on_conflict_columns.is_empty() {
-            write!(f, "(")?;
-            write_comma_separated_list(f, &self.on_conflict_columns)?;
-            write!(f, ") ")?;
-        }
+        write!(f, " (")?;
+        write_comma_separated_list(f, &self.on_conflict_columns)?;
+        write!(f, ")")?;
+
         if let Some(expr) = &self.delete_when {
             write!(f, " DELETE WHEN {expr}")?;
         }
