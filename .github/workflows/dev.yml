@@ -71,7 +71,7 @@ jobs:
       - linux_hive
     steps:
       - name: Check Ready to Merge
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         env:
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
