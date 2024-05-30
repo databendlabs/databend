@@ -1,9 +1,12 @@
 name: MetaChaos
 
 on:
-  pull_request_target:
-    types:
-      - labeled
+  # pull_request_target:
+  #   types:
+  #     - labeled
+  #   branches:
+  #     - main
+  pull_request:
     branches:
       - main
 
@@ -31,6 +34,8 @@ jobs:
       - name: Get SHA
         shell: bash
         id: sha
+        run: |
+          echo "sha=$(git rev-parse --verify HEAD)" > $GITHUB_OUTPUT
 
   build:
     needs: info
@@ -38,7 +43,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - {arch: x86_64, runner: X64}
+          - { arch: x86_64, runner: X64 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,15 +59,8 @@ jobs:
 
   test_meta_chaos:
     needs: [info, build]
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
+    runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
     steps:
       - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_meta_chaos
         timeout-minutes: 10
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}

@@ -1,4 +1,4 @@
 bootstrap: true
 replicaCount: 3
 persistence:
-  size: 10Gi
+  size: 8Gi

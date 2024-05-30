@@ -13,8 +13,9 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
+        artifacts: meta,metactl
 
     - name: Chaos Test meta service
       shell: bash
       run: |
-        ./scripts/ci/ci-chaos-meta-tests.sh ${{ inputs.target }}
+        ./scripts/ci/ci-chaos-meta-tests.sh

@@ -10,5 +10,5 @@ RUN apt-get update -y && \
     rm -rf /var/cache/apt/*
 
 COPY ./distro/$TARGETPLATFORM/databend-meta /databend-meta
-#COPY ./distro/$TARGETPLATFORM/databend-metactl /databend-metactl
+COPY ./distro/$TARGETPLATFORM/databend-metactl /databend-metactl
 ENTRYPOINT ["/databend-meta"]

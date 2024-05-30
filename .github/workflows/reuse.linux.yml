@@ -4,15 +4,15 @@ on:
   workflow_call:
     inputs:
       build_profile:
-        description: 'Build profile, debug or release'
+        description: "Build profile, debug or release"
         type: string
         required: true
-        default: 'debug'
+        default: "debug"
       runner_provider:
-        description: 'Self-hosted runner provider, aws or gcp'
+        description: "Self-hosted runner provider, aws or gcp"
         type: string
         required: true
-        default: 'aws'
+        default: "aws"
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
@@ -54,7 +54,14 @@ jobs:
           cat license.json
 
   build:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      [
+        self-hosted,
+        "${{ matrix.runner }}",
+        Linux,
+        16c32g,
+        "${{ inputs.runner_provider }}",
+      ]
     strategy:
       fail-fast: false
       matrix:
@@ -73,7 +80,14 @@ jobs:
           artifacts: all
 
   build_address_sanitizer:
-    runs-on: [ self-hosted, "${{ matrix.runner }}", Linux, 16c32g, "${{ inputs.runner_provider }}" ]
+    runs-on:
+      [
+        self-hosted,
+        "${{ matrix.runner }}",
+        Linux,
+        16c32g,
+        "${{ inputs.runner_provider }}",
+      ]
     strategy:
       fail-fast: false
       matrix:
@@ -325,18 +339,3 @@ jobs:
     with:
       build_profile: ${{ inputs.build_profile }}
       runner_provider: ${{ inputs.runner_provider }}
-
-  test_meta_chaos:
-    needs: [build, check, license]
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
-    steps:
-      - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
-      - uses: ./.github/actions/test_meta_chaos
-        timeout-minutes: 10
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
