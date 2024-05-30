@@ -398,7 +398,7 @@ impl BloomIndex {
                     {
                         // If the result of a bloom filter is Uncertain, it means that the filter is invalid,
                         // and reading the bloom filter data will increase additional costs,
-                        // so we can consider not using this bloom filter in the next query.
+                        // so we can consider not using this bloom filter in the following queries.
                         let filter_key = build_filter_key(table_id, col_name, opt_key, scalar);
                         invalid_keys.insert(filter_key);
                     }

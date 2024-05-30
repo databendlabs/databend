@@ -96,7 +96,9 @@ impl BloomPrunerCreator {
                 type CacheItem = bool;
                 for (field, scalar, ty, filter_key) in point_query_cols.into_iter() {
                     if func_ctx.bloom_filter_ignore_invalid_key_ratio.is_some() {
-                        // If the invalid key cache contains this filter key, we can ignore it.
+                        // If the invalid key cache contains this filter key, it means that according to previous queries,
+                        // the bloom filter of this filter key will most likely return Uncertain.
+                        // We can ignore it to reduce the cost of reading bloom data.
                         if let Some(cache) = CacheItem::cache() {
                             if cache.contains_key(&filter_key) {
                                 continue;
