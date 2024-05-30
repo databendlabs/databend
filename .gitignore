@@ -73,5 +73,8 @@ benchmark/clickbench/results
 # direnv test files
 .envrc
 
+# z3
+**/.z3-trace
+
 # lychee
 .lycheecache

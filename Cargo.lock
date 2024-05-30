@@ -2923,6 +2923,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-constraint"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "databend-common-ast",
+ "goldenfile",
+ "z3",
+]
+
+[[package]]
 name = "databend-common-datavalues"
 version = "0.1.0"
 dependencies = [
@@ -3728,6 +3738,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-compress",
  "databend-common-config",
+ "databend-common-constraint",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
@@ -15774,6 +15785,26 @@ name = "yansi"
 version = "1.0.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1367295b8f788d371ce2dbc842c7b709c73ee1364d30351dd300ec2203b12377"
+
+[[package]]
+name = "z3"
+version = "0.12.1"
+source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
+dependencies = [
+ "log",
+ "num",
+ "z3-sys",
+]
+
+[[package]]
+name = "z3-sys"
+version = "0.8.1"
+source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
+dependencies = [
+ "bindgen 0.69.4",
+ "cmake",
+ "pkg-config",
+]
 
 [[package]]
 name = "z85"

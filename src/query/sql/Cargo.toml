@@ -13,6 +13,7 @@ test = true
 [features]
 default = []
 storage-hdfs = ["databend-common-config/storage-hdfs"]
+z3-prove = ["databend-common-constraint"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
@@ -22,6 +23,7 @@ databend-common-base = { path = "../../common/base" }
 databend-common-catalog = { path = "../catalog" }
 databend-common-compress = { path = "../../common/compress" }
 databend-common-config = { path = "../config" }
+databend-common-constraint = { path = "../constraint", optional = true }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-expression = { path = "../expression" }
 databend-common-functions = { path = "../functions" }
