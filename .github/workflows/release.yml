@@ -266,6 +266,14 @@ jobs:
         run: |
           target=${{ matrix.target }}
           version=${{ needs.create_release.outputs.version }}
+          case ${{ matrix.category }} in
+            default)
+              pkg_name="databend-${version}-${target}"
+              ;;
+            *)
+            pkg_name="databend-${{ matrix.category }}-${version}-${target}"
+              ;;
+          esac
           mkdir -p release/${target}/{bin,configs,systemd,scripts}
           cp ./target/${target}/release/databend-{query,meta,metactl} release/${target}/bin/
           rm -f release/${target}/bin/*.d
@@ -274,9 +282,8 @@ jobs:
           cp ./scripts/distribution/release-readme.txt release/${target}/readme.txt
           cp -r ./scripts/distribution/local-scripts/* release/${target}/scripts/
           cp -r ./scripts/distribution/package-scripts/* release/${target}/scripts/
-          tar -C ./release/${target} -czvf databend-${version}-${target}.tar.gz bin configs systemd scripts readme.txt
-          sha256sum databend-${version}-${target}.tar.gz >> sha256-${version}-${target}.txt
-
+          tar -C ./release/${target} -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
+          sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
       - name: post sha256
         uses: actions/upload-artifact@v4
         with:
@@ -304,8 +311,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
+        target:
+          - x86_64-unknown-linux-gnu
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -322,11 +329,12 @@ jobs:
         run: |
           target=${{ matrix.target }}
           version=${{ needs.create_release.outputs.version }}
+          pkg_name="databend-testsuite-${version}-${target}"
           mkdir -p release/testsuite/bin
           cp -r ./tests/sqllogictests/suites ./release/testsuite/
           cp ./target/${target}/release/databend-{sqllogictests,sqlsmith} release/testsuite/bin/
-          tar -C ./release/testsuite -czvf databend-testsuite-${version}-${target}.tar.gz bin suites
-          sha256sum databend-testsuite-${version}-${target}.tar.gz >> sha256-testsuite-${version}-${target}.txt
+          tar -C ./release/testsuite -czvf ${pkg_name}.tar.gz bin suites
+          sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
       - name: post sha256
         uses: actions/upload-artifact@v4
         with:
