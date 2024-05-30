@@ -84,7 +84,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        if self.terminated || self.cache_writer.current_bytes() == 0 {
+        if self.terminated || self.cache_writer.num_rows() == 0 {
             return Ok(());
         }
 
