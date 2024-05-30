@@ -220,7 +220,7 @@ jobs:
 
   publish:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c8g, gcp]
-    needs: create_release
+    needs: [create_release, build_default, build_hdfs]
     env:
       RUNNER_PROVIDER: gcp
     strategy:
@@ -305,7 +305,7 @@ jobs:
 
   publish_testsuite:
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
-    needs: create_release
+    needs: [create_release, build_default]
     env:
       RUNNER_PROVIDER: gcp
     strategy:
@@ -350,42 +350,10 @@ jobs:
           target: ${{ matrix.target }}
           category: testsuite
 
-  hdfs:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
-    needs: create_release
-    env:
-      RUNNER_PROVIDER: gcp
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { target: x86_64-unknown-linux-gnu, runner: X64 }
-    steps:
-      - name: Pack binaries
-        run: |
-          target=${{ matrix.target }}
-          version=${{ needs.create_release.outputs.version }}
-          mkdir -p release/${target}/{bin,configs,systemd,scripts}
-          cp ./target/${target}/release/databend-* release/${target}/bin/
-          rm -f release/${target}/bin/*.d
-          cp ./scripts/distribution/systemd/databend-* release/${target}/systemd/
-          cp ./scripts/distribution/configs/databend-* release/${target}/configs/
-          cp ./scripts/distribution/release-readme.txt release/${target}/readme.txt
-          cp -r ./scripts/distribution/local-scripts/* release/${target}/scripts/
-          cp -r ./scripts/distribution/package-scripts/* release/${target}/scripts/
-          tar -C ./release/${target} -czvf databend-hdfs-${version}-${target}.tar.gz bin configs systemd scripts readme.txt
-          sha256sum databend-hdfs-${version}-${target}.tar.gz >> sha256-hdfs-${version}-${target}.txt
-      - name: post sha256
-        uses: actions/upload-artifact@v4
-        with:
-          name: sha256sums-hdfs-${{ matrix.target }}
-          path: sha256-*.txt
-          retention-days: 1
-
   docker_all_in_one:
-    name: docker combined
-    runs-on: ubuntu-latest
-    needs: [create_release, linux]
+    name: docker all in one
+    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    needs: [create_release, build_default]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -459,9 +427,9 @@ jobs:
           readme-filepath: ./docker/README.md
 
   docker_service:
-    name: docker separate
-    runs-on: ubuntu-latest
-    needs: [create_release, linux]
+    name: docker service
+    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    needs: [create_release, build_udf]
     strategy:
       fail-fast: false
       matrix:
@@ -540,7 +508,7 @@ jobs:
 
   distribution:
     runs-on: ubuntu-latest
-    needs: [create_release, linux]
+    needs: [create_release, build_default]
     strategy:
       matrix:
         arch:
