@@ -10140,6 +10140,82 @@ Query(
 
 
 ---------- Input ----------
+SELECT 1 - (2 + 3);
+---------- Output ---------
+SELECT 1 - (2 + 3)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..18,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..18,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: BinaryOp {
+                            span: Some(
+                                9..10,
+                            ),
+                            op: Minus,
+                            left: Literal {
+                                span: Some(
+                                    7..8,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                            right: BinaryOp {
+                                span: Some(
+                                    14..15,
+                                ),
+                                op: Plus,
+                                left: Literal {
+                                    span: Some(
+                                        12..13,
+                                    ),
+                                    value: UInt64(
+                                        2,
+                                    ),
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        16..17,
+                                    ),
+                                    value: UInt64(
+                                        3,
+                                    ),
+                                },
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE STAGE ~
 ---------- Output ---------
 CREATE STAGE ~
