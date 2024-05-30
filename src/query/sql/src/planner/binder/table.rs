@@ -77,7 +77,6 @@ use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::Statistics;
-use crate::plans::UnionAll;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
@@ -442,7 +441,7 @@ impl Binder {
                     ));
                 }
                 self.set_bind_recursive_cte(true);
-                let (union_s_expr, mut new_bind_ctx) = self
+                let (union_s_expr, new_bind_ctx) = self
                     .bind_set_operator(
                         bind_context,
                         &set_expr.left,
