@@ -1873,16 +1873,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             };
 
-            if let Some(last_table_id) = tb_id_list.last() {
-                if *last_table_id != table_id {
-                    return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(
-                            &req.name_ident.table_name,
-                            format!("{}: {}", "rename table", tenant_dbname_tbname),
-                        ),
-                    )));
+            let mut found_table = false;
+            for (idx, item) in tb_id_list.id_list.iter().enumerate() {
+                if *item != table_id {
+                    continue;
                 }
-            } else {
+                found_table = true;
+                tb_id_list.id_list.remove(idx);
+                break;
+            }
+
+            if !found_table {
                 return Err(KVAppError::AppError(AppError::UnknownTable(
                     UnknownTable::new(
                         &req.name_ident.table_name,
@@ -1931,7 +1932,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             {
                 // move table id from old table id list to new table id list
-                tb_id_list.pop();
                 new_tb_id_list.append(table_id);
 
                 let condition = vec![
