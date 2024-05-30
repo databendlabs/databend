@@ -1015,6 +1015,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterUDF(_)
             | Plan::AlterShareTenants(_)
             | Plan::RefreshIndex(_)
+            | Plan::RefreshBloomIndex(_)
             | Plan::RefreshTableIndex(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter)
                     .await?;

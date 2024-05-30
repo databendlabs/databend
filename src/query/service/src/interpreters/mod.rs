@@ -96,6 +96,7 @@ mod interpreter_stream_create;
 mod interpreter_stream_drop;
 mod interpreter_table_add_column;
 mod interpreter_table_analyze;
+mod interpreter_table_bloom_index_refresh;
 mod interpreter_table_create;
 mod interpreter_table_describe;
 mod interpreter_table_drop;

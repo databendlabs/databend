@@ -585,6 +585,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_refresh_inverted_index(&mut self, _stmt: &'ast RefreshInvertedIndexStmt) {}
 
+    fn visit_refresh_bloom_index(&mut self, _stmt: &'ast RefreshBloomIndexStmt) {}
+
     fn visit_create_virtual_column(&mut self, _stmt: &'ast CreateVirtualColumnStmt) {}
 
     fn visit_alter_virtual_column(&mut self, _stmt: &'ast AlterVirtualColumnStmt) {}

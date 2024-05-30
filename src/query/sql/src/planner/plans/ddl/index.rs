@@ -84,3 +84,11 @@ pub struct RefreshTableIndexPlan {
     pub segment_locs: Option<Vec<Location>>,
     pub lock_opt: LockTableOption,
 }
+
+// TODO make RefreshTableIndexPlan into an enum?
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RefreshBloomIndexPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}

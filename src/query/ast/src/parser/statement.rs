@@ -1076,6 +1076,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let refresh_bloom_index = map(
+        rule! {
+            REFRESH ~ BLOOM ~ INDEX ~ ON ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::RefreshBloomIndex(RefreshBloomIndexStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let create_virtual_column = map_res(
         rule! {
             CREATE
@@ -2139,6 +2152,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             | #drop_inverted_index: "`DROP INVERTED INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
             | #refresh_inverted_index: "`REFRESH INVERTED INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
+            | #refresh_bloom_index: "`REFRESH BLOOM INDEX ON [<database>.]<table>`"
         ),
         rule!(
             #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"

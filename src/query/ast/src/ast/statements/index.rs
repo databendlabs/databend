@@ -217,3 +217,25 @@ impl Display for RefreshInvertedIndexStmt {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct RefreshBloomIndexStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+}
+
+impl Display for RefreshBloomIndexStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "REFRESH BLOOM INDEX")?;
+        write!(f, " ON ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        Ok(())
+    }
+}

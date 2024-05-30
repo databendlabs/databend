@@ -50,6 +50,7 @@ use crate::interpreters::interpreter_notification_drop::DropNotificationInterpre
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
+use crate::interpreters::interpreter_table_bloom_index_refresh::RefreshBloomIndexInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
@@ -308,6 +309,9 @@ impl InterpreterFactory {
             )?)),
             Plan::RefreshTableIndex(index) => Ok(Arc::new(
                 RefreshTableIndexInterpreter::try_create(ctx, *index.clone())?,
+            )),
+            Plan::RefreshBloomIndex(plan) => Ok(Arc::new(
+                RefreshBloomIndexInterpreter::try_create(ctx, *plan.clone())?,
             )),
             // Virtual columns
             Plan::CreateVirtualColumn(create_virtual_column) => Ok(Arc::new(

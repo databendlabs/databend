@@ -332,6 +332,8 @@ pub enum TokenKind {
     AFTER,
     #[token("AGGREGATING", ignore(ascii_case))]
     AGGREGATING,
+    #[token("BLOOM", ignore(ascii_case))]
+    BLOOM,
     #[token("ANY", ignore(ascii_case))]
     ANY,
     #[token("APPEND_ONLY", ignore(ascii_case))]
