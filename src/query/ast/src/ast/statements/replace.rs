@@ -39,11 +39,11 @@ pub struct ReplaceStmt {
 
 impl Display for ReplaceStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "REPLACE ")?;
+        write!(f, "REPLACE")?;
         if let Some(hints) = &self.hints {
-            write!(f, "{} ", hints)?;
+            write!(f, " {}", hints)?;
         }
-        write!(f, "INTO ")?;
+        write!(f, " INTO ")?;
         write_dot_separated_list(
             f,
             self.catalog
@@ -54,18 +54,18 @@ impl Display for ReplaceStmt {
         if !self.columns.is_empty() {
             write!(f, "(")?;
             write_comma_separated_list(f, &self.columns)?;
-            write!(f, ") ")?;
+            write!(f, ")")?;
         }
-        write!(f, "ON CONFLICT")?;
+        write!(f, " ON CONFLICT")?;
         if !self.on_conflict_columns.is_empty() {
             write!(f, "(")?;
             write_comma_separated_list(f, &self.on_conflict_columns)?;
             write!(f, ") ")?;
         }
         if let Some(expr) = &self.delete_when {
-            write!(f, "DELETE WHEN {expr} ")?;
+            write!(f, " DELETE WHEN {expr}")?;
         }
 
-        write!(f, "{}", self.source)
+        write!(f, " {}", self.source)
     }
 }
