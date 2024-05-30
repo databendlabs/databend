@@ -104,7 +104,7 @@ members = [
     "src/meta/service",
     # sqllogictest
     "tests/sqllogictests",
-    "src/bendpy",
+    # "src/bendpy",
     # sqlsmith
     "src/tests/sqlsmith",
 ]
