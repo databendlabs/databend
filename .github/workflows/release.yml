@@ -158,10 +158,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {target: x86_64-unknown-linux-gnu, runner: X64}
-          - {target: aarch64-unknown-linux-gnu, runner: ARM64}
-          - {target: x86_64-unknown-linux-musl, runner: X64}
-          - {target: aarch64-unknown-linux-musl, runner: X64}
+          - { target: x86_64-unknown-linux-gnu, runner: X64 }
+          - { target: aarch64-unknown-linux-gnu, runner: ARM64 }
+          - { target: x86_64-unknown-linux-musl, runner: X64 }
+          - { target: aarch64-unknown-linux-musl, runner: X64 }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -244,7 +244,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {target: x86_64-unknown-linux-gnu, runner: X64}
+          - { target: x86_64-unknown-linux-gnu, runner: X64 }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -297,7 +297,7 @@ jobs:
           target: ${{ matrix.target }}
           category: hdfs
 
-  docker_combined:
+  docker_all_in_one:
     name: docker combined
     runs-on: ubuntu-latest
     needs: [create_release, linux]
@@ -373,7 +373,7 @@ jobs:
           short-description: "A modern cloud data warehouse. Also available in the cloud: https://app.databend.com."
           readme-filepath: ./docker/README.md
 
-  docker_separate:
+  docker_service:
     name: docker separate
     runs-on: ubuntu-latest
     needs: [create_release, linux]
@@ -561,7 +561,7 @@ jobs:
           gh release upload ${version} sha256sums.txt --clobber
 
   benchmark:
-    needs: [create_release, docker_separate]
+    needs: [create_release, docker_service]
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:
@@ -618,8 +618,8 @@ jobs:
     needs:
       - create_release
       - linux
-      - docker_combined
-      - docker_separate
+      - docker_all_in_one
+      - docker_service
       - distribution
     steps:
       - uses: actions/checkout@v4
