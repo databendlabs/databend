@@ -1540,42 +1540,24 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         // fixed
-        let (key_table_id_list, orphan_table_name) = if req.as_dropped {
-            // if req.as_dropped, append new table id to orphan table id list
+        let mut key_table_id_list = TableIdHistoryIdent {
+            database_id: db_id.data,
+            table_name: req.name_ident.table_name.clone(),
+        };
+        // if req.as_dropped, append new table id to orphan table id list
+        let orphan_table_name = if req.as_dropped {
             let now = Utc::now().timestamp_micros();
-            let table_name = format!("{}@{}", ORPHAN_POSTFIX, now);
-            (
-                TableIdHistoryIdent {
-                    database_id: db_id.data,
-                    table_name: table_name.clone(),
-                },
-                Some(table_name),
-            )
+            Some(format!("{}@{}", ORPHAN_POSTFIX, now))
         } else {
-            (
-                TableIdHistoryIdent {
-                    database_id: db_id.data,
-                    table_name: req.name_ident.table_name.clone(),
-                },
-                None,
-            )
+            None
         };
 
         // The keys of values to re-fetch for every retry in this txn.
-        let mut keys = vec![
+        let keys = vec![
             key_dbid.to_string_key(),
             key_dbid_tbname.to_string_key(),
             key_table_id_list.to_string_key(),
         ];
-        if req.as_dropped {
-            keys.push(
-                TableIdHistoryIdent {
-                    database_id: db_id.data,
-                    table_name: req.name_ident.table_name.clone(),
-                }
-                .to_string_key(),
-            );
-        }
 
         // Initialize required key-values
         let mut data = {
@@ -1696,22 +1678,33 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             };
 
-            let mut tb_id_list = {
+            let (mut tb_id_list, prev_table_id, tb_id_list_seq) = {
                 let d = data.remove(0);
                 let (k, v) = deserialize_struct_get_response::<TableIdHistoryIdent>(d)?;
                 assert_eq!(key_table_id_list, k);
 
-                v.unwrap_or_default()
-            };
+                let tb_id_list = v.unwrap_or_default();
 
-            let prev_table_id = if req.as_dropped {
-                let d = data.remove(0);
-                let (_k, v) = deserialize_struct_get_response::<TableIdHistoryIdent>(d)?;
-
-                let v: SeqV<TableIdList> = v.unwrap_or_default();
-                v.data.id_list.last().copied()
-            } else {
-                None
+                // if `as_dropped` is true, append new table id into a temp new table
+                // if create table return success, table id will be moved to table id list,
+                // else, it will be vacuum when `vacuum drop table`
+                if req.as_dropped {
+                    // change key_table_id_list to orphan_table_name
+                    key_table_id_list = TableIdHistoryIdent {
+                        database_id: db_id.data,
+                        table_name: orphan_table_name.clone().unwrap(),
+                    };
+                    (
+                        // a new TableIdList
+                        TableIdList::new(),
+                        // save last table id and check when commit table meta
+                        tb_id_list.data.id_list.last().copied(),
+                        // seq MUST be 0
+                        0,
+                    )
+                } else {
+                    (tb_id_list.data, None, tb_id_list.seq)
+                }
             };
 
             // Table id is unique and does not need to re-generate in every loop.
@@ -1736,18 +1729,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             {
                 // append new table_id into list
-                if req.as_dropped && !tb_id_list.data.is_empty() {
-                    error!(
-                        "table {:?} orphan list is not empty",
-                        tenant_dbname_tbname.table_name
-                    );
-                    let exist_err = TableAlreadyExists::new(
-                        tenant_dbname_tbname.table_name.clone(),
-                        format!("create_table: {}", tenant_dbname_tbname.table_name),
-                    );
-                    return Err(KVAppError::AppError(AppError::from(exist_err)));
-                }
-                tb_id_list.data.append(table_id);
+                tb_id_list.append(table_id);
                 let dbid_tbname_seq = opt.1;
 
                 condition.extend(vec![
@@ -1757,7 +1739,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     // no other table with the same name is inserted.
                     txn_cond_seq(&key_dbid_tbname, Eq, dbid_tbname_seq),
                     // no other table id with the same name is append.
-                    txn_cond_seq(&key_table_id_list, Eq, tb_id_list.seq),
+                    txn_cond_seq(&key_table_id_list, Eq, tb_id_list_seq),
                 ]);
 
                 if_then.extend( vec![
@@ -1768,7 +1750,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             key_table_id,
                             serialize_struct(&req.table_meta)?,
                         ), /* (tenant, db_id, tb_id) -> tb_meta */
-                        txn_op_put(&key_table_id_list, serialize_struct(&tb_id_list.data)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                        txn_op_put(&key_table_id_list, serialize_struct(&tb_id_list)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
                         // This record does not need to assert `table_id_to_name_key == 0`,
                         // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
                         txn_op_put(&key_table_id_to_name, serialize_struct(&key_dbid_tbname)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
