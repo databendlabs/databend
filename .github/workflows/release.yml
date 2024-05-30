@@ -26,7 +26,6 @@ env:
 
 jobs:
   create_release:
-    name: create release
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.bump.outputs.tag }}
@@ -355,7 +354,6 @@ jobs:
           category: testsuite
 
   docker_all_in_one:
-    name: docker all in one
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
     needs: [create_release, build_default]
     steps:
@@ -431,7 +429,6 @@ jobs:
           readme-filepath: ./docker/README.md
 
   docker_service:
-    name: docker service
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
     needs: [create_release, build_udf]
     strategy:
