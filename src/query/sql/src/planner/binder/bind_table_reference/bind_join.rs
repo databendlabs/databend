@@ -69,7 +69,6 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let (left_child, mut left_context) =
             self.bind_table_reference(bind_context, &join.left).await?;
-        dbg!(&left_context.columns);
         let left_column_bindings = left_context.columns.clone();
 
         let cache_column_bindings = left_column_bindings.clone();

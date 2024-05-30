@@ -50,6 +50,15 @@ impl AsyncSource for TransformRecursiveCteScan {
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let data = self.ctx.get_recursive_cte_scan(&self.cte_name)?;
-        Ok(Some(DataBlock::concat(&data)?))
+        if data.is_empty() {
+            return Ok(None);
+        }
+        self.ctx.update_recursive_cte_scan(&self.cte_name, vec![])?;
+        let data = DataBlock::concat(&data)?;
+        if data.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(data))
+        }
     }
 }
