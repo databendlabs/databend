@@ -8,7 +8,7 @@ inputs:
     description: "Release target"
     required: true
   category:
-    description: "Release default/hdfs/testsuite"
+    description: "Release default/hdfs/udf/testsuite"
     required: false
     default: default
 
@@ -25,6 +25,9 @@ runs:
             ;;
           hdfs)
             publish_name="databend-hdfs-${{ inputs.version }}-${{ inputs.target }}"
+            ;;
+          udf )
+            publish_name="databend-udf-${{ inputs.version }}-${{ inputs.target }}"
             ;;
           testsuite)
             publish_name="databend-testsuite-${{ inputs.version }}-${{ inputs.target }}"
