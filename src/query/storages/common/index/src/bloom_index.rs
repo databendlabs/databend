@@ -399,7 +399,7 @@ impl BloomIndex {
                         // If the result of a bloom filter is Uncertain, it means that the filter is invalid,
                         // and reading the bloom filter data will increase additional costs,
                         // so we can consider not using this bloom filter in the next query.
-                        let filter_key = build_filter_key(table_id, col_name, opt_key);
+                        let filter_key = build_filter_key(table_id, col_name, opt_key, scalar);
                         invalid_keys.insert(filter_key);
                     }
                     Ok(None)
@@ -499,7 +499,7 @@ impl BloomIndex {
             &mut |_, col_name, opt_key, scalar, ty, _| {
                 if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
                     if Xor8Filter::supported_type(ty) && !scalar.is_null() {
-                        let filter_key = build_filter_key(table_id, col_name, opt_key);
+                        let filter_key = build_filter_key(table_id, col_name, opt_key, scalar);
                         cols.push((v.clone(), scalar.clone(), ty.clone(), filter_key));
                     }
                 }
@@ -772,12 +772,18 @@ fn visit_map_column(
     Ok(None)
 }
 
-// The filter key consists of the table id and column name, if the field is a map, the map's field key is also included.
+// The filter key consists of the table id, column name and point query value,
+// if the field is a map, the map's field key is also included.
 // Filter key can be stored in the cache to ignore bloom filters that always return Uncertain.
-fn build_filter_key(table_id: u64, col_name: &str, opt_key: Option<&Scalar>) -> String {
+fn build_filter_key(
+    table_id: u64,
+    col_name: &str,
+    opt_key: Option<&Scalar>,
+    value: &Scalar,
+) -> String {
     if let Some(key) = opt_key {
-        format!("{}_{}[{}]", table_id, col_name, key)
+        format!("{}_{}[{}]={}", table_id, col_name, key, value)
     } else {
-        format!("{}_{}", table_id, col_name)
+        format!("{}_{}={}", table_id, col_name, value)
     }
 }
