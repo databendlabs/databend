@@ -22,14 +22,29 @@ GRANT ROLE test TO 'test-user'
 statement ok
 CREATE ROLE test
 
+query T
+select created_on=update_on from system.roles where name='test';
+----
+1
+
 statement error 2201
 GRANT ROLE test TO 'test-user'
 
 statement ok
 CREATE USER 'test-user' IDENTIFIED BY 'password'
 
+query T
+select created_on=update_on from system.users where name='test-user';
+----
+1
+
 statement ok
 GRANT ROLE test TO 'test-user'
+
+query T
+select created_on=update_on from system.users where name='test-user';
+----
+0
 
 statement error 2204
 GRANT ROLE test TO ROLE `test-role`
@@ -37,8 +52,18 @@ GRANT ROLE test TO ROLE `test-role`
 statement ok
 CREATE ROLE `test-role`
 
+query T
+select created_on=update_on from system.roles where name='test-role';
+----
+1
+
 statement ok
 GRANT ROLE test TO ROLE `test-role`
+
+query T
+select created_on=update_on from system.roles where name='test-role';
+----
+0
 
 statement ok
 CREATE ROLE IF NOT EXISTS role1
@@ -70,7 +95,7 @@ test 0 (empty) 0 0
 test-role 1 test 0 0
 
 query TTT
-select * from system.roles order by name;
+select name, inherited_roles, inherited_roles_name from system.roles order by name;
 ----
 account_admin 0 (empty)
 public 0 (empty)

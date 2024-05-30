@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -66,10 +67,21 @@ impl AsyncSystemTable for RolesTable {
             .map(|x| x.grants.roles().iter().sorted().join(", ").to_string())
             .collect();
 
+        let created_on = roles
+            .iter()
+            .map(|role| role.created_on.timestamp_micros())
+            .collect();
+        let update_on = roles
+            .iter()
+            .map(|role| role.update_on.timestamp_micros())
+            .collect();
+
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             UInt64Type::from_data(inherited_roles),
             StringType::from_data(inherited_roles_names),
+            TimestampType::from_data(created_on),
+            TimestampType::from_data(update_on),
         ]))
     }
 }
@@ -83,6 +95,8 @@ impl RolesTable {
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new("inherited_roles_name", TableDataType::String),
+            TableField::new("created_on", TableDataType::Timestamp),
+            TableField::new("update_on", TableDataType::Timestamp),
         ]);
 
         let table_info = TableInfo {

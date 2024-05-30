@@ -60,29 +60,40 @@ impl FlightClient {
         T: Serialize,
         Res: for<'a> Deserialize<'a>,
     {
-        let mut request =
-            databend_common_tracing::inject_span_to_tonic_request(Request::new(Action {
-                r#type: path.to_string(),
-                body: serde_json::to_vec(&message).map_err(|cause| {
-                    ErrorCode::BadArguments(format!(
-                        "Request payload serialize error while in {:?}, cause: {}",
-                        path, cause
-                    ))
-                })?,
-            }));
+        let mut body = Vec::with_capacity(512);
+        let mut serializer = serde_json::Serializer::new(&mut body);
+        let serializer = serde_stacker::Serializer::new(&mut serializer);
+        message.serialize(serializer).map_err(|cause| {
+            ErrorCode::BadArguments(format!(
+                "Request payload serialize error while in {:?}, cause: {}",
+                path, cause
+            ))
+        })?;
 
         drop(message);
+        let mut request =
+            databend_common_tracing::inject_span_to_tonic_request(Request::new(Action {
+                body,
+                r#type: path.to_string(),
+            }));
+
         request.set_timeout(Duration::from_secs(timeout));
 
         let response = self.inner.do_action(request).await?;
 
         match response.into_inner().message().await? {
-            Some(response) => serde_json::from_slice::<Res>(&response.body).map_err(|cause| {
-                ErrorCode::BadBytes(format!(
-                    "Response payload deserialize error while in {:?}, cause: {}",
-                    path, cause
-                ))
-            }),
+            Some(response) => {
+                let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
+                deserializer.disable_recursion_limit();
+                let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+
+                Res::deserialize(deserializer).map_err(|cause| {
+                    ErrorCode::BadBytes(format!(
+                        "Response payload deserialize error while in {:?}, cause: {}",
+                        path, cause
+                    ))
+                })
+            }
             None => Err(ErrorCode::EmptyDataFromServer(format!(
                 "Can not receive data from flight server, action: {:?}",
                 path

@@ -48,9 +48,9 @@ use itertools::Itertools;
 use log::info;
 use opendal::Operator;
 
-use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::BlockWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
@@ -464,11 +464,8 @@ impl AggregationContext {
             })??;
 
         // persistent data
-        let new_block_meta = serialized.block_meta;
-        let new_block_location = new_block_meta.location.0.clone();
-        let new_block_raw_data = serialized.block_raw_data;
-        let data_accessor = self.data_accessor.clone();
-        write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
+
+        let new_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
 
         metrics_inc_merge_into_replace_blocks_counter(1);
         metrics_inc_merge_into_replace_blocks_rows_counter(origin_num_rows as u32);
