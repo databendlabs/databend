@@ -319,9 +319,6 @@ select 3, a as price from a union all select a, b from ab order by price
 1 3.3
 
 statement ok
-SET enable_query_result_cache = 0;
-
-statement ok
 create table tt(a int);
 
 statement ok
@@ -329,6 +326,9 @@ select * from tt;
 
 statement ok
 select * from tt;
+
+statement ok
+SET enable_query_result_cache = 0;
 
 statement ok
 DROP DATABASE db20_13;
