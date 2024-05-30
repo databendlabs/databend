@@ -229,6 +229,20 @@ impl CreateTableWithDropTime {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CreateAsDropTableWithoutDropTime: create as_drop {table_name} without drop time")]
+pub struct CreateAsDropTableWithoutDropTime {
+    table_name: String,
+}
+
+impl CreateAsDropTableWithoutDropTime {
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("UndropTableAlreadyExists: undrop {table_name} already exists")]
 pub struct UndropTableAlreadyExists {
     table_name: String,
@@ -1058,6 +1072,9 @@ pub enum AppError {
     CreateTableWithDropTime(#[from] CreateTableWithDropTime),
 
     #[error(transparent)]
+    CreateAsDropTableWithoutDropTime(#[from] CreateAsDropTableWithoutDropTime),
+
+    #[error(transparent)]
     UndropTableAlreadyExists(#[from] UndropTableAlreadyExists),
 
     #[error(transparent)]
@@ -1332,6 +1349,15 @@ impl AppErrorMessage for ViewAlreadyExists {
 impl AppErrorMessage for CreateTableWithDropTime {
     fn message(&self) -> String {
         format!("Create Table '{}' with drop time", self.table_name)
+    }
+}
+
+impl AppErrorMessage for CreateAsDropTableWithoutDropTime {
+    fn message(&self) -> String {
+        format!(
+            "Create as drop Table '{}' without drop time",
+            self.table_name
+        )
     }
 }
 
@@ -1665,6 +1691,9 @@ impl From<AppError> for ErrorCode {
             AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {
                 ErrorCode::CreateTableWithDropTime(err.message())
+            }
+            AppError::CreateAsDropTableWithoutDropTime(err) => {
+                ErrorCode::CreateAsDropTableWithoutDropTime(err.message())
             }
             AppError::UndropTableAlreadyExists(err) => {
                 ErrorCode::UndropTableAlreadyExists(err.message())

@@ -26,6 +26,7 @@ use databend_common_base::base::uuid::Uuid;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CatalogAlreadyExists;
 use databend_common_meta_app::app_error::CommitTableMetaError;
+use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
 use databend_common_meta_app::app_error::CreateIndexWithDropTime;
 use databend_common_meta_app::app_error::CreateTableWithDropTime;
@@ -1522,6 +1523,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             return Err(KVAppError::AppError(AppError::CreateTableWithDropTime(
                 CreateTableWithDropTime::new(&tenant_dbname_tbname.table_name),
             )));
+        }
+
+        if req.as_dropped && req.table_meta.drop_on.is_none() {
+            return Err(KVAppError::AppError(
+                AppError::CreateAsDropTableWithoutDropTime(CreateAsDropTableWithoutDropTime::new(
+                    &tenant_dbname_tbname.table_name,
+                )),
+            ));
         }
 
         // fixed: does not change in every loop.

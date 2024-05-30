@@ -283,6 +283,7 @@ build_exceptions! {
     DatamaskAlreadyExists(2321),
 
     CommitTableMetaError(2322),
+    CreateAsDropTableWithoutDropTime(2323),
 
 
     // Cluster error codes.
