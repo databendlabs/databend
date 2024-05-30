@@ -169,3 +169,42 @@ echo "drop database c" | $USER_A_CONNECT
 echo "show tables from c" | $USER_A_CONNECT
 echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
+
+echo "=== test db owner can access all table under this db ==="
+echo "drop database if exists db1"| $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role1"| $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role2"| $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists u1"| $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists u2"| $BENDSQL_CLIENT_CONNECT
+
+echo "create database db1"| $BENDSQL_CLIENT_CONNECT
+echo "create role role1"| $BENDSQL_CLIENT_CONNECT
+echo "create role role2"| $BENDSQL_CLIENT_CONNECT
+echo "create table db1.t1(id int)"| $BENDSQL_CLIENT_CONNECT
+echo "create table db1.t2(id int)"| $BENDSQL_CLIENT_CONNECT
+echo "grant ownership on db1.* to role role1;"| $BENDSQL_CLIENT_CONNECT
+echo "grant ownership on db1.t2 to role role2;"| $BENDSQL_CLIENT_CONNECT
+echo "create user u1 identified by '123' with default_role ='role1'" | $BENDSQL_CLIENT_CONNECT
+echo "create user u2 identified by '123' with default_role ='role2'" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role1 to u1" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role2 to u2" | $BENDSQL_CLIENT_CONNECT
+
+echo "set role role1;show tables from default;" | $USER_U1_CONNECT
+echo "set role role1;show tables from db1;" | $USER_U1_CONNECT
+echo "set role role1;insert into db1.t1 values(1);" | $USER_U1_CONNECT
+echo "set role role1;insert into db1.t2 values(2);" | $USER_U1_CONNECT
+echo "set role role1;select * from db1.t1;" | $USER_U1_CONNECT
+echo "set role role1;select * from db1.t2;" | $USER_U1_CONNECT
+export USER_U2_CONNECT="bendsql --user=u2 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+echo "set role role2;select * from db1.t1;" | $USER_U2_CONNECT
+echo "set role role2;select * from db1.t2;" | $USER_U2_CONNECT
+
+echo "show grants for role role2;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "set role role1;drop table db1.t2;" | $USER_U1_CONNECT
+echo "show grants for role role2;" | $BENDSQL_CLIENT_CONNECT
+
+echo "drop database if exists db1"| $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role1"| $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role2"| $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists u1"| $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists u2"| $BENDSQL_CLIENT_CONNECT

@@ -57,7 +57,7 @@ impl VacuumHandler for RealVacuumHandler {
         &self,
         temporary_dir: String,
         retain: Option<Duration>,
-        vacuum_limit: Option<usize>,
+        vacuum_limit: usize,
     ) -> Result<usize> {
         do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit).await
     }
