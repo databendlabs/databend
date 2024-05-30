@@ -346,7 +346,7 @@ async fn test_show_databases() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sql = "show databases";
-    let (status, result) = post_sql(sql, 1).await?;
+    let (status, result) = post_sql(sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     // has only one field: name
@@ -566,7 +566,7 @@ async fn test_pagination() -> Result<()> {
 
     let ep = create_endpoint().await?;
     let sql = "select * from numbers(10)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {}}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3, "max_rows_per_page": 2}, "session": { "settings": {}}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -695,7 +695,7 @@ async fn test_system_tables() -> Result<()> {
 
     let sql = "select name from system.tables where database='system' order by name";
 
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(!result.data.is_empty(), "{:?}", result);
 

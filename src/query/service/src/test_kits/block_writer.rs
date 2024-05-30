@@ -77,6 +77,7 @@ impl<'a> BlockWriter<'a> {
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let col_metas = serialize_block(&write_settings, schema, block, &mut buf)?;
         let file_size = buf.len() as u64;
+        let inverted_index_size = None;
 
         data_accessor.write(&location.0, buf).await?;
 
@@ -90,6 +91,7 @@ impl<'a> BlockWriter<'a> {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            inverted_index_size,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );

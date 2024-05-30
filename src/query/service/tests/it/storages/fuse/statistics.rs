@@ -610,6 +610,7 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
         let block_size = rng.gen::<u64>() / size;
         let file_size = rng.gen::<u64>() / size;
         let bloom_filter_index_size = rng.gen::<u64>() / size;
+        let inverted_index_size = None;
         acc_row_count += row_count;
         acc_block_size += block_size;
         acc_file_size += file_size;
@@ -624,6 +625,7 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
             location.clone(),
             None,
             bloom_filter_index_size,
+            inverted_index_size,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );
