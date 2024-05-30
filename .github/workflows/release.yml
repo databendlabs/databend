@@ -149,7 +149,7 @@ jobs:
           branch-suffix: random
           delete-branch: true
 
-  linux:
+  build_default:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
     env:
@@ -165,16 +165,95 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.create_release.outputs.version }}
       - name: Build Release
         uses: ./.github/actions/build_linux
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,metactl,meta,query
-          upload: false
+
+  build_udf:
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    needs: create_release
+    env:
+      RUNNER_PROVIDER: gcp
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, runner: X64 }
+          - { target: aarch64-unknown-linux-gnu, runner: ARM64 }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build Release
+        uses: ./.github/actions/build_linux
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.target }}
+          artifacts: sqllogictests,sqlsmith,metactl,meta,query
+          features: python-udf
+          category: udf
+
+  build_hdfs:
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    needs: create_release
+    env:
+      RUNNER_PROVIDER: gcp
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, runner: X64 }
+          - { target: aarch64-unknown-linux-gnu, runner: ARM64 }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build Release
+        uses: ./.github/actions/build_linux
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.target }}
+          artifacts: sqllogictests,sqlsmith,metactl,meta,query
+          features: storage-hdfs
+          category: hdfs
+
+  publish:
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c8g, gcp]
+    needs: create_release
+    env:
+      RUNNER_PROVIDER: gcp
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - category: default
+            target: x86_64-unknown-linux-gnu
+            runner: X64
+          - category: default
+            target: aarch64-unknown-linux-gnu
+            runner: ARM64
+          - category: default
+            target: x86_64-unknown-linux-musl
+            runner: X64
+          - category: default
+            target: aarch64-unknown-linux-musl
+            runner: X64
+          - category: hdfs
+            target: x86_64-unknown-linux-gnu
+            runner: X64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.create_release.outputs.version }}
+      - name: Download artifact
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.target }}
+          category: ${{ matrix.category }}
       - name: Basic Sqllogic Test
         if: matrix.target != 'aarch64-unknown-linux-musl'
         shell: bash
@@ -182,7 +261,6 @@ jobs:
           TEST_HANDLERS: http
         run: |
           mkdir -p target/release
-          cp ./target/${{ matrix.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
       - name: Pack Binaries
         run: |
@@ -198,20 +276,11 @@ jobs:
           cp -r ./scripts/distribution/package-scripts/* release/${target}/scripts/
           tar -C ./release/${target} -czvf databend-${version}-${target}.tar.gz bin configs systemd scripts readme.txt
           sha256sum databend-${version}-${target}.tar.gz >> sha256-${version}-${target}.txt
-      - name: Pack Testsuite
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: |
-          target=${{ matrix.target }}
-          version=${{ needs.create_release.outputs.version }}
-          mkdir -p release/testsuite/bin
-          cp -r ./tests/sqllogictests/suites ./release/testsuite/
-          cp ./target/${target}/release/databend-{sqllogictests,sqlsmith} release/testsuite/bin/
-          tar -C ./release/testsuite -czvf databend-testsuite-${version}-${target}.tar.gz bin suites
-          sha256sum databend-testsuite-${version}-${target}.tar.gz >> sha256-testsuite-${version}-${target}.txt
+
       - name: post sha256
         uses: actions/upload-artifact@v4
         with:
-          name: sha256sums-${{ matrix.target }}
+          name: sha256sums-${{ matrix.category }}-${{ matrix.target }}
           path: sha256-*.txt
           retention-days: 1
       - name: Publish Binaries
@@ -225,8 +294,46 @@ jobs:
         with:
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ matrix.target }}
+          category: ${{ matrix.category }}
+
+  publish_testsuite:
+    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    needs: create_release
+    env:
+      RUNNER_PROVIDER: gcp
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.create_release.outputs.version }}
+      - name: Download artifact
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.target }}
+          category: defaulta
+      - name: Pack Testsuite
+        run: |
+          target=${{ matrix.target }}
+          version=${{ needs.create_release.outputs.version }}
+          mkdir -p release/testsuite/bin
+          cp -r ./tests/sqllogictests/suites ./release/testsuite/
+          cp ./target/${target}/release/databend-{sqllogictests,sqlsmith} release/testsuite/bin/
+          tar -C ./release/testsuite -czvf databend-testsuite-${version}-${target}.tar.gz bin suites
+          sha256sum databend-testsuite-${version}-${target}.tar.gz >> sha256-testsuite-${version}-${target}.txt
+      - name: post sha256
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256sums-testsuite-${{ matrix.target }}
+          path: sha256-*.txt
+          retention-days: 1
       - name: Publish Testsuite
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
         uses: ./.github/actions/publish_binary
         env:
           GH_TOKEN: ${{ github.token }}
@@ -246,24 +353,6 @@ jobs:
         include:
           - { target: x86_64-unknown-linux-gnu, runner: X64 }
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.create_release.outputs.version }}
-      - name: Setup Build Tool
-        uses: ./.github/actions/setup_build_tool
-        with:
-          target: ${{ matrix.target }}
-      - name: Build Release
-        uses: ./.github/actions/build_linux
-        with:
-          sha: ${{ github.sha }}
-          target: ${{ matrix.target }}
-          artifacts: meta,query
-          category: hdfs
-          features: storage-hdfs
-          upload: false
       - name: Pack binaries
         run: |
           target=${{ matrix.target }}
@@ -284,18 +373,6 @@ jobs:
           name: sha256sums-hdfs-${{ matrix.target }}
           path: sha256-*.txt
           retention-days: 1
-      - name: Publish Binaries
-        uses: ./.github/actions/publish_binary
-        env:
-          GH_TOKEN: ${{ github.token }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
-        with:
-          version: ${{ needs.create_release.outputs.version }}
-          target: ${{ matrix.target }}
-          category: hdfs
 
   docker_all_in_one:
     name: docker combined
