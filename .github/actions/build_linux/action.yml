@@ -113,10 +113,9 @@ runs:
 
     - name: Check Binary Info
       shell: bash
-      continue-on-error: true
       run: |
-        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
-        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
+        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'
