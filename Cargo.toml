@@ -233,9 +233,8 @@ arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafus
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
-serde_stacker = { version = "0.1" }
 serde_with = { version = "3.8.1" }
-serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
+serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 tonic-build = { version = "0.11" }
 
 # Memory management

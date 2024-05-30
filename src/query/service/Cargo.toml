@@ -163,7 +163,6 @@ rustls-pki-types = "1"
 rustyline = "14"
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_stacker = { workspace = true }
 serde_urlencoded = "0.7.1"
 socket2 = "0.5.3"
 strength_reduce = "0.2.4"

@@ -64,10 +64,7 @@ impl FlightActions {
         self.actions.insert(
             path.clone(),
             Box::new(move |request| {
-                let mut deserializer = serde_json::Deserializer::from_slice(request);
-                deserializer.disable_recursion_limit();
-                let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
-                let request = Req::deserialize(deserializer).map_err(|cause| {
+                let request = serde_json::from_slice::<Req>(request).map_err(|cause| {
                     ErrorCode::BadArguments(format!(
                         "Cannot parse request for {}, cause: {:?}",
                         path, cause
@@ -83,19 +80,12 @@ impl FlightActions {
 
                     let future = CatchUnwindFuture::create(future);
                     match future.await.flatten() {
-                        Ok(v) => {
-                            let mut out = Vec::with_capacity(512);
-                            let mut serializer = serde_json::Serializer::new(&mut out);
-                            let serializer = serde_stacker::Serializer::new(&mut serializer);
-                            v.serialize(serializer).map_err(|cause| {
-                                ErrorCode::BadBytes(format!(
-                                    "Cannot serialize response for {}, cause: {:?}",
-                                    path, cause
-                                ))
-                            })?;
-
-                            Ok(out)
-                        }
+                        Ok(v) => serde_json::to_vec(&v).map_err(|cause| {
+                            ErrorCode::BadBytes(format!(
+                                "Cannot serialize response for {}, cause: {:?}",
+                                path, cause
+                            ))
+                        }),
                         Err(err) => Err(err),
                     }
                 })

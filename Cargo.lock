@@ -4713,7 +4713,6 @@ dependencies = [
  "rustyline",
  "serde",
  "serde_json",
- "serde_stacker",
  "serde_urlencoded",
  "socket2 0.5.6",
  "strength_reduce",
@@ -12621,16 +12620,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb3622f419d1296904700073ea6cc23ad690adbd66f13ea683df73298736f0c1"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "serde_stacker"
-version = "0.1.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "babfccff5773ff80657f0ecf553c7c516bdc2eb16389c0918b36b73e7015276e"
-dependencies = [
- "serde",
- "stacker",
 ]
 
 [[package]]
