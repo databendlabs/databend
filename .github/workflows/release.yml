@@ -177,6 +177,8 @@ jobs:
         env:
           TEST_HANDLERS: http
         run: |
+          mkdir -p ./target/${{ env.BUILD_PROFILE }}
+          cp ./target/${{ matrix.target }}/${{ env.BUILD_PROFILE }}/databend-* ./target/${{ env.BUILD_PROFILE }}/
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
   build_udf:
