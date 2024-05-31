@@ -107,11 +107,11 @@ jobs:
           if [[ "${{ inputs.stable }}" == "true" ]]; then
             echo "Stable release"
             previous=$(gh release list --limit 1 --exclude-pre-releases | cut -f 1)
-            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --latest
+            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --latest --draft
           else
             echo "Nightly release"
             previous=$(gh release list --limit 1 | cut -f 1)
-            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --prerelease
+            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --prerelease --draft
           fi
 
   changelog:
@@ -677,3 +677,8 @@ jobs:
             -H 'Content-Type: application/json' \
             -H 'cache-control: no-cache' \
             -d @/tmp/release-report.json
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
+        run: |
+          gh release edit ${{ needs.create_release.outputs.version }} --draft=false
