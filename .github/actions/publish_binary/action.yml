@@ -48,5 +48,4 @@ runs:
         cat tags.json
         aws s3 cp ./tags.json s3://repo/databend/tags.json
         gh api /repos/datafuselabs/databend/releases > releases.json
-        cat releases.json
         aws s3 cp ./releases.json s3://repo/databend/releases.json
