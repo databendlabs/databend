@@ -463,7 +463,7 @@ jobs:
           sha: ${{ github.sha }}
           target: aarch64-unknown-linux-gnu
           category: udf
-          artifacts: ${{ matrix.service }}
+          artifacts: ${{ matrix.service }},metactl
           path: distro/linux/arm64
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
