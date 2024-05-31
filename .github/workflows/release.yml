@@ -659,7 +659,7 @@ jobs:
             });
 
             if (JOBS_STATUS !== "success") {
-              core.info(`Skip publishing on ${JOBS_STATUS}`);
+              core.setFailed("Release failed");
               return;
             }
 
