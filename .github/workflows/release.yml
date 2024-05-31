@@ -23,6 +23,7 @@ permissions:
 
 env:
   BUILD_PROFILE: release
+  RUNNER_PROVIDER: gcp
 
 jobs:
   create_release:
@@ -151,8 +152,6 @@ jobs:
   build_default:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -172,12 +171,17 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,metactl,meta,query
+      - name: Basic Sqllogic Test
+        if: matrix.target != 'aarch64-unknown-linux-musl'
+        shell: bash
+        env:
+          TEST_HANDLERS: http
+        run: |
+          bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
   build_udf:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -201,8 +205,6 @@ jobs:
   build_hdfs:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -226,8 +228,6 @@ jobs:
   publish:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c8g, gcp]
     needs: [create_release, build_default, build_hdfs]
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -258,14 +258,6 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           category: ${{ matrix.category }}
-      - name: Basic Sqllogic Test
-        if: matrix.target != 'aarch64-unknown-linux-musl'
-        shell: bash
-        env:
-          TEST_HANDLERS: http
-        run: |
-          mkdir -p target/release
-          bash ./scripts/ci/ci-run-sqllogic-tests.sh base
       - name: Pack Binaries
         run: |
           target=${{ matrix.target }}
@@ -310,8 +302,6 @@ jobs:
   publish_testsuite:
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
     needs: [create_release, build_default]
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -328,6 +318,7 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           category: default
+          artifacts: sqllogictests,sqlsmith
       - name: Pack Testsuite
         run: |
           target=${{ matrix.target }}
@@ -637,7 +628,6 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-          category: udf
           artifacts: meta,query,sqlsmith
           path: distro
       - name: Run sqlsmith
