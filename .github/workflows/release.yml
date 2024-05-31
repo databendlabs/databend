@@ -576,6 +576,95 @@ jobs:
           # name looks like: `databend_0.8.144~nightly_amd64.deb`
           gh release upload ${version} databend_*.${{ matrix.packager }} --clobber
 
+  # bindings_python:
+  #   if: inputs.stable
+  #   needs: create_release
+  #   uses: ./.github/workflows/bindings.python.yml
+  #   secrets: inherit
+  #   with:
+  #     tag: ${{ needs.create_release.outputs.version }}
+
+  notify:
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - create_release
+      - publish
+      - docker_all_in_one
+      - docker_service
+      - distribution
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.sha }}
+      - name: Notify Release
+        uses: actions/github-script@v7
+        env:
+          JOBS_STATUS: ${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled')|| (contains(needs.*.result, 'canceled') && 'canceled') || 'success' }}
+          REPORT_WEBHOOK: ${{ secrets.RELEASE_REPORT_WEBHOOK }}
+          VERSION: ${{ needs.create_release.outputs.version }}
+        with:
+          script: |
+            const { JOBS_STATUS, REPORT_WEBHOOK, VERSION } = process.env;
+            if (!REPORT_WEBHOOK) {
+              core.setFailed("REPORT_WEBHOOK is not set");
+              return;
+            }
+            if (!VERSION) {
+              core.setFailed("VERSION is not set");
+              return;
+            }
+            const reportData = {
+              msg_type: "post",
+              content: {
+                post: {
+                  en_us: {
+                    title: `[Release] ${VERSION}`,
+                    content: [
+                      [
+                        {
+                          tag: "text",
+                          text: `Build result: ${JOBS_STATUS}`,
+                        },
+                      ],
+                      [
+                        {
+                          tag: "a",
+                          text: "Workflow Details",
+                          href: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                        },
+                        {
+                          tag: "text",
+                          text: " | ",
+                        },
+                        {
+                          tag: "a",
+                          text: "Release Notes",
+                          href: `https://github.com/datafuselabs/databend/releases/tag/${VERSION}`,
+                        },
+                      ],
+                    ],
+                  },
+                },
+              },
+            };
+            await fetch(REPORT_WEBHOOK, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(reportData),
+            });
+            if (JOBS_STATUS !== "success") {
+              core.setFailed("Release failed");
+              return;
+            }
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
+        run: |
+          gh release edit ${{ needs.create_release.outputs.version }} --draft=false
+
   deb:
     runs-on: ubuntu-latest
     if: inputs.stable
@@ -622,19 +711,6 @@ jobs:
           version="${{ needs.create_release.outputs.version }}"
           gh release upload ${version} sha256sums.txt --clobber
 
-  benchmark:
-    needs: [create_release, docker_service]
-    uses: ./.github/workflows/reuse.benchmark.yml
-    secrets: inherit
-    with:
-      sha: ${{ github.sha }}
-      run_id: ${{ github.run_id }}
-      source: release
-      source_id: ${{ needs.create_release.outputs.version }}
-      version: ${{ needs.create_release.outputs.version }}
-      runner_provider: gcp
-      target: all
-
   sqlsmith:
     needs: [create_release, build_default]
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
@@ -659,103 +735,15 @@ jobs:
         with:
           name: test-sqlsmith
 
-  # bindings_python:
-  #   if: inputs.stable
-  #   needs: create_release
-  #   uses: ./.github/workflows/bindings.python.yml
-  #   secrets: inherit
-  #   with:
-  #     tag: ${{ needs.create_release.outputs.version }}
-
-  notify:
-    runs-on: ubuntu-latest
-    if: always()
-    needs:
-      - create_release
-      - publish
-      - docker_all_in_one
-      - docker_service
-      - distribution
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.create_release.outputs.sha }}
-      - name: Notify Release
-        uses: actions/github-script@v7
-        env:
-          JOBS_STATUS: ${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled')|| (contains(needs.*.result, 'canceled') && 'canceled') || 'success' }}
-          REPORT_WEBHOOK: ${{ secrets.RELEASE_REPORT_WEBHOOK }}
-          VERSION: ${{ needs.create_release.outputs.version }}
-        with:
-          github-token: ${{ secrets.DATABEND_BOT_TOKEN }}
-          script: |
-            const { JOBS_STATUS, REPORT_WEBHOOK, VERSION } = process.env;
-            if (!REPORT_WEBHOOK) {
-              core.setFailed("REPORT_WEBHOOK is not set");
-              return;
-            }
-            if (!VERSION) {
-              core.setFailed("VERSION is not set");
-              return;
-            }
-            const reportData = {
-              msg_type: "post",
-              content: {
-                post: {
-                  en_us: {
-                    title: `[Release] ${VERSION}`,
-                    content: [
-                      [
-                        {
-                          tag: "text",
-                          text: `Build result: ${JOBS_STATUS}`,
-                        },
-                      ],
-                      [
-                        {
-                          tag: "a",
-                          text: "Workflow Details",
-                          href: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-                        },
-                        {
-                          tag: "text",
-                          text: " | ",
-                        },
-                        {
-                          tag: "a",
-                          text: "Release Notes",
-                          href: `https://github.com/datafuselabs/databend/releases/tag/${VERSION}`,
-                        },
-                      ],
-                    ],
-                  },
-                },
-              },
-            };
-
-            await fetch(REPORT_WEBHOOK, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(reportData),
-            });
-
-            if (JOBS_STATUS !== "success") {
-              core.info(`Skip publishing on ${JOBS_STATUS}`);
-              return;
-            }
-
-            const release = await github.rest.repos.getReleaseByTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag: VERSION,
-            });
-            if (release.data.draft) {
-              await github.rest.repos.updateRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: release.data.id,
-                draft: false,
-              });
-            }
+  benchmark:
+    needs: [create_release, docker_service, notify]
+    uses: ./.github/workflows/reuse.benchmark.yml
+    secrets: inherit
+    with:
+      sha: ${{ github.sha }}
+      run_id: ${{ github.run_id }}
+      source: release
+      source_id: ${{ needs.create_release.outputs.version }}
+      version: ${{ needs.create_release.outputs.version }}
+      runner_provider: gcp
+      target: all
