@@ -56,11 +56,15 @@ tar -zxf ${target_dir}/data/tpcds.tar.gz -C ${target_dir}/data
 
 # insert data to tables
 # shellcheck disable=SC2068
+
+stmt "drop stage if exists s1"
+stmt "create stage s1 url='fs://${PWD}/${target_dir}/'"
+
 for t in ${tables[@]}; do
-    echo $t
-    insert_sql="insert into ${db}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${target_dir}'/data/data/'$t'.csv"' >/dev/null 2>&1
-    echo "analyze table $db.$t" | $BENDSQL_CLIENT_CONNECT
+    echo "$t"
+    sub_path="data/data/$t.csv"
+   	query "copy into ${db}.${t} from @s1/${sub_path} file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+    query "analyze table $db.$t"
 done
 
 if [ -d "tests/sqllogictests/data" ]; then

@@ -4152,6 +4152,7 @@ dependencies = [
  "databend-common-building",
  "databend-common-catalog",
  "databend-common-compress",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",

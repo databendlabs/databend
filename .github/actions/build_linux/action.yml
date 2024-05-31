@@ -30,7 +30,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,PYO3_PYTHON,LD_LIBRARY_PATH,PYO3_CROSS_PYTHON_VERSION
+        bypass_env_vars: RUSTFLAGS,RUST_LOG
 
     - name: Cross setup
       if: startsWith(inputs.target, 'aarch64-')
@@ -61,9 +61,6 @@ runs:
         echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
         target=${{ inputs.target }}
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
-        echo "LD_LIBRARY_PATH=/usr/local/lib" >> $GITHUB_ENV
-        echo "PYO3_PYTHON=python3.12" >> $GITHUB_ENV
-        echo "PYO3_CROSS_PYTHON_VERSION=/3.12" >> $GITHUB_ENV
 
     # build all binaries for debug
     - name: Build Debug
@@ -113,10 +110,9 @@ runs:
 
     - name: Check Binary Info
       shell: bash
-      continue-on-error: true
       run: |
-        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
-        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
+        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'
