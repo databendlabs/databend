@@ -209,8 +209,10 @@ impl ReclusterMutator {
                 .block_thresholds
                 .check_for_recluster(total_rows as usize, total_bytes as usize)
             {
-                let block_metas: Vec<_> =
-                    block_metas.into_iter().map(|meta| (None, meta)).collect();
+                let block_metas = block_metas
+                    .into_iter()
+                    .map(|meta| (None, meta))
+                    .collect::<Vec<_>>();
                 self.generate_task(
                     &block_metas,
                     &column_nodes,
@@ -453,12 +455,9 @@ impl ReclusterMutator {
             });
         }
 
-        let mut selected_idx = IndexSet::new();
         if !unfinished_parts.is_empty() {
             warn!("Recluster: unfinished_parts is not empty after calculate the blocks overlaps");
-            unfinished_parts.keys().for_each(|idx| {
-                selected_idx.insert(*idx);
-            });
+            // todo: re-sort the unfinished parts firstly.
         }
 
         let sum_depth: usize = block_depths.iter().sum();
@@ -467,6 +466,7 @@ impl ReclusterMutator {
             (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
 
         // find the max point, gather the indices.
+        let mut selected_idx = IndexSet::new();
         if average_depth > depth_threshold {
             point_overlaps[max_point].iter().for_each(|idx| {
                 selected_idx.insert(*idx);
