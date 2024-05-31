@@ -249,6 +249,9 @@ jobs:
           - category: hdfs
             target: x86_64-unknown-linux-gnu
             runner: X64
+          - category: hdfs
+            target: aarch64-unknown-linux-gnu
+            runner: ARM64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
