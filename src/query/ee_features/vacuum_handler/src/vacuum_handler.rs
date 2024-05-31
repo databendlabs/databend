@@ -47,7 +47,7 @@ pub trait VacuumHandler: Sync + Send {
         &self,
         temporary_dir: String,
         retain: Option<Duration>,
-        vacuum_limit: Option<usize>,
+        vacuum_limit: usize,
     ) -> Result<usize>;
 }
 
@@ -90,7 +90,7 @@ impl VacuumHandlerWrapper {
         &self,
         temporary_dir: String,
         retain: Option<Duration>,
-        vacuum_limit: Option<usize>,
+        vacuum_limit: usize,
     ) -> Result<usize> {
         self.handler
             .do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit)

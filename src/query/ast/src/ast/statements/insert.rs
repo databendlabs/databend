@@ -37,7 +37,6 @@ pub struct InsertStmt {
     pub table: Identifier,
     pub columns: Vec<Identifier>,
     pub source: InsertSource,
-    #[drive(skip)]
     pub overwrite: bool,
 }
 
@@ -74,27 +73,20 @@ impl Display for InsertStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum InsertSource {
     Streaming {
-        #[drive(skip)]
         format: String,
-        #[drive(skip)]
         rest_str: String,
-        #[drive(skip)]
         start: usize,
     },
     StreamingV2 {
         settings: FileFormatOptions,
-        #[drive(skip)]
         on_error_mode: Option<String>,
-        #[drive(skip)]
         start: usize,
     },
     Values {
         rows: Vec<Vec<Expr>>,
     },
     RawValues {
-        #[drive(skip)]
         rest_str: String,
-        #[drive(skip)]
         start: usize,
     },
     Select {

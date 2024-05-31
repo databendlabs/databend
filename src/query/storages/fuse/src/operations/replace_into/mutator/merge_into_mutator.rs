@@ -58,9 +58,9 @@ use log::warn;
 use opendal::Operator;
 
 use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
-use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::BlockWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
@@ -564,18 +564,11 @@ impl AggregationContext {
             })??;
 
         // persistent data
-        let new_block_meta = serialized.block_meta;
-        let new_block_location = new_block_meta.location.0.clone();
-        let new_block_raw_data = serialized.block_raw_data;
-        let data_accessor = self.data_accessor.clone();
-        write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
+        let new_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
 
         metrics_inc_replace_block_number_write(1);
         metrics_inc_replace_row_number_write(new_block_meta.row_count);
         metrics_inc_replace_replaced_blocks_rows(num_rows as u64);
-        if let Some(index_state) = serialized.bloom_index_state {
-            write_data(index_state.data, &data_accessor, &index_state.location.0).await?;
-        }
 
         // generate log
         let mutation = MutationLogEntry::ReplacedBlock {

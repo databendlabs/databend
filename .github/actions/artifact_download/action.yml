@@ -8,7 +8,7 @@ inputs:
     description: ""
     required: true
   category:
-    description: "default/hdfs"
+    description: "default/hdfs/udf"
     required: false
     default: default
   path:
@@ -16,7 +16,7 @@ inputs:
     required: false
     default: ""
   artifacts:
-    description: "Artifacts to download, only works with s3"
+    description: "Artifacts to download, only works with s3/gcs"
     required: false
     default: "meta,query"
 outputs:
@@ -82,6 +82,7 @@ runs:
       if: env.RUNNER_PROVIDER == 'gcp'
       shell: bash
       run: |
+        gcloud config set storage/parallel_composite_upload_enabled True
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           if [[ "${artifact}" == "open-sharing" ]]; then

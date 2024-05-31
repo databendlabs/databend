@@ -41,6 +41,7 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::Visibility;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
@@ -53,7 +54,6 @@ use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
-use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -94,17 +94,20 @@ impl Interpreter for UpdateInterpreter {
         }
 
         let catalog_name = self.plan.catalog.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
-        let tbl = catalog
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await?;
 
         // Add table lock.
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                catalog_name,
+                db_name,
+                tbl_name,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
 
         // build physical plan.
         let physical_plan = self.get_physical_plan().await?;
@@ -122,7 +125,7 @@ impl Interpreter for UpdateInterpreter {
                     tbl_name.to_string(),
                     MutationKind::Update,
                     // table lock has been added, no need to check.
-                    false,
+                    LockTableOption::NoLock,
                 );
                 hook_operator
                     .execute_refresh(&mut build_res.main_pipeline)
@@ -146,8 +149,6 @@ impl UpdateInterpreter {
         let tbl = catalog
             .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await?;
-        // refresh table.
-        let tbl = tbl.refresh(self.ctx.as_ref()).await?;
         // check mutability
         tbl.check_mutable()?;
 
@@ -327,7 +328,6 @@ impl UpdateInterpreter {
             mutation_kind: MutationKind::Update,
             update_stream_meta: vec![],
             merge_meta,
-            need_lock: false,
             deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
         }));

@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod declare;
-pub mod mir;
-pub mod problem;
-pub mod simplify;
+pub fn defer<F: FnOnce() -> R, R>(f: F) -> impl Drop {
+    struct Defer<F: FnOnce() -> R, R>(Option<F>);
+
+    impl<F: FnOnce() -> R, R> Drop for Defer<F, R> {
+        fn drop(&mut self) {
+            self.0.take().unwrap()();
+        }
+    }
+
+    Defer(Some(f))
+}

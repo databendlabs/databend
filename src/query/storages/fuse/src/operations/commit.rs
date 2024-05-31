@@ -104,7 +104,6 @@ impl FuseTable {
                 snapshot_gen.clone(),
                 input,
                 None,
-                None,
                 prev_snapshot_id,
                 deduplicated_label.clone(),
             )

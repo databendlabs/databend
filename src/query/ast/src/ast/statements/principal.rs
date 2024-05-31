@@ -35,9 +35,7 @@ impl Display for ShareNameIdent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UserIdentity {
-    #[drive(skip)]
     pub username: String,
-    #[drive(skip)]
     pub hostname: String,
 }
 
@@ -59,7 +57,7 @@ impl Display for UserIdentity {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum PrincipalIdentity {
     User(UserIdentity),
-    Role(#[drive(skip)] String),
+    Role(String),
 }
 
 impl Display for PrincipalIdentity {
@@ -232,23 +230,14 @@ impl Display for ShareGrantObjectPrivilege {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
-    #[drive(skip)]
     pub size_limit: usize,
-    #[drive(skip)]
     pub max_files: usize,
-    #[drive(skip)]
     pub split_size: usize,
-    #[drive(skip)]
     pub purge: bool,
-    #[drive(skip)]
     pub disable_variant_check: bool,
-    #[drive(skip)]
     pub return_failed_only: bool,
-    #[drive(skip)]
     pub max_file_size: usize,
-    #[drive(skip)]
     pub single: bool,
-    #[drive(skip)]
     pub detailed_output: bool,
 }
 
@@ -270,8 +259,8 @@ impl Display for CopyOptions {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum OnErrorMode {
     Continue,
-    SkipFileNum(#[drive(skip)] u64),
-    AbortNum(#[drive(skip)] u64),
+    SkipFileNum(u64),
+    AbortNum(u64),
 }
 
 impl Display for OnErrorMode {

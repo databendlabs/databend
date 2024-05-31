@@ -14,6 +14,8 @@
 
 use std::collections::HashSet;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserGrantSet;
@@ -88,6 +90,8 @@ fn test_decode_v76_role() -> anyhow::Result<()> {
             ],
             HashSet::new(),
         ),
+        created_on: DateTime::<Utc>::default(),
+        update_on: DateTime::<Utc>::default(),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), role_info_v76.as_slice(), 76, want())?;

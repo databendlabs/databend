@@ -107,6 +107,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::LockTableOption;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
@@ -1115,7 +1116,7 @@ impl Binder {
             table,
             action,
             limit: limit.map(|v| v as usize),
-            need_lock: true,
+            lock_opt: LockTableOption::LockWithRetry,
         })))
     }
 

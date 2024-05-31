@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
@@ -46,7 +45,6 @@ pub struct SegmentCompactionState {
 
 pub struct SegmentCompactMutator {
     ctx: Arc<dyn TableContext>,
-    lock: Arc<dyn Lock>,
     compact_params: CompactOptions,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
@@ -57,7 +55,6 @@ pub struct SegmentCompactMutator {
 impl SegmentCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        lock: Arc<dyn Lock>,
         compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
@@ -65,7 +62,6 @@ impl SegmentCompactMutator {
     ) -> Result<Self> {
         Ok(Self {
             ctx,
-            lock,
             compact_params,
             data_accessor: operator,
             location_generator,
@@ -136,8 +132,6 @@ impl SegmentCompactMutator {
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-        let _guard = self.lock.try_lock(self.ctx.clone()).await?;
 
         fuse_table
             .commit_mutation(

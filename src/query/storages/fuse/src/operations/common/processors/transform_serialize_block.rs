@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table::Table;
@@ -25,7 +24,6 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
-use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -37,9 +35,9 @@ use databend_storages_common_index::BloomIndex;
 use opendal::Operator;
 
 use crate::io::create_inverted_index_builders;
-use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
+use crate::io::BlockWriter;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -303,70 +301,19 @@ impl Processor for TransformSerializeBlock {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
-                let start = Instant::now();
-                // write block data.
-                let raw_block_data = serialized.block_raw_data;
-                let data_size = raw_block_data.len();
-                let path = serialized.block_meta.location.0.as_str();
-                write_data(raw_block_data, &self.dal, path).await?;
+                let block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
-                // Perf.
-                {
-                    metrics_inc_block_write_nums(1);
-                    metrics_inc_block_write_bytes(data_size as u64);
-                    metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
-                }
-
-                // write index data.
-                let bloom_index_state = serialized.bloom_index_state;
-                if let Some(bloom_index_state) = bloom_index_state {
-                    let start = Instant::now();
-                    let index_size = bloom_index_state.size;
-                    write_data(
-                        bloom_index_state.data,
-                        &self.dal,
-                        &bloom_index_state.location.0,
-                    )
-                    .await?;
-                    // Perf.
-                    {
-                        metrics_inc_block_index_write_nums(1);
-                        metrics_inc_block_index_write_bytes(index_size);
-                        metrics_inc_block_index_write_milliseconds(
-                            start.elapsed().as_millis() as u64
-                        );
-                    }
-                }
-
-                // write inverted index
-                for inverted_index_state in serialized.inverted_index_states {
-                    let start = Instant::now();
-                    let index_size = inverted_index_state.size;
-                    write_data(
-                        inverted_index_state.data,
-                        &self.dal,
-                        &inverted_index_state.location.0,
-                    )
-                    .await?;
-                    // Perf.
-                    {
-                        metrics_inc_block_inverted_index_write_nums(1);
-                        metrics_inc_block_inverted_index_write_bytes(index_size);
-                        metrics_inc_block_inverted_index_write_milliseconds(
-                            start.elapsed().as_millis() as u64,
-                        );
-                    }
-                }
-
-                let data_block = if let Some(index) = index {
+                let mutation_log_data_block = if let Some(index) = index {
+                    // we are replacing the block represented by the `index`
                     Self::mutation_logs(MutationLogEntry::ReplacedBlock {
                         index,
-                        block_meta: Arc::new(serialized.block_meta),
+                        block_meta: Arc::new(block_meta),
                     })
                 } else {
+                    // appending new data block
                     let progress_values = ProgressValues {
-                        rows: serialized.block_meta.row_count as usize,
-                        bytes: serialized.block_meta.block_size as usize,
+                        rows: block_meta.row_count as usize,
+                        bytes: block_meta.block_size as usize,
                     };
                     self.block_builder
                         .ctx
@@ -376,12 +323,12 @@ impl Processor for TransformSerializeBlock {
                     if let Some(tid) = self.table_id {
                         self.block_builder
                             .ctx
-                            .update_multi_table_insert_status(tid, serialized.block_meta.row_count);
+                            .update_multi_table_insert_status(tid, block_meta.row_count);
                     }
 
-                    DataBlock::empty_with_meta(Box::new(serialized.block_meta))
+                    DataBlock::empty_with_meta(Box::new(block_meta))
                 };
-                self.output_data = Some(data_block);
+                self.output_data = Some(mutation_log_data_block);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
