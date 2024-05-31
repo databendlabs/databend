@@ -411,6 +411,12 @@ pub fn parse_cluster_keys(
         if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
             ast_exprs = exprs.clone();
         }
+    } else {
+        // Defensive check:
+        // `ast_exprs` should always contain one element which can be one of the following:
+        // 1. A tuple of composite cluster keys
+        // 2. A single cluster key
+        unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
     }
 
     let mut exprs = Vec::with_capacity(ast_exprs.len());
