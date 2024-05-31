@@ -66,7 +66,6 @@ pub struct Pipeline {
     max_threads: usize,
     pub pipes: Vec<Pipe>,
     on_init: Option<InitCallback>,
-    on_finished: Option<FinishedCallback>,
     lock_guards: Vec<LockGuard>,
 
     on_finished_chain: FinishedCallbackChain,
@@ -83,8 +82,6 @@ impl Debug for Pipeline {
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
-pub type FinishedCallback = Box<dyn FnOnce(&ExecutionInfo) -> Result<()> + Send + Sync + 'static>;
-
 pub type DynTransformBuilder = Box<dyn Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>>;
 
 impl Pipeline {
@@ -93,7 +90,6 @@ impl Pipeline {
             max_threads: 0,
             pipes: Vec::new(),
             on_init: None,
-            on_finished: None,
             lock_guards: vec![],
             plans_scope: vec![],
             on_finished_chain: FinishedCallbackChain::create(),
@@ -108,7 +104,6 @@ impl Pipeline {
             max_threads: 0,
             pipes: Vec::new(),
             on_init: None,
-            on_finished: None,
             lock_guards: vec![],
             on_finished_chain: FinishedCallbackChain::create(),
             plans_scope: scope,
@@ -521,13 +516,13 @@ impl Drop for Pipeline {
     fn drop(&mut self) {
         drop_guard(move || {
             // An error may have occurred before the executor was created.
-            if let Some(on_finished) = self.on_finished.take() {
-                let cause = Err(ErrorCode::Internal(
-                    "Pipeline illegal state: not successfully shutdown.",
-                ));
+            let cause = Err(ErrorCode::Internal(
+                "Pipeline illegal state: not successfully shutdown.",
+            ));
 
-                let _ = on_finished(&ExecutionInfo::create(cause, vec![]));
-            }
+            let _ = self
+                .on_finished_chain
+                .apply(ExecutionInfo::create(cause, vec![]));
         })
     }
 }

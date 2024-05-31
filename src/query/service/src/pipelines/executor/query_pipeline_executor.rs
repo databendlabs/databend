@@ -56,8 +56,6 @@ use crate::pipelines::executor::WorkersCondvar;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
-pub type FinishedCallback = Box<dyn FnOnce(&ExecutionInfo) -> Result<()> + Send + Sync + 'static>;
-
 pub struct QueryPipelineExecutor {
     threads_num: usize,
     pub(crate) graph: Arc<RunningGraph>,
