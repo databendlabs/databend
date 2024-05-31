@@ -89,7 +89,7 @@ jobs:
       matrix:
         include:
           - { arch: x86_64, runner: X64 }
-          - { arch: aarch64, runner: ARM64 }
+          # - { arch: aarch64, runner: ARM64 }
     steps:
       - uses: actions/checkout@v4
         with:
