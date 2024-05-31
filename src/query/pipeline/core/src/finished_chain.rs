@@ -45,6 +45,7 @@ pub trait Callback: Send + Sync + 'static {
 
 struct ApplyState {
     is_always: bool,
+    is_interrupt: bool,
     successfully: bool,
     elapsed: Duration,
     location: &'static Location<'static>,
@@ -84,32 +85,47 @@ impl FinishedCallbackChain {
             }
         }
 
+        let mut apply_res = Ok(());
         for (location, callback) in callbacks {
+            if apply_res.is_err() {
+                states.push(ApplyState {
+                    location,
+                    is_always: false,
+                    is_interrupt: true,
+                    successfully: false,
+                    elapsed: Duration::from_secs(0),
+                });
+
+                continue;
+            }
+
             let instant = Instant::now();
             if let Err(cause) = callback.apply(&info) {
                 states.push(ApplyState {
                     location,
                     is_always: false,
+                    is_interrupt: false,
                     successfully: false,
                     elapsed: instant.elapsed(),
                 });
 
                 info.res = Err(cause.clone());
-                Self::apply_always(info, states, always_callbacks);
 
-                return Err(cause);
+                apply_res = Err(cause);
+                continue;
             }
 
             states.push(ApplyState {
                 location,
                 is_always: false,
+                is_interrupt: false,
                 successfully: true,
                 elapsed: instant.elapsed(),
             });
         }
 
         Self::apply_always(info, states, always_callbacks);
-        Ok(())
+        apply_res
     }
 
     fn apply_always(
@@ -123,12 +139,14 @@ impl FinishedCallbackChain {
                 Ok(_) => ApplyState {
                     location,
                     is_always: true,
+                    is_interrupt: false,
                     successfully: true,
                     elapsed: instant.elapsed(),
                 },
                 Err(_cause) => ApplyState {
                     location,
                     is_always: true,
+                    is_interrupt: false,
                     successfully: false,
                     elapsed: instant.elapsed(),
                 },
@@ -153,7 +171,10 @@ impl FinishedCallbackChain {
 
             let always_state = match apply_state.is_always {
                 true => "(always) ",
-                false => "",
+                false => match apply_state.is_interrupt {
+                    true => "(interrupt) ",
+                    false => "",
+                },
             };
 
             writeln!(
