@@ -628,7 +628,6 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-          category: udf
           artifacts: meta,query,sqlsmith
           path: distro
       - name: Run sqlsmith
