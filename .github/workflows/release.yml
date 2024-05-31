@@ -455,7 +455,7 @@ jobs:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
           category: udf
-          artifacts: ${{ matrix.service }}
+          artifacts: ${{ matrix.service }},metactl
           path: distro/linux/amd64
       - name: Download artifacts for aarch64
         uses: ./.github/actions/artifact_download
@@ -559,6 +559,12 @@ jobs:
               export arch="arm64"
               ;;
           esac
+          mkdir -p distro/{bin,configs,systemd,scripts}
+          cp ./scripts/distribution/systemd/databend-* distro/systemd/
+          cp ./scripts/distribution/configs/databend-* distro/configs/
+          cp ./scripts/distribution/release-readme.txt distro/readme.txt
+          cp -r ./scripts/distribution/local-scripts/* distro/scripts/
+          cp -r ./scripts/distribution/package-scripts/* distro/scripts/
           nfpm pkg --packager ${{ matrix.packager }} -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
       - name: Update release to github
         shell: bash
