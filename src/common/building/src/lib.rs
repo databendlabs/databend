@@ -25,7 +25,7 @@ use gix::Repository;
 use log::error;
 use vergen::EmitBuilder;
 
-const VERSION_ERROR_MESSAGE: &'static str = "A valid version is required for MetaClient handshaking, you could either set the `DATABEND_RELEASE_VERSION` env var or use `git fetch` to get the latest tag";
+const VERSION_ERROR_MESSAGE: &str = "A valid version is required for MetaClient handshaking, you could either set the `DATABEND_RELEASE_VERSION` env var or use `git fetch` to get the latest tag";
 
 /// Setup building environment:
 /// - Watch git HEAD to trigger a rebuild;
