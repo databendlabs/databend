@@ -34,6 +34,7 @@ use super::sort::OrderItem;
 use super::Finder;
 use crate::binder::bind_table_reference::JoinConditions;
 use crate::binder::scalar_common::split_conjunctions;
+use crate::binder::util::find_and_update_r_cte_scan;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
@@ -211,7 +212,7 @@ impl Binder {
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
-        right_expr: SExpr,
+        mut right_expr: SExpr,
         distinct: bool,
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
@@ -241,6 +242,18 @@ impl Binder {
                 coercion_types.push(*left_col.data_type.clone());
             }
         }
+        // If the union is from recursive cte, find all recursive cte scans and update the data type of field in cte scan
+        if let Some(_) = cte_name.as_ref() {
+            // Find all recursive cte scans in right_expr
+            let mut count = 0;
+            right_expr = find_and_update_r_cte_scan(&right_expr, &coercion_types, &mut count)?;
+            if count == 0 {
+                return Err(ErrorCode::SemanticError(
+                    "Recursive cte should be used in recursive cte".to_string(),
+                ));
+            }
+        }
+
         let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
             left_span,
             right_span,
