@@ -8,19 +8,27 @@ module.exports = async ({ context, core }) => {
     core.setFailed("VERSION is not set");
     return;
   }
+
+  let icon = "";
+  switch (JOBS_STATUS) {
+    case "success":
+      icon = "🎉";
+      break;
+    case "failure":
+      icon = "🔥";
+      break;
+    case "cancelled":
+      icon = "🚫";
+      break;
+  }
+
   const reportData = {
     msg_type: "post",
     content: {
       post: {
         en_us: {
-          title: `[Release] ${VERSION}`,
+          title: `${icon} [Release] ${VERSION} (${JOBS_STATUS})`,
           content: [
-            [
-              {
-                tag: "text",
-                text: `Build result: ${JOBS_STATUS}`,
-              },
-            ],
             [
               {
                 tag: "a",
