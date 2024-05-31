@@ -399,15 +399,13 @@ impl Binder {
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
         cte_name: &String,
-        alias_name: &Option<String>,
+        alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
         self.ctx.set_recursive_cte_scan(cte_name, vec![])?;
         let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
         new_bind_ctx.columns = cte_info.columns.clone();
-        if let Some(alias) = alias_name {
-            for col in new_bind_ctx.columns.iter_mut() {
-                col.table_name = Some(alias.clone());
-            }
+        if let Some(alias) = alias {
+            new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
         let mut fields = Vec::with_capacity(cte_info.columns.len());
         for col in new_bind_ctx.columns.iter() {

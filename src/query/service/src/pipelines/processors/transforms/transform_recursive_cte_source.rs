@@ -17,7 +17,10 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::{BlockEntry, ColumnBuilder, DataBlock, Value};
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
@@ -84,13 +87,12 @@ impl TransformRecursiveCteSource {
         let num_rows = block.num_rows();
         let left_schema = self.union_plan.left.output_schema()?;
         let columns = self
-            .union_plan.pairs
+            .union_plan
+            .pairs
             .iter()
             .map(|(left, right)| {
                 if is_left {
-                    Ok(block
-                        .get_by_offset(left_schema.index_of(left)?)
-                        .clone())
+                    Ok(block.get_by_offset(left_schema.index_of(left)?).clone())
                 } else {
                     // If block from right, check if block schema matches self scheme(left schema)
                     // If unmatched, covert block columns types or report error
@@ -162,10 +164,10 @@ impl AsyncSource for TransformRecursiveCteSource {
 
         let row_size = data.num_rows();
         if row_size > 0 {
-            data = self.project_block(data, self.recursive_step == 1)?;
             // Prepare the data of next round recursive.
             self.ctx
                 .update_recursive_cte_scan(&self.cte_name, vec![data.clone()])?;
+            data = self.project_block(data, self.recursive_step == 1)?;
             res = Some(data);
         } else {
             self.ctx.update_recursive_cte_scan(&self.cte_name, vec![])?;

@@ -1017,6 +1017,10 @@ impl DataField {
     pub fn is_nullable_or_null(&self) -> bool {
         self.data_type.is_nullable_or_null()
     }
+
+    pub fn update_type(&mut self, new_type: DataType) {
+        self.data_type = new_type;
+    }
 }
 
 impl TableField {
