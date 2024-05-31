@@ -31,6 +31,7 @@ use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::TableScan;
@@ -375,7 +376,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
         build_res
             .main_pipeline
-            .set_on_finished(move |info| match &info.res {
+            .set_on_finished(move |info: &ExecutionInfo| match &info.res {
                 Ok(_) => GlobalIORuntime::instance()
                     .block_on(async move { modify_last_update(ctx, req).await }),
                 Err(error_code) => Err(error_code.clone()),

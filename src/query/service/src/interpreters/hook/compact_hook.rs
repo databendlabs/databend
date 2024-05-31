@@ -19,6 +19,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::LockTableOption;
@@ -73,7 +74,7 @@ async fn do_hook_compact(
         return Ok(());
     }
 
-    pipeline.set_on_finished(move |info| {
+    pipeline.set_on_finished(move |info: &ExecutionInfo| {
         let compaction_limits = match compact_target.mutation_kind {
             MutationKind::Insert => {
                 let compaction_num_block_hint = ctx.get_compaction_num_block_hint();

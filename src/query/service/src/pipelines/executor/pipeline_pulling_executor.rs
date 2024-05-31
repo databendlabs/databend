@@ -29,6 +29,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
@@ -129,7 +130,7 @@ impl PipelinePullingExecutor {
             )))
         })?;
 
-        pipeline.set_on_finished(move |_info| {
+        pipeline.set_on_finished(move |_info: &ExecutionInfo| {
             drop(tx);
             Ok(())
         });

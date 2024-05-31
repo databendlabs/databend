@@ -26,7 +26,9 @@ use databend_common_exception::Result;
 use log::info;
 use petgraph::matrix_graph::Zero;
 
-use crate::callback::ExecutionInfo;
+use crate::finished_chain::Callback;
+use crate::finished_chain::ExecutionInfo;
+use crate::finished_chain::FinishedCallbackChain;
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
 use crate::processors::DuplicateProcessor;
@@ -67,6 +69,8 @@ pub struct Pipeline {
     on_finished: Option<FinishedCallback>,
     lock_guards: Vec<LockGuard>,
 
+    on_finished_chain: FinishedCallbackChain,
+
     plans_scope: Vec<PlanScope>,
     scope_size: Arc<AtomicUsize>,
 }
@@ -92,6 +96,7 @@ impl Pipeline {
             on_finished: None,
             lock_guards: vec![],
             plans_scope: vec![],
+            on_finished_chain: FinishedCallbackChain::create(),
             scope_size: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -105,6 +110,7 @@ impl Pipeline {
             on_init: None,
             on_finished: None,
             lock_guards: vec![],
+            on_finished_chain: FinishedCallbackChain::create(),
             plans_scope: scope,
         }
     }
@@ -469,64 +475,18 @@ impl Pipeline {
         self.on_init = Some(Box::new(f));
     }
 
+    // Set param into last
     #[track_caller]
-    pub fn set_on_finished<F: FnOnce(&ExecutionInfo) -> Result<()> + Send + Sync + 'static>(
-        &mut self,
-        f: F,
-    ) {
+    pub fn set_on_finished<F: Callback>(&mut self, f: F) {
         let location = std::panic::Location::caller();
-        if let Some(on_finished) = self.on_finished.take() {
-            self.on_finished = Some(Box::new(move |info| {
-                on_finished(info)?;
-                let instants = Instant::now();
-                let _guard = defer(move || {
-                    info!(
-                        "OnFinished callback elapsed: {:?} while in {}:{}:{}",
-                        instants.elapsed(),
-                        location.file(),
-                        location.line(),
-                        location.column()
-                    );
-                });
-
-                f(info)
-            }));
-            return;
-        }
-
-        self.on_finished = Some(Box::new(f));
+        self.on_finished_chain.push_back(location, Box::new(f));
     }
 
+    // Lift current and set param into first
     #[track_caller]
-    pub fn push_front_on_finished_callback<
-        F: FnOnce(&ExecutionInfo) -> Result<()> + Send + Sync + 'static,
-    >(
-        &mut self,
-        f: F,
-    ) {
+    pub fn lift_on_finished<F: Callback>(&mut self, f: F) {
         let location = std::panic::Location::caller();
-        if let Some(on_finished) = self.on_finished.take() {
-            self.on_finished = Some(Box::new(move |info| {
-                let instants = Instant::now();
-                let guard = defer(move || {
-                    info!(
-                        "OnFinished callback elapsed: {:?} while in {}:{}:{}",
-                        instants.elapsed(),
-                        location.file(),
-                        location.line(),
-                        location.column()
-                    );
-                });
-
-                f(info)?;
-                drop(guard);
-                on_finished(info)
-            }));
-
-            return;
-        }
-
-        self.on_finished = Some(Box::new(f));
+        self.on_finished_chain.push_front(location, Box::new(f));
     }
 
     pub fn take_on_init(&mut self) -> InitCallback {
@@ -536,11 +496,10 @@ impl Pipeline {
         }
     }
 
-    pub fn take_on_finished(&mut self) -> FinishedCallback {
-        match self.on_finished.take() {
-            None => Box::new(|_may_error| Ok(())),
-            Some(on_finished) => on_finished,
-        }
+    pub fn take_on_finished(&mut self) -> FinishedCallbackChain {
+        let mut chain = FinishedCallbackChain::create();
+        std::mem::swap(&mut self.on_finished_chain, &mut chain);
+        chain
     }
 
     pub fn add_plan_scope(&mut self, scope: PlanScope) -> PlanScopeGuard {

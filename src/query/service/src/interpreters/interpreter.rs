@@ -27,7 +27,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
@@ -108,48 +110,50 @@ pub trait Interpreter: Sync + Send {
         }
 
         let query_ctx = ctx.clone();
-        build_res.main_pipeline.set_on_finished(move |info| {
-            let mut has_profiles = false;
-            // Standalone mode or query executed is successfully
-            if query_ctx.get_cluster().is_empty() || info.res.is_ok() {
-                query_ctx.add_query_profiles(&info.profiling);
+        build_res
+            .main_pipeline
+            .set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                let mut has_profiles = false;
+                // Standalone mode or query executed is successfully
+                if query_ctx.get_cluster().is_empty() || info.res.is_ok() {
+                    query_ctx.add_query_profiles(&info.profiling);
 
-                let query_profiles = query_ctx.get_query_profiles();
+                    let query_profiles = query_ctx.get_query_profiles();
 
-                if !query_profiles.is_empty() {
-                    has_profiles = true;
-                    #[derive(serde::Serialize)]
-                    struct QueryProfiles {
-                        query_id: String,
-                        profiles: Vec<PlanProfile>,
-                        statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+                    if !query_profiles.is_empty() {
+                        has_profiles = true;
+                        #[derive(serde::Serialize)]
+                        struct QueryProfiles {
+                            query_id: String,
+                            profiles: Vec<PlanProfile>,
+                            statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+                        }
+
+                        info!(
+                            target: "databend::log::profile",
+                            "{}",
+                            serde_json::to_string(&QueryProfiles {
+                                query_id: query_ctx.get_id(),
+                                profiles: query_profiles,
+                                statistics_desc: get_statistics_desc(),
+                            })?
+                        );
                     }
-
-                    info!(
-                        target: "databend::log::profile",
-                        "{}",
-                        serde_json::to_string(&QueryProfiles {
-                            query_id: query_ctx.get_id(),
-                            profiles: query_profiles,
-                            statistics_desc: get_statistics_desc(),
-                        })?
-                    );
                 }
-            }
 
-            hook_vacuum_temp_files(&query_ctx)?;
+                hook_vacuum_temp_files(&query_ctx)?;
 
-            let err_opt = match &info.res {
-                Ok(_) => None,
-                Err(e) => Some(e.clone()),
-            };
+                let err_opt = match &info.res {
+                    Ok(_) => None,
+                    Err(e) => Some(e.clone()),
+                };
 
-            log_query_finished(&query_ctx, err_opt, has_profiles);
-            match &info.res {
-                Ok(_) => Ok(()),
-                Err(error) => Err(error.clone()),
-            }
-        });
+                log_query_finished(&query_ctx, err_opt, has_profiles);
+                match &info.res {
+                    Ok(_) => Ok(()),
+                    Err(error) => Err(error.clone()),
+                }
+            }));
 
         ctx.set_status_info("executing pipeline");
 
