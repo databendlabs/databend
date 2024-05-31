@@ -45,7 +45,6 @@ runs:
       run: |
         aws s3 cp ${{ steps.name.outputs.name }}.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}.tar.gz --no-progress
         gh api /repos/datafuselabs/databend/tags > tags.json
-        cat tags.json
         aws s3 cp ./tags.json s3://repo/databend/tags.json
         gh api /repos/datafuselabs/databend/releases > releases.json
         aws s3 cp ./releases.json s3://repo/databend/releases.json
