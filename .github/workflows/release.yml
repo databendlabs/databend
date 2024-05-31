@@ -666,7 +666,7 @@ jobs:
         with:
           ref: ${{ needs.create_release.outputs.version }}
       - run: |
-          status="${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled') || 'success' }}"
+          status="${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled')|| (contains(needs.*.result, 'canceled') && 'canceled') || 'success' }}"
           jq -n -f .github/release-report.jq \
             --arg title "[Release] ${{ needs.create_release.outputs.version }}" \
             --arg content "Build result: ${status}" \
