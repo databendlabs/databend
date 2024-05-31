@@ -43,10 +43,9 @@ pub fn setup_commit_authors() {
         Ok(repo) => {
             add_env_commit_authors(&repo);
         }
-        Err(e) => {
+        Err(_) => {
             println!(
-                "cargo:warning={}",
-                format!("failed to discover commit authors :{}", e)
+                "cargo:warning=failed to discover git repo, set DATABEND_COMMIT_AUTHORS=unknown"
             );
             println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS=unknown");
         }
