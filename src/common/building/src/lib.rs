@@ -20,9 +20,12 @@ mod git;
 use std::env;
 use std::path::Path;
 
+use anyhow::Result;
 use gix::Repository;
 use log::error;
 use vergen::EmitBuilder;
+
+const VERSION_ERROR_MESSAGE: &'static str = "A valid version is required for MetaClient handshaking, you could either set the `DATABEND_RELEASE_VERSION` env var or use `git fetch` to get the latest tag";
 
 /// Setup building environment:
 /// - Watch git HEAD to trigger a rebuild;
@@ -51,17 +54,7 @@ pub fn add_building_env_vars() {
     set_env_config();
     add_env_credits_info();
     add_target_features();
-    match gix::discover(".") {
-        Ok(repo) => {
-            add_env_git_tag(&repo);
-        }
-        Err(e) => {
-            panic!(
-                "{}; The MetaClient is unable to proceed as it relies on the git-tag version for handshaking, which is not found.",
-                e
-            );
-        }
-    };
+    add_env_version();
 }
 
 pub fn set_env_config() {
@@ -75,11 +68,23 @@ pub fn set_env_config() {
         .expect("Unable to generate build envs");
 }
 
-pub fn add_env_git_tag(repo: &Repository) {
-    match git::get_latest_tag(repo) {
-        Ok(tag) => println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", tag),
-        Err(e) => println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", e),
-    }
+pub fn add_env_version() {
+    let version = match env::var("DATABEND_RELEASE_VERSION") {
+        Ok(ver) => ver,
+        Err(_) => match discover_git_tag() {
+            Ok(tag) => tag,
+            Err(e) => {
+                panic!("{}; {}", e, VERSION_ERROR_MESSAGE);
+            }
+        },
+    };
+    println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", version);
+}
+
+fn discover_git_tag() -> Result<String> {
+    let repo = gix::discover(".")?;
+    let tag = git::get_latest_tag(&repo)?;
+    Ok(tag)
 }
 
 pub fn add_env_commit_authors(repo: &Repository) {
