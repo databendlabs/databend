@@ -44,7 +44,10 @@ pub fn setup_commit_authors() {
             add_env_commit_authors(&repo);
         }
         Err(e) => {
-            eprintln!("{}", e);
+            println!(
+                "cargo:warning={}",
+                format!("failed to discover commit authors :{}", e)
+            );
             println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS=unknown");
         }
     };
@@ -69,22 +72,20 @@ pub fn set_env_config() {
 }
 
 pub fn add_env_version() {
-    let version = match env::var("DATABEND_RELEASE_VERSION") {
-        Ok(ver) => ver,
-        Err(_) => match discover_git_tag() {
-            Ok(tag) => tag,
-            Err(e) => {
-                panic!("{}; {}", e, VERSION_ERROR_MESSAGE);
-            }
-        },
-    };
+    let version = discover_version().expect(VERSION_ERROR_MESSAGE);
     println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", version);
 }
 
-fn discover_git_tag() -> Result<String> {
-    let repo = gix::discover(".")?;
-    let tag = git::get_latest_tag(&repo)?;
-    Ok(tag)
+fn discover_version() -> Result<String> {
+    match env::var("DATABEND_RELEASE_VERSION") {
+        Ok(ver) => Ok(ver),
+        Err(_) => {
+            // env var not set, try to get the latest git tag
+            let repo = gix::discover(".")?;
+            let tag = git::get_latest_tag(&repo)?;
+            Ok(tag)
+        }
+    }
 }
 
 pub fn add_env_commit_authors(repo: &Repository) {
