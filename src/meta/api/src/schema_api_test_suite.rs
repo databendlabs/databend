@@ -5123,6 +5123,86 @@ impl SchemaApiTestSuite {
             mt.commit_table_meta(commit_table_req).await?;
         }
 
+        // verify the orphan table id list will be vacuum
+        {
+            // use a new tenant and db do test
+            let db_name = "orphan_db";
+            let tenant_name = "orphan_tenant";
+            let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+            let plan = CreateDatabaseReq {
+                create_option: CreateOption::Create,
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            let db_id = res.db_id;
+
+            let create_table_req = CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: drop_table_meta(created_on),
+                as_dropped: true,
+            };
+
+            let create_table_as_dropped_resp = mt.create_table(create_table_req.clone()).await?;
+
+            let key_table_id_list = TableIdHistoryIdent {
+                database_id: db_id,
+                table_name: create_table_as_dropped_resp
+                    .orphan_table_name
+                    .clone()
+                    .unwrap(),
+            };
+
+            // assert orphan table id list and table meta exists
+            let seqv = mt
+                .as_kv_api()
+                .get_kv(&key_table_id_list.to_string_key())
+                .await?;
+            assert!(seqv.is_some() && seqv.unwrap().seq != 0);
+            let table_key = TableId {
+                table_id: create_table_as_dropped_resp.table_id,
+            };
+            let seqv = mt.as_kv_api().get_kv(&table_key.to_string_key()).await?;
+            assert!(seqv.is_some() && seqv.unwrap().seq != 0);
+
+            // vacuum drop table
+            let req = ListDroppedTableReq {
+                inner: DatabaseNameIdent::new(&tenant, ""),
+                filter: TableInfoFilter::AllDroppedTables(None),
+                limit: None,
+            };
+            let resp = mt.get_drop_table_infos(req).await?;
+            assert!(!resp.drop_ids.is_empty());
+
+            let req = GcDroppedTableReq {
+                tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                drop_ids: resp.drop_ids.clone(),
+            };
+            let _resp = mt.gc_drop_tables(req).await?;
+
+            // assert orphan table id list and table meta has been vacuum
+            let seqv = mt
+                .as_kv_api()
+                .get_kv(&key_table_id_list.to_string_key())
+                .await?;
+            assert!(seqv.is_none());
+            let table_key = TableId {
+                table_id: create_table_as_dropped_resp.table_id,
+            };
+            let seqv = mt.as_kv_api().get_kv(&table_key.to_string_key()).await?;
+            assert!(seqv.is_none());
+        }
+
         Ok(())
     }
 
