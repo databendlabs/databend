@@ -703,7 +703,7 @@ jobs:
               content: {
                 post: {
                   en_us: {
-                    title: `[Release] $VERSION`,
+                    title: `[Release] ${VERSION}`,
                     content: [
                       [
                         {
@@ -715,7 +715,7 @@ jobs:
                         {
                           tag: "a",
                           text: "Workflow Details",
-                          href: `${github.server_url}/${github.repository}/actions/runs/${github.run_id}`,
+                          href: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
                         },
                         {
                           tag: "text",
