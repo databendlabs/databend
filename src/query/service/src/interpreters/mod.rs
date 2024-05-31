@@ -227,6 +227,7 @@ pub use interpreter_table_optimize::OptimizeTableInterpreter;
 pub use interpreter_table_recluster::ReclusterTableInterpreter;
 pub use interpreter_table_rename::RenameTableInterpreter;
 pub use interpreter_table_rename_column::RenameTableColumnInterpreter;
+pub use interpreter_table_show_create::ShowCreateQuerySettings;
 pub use interpreter_table_show_create::ShowCreateTableInterpreter;
 pub use interpreter_table_truncate::TruncateTableInterpreter;
 pub use interpreter_table_undrop::UndropTableInterpreter;
