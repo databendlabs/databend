@@ -39,6 +39,7 @@ use crate::runtime::metrics::gauge::Gauge;
 use crate::runtime::metrics::histogram::Histogram;
 use crate::runtime::metrics::histogram::BUCKET_MILLISECONDS;
 use crate::runtime::metrics::histogram::BUCKET_SECONDS;
+use crate::runtime::metrics::process_collector::ProcessCollector;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::ThreadTracker;
 
@@ -85,10 +86,12 @@ unsafe impl Sync for GlobalRegistry {}
 
 impl GlobalRegistry {
     pub fn create() -> GlobalRegistry {
+        let mut registry = Registry::with_prefix("databend");
+        registry.register_collector(ProcessCollector::new());
         GlobalRegistry {
             inner: Mutex::new(GlobalRegistryInner {
                 metrics: vec![],
-                registry: Registry::with_prefix("databend"),
+                registry,
             }),
         }
     }

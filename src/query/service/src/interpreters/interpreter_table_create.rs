@@ -31,6 +31,7 @@ use databend_common_license::license::Feature::InvertedIndex;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableIdent;
@@ -38,7 +39,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
-use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
@@ -196,6 +196,8 @@ impl CreateTableInterpreter {
         }
 
         let table_id = reply.table_id;
+        let prev_table_id = reply.prev_table_id;
+        let orphan_table_name = reply.orphan_table_name.clone();
         let table_id_seq = reply
             .table_id_seq
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
@@ -273,10 +275,15 @@ impl CreateTableInterpreter {
         pipeline
             .main_pipeline
             .push_front_on_finished_callback(move |(_profiles, err)| {
+                let qualified_table_name = format!("{}.{}", db_name, table_name);
+
                 if err.is_ok() {
-                    let qualified_table_name = format!("{}.{}", db_name, table_name);
-                    let undrop_fut = async move {
-                        let undrop_by_id = UndropTableByIdReq {
+                    info!(
+                        "create_table_as_select {} success, commit table meta data by table id {}",
+                        qualified_table_name, table_id
+                    );
+                    let fut = async move {
+                        let req = CommitTableMetaReq {
                             name_ident: TableNameIdent {
                                 tenant,
                                 db_name,
@@ -284,17 +291,16 @@ impl CreateTableInterpreter {
                             },
                             db_id,
                             table_id,
-                            table_id_seq,
-                            force_replace: true,
+                            prev_table_id,
+                            orphan_table_name,
                         };
-                        catalog.undrop_table_by_id(undrop_by_id).await
+                        catalog.commit_table_meta(req).await
                     };
-                    GlobalIORuntime::instance()
-                        .block_on(undrop_fut)
-                        .map_err(|e| {
-                            info!("create {} as select failed. {:?}", qualified_table_name, e);
-                            e
-                        })?;
+
+                    GlobalIORuntime::instance().block_on(fut).map_err(|e| {
+                        info!("create {} as select failed. {:?}", qualified_table_name, e);
+                        e
+                    })?;
                 }
 
                 Ok(())

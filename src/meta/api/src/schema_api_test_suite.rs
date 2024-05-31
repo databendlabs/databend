@@ -39,6 +39,7 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
@@ -112,7 +113,6 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
-use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
@@ -298,6 +298,7 @@ impl SchemaApiTestSuite {
         suite
             .database_drop_undrop_list_history(&b.build().await)
             .await?;
+        suite.table_commit_table_meta(&b.build().await).await?;
         suite
             .database_drop_out_of_retention_time_history(&b.build().await)
             .await?;
@@ -1988,18 +1989,18 @@ impl SchemaApiTestSuite {
             assert!(old_db.ident.seq < cur_db.ident.seq);
             assert!(create_table_as_dropped_resp.table_id >= 1, "table id >= 1");
 
-            // -- verify this table is un-droppable
+            // -- verify this table is committpable
 
             {
-                let undrop_table_req = UndropTableByIdReq {
+                let commit_table_req = CommitTableMetaReq {
                     name_ident: create_table_req.name_ident.clone(),
                     db_id: create_table_as_dropped_resp.db_id,
                     table_id: create_table_as_dropped_resp.table_id,
-                    table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
-                    force_replace: true,
+                    prev_table_id: create_table_as_dropped_resp.prev_table_id,
+                    orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
                 };
 
-                mt.undrop_table_by_id(undrop_table_req).await?;
+                mt.commit_table_meta(commit_table_req).await?;
                 let req = GetTableReq::new(&tenant, db_name, tbl_name);
                 // after "un-drop", table should be visible
                 let tbl = mt.get_table(req).await?;
@@ -2007,26 +2008,7 @@ impl SchemaApiTestSuite {
                 assert_eq!(tbl.ident.table_id, create_table_as_dropped_resp.table_id);
             }
 
-            {
-                // if there is already a table with same name that is visible
-                // undrop-table-by-id with force_replace set to false should fail.
-                let undrop_table_req = UndropTableByIdReq {
-                    name_ident: create_table_req.name_ident.clone(),
-                    db_id: create_table_as_dropped_resp.db_id,
-                    table_id: create_table_as_dropped_resp.table_id,
-                    table_id_seq: create_table_as_dropped_resp.table_id_seq.unwrap(),
-                    force_replace: false,
-                };
-
-                let res = mt.undrop_table_by_id(undrop_table_req).await;
-                assert!(matches!(
-                    res.unwrap_err(),
-                    KVAppError::AppError(AppError::UndropTableAlreadyExists(_))
-                ));
-            }
-
             // -- create if not exist (as dropped) should work as expected
-
             {
                 // recall that there is table of same name existing
                 // case 1: table exists
@@ -4934,6 +4916,216 @@ impl SchemaApiTestSuite {
 
         Ok(())
     }
+
+    #[minitrace::trace]
+    async fn table_commit_table_meta<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "table_commit_table_meta_tenant";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        info!("--- prepare db");
+        let plan = CreateDatabaseReq {
+            create_option: CreateOption::Create,
+            name_ident: DatabaseNameIdent::new(&tenant, db_name),
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..DatabaseMeta::default()
+            },
+        };
+
+        let res = mt.create_database(plan).await?;
+        let db_id = res.db_id;
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+        let drop_table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            drop_on: Some(created_on),
+            ..TableMeta::default()
+        };
+        let created_on = Utc::now();
+
+        let create_table_req = CreateTableReq {
+            create_option: CreateOption::Create,
+            name_ident: TableNameIdent {
+                tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
+            },
+            table_meta: drop_table_meta(created_on),
+            as_dropped: true,
+        };
+
+        let create_table_as_dropped_resp = mt.create_table(create_table_req.clone()).await?;
+
+        // commit table meta with a wrong prev_table_id will fail
+        {
+            let commit_table_req = CommitTableMetaReq {
+                name_ident: create_table_req.name_ident.clone(),
+                db_id: create_table_as_dropped_resp.db_id,
+                table_id: create_table_as_dropped_resp.table_id,
+                prev_table_id: Some(1111),
+                orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+            };
+            let resp = mt.commit_table_meta(commit_table_req).await;
+            use databend_common_meta_app::app_error::AppError;
+            assert!(matches!(
+                resp.unwrap_err(),
+                KVAppError::AppError(AppError::CommitTableMetaError(_))
+            ));
+        }
+
+        // commit table meta with a wrong orphan table id list will fail
+        {
+            // first update orphan_table_id_list
+            let mut orphan_table_id_list: TableIdList = TableIdList::new();
+            orphan_table_id_list.append(1);
+            orphan_table_id_list.append(2);
+            let key_table_id_list = TableIdHistoryIdent {
+                database_id: db_id,
+                table_name: create_table_as_dropped_resp
+                    .orphan_table_name
+                    .clone()
+                    .unwrap(),
+            };
+            upsert_test_data(
+                mt.as_kv_api(),
+                &key_table_id_list,
+                serialize_struct(&orphan_table_id_list)?,
+            )
+            .await?;
+
+            let commit_table_req = CommitTableMetaReq {
+                name_ident: create_table_req.name_ident.clone(),
+                db_id: create_table_as_dropped_resp.db_id,
+                table_id: create_table_as_dropped_resp.table_id,
+                prev_table_id: create_table_as_dropped_resp.prev_table_id,
+                orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+            };
+            let resp = mt.commit_table_meta(commit_table_req).await;
+            use databend_common_meta_app::app_error::AppError;
+            assert!(matches!(
+                resp.unwrap_err(),
+                KVAppError::AppError(AppError::CommitTableMetaError(_))
+            ));
+        }
+
+        {
+            // first update orphan_table_id_list
+            let mut orphan_table_id_list: TableIdList = TableIdList::new();
+            orphan_table_id_list.append(1);
+            let key_table_id_list = TableIdHistoryIdent {
+                database_id: db_id,
+                table_name: create_table_as_dropped_resp
+                    .orphan_table_name
+                    .clone()
+                    .unwrap(),
+            };
+            upsert_test_data(
+                mt.as_kv_api(),
+                &key_table_id_list,
+                serialize_struct(&orphan_table_id_list)?,
+            )
+            .await?;
+
+            // replace with a new as_dropped = false table
+            let create_table_req = CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+                as_dropped: false,
+            };
+
+            let _ = mt.create_table(create_table_req.clone()).await?;
+
+            let commit_table_req = CommitTableMetaReq {
+                name_ident: create_table_req.name_ident.clone(),
+                db_id: create_table_as_dropped_resp.db_id,
+                table_id: create_table_as_dropped_resp.table_id,
+                prev_table_id: create_table_as_dropped_resp.prev_table_id,
+                orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+            };
+            let resp = mt.commit_table_meta(commit_table_req).await;
+            use databend_common_meta_app::app_error::AppError;
+            assert!(matches!(
+                resp.unwrap_err(),
+                KVAppError::AppError(AppError::CommitTableMetaError(_))
+            ));
+        }
+
+        {
+            use databend_common_meta_app::app_error::AppError;
+
+            // replace with a new as_dropped = true and table_meta.as_drop is None table
+            let create_table_req = CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+                as_dropped: true,
+            };
+
+            let resp = mt.create_table(create_table_req.clone()).await;
+            assert!(matches!(
+                resp.unwrap_err(),
+                KVAppError::AppError(AppError::CreateAsDropTableWithoutDropTime(_))
+            ));
+
+            let create_table_req = CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: drop_table_meta(created_on),
+                as_dropped: true,
+            };
+
+            let create_table_as_dropped_resp = mt.create_table(create_table_req.clone()).await?;
+
+            let commit_table_req = CommitTableMetaReq {
+                name_ident: create_table_req.name_ident.clone(),
+                db_id: create_table_as_dropped_resp.db_id,
+                table_id: create_table_as_dropped_resp.table_id,
+                prev_table_id: create_table_as_dropped_resp.prev_table_id,
+                orphan_table_name: create_table_as_dropped_resp.orphan_table_name.clone(),
+            };
+            mt.commit_table_meta(commit_table_req).await?;
+        }
+
+        Ok(())
+    }
+
     #[minitrace::trace]
     async fn get_table_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";

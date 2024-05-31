@@ -23,6 +23,7 @@ permissions:
 
 env:
   BUILD_PROFILE: release
+  RUNNER_PROVIDER: gcp
 
 jobs:
   create_release:
@@ -151,8 +152,6 @@ jobs:
   build_default:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -172,12 +171,19 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,metactl,meta,query
+      - name: Basic Sqllogic Test
+        if: matrix.target != 'aarch64-unknown-linux-musl'
+        shell: bash
+        env:
+          TEST_HANDLERS: http
+        run: |
+          mkdir -p ./target/${{ env.BUILD_PROFILE }}
+          cp ./target/${{ matrix.target }}/${{ env.BUILD_PROFILE }}/databend-* ./target/${{ env.BUILD_PROFILE }}/
+          bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
   build_udf:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -201,8 +207,6 @@ jobs:
   build_hdfs:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -226,8 +230,6 @@ jobs:
   publish:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c8g, gcp]
     needs: [create_release, build_default, build_hdfs]
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -258,14 +260,8 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           category: ${{ matrix.category }}
-      - name: Basic Sqllogic Test
-        if: matrix.target != 'aarch64-unknown-linux-musl'
-        shell: bash
-        env:
-          TEST_HANDLERS: http
-        run: |
-          mkdir -p target/release
-          bash ./scripts/ci/ci-run-sqllogic-tests.sh base
+          path: distro/bin
+          artifacts: metactl,meta,query
       - name: Pack Binaries
         run: |
           target=${{ matrix.target }}
@@ -278,15 +274,13 @@ jobs:
             pkg_name="databend-${{ matrix.category }}-${version}-${target}"
               ;;
           esac
-          mkdir -p release/${target}/{bin,configs,systemd,scripts}
-          cp ./target/${target}/release/databend-{query,meta,metactl} release/${target}/bin/
-          rm -f release/${target}/bin/*.d
-          cp ./scripts/distribution/systemd/databend-* release/${target}/systemd/
-          cp ./scripts/distribution/configs/databend-* release/${target}/configs/
-          cp ./scripts/distribution/release-readme.txt release/${target}/readme.txt
-          cp -r ./scripts/distribution/local-scripts/* release/${target}/scripts/
-          cp -r ./scripts/distribution/package-scripts/* release/${target}/scripts/
-          tar -C ./release/${target} -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
+          mkdir -p distro/{bin,configs,systemd,scripts}
+          cp ./scripts/distribution/systemd/databend-* distro/systemd/
+          cp ./scripts/distribution/configs/databend-* distro/configs/
+          cp ./scripts/distribution/release-readme.txt distro/readme.txt
+          cp -r ./scripts/distribution/local-scripts/* distro/scripts/
+          cp -r ./scripts/distribution/package-scripts/* distro/scripts/
+          tar -C ./distro -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
           sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
       - name: post sha256
         uses: actions/upload-artifact@v4
@@ -310,8 +304,6 @@ jobs:
   publish_testsuite:
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
     needs: [create_release, build_default]
-    env:
-      RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
@@ -328,15 +320,15 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           category: default
+          artifacts: sqllogictests,sqlsmith
+          path: distro/bin
       - name: Pack Testsuite
         run: |
           target=${{ matrix.target }}
           version=${{ needs.create_release.outputs.version }}
           pkg_name="databend-testsuite-${version}-${target}"
-          mkdir -p release/testsuite/bin
-          cp -r ./tests/sqllogictests/suites ./release/testsuite/
-          cp ./target/${target}/release/databend-{sqllogictests,sqlsmith} release/testsuite/bin/
-          tar -C ./release/testsuite -czvf ${pkg_name}.tar.gz bin suites
+          cp -r ./tests/sqllogictests/suites ./distro/
+          tar -C ./distro -czvf ${pkg_name}.tar.gz bin suites
           sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
       - name: post sha256
         uses: actions/upload-artifact@v4
@@ -540,7 +532,7 @@ jobs:
           target: ${{ steps.target.outputs.target }}
           category: udf
           artifacts: metactl,meta,query
-          path: distro
+          path: distro/bin
       - name: Build Packages
         id: build_packages
         run: |
@@ -637,9 +629,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-          category: udf
           artifacts: meta,query,sqlsmith
-          path: distro
       - name: Run sqlsmith
         timeout-minutes: 60
         shell: bash
