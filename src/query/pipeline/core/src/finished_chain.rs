@@ -158,8 +158,7 @@ impl FinishedCallbackChain {
 
             writeln!(
                 &mut message,
-                "{}{}:{:?} - {}{}:{}:{}",
-                "├──",
+                "├──{}:{:?} - {}{}:{}:{}",
                 execute_state,
                 apply_state.elapsed,
                 always_state,

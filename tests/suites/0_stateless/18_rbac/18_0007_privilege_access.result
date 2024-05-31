@@ -66,7 +66,7 @@ Error: APIError: ResponseError with 1063: Permission denied: privilege READ is r
 Error: APIError: ResponseError with 1063: Permission denied: No privilege on database root_db for user b.
 Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
 Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
-1	64	378
+1	64	377
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]

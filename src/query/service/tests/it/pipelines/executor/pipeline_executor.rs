@@ -26,6 +26,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
@@ -99,7 +100,7 @@ fn create_pipeline() -> (Arc<AtomicBool>, Pipeline) {
     pipeline.set_on_init(|| Err(ErrorCode::Internal("test failure")));
     pipeline.set_on_finished({
         let called_finished = called_finished.clone();
-        move |info| {
+        move |_info: &ExecutionInfo| {
             called_finished.fetch_or(true, Ordering::SeqCst);
             Ok(())
         }

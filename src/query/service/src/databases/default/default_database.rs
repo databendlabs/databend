@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseInfo;
@@ -171,6 +173,12 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         let res = self.ctx.meta.undrop_table(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        let res = self.ctx.meta.commit_table_meta(req).await?;
         Ok(res)
     }
 

@@ -167,6 +167,22 @@ impl UndropDbHasNoHistory {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CommitTableMetaError: {table_name} while {context}")]
+pub struct CommitTableMetaError {
+    table_name: String,
+    context: String,
+}
+
+impl CommitTableMetaError {
+    pub fn new(table_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -205,6 +221,20 @@ pub struct CreateTableWithDropTime {
 }
 
 impl CreateTableWithDropTime {
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CreateAsDropTableWithoutDropTime: create as_drop {table_name} without drop time")]
+pub struct CreateAsDropTableWithoutDropTime {
+    table_name: String,
+}
+
+impl CreateAsDropTableWithoutDropTime {
     pub fn new(table_name: impl Into<String>) -> Self {
         Self {
             table_name: table_name.into(),
@@ -1030,6 +1060,9 @@ pub enum AppError {
     DuplicatedUpsertFiles(#[from] DuplicatedUpsertFiles),
 
     #[error(transparent)]
+    CommitTableMetaError(#[from] CommitTableMetaError),
+
+    #[error(transparent)]
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
@@ -1037,6 +1070,9 @@ pub enum AppError {
 
     #[error(transparent)]
     CreateTableWithDropTime(#[from] CreateTableWithDropTime),
+
+    #[error(transparent)]
+    CreateAsDropTableWithoutDropTime(#[from] CreateAsDropTableWithoutDropTime),
 
     #[error(transparent)]
     UndropTableAlreadyExists(#[from] UndropTableAlreadyExists),
@@ -1292,6 +1328,12 @@ impl AppErrorMessage for MultiStmtTxnCommitFailed {}
 
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
+impl AppErrorMessage for CommitTableMetaError {
+    fn message(&self) -> String {
+        format!("Commit table '{}' fail", self.table_name)
+    }
+}
+
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
         format!("Table '{}' already exists", self.table_name)
@@ -1307,6 +1349,15 @@ impl AppErrorMessage for ViewAlreadyExists {
 impl AppErrorMessage for CreateTableWithDropTime {
     fn message(&self) -> String {
         format!("Create Table '{}' with drop time", self.table_name)
+    }
+}
+
+impl AppErrorMessage for CreateAsDropTableWithoutDropTime {
+    fn message(&self) -> String {
+        format!(
+            "Create as drop Table '{}' without drop time",
+            self.table_name
+        )
     }
 }
 
@@ -1635,10 +1686,14 @@ impl From<AppError> for ErrorCode {
             AppError::UndropDbWithNoDropTime(err) => {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
+            AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
             AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {
                 ErrorCode::CreateTableWithDropTime(err.message())
+            }
+            AppError::CreateAsDropTableWithoutDropTime(err) => {
+                ErrorCode::CreateAsDropTableWithoutDropTime(err.message())
             }
             AppError::UndropTableAlreadyExists(err) => {
                 ErrorCode::UndropTableAlreadyExists(err.message())
