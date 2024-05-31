@@ -245,17 +245,17 @@ tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 # Observability
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.5"
-minitrace = { version = "0.6.5", features = ["enable"] }
-minitrace-opentelemetry = "0.6.5"
-opentelemetry = { version = "0.22", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.15", features = [
+minitrace = { version = "0.6.6", features = ["enable"] }
+minitrace-opentelemetry = "0.6.6"
+opentelemetry = { version = "0.23", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.16", features = [
     "trace",
     "logs",
     "grpc-tonic",
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.23", features = ["trace", "logs", "rt-tokio"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
