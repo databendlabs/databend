@@ -89,6 +89,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         if: inputs.source == 'release'
+        with:
+          ref: ${{ inputs.sha }}
       - uses: actions/checkout@v4
         if: inputs.source == 'pr'
         with:
@@ -133,6 +135,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         if: inputs.source == 'release'
+        with:
+          ref: ${{ inputs.sha }}
       - uses: actions/checkout@v4
         if: inputs.source == 'pr'
         with:
