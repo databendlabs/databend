@@ -390,9 +390,6 @@ jobs:
         service:
           - meta
           - query
-        distro:
-          - debian
-          - distroless
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -427,7 +424,6 @@ jobs:
         id: tags
         uses: actions/github-script@v7
         env:
-          DISTRO: ${{ matrix.distro }}
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
@@ -435,19 +431,15 @@ jobs:
         with:
           script: |
             const version = process.env.VERSION;
-            const distro = process.env.DISTRO;
             const repos = [process.env.REPO_DOCKERHUB, process.env.REPO_ECR];
             const stable = process.env.STABLE;
             let tags = [];
             for (const repo of repos) {
-              tags.push(`${repo}:${version}-${distro}`);
-              if (distro === 'debian') {
-                tags.push(`${repo}:${version}`);
-                if (stable === 'true') {
-                  tags.push(`${repo}:latest`);
-                } else {
-                  tags.push(`${repo}:nightly`);
-                }
+              tags.push(`${repo}:${version}`);
+              if (stable === 'true') {
+                tags.push(`${repo}:latest`);
+              } else {
+                tags.push(`${repo}:nightly`);
               }
             }
             core.setOutput('tags', tags.join(','));
@@ -458,7 +450,7 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           context: .
-          file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
+          file: ./docker/service/${{ matrix.service }}.Dockerfile
 
   distribution:
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
