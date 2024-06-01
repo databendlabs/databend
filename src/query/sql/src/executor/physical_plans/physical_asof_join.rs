@@ -21,8 +21,8 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 
-use crate::binder::ColumnBindingBuilder;
 use crate::binder::bind_window_function_info;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::WindowFunctionInfo;
 use crate::binder::WindowOrderByInfo;
 use crate::executor::explain::PlanStatsInfo;
@@ -89,7 +89,9 @@ impl PhysicalPlanBuilder {
         }
         let (window_func, right_column) =
             self.bind_window_func(join, s_expr, &range_conditions, &mut other_conditions)?;
-        let window_plan = self.build_window_plan(&window_func, s_expr, &mut window_index).await?;
+        let window_plan = self
+            .build_window_plan(&window_func, s_expr, &mut window_index)
+            .await?;
         self.add_range_condition(
             &window_func,
             window_index,
@@ -292,11 +294,12 @@ impl PhysicalPlanBuilder {
         Ok((window_func, right_column))
     }
 
-    async fn  build_window_plan(
+    async fn build_window_plan(
         &mut self,
         window: &WindowFunc,
         s_expr: &SExpr,
-        window_index: &mut usize) -> Result<SExpr> {
+        window_index: &mut usize,
+    ) -> Result<SExpr> {
         let mut window_args = vec![];
         let window_func_name = window.func.func_name();
         let func = match &window.func {
