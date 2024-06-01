@@ -81,12 +81,6 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut window_index: usize = 0;
 
-        if range_conditions.is_empty() {
-            return Err(ErrorCode::Internal("Missing inequality condition!"));
-        }
-        if range_conditions.len() > 1 {
-            return Err(ErrorCode::Internal("Multiple inequalities condition!"));
-        }
         let (window_func, right_column) =
             self.bind_window_func(join, s_expr, &range_conditions, &mut other_conditions)?;
         let window_plan = self
