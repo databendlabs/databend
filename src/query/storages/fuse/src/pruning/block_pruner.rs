@@ -163,6 +163,7 @@ impl BlockPruner {
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
                     let column_ids = block_meta.col_metas.keys().cloned().collect::<Vec<_>>();
+                    let ignored_keys = ignored_keys.clone();
 
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
@@ -178,7 +179,14 @@ impl BlockPruner {
                                     pruning_stats.set_blocks_bloom_pruning_before(1);
                                 }
                                 let keep = bloom_pruner
-                                    .should_keep(&index_location, index_size, &block_meta.col_stats, column_ids, ignored_keys, &mut prune_result.invalid_keys)
+                                    .should_keep(
+                                        &index_location,
+                                        index_size,
+                                        &block_meta.col_stats,
+                                        column_ids,
+                                        &ignored_keys,
+                                        &mut prune_result.invalid_keys
+                                    )
                                     .await
                                     && limit_pruner.within_limit(row_count);
                                 if keep {

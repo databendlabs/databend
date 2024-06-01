@@ -43,6 +43,7 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
 use opendal::Operator;
@@ -277,7 +278,7 @@ impl FusePruner {
     #[async_backtrace::framed]
     pub async fn pruning(
         &mut self,
-        mut segment_locs: Vec<SegmentLocation>,
+        segment_locs: Vec<SegmentLocation>,
         delete_pruning: bool,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Segment pruner.
@@ -319,7 +320,7 @@ impl FusePruner {
         }
 
         let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
-        let (mut sample_block_metas, ignored_keys) = if !sampled_segments.is_empty() {
+        let (mut block_metas, ignored_keys) = if !sampled_segments.is_empty() {
             self.block_pruning(&block_pruner, &mut sampled_segments, true, &HashSet::new())
                 .await?
         } else {
@@ -330,9 +331,16 @@ impl FusePruner {
             .block_pruning(&block_pruner, &mut remainder_segments, false, &ignored_keys)
             .await?;
 
-        sample_block_metas.append(&mut remainder_block_metas);
+        block_metas.append(&mut remainder_block_metas);
 
-        Ok(sample_block_metas)
+        if delete_pruning {
+            Ok(block_metas)
+        } else {
+            // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+            // will get here, we can prevent other mutations like update and so on.
+            // TopN pruner.
+            self.topn_pruning(block_metas)
+        }
     }
 
     #[async_backtrace::framed]
@@ -393,8 +401,8 @@ impl FusePruner {
                                 }
                             }
                             not_deleted_segments.push((segment_location, compact_segment_info));
-                            Result::<_, ErrorCode>::Ok((not_deleted_segments, deleted_segments))
                         }
+                        Result::<_, ErrorCode>::Ok((not_deleted_segments, deleted_segments))
                     } else {
                         Result::<_, ErrorCode>::Ok((pruned_segments, deleted_segments))
                     }
@@ -430,7 +438,7 @@ impl FusePruner {
         let batch_size = segments.len() / self.max_concurrency;
         let mut works = Vec::with_capacity(self.max_concurrency);
 
-        let block_num: usize = &segments
+        let block_num: usize = segments
             .iter()
             .map(|(_, block_metas)| block_metas.len())
             .sum();
@@ -440,10 +448,10 @@ impl FusePruner {
             let batch_size = batch_size + gap_size;
             remain -= gap_size;
 
-            let mut batch_segments = segments.drain(0..batch_size).collect::<Vec<_>>();
+            let batch_segments = segments.drain(0..batch_size).collect::<Vec<_>>();
             works.push(self.pruning_ctx.pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
-                let pruning_ctx = self.pruning_ctx.clone();
+                let ignored_keys = ignored_keys.clone();
 
                 async move {
                     // Build pruning tasks.
@@ -453,7 +461,12 @@ impl FusePruner {
                     for (location, block_metas) in batch_segments {
                         pruned_blocks.extend(
                             block_pruner
-                                .pruning(location, block_metas, ignored_keys, &mut invalid_keys_map)
+                                .pruning(
+                                    location,
+                                    block_metas,
+                                    &ignored_keys,
+                                    &mut invalid_keys_map,
+                                )
                                 .await?,
                         );
                     }
@@ -471,7 +484,7 @@ impl FusePruner {
                 let mut block_metas = vec![];
                 let mut invalid_keys_map = HashMap::new();
                 for worker in workers {
-                    let mut res = worker?;
+                    let res = worker?;
                     block_metas.extend(res.0);
 
                     for (invalid_key, invalid_num) in res.1 {
@@ -524,6 +537,7 @@ impl FusePruner {
             works.push(self.pruning_ctx.pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 async move {
+                    let ignored_keys = HashSet::new();
                     let mut invalid_keys_map = HashMap::new();
                     // Build pruning tasks.
                     let res = block_pruner
@@ -535,6 +549,7 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             batch,
+                            &ignored_keys,
                             &mut invalid_keys_map,
                         )
                         .await?;

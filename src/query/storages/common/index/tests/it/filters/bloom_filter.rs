@@ -355,15 +355,16 @@ fn eval_index(
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
     let func_ctx = FunctionContext::default();
-    for (_, scalar, ty) in point_query_cols.iter() {
+    for (_, scalar, ty, _) in point_query_cols.iter() {
         if !scalar_map.contains_key(scalar) {
             let digest = BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty).unwrap();
             scalar_map.insert(scalar.clone(), digest);
         }
     }
     let column_stats = StatisticsOfColumns::new();
+    let mut invalid_keys = HashSet::new();
     index
-        .apply(expr, &scalar_map, &column_stats, schema)
+        .apply(expr, &scalar_map, &column_stats, schema, &mut invalid_keys)
         .unwrap()
 }
 
@@ -415,15 +416,16 @@ fn eval_map_index(
     let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
-    for (_, scalar, ty) in point_query_cols.iter() {
+    for (_, scalar, ty, _) in point_query_cols.iter() {
         if !scalar_map.contains_key(scalar) {
             let digest = BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty).unwrap();
             scalar_map.insert(scalar.clone(), digest);
         }
     }
     let column_stats = StatisticsOfColumns::new();
+    let mut invalid_keys = HashSet::new();
     index
-        .apply(expr, &scalar_map, &column_stats, schema)
+        .apply(expr, &scalar_map, &column_stats, schema, &mut invalid_keys)
         .unwrap()
 }
 
