@@ -339,13 +339,27 @@ impl PrivilegeAccess {
                 ErrorCode::UNKNOWN_DATABASE
                 | ErrorCode::UNKNOWN_TABLE
                 | ErrorCode::UNKNOWN_CATALOG => Ok(None),
-                _ => Err(e.add_message("error on validating access")),
+                _ => Err(e.add_message("error on check has_ownership")),
             })?;
         if let Some(object) = &owner_object {
-            if let Ok(ok) = session.has_ownership(object).await {
-                if ok {
+            if let OwnershipObject::Table {
+                catalog_name,
+                db_id,
+                ..
+            } = object
+            {
+                let database_owner = OwnershipObject::Database {
+                    catalog_name: catalog_name.to_string(),
+                    db_id: *db_id,
+                };
+                // If Table ownership check fails, check for Database ownership
+                if session.has_ownership(object).await?
+                    || session.has_ownership(&database_owner).await?
+                {
                     return Ok(true);
                 }
+            } else if session.has_ownership(object).await? {
+                return Ok(true);
             }
         }
         Ok(false)

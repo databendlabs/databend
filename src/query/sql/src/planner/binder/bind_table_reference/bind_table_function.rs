@@ -104,8 +104,9 @@ impl Binder {
                 window_list: None,
                 qualify: None,
             };
-            let (srf_expr, mut bind_context) =
-                self.bind_select(bind_context, &select_stmt, &[], 0).await?;
+            let (srf_expr, mut bind_context) = self
+                .bind_select(bind_context, &select_stmt, &[], None)
+                .await?;
 
             return self
                 .extract_srf_table_function_columns(

@@ -32,7 +32,14 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
+use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -40,6 +47,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::TableCompression;
+use log::info;
 use opendal::Operator;
 
 use crate::io::write::WriteSettings;
@@ -327,5 +335,75 @@ impl BlockBuilder {
             inverted_index_states,
         };
         Ok(serialized)
+    }
+}
+
+pub struct BlockWriter;
+
+impl BlockWriter {
+    pub async fn write_down(dal: &Operator, serialized: BlockSerialization) -> Result<BlockMeta> {
+        let block_meta = serialized.block_meta;
+
+        Self::write_down_data_block(dal, serialized.block_raw_data, &block_meta.location.0).await?;
+        Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
+        Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
+
+        Ok(block_meta)
+    }
+
+    pub async fn write_down_data_block(
+        dal: &Operator,
+        raw_block_data: Vec<u8>,
+        block_location: &str,
+    ) -> Result<()> {
+        let start = Instant::now();
+        let size = raw_block_data.len();
+
+        write_data(raw_block_data, dal, block_location).await?;
+
+        metrics_inc_block_write_nums(1);
+        metrics_inc_block_write_nums(size as u64);
+        metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
+
+        info!("wrote down block: {}", block_location);
+        Ok(())
+    }
+
+    pub async fn write_down_bloom_index_state(
+        dal: &Operator,
+        bloom_index_state: Option<BloomIndexState>,
+    ) -> Result<()> {
+        if let Some(index_state) = bloom_index_state {
+            let start = Instant::now();
+
+            let location = &index_state.location.0;
+            write_data(index_state.data, dal, location).await?;
+
+            metrics_inc_block_index_write_nums(1);
+            metrics_inc_block_index_write_nums(index_state.size);
+            metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
+
+            info!("wrote down bloom index: {}", location);
+        }
+        Ok(())
+    }
+
+    pub async fn write_down_inverted_index_state(
+        dal: &Operator,
+        inverted_index_states: Vec<InvertedIndexState>,
+    ) -> Result<()> {
+        for inverted_index_state in inverted_index_states {
+            let start = Instant::now();
+
+            let location = &inverted_index_state.location.0;
+            let index_size = inverted_index_state.size;
+            write_data(inverted_index_state.data, dal, location).await?;
+            metrics_inc_block_inverted_index_write_nums(1);
+            metrics_inc_block_inverted_index_write_bytes(index_size);
+            metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
+
+            info!("wrote down inverted index: {}", location);
+        }
+        Ok(())
     }
 }

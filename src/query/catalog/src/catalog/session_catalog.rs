@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -331,6 +333,10 @@ impl Catalog for SessionCatalog {
 
     async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
         self.inner.undrop_table_by_id(req).await
+    }
+
+    async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        self.inner.commit_table_meta(req).await
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {

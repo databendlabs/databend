@@ -33,24 +33,17 @@ pub enum UDFDefinition {
     UDFServer {
         arg_types: Vec<TypeName>,
         return_type: TypeName,
-        #[drive(skip)]
         address: String,
-        #[drive(skip)]
         handler: String,
-        #[drive(skip)]
         language: String,
     },
 
     UDFScript {
         arg_types: Vec<TypeName>,
         return_type: TypeName,
-        #[drive(skip)]
         code: String,
-        #[drive(skip)]
         handler: String,
-        #[drive(skip)]
         language: String,
-        #[drive(skip)]
         runtime_version: String,
     },
 }
@@ -104,7 +97,6 @@ impl Display for UDFDefinition {
 pub struct CreateUDFStmt {
     pub create_option: CreateOption,
     pub udf_name: Identifier,
-    #[drive(skip)]
     pub description: Option<String>,
     pub definition: UDFDefinition,
 }
@@ -130,7 +122,6 @@ impl Display for CreateUDFStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterUDFStmt {
     pub udf_name: Identifier,
-    #[drive(skip)]
     pub description: Option<String>,
     pub definition: UDFDefinition,
 }

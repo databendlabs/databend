@@ -895,25 +895,25 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<TimestampType, _, _>(
         "now",
         |_| FunctionDomain::Full,
-        |_| Value::Scalar(Utc::now().timestamp_micros()),
+        |ctx| Value::Scalar(ctx.func_ctx.now.timestamp_micros()),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "today",
         |_| FunctionDomain::Full,
-        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz)),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.now, ctx.func_ctx.tz)),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "yesterday",
         |_| FunctionDomain::Full,
-        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz) - 1),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.now, ctx.func_ctx.tz) - 1),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "tomorrow",
         |_| FunctionDomain::Full,
-        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz) + 1),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.now, ctx.func_ctx.tz) + 1),
     );
 }
 

@@ -23,13 +23,9 @@ use crate::ast::CreateOption;
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateNetworkPolicyStmt {
     pub create_option: CreateOption,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub allowed_ip_list: Vec<String>,
-    #[drive(skip)]
     pub blocked_ip_list: Option<Vec<String>>,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -72,15 +68,10 @@ impl Display for CreateNetworkPolicyStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterNetworkPolicyStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub allowed_ip_list: Option<Vec<String>>,
-    #[drive(skip)]
     pub blocked_ip_list: Option<Vec<String>>,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -122,9 +113,7 @@ impl Display for AlterNetworkPolicyStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropNetworkPolicyStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
 }
 
@@ -142,7 +131,6 @@ impl Display for DropNetworkPolicyStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescNetworkPolicyStmt {
-    #[drive(skip)]
     pub name: String,
 }
 

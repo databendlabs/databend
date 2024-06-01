@@ -48,7 +48,7 @@ pub fn set_backoff(
     // The initial retry delay in millisecond. By default,  it is 5 ms.
     let init_delay = init_retry_delay.unwrap_or(OCC_DEFAULT_BACKOFF_INIT_DELAY_MS);
 
-    // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
+    // The maximum back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
     // By default, it is 20 seconds.
     let max_delay = max_retry_delay.unwrap_or(OCC_DEFAULT_BACKOFF_MAX_DELAY_MS);
 

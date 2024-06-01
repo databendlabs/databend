@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::fmt::Display;
-use std::io;
-use std::io::Read;
 use std::str::FromStr;
 
 use databend_common_exception::ErrorCode;
@@ -26,13 +24,9 @@ use geozero::GeozeroGeometry;
 use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
-use scroll::Endian;
-use scroll::IOread;
 use serde::Deserialize;
 use serde::Serialize;
 use wkt::TryFromWkt;
-
-const GEO_TYPE_ID_MASK: u32 = 0x2000_0000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum GeometryDataType {
@@ -42,6 +36,18 @@ pub enum GeometryDataType {
     #[default]
     EWKT,
     GEOJSON,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Axis {
+    X,
+    Y,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Extremum {
+    Max,
+    Min,
 }
 
 impl FromStr for GeometryDataType {
@@ -168,21 +174,6 @@ pub fn parse_to_subtype(buf: &[u8]) -> Result<GeometryDataType> {
         }
     }
 }
-
-pub fn read_ewkb_srid<R: Read>(raw: &mut R) -> std::result::Result<Option<i32>, io::Error> {
-    let byte_order = raw.ioread::<u8>()?;
-    let is_little_endian = byte_order != 0;
-    let endian = Endian::from(is_little_endian);
-    let type_id = raw.ioread_with::<u32>(endian)?;
-    let srid = if type_id & GEO_TYPE_ID_MASK == GEO_TYPE_ID_MASK {
-        Some(raw.ioread_with::<i32>(endian)?)
-    } else {
-        None
-    };
-
-    Ok(srid)
-}
-
 pub trait GeometryFormatOutput {
     fn format(self, data_type: GeometryDataType) -> Result<String>;
 }

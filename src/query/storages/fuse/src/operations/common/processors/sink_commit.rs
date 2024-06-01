@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
-use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -35,7 +34,6 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::LockGuard;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -59,7 +57,6 @@ use crate::FuseTable;
 enum State {
     None,
     FillDefault,
-    TryLock,
     RefreshTable,
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
@@ -94,8 +91,6 @@ pub struct CommitSink<F: SnapshotGenerator> {
     backoff: ExponentialBackoff,
 
     new_segment_locs: Vec<Location>,
-    lock_guard: Option<LockGuard>,
-    lock: Option<Arc<dyn Lock>>,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
 
@@ -116,7 +111,6 @@ where F: SnapshotGenerator + Send + 'static
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
-        lock: Option<Arc<dyn Lock>>,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
     ) -> Result<ProcessorPtr> {
@@ -129,14 +123,12 @@ where F: SnapshotGenerator + Send + 'static
             table: Arc::new(table.clone()),
             copied_files,
             snapshot_gen,
-            lock_guard: None,
             purge,
             backoff: ExponentialBackoff::default(),
             retries: 0,
             max_retry_elapsed,
             input,
             new_segment_locs: vec![],
-            lock,
             start_time: Instant::now(),
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
@@ -179,11 +171,7 @@ where F: SnapshotGenerator + Send + 'static
 
         self.snapshot_gen
             .set_conflict_resolve_context(meta.conflict_resolve_context);
-        if self.lock.is_some() {
-            self.state = State::TryLock;
-        } else {
-            self.state = State::FillDefault;
-        }
+        self.state = State::FillDefault;
 
         Ok(Event::Async)
     }
@@ -242,8 +230,6 @@ where F: SnapshotGenerator + Send + 'static
         }
 
         if matches!(self.state, State::Finish) {
-            // release the lock manually.
-            std::mem::take(&mut self.lock_guard);
             return Ok(Event::Finished);
         }
 
@@ -364,15 +350,6 @@ where F: SnapshotGenerator + Send + 'static
                     };
                 }
             }
-            State::TryLock => match self.lock.as_ref().unwrap().try_lock(self.ctx.clone()).await {
-                Ok(guard) => {
-                    self.lock_guard = guard;
-                    self.state = State::FillDefault;
-                }
-                Err(e) => {
-                    self.state = State::Abort(e);
-                }
-            },
             State::TryCommit {
                 data,
                 snapshot,

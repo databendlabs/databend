@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 
 use databend_common_base::base::tokio;
+use databend_common_base::runtime::metrics::dump_process_stat;
 use databend_common_base::runtime::metrics::register_counter;
 use databend_query::servers::metrics::MetricService;
 use databend_query::servers::Server;
@@ -46,4 +47,15 @@ async fn test_metric_server() -> databend_common_exception::Result<()> {
     assert!(output.contains("unit_test_counter_total 1"));
 
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_process_collector() {
+    let stat = dump_process_stat().unwrap();
+
+    assert!(stat.max_fds > 0);
+    assert!(stat.vsize > 0);
+    assert!(stat.rss > 0);
+    assert!(stat.threads_num > 0);
 }
