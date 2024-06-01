@@ -77,3 +77,4 @@ pub use scalar_common::*;
 pub use stream_column_factory::STREAM_COLUMN_FACTORY;
 pub use window::WindowFunctionInfo;
 pub use window::WindowOrderByInfo;
+pub use window::bind_window_function_info;
