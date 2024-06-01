@@ -1549,16 +1549,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         // fixed
-        let mut key_table_id_list = TableIdHistoryIdent {
+        let key_table_id_list = TableIdHistoryIdent {
             database_id: db_id.data,
             table_name: req.name_ident.table_name.clone(),
         };
         // if req.as_dropped, append new table id to orphan table id list
-        let orphan_table_name = if req.as_dropped {
+        let (orphan_table_name, save_key_table_id_list) = if req.as_dropped {
             let now = Utc::now().timestamp_micros();
-            Some(format!("{}@{}", ORPHAN_POSTFIX, now))
+            let orphan_table_name = format!("{}@{}", ORPHAN_POSTFIX, now);
+            (Some(orphan_table_name.clone()), TableIdHistoryIdent {
+                database_id: db_id.data,
+                table_name: orphan_table_name,
+            })
         } else {
-            None
+            (None, key_table_id_list.clone())
         };
 
         // The keys of values to re-fetch for every retry in this txn.
@@ -1698,11 +1702,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 // if create table return success, table id will be moved to table id list,
                 // else, it will be vacuum when `vacuum drop table`
                 if req.as_dropped {
-                    // change key_table_id_list to orphan_table_name
-                    key_table_id_list = TableIdHistoryIdent {
-                        database_id: db_id.data,
-                        table_name: orphan_table_name.clone().unwrap(),
-                    };
                     (
                         // a new TableIdList
                         TableIdList::new(),
@@ -1748,7 +1747,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     // no other table with the same name is inserted.
                     txn_cond_seq(&key_dbid_tbname, Eq, dbid_tbname_seq),
                     // no other table id with the same name is append.
-                    txn_cond_seq(&key_table_id_list, Eq, tb_id_list_seq),
+                    txn_cond_seq(&save_key_table_id_list, Eq, tb_id_list_seq),
                 ]);
 
                 if_then.extend( vec![
@@ -1759,7 +1758,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             key_table_id,
                             serialize_struct(&req.table_meta)?,
                         ), /* (tenant, db_id, tb_id) -> tb_meta */
-                        txn_op_put(&key_table_id_list, serialize_struct(&tb_id_list)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                        txn_op_put(&save_key_table_id_list, serialize_struct(&tb_id_list)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
                         // This record does not need to assert `table_id_to_name_key == 0`,
                         // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
                         txn_op_put(&key_table_id_to_name, serialize_struct(&key_dbid_tbname)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
