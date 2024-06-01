@@ -10,7 +10,7 @@
 #
 
 statement ok
-CREATE TABLE events (key INTEGER, begin DOUBLE, value INTEGER);
+CREATE TABLE events (key INTEGER DEFAULT '0', begin DOUBLE DEFAULT '0', value INTEGER DEFAULT '0');
 
 statement ok
 INSERT INTO events VALUES
@@ -24,7 +24,7 @@ INSERT INTO events VALUES
 ;
 
 statement ok
-CREATE TABLE probes (key INTEGER, ts DOUBLE);
+CREATE TABLE probes (key INTEGER DEFAULT '0', ts DOUBLE DEFAULT '0');
 
 statement ok
 INSERT INTO probes VALUES
