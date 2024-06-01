@@ -123,12 +123,10 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     // unused snapshot.
     let snapshot = TableSnapshot::new_empty_snapshot(schema.as_ref().clone(), None);
 
-    let table_id = 1;
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(test_segment_locations, None);
     let compact_segments = FuseTable::segment_pruning(
         &ctx,
-        table_id,
         schema.clone(),
         data_accessor.clone(),
         &None,
@@ -237,12 +235,10 @@ async fn test_safety_for_recluster() -> Result<()> {
             }
         }
 
-        let table_id = 1;
         let ctx: Arc<dyn TableContext> = ctx.clone();
         let segment_locations = create_segment_location_vector(locations, None);
         let compact_segments = FuseTable::segment_pruning(
             &ctx,
-            table_id,
             schema.clone(),
             data_accessor.clone(),
             &None,
