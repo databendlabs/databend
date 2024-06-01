@@ -363,7 +363,7 @@ impl PhysicalPlanBuilder {
             order_by_items,
             frame: window.frame.clone(),
         };
-        Ok(bind_window_function_info(&self.ctx, &window_info, s_expr.child(1)?.clone()).await?)
+        bind_window_function_info(&self.ctx, &window_info, s_expr.child(1)?.clone()).await
     }
 
     fn replace_lag_lead_args(
