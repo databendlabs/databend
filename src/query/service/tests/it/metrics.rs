@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 
 use databend_common_base::base::tokio;
+#[cfg(target_os = "linux")]
 use databend_common_base::runtime::metrics::dump_process_stat;
 use databend_common_base::runtime::metrics::register_counter;
 use databend_query::servers::metrics::MetricService;
