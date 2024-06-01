@@ -340,7 +340,6 @@ impl BloomIndex {
         mut expr: Expr<String>,
         scalar_map: &HashMap<Scalar, u64>,
         column_stats: &StatisticsOfColumns,
-        table_id: u64,
         data_schema: TableSchemaRef,
         invalid_keys: &mut HashSet<String>,
     ) -> Result<FilterEvalResult> {
@@ -399,7 +398,7 @@ impl BloomIndex {
                         // If the result of a bloom filter is Uncertain, it means that the filter is invalid,
                         // and reading the bloom filter data will increase additional costs,
                         // so we can consider not using this bloom filter in the next query.
-                        let filter_key = build_filter_key(table_id, col_name, opt_key, scalar);
+                        let filter_key = build_filter_key(col_name, opt_key, scalar);
                         invalid_keys.insert(filter_key);
                     }
                     Ok(None)
@@ -489,7 +488,6 @@ impl BloomIndex {
 
     /// Find all columns that match the pattern of `col = <constant>` in the expression.
     pub fn find_eq_columns(
-        table_id: u64,
         expr: &Expr<String>,
         fields: Vec<TableField>,
     ) -> Result<Vec<(TableField, Scalar, DataType, String)>> {
@@ -499,7 +497,7 @@ impl BloomIndex {
             &mut |_, col_name, opt_key, scalar, ty, _| {
                 if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
                     if Xor8Filter::supported_type(ty) && !scalar.is_null() {
-                        let filter_key = build_filter_key(table_id, col_name, opt_key, scalar);
+                        let filter_key = build_filter_key(col_name, opt_key, scalar);
                         cols.push((v.clone(), scalar.clone(), ty.clone(), filter_key));
                     }
                 }
@@ -772,18 +770,13 @@ fn visit_map_column(
     Ok(None)
 }
 
-// The filter key consists of the table id, column name and point query value,
+// The filter key consists of column name and point query value,
 // if the field is a map, the map's field key is also included.
 // Filter key can be stored in the cache to ignore bloom filters that always return Uncertain.
-fn build_filter_key(
-    table_id: u64,
-    col_name: &str,
-    opt_key: Option<&Scalar>,
-    value: &Scalar,
-) -> String {
+fn build_filter_key(col_name: &str, opt_key: Option<&Scalar>, value: &Scalar) -> String {
     if let Some(key) = opt_key {
-        format!("{}_{}[{}]={}", table_id, col_name, key, value)
+        format!("{}[{}]={}", col_name, key, value)
     } else {
-        format!("{}_{}={}", table_id, col_name, value)
+        format!("{}={}", col_name, value)
     }
 }

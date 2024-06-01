@@ -248,7 +248,6 @@ impl FuseTable {
         let mut pruner = FusePruner::create(
             &ctx,
             self.operator.clone(),
-            self.get_id(),
             self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),

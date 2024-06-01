@@ -43,7 +43,6 @@ use crate::BloomIndexFilterMeter;
 use crate::ColumnArrayMeter;
 use crate::CompactSegmentInfoMeter;
 use crate::InvertedIndexFileMeter;
-use crate::PruneBloomFilterInvalidKeysCache;
 use crate::PrunePartitionsCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
@@ -58,7 +57,6 @@ pub struct CacheManager {
     inverted_index_meta_cache: Option<InvertedIndexMetaCache>,
     inverted_index_file_cache: Option<InvertedIndexFileCache>,
     prune_partitions_cache: Option<PrunePartitionsCache>,
-    prune_bloom_filter_invalid_keys_cache: Option<PruneBloomFilterInvalidKeysCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
     table_data_cache: Option<TableDataCache>,
     table_column_array_cache: Option<ColumnArrayCache>,
@@ -128,7 +126,6 @@ impl CacheManager {
                 inverted_index_meta_cache: None,
                 inverted_index_file_cache: None,
                 prune_partitions_cache: None,
-                prune_bloom_filter_invalid_keys_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
                 table_data_cache,
@@ -172,11 +169,6 @@ impl CacheManager {
             let prune_partitions_cache =
                 Self::new_item_cache(config.table_prune_partitions_count, "prune_partitions");
 
-            let prune_bloom_filter_invalid_keys_cache = Self::new_item_cache(
-                config.table_prune_bloom_filter_invalid_keys_count,
-                "prune_bloom_filter_invalid_keys",
-            );
-
             let file_meta_data_cache =
                 Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, "parquet_file_meta");
             GlobalInstance::set(Arc::new(Self {
@@ -187,7 +179,6 @@ impl CacheManager {
                 inverted_index_meta_cache,
                 inverted_index_file_cache,
                 prune_partitions_cache,
-                prune_bloom_filter_invalid_keys_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
                 table_data_cache,
@@ -244,12 +235,6 @@ impl CacheManager {
 
     pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
         self.table_column_array_cache.clone()
-    }
-
-    pub fn get_prune_bloom_filter_invalid_keys_cache(
-        &self,
-    ) -> Option<PruneBloomFilterInvalidKeysCache> {
-        self.prune_bloom_filter_invalid_keys_cache.clone()
     }
 
     // create cache that meters size by `Count`

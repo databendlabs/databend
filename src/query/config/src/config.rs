@@ -2805,13 +2805,6 @@ pub struct CacheConfig {
     )]
     pub table_prune_partitions_count: u64,
 
-    #[clap(
-        long = "cache-table-prune-bloom-filter-invalid-keys-count",
-        value_name = "VALUE",
-        default_value = "256"
-    )]
-    pub table_prune_bloom_filter_invalid_keys_count: u64,
-
     /// Type of data cache storage
     #[clap(
         long = "cache-data-cache-storage",
@@ -3027,8 +3020,6 @@ mod cache_config_converters {
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
-                table_prune_bloom_filter_invalid_keys_count: value
-                    .table_prune_bloom_filter_invalid_keys_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
@@ -3055,8 +3046,6 @@ mod cache_config_converters {
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
-                table_prune_bloom_filter_invalid_keys_count: value
-                    .table_prune_bloom_filter_invalid_keys_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),
                 table_data_cache_population_queue_size: value

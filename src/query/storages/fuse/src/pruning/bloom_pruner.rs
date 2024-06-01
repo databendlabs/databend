@@ -26,8 +26,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::BloomIndexColumns;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_table_meta::meta::Location;
@@ -54,7 +52,7 @@ pub struct BloomPrunerCreator {
     func_ctx: FunctionContext,
 
     /// indices that should be loaded from filter block
-    index_fields: Vec<TableField>,
+    index_fields: Vec<(TableField, String)>,
 
     /// the expression that would be evaluate
     filter_expression: Expr<String>,
@@ -65,9 +63,6 @@ pub struct BloomPrunerCreator {
     /// the data accessor
     dal: Operator,
 
-    /// table id
-    table_id: u64,
-
     /// the schema of data being indexed
     data_schema: TableSchemaRef,
 }
@@ -75,7 +70,6 @@ pub struct BloomPrunerCreator {
 impl BloomPrunerCreator {
     pub fn create(
         func_ctx: FunctionContext,
-        table_id: u64,
         schema: &TableSchemaRef,
         dal: Operator,
         filter_expr: Option<&Expr<String>>,
@@ -85,33 +79,18 @@ impl BloomPrunerCreator {
             let bloom_columns_map =
                 bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
             let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
-            let point_query_cols =
-                BloomIndex::find_eq_columns(table_id, expr, bloom_column_fields)?;
+            let point_query_cols = BloomIndex::find_eq_columns(expr, bloom_column_fields)?;
 
             if !point_query_cols.is_empty() {
                 // convert to filter column names
                 let mut filter_fields = Vec::with_capacity(point_query_cols.len());
                 let mut scalar_map = HashMap::<Scalar, u64>::new();
-
-                type CacheItem = bool;
                 for (field, scalar, ty, filter_key) in point_query_cols.into_iter() {
-                    if func_ctx.bloom_filter_ignore_invalid_key_ratio.is_some() {
-                        // If the invalid key cache contains this filter key, we can ignore it.
-                        if let Some(cache) = CacheItem::cache() {
-                            if cache.contains_key(&filter_key) {
-                                continue;
-                            }
-                        }
-                    }
-
-                    filter_fields.push(field);
+                    filter_fields.push((field, filter_key));
                     if let Entry::Vacant(e) = scalar_map.entry(scalar.clone()) {
                         let digest = BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &ty)?;
                         e.insert(digest);
                     }
-                }
-                if filter_fields.is_empty() {
-                    return Ok(None);
                 }
 
                 let creator = BloomPrunerCreator {
@@ -120,7 +99,6 @@ impl BloomPrunerCreator {
                     filter_expression: expr.clone(),
                     scalar_map,
                     dal,
-                    table_id,
                     data_schema: schema.clone(),
                 };
                 return Ok(Some(Arc::new(creator)));
@@ -144,7 +122,7 @@ impl BloomPrunerCreator {
         // filter out columns that no longer exist in the indexed block
         let index_columns = self.index_fields.iter().try_fold(
             Vec::with_capacity(self.index_fields.len()),
-            |mut acc, field| {
+            |mut acc, (field, _)| {
                 if column_ids_of_indexed_block.contains(&field.column_id()) {
                     acc.push(BloomIndex::build_filter_column_name(version, field)?);
                 }
@@ -168,7 +146,6 @@ impl BloomPrunerCreator {
                 self.filter_expression.clone(),
                 &self.scalar_map,
                 column_stats,
-                self.table_id,
                 self.data_schema.clone(),
                 invalid_keys,
             )? != FilterEvalResult::MustFalse),
