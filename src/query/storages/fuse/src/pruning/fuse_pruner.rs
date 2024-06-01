@@ -281,15 +281,73 @@ impl FusePruner {
         delete_pruning: bool,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Segment pruner.
+        let pruned_segments = self.segment_pruning(segment_locs, delete_pruning).await?;
+
+        let block_count: usize = pruned_segments
+            .iter()
+            .map(|(_, s)| s.summary.block_count as usize)
+            .sum();
+
+        println!("\n--all block_count={:?}", block_count);
+        // 如果 block 的数量很多，为了避免无效的 bloom 过滤，我们挑选一部分 block 出来作为 sample，验证 bloom 是否有效，如果无效，其它 block 将不使用 bloom 过滤
+        let mut sampled_segments = vec![];
+        let mut remainder_segments = vec![];
+        if block_count > 100 {
+            let mut sample_count = std::cmp::max(block_count / 10, 20);
+
+            for (segment_location, compact_segment_info) in &pruned_segments {
+                let mut block_metas = compact_segment_info.block_metas()?;
+
+                let block_count = block_metas.len();
+                if sample_count >= block_count {
+                    sample_count -= block_count;
+                    sampled_segments.push((segment_location.clone(), block_metas));
+                } else if sample_count > 0 {
+                    let remain_block_metas = block_metas.split_off(sample_count);
+                    sample_count = 0;
+                    sampled_segments.push((segment_location.clone(), block_metas));
+                    remainder_segments.push((segment_location.clone(), remain_block_metas));
+                } else {
+                    remainder_segments.push((segment_location.clone(), block_metas));
+                }
+            }
+        } else {
+            for (segment_location, compact_segment_info) in &pruned_segments {
+                let block_metas = compact_segment_info.block_metas()?;
+                remainder_segments.push((segment_location.clone(), block_metas));
+            }
+        }
+
+        let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
+        let (mut sample_block_metas, ignored_keys) = if !sampled_segments.is_empty() {
+            self.block_pruning(&block_pruner, &mut sampled_segments, true, &HashSet::new())
+                .await?
+        } else {
+            (vec![], HashSet::new())
+        };
+
+        let (mut remainder_block_metas, _) = self
+            .block_pruning(&block_pruner, &mut remainder_segments, false, &ignored_keys)
+            .await?;
+
+        sample_block_metas.append(&mut remainder_block_metas);
+
+        Ok(sample_block_metas)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn segment_pruning(
+        &mut self,
+        mut segment_locs: Vec<SegmentLocation>,
+        delete_pruning: bool,
+    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
         let segment_pruner =
             SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
-        let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
 
         let mut remain = segment_locs.len() % self.max_concurrency;
         let batch_size = segment_locs.len() / self.max_concurrency;
         let mut works = Vec::with_capacity(self.max_concurrency);
 
-        // 1. segment prunner
         let mut pruned_segments = Vec::with_capacity(segment_locs.len());
         while !segment_locs.is_empty() {
             let gap_size = std::cmp::min(1, remain);
@@ -318,8 +376,10 @@ impl FusePruner {
                     let pruned_segments = segment_pruner.pruning(batch).await?;
 
                     if delete_pruning {
+                        let mut not_deleted_segments = Vec::with_capacity(pruned_segments.len());
                         // inverse prun
-                        for (segment_location, compact_segment_info) in &pruned_segments {
+                        for (segment_location, compact_segment_info) in pruned_segments.into_iter()
+                        {
                             // for delete_prune
                             if let Some(range_index) = inverse_range_index.as_ref() {
                                 if !range_index
@@ -328,81 +388,34 @@ impl FusePruner {
                                     deleted_segments.push(DeletedSegmentInfo {
                                         index: segment_location.segment_idx,
                                         summary: compact_segment_info.summary.clone(),
-                                    })
+                                    });
+                                    continue;
                                 }
                             }
+                            not_deleted_segments.push((segment_location, compact_segment_info));
+                            Result::<_, ErrorCode>::Ok((not_deleted_segments, deleted_segments))
                         }
+                    } else {
+                        Result::<_, ErrorCode>::Ok((pruned_segments, deleted_segments))
                     }
-                    Result::<_, ErrorCode>::Ok((pruned_segments, deleted_segments))
                 }
             }));
         }
 
         match futures::future::try_join_all(works).await {
-            Err(e) => {
-                return Err(ErrorCode::StorageOther(format!(
-                    "segment pruning failure, {}",
-                    e
-                )));
-            }
+            Err(e) => Err(ErrorCode::StorageOther(format!(
+                "segment pruning failure, {}",
+                e
+            ))),
             Ok(workers) => {
                 for worker in workers {
                     let mut res = worker?;
                     pruned_segments.extend(res.0);
                     self.deleted_segments.append(&mut res.1);
                 }
+                Ok(pruned_segments)
             }
         }
-
-        let block_count: usize = pruned_segments
-            .iter()
-            .map(|(_, s)| s.summary.block_count as usize)
-            .sum();
-
-        println!("\n--all block_count={:?}", block_count);
-        // 如果 block 的数量很多，为了避免无效的 bloom 过滤，我们挑选一部分 block 出来作为 sample，验证 bloom 是否有效，如果无效，其它 block 将不使用 bloom 过滤
-        let mut sampled_segments = vec![];
-        let mut other_segments = vec![];
-        if block_count > 100 {
-            let mut sample_count = std::cmp::max(block_count / 10, 20);
-
-            for (segment_location, compact_segment_info) in &pruned_segments {
-                let mut block_metas = compact_segment_info.block_metas()?;
-
-                let block_count = block_metas.len();
-                if sample_count >= block_count {
-                    sample_count -= block_count;
-                    sampled_segments.push((segment_location.clone(), block_metas));
-                } else if sample_count > 0 {
-                    let remain_block_metas = block_metas.split_off(sample_count);
-                    sample_count = 0;
-                    sampled_segments.push((segment_location.clone(), block_metas));
-                    other_segments.push((segment_location.clone(), remain_block_metas));
-                } else {
-                    other_segments.push((segment_location.clone(), block_metas));
-                }
-            }
-        } else {
-            for (segment_location, compact_segment_info) in &pruned_segments {
-                let block_metas = compact_segment_info.block_metas()?;
-                other_segments.push((segment_location.clone(), block_metas));
-            }
-        }
-
-        let (mut sample_block_metas, ignored_keys) = if !sampled_segments.is_empty() {
-            self.block_pruning(&block_pruner, &mut sampled_segments, &HashSet::new())
-                .await?
-        } else {
-            (vec![], HashSet::new())
-        };
-
-        let (mut block_metas, _) = self
-            .block_pruning(&block_pruner, &mut other_segments, &ignored_keys)
-            .await?;
-
-        sample_block_metas.append(&mut block_metas);
-
-        Ok(sample_block_metas)
     }
 
     #[async_backtrace::framed]
@@ -410,13 +423,17 @@ impl FusePruner {
         &mut self,
         block_pruner: &Arc<BlockPruner>,
         segments: &mut Vec<(SegmentLocation, Vec<Arc<BlockMeta>>)>,
-        // delete_pruning: bool,
-        // is_sample: bool,
+        is_sample: bool,
         ignored_keys: &HashSet<String>,
     ) -> Result<(Vec<(BlockMetaIndex, Arc<BlockMeta>)>, HashSet<String>)> {
         let mut remain = segments.len() % self.max_concurrency;
         let batch_size = segments.len() / self.max_concurrency;
         let mut works = Vec::with_capacity(self.max_concurrency);
+
+        let block_num: usize = &segments
+            .iter()
+            .map(|(_, block_metas)| block_metas.len())
+            .sum();
 
         while !segments.is_empty() {
             let gap_size = std::cmp::min(1, remain);
@@ -424,7 +441,6 @@ impl FusePruner {
             remain -= gap_size;
 
             let mut batch_segments = segments.drain(0..batch_size).collect::<Vec<_>>();
-            let inverse_range_index = self.get_inverse_range_index();
             works.push(self.pruning_ctx.pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 let pruning_ctx = self.pruning_ctx.clone();
@@ -432,18 +448,16 @@ impl FusePruner {
                 async move {
                     // Build pruning tasks.
                     let mut pruned_blocks = vec![];
-                    let mut block_num = 0;
                     let mut invalid_keys_map = HashMap::new();
 
                     for (location, block_metas) in batch_segments {
-                        block_num += block_metas.len();
                         pruned_blocks.extend(
                             block_pruner
-                                .pruning(location, block_metas, &mut invalid_keys_map)
+                                .pruning(location, block_metas, ignored_keys, &mut invalid_keys_map)
                                 .await?,
                         );
                     }
-                    Result::<_, ErrorCode>::Ok((pruned_blocks, block_num, invalid_keys_map))
+                    Result::<_, ErrorCode>::Ok((pruned_blocks, invalid_keys_map))
                 }
             }));
         }
@@ -455,27 +469,33 @@ impl FusePruner {
             ))),
             Ok(workers) => {
                 let mut block_metas = vec![];
-                let mut block_num = 0;
                 let mut invalid_keys_map = HashMap::new();
                 for worker in workers {
                     let mut res = worker?;
                     block_metas.extend(res.0);
 
-                    block_num += res.1;
-                    for (invalid_key, invalid_num) in res.2 {
+                    for (invalid_key, invalid_num) in res.1 {
                         let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
                         *val_ref += invalid_num;
                     }
                 }
                 let mut ignored_keys = HashSet::new();
-                let ratio = 0.8;
-                for (invalid_key, invalid_num) in invalid_keys_map.into_iter() {
-                    // invalid_num is the number of bloom filters that return Uncertain.
-                    // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
-                    // we put the filter key into the cache and the filter key is ignored in following queries.
-                    let invalid_ratio = invalid_num as f32 / block_num as f32;
-                    if invalid_ratio > ratio {
-                        ignored_keys.insert(invalid_key);
+                if is_sample {
+                    println!("block_num={:?}", block_num);
+                    let ratio = 0.8;
+                    for (invalid_key, invalid_num) in invalid_keys_map.into_iter() {
+                        // invalid_num is the number of bloom filters that return Uncertain.
+                        // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
+                        // we put the filter key into the cache and the filter key is ignored in following queries.
+                        let invalid_ratio = invalid_num as f32 / block_num as f32;
+                        println!(
+                            "invalid_key={:?} invalid_ratio={:?}",
+                            invalid_key, invalid_ratio
+                        );
+
+                        if invalid_ratio > ratio {
+                            ignored_keys.insert(invalid_key);
+                        }
                     }
                 }
 

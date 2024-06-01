@@ -44,6 +44,7 @@ pub trait BloomPruner {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
+        ignored_keys: &HashSet<String>,
         invalid_keys: &mut HashSet<String>,
     ) -> bool;
 }
@@ -115,6 +116,7 @@ impl BloomPrunerCreator {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids_of_indexed_block: Vec<ColumnId>,
+        ignored_keys: &HashSet<String>,
         invalid_keys: &mut HashSet<String>,
     ) -> Result<bool> {
         let version = index_location.1;
@@ -122,13 +124,23 @@ impl BloomPrunerCreator {
         // filter out columns that no longer exist in the indexed block
         let index_columns = self.index_fields.iter().try_fold(
             Vec::with_capacity(self.index_fields.len()),
-            |mut acc, (field, _)| {
-                if column_ids_of_indexed_block.contains(&field.column_id()) {
+            |mut acc, (field, filter_key)| {
+                if column_ids_of_indexed_block.contains(&field.column_id())
+                    && !ignored_keys.contains(filter_key)
+                {
                     acc.push(BloomIndex::build_filter_column_name(version, field)?);
                 }
                 Ok::<_, ErrorCode>(acc)
             },
         )?;
+
+        println!("\n---ignored_keys={:?}", ignored_keys);
+        println!("self.index_fields={:?}", self.index_fields);
+        println!("===index_columns=={:?}", index_columns);
+        if index_columns.is_empty() {
+            // if index columns is empty
+            return Ok(true);
+        }
 
         // load the relevant index columns
         let maybe_filter = index_location
@@ -169,12 +181,20 @@ impl BloomPruner for BloomPrunerCreator {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
+        ignored_keys: &HashSet<String>,
         invalid_keys: &mut HashSet<String>,
     ) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
             match self
-                .apply(loc, index_length, column_stats, column_ids, invalid_keys)
+                .apply(
+                    loc,
+                    index_length,
+                    column_stats,
+                    column_ids,
+                    ignored_keys,
+                    invalid_keys,
+                )
                 .await
             {
                 Ok(v) => v,

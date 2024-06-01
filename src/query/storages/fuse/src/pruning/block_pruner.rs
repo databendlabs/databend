@@ -48,6 +48,7 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
+        ignored_keys: &HashSet<String>,
         invalid_keys_map: &mut HashMap<String, u64>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Apply internal column pruning.
@@ -62,6 +63,7 @@ impl BlockPruner {
                 segment_location,
                 block_metas,
                 block_meta_indexes,
+                ignored_keys,
                 invalid_keys_map,
             )
             .await
@@ -100,6 +102,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        ignored_keys: &HashSet<String>,
         invalid_keys_map: &mut HashMap<String, u64>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
@@ -175,7 +178,7 @@ impl BlockPruner {
                                     pruning_stats.set_blocks_bloom_pruning_before(1);
                                 }
                                 let keep = bloom_pruner
-                                    .should_keep(&index_location, index_size, &block_meta.col_stats, column_ids, &mut prune_result.invalid_keys)
+                                    .should_keep(&index_location, index_size, &block_meta.col_stats, column_ids, ignored_keys, &mut prune_result.invalid_keys)
                                     .await
                                     && limit_pruner.within_limit(row_count);
                                 if keep {
