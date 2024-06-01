@@ -114,7 +114,7 @@ pub struct FunctionContext {
 
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
-    pub bloom_filter_ignore_invalid_key_ratio: Option<f32>,
+    pub enable_bloom_filter_ignore_invalid_key: bool,
 }
 
 #[derive(Clone)]

@@ -698,13 +698,9 @@ impl TableContext for QueryContext {
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
-        let invalid_key_ratio_value = settings.get_bloom_filter_ignore_invalid_key_ratio()?;
-        // invalid key ratio is 100 means don't need cache invalid filter keys
-        let bloom_filter_ignore_invalid_key_ratio = if invalid_key_ratio_value < 100 {
-            Some(invalid_key_ratio_value as f32 / 100.0)
-        } else {
-            None
-        };
+        let enable_bloom_filter_ignore_invalid_key =
+            settings.get_enable_bloom_filter_ignore_invalid_key()?;
+
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -725,7 +721,7 @@ impl TableContext for QueryContext {
             external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
-            bloom_filter_ignore_invalid_key_ratio,
+            enable_bloom_filter_ignore_invalid_key,
         })
     }
 

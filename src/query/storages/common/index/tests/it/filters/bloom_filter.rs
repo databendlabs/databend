@@ -351,8 +351,7 @@ fn eval_index(
     )
     .unwrap();
 
-    let table_id = 1;
-    let point_query_cols = BloomIndex::find_eq_columns(table_id, &expr, fields).unwrap();
+    let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
     let func_ctx = FunctionContext::default();
@@ -362,17 +361,10 @@ fn eval_index(
             scalar_map.insert(scalar.clone(), digest);
         }
     }
-    let mut invalid_keys = HashSet::new();
     let column_stats = StatisticsOfColumns::new();
+    let mut invalid_keys = HashSet::new();
     index
-        .apply(
-            expr,
-            &scalar_map,
-            &column_stats,
-            table_id,
-            schema,
-            &mut invalid_keys,
-        )
+        .apply(expr, &scalar_map, &column_stats, schema, &mut invalid_keys)
         .unwrap()
 }
 
@@ -421,8 +413,7 @@ fn eval_map_index(
 
     let func_ctx = FunctionContext::default();
     let (expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
-    let table_id = 1;
-    let point_query_cols = BloomIndex::find_eq_columns(table_id, &expr, fields).unwrap();
+    let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
     for (_, scalar, ty, _) in point_query_cols.iter() {
@@ -431,17 +422,10 @@ fn eval_map_index(
             scalar_map.insert(scalar.clone(), digest);
         }
     }
-    let mut invalid_keys = HashSet::new();
     let column_stats = StatisticsOfColumns::new();
+    let mut invalid_keys = HashSet::new();
     index
-        .apply(
-            expr,
-            &scalar_map,
-            &column_stats,
-            table_id,
-            schema,
-            &mut invalid_keys,
-        )
+        .apply(expr, &scalar_map, &column_stats, schema, &mut invalid_keys)
         .unwrap()
 }
 

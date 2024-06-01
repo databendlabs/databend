@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Semaphore;
@@ -22,15 +23,12 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
@@ -58,9 +56,9 @@ use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
 
+#[derive(Clone)]
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
-    pub func_ctx: FunctionContext,
     pub dal: Operator,
     pub pruning_runtime: Arc<Runtime>,
     pub pruning_semaphore: Arc<Semaphore>,
@@ -80,7 +78,6 @@ impl PruningContext {
     pub fn try_create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
-        table_id: u64,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
@@ -135,7 +132,6 @@ impl PruningContext {
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let bloom_pruner = BloomPrunerCreator::create(
             func_ctx.clone(),
-            table_id,
             &table_schema,
             dal.clone(),
             filter_expr.as_ref(),
@@ -158,7 +154,7 @@ impl PruningContext {
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
         let internal_column_pruner =
-            InternalColumnPruner::try_create(func_ctx.clone(), filter_expr.as_ref());
+            InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -173,7 +169,6 @@ impl PruningContext {
 
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
-            func_ctx,
             dal,
             pruning_runtime,
             pruning_semaphore,
@@ -203,7 +198,6 @@ impl FusePruner {
     pub fn create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
-        table_id: u64,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
@@ -212,7 +206,6 @@ impl FusePruner {
         Self::create_with_pages(
             ctx,
             dal,
-            table_id,
             table_schema,
             push_down,
             None,
@@ -226,7 +219,6 @@ impl FusePruner {
     pub fn create_with_pages(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
-        table_id: u64,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
@@ -250,7 +242,6 @@ impl FusePruner {
         let pruning_ctx = PruningContext::try_create(
             ctx,
             dal,
-            table_id,
             table_schema.clone(),
             push_down,
             cluster_key_meta,
@@ -303,92 +294,172 @@ impl FusePruner {
         let batch_size = segment_locs.len() / self.max_concurrency;
         let mut works = Vec::with_capacity(self.max_concurrency);
 
-        while !segment_locs.is_empty() {
-            let gap_size = std::cmp::min(1, remain);
-            let batch_size = batch_size + gap_size;
-            remain -= gap_size;
+        let enable_bloom_filter_ignore_invalid_key = self
+            .pruning_ctx
+            .ctx
+            .get_function_context()?
+            .enable_bloom_filter_ignore_invalid_key;
 
-            let mut batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
-            let inverse_range_index = self.get_inverse_range_index();
-            works.push(self.pruning_ctx.pruning_runtime.spawn({
-                let block_pruner = block_pruner.clone();
-                let segment_pruner = segment_pruner.clone();
-                let pruning_ctx = self.pruning_ctx.clone();
+        let inverse_range_index = self.get_inverse_range_index();
+        if !enable_bloom_filter_ignore_invalid_key {
+            while !segment_locs.is_empty() {
+                let gap_size = std::cmp::min(1, remain);
+                let batch_size = batch_size + gap_size;
+                remain -= gap_size;
 
-                async move {
-                    // Build pruning tasks.
-                    if let Some(internal_column_pruner) = &pruning_ctx.internal_column_pruner {
-                        batch = batch
-                            .into_iter()
-                            .filter(|segment| {
-                                internal_column_pruner
-                                    .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
-                            })
-                            .collect::<Vec<_>>();
+                let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
+                works.push(self.pruning_ctx.pruning_runtime.spawn({
+                    let block_pruner = block_pruner.clone();
+                    let segment_pruner = segment_pruner.clone();
+                    let pruning_ctx = self.pruning_ctx.clone();
+                    let inverse_range_index = inverse_range_index.clone();
+
+                    async move {
+                        let (segment_block_metas, deleted_segments) = Self::segment_pruning(
+                            pruning_ctx,
+                            segment_pruner,
+                            inverse_range_index,
+                            batch,
+                            delete_pruning,
+                        )
+                        .await?;
+
+                        let mut invalid_keys_map = HashMap::new();
+                        let res = Self::block_pruning(
+                            block_pruner,
+                            segment_block_metas,
+                            &mut invalid_keys_map,
+                        )
+                        .await?;
+
+                        Result::<_, ErrorCode>::Ok((res, deleted_segments))
                     }
+                }));
+            }
+        } else {
+            let mut segment_works = Vec::with_capacity(self.max_concurrency);
+            while !segment_locs.is_empty() {
+                let gap_size = std::cmp::min(1, remain);
+                let batch_size = batch_size + gap_size;
+                remain -= gap_size;
 
-                    let mut res = vec![];
-                    let mut deleted_segments = vec![];
-                    let mut block_num = 0;
-                    let mut invalid_keys_map = HashMap::new();
-                    let pruned_segments = segment_pruner.pruning(batch).await?;
+                let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
+                segment_works.push(self.pruning_ctx.pruning_runtime.spawn({
+                    let segment_pruner = segment_pruner.clone();
+                    let pruning_ctx = self.pruning_ctx.clone();
+                    let inverse_range_index = inverse_range_index.clone();
 
-                    if delete_pruning {
-                        // inverse prun
-                        for (segment_location, compact_segment_info) in &pruned_segments {
-                            // for delete_prune
-                            match inverse_range_index.as_ref() {
-                                Some(range_index) => {
-                                    if !range_index
-                                        .should_keep(&compact_segment_info.summary.col_stats, None)
-                                    {
-                                        deleted_segments.push(DeletedSegmentInfo {
-                                            index: segment_location.segment_idx,
-                                            summary: compact_segment_info.summary.clone(),
-                                        })
-                                    } else {
-                                        let block_metas = compact_segment_info.block_metas()?;
-                                        block_num += block_metas.len();
-                                        res.extend(
-                                            block_pruner
-                                                .pruning(
-                                                    segment_location.clone(),
-                                                    block_metas,
-                                                    &mut invalid_keys_map,
-                                                )
-                                                .await?,
-                                        );
-                                    }
-                                }
-                                None => {
-                                    let block_metas = compact_segment_info.block_metas()?;
-                                    block_num += block_metas.len();
-                                    res.extend(
-                                        block_pruner
-                                            .pruning(
-                                                segment_location.clone(),
-                                                block_metas,
-                                                &mut invalid_keys_map,
-                                            )
-                                            .await?,
-                                    );
-                                }
-                            }
-                        }
-                    } else {
-                        for (location, info) in pruned_segments {
-                            let block_metas = info.block_metas()?;
-                            block_num += block_metas.len();
-                            res.extend(
-                                block_pruner
-                                    .pruning(location, block_metas, &mut invalid_keys_map)
-                                    .await?,
-                            );
-                        }
+                    async move {
+                        let (segment_block_metas, deleted_segments) = Self::segment_pruning(
+                            pruning_ctx,
+                            segment_pruner,
+                            inverse_range_index,
+                            batch,
+                            delete_pruning,
+                        )
+                        .await?;
+                        Result::<_, ErrorCode>::Ok((segment_block_metas, deleted_segments))
                     }
-                    Result::<_, ErrorCode>::Ok((res, deleted_segments, block_num, invalid_keys_map))
+                }));
+            }
+
+            let mut segment_block_metas = vec![];
+            let mut deleted_segments = vec![];
+            match futures::future::try_join_all(segment_works).await {
+                Err(e) => {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "segment pruning failure, {}",
+                        e
+                    )));
                 }
-            }));
+                Ok(workers) => {
+                    for worker in workers {
+                        let res = worker?;
+                        segment_block_metas.extend(res.0);
+                        deleted_segments.extend(res.1);
+                    }
+                }
+            }
+
+            let block_count: usize = segment_block_metas
+                .iter()
+                .map(|(_, block_metas)| block_metas.len())
+                .sum();
+
+            let sample_num = if block_count > 100 {
+                std::cmp::min(block_count / 10, 15)
+            } else {
+                0
+            };
+
+            let (sample_block_metas, mut remainder_block_metas) =
+                Self::split_sample_block_metas(sample_num, segment_block_metas);
+
+            let mut invalid_keys_map = HashMap::new();
+            let sample_result_block_metas = Self::block_pruning(
+                block_pruner.clone(),
+                sample_block_metas,
+                &mut invalid_keys_map,
+            )
+            .await?;
+
+            let ratio = 0.7;
+            let mut ignored_keys = HashSet::new();
+            for (invalid_key, invalid_num) in invalid_keys_map.into_iter() {
+                // invalid_num is the number of bloom filters that return Uncertain.
+                // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
+                // we put the filter key into the cache and the filter key is ignored in following queries.
+                let invalid_ratio = invalid_num as f32 / sample_num as f32;
+                if invalid_ratio > ratio {
+                    ignored_keys.insert(invalid_key);
+                }
+            }
+
+            let pruning_ctx = if ignored_keys.is_empty() {
+                self.pruning_ctx.clone()
+            } else {
+                let mut pruning_ctx = Arc::unwrap_or_clone(self.pruning_ctx.clone());
+                let bloom_pruner = match &pruning_ctx.bloom_pruner {
+                    Some(bloom_pruner) => bloom_pruner.update_index_fields(&ignored_keys),
+                    None => None,
+                };
+                pruning_ctx.bloom_pruner = bloom_pruner;
+                Arc::new(pruning_ctx)
+            };
+
+            let block_pruner = Arc::new(BlockPruner::create(pruning_ctx.clone())?);
+
+            works.push(
+                pruning_ctx.pruning_runtime.spawn({
+                    async move {
+                        Result::<_, ErrorCode>::Ok((sample_result_block_metas, deleted_segments))
+                    }
+                }),
+            );
+
+            let mut remain = remainder_block_metas.len() % self.max_concurrency;
+            let batch_size = remainder_block_metas.len() / self.max_concurrency;
+
+            while !remainder_block_metas.is_empty() {
+                let gap_size = std::cmp::min(1, remain);
+                let batch_size = batch_size + gap_size;
+                remain -= gap_size;
+
+                let batch = remainder_block_metas
+                    .drain(0..batch_size)
+                    .collect::<Vec<_>>();
+                works.push(pruning_ctx.pruning_runtime.spawn({
+                    let block_pruner = block_pruner.clone();
+                    let mut invalid_keys_map = HashMap::new();
+
+                    async move {
+                        let remainder_result_block_metas =
+                            Self::block_pruning(block_pruner, batch, &mut invalid_keys_map).await?;
+
+                        Result::<_, ErrorCode>::Ok((remainder_result_block_metas, vec![]))
+                    }
+                }));
+            }
         }
 
         match futures::future::try_join_all(works).await {
@@ -398,39 +469,11 @@ impl FusePruner {
             ))),
             Ok(workers) => {
                 let mut metas = vec![];
-                let mut block_num = 0;
-                let mut invalid_keys_map = HashMap::new();
                 for worker in workers {
                     let mut res = worker?;
                     metas.extend(res.0);
                     self.deleted_segments.append(&mut res.1);
-
-                    block_num += res.2;
-                    for (invalid_key, invalid_num) in res.3 {
-                        let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
-                        *val_ref += invalid_num;
-                    }
                 }
-
-                if let Some(ratio) = self
-                    .pruning_ctx
-                    .func_ctx
-                    .bloom_filter_ignore_invalid_key_ratio
-                {
-                    type CacheItem = bool;
-                    if let Some(cache) = CacheItem::cache() {
-                        for (invalid_key, invalid_num) in invalid_keys_map {
-                            // invalid_num is the number of bloom filters that return Uncertain.
-                            // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
-                            // we put the filter key into the cache and the filter key is ignored in following queries.
-                            let invalid_ratio = invalid_num as f32 / block_num as f32;
-                            if invalid_ratio > ratio {
-                                cache.put(invalid_key.clone(), Arc::new(true));
-                            }
-                        }
-                    }
-                }
-
                 if delete_pruning {
                     Ok(metas)
                 } else {
@@ -441,6 +484,100 @@ impl FusePruner {
                 }
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    async fn segment_pruning(
+        pruning_ctx: Arc<PruningContext>,
+        segment_pruner: Arc<SegmentPruner>,
+        inverse_range_index: Option<RangeIndex>,
+        mut segment_locs: Vec<SegmentLocation>,
+        delete_pruning: bool,
+    ) -> Result<(
+        Vec<(SegmentLocation, Vec<Arc<BlockMeta>>)>,
+        Vec<DeletedSegmentInfo>,
+    )> {
+        // Build pruning tasks.
+        if let Some(internal_column_pruner) = &pruning_ctx.internal_column_pruner {
+            segment_locs = segment_locs
+                .into_iter()
+                .filter(|segment| {
+                    internal_column_pruner.should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
+                })
+                .collect::<Vec<_>>();
+        }
+        let pruned_segments = segment_pruner.pruning(segment_locs).await?;
+        let mut pruned_block_metas = Vec::with_capacity(pruned_segments.len());
+        let mut deleted_segments = vec![];
+        if delete_pruning {
+            // inverse prun
+            for (location, segment_info) in pruned_segments.into_iter() {
+                // for delete_prune
+                if let Some(range_index) = inverse_range_index.as_ref() {
+                    if !range_index.should_keep(&segment_info.summary.col_stats, None) {
+                        deleted_segments.push(DeletedSegmentInfo {
+                            index: location.segment_idx,
+                            summary: segment_info.summary.clone(),
+                        });
+                        continue;
+                    }
+                }
+                let block_metas = segment_info.block_metas()?;
+                pruned_block_metas.push((location, block_metas));
+            }
+        } else {
+            for (location, segment_info) in pruned_segments.into_iter() {
+                let block_metas = segment_info.block_metas()?;
+                pruned_block_metas.push((location, block_metas));
+            }
+        }
+        Ok((pruned_block_metas, deleted_segments))
+    }
+
+    async fn block_pruning(
+        block_pruner: Arc<BlockPruner>,
+        segment_block_metas: Vec<(SegmentLocation, Vec<Arc<BlockMeta>>)>,
+        invalid_keys_map: &mut HashMap<String, u64>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let mut res = vec![];
+        for (location, block_metas) in segment_block_metas {
+            res.extend(
+                block_pruner
+                    .pruning(location, block_metas, invalid_keys_map)
+                    .await?,
+            );
+        }
+        Ok(res)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn split_sample_block_metas(
+        mut sample_num: usize,
+        segment_block_metas: Vec<(SegmentLocation, Vec<Arc<BlockMeta>>)>,
+    ) -> (
+        Vec<(SegmentLocation, Vec<Arc<BlockMeta>>)>,
+        Vec<(SegmentLocation, Vec<Arc<BlockMeta>>)>,
+    ) {
+        if sample_num == 0 {
+            return (vec![], segment_block_metas);
+        }
+        let mut sample_block_metas = vec![];
+        let mut remainder_block_metas = vec![];
+        for (segment_location, mut block_metas) in segment_block_metas.into_iter() {
+            let block_num = block_metas.len();
+            if sample_num >= block_num {
+                sample_num -= block_num;
+                sample_block_metas.push((segment_location, block_metas));
+            } else if sample_num > 0 {
+                let remain_block_metas = block_metas.split_off(sample_num);
+                sample_num = 0;
+                sample_block_metas.push((segment_location.clone(), block_metas));
+                remainder_block_metas.push((segment_location, remain_block_metas));
+            } else {
+                remainder_block_metas.push((segment_location, block_metas));
+            }
+        }
+        (sample_block_metas, remainder_block_metas)
     }
 
     #[async_backtrace::framed]

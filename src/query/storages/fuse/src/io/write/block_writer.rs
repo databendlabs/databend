@@ -129,6 +129,7 @@ pub struct BloomIndexState {
     pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
 }
 
+#[derive(Clone)]
 pub struct BloomIndexBuilder {
     pub table_ctx: Arc<dyn TableContext>,
     pub table_schema: TableSchemaRef,

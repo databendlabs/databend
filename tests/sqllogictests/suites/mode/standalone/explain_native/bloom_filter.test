@@ -125,7 +125,6 @@ drop table if exists bloom_test_nullable_t
 
 statement ok
 create table bloom_test_nullable_t(c1 int null, c2 int null);
-create table bloom_test_nullable_t(c1 int null, c2 int null) storage_format='parquet';
 
 statement ok
 insert into  bloom_test_nullable_t values(1,1), (5,6), (10,10)
@@ -146,68 +145,6 @@ TableScan
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
 ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
 └── estimated rows: 1.00
-
-statement ok
-set bloom_filter_ignore_invalid_key_ratio = 90
-
-query T
-explain select 1 from bloom_test_nullable_t where c1 = 1
-----
-EvalScalar
-├── output columns: [1 (#2)]
-├── expressions: [1]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.bloom_test_nullable_t
-    ├── output columns: []
-    ├── read rows: 6
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
-    ├── push downs: [filters: [is_true(bloom_test_nullable_t.c1 (#0) = 1)], limit: NONE]
-    └── estimated rows: 1.00
-
-# column c1 = 1 is cached as invalid key, bloom filter is ignored
-query T
-explain select 1 from bloom_test_nullable_t where c1 = 1 and c2 >= 1
-----
-EvalScalar
-├── output columns: [1 (#2)]
-├── expressions: [1]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.bloom_test_nullable_t
-    ├── output columns: []
-    ├── read rows: 6
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
-    ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 1, bloom_test_nullable_t.c2 (#1) >= 1)], limit: NONE]
-    └── estimated rows: 1.00
-
-statement ok
-set bloom_filter_ignore_invalid_key_ratio = 100
-
-# invalid key cache is disabled, bloom index for c1 = 1 can work again
-query T
-explain select 1 from bloom_test_nullable_t where c1 = 1 and c2 >= 0
-----
-EvalScalar
-├── output columns: [1 (#2)]
-├── expressions: [1]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.bloom_test_nullable_t
-    ├── output columns: []
-    ├── read rows: 6
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
-    ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 1, bloom_test_nullable_t.c2 (#1) >= 0)], limit: NONE]
-    └── estimated rows: 1.00
 
 # fix https://github.com/datafuselabs/databend/issues/15570
 # fix https://github.com/datafuselabs/databend/issues/15572
