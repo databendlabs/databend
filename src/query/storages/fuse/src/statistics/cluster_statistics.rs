@@ -23,10 +23,7 @@ use databend_common_expression::Scalar;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 
-use crate::statistics::column_statistic::Trim;
 use crate::table_functions::cmp_with_null;
-
-pub const CLUSTER_STATS_STRING_PREFIX_LEN: usize = 8;
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
@@ -136,21 +133,12 @@ impl ClusterStatsGenerator {
             let val = data_block.get_by_offset(*key);
             let val_ref = val.value.as_ref();
             let left = unsafe { val_ref.index_unchecked(0) }.to_owned();
-            min.push(
-                left.clone()
-                    .trim_min(CLUSTER_STATS_STRING_PREFIX_LEN)
-                    .unwrap_or(left),
-            );
+            min.push(left);
 
             // The maximum in cluster statistics neednot larger than the non-trimmed one.
             // So we use trim_min directly.
             let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) }.to_owned();
-            max.push(
-                right
-                    .clone()
-                    .trim_min(CLUSTER_STATS_STRING_PREFIX_LEN)
-                    .unwrap_or(right),
-            );
+            max.push(right);
         }
 
         let level = if min == max

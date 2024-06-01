@@ -225,7 +225,7 @@ impl FuseTable {
 
         let input_schema =
             modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
-        let mut merged: Vec<DataField> = input_schema.fields().clone();
+        let mut merged = input_schema.fields().clone();
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
@@ -233,7 +233,7 @@ impl FuseTable {
         let mut exprs = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
-            let expr: Expr = remote_expr
+            let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             let index = match &expr {
