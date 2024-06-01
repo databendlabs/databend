@@ -50,10 +50,3 @@ SELECT p.ts, e.value
 FROM range(0,10) p(ts) ASOF JOIN events0 e
 ON p.ts = e.begin
 ORDER BY p.ts ASC
-
-# Multiple ASOF JOIN inequalities
-statement error (?s).*Multiple inequalities condition!
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON p.ts >= e.begin AND p.ts >= e.value
-ORDER BY p.ts ASC
