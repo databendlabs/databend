@@ -87,3 +87,4 @@ pub use table::parse_result_scan_args;
 pub use values::bind_values;
 pub use window::WindowFunctionInfo;
 pub use window::WindowOrderByInfo;
+pub use window::bind_window_function_info;

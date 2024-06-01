@@ -22,6 +22,8 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::bind_window_function_info;
+use crate::binder::WindowFunctionInfo;
 use crate::binder::WindowOrderByInfo;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
@@ -38,7 +40,6 @@ use crate::plans::JoinType;
 use crate::plans::LagLeadFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::plans::Window;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -78,8 +79,7 @@ impl PhysicalPlanBuilder {
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
     ) -> Result<PhysicalPlan> {
-        let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
-        let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
+        let mut window_index: usize = 0;
 
         if range_conditions.is_empty() {
             return Err(ErrorCode::Internal("Missing inequality condition!"));
@@ -89,19 +89,17 @@ impl PhysicalPlanBuilder {
         }
         let (window_func, right_column) =
             self.bind_window_func(join, s_expr, &range_conditions, &mut other_conditions)?;
-        let window_plan = self.build_window_plan(&window_func)?;
+        let window_plan = self.build_window_plan(&window_func, s_expr, &mut window_index).await?;
         self.add_range_condition(
             &window_func,
-            &window_plan,
+            window_index,
             &mut range_conditions,
             right_column,
         )?;
         let mut ss_expr = s_expr.clone();
-        ss_expr.children[1] = SExpr::create_unary(
-            Arc::new(window_plan.into()),
-            Arc::new(s_expr.child(1)?.clone()),
-        )
-        .into();
+        ss_expr.children[1] = Arc::new(window_plan);
+        let left_prop = RelExpr::with_s_expr(ss_expr.child(1)?).derive_relational_prop()?;
+        let right_prop = RelExpr::with_s_expr(ss_expr.child(0)?).derive_relational_prop()?;
         let left_required = required.0.union(&left_prop.used_columns).cloned().collect();
         let right_required = required
             .1
@@ -121,7 +119,7 @@ impl PhysicalPlanBuilder {
     fn add_range_condition(
         &mut self,
         window_func: &WindowFunc,
-        window_plan: &Window,
+        window_index: usize,
         range_conditions: &mut Vec<ScalarExpr>,
         right_column: ScalarExpr,
     ) -> Result<bool> {
@@ -130,7 +128,7 @@ impl PhysicalPlanBuilder {
         // Generate a ColumnBinding for each argument of aggregates
         let column = ColumnBindingBuilder::new(
             window_func.display_name.clone(),
-            window_plan.index,
+            window_index,
             Box::new(right_column.data_type()?.remove_nullable().clone()),
             Visibility::Visible,
         )
@@ -294,7 +292,11 @@ impl PhysicalPlanBuilder {
         Ok((window_func, right_column))
     }
 
-    fn build_window_plan(&mut self, window: &WindowFunc) -> Result<Window> {
+    async fn  build_window_plan(
+        &mut self,
+        window: &WindowFunc,
+        s_expr: &SExpr,
+        window_index: &mut usize) -> Result<SExpr> {
         let mut window_args = vec![];
         let window_func_name = window.func.func_name();
         let func = match &window.func {
@@ -347,17 +349,18 @@ impl PhysicalPlanBuilder {
             None,
         );
 
-        let window_plan = Window {
+        *window_index = index;
+
+        let window_info = WindowFunctionInfo {
             span: window.span,
             index,
-            function: func.clone(),
+            partition_by_items,
+            func,
             arguments: window_args,
-            partition_by: partition_by_items,
-            order_by: order_by_items,
+            order_by_items,
             frame: window.frame.clone(),
-            limit: None,
         };
-        Ok(window_plan)
+        Ok(bind_window_function_info(&self.ctx, &window_info, s_expr.child(1)?.clone()).await?)
     }
 
     fn replace_lag_lead_args(
@@ -395,10 +398,11 @@ impl PhysicalPlanBuilder {
             Ok(col.clone())
         } else {
             let ty = arg.data_type()?;
-            let index =
-                self.metadata
-                    .write()
-                    .add_derived_column(name.to_string(), ty.clone(), None);
+            let index = self.metadata.write().add_derived_column(
+                name.to_string(),
+                ty.clone(),
+                Some(arg.clone()),
+            );
 
             // Generate a ColumnBinding for each argument of aggregates
             let column = ColumnBindingBuilder::new(
