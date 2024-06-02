@@ -55,12 +55,12 @@ jobs:
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
-          artifacts: meta,metactl
+          artifacts: meta,metactl,metaverifier
 
-  test_meta_chaos:
+  io_delay_chaos:
     needs: [info, build]
     runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_meta_chaos
-        timeout-minutes: 10
+      - uses: ./.github/actions/io_delay_chaos
+        timeout-minutes: 15

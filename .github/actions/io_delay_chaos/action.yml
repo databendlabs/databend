@@ -13,9 +13,9 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        artifacts: meta,metactl
+        artifacts: meta,metactl,metaverifier
 
-    - name: Chaos Test meta service
+    - name: Meta Service IO Delay tests
       shell: bash
       run: |
         ./scripts/ci/ci-chaos-meta-tests.sh
