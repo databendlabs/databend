@@ -134,9 +134,9 @@ impl BloomPrunerCreator {
             },
         )?;
 
-        println!("\n---ignored_keys={:?}", ignored_keys);
-        println!("self.index_fields={:?}", self.index_fields);
-        println!("===index_columns=={:?}", index_columns);
+        //println!("\n---ignored_keys={:?}", ignored_keys);
+        //println!("self.index_fields={:?}", self.index_fields);
+        //println!("===index_columns=={:?}", index_columns);
         if index_columns.is_empty() {
             // if index columns is empty
             return Ok(true);

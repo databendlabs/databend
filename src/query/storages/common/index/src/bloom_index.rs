@@ -390,17 +390,17 @@ impl BloomIndex {
                         display_name: new_col_name,
                     }))
                 } else {
-                    if self
-                        .func_ctx
-                        .bloom_filter_ignore_invalid_key_ratio
-                        .is_some()
-                    {
+                    //if self
+                    //    .func_ctx
+                    //    .bloom_filter_ignore_invalid_key_ratio
+                    //    .is_some()
+                    //{
                         // If the result of a bloom filter is Uncertain, it means that the filter is invalid,
                         // and reading the bloom filter data will increase additional costs,
                         // so we can consider not using this bloom filter in the following queries.
                         let filter_key = build_filter_key(col_name, opt_key, scalar);
                         invalid_keys.insert(filter_key);
-                    }
+                    //}
                     Ok(None)
                 }
             },

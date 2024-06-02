@@ -291,7 +291,7 @@ impl FusePruner {
 
         println!("\n--all block_count={:?}", block_count);
         // 如果 block 的数量很多，为了避免无效的 bloom 过滤，我们挑选一部分 block 出来作为 sample，验证 bloom 是否有效，如果无效，其它 block 将不使用 bloom 过滤
-        let mut sampled_segments = vec![];
+        let mut sample_segments = vec![];
         let mut remainder_segments = vec![];
         if block_count > 100 {
             let mut sample_count = std::cmp::max(block_count / 10, 20);
@@ -302,11 +302,11 @@ impl FusePruner {
                 let block_count = block_metas.len();
                 if sample_count >= block_count {
                     sample_count -= block_count;
-                    sampled_segments.push((segment_location.clone(), block_metas));
+                    sample_segments.push((segment_location.clone(), block_metas));
                 } else if sample_count > 0 {
                     let remain_block_metas = block_metas.split_off(sample_count);
                     sample_count = 0;
-                    sampled_segments.push((segment_location.clone(), block_metas));
+                    sample_segments.push((segment_location.clone(), block_metas));
                     remainder_segments.push((segment_location.clone(), remain_block_metas));
                 } else {
                     remainder_segments.push((segment_location.clone(), block_metas));
@@ -319,13 +319,21 @@ impl FusePruner {
             }
         }
 
+	println!("\n\n--sampled_segments.len={:?}", sample_segments.len());
+	println!("--remainder_segments.len={:?}", remainder_segments.len());
+
+
+
         let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
-        let (mut block_metas, ignored_keys) = if !sampled_segments.is_empty() {
-            self.block_pruning(&block_pruner, &mut sampled_segments, true, &HashSet::new())
+        let (mut block_metas, ignored_keys) = if !sample_segments.is_empty() {
+            self.block_pruning(&block_pruner, &mut sample_segments, true, &HashSet::new())
                 .await?
         } else {
             (vec![], HashSet::new())
         };
+
+	println!("\n-----ignored_keys={:?}", ignored_keys);
+
 
         let (mut remainder_block_metas, _) = self
             .block_pruning(&block_pruner, &mut remainder_segments, false, &ignored_keys)
@@ -470,6 +478,9 @@ impl FusePruner {
                                 .await?,
                         );
                     }
+			if is_sample {
+		println!("\n---invalid_keys_map={:?}", invalid_keys_map);
+			}
                     Result::<_, ErrorCode>::Ok((pruned_blocks, invalid_keys_map))
                 }
             }));
@@ -492,10 +503,12 @@ impl FusePruner {
                         *val_ref += invalid_num;
                     }
                 }
+                println!("---- is_sample={:?}  block_num={:?}", is_sample, block_num);
+                println!("\n====----invalid_keys_map={:?}", invalid_keys_map);
+
                 let mut ignored_keys = HashSet::new();
                 if is_sample {
-                    println!("block_num={:?}", block_num);
-                    let ratio = 0.8;
+                    let ratio = 0.7;
                     for (invalid_key, invalid_num) in invalid_keys_map.into_iter() {
                         // invalid_num is the number of bloom filters that return Uncertain.
                         // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
