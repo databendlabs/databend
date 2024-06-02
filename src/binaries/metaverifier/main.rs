@@ -17,6 +17,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::fs;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -113,6 +114,10 @@ async fn main() -> Result<()> {
     let (tx, rx) = mpsc::channel::<()>();
     let mut handles = Vec::new();
 
+    // write a file as start
+    let file = "/tmp/meta-verifier".to_string();
+    fs::write(&file, "START")?;
+
     while client_num < config.client {
         client_num += 1;
         let prefix = config.prefix;
@@ -190,6 +195,9 @@ async fn main() -> Result<()> {
         config.number,
         end.duration_since(start).as_millis()
     );
+
+    // write a file as end
+    fs::write(&file, "END")?;
 
     Ok(())
 }

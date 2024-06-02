@@ -30,6 +30,7 @@ else
     ./get_helm.sh
 fi
 
+echo "make databend-meta image"
 ls -lh ./target/"${BUILD_PROFILE}"
 mkdir -p temp/distro/amd64
 cp ./target/"${BUILD_PROFILE}"/databend-meta ./temp/distro/amd64
@@ -38,11 +39,22 @@ docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f .
 docker tag databend-meta:meta-chaos k3d-registry.localhost:5111/databend-meta:meta-chaos
 docker push k3d-registry.localhost:5111/databend-meta:meta-chaos
 
+echo "make databend-metaverifier image"
+rm -rf temp/distro/amd64/*
+cp ./target/"${BUILD_PROFILE}"/databend-metaverifier ./temp/distro/amd64
+cp tests/metaverifier/start-verifier.sh ./temp/distro/amd64
+docker build -t databend-metaverifier:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/debian/verifier.Dockerfile temp
+docker tag databend-metaverifier:meta-chaos k3d-registry.localhost:5111/databend-metaverifier:meta-chaos
+docker push k3d-registry.localhost:5111/databend-metaverifier:meta-chaos
+
 echo "install chaos mesh on k3d"
 curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
 
 kubectl get pods -A -o wide
 kubectl get pvc -A
+
+echo "kubectl delete databend-meta pvc"
+kubectl delete pvc --namespace databend data-test-databend-meta-0 data-test-databend-meta-1 data-test-databend-meta-2 --ignore-not-found 
 
 helm repo add databend https://charts.databend.rs
 helm install test databend/databend-meta \
@@ -54,6 +66,7 @@ helm install test databend/databend-meta \
     --wait || true
 
 sleep 10
+echo "check if databend-meta nodes is ready"
 kubectl -n databend wait \
     --for=condition=ready pod \
     -l app.kubernetes.io/name=databend-meta \
