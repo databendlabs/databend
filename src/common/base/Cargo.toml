@@ -59,6 +59,9 @@ tokio = { workspace = true }
 unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = { version = "^0.16" }
+
 [dev-dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }

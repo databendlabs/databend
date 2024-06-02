@@ -58,7 +58,6 @@ impl Display for CreateUserStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct AuthOption {
     pub auth_type: Option<AuthType>,
-    #[drive(skip)]
     pub password: Option<String>,
 }
 
@@ -144,10 +143,10 @@ pub struct ShowObjectPrivilegesStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum GrantObjectName {
-    Database(#[drive(skip)] String),
-    Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
-    UDF(#[drive(skip)] String),
-    Stage(#[drive(skip)] String),
+    Database(String),
+    Table(Option<String>, String),
+    UDF(String),
+    Stage(String),
 }
 
 impl Display for GrantObjectName {
@@ -183,7 +182,6 @@ impl Display for ShowObjectPrivilegesStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AccountMgrSource {
     Role {
-        #[drive(skip)]
         role: String,
     },
     Privs {
@@ -218,10 +216,10 @@ impl Display for AccountMgrSource {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AccountMgrLevel {
     Global,
-    Database(#[drive(skip)] Option<String>),
-    Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
-    UDF(#[drive(skip)] String),
-    Stage(#[drive(skip)] String),
+    Database(Option<String>),
+    Table(Option<String>, String),
+    UDF(String),
+    Stage(String),
 }
 
 impl Display for AccountMgrLevel {
@@ -256,12 +254,12 @@ pub enum SecondaryRolesOption {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum UserOptionItem {
-    TenantSetting(#[drive(skip)] bool),
-    DefaultRole(#[drive(skip)] String),
-    Disabled(#[drive(skip)] bool),
-    SetNetworkPolicy(#[drive(skip)] String),
+    TenantSetting(bool),
+    DefaultRole(String),
+    Disabled(bool),
+    SetNetworkPolicy(String),
     UnsetNetworkPolicy,
-    SetPasswordPolicy(#[drive(skip)] String),
+    SetPasswordPolicy(String),
     UnsetPasswordPolicy,
 }
 

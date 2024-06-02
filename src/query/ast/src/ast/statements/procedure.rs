@@ -20,7 +20,6 @@ use derive_visitor::DriveMut;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ExecuteImmediateStmt {
-    #[drive(skip)]
     pub script: String,
 }
 

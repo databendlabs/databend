@@ -49,8 +49,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - {arch: x86_64, runner: X64}
-          - {arch: aarch64, runner: ARM64}
+          - { arch: x86_64, runner: X64 }
+          - { arch: aarch64, runner: ARM64 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,6 +63,8 @@ jobs:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: meta,query
+          category: udf
+          features: python-udf
 
   docker:
     needs: [info, build]

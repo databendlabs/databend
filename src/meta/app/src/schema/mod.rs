@@ -78,6 +78,8 @@ pub use lock::LockMeta;
 pub use lock::LockType;
 pub use ownership::Ownership;
 pub use sequence::*;
+pub use table::CommitTableMetaReply;
+pub use table::CommitTableMetaReq;
 pub use table::CreateTableIndexReply;
 pub use table::CreateTableIndexReq;
 pub use table::CreateTableReply;

@@ -14,6 +14,8 @@
 
 use std::collections::HashSet;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::UserGrantSet;
 use minitrace::func_name;
@@ -39,6 +41,8 @@ fn test_decode_v90_role() -> anyhow::Result<()> {
     let want = || mt::principal::RoleInfo {
         name: "r1".to_string(),
         grants: UserGrantSet::new(vec![], HashSet::new()),
+        created_on: DateTime::<Utc>::default(),
+        update_on: DateTime::<Utc>::default(),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), role_info_v90.as_slice(), 90, want())?;

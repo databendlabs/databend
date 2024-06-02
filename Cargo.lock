@@ -301,7 +301,6 @@ dependencies = [
  "arrow-schema",
  "arrow-select",
  "arrow-string",
- "pyo3",
 ]
 
 [[package]]
@@ -509,7 +508,6 @@ version = "51.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02d9483aaabe910c4781153ae1b6ae0393f72d9ef757d38d09d450070cf2e528"
 dependencies = [
- "bitflags 2.4.2",
  "serde",
 ]
 
@@ -555,6 +553,21 @@ dependencies = [
  "arrow-schema",
  "atomic-time",
  "rquickjs",
+]
+
+[[package]]
+name = "arrow-udf-python"
+version = "0.1.0"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=d0a21f0#d0a21f0fde330a0e5f658a55b58e0405d8372844"
+dependencies = [
+ "anyhow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ipc",
+ "arrow-schema",
+ "lazy_static",
+ "pyo3",
+ "pyo3-build-config",
 ]
 
 [[package]]
@@ -1045,28 +1058,6 @@ name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
-
-[[package]]
-name = "bendpy"
-version = "0.0.0"
-dependencies = [
- "arrow",
- "arrow-schema",
- "ctor 0.2.7",
- "databend-common-config",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-license",
- "databend-common-meta-app",
- "databend-common-meta-embedded",
- "databend-common-users",
- "databend-query",
- "pyo3",
- "pyo3-build-config 0.18.3",
- "tokio",
- "tokio-stream",
- "uuid",
-]
 
 [[package]]
 name = "bigdecimal"
@@ -2487,16 +2478,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctor"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad291aa74992b9b7a7e88c38acbbf6ad7e107f1d90ee8775b7bc1fc3394f485c"
-dependencies = [
- "quote",
- "syn 2.0.52",
-]
-
-[[package]]
 name = "ctrlc"
 version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2807,6 +2788,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "pprof",
+ "procfs 0.16.0",
  "prometheus-client",
  "prometheus-parse",
  "rand 0.8.5",
@@ -2943,16 +2925,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-constraint"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "databend-common-ast",
- "goldenfile",
- "z3",
-]
-
-[[package]]
 name = "databend-common-datavalues"
 version = "0.1.0"
 dependencies = [
@@ -2973,7 +2945,7 @@ dependencies = [
  "databend-common-arrow",
  "databend-common-ast",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "http 1.1.0",
  "opendal",
  "parquet",
@@ -3016,7 +2988,7 @@ dependencies = [
  "futures",
  "geo",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "goldenfile",
  "hex",
  "itertools 0.10.5",
@@ -3061,7 +3033,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "hex",
  "jsonb",
  "lexical-core",
@@ -3090,7 +3062,7 @@ dependencies = [
  "comfy-table 6.2.0",
  "crc32fast",
  "criterion",
- "ctor 0.1.26",
+ "ctor",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -3105,7 +3077,7 @@ dependencies = [
  "geo-types",
  "geohash",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "goldenfile",
  "h3o",
  "hex",
@@ -3196,14 +3168,13 @@ dependencies = [
  "ethnum",
  "geo",
  "geos",
- "geozero",
+ "geozero 0.13.0",
  "lexical-core",
  "micromarshal 0.5.0",
  "ordered-float 4.2.0",
  "rand 0.8.5",
  "rmp-serde",
  "roaring",
- "scroll 0.12.0",
  "serde",
  "wkt",
 ]
@@ -3568,6 +3539,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "futures",
+ "log",
  "minitrace",
  "petgraph",
  "serde",
@@ -3750,7 +3722,7 @@ dependencies = [
  "chrono-tz",
  "cidr",
  "cron",
- "ctor 0.1.26",
+ "ctor",
  "dashmap",
  "databend-common-ast",
  "databend-common-async-functions",
@@ -3758,7 +3730,6 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-compress",
  "databend-common-config",
- "databend-common-constraint",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
@@ -4183,6 +4154,7 @@ dependencies = [
  "databend-common-building",
  "databend-common-catalog",
  "databend-common-compress",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
@@ -4610,6 +4582,7 @@ dependencies = [
  "arrow-ipc",
  "arrow-schema",
  "arrow-udf-js",
+ "arrow-udf-python",
  "arrow-udf-wasm",
  "async-backtrace",
  "async-channel 1.9.0",
@@ -4624,7 +4597,7 @@ dependencies = [
  "chrono-tz",
  "config",
  "criterion",
- "ctor 0.1.26",
+ "ctor",
  "dashmap",
  "databend-common-arrow",
  "databend-common-ast",
@@ -4743,6 +4716,7 @@ dependencies = [
  "rustyline",
  "serde",
  "serde_json",
+ "serde_stacker",
  "serde_urlencoded",
  "socket2 0.5.6",
  "strength_reduce",
@@ -4798,7 +4772,7 @@ dependencies = [
  "arrow",
  "chrono",
  "databend-client",
- "geozero",
+ "geozero 0.12.0",
  "glob",
  "hex",
  "itertools 0.12.1",
@@ -5148,16 +5122,18 @@ dependencies = [
 
 [[package]]
 name = "derive-visitor"
-version = "0.3.0"
-source = "git+https://github.com/andylokandy/derive-visitor.git?rev=c07c6b6#c07c6b6095f2f137223cbe4b25ff4c19ecde4234"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d47165df83b9707cbada3216607a5d66125b6a66906de0bc1216c0669767ca9e"
 dependencies = [
  "derive-visitor-macros",
 ]
 
 [[package]]
 name = "derive-visitor-macros"
-version = "0.3.0"
-source = "git+https://github.com/andylokandy/derive-visitor.git?rev=c07c6b6#c07c6b6095f2f137223cbe4b25ff4c19ecde4234"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "427b39a85fecafea16b1a5f3f50437151022e35eb4fe038107f08adbf7f8def6"
 dependencies = [
  "convert_case 0.4.0",
  "itertools 0.10.5",
@@ -6410,9 +6386,24 @@ checksum = "61d25cc15c7e5b86cd8dadea56bb78c46f346d4fb09022e7cbba0839c890d0a1"
 dependencies = [
  "geo-types",
  "geojson",
+ "log",
+ "scroll",
+ "serde_json",
+ "thiserror",
+ "wkt",
+]
+
+[[package]]
+name = "geozero"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cd8fb67347739a057fd607b6d8b43ba4ed93619ed84b8f429fa3296f8ae504c"
+dependencies = [
+ "geo-types",
+ "geojson",
  "geos",
  "log",
- "scroll 0.11.0",
+ "scroll",
  "serde_json",
  "thiserror",
  "wkt",
@@ -9473,7 +9464,7 @@ version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fb9b5c752f145ac5046bccc3c4f62892e3c950c1d1eab80c5949cd68a2078db"
 dependencies = [
- "ctor 0.1.26",
+ "ctor",
  "web-time",
 ]
 
@@ -11124,6 +11115,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "procfs"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "731e0d9356b0c25f16f33b5be79b1c57b562f141ebfcdb0ad8ac2c13a24293b4"
+dependencies = [
+ "bitflags 2.4.2",
+ "chrono",
+ "flate2",
+ "hex",
+ "lazy_static",
+ "procfs-core",
+ "rustix 0.38.31",
+]
+
+[[package]]
+name = "procfs-core"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d3554923a69f4ce04c4a754260c338f505ce22642d3830e049a399fc2059a29"
+dependencies = [
+ "bitflags 2.4.2",
+ "chrono",
+ "hex",
+]
+
+[[package]]
 name = "prodash"
 version = "28.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11410,9 +11427,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3"
-version = "0.20.3"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53bdbb96d49157e65d45cc287af5f32ffadd5f4761438b527b055fb0d4bb8233"
+checksum = "a5e00b96a521718e08e03b1a622f01c8a8deb50719335de3f60b3b3950f069d8"
 dependencies = [
  "cfg-if",
  "indoc",
@@ -11420,7 +11437,7 @@ dependencies = [
  "memoffset",
  "parking_lot 0.12.1",
  "portable-atomic",
- "pyo3-build-config 0.20.3",
+ "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
  "unindent",
@@ -11428,19 +11445,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-build-config"
-version = "0.18.3"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cb946f5ac61bb61a5014924910d936ebd2b23b705f7a4a3c40b05c720b079a3"
-dependencies = [
- "once_cell",
- "target-lexicon",
-]
-
-[[package]]
-name = "pyo3-build-config"
-version = "0.20.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deaa5745de3f5231ce10517a1f5dd97d53e5a2fd77aa6b5842292085831d48d7"
+checksum = "7883df5835fafdad87c0d888b266c8ec0f4c9ca48a5bed6bbb592e8dedee1b50"
 dependencies = [
  "once_cell",
  "target-lexicon",
@@ -11448,19 +11455,19 @@ dependencies = [
 
 [[package]]
 name = "pyo3-ffi"
-version = "0.20.3"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b42531d03e08d4ef1f6e85a2ed422eb678b8cd62b762e53891c05faf0d4afa"
+checksum = "01be5843dc60b916ab4dad1dca6d20b9b4e6ddc8e15f50c47fe6d85f1fb97403"
 dependencies = [
  "libc",
- "pyo3-build-config 0.20.3",
+ "pyo3-build-config",
 ]
 
 [[package]]
 name = "pyo3-macros"
-version = "0.20.3"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7305c720fa01b8055ec95e484a6eca7a83c841267f0dd5280f0c8b8551d2c158"
+checksum = "77b34069fc0682e11b31dbd10321cbf94808394c56fd996796ce45217dfac53c"
 dependencies = [
  "proc-macro2",
  "pyo3-macros-backend",
@@ -11470,13 +11477,13 @@ dependencies = [
 
 [[package]]
 name = "pyo3-macros-backend"
-version = "0.20.3"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c7e9b68bb9c3149c5b0cade5d07f953d6d125eb4337723c4ccdb665f1f96185"
+checksum = "08260721f32db5e1a5beae69a55553f56b99bd0e1c3e6e0a5e8851a9d0f5a85c"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
- "pyo3-build-config 0.20.3",
+ "pyo3-build-config",
  "quote",
  "syn 2.0.52",
 ]
@@ -12474,12 +12481,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
 
 [[package]]
-name = "scroll"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6"
-
-[[package]]
 name = "scrypt"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12649,6 +12650,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb3622f419d1296904700073ea6cc23ad690adbd66f13ea683df73298736f0c1"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "serde_stacker"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "babfccff5773ff80657f0ecf553c7c516bdc2eb16389c0918b36b73e7015276e"
+dependencies = [
+ "serde",
+ "stacker",
 ]
 
 [[package]]
@@ -15792,26 +15803,6 @@ name = "yansi"
 version = "1.0.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1367295b8f788d371ce2dbc842c7b709c73ee1364d30351dd300ec2203b12377"
-
-[[package]]
-name = "z3"
-version = "0.12.1"
-source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
-dependencies = [
- "log",
- "num",
- "z3-sys",
-]
-
-[[package]]
-name = "z3-sys"
-version = "0.8.1"
-source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
-dependencies = [
- "bindgen 0.69.4",
- "cmake",
- "pkg-config",
-]
 
 [[package]]
 name = "z85"

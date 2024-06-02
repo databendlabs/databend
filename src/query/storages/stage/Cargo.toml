@@ -15,6 +15,7 @@ test = true
 databend-common-base = { path = "../../../common/base" }
 databend-common-catalog = { path = "../../catalog" }
 databend-common-compress = { path = "../../../common/compress" }
+databend-common-config = { path = "../../config" }
 databend-common-exception = { path = "../../../common/exception" }
 databend-common-expression = { path = "../../expression" }
 databend-common-formats = { path = "../../formats" }

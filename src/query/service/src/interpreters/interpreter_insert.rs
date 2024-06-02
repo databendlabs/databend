@@ -29,6 +29,7 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
 
@@ -276,7 +277,7 @@ impl Interpreter for InsertInterpreter {
                         self.plan.database.clone(),
                         self.plan.table.clone(),
                         MutationKind::Insert,
-                        true,
+                        LockTableOption::LockNoRetry,
                     );
                     hook_operator.execute(&mut build_res.main_pipeline).await;
                 }
@@ -311,7 +312,7 @@ impl Interpreter for InsertInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Insert,
-                true,
+                LockTableOption::LockNoRetry,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }

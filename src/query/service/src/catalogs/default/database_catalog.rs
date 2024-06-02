@@ -26,6 +26,8 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -488,6 +490,12 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.undrop_database(req).await;
         }
         self.mutable_catalog.undrop_database(req).await
+    }
+
+    async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        info!("commit_table_meta from req:{:?}", req);
+
+        self.mutable_catalog.commit_table_meta(req).await
     }
 
     #[async_backtrace::framed]
