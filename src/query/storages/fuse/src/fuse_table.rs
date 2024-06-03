@@ -32,6 +32,7 @@ use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
@@ -50,7 +51,7 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sharing::create_share_table_operator;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
-use databend_common_sql::parse_exprs;
+use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -89,7 +90,6 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::TruncateMode;
-use crate::table_functions::unwrap_tuple;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
@@ -453,6 +453,18 @@ impl FuseTable {
             .get(OPT_KEY_TABLE_ATTACHED_READ_ONLY)
             .is_some()
     }
+
+    pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
+        let Some((_, cluster_key_str)) = &self.cluster_key_meta else {
+            return vec![];
+        };
+        let cluster_keys =
+            parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
+        cluster_keys
+            .into_iter()
+            .map(|v| v.data_type().clone())
+            .collect()
+    }
 }
 
 #[async_trait::async_trait]
@@ -488,12 +500,7 @@ impl Table for FuseTable {
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = parse_exprs(ctx, table_meta.clone(), order).unwrap();
-            let cluster_keys = if cluster_keys.len() == 1 {
-                unwrap_tuple(&cluster_keys[0]).unwrap_or(cluster_keys)
-            } else {
-                cluster_keys
-            };
+            let cluster_keys = parse_cluster_keys(ctx, table_meta.clone(), order).unwrap();
             let cluster_keys = cluster_keys
                 .iter()
                 .map(|k| {

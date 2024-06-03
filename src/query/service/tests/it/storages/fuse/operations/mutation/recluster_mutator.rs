@@ -20,6 +20,8 @@ use chrono::Utc;
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -134,15 +136,17 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     )
     .await?;
 
-    let mut mutator = ReclusterMutator::try_create(
+    let mut mutator = ReclusterMutator::new(
         ctx,
         Arc::new(snapshot),
         schema,
+        vec![DataType::Number(NumberDataType::Int64)],
         1.0,
         BlockThresholds::default(),
         cluster_key_id,
         1,
-    )?;
+        1000,
+    );
     let need_recluster = mutator.target_select(compact_segments).await?;
     assert!(need_recluster);
     assert_eq!(mutator.tasks.len(), 1);
@@ -247,24 +251,21 @@ async fn test_safety_for_recluster() -> Result<()> {
         .await?;
 
         let mut need_recluster = false;
-        let mut mutator = ReclusterMutator::try_create(
+        let mut mutator = ReclusterMutator::new(
             ctx.clone(),
             snapshot,
             schema.clone(),
+            vec![DataType::Number(NumberDataType::Int32)],
             1.0,
             threshold,
             cluster_key_id,
             max_tasks,
-        )?;
-        let selected_segs =
-            ReclusterMutator::select_segments(&compact_segments, block_per_seg, 8, cluster_key_id)?;
+            block_per_seg,
+        );
+        let selected_segs = mutator.select_segments(&compact_segments, 8)?;
         if selected_segs.is_empty() {
             for compact_segment in compact_segments.into_iter() {
-                if !ReclusterMutator::segment_can_recluster(
-                    &compact_segment.1.summary,
-                    block_per_seg,
-                    cluster_key_id,
-                ) {
+                if !mutator.segment_can_recluster(&compact_segment.1.summary) {
                     continue;
                 }
 
