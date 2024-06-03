@@ -39,15 +39,6 @@ impl OrcTable {
             return Ok(());
         };
 
-        // let pos_projection = if let Some(PushDownInfo {
-        //     projection: Some(Projection::Columns(columns)),
-        //     ..
-        // }) = &plan.push_downs
-        // {
-        //     Some(columns.clone())
-        // } else {
-        //     None
-        // };
         let settings = ctx.get_settings();
         ctx.set_partitions(plan.parts.clone())?;
 
