@@ -143,7 +143,7 @@ impl PipelineBuilder {
             }
             assert!(self.join_state.is_some());
             assert!(self.merge_into_probe_data_fields.is_some());
-
+            self.main_pipeline.resize(1, false)?;
             let join_state = self.join_state.clone().unwrap();
             // split row_number and log
             //      output_port_row_number
@@ -291,6 +291,7 @@ impl PipelineBuilder {
                 // we will receive MutationLogs only without rowids.
                 return Ok(());
             }
+            self.main_pipeline.resize(1, false)?;
             // we will receive MutationLogs and rowids. So we should apply
             // rowids firstly and then send all mutation logs to commit sink.
             // we need to spilt rowid and mutationlogs, and we can get pipeitems:
@@ -366,9 +367,10 @@ impl PipelineBuilder {
             change_join_order,
             can_try_update_column_only,
             merge_into_split_idx,
+            enable_right_broadcast,
             ..
         } = merge_into;
-
+        let enable_right_broadcast = *enable_right_broadcast;
         self.build_pipeline(input)?;
 
         self.main_pipeline
@@ -457,10 +459,8 @@ impl PipelineBuilder {
             }
 
             if need_unmatch {
-                // distributed: false, standalone mode, we need to add insert processor
-                // (distributed,change join order):(true,true) target is build side, we
-                // need to support insert in local node.
-                if !*distributed || *change_join_order {
+                // If merge into doesn't contain right broadcast join, execute insert in local.
+                if !enable_right_broadcast {
                     let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                         unmatched.clone(),
                         input.output_schema()?,
@@ -613,7 +613,7 @@ impl PipelineBuilder {
             }
         } else if need_match && need_unmatch {
             // remove first row_id port and last row_number_port
-            if !*change_join_order {
+            if enable_right_broadcast {
                 self.main_pipeline.output_len() - 2
             } else {
                 // remove first row_id port
@@ -624,7 +624,7 @@ impl PipelineBuilder {
             self.main_pipeline.output_len() - 1
         } else {
             // there are only row_number
-            if !*change_join_order {
+            if enable_right_broadcast {
                 0
             } else {
                 // unmatched prot
@@ -659,7 +659,7 @@ impl PipelineBuilder {
                     // receive row_id
                     builder.add_items_prepend(vec![create_dummy_item()]);
                 }
-                if need_unmatch && !*change_join_order {
+                if enable_right_broadcast {
                     // receive row_number
                     builder.add_items(vec![create_dummy_item()]);
                 }
@@ -721,7 +721,7 @@ impl PipelineBuilder {
             }
 
             // need to receive row_number, we should give a dummy item here.
-            if *distributed && need_unmatch && !*change_join_order {
+            if enable_right_broadcast {
                 builder.add_items(vec![create_dummy_item()]);
             }
             self.main_pipeline.add_pipe(builder.finalize());
@@ -773,7 +773,7 @@ impl PipelineBuilder {
             }
 
             // need to receive row_number, we should give a dummy item here.
-            if *distributed && need_unmatch && !*change_join_order {
+            if enable_right_broadcast {
                 builder.add_items(vec![create_dummy_item()]);
             }
             self.main_pipeline.add_pipe(builder.finalize());
@@ -817,7 +817,7 @@ impl PipelineBuilder {
         }
 
         // receive row_number
-        if *distributed && need_unmatch && !*change_join_order {
+        if enable_right_broadcast {
             pipe_items.push(create_dummy_item());
         }
 
@@ -853,7 +853,7 @@ impl PipelineBuilder {
         }
 
         // with row_number
-        if *distributed && need_unmatch && !change_join_order {
+        if enable_right_broadcast {
             ranges.push(vec![self.main_pipeline.output_len() - 1]);
         }
 
@@ -877,7 +877,7 @@ impl PipelineBuilder {
                 vec.push(serialize_segment_transform.into_pipe_item());
             }
 
-            if need_unmatch && !*change_join_order {
+            if enable_right_broadcast {
                 vec.push(create_dummy_item())
             }
             vec
@@ -911,7 +911,7 @@ impl PipelineBuilder {
         ));
 
         // accumulate row_number
-        if *distributed && need_unmatch && !*change_join_order {
+        if enable_right_broadcast {
             let pipe_items = if need_match {
                 vec![
                     create_dummy_item(),

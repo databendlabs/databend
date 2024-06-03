@@ -339,9 +339,11 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::MergeInto(merge_into) => {
-                MergeIntoInterpreter::try_create(ctx, *merge_into.clone())
-            }
+            Plan::MergeInto(merge_into) => Ok(Arc::new(MergeIntoInterpreter::try_create(
+                ctx,
+                *merge_into.clone(),
+            )?)),
+
             Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
                 ctx,
                 *delete.clone(),
@@ -401,10 +403,6 @@ impl InterpreterFactory {
             Plan::GrantRole(grant_role) => Ok(Arc::new(GrantRoleInterpreter::try_create(
                 ctx,
                 *grant_role.clone(),
-            )?)),
-            Plan::ShowGrants(show_grants) => Ok(Arc::new(ShowGrantsInterpreter::try_create(
-                ctx,
-                *show_grants.clone(),
             )?)),
             Plan::RevokePriv(revoke_priv) => Ok(Arc::new(RevokePrivilegeInterpreter::try_create(
                 ctx,

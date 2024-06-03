@@ -28,6 +28,7 @@ use super::limit::Limit;
 use super::scan::Scan;
 use super::sort::Sort;
 use super::union_all::UnionAll;
+use super::ExpressionScan;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -35,6 +36,7 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::materialized_cte::MaterializedCte;
 use crate::plans::AsyncFunction;
+use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::Exchange;
@@ -96,6 +98,8 @@ pub enum RelOp {
     ProjectSet,
     MaterializedCte,
     ConstantTableScan,
+    ExpressionScan,
+    CacheScan,
     AddRowNumber,
     Udf,
     AsyncFunction,
@@ -123,6 +127,8 @@ pub enum RelOperator {
     ProjectSet(ProjectSet),
     MaterializedCte(MaterializedCte),
     ConstantTableScan(ConstantTableScan),
+    ExpressionScan(ExpressionScan),
+    CacheScan(CacheScan),
     Udf(Udf),
     AsyncFunction(AsyncFunction),
 }
@@ -145,6 +151,8 @@ impl Operator for RelOperator {
             RelOperator::CteScan(rel_op) => rel_op.rel_op(),
             RelOperator::MaterializedCte(rel_op) => rel_op.rel_op(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
+            RelOperator::ExpressionScan(rel_op) => rel_op.rel_op(),
+            RelOperator::CacheScan(rel_op) => rel_op.rel_op(),
             RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
@@ -169,6 +177,8 @@ impl Operator for RelOperator {
             RelOperator::ProjectSet(rel_op) => rel_op.arity(),
             RelOperator::MaterializedCte(rel_op) => rel_op.arity(),
             RelOperator::ConstantTableScan(rel_op) => rel_op.arity(),
+            RelOperator::ExpressionScan(rel_op) => rel_op.arity(),
+            RelOperator::CacheScan(rel_op) => rel_op.arity(),
             RelOperator::Udf(rel_op) => rel_op.arity(),
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
         }
@@ -191,6 +201,8 @@ impl Operator for RelOperator {
             RelOperator::CteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::ExpressionScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::CacheScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -214,6 +226,8 @@ impl Operator for RelOperator {
             RelOperator::CteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::ExpressionScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::CacheScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
@@ -237,6 +251,8 @@ impl Operator for RelOperator {
             RelOperator::CteScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::MaterializedCte(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::ExpressionScan(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::CacheScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
@@ -294,6 +310,12 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::ConstantTableScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::ExpressionScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::CacheScan(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::AddRowNumber(rel_op) => {
@@ -363,6 +385,12 @@ impl Operator for RelOperator {
             RelOperator::ConstantTableScan(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
+            RelOperator::ExpressionScan(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::CacheScan(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
             RelOperator::Udf(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
@@ -386,7 +414,10 @@ impl TryFrom<RelOperator> for Scan {
         if let RelOperator::Scan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Scan"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Scan",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -404,9 +435,10 @@ impl TryFrom<RelOperator> for CteScan {
         if let RelOperator::CteScan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to CteScan",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to CteScan",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -424,9 +456,10 @@ impl TryFrom<RelOperator> for MaterializedCte {
         if let RelOperator::MaterializedCte(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to MaterializedCte",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to MaterializedCte",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -443,9 +476,10 @@ impl TryFrom<RelOperator> for Join {
         if let RelOperator::Join(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to LogicalJoin",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Join",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -462,9 +496,10 @@ impl TryFrom<RelOperator> for EvalScalar {
         if let RelOperator::EvalScalar(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to EvalScalar",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to EvalScalar",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -481,7 +516,10 @@ impl TryFrom<RelOperator> for Filter {
         if let RelOperator::Filter(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Filter"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Filter",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -498,9 +536,10 @@ impl TryFrom<RelOperator> for Aggregate {
         if let RelOperator::Aggregate(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to Aggregate",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Aggregate",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -517,7 +556,10 @@ impl TryFrom<RelOperator> for Window {
         if let RelOperator::Window(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Window"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Window",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -534,7 +576,10 @@ impl TryFrom<RelOperator> for Sort {
         if let RelOperator::Sort(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Sort"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Sort",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -551,7 +596,10 @@ impl TryFrom<RelOperator> for Limit {
         if let RelOperator::Limit(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Limit"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Limit",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -568,9 +616,10 @@ impl TryFrom<RelOperator> for Exchange {
         if let RelOperator::Exchange(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to Exchange",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Exchange",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -587,9 +636,10 @@ impl TryFrom<RelOperator> for UnionAll {
         if let RelOperator::UnionAll(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to UnionAll",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to UnionAll",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -606,9 +656,10 @@ impl TryFrom<RelOperator> for DummyTableScan {
         if let RelOperator::DummyTableScan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to DummyTableScan",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to DummyTableScan",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -626,9 +677,10 @@ impl TryFrom<RelOperator> for ProjectSet {
         if let RelOperator::ProjectSet(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to ProjectSet",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to ProjectSet",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -639,6 +691,12 @@ impl From<ConstantTableScan> for RelOperator {
     }
 }
 
+impl From<ExpressionScan> for RelOperator {
+    fn from(value: ExpressionScan) -> Self {
+        Self::ExpressionScan(value)
+    }
+}
+
 impl TryFrom<RelOperator> for ConstantTableScan {
     type Error = ErrorCode;
 
@@ -646,9 +704,10 @@ impl TryFrom<RelOperator> for ConstantTableScan {
         if let RelOperator::ConstantTableScan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to ConstantTableScan",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to ConstantTableScan",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -666,7 +725,10 @@ impl TryFrom<RelOperator> for Udf {
         if let RelOperator::Udf(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal("Cannot downcast RelOperator to Udf"))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to Udf",
+                value.rel_op()
+            )))
         }
     }
 }
@@ -684,9 +746,10 @@ impl TryFrom<RelOperator> for AsyncFunction {
         if let RelOperator::AsyncFunction(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to AsyncFunction",
-            ))
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to AsyncFunction",
+                value.rel_op()
+            )))
         }
     }
 }

@@ -28,6 +28,7 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -383,6 +384,83 @@ pub fn parse_lambda_expr(
     )?;
 
     databend_common_base::runtime::block_on(type_checker.resolve(ast))
+}
+
+pub fn parse_cluster_keys(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    cluster_key_str: &str,
+) -> Result<Vec<Expr>> {
+    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        false,
+    )?;
+
+    let tokens = tokenize_sql(cluster_key_str)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1 {
+        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
+            ast_exprs = exprs.clone();
+        }
+    } else {
+        // Defensive check:
+        // `ast_exprs` should always contain one element which can be one of the following:
+        // 1. A tuple of composite cluster keys
+        // 2. A single cluster key
+        unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
+    }
+
+    let mut exprs = Vec::with_capacity(ast_exprs.len());
+    for ast in ast_exprs {
+        let (scalar, _) = *databend_common_base::runtime::block_on(type_checker.resolve(&ast))?;
+        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+
+        let inner_type = expr.data_type().remove_nullable();
+        let mut should_wrapper = false;
+        if inner_type == DataType::String {
+            if let Expr::FunctionCall { function, .. } = &expr {
+                should_wrapper = function.signature.name != "substr";
+            } else {
+                should_wrapper = true;
+            }
+        }
+
+        // If the cluster key type is string, use substr to truncate the first 8 digits.
+        let expr = if should_wrapper {
+            check_function(
+                None,
+                "substr",
+                &[],
+                &[
+                    expr,
+                    Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number(1i64.into()),
+                        data_type: DataType::Number(NumberDataType::Int64),
+                    },
+                    Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number(8u64.into()),
+                        data_type: DataType::Number(NumberDataType::UInt64),
+                    },
+                ],
+                &BUILTIN_FUNCTIONS,
+            )?
+        } else {
+            expr
+        };
+        exprs.push(expr);
+    }
+    Ok(exprs)
 }
 
 #[derive(Default)]

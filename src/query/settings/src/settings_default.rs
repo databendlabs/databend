@@ -576,6 +576,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("compact_max_block_selection", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "Limits the maximum number of blocks that can be selected during a compact operation.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of table recluster.",
@@ -632,7 +638,7 @@ impl DefaultSettings {
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting disables stage and udf privilege check(disable by default).",
+                    desc: "experiment setting disables stage and udf privilege check(enable by default).",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -728,8 +734,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("max_vacuum_temp_files_after_query", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "The maximum temp files will be removed after query. please enable vacuum feature. The default value is 0(all temp files)",
+                    value: UserSettingValue::UInt64(u64::MAX),
+                    desc: "The maximum temp files will be removed after query. please enable vacuum feature. disable if 0",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 })

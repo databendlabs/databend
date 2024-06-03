@@ -112,6 +112,10 @@ impl PhysicalPlanBuilder {
             RelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await
             }
+            RelOperator::ExpressionScan(scan) => {
+                self.build_expression_scan(s_expr, scan, required).await
+            }
+            RelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
             RelOperator::AddRowNumber(_) => self.build_add_row_number(s_expr, required).await,
             RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
             RelOperator::AsyncFunction(async_func) => {

@@ -29,6 +29,7 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
 
@@ -216,6 +217,7 @@ impl Interpreter for InsertInterpreter {
                 let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
                 let catalog_info = catalog.info();
 
+                // here we remove the last exchange merge plan to trigger distribute insert
                 let insert_select_plan = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
                         // insert can be dispatched to different nodes
@@ -275,7 +277,7 @@ impl Interpreter for InsertInterpreter {
                         self.plan.database.clone(),
                         self.plan.table.clone(),
                         MutationKind::Insert,
-                        true,
+                        LockTableOption::LockNoRetry,
                     );
                     hook_operator.execute(&mut build_res.main_pipeline).await;
                 }
@@ -310,7 +312,7 @@ impl Interpreter for InsertInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Insert,
-                true,
+                LockTableOption::LockNoRetry,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }

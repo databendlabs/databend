@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -32,7 +33,6 @@ use databend_storages_common_table_meta::table::is_internal_opt_key;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
-use log::debug;
 
 use crate::interpreters::util::format_name;
 use crate::interpreters::Interpreter;
@@ -43,6 +43,12 @@ use crate::sessions::TableContext;
 pub struct ShowCreateTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: ShowCreateTablePlan,
+}
+
+pub struct ShowCreateQuerySettings {
+    pub sql_dialect: Dialect,
+    pub quoted_ident_case_sensitive: bool,
+    pub hide_options_in_show_create_table: bool,
 }
 
 impl ShowCreateTableInterpreter {
@@ -70,28 +76,64 @@ impl Interpreter for ShowCreateTableInterpreter {
             .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
 
-        match table.engine() {
-            STREAM_ENGINE => self.show_create_stream(table.as_ref()),
-            VIEW_ENGINE => self.show_create_view(table.as_ref()),
-            _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
-                Some(_) => self.show_attach_table(table.as_ref()),
-                None => self.show_create_table(table.as_ref()),
-            },
-        }
+        let settings = self.ctx.get_settings();
+
+        let settings = ShowCreateQuerySettings {
+            sql_dialect: settings.get_sql_dialect()?,
+            quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
+            hide_options_in_show_create_table: settings
+                .get_hide_options_in_show_create_table()
+                .unwrap_or(false),
+        };
+
+        let create_query = Self::show_create_query(&self.plan.database, table.as_ref(), &settings)?;
+
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(table.name().to_string())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(create_query)),
+                ),
+            ],
+            1,
+        );
+
+        PipelineBuildResult::from_blocks(vec![block])
     }
 }
 
 impl ShowCreateTableInterpreter {
-    fn show_create_table(&self, table: &dyn Table) -> Result<PipelineBuildResult> {
+    pub fn show_create_query(
+        database: &str,
+        table: &dyn Table,
+        settings: &ShowCreateQuerySettings,
+    ) -> Result<String> {
+        match table.engine() {
+            STREAM_ENGINE => Self::show_create_stream_query(table),
+            VIEW_ENGINE => Self::show_create_view_query(table, database),
+            _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
+                Some(_) => Ok(Self::show_attach_table_query(table, database)),
+                None => Self::show_create_table_query(table, settings),
+            },
+        }
+    }
+
+    fn show_create_table_query(
+        table: &dyn Table,
+        settings: &ShowCreateQuerySettings,
+    ) -> Result<String> {
         let name = table.name();
         let engine = table.engine();
         let schema = table.schema();
         let field_comments = table.field_comments();
         let n_fields = schema.fields().len();
-        let settings = self.ctx.get_settings();
-
-        let quoted_ident_case_sensitive = settings.get_quoted_ident_case_sensitive()?;
-        let sql_dialect = settings.get_sql_dialect()?;
+        let sql_dialect = settings.sql_dialect;
+        let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
+        let hide_options_in_show_create_table = settings.hide_options_in_show_create_table;
 
         let mut table_create_sql = format!(
             "CREATE TABLE {} (\n",
@@ -201,11 +243,6 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
         }
 
-        let settings = self.ctx.get_settings();
-        let hide_options_in_show_create_table = settings
-            .get_hide_options_in_show_create_table()
-            .unwrap_or(false);
-
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
             table_create_sql.push_str({
                 let mut opts = table_info.options().iter().collect::<Vec<_>>();
@@ -228,56 +265,25 @@ impl ShowCreateTableInterpreter {
         if !table_info.meta.comment.is_empty() {
             table_create_sql.push_str(format!(" COMMENT = '{}'", table_info.meta.comment).as_str());
         }
-
-        let block = DataBlock::new(
-            vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(name.to_string())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(table_create_sql)),
-                ),
-            ],
-            1,
-        );
-        debug!("Show create table executor result: {:?}", block);
-
-        PipelineBuildResult::from_blocks(vec![block])
+        Ok(table_create_sql)
     }
 
-    fn show_create_view(&self, table: &dyn Table) -> Result<PipelineBuildResult> {
+    fn show_create_view_query(table: &dyn Table, database: &str) -> Result<String> {
         let name = table.name();
-        if let Some(query) = table.options().get(QUERY) {
-            let view_create_sql = format!(
+        let view_create_sql = if let Some(query) = table.options().get(QUERY) {
+            Ok(format!(
                 "CREATE VIEW `{}`.`{}` AS {}",
-                &self.plan.database, name, query
-            );
-            let block = DataBlock::new(
-                vec![
-                    BlockEntry::new(
-                        DataType::String,
-                        Value::Scalar(Scalar::String(name.to_string())),
-                    ),
-                    BlockEntry::new(
-                        DataType::String,
-                        Value::Scalar(Scalar::String(view_create_sql)),
-                    ),
-                ],
-                1,
-            );
-            debug!("Show create view executor result: {:?}", block);
-
-            PipelineBuildResult::from_blocks(vec![block])
+                database, name, query
+            ))
         } else {
             Err(ErrorCode::Internal(
                 "Logical error, View Table must have a SelectQuery inside.",
             ))
-        }
+        }?;
+        Ok(view_create_sql)
     }
 
-    fn show_create_stream(&self, table: &dyn Table) -> Result<PipelineBuildResult> {
+    fn show_create_stream_query(table: &dyn Table) -> Result<String> {
         let stream_table = StreamTable::try_from_table(table)?;
         let mut create_sql = format!(
             "CREATE STREAM `{}` ON TABLE `{}`.`{}`",
@@ -290,21 +296,10 @@ impl ShowCreateTableInterpreter {
         if !comment.is_empty() {
             create_sql.push_str(format!(" COMMENT = '{}'", comment).as_str());
         }
-        let block = DataBlock::new(
-            vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(stream_table.name().to_string())),
-                ),
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(create_sql))),
-            ],
-            1,
-        );
-        PipelineBuildResult::from_blocks(vec![block])
+        Ok(create_sql)
     }
 
-    fn show_attach_table(&self, table: &dyn Table) -> Result<PipelineBuildResult> {
-        let name = table.name();
+    fn show_attach_table_query(table: &dyn Table, database: &str) -> String {
         // TODO table that attached before this PR, could not show location properly
         let location_not_available = "N/A".to_string();
         let table_data_location = table
@@ -314,7 +309,9 @@ impl ShowCreateTableInterpreter {
 
         let mut ddl = format!(
             "ATTACH TABLE `{}`.`{}` {}",
-            &self.plan.database, name, table_data_location,
+            database,
+            table.name(),
+            table_data_location,
         );
 
         if table
@@ -323,17 +320,6 @@ impl ShowCreateTableInterpreter {
         {
             ddl.push_str(" READ_ONLY")
         }
-
-        let block = DataBlock::new(
-            vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(name.to_string())),
-                ),
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(ddl))),
-            ],
-            1,
-        );
-        PipelineBuildResult::from_blocks(vec![block])
+        ddl
     }
 }

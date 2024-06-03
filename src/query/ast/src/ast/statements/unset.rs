@@ -23,7 +23,6 @@ use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UnSetStmt {
-    #[drive(skip)]
     pub session_level: bool,
     pub source: UnSetSource,
 }

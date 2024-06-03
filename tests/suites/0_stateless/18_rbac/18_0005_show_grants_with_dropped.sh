@@ -86,11 +86,17 @@ export USER_U1_CONNECT="bendsql --user=u1 --password=123 --host=${QUERY_MYSQL_HA
 echo "show grants for role role1" | $USER_U1_CONNECT
 echo "show grants for role role2" | $USER_U1_CONNECT
 echo "show grants for user u1" | $USER_U1_CONNECT
+echo "show grants for user u1 where name='u1' limit 1;" | $USER_U1_CONNECT
+echo "show grants for user u1 where name!='u1' limit 1;" | $USER_U1_CONNECT
+echo "show grants on database c_r1" | $USER_U1_CONNECT  | awk -F ' ' '{$3=""; print $0}'
 echo "show grants" | $USER_U1_CONNECT
 echo "Need Err:"
 echo "show grants for user root" | $USER_U1_CONNECT
 echo "show grants for role account_admin" | $USER_U1_CONNECT
-echo "show grants for role c_r2" | $USER_U1_CONNECT
+
+echo "grant grant on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for role role3;" | $USER_U1_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for user 'role3@test';" | $USER_U1_CONNECT
 
 echo "=== clean up ==="
 echo "drop user if exists u1" | $BENDSQL_CLIENT_CONNECT

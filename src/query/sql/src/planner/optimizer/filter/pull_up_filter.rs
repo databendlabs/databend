@@ -180,6 +180,7 @@ impl PullUpFilterOptimizer {
                 let new_index = metadata.write().add_derived_column(
                     column.column.column_name.clone(),
                     *column.column.data_type.clone(),
+                    None,
                 );
                 let new_column = column.clone();
                 items.push(ScalarItem {

@@ -17,6 +17,8 @@
 
 use std::collections::HashSet;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_meta_app as mt;
 use databend_common_protos::pb;
 
@@ -43,6 +45,14 @@ impl FromToProto for mt::principal::RoleInfo {
             } else {
                 mt::principal::UserGrantSet::new(vec![], HashSet::new())
             },
+            created_on: match p.created_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
+            },
+            update_on: match p.update_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
+            },
         })
     }
 
@@ -52,6 +62,8 @@ impl FromToProto for mt::principal::RoleInfo {
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
             grants: Some(mt::principal::UserGrantSet::to_pb(&self.grants)?),
+            created_on: Some(self.created_on.to_pb()?),
+            update_on: Some(self.update_on.to_pb()?),
         })
     }
 }
