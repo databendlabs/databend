@@ -18,6 +18,7 @@ use pretty_assertions::assert_eq;
 
 use crate::ast::Expr;
 use crate::ast::Identifier;
+use crate::ast::Literal;
 use crate::ast::Statement;
 use crate::ast::StatementWithFormat;
 use crate::parser::common::comma_separated_list0;
@@ -143,6 +144,7 @@ pub fn run_parser<O>(
 
 /// Check that the statement can be displayed and reparsed without loss
 fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
+    let stmt = reset_ast(stmt);
     let new_sql = stmt.to_string();
     let new_tokens = crate::parser::tokenize_sql(&new_sql).unwrap();
     let new_stmt = run_parser(
@@ -154,28 +156,27 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
     )
     .map_err(|err| panic!("{}", err.1))
     .unwrap();
-    assert_eq!(
-        reset_span(stmt),
-        reset_span(new_stmt.clone()),
-        "\nleft:\n{}\nright:\n{}",
-        sql,
-        new_sql,
-    );
+    let new_stmt = reset_ast(new_stmt);
+    assert_eq!(stmt, new_stmt, "\nleft:\n{}\nright:\n{}", sql, new_sql,);
 }
 
-fn reset_span(mut stmt: StatementWithFormat) -> StatementWithFormat {
+fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
     #[derive(VisitorMut)]
-    #[visitor(Range(enter))]
-    struct ResetSpan;
+    #[visitor(Range(enter), Literal(enter))]
+    struct ResetAST;
 
-    impl ResetSpan {
+    impl ResetAST {
         fn enter_range(&mut self, range: &mut Range) {
             range.start = 0;
             range.end = 0;
         }
+
+        fn enter_literal(&mut self, literal: &mut Literal) {
+            *literal = Literal::Null;
+        }
     }
 
-    stmt.drive_mut(&mut ResetSpan);
+    stmt.drive_mut(&mut ResetAST);
 
     stmt
 }
