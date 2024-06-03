@@ -81,6 +81,8 @@ class MetaChaos:
       content = os.popen(cmd).read()
       print("exec cat meta-verifier: ", content)
 
+      return content
+
   def wait_verifier(self):
     # first start meta-verifier
     # make sure meta-verifier has been started
