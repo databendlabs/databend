@@ -99,7 +99,8 @@ jobs:
         id: prepare
         run: |
           short_sha=$(echo "${{ needs.info.outputs.sha }}" | cut -c1-7)
-          echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}" >> $GITHUB_OUTPUT
+          ts=$(date +%s)
+          echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}-${ts}" >> $GITHUB_OUTPUT
       - name: push service image
         uses: docker/build-push-action@v5
         with:
@@ -107,7 +108,7 @@ jobs:
           tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}
           platforms: linux/amd64,linux/arm64
           context: .
-          file: ./docker/debian/query.Dockerfile
+          file: ./docker/service/query.Dockerfile
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
