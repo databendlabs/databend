@@ -11,3 +11,6 @@
   "message": "canceled by client",
   "detail": ""
 }
+## query_log
+0		1
+1043	AbortedQuery. Code: 1043, Text = canceled by client.	4

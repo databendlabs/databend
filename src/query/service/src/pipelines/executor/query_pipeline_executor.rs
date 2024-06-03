@@ -210,15 +210,15 @@ impl QueryPipelineExecutor {
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
+        let mut finished_error = self.finished_error.lock();
         if let Some(cause) = cause {
-            let mut finished_error = self.finished_error.lock();
-
             // We only save the cause of the first error.
             if finished_error.is_none() {
                 *finished_error = Some(cause);
             }
         }
 
+        drop(finished_error);
         self.global_tasks_queue.finish(self.workers_condvar.clone());
         self.graph.interrupt_running_nodes();
         self.finished_notify.notify_waiters();
