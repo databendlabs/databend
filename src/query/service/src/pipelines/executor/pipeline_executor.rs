@@ -26,6 +26,8 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
@@ -43,14 +45,11 @@ use crate::pipelines::executor::RunningGraph;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
-pub type FinishedCallback =
-    Box<dyn FnOnce((&Vec<PlanProfile>, &Result<()>)) -> Result<()> + Send + Sync + 'static>;
-
 pub struct QueryWrapper {
     graph: Arc<RunningGraph>,
     settings: ExecutorSettings,
     on_init_callback: Mutex<Option<InitCallback>>,
-    on_finished_callback: Mutex<Option<FinishedCallback>>,
+    on_finished_chain: Mutex<FinishedCallbackChain>,
     #[allow(unused)]
     lock_guards: Vec<LockGuard>,
     finish_condvar_wait: Arc<(Mutex<bool>, Condvar)>,
@@ -70,7 +69,7 @@ impl PipelineExecutor {
             ))
         } else {
             let on_init_callback = Some(pipeline.take_on_init());
-            let on_finished_callback = Some(pipeline.take_on_finished());
+            let on_finished_chain = pipeline.take_on_finished();
 
             let finish_condvar = Arc::new((Mutex::new(false), Condvar::new()));
 
@@ -87,7 +86,7 @@ impl PipelineExecutor {
                 graph,
                 settings,
                 on_init_callback: Mutex::new(on_init_callback),
-                on_finished_callback: Mutex::new(on_finished_callback),
+                on_finished_chain: Mutex::new(on_finished_chain),
                 lock_guards,
                 finish_condvar_wait: finish_condvar,
                 finished_notify: Arc::new(WatchNotify::new()),
@@ -118,19 +117,11 @@ impl PipelineExecutor {
                 })
             };
 
-            let on_finished_callback = {
-                let pipelines_callback = pipelines
-                    .iter_mut()
-                    .map(|x| x.take_on_finished())
-                    .collect::<Vec<_>>();
+            let mut on_finished_chain = FinishedCallbackChain::create();
 
-                pipelines_callback.into_iter().reduce(|left, right| {
-                    Box::new(move |arg| {
-                        left(arg)?;
-                        right(arg)
-                    })
-                })
-            };
+            for pipeline in &mut pipelines {
+                on_finished_chain.extend(pipeline.take_on_finished());
+            }
 
             let finish_condvar = Arc::new((Mutex::new(false), Condvar::new()));
 
@@ -150,7 +141,7 @@ impl PipelineExecutor {
                 graph,
                 settings,
                 on_init_callback: Mutex::new(on_init_callback),
-                on_finished_callback: Mutex::new(on_finished_callback),
+                on_finished_chain: Mutex::new(on_finished_chain),
                 lock_guards,
                 finish_condvar_wait: finish_condvar,
                 finished_notify: Arc::new(WatchNotify::new()),
@@ -210,23 +201,15 @@ impl PipelineExecutor {
                 let may_error = query_wrapper.graph.get_error();
                 return match may_error {
                     None => {
-                        let guard = query_wrapper.on_finished_callback.lock().take();
-                        if let Some(on_finished_callback) = guard {
-                            catch_unwind(move || {
-                                on_finished_callback((&self.get_plans_profile(), &Ok(())))
-                            })??;
-                        }
-                        Ok(())
+                        let mut finished_chain = query_wrapper.on_finished_chain.lock();
+                        let info = ExecutionInfo::create(Ok(()), self.get_plans_profile());
+                        finished_chain.apply(info)
                     }
                     Some(cause) => {
-                        let guard = query_wrapper.on_finished_callback.lock().take();
-                        let cause_clone = cause.clone();
-                        if let Some(on_finished_callback) = guard {
-                            catch_unwind(move || {
-                                on_finished_callback((&self.get_plans_profile(), &Err(cause_clone)))
-                            })??;
-                        }
-                        Err(cause)
+                        let mut finished_chain = query_wrapper.on_finished_chain.lock();
+                        let profiling = self.get_plans_profile();
+                        let info = ExecutionInfo::create(Err(cause.clone()), profiling);
+                        finished_chain.apply(info).and_then(|_| Err(cause))
                     }
                 };
             }
