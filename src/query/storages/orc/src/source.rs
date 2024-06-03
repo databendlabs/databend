@@ -28,7 +28,7 @@ use orc_rust::ArrowReader;
 use orc_rust::ArrowReaderBuilder;
 
 use super::file_reader::OrcFileReader;
-use crate::one_file_partition::OneFilePartition;
+use crate::one_file_partition::OrcFilePartition;
 
 pub struct ORCSource {
     table_ctx: Arc<dyn TableContext>,
@@ -62,7 +62,7 @@ impl SyncSource for ORCSource {
                 Some(part) => part,
                 None => return Ok(None),
             };
-            let file = OneFilePartition::from_part(&part)?.clone();
+            let file = OrcFilePartition::from_part(&part)?.clone();
 
             let file = OrcFileReader {
                 operator: self.op.clone(),
@@ -74,14 +74,14 @@ impl SyncSource for ORCSource {
             self.reader = Some(reader)
         }
         if let Some(reader) = &mut self.reader {
-            return match reader.next() {
+            match reader.next() {
                 None => Ok(None),
                 Some(batch) => {
                     let (block, _) =
-                        DataBlock::from_record_batch(&self.data_schema.as_ref(), &batch?)?;
+                        DataBlock::from_record_batch(self.data_schema.as_ref(), &batch?)?;
                     Ok(Some(block))
                 }
-            };
+            }
         } else {
             Err(ErrorCode::Internal(
                 "Bug: ORCSource: should not be called with reader != None.",
