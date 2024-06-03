@@ -63,4 +63,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/io_delay_chaos
-        timeout-minutes: 15
+        timeout-minutes: 20

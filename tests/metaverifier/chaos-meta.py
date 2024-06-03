@@ -53,7 +53,7 @@ class MetaChaos:
 
   def get_node(self, get_leader):
     nodes = []
-    cmd = "kubectl exec -it databend-metaverifier -n databend -- "
+    cmd = "kubectl exec -i databend-metaverifier -n databend -- "
     for node, addr in self.node_port_map.items():
       curl_cmd = cmd + "curl " + addr + '/v1/cluster/status'
       content = os.popen(curl_cmd).read()
@@ -75,7 +75,7 @@ class MetaChaos:
     return random.sample(self.get_node(node_mode == "leader"), 1)[0]
     
   def exec_cat_meta_verifier(self):
-      cmd = "kubectl exec -it databend-metaverifier -n databend -- cat /tmp/meta-verifier"
+      cmd = "kubectl exec -i databend-metaverifier -n databend -- cat /tmp/meta-verifier"
       content = os.popen(cmd).read()
       print("exec cat meta-verifier: ", content)
 
