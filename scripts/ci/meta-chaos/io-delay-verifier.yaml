@@ -4,6 +4,7 @@ metadata:
   creationTimestamp: null
   labels:
     run: databend-metaverifier
+    app.kubernetes.io/name: databend-metaverifier
   name: databend-metaverifier
   namespace: databend
 spec:
