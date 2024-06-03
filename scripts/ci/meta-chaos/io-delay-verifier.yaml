@@ -17,7 +17,7 @@ spec:
     - name: CLIENT
       value: "10"
     - name: NUMBER
-      value: "3000"
+      value: "4000"
     - name: GRPC_ADDRESS
       value: "test-databend-meta-0.test-databend-meta.databend.svc.cluster.local:9191,test-databend-meta-1.test-databend-meta.databend.svc.cluster.local:9191,test-databend-meta-2.test-databend-meta.databend.svc.cluster.local:9191"
     command: [ "/start-verifier.sh"]

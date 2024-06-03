@@ -10,6 +10,7 @@ echo "START" > /tmp/meta-verifier
 sleep 3
 /databend-metaverifier --client ${CLIENT} --time 1800 --remove-percent 10 --number ${NUMBER} --grpc-api-address ${GRPC_ADDRESS} 
 
+echo "/databend-metaverifier exec result: $?"
 if [ $? -eq 0 ]; then
     echo "END" > /tmp/meta-verifier
 else

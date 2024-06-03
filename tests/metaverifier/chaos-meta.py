@@ -99,6 +99,9 @@ class MetaChaos:
     sys.exit(-1)
 
   def is_verifier_end(self):
+    cmd = "kubectl logs databend-metaverifier -n databend | tail -50"
+    content = os.popen(cmd).read()
+    print("kubectl logs databend-metaverifier -n databend:\n", content)
     content = self.exec_cat_meta_verifier()
     if content != "END" and content != "START" and content != "ERROR":
       print("cat /tmp/meta-verifier return " + str(content) + ", exit")
@@ -113,10 +116,6 @@ class MetaChaos:
 
     if content == "ERROR":
       print("databend-metaverifier return error")
-
-      cmd = "kubectl logs databend-metaverifier -n databend | tail -100"
-      content = os.popen(cmd).read()
-      print("kubectl logs databend-metaverifier -n databend:\n", content)
       sys.exit(-1)
 
     return content == "END"
@@ -170,7 +169,7 @@ class MetaChaos:
       current = int(time.time())
       diff = current - start
       if self.is_verifier_end():
-        print("databend-metaverifier has completed, cost:" + diff + "s, exit")
+        print("databend-metaverifier has completed, cost:" + str(diff) + "s, exit")
         sys.exit(0)
       
       if diff > self.total:
