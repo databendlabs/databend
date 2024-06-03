@@ -57,6 +57,7 @@ class MetaChaos:
     for node, addr in self.node_port_map.items():
       curl_cmd = cmd + "curl " + addr + '/v1/cluster/status'
       content = os.popen(curl_cmd).read()
+      print("curl cmd output:", content)
       if get_leader:
         if content.find('"state":"Leader"') != -1:
           nodes.append(node)
@@ -98,6 +99,12 @@ class MetaChaos:
 
   def is_verifier_end(self):
     content = self.exec_cat_meta_verifier()
+    if content != "END" and content != "START":
+      print("cat /tmp/meta-verifier return " + str(content) + ", exit")
+      cmd = "kubectl get pods -n databend -o wide"
+      content = os.popen(cmd).read()
+      print("kubectl get pods -n databend -o wide:\n", content)
+      sys.exit(-1)
     return content == "END"
 
   def run(self):
