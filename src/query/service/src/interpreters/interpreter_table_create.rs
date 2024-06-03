@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
@@ -274,10 +275,10 @@ impl CreateTableInterpreter {
 
         pipeline
             .main_pipeline
-            .push_front_on_finished_callback(move |(_profiles, err)| {
+            .lift_on_finished(move |info: &ExecutionInfo| {
                 let qualified_table_name = format!("{}.{}", db_name, table_name);
 
-                if err.is_ok() {
+                if info.res.is_ok() {
                     info!(
                         "create_table_as_select {} success, commit table meta data by table id {}",
                         qualified_table_name, table_id
