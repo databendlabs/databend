@@ -73,6 +73,7 @@ databend-common-storages-hive = { path = "../storages/hive/hive" }
 databend-common-storages-iceberg = { path = "../storages/iceberg" }
 databend-common-storages-information-schema = { path = "../storages/information_schema" }
 databend-common-storages-null = { path = "../storages/null" }
+databend-common-storages-orc = { path = "../storages/orc" }
 databend-common-storages-parquet = { path = "../storages/parquet" }
 databend-common-storages-result-cache = { path = "../storages/result_cache" }
 databend-common-storages-share = { path = "../storages/share" }
