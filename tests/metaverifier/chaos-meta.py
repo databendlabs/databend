@@ -73,7 +73,8 @@ class MetaChaos:
     return nodes
 
   def get_inject_chaos_node(self, node_mode):
-    return random.sample(self.get_node(node_mode == "leader"), 1)[0]
+    #return random.sample(self.get_node(node_mode == "leader"), 1)[0]
+    return random.sample(list(self.node_port_map.keys()), 1)[0]
     
   def exec_cat_meta_verifier(self):
       cmd = "kubectl exec -i databend-metaverifier -n databend -- cat /tmp/meta-verifier"
@@ -99,12 +100,25 @@ class MetaChaos:
 
   def is_verifier_end(self):
     content = self.exec_cat_meta_verifier()
-    if content != "END" and content != "START":
+    if content != "END" and content != "START" and content != "ERROR":
       print("cat /tmp/meta-verifier return " + str(content) + ", exit")
       cmd = "kubectl get pods -n databend -o wide"
       content = os.popen(cmd).read()
       print("kubectl get pods -n databend -o wide:\n", content)
+
+      cmd = "kubectl logs databend-metaverifier -n databend | tail -100"
+      content = os.popen(cmd).read()
+      print("kubectl logs databend-metaverifier -n databend:\n", content)
       sys.exit(-1)
+
+    if content == "ERROR":
+      print("databend-metaverifier return error")
+
+      cmd = "kubectl logs databend-metaverifier -n databend | tail -100"
+      content = os.popen(cmd).read()
+      print("kubectl logs databend-metaverifier -n databend:\n", content)
+      sys.exit(-1)
+
     return content == "END"
 
   def run(self):
