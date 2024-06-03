@@ -67,7 +67,7 @@ pub async fn export_data(config: &Config) -> anyhow::Result<()> {
     match config.raft_dir {
         None => export_from_running_node(config).await?,
         Some(ref dir) => {
-            init_sled_db(dir.clone());
+            init_sled_db(dir.clone(), 64 * 1024 * 1024 * 1024);
             export_from_dir(config).await?;
         }
     }
@@ -80,7 +80,7 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
 
     let nodes = build_nodes(config.initial_cluster.clone(), config.id)?;
 
-    init_sled_db(raft_dir.clone());
+    init_sled_db(raft_dir.clone(), 64 * 1024 * 1024 * 1024);
 
     clear(config)?;
     let max_log_id = import_from_stdin_or_file(config).await?;

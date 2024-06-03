@@ -26,7 +26,7 @@ pub fn process_sled_db<F>(config: &Config, convert: F) -> anyhow::Result<()>
 where F: Fn(RaftStoreEntry) -> Result<Option<RaftStoreEntry>, anyhow::Error> {
     let raft_config = &config.raft_config;
 
-    init_sled_db(raft_config.raft_dir.clone());
+    init_sled_db(raft_config.raft_dir.clone(), 64 * 1024 * 1024 * 1024);
 
     let db = get_sled_db();
 
