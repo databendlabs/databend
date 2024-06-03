@@ -58,6 +58,7 @@ pub enum FileFormatParams {
     Json(JsonFileFormatParams),
     Xml(XmlFileFormatParams),
     Parquet(ParquetFileFormatParams),
+    Orc(OrcFileFormatParams),
 }
 
 impl FileFormatParams {
@@ -69,6 +70,7 @@ impl FileFormatParams {
             FileFormatParams::Json(_) => StageFileFormatType::Json,
             FileFormatParams::Xml(_) => StageFileFormatType::Xml,
             FileFormatParams::Parquet(_) => StageFileFormatType::Parquet,
+            FileFormatParams::Orc(_) => StageFileFormatType::Orc,
         }
     }
 
@@ -85,6 +87,7 @@ impl FileFormatParams {
             StageFileFormatType::Json => {
                 Ok(FileFormatParams::Json(JsonFileFormatParams::default()))
             }
+            StageFileFormatType::Orc => Ok(FileFormatParams::Orc(OrcFileFormatParams::default())),
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -100,6 +103,7 @@ impl FileFormatParams {
             FileFormatParams::Json(v) => v.compression,
             FileFormatParams::Xml(v) => v.compression,
             FileFormatParams::Parquet(_) => StageFileCompression::None,
+            FileFormatParams::Orc(_) => StageFileCompression::None,
         }
     }
 
@@ -149,6 +153,7 @@ impl FileFormatParams {
                     missing_field_as.as_deref(),
                 )?)
             }
+            StageFileFormatType::Orc => FileFormatParams::Orc(OrcFileFormatParams::try_create()?),
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = reader.take_compression()?;
@@ -667,6 +672,15 @@ impl ParquetFileFormatParams {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OrcFileFormatParams {}
+
+impl OrcFileFormatParams {
+    pub fn try_create() -> Result<Self> {
+        Ok(Self {})
+    }
+}
+
 impl Display for FileFormatParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -731,6 +745,9 @@ impl Display for FileFormatParams {
                     "TYPE = PARQUET MISSING_FIELD_AS = {}",
                     params.missing_field_as
                 )
+            }
+            FileFormatParams::Orc(_) => {
+                write!(f, "TYPE = ORC",)
             }
         }
     }

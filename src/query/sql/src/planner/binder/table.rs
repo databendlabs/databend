@@ -53,6 +53,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_stage::StageTable;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -146,6 +147,19 @@ impl Binder {
                     files_to_copy,
                 )
                 .await?
+            }
+            FileFormatParams::Orc(..) => {
+                let schema = Arc::new(TableSchema::empty());
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    duplicated_files_detected: vec![],
+                    is_select: true,
+                    default_values: None,
+                };
+                OrcTable::try_create(info).await?
             }
             FileFormatParams::NdJson(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
