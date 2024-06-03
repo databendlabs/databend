@@ -14,6 +14,7 @@
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
+use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryEnv;
@@ -26,6 +27,7 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     ThreadTracker::tracking_future(async move {
+        debug!("init query env with {:?}", env);
         let ctx = env.create_query_ctx()?;
         if let Err(cause) = DataExchangeManager::instance()
             .init_query_env(&env, ctx)

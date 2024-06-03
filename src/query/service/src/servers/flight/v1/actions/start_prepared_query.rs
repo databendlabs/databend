@@ -14,6 +14,7 @@
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
+use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 
@@ -24,6 +25,7 @@ pub async fn start_prepared_query(id: String) -> Result<()> {
     tracking_payload.query_id = Some(id.clone());
     let _guard = ThreadTracker::tracking(tracking_payload);
 
+    debug!("start prepared query {}", id);
     if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&id) {
         DataExchangeManager::instance().on_finished_query(&id);
         return Err(cause);

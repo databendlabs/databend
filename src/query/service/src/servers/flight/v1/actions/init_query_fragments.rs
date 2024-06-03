@@ -16,6 +16,7 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryFragments;
@@ -30,6 +31,7 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     // Avoid blocking runtime.
     let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
     let join_handler = ctx.spawn(ThreadTracker::tracking_future(async move {
+        debug!("init query fragments with {:?}", fragments);
         if let Err(cause) = DataExchangeManager::instance().init_query_fragments_plan(&fragments) {
             DataExchangeManager::instance().on_finished_query(&fragments.query_id);
             return Err(cause);
