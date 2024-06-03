@@ -289,8 +289,6 @@ impl FusePruner {
             .map(|(_, s)| s.summary.block_count as usize)
             .sum();
 
-        println!("\n--all block_count={:?}", block_count);
-        // 如果 block 的数量很多，为了避免无效的 bloom 过滤，我们挑选一部分 block 出来作为 sample，验证 bloom 是否有效，如果无效，其它 block 将不使用 bloom 过滤
         let mut sample_segments = vec![];
         let mut remainder_segments = vec![];
         if block_count > 100 {
@@ -319,11 +317,6 @@ impl FusePruner {
             }
         }
 
-	println!("\n\n--sampled_segments.len={:?}", sample_segments.len());
-	println!("--remainder_segments.len={:?}", remainder_segments.len());
-
-
-
         let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
         let (mut block_metas, ignored_keys) = if !sample_segments.is_empty() {
             self.block_pruning(&block_pruner, &mut sample_segments, true, &HashSet::new())
@@ -331,9 +324,6 @@ impl FusePruner {
         } else {
             (vec![], HashSet::new())
         };
-
-	println!("\n-----ignored_keys={:?}", ignored_keys);
-
 
         let (mut remainder_block_metas, _) = self
             .block_pruning(&block_pruner, &mut remainder_segments, false, &ignored_keys)
@@ -478,9 +468,6 @@ impl FusePruner {
                                 .await?,
                         );
                     }
-			if is_sample {
-		println!("\n---invalid_keys_map={:?}", invalid_keys_map);
-			}
                     Result::<_, ErrorCode>::Ok((pruned_blocks, invalid_keys_map))
                 }
             }));
@@ -503,9 +490,6 @@ impl FusePruner {
                         *val_ref += invalid_num;
                     }
                 }
-                println!("---- is_sample={:?}  block_num={:?}", is_sample, block_num);
-                println!("\n====----invalid_keys_map={:?}", invalid_keys_map);
-
                 let mut ignored_keys = HashSet::new();
                 if is_sample {
                     let ratio = 0.7;
@@ -514,11 +498,6 @@ impl FusePruner {
                         // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
                         // we put the filter key into the cache and the filter key is ignored in following queries.
                         let invalid_ratio = invalid_num as f32 / block_num as f32;
-                        println!(
-                            "invalid_key={:?} invalid_ratio={:?}",
-                            invalid_key, invalid_ratio
-                        );
-
                         if invalid_ratio > ratio {
                             ignored_keys.insert(invalid_key);
                         }
