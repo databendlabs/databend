@@ -38,7 +38,7 @@ databend-common-settings = { path = "../settings" }
 databend-common-storage = { path = "../../common/storage" }
 databend-common-storages-delta = { path = "../storages/delta" }
 databend-common-storages-iceberg = { path = "../storages/iceberg" }
-databend-common-storages-orc= { path = "../storages/orc" }
+databend-common-storages-orc = { path = "../storages/orc" }
 databend-common-storages-parquet = { path = "../storages/parquet" }
 databend-common-storages-result-cache = { path = "../storages/result_cache" }
 databend-common-storages-stage = { path = "../storages/stage" }
