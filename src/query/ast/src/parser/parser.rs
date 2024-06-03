@@ -175,8 +175,7 @@ fn reset_span(mut stmt: StatementWithFormat) -> StatementWithFormat {
         }
     }
 
-    let mut visitor = ResetSpan;
-    stmt.drive_mut(&mut visitor);
+    stmt.drive_mut(&mut ResetSpan);
 
     stmt
 }
