@@ -66,15 +66,13 @@ class MetaChaos:
           nodes.append(node)
 
     if len(nodes) == 0:
-      print("cannot find nodes, get_leader: ", get_leader, self.node_port_map.keys())
-      return self.node_port_map.keys()
+      nodes = list(self.node_port_map.keys())
+      print("cannot find nodes, get_leader: ", get_leader, nodes)
+      return nodes
     return nodes
 
   def get_inject_chaos_node(self, node_mode):
-    if node_mode == "leader":
-      return self.get_node(True)[0]
-    
-    return random.sample(self.get_node(False), 1)[0]
+    return random.sample(self.get_node(node_mode == "leader"), 1)[0]
     
   def exec_cat_meta_verifier(self):
       cmd = "kubectl exec -it databend-metaverifier -n databend -- cat /tmp/meta-verifier"
