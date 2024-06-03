@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
@@ -64,8 +65,8 @@ pub async fn hook_refresh(
         return;
     }
 
-    pipeline.set_on_finished(move |(_profiles, err)| {
-        if err.is_ok() {
+    pipeline.set_on_finished(move |info: &ExecutionInfo| {
+        if info.res.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
             match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc, lock_opt)) {
                 Ok(_) => {

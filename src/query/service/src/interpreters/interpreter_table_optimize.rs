@@ -25,6 +25,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::CompactSource;
@@ -248,9 +249,8 @@ impl OptimizeTableInterpreter {
                     let ctx = self.ctx.clone();
                     let plan = self.plan.clone();
                     let start = SystemTime::now();
-                    build_res
-                        .main_pipeline
-                        .set_on_finished(move |(_profiles, may_error)| match may_error {
+                    build_res.main_pipeline.set_on_finished(
+                        move |info: &ExecutionInfo| match &info.res {
                             Ok(_) => InterpreterClusteringHistory::write_log(
                                 &ctx,
                                 start,
@@ -259,7 +259,8 @@ impl OptimizeTableInterpreter {
                                 reclustered_block_count,
                             ),
                             Err(error_code) => Err(error_code.clone()),
-                        });
+                        },
+                    );
                 }
             }
         } else {
@@ -274,7 +275,7 @@ impl OptimizeTableInterpreter {
             } else {
                 build_res
                     .main_pipeline
-                    .set_on_finished(move |(_profiles, may_error)| match may_error {
+                    .set_on_finished(move |info: &ExecutionInfo| match &info.res {
                         Ok(_) => GlobalIORuntime::instance()
                             .block_on(async move { purge(ctx, catalog, plan, None).await }),
                         Err(error_code) => Err(error_code.clone()),

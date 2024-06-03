@@ -7,10 +7,10 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        if bendsql -V; then
+        if bendsql --version; then
           exit 0
         fi
-        curl --retry 5 -Lo /tmp/bendsql.tar.gz https://github.com/datafuselabs/bendsql/releases/download/v0.13.3/bendsql-x86_64-unknown-linux-gnu.tar.gz
+        curl --retry 5 -Lo /tmp/bendsql.tar.gz https://github.com/datafuselabs/bendsql/releases/download/v0.18.3/bendsql-x86_64-unknown-linux-gnu.tar.gz
         tar -xzf /tmp/bendsql.tar.gz -C /tmp
         mv /tmp/bendsql /usr/local/bin/bendsql
         bendsql --version
@@ -18,10 +18,10 @@ runs:
       if: runner.os == 'macOS'
       shell: bash
       run: |
-        if bendsql -V; then
+        if bendsql --version; then
           exit 0
         fi
-        curl --retry 5 -Lo /tmp/bendsql.tar.gz https://github.com/datafuselabs/bendsql/releases/download/v0.13.3/bendsql-x86_64-apple-darwin.tar.gz
+        curl --retry 5 -Lo /tmp/bendsql.tar.gz https://github.com/datafuselabs/bendsql/releases/download/v0.18.3/bendsql-x86_64-apple-darwin.tar.gz
         tar -xzf /tmp/bendsql.tar.gz -C /tmp
         mv /tmp/bendsql /usr/local/bin/bendsql
         bendsql --version
