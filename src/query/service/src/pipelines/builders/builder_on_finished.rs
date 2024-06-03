@@ -20,7 +20,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_stage::StageTable;
 use databend_storages_common_io::Files;
@@ -48,8 +47,8 @@ impl PipelineBuilder {
             is_active
         };
         // set on_finished callback.
-        main_pipeline.set_on_finished(move |info: &ExecutionInfo| {
-            match &info.res {
+        main_pipeline.set_on_finished(move |(_profiles, may_error)| {
+            match may_error {
                 Ok(_) => {
                     GlobalIORuntime::instance().block_on(async move {
                         // 1. log on_error mode errors.

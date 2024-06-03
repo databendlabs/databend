@@ -19,7 +19,6 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::LockTableOption;
@@ -74,7 +73,7 @@ async fn do_hook_compact(
         return Ok(());
     }
 
-    pipeline.set_on_finished(move |info: &ExecutionInfo| {
+    pipeline.set_on_finished(move |(_profiles, err)| {
         let compaction_limits = match compact_target.mutation_kind {
             MutationKind::Insert => {
                 let compaction_num_block_hint = ctx.get_compaction_num_block_hint();
@@ -102,7 +101,7 @@ async fn do_hook_compact(
         metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
 
         let compact_start_at = Instant::now();
-        if info.res.is_ok() {
+        if err.is_ok() {
             info!("execute {op_name} finished successfully. running table optimization job.");
             match GlobalIORuntime::instance().block_on({
                 compact_table(ctx, compact_target, compaction_limits, lock_opt)
