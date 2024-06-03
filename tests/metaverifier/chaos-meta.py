@@ -66,7 +66,7 @@ class MetaChaos:
           nodes.append(node)
 
     if len(nodes) == 0:
-      print("cannot find nodes, get_leader: ", get_leader)
+      print("cannot find nodes, get_leader: ", get_leader, self.node_port_map.keys())
       return self.node_port_map.keys()
     return nodes
 
@@ -76,13 +76,17 @@ class MetaChaos:
     
     return random.sample(self.get_node(False), 1)[0]
     
+  def exec_cat_meta_verifier(self):
+      cmd = "kubectl exec -it databend-metaverifier -n databend -- cat /tmp/meta-verifier"
+      content = os.popen(cmd).read()
+      print("exec cat meta-verifier: ", content)
+
   def wait_verifier(self):
     # first start meta-verifier
     # make sure meta-verifier has been started
     count = 0
     while count < 10:
-      cmd = "kubectl exec -it databend-metaverifier -n databend -- cat /tmp/meta-verifier"
-      content = os.popen(cmd).read()
+      content = self.exec_cat_meta_verifier()
       if content == "START":
         print('databend-metaverifier has started')
         return
@@ -93,8 +97,7 @@ class MetaChaos:
     sys.exit(-1)
 
   def is_verifier_end(self):
-    cmd = "kubectl exec -it databend-metaverifier -n databend -- cat /tmp/meta-verifier"
-    content = os.popen(cmd).read()
+    content = self.exec_cat_meta_verifier()
     return content == "END"
 
   def run(self):

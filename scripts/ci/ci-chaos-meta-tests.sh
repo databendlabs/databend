@@ -12,5 +12,7 @@ echo "setting up meta chaos.."
 echo "create io-delay-verifier pod.."
 kubectl apply -f scripts/ci/meta-chaos/io-delay-verifier.yaml
 
+kubectl get pods -n databend -o wide
+
 HTTP_ADDR="test-databend-meta-0.test-databend-meta.databend.svc.cluster.local:28002,test-databend-meta-1.test-databend-meta.databend.svc.cluster.local:28002,test-databend-meta-2.test-databend-meta.databend.svc.cluster.local:28002"
 python3 tests/metaverifier/chaos-meta.py --mode=io/delay/delay=1000ms,percent=100 --namespace=databend --nodes=${HTTP_ADDR} --total=800
