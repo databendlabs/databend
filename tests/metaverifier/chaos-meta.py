@@ -143,12 +143,13 @@ class MetaChaos:
       # wait some time until next loop
       time.sleep(3)
 
+      current = int(time.time())
+      diff = current - start
       if self.is_verifier_end():
-        print('databend-metaverifier has completed, exit')
+        print("databend-metaverifier has completed, cost:" + diff + "s, exit")
         sys.exit(0)
       
-      current = int(time.time())
-      if current - start > self.total:
+      if diff > self.total:
         print('databend-metaverifier is not completed in total time, exit -1')
         sys.exit(-1)
       
