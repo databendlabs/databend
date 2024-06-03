@@ -266,7 +266,7 @@ impl Interpreter for RefreshIndexInterpreter {
             }
         };
 
-        let data_accessor = self.ctx.get_data_operator()?;
+        let data_accessor = self.ctx.get_application_level_data_operator()?;
         let fuse_table = FuseTable::do_create(self.plan.table_info.clone())?;
         let fuse_table: Arc<FuseTable> = fuse_table.into();
 

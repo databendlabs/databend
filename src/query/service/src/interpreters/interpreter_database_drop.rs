@@ -78,7 +78,7 @@ impl Interpreter for DropDatabaseInterpreter {
 
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
+                self.ctx.get_application_level_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_into),
             )

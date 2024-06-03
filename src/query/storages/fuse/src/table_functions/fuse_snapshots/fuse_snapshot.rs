@@ -75,6 +75,7 @@ impl<'a> FuseSnapshot<'a> {
                 // returned is as expected
                 let snapshot_lites = snapshots_io
                     .read_chained_snapshot_lites(
+                        self.table.operator.clone(),
                         meta_location_generator.clone(),
                         snapshot_location,
                         limit,
