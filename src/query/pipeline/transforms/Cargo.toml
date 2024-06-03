@@ -22,9 +22,8 @@ async-trait = { workspace = true }
 jsonb = { workspace = true }
 match-template = { workspace = true }
 serde = { workspace = true }
-typetag = { workspace = true }
 tokio = { workspace = true }
-
+typetag = { workspace = true }
 
 [dev-dependencies]
 itertools = { workspace = true }
