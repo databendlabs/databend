@@ -315,6 +315,8 @@ impl CreateTableInterpreter {
         let mut stat = None;
         if !GlobalConfig::instance().query.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
+                // using application level data operator is a temp workaround
+                // please see discussions https://github.com/datafuselabs/databend/pull/10424
                 let operator = self.ctx.get_application_level_data_operator()?.operator();
                 let reader = MetaReaders::table_snapshot_reader(operator);
 

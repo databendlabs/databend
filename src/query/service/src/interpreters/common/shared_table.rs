@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use databend_common_meta_app::share::ShareTableInfoMap;
 
 use crate::sessions::QueryContext;
@@ -20,7 +21,7 @@ use crate::sessions::QueryContext;
 pub async fn save_share_table_info(
     ctx: &QueryContext,
     share_table_info: &Option<Vec<ShareTableInfoMap>>,
-) -> databend_common_exception::Result<()> {
+) -> Result<()> {
     if let Some(share_table_info) = share_table_info {
         databend_common_storages_share::save_share_table_info(
             ctx.get_tenant().tenant_name(),
