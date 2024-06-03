@@ -14,6 +14,19 @@ NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
 
 query 
+select int8 from @data/orc/alltypes.zstd.orc (file_format => 'orc') where boolean is not null;
+----
+0
+1
+-1
+127
+-128
+50
+51
+52
+53
+
+query 
 select * from @data/orc/nested_array.orc  (file_format=>'orc')
 ----
 [1,NULL,3,43,5]
