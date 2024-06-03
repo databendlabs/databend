@@ -65,7 +65,7 @@ impl OrcTable {
     pub async fn try_create(mut stage_table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
         let stage_info = &stage_table_info.stage_info;
         let files_to_read = &stage_table_info.files_to_copy;
-        let operator = init_stage_operator(&stage_info)?;
+        let operator = init_stage_operator(stage_info)?;
         let first_file = match &files_to_read {
             Some(files) => files[0].clone(),
             None => stage_table_info
@@ -81,7 +81,7 @@ impl OrcTable {
             TableSchema::try_from(arrow_schema.as_ref()).map_err(ErrorCode::from_std_error)?,
         );
 
-        let table_info = create_orc_table_info(table_schema.clone(), &stage_info)?;
+        let table_info = create_orc_table_info(table_schema.clone(), stage_info)?;
 
         stage_table_info.schema = table_schema;
 
@@ -123,7 +123,7 @@ impl Table for OrcTable {
     }
 
     fn support_column_projection(&self) -> bool {
-        true
+        false
     }
 
     fn support_prewhere(&self) -> bool {
