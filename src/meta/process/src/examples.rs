@@ -94,7 +94,7 @@ pub fn print_table_meta(config: &Config) -> anyhow::Result<()> {
 
     let raft_config = &config.raft_config;
 
-    init_sled_db(raft_config.raft_dir.clone());
+    init_sled_db(raft_config.raft_dir.clone(), 64 * 1024 * 1024 * 1024);
 
     for tree_iter_res in databend_common_meta_sled_store::iter::<Vec<u8>>() {
         let (_tree_name, item_iter) = tree_iter_res?;

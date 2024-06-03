@@ -110,6 +110,9 @@ pub struct RaftConfig {
     /// For test only: specifies the tree name prefix
     pub sled_tree_prefix: String,
 
+    /// The maximum memory in MB that sled can use for caching.
+    pub sled_max_cache_size_mb: u64,
+
     ///  The node name. If the user specifies a name,
     /// the user-supplied name is used, if not, the default name is used.
     pub cluster_name: String,
@@ -148,6 +151,7 @@ impl Default for RaftConfig {
             leave_id: None,
             id: 0,
             sled_tree_prefix: "".to_string(),
+            sled_max_cache_size_mb: 10 * 1024,
             cluster_name: "foo_cluster".to_string(),
             wait_leader_timeout: 70000,
         }
@@ -226,5 +230,10 @@ impl RaftConfig {
     /// sled does not allow to open multiple `sled::Db` in one process.
     pub fn tree_name(&self, name: impl std::fmt::Display) -> String {
         format!("{}{}", self.sled_tree_prefix, name)
+    }
+
+    /// Return the size of sled cache in bytes.
+    pub fn sled_cache_size(&self) -> u64 {
+        self.sled_max_cache_size_mb * 1024 * 1024
     }
 }
