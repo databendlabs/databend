@@ -658,14 +658,8 @@ pub async fn resolve_file_location(
         FileLocation::Stage(location) => resolve_stage_location(ctx, &location).await,
         FileLocation::Uri(mut uri) => {
             let (storage_params, path) = parse_uri_location(&mut uri, Some(ctx)).await?;
-            if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
-                Err(ErrorCode::StorageInsecure(
-                    "copy from insecure storage is not allowed",
-                ))
-            } else {
-                let stage_info = StageInfo::new_external_stage(storage_params, true);
-                Ok((stage_info, path))
-            }
+            let stage_info = StageInfo::new_external_stage(storage_params, true);
+            Ok((stage_info, path))
         }
     }
 }
