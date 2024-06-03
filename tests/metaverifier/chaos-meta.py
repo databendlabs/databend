@@ -77,7 +77,7 @@ class MetaChaos:
     
   def exec_cat_meta_verifier(self):
       cmd = "kubectl exec -i databend-metaverifier -n databend -- cat /tmp/meta-verifier"
-      content = os.popen(cmd).read()
+      content = os.popen(cmd).read().strip()
       print("exec cat meta-verifier: ", content)
 
       return content
