@@ -19,9 +19,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::compare_scalars;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
@@ -33,16 +36,18 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use indexmap::IndexSet;
-use itertools::Itertools;
-use log::error;
+use log::warn;
 use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
 
 use crate::statistics::reducers::merge_statistics_mut;
-use crate::table_functions::cmp_with_null;
 use crate::FuseTable;
 use crate::SegmentLocation;
+use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
+use crate::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
@@ -52,6 +57,8 @@ pub struct ReclusterMutator {
     pub(crate) cluster_key_id: u32,
     pub(crate) schema: TableSchemaRef,
     pub(crate) max_tasks: usize,
+    pub(crate) block_per_seg: usize,
+    pub(crate) cluster_key_types: Vec<DataType>,
 
     pub snapshot: Arc<TableSnapshot>,
     pub tasks: Vec<ReclusterTask>,
@@ -63,14 +70,32 @@ pub struct ReclusterMutator {
 
 impl ReclusterMutator {
     pub fn try_create(
+        table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         snapshot: Arc<TableSnapshot>,
-        schema: TableSchemaRef,
-        depth_threshold: f64,
-        block_thresholds: BlockThresholds,
-        cluster_key_id: u32,
-        max_tasks: usize,
     ) -> Result<Self> {
+        let schema = table.schema_with_stream();
+        let cluster_key_id = table.cluster_key_meta.clone().unwrap().0;
+        let block_thresholds = table.get_block_thresholds();
+        let block_per_seg =
+            table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+
+        let avg_depth_threshold = table.get_option(
+            FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
+            DEFAULT_AVG_DEPTH_THRESHOLD,
+        );
+        let depth_threshold = (snapshot.summary.block_count as f64 * avg_depth_threshold)
+            .max(1.0)
+            .min(64.0);
+
+        let mut max_tasks = 1;
+        let cluster = ctx.get_cluster();
+        if !cluster.is_empty() && ctx.get_settings().get_enable_distributed_recluster()? {
+            max_tasks = cluster.nodes.len();
+        }
+
+        let cluster_key_types = table.cluster_key_types(ctx.clone());
+
         Ok(Self {
             ctx,
             schema,
@@ -78,6 +103,8 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_id,
             max_tasks,
+            block_per_seg,
+            cluster_key_types,
             snapshot,
             tasks: Vec::new(),
             remained_blocks: Vec::new(),
@@ -85,6 +112,36 @@ impl ReclusterMutator {
             removed_segment_indexes: Vec::new(),
             removed_segment_summary: Statistics::default(),
         })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        snapshot: Arc<TableSnapshot>,
+        schema: TableSchemaRef,
+        cluster_key_types: Vec<DataType>,
+        depth_threshold: f64,
+        block_thresholds: BlockThresholds,
+        cluster_key_id: u32,
+        max_tasks: usize,
+        block_per_seg: usize,
+    ) -> Self {
+        Self {
+            ctx,
+            schema,
+            depth_threshold,
+            block_thresholds,
+            cluster_key_id,
+            max_tasks,
+            block_per_seg,
+            cluster_key_types,
+            snapshot,
+            tasks: Vec::new(),
+            remained_blocks: Vec::new(),
+            recluster_blocks_count: 0,
+            removed_segment_indexes: Vec::new(),
+            removed_segment_summary: Statistics::default(),
+        }
     }
 
     #[async_backtrace::framed]
@@ -152,8 +209,10 @@ impl ReclusterMutator {
                 .block_thresholds
                 .check_for_recluster(total_rows as usize, total_bytes as usize)
             {
-                let block_metas: Vec<_> =
-                    block_metas.into_iter().map(|meta| (None, meta)).collect();
+                let block_metas = block_metas
+                    .into_iter()
+                    .map(|meta| (None, meta))
+                    .collect::<Vec<_>>();
                 self.generate_task(
                     &block_metas,
                     &column_nodes,
@@ -166,7 +225,7 @@ impl ReclusterMutator {
             }
 
             let selected_idx =
-                Self::fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
+                self.fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
             if selected_idx.is_empty() {
                 remained_blocks.extend(block_metas.into_iter());
                 continue;
@@ -267,20 +326,15 @@ impl ReclusterMutator {
     }
 
     pub fn select_segments(
+        &mut self,
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
-        block_per_seg: usize,
         max_len: usize,
-        cluster_key_id: u32,
     ) -> Result<IndexSet<usize>> {
         let mut blocks_num = 0;
         let mut indices = IndexSet::new();
         let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
         for (i, (_, compact_segment)) in compact_segments.iter().enumerate() {
-            if !ReclusterMutator::segment_can_recluster(
-                &compact_segment.summary,
-                block_per_seg,
-                cluster_key_id,
-            ) {
+            if !self.segment_can_recluster(&compact_segment.summary) {
                 continue;
             }
 
@@ -298,21 +352,17 @@ impl ReclusterMutator {
             }
         }
 
-        if indices.len() < 2 || blocks_num < block_per_seg {
+        if indices.len() < 2 || blocks_num < self.block_per_seg {
             return Ok(indices);
         }
 
-        ReclusterMutator::fetch_max_depth(points_map, 1.0, max_len)
+        self.fetch_max_depth(points_map, 1.0, max_len)
     }
 
-    pub fn segment_can_recluster(
-        summary: &Statistics,
-        block_per_seg: usize,
-        cluster_key_id: u32,
-    ) -> bool {
+    pub fn segment_can_recluster(&self, summary: &Statistics) -> bool {
         if let Some(stats) = &summary.cluster_stats {
-            stats.cluster_key_id == cluster_key_id
-                && (stats.level >= 0 || (summary.block_count as usize) < block_per_seg)
+            stats.cluster_key_id == self.cluster_key_id
+                && (stats.level >= 0 || (summary.block_count as usize) < self.block_per_seg)
         } else {
             false
         }
@@ -362,6 +412,7 @@ impl ReclusterMutator {
     }
 
     fn fetch_max_depth(
+        &self,
         points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)>,
         depth_threshold: f64,
         max_len: usize,
@@ -371,12 +422,12 @@ impl ReclusterMutator {
         let mut block_depths = Vec::new();
         let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
         let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
-        for (i, (_, (start, end))) in points_map
-            .into_iter()
-            .sorted_by(|(a, _), (b, _)| a.iter().cmp_by(b.iter(), cmp_with_null))
-            .enumerate()
-        {
-            let point_depth = if unfinished_parts.len() == 1 && Self::check_point(&start, &end) {
+        let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
+        let indices = compare_scalars(keys, &self.cluster_key_types)?;
+        for (i, idx) in indices.into_iter().enumerate() {
+            let start = &values[idx as usize].0;
+            let end = &values[idx as usize].1;
+            let point_depth = if unfinished_parts.len() == 1 && Self::check_point(start, end) {
                 1
             } else {
                 unfinished_parts.len() + start.len()
@@ -403,11 +454,10 @@ impl ReclusterMutator {
                 }
             });
         }
+
         if !unfinished_parts.is_empty() {
-            error!("Recluster: unfinished_parts is not empty after calculate the blocks overlaps");
-            return Err(ErrorCode::Internal(
-                "failed to select blocks for recluster, please check your data",
-            ));
+            warn!("Recluster: unfinished_parts is not empty after calculate the blocks overlaps");
+            // todo: re-sort the unfinished parts firstly.
         }
 
         let sum_depth: usize = block_depths.iter().sum();

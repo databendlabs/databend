@@ -20,7 +20,7 @@ use derive_visitor::DriveMut;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use pratt::Affix;
-use pratt::Precedence;
+use pratt::Associativity;
 
 use super::ColumnRef;
 use super::OrderByExpr;
@@ -415,26 +415,54 @@ impl Expr {
         ]
     }
 
-    pub fn precedence(&self) -> Option<Precedence> {
-        match ExprElement::from(self.clone()).affix() {
-            Affix::Nilfix => None,
-            Affix::Infix(p, _) => Some(p),
-            Affix::Prefix(p) => Some(p),
-            Affix::Postfix(p) => Some(p),
-        }
+    fn affix(&self) -> Affix {
+        ExprElement::from(self.clone()).affix()
     }
 }
 
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        fn needs_parentheses(parent: Option<Affix>, child: Affix, is_left: bool) -> bool {
+            match (parent, child) {
+                (Some(Affix::Infix(parent_prec, parent_assoc)), Affix::Infix(child_prec, _)) => {
+                    if parent_prec < child_prec {
+                        return false;
+                    }
+                    if parent_prec > child_prec {
+                        return true;
+                    }
+                    if matches!(parent_assoc, Associativity::Left) && !is_left {
+                        return true;
+                    }
+                    if matches!(parent_assoc, Associativity::Right) && is_left {
+                        return true;
+                    }
+                }
+                (
+                    Some(
+                        Affix::Infix(parent_prec, _)
+                        | Affix::Prefix(parent_prec)
+                        | Affix::Postfix(parent_prec),
+                    ),
+                    Affix::Infix(child_prec, _)
+                    | Affix::Prefix(child_prec)
+                    | Affix::Postfix(child_prec),
+                ) => {
+                    return parent_prec > child_prec;
+                }
+                _ => (),
+            }
+            false
+        }
+
         fn write_expr(
             expr: &Expr,
-            min_precedence: Precedence,
+            parent: Option<Affix>,
+            is_left: bool,
             f: &mut Formatter,
         ) -> std::fmt::Result {
-            let prec = expr.precedence();
-            let need_paren = prec.map(|p| p < min_precedence).unwrap_or(false);
-            let min_prec = prec.unwrap_or(Precedence(0));
+            let affix = expr.affix();
+            let need_paren = needs_parentheses(parent, affix, is_left);
 
             if need_paren {
                 write!(f, "(")?;
@@ -449,7 +477,7 @@ impl Display for Expr {
                     }
                 }
                 Expr::IsNull { expr, not, .. } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     write!(f, " IS")?;
                     if *not {
                         write!(f, " NOT")?;
@@ -459,19 +487,19 @@ impl Display for Expr {
                 Expr::IsDistinctFrom {
                     left, right, not, ..
                 } => {
-                    write_expr(left, min_prec, f)?;
+                    write_expr(left, Some(affix), true, f)?;
                     write!(f, " IS")?;
                     if *not {
                         write!(f, " NOT")?;
                     }
                     write!(f, " DISTINCT FROM ")?;
-                    write_expr(right, min_prec, f)?;
+                    write_expr(right, Some(affix), true, f)?;
                 }
 
                 Expr::InList {
                     expr, list, not, ..
                 } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -485,7 +513,7 @@ impl Display for Expr {
                     not,
                     ..
                 } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -498,7 +526,7 @@ impl Display for Expr {
                     not,
                     ..
                 } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -508,28 +536,28 @@ impl Display for Expr {
                     match op {
                         // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
                         UnaryOperator::Factorial => {
-                            write_expr(expr, min_prec, f)?;
+                            write_expr(expr, Some(affix), true, f)?;
                             write!(f, " {op}")?;
                         }
                         _ => {
                             write!(f, "{op} ")?;
-                            write_expr(expr, min_prec, f)?;
+                            write_expr(expr, Some(affix), true, f)?;
                         }
                     }
                 }
                 Expr::BinaryOp {
                     op, left, right, ..
                 } => {
-                    write_expr(left, min_prec, f)?;
+                    write_expr(left, Some(affix), true, f)?;
                     write!(f, " {op} ")?;
-                    write_expr(right, min_prec, f)?;
+                    write_expr(right, Some(affix), false, f)?;
                 }
                 Expr::JsonOp {
                     op, left, right, ..
                 } => {
-                    write_expr(left, min_prec, f)?;
+                    write_expr(left, Some(affix), true, f)?;
                     write!(f, " {op} ")?;
-                    write_expr(right, min_prec, f)?;
+                    write_expr(right, Some(affix), true, f)?;
                 }
                 Expr::Cast {
                     expr,
@@ -538,7 +566,7 @@ impl Display for Expr {
                     ..
                 } => {
                     if *pg_style {
-                        write_expr(expr, min_prec, f)?;
+                        write_expr(expr, Some(affix), true, f)?;
                         write!(f, "::{target_type}")?;
                     } else {
                         write!(f, "CAST({expr} AS {target_type})")?;
@@ -641,7 +669,7 @@ impl Display for Expr {
                     write!(f, "({subquery})")?;
                 }
                 Expr::MapAccess { expr, accessor, .. } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     match accessor {
                         MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
                         MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
@@ -697,7 +725,7 @@ impl Display for Expr {
             Ok(())
         }
 
-        write_expr(self, Precedence(0), f)
+        write_expr(self, None, true, f)
     }
 }
 

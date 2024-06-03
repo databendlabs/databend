@@ -2787,6 +2787,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "pprof",
+ "procfs 0.16.0",
  "prometheus-client",
  "prometheus-parse",
  "rand 0.8.5",
@@ -2920,16 +2921,6 @@ dependencies = [
  "serde_with",
  "serfig",
  "strum 0.24.1",
-]
-
-[[package]]
-name = "databend-common-constraint"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "databend-common-ast",
- "goldenfile",
- "z3",
 ]
 
 [[package]]
@@ -3618,6 +3609,7 @@ dependencies = [
  "match-template",
  "rand 0.8.5",
  "serde",
+ "tokio",
  "typetag",
 ]
 
@@ -3738,7 +3730,6 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-compress",
  "databend-common-config",
- "databend-common-constraint",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
@@ -4163,6 +4154,7 @@ dependencies = [
  "databend-common-building",
  "databend-common-catalog",
  "databend-common-compress",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
@@ -4724,6 +4716,7 @@ dependencies = [
  "rustyline",
  "serde",
  "serde_json",
+ "serde_stacker",
  "serde_urlencoded",
  "socket2 0.5.6",
  "strength_reduce",
@@ -11122,6 +11115,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "procfs"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "731e0d9356b0c25f16f33b5be79b1c57b562f141ebfcdb0ad8ac2c13a24293b4"
+dependencies = [
+ "bitflags 2.4.2",
+ "chrono",
+ "flate2",
+ "hex",
+ "lazy_static",
+ "procfs-core",
+ "rustix 0.38.31",
+]
+
+[[package]]
+name = "procfs-core"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d3554923a69f4ce04c4a754260c338f505ce22642d3830e049a399fc2059a29"
+dependencies = [
+ "bitflags 2.4.2",
+ "chrono",
+ "hex",
+]
+
+[[package]]
 name = "prodash"
 version = "28.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12631,6 +12650,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb3622f419d1296904700073ea6cc23ad690adbd66f13ea683df73298736f0c1"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "serde_stacker"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "babfccff5773ff80657f0ecf553c7c516bdc2eb16389c0918b36b73e7015276e"
+dependencies = [
+ "serde",
+ "stacker",
 ]
 
 [[package]]
@@ -15774,26 +15803,6 @@ name = "yansi"
 version = "1.0.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1367295b8f788d371ce2dbc842c7b709c73ee1364d30351dd300ec2203b12377"
-
-[[package]]
-name = "z3"
-version = "0.12.1"
-source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
-dependencies = [
- "log",
- "num",
- "z3-sys",
-]
-
-[[package]]
-name = "z3-sys"
-version = "0.8.1"
-source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
-dependencies = [
- "bindgen 0.69.4",
- "cmake",
- "pkg-config",
-]
 
 [[package]]
 name = "z85"

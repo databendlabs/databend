@@ -25,6 +25,8 @@ use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -479,6 +481,13 @@ impl Catalog for MutableCatalog {
     async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
         let res = self.ctx.meta.undrop_table_by_id(req).await?;
         Ok(res)
+    }
+
+    async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        let db = self
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?;
+        db.commit_table_meta(req).await
     }
 
     #[async_backtrace::framed]

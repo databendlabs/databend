@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
@@ -26,7 +27,10 @@ pub trait RoleApi: Sync + Send {
     #[allow(clippy::ptr_arg)]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>>;
 
-    async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
+    /// get all roles that store in meta
+    async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
+
+    async fn get_raw_meta_roles(&self) -> Result<ListKVReply>;
 
     async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>>;
 

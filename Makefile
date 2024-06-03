@@ -84,7 +84,7 @@ sqllogic-test: build
 
 stateless-cluster-test: build
 	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
+	ulimit -n 10000; ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
 stateless-cluster-test-tls: build
 	rm -rf ./_meta*/
@@ -110,7 +110,7 @@ clean:
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
 	rm -rf ./_meta*/ ./_logs*/ ./src/query/service_logs*/ ./src/meta/service/_logs*/ ./stateless_test_data/
 	rm -rf ./src/common/base/_logs*/ ./src/meta/raft-store/_logs*/ ./src/meta/sled-store/_logs*/
-	find . \( -type f -name '.z3-trace' -o -type d -name '.databend' \) | xargs rm -rf
+	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
 
 genproto:
 	python  -m grpc_tools.protoc -Isrc/common/cloud_control/proto/ --python_out=tests/cloud_control_server/ --grpc_python_out=tests/cloud_control_server/ src/common/cloud_control/proto/task.proto

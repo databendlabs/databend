@@ -1,7 +1,7 @@
 === test db/table ===
 200
 === test stage ===
-1	8	402
+1	8	401
 0
 === test udf ===
 2
@@ -49,3 +49,12 @@ OWNERSHIP a  ROLE drop_role1 GRANT OWNERSHIP ON 'default'.'a'.* TO ROLE `drop_ro
 OWNERSHIP default.a.t  ROLE drop_role1 GRANT OWNERSHIP ON 'default'.'a'.'t' TO ROLE `drop_role1`
 == test create database privilege and drop object ===
 Error: APIError: ResponseError with 1003: Unknown database 'c'
+=== test db owner can access all table under this db ===
+Error: APIError: ResponseError with 1063: Permission denied: User 'u1'@'%' does not have the required privileges for database 'default'
+t1
+t2
+1
+2
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db1'.'t1' for user 'u2'@'%' with roles [public,role2]
+2
+OWNERSHIP default.db1.t2  ROLE role2 GRANT OWNERSHIP ON 'default'.'db1'.'t2' TO ROLE `role2`

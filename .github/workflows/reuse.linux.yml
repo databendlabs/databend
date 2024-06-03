@@ -4,15 +4,15 @@ on:
   workflow_call:
     inputs:
       build_profile:
-        description: 'Build profile, debug or release'
+        description: "Build profile, debug or release"
         type: string
         required: true
-        default: 'debug'
+        default: "debug"
       runner_provider:
-        description: 'Self-hosted runner provider, aws or gcp'
+        description: "Self-hosted runner provider, aws or gcp"
         type: string
         required: true
-        default: 'aws'
+        default: "aws"
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
@@ -54,7 +54,12 @@ jobs:
           cat license.json
 
   build:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - "${{ matrix.runner }}"
+      - Linux
+      - 16c32g
+      - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
       matrix:
@@ -72,8 +77,40 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: all
 
+  build_udf:
+    runs-on:
+      - self-hosted
+      - "${{ matrix.runner }}"
+      - Linux
+      - 16c32g
+      - "${{ inputs.runner_provider }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: X64 }
+          # - { arch: aarch64, runner: ARM64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux
+        timeout-minutes: 60
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
+          features: python-udf
+          category: udf
+          artifacts: query
+
   build_address_sanitizer:
-    runs-on: [ self-hosted, "${{ matrix.runner }}", Linux, 16c32g, "${{ inputs.runner_provider }}" ]
+    runs-on:
+      - self-hosted
+      - "${{ matrix.runner }}"
+      - Linux
+      - 16c32g
+      - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
       matrix:
