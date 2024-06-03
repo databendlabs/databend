@@ -49,7 +49,7 @@ auth_type = "no_password"
 [log]
 
 [log.file]
-level = "INFO"
+level = "DEBUG"
 format = "text"
 dir = "./.databend/logs_2"
 prefix_filter = ""
