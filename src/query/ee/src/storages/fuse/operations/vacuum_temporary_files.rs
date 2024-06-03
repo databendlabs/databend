@@ -33,9 +33,12 @@ const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
 pub async fn do_vacuum_temporary_files(
     temporary_dir: String,
     retain: Option<Duration>,
-    limit: Option<usize>,
+    limit: usize,
 ) -> Result<usize> {
-    let limit = limit.unwrap_or(usize::MAX);
+    if limit == 0 {
+        return Ok(0);
+    }
+
     let expire_time = retain.unwrap_or(DEFAULT_RETAIN_DURATION).as_millis() as i64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)

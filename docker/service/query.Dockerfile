@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM python:3.12-slim-bookworm
 
 ARG TARGETPLATFORM
 ENV TERM=dumb

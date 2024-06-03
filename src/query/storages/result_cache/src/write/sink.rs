@@ -84,11 +84,11 @@ impl AsyncMpscSink for WriteResultCacheSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        if self.terminated {
+        if self.terminated || self.cache_writer.num_rows() == 0 {
             return Ok(());
         }
 
-        // 1. Write the result cache to the storage.
+        // 1. Write the result cache to the storage, blocks must be !empty.
         let location = self.cache_writer.write_to_storage().await?;
 
         // 2. Set result cache key-value pair to meta.

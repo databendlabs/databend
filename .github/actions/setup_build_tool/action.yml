@@ -32,7 +32,7 @@ runs:
         export TARGET=${{ inputs.target }}
         export CARGO_INCREMENTAL=0
         export CARGO_TERM_COLOR=always
-        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE,JEMALLOC_SYS_WITH_LG_PAGE
+        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE,JEMALLOC_SYS_WITH_LG_PAGE,DATABEND_RELEASE_VERSION
         EOF
 
         RUNNER_PROVIDER="${RUNNER_PROVIDER:-github}"

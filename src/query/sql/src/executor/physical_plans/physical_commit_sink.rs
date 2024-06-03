@@ -34,6 +34,5 @@ pub struct CommitSink {
     pub mutation_kind: MutationKind,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,
-    pub need_lock: bool,
     pub deduplicated_label: Option<String>,
 }

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
@@ -26,6 +27,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_storages_common_table_meta::meta::TableSnapshotLite;
+use log::info;
 
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -52,6 +54,7 @@ impl<'a> FuseSnapshot<'a> {
                 TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
             let snapshots_io = SnapshotsIO::create(self.ctx.clone(), self.table.operator.clone());
             let snapshot_lite = if limit.is_none() {
+                info!("getting snapshots, using parallel strategy");
                 // Use SnapshotsIO::read_snapshot_lites only if limit is None
                 //
                 // SnapshotsIO::read_snapshot lists snapshots from object storage, taking limit into
@@ -65,20 +68,27 @@ impl<'a> FuseSnapshot<'a> {
                         &|_| {},
                     )
                     .await?;
-                Ok(chained_snapshot_lites)
+                Ok::<_, ErrorCode>(chained_snapshot_lites)
             } else {
                 // SnapshotsIO::read_chained_snapshot_lists traverses the history of snapshot sequentially, by using the
                 // TableSnapshot::prev_snapshot_id, which guarantees that the number of snapshot
                 // returned is as expected
-                snapshots_io
+                let snapshot_lites = snapshots_io
                     .read_chained_snapshot_lites(
                         meta_location_generator.clone(),
                         snapshot_location,
                         limit,
                     )
-                    .await
+                    .await?;
+                info!(
+                    "getting snapshots in chained mod, limit: {:?}, number of snapshot_lite found: {}",
+                    limit,
+                    snapshot_lites.len()
+                );
+                Ok(snapshot_lites)
             }?;
 
+            info!("got {} snapshots", snapshot_lite.len());
             return self.to_block(&meta_location_generator, &snapshot_lite, snapshot_version);
         }
         Ok(DataBlock::empty_with_schema(Arc::new(

@@ -51,7 +51,7 @@ impl UserApiProvider {
         let builtin_roles = self.builtin_roles();
         let seq_roles = self
             .role_api(tenant)
-            .get_roles()
+            .get_meta_roles()
             .await
             .map_err(|e| e.add_message_back("(while get roles)."))?;
         // overwrite the builtin roles.
@@ -200,6 +200,7 @@ impl UserApiProvider {
         let client = self.role_api(tenant);
         client
             .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+                ri.update_role_time();
                 ri.grants.grant_privileges(&object, privileges)
             })
             .await
@@ -217,6 +218,7 @@ impl UserApiProvider {
         let client = self.role_api(tenant);
         client
             .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+                ri.update_role_time();
                 ri.grants.revoke_privileges(&object, privileges)
             })
             .await
@@ -245,6 +247,7 @@ impl UserApiProvider {
         let client = self.role_api(tenant);
         client
             .update_role_with(target_role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+                ri.update_role_time();
                 ri.grants.grant_role(grant_role)
             })
             .await
@@ -261,6 +264,7 @@ impl UserApiProvider {
         let client = self.role_api(tenant);
         client
             .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+                ri.update_role_time();
                 ri.grants.revoke_role(revoke_role)
             })
             .await

@@ -56,11 +56,3 @@ runs:
           cargo -Zbuild-std -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --manifest-path src/binaries/Cargo.toml --bin databend-$artifact
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
-
-    - name: Check Binary Info
-      if: env.BUILD_PROFILE == 'debug' && endsWith(inputs.target, '-gnu')
-      shell: bash
-      continue-on-error: true
-      run: |
-        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
-        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query

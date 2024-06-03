@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::defer;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
@@ -179,6 +180,13 @@ impl PipelineExecutor {
     }
 
     pub fn execute(&self) -> Result<()> {
+        let instants = Instant::now();
+        let _guard = defer(move || {
+            info!(
+                "Pipeline executor finished, elapsed: {:?}",
+                instants.elapsed()
+            );
+        });
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.execute(),
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
@@ -233,16 +241,16 @@ impl PipelineExecutor {
             let this_graph = Arc::downgrade(&query_wrapper.graph);
             let finished_notify = query_wrapper.finished_notify.clone();
             GlobalIORuntime::instance().spawn(async move {
-                            let finished_future = Box::pin(finished_notify.notified());
-                            let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
-                            if let Either::Left(_) = select(max_execute_future, finished_future).await {
-                                if let Some(graph) = this_graph.upgrade() {
-                                    graph.should_finish(Err(ErrorCode::AbortedQuery(
-                                        "Aborted query, because the execution time exceeds the maximum execution time limit",
-                                    ))).expect("exceed max execute time, but cannot send error message");
-                                }
-                            }
-                        });
+                let finished_future = Box::pin(finished_notify.notified());
+                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
+                if let Either::Left(_) = select(max_execute_future, finished_future).await {
+                    if let Some(graph) = this_graph.upgrade() {
+                        graph.should_finish(Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the execution time exceeds the maximum execution time limit",
+                        ))).expect("exceed max execute time, but cannot send error message");
+                    }
+                }
+            });
         }
 
         Ok(())

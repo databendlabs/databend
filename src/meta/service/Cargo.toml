@@ -12,7 +12,7 @@ doctest = false
 test = true
 
 [features]
-default = ["simd"]
+default = ["simd", "memory-profiling"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 simd = ["databend-common-arrow/simd"]
 io-uring = [
