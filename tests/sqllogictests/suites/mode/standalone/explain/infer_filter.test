@@ -910,3 +910,67 @@ drop table if exists t2;
 
 statement ok
 drop table if exists t3;
+
+# merge predicates with different data types.
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(id BIGINT NOT NULL);
+
+statement ok
+create table t2(id BIGINT UNSIGNED NULL);
+
+statement ok
+insert into t1 values(869550529);
+
+statement ok
+insert into t2 values(869550529);
+
+query T
+explain SELECT * FROM t1 inner JOIN t2 on t1.id = t2.id where t2.id = 869550529;
+----
+HashJoin
+├── output columns: [t1.id (#0), t2.id (#1)]
+├── join type: INNER
+├── build keys: [CAST(t2.id (#1) AS Int64 NULL)]
+├── probe keys: [CAST(t1.id (#0) AS Int64 NULL)]
+├── filters: []
+├── estimated rows: 1.00
+├── Filter(Build)
+│   ├── output columns: [t2.id (#1)]
+│   ├── filters: [is_true(t2.id (#1) = 869550529)]
+│   ├── estimated rows: 1.00
+│   └── TableScan
+│       ├── table: default.default.t2
+│       ├── output columns: [id (#1)]
+│       ├── read rows: 1
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+│       ├── push downs: [filters: [is_true(t2.id (#1) = 869550529)], limit: NONE]
+│       └── estimated rows: 1.00
+└── Filter(Probe)
+    ├── output columns: [t1.id (#0)]
+    ├── filters: [t1.id (#0) = 869550529]
+    ├── estimated rows: 1.00
+    └── TableScan
+        ├── table: default.default.t1
+        ├── output columns: [id (#0)]
+        ├── read rows: 1
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+        ├── push downs: [filters: [t1.id (#0) = 869550529], limit: NONE]
+        └── estimated rows: 1.00
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
