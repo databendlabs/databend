@@ -604,7 +604,7 @@ impl AccessChecker for PrivilegeAccess {
                                 self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::ORCSource(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
+                                self.validate_stage_access(&stage_info.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }

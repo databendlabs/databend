@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 
+use crate::plan::datasource::datasource_info::orc::OrcTableInfo;
 use crate::plan::ParquetTableInfo;
 use crate::plan::ResultScanTableInfo;
 use crate::plan::StageTableInfo;
@@ -30,7 +31,7 @@ pub enum DataSourceInfo {
     // stage source with parquet format used for select.
     ParquetSource(ParquetTableInfo),
     // stage source with orc format used for select.
-    ORCSource(StageTableInfo),
+    ORCSource(OrcTableInfo),
     // Table Function Result_Scan
     ResultScanSource(ResultScanTableInfo),
 }

@@ -15,12 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use arrow_array::RecordBatchReader;
 use arrow_schema::Schema as ArrowSchema;
 use chrono::DateTime;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::OrcTableInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
@@ -39,26 +38,29 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_storages_common_table_meta::table::ChangeType;
-use opendal::layers::BlockingLayer;
 use opendal::Operator;
 use orc_rust::ArrowReaderBuilder;
 
-use crate::file_reader::OrcFileReader;
+use crate::chunk_reader_impl::OrcChunkReader;
 use crate::read_partition::read_partitions_simple;
 
 pub struct OrcTable {
     pub(super) stage_table_info: StageTableInfo,
+    pub(super) arrow_schema: arrow_schema::SchemaRef,
+    pub(super) schema_from: String,
     pub(super) table_info: TableInfo,
 }
 
 impl OrcTable {
-    pub fn from_info(stage_table_info: &StageTableInfo) -> Result<Arc<dyn Table>> {
+    pub fn from_info(info: &OrcTableInfo) -> Result<Arc<dyn Table>> {
         let table_info = create_orc_table_info(
-            stage_table_info.schema.clone(),
-            &stage_table_info.stage_info,
+            info.stage_table_info.schema.clone(),
+            &info.stage_table_info.stage_info,
         )?;
         Ok(Arc::new(OrcTable {
-            stage_table_info: stage_table_info.clone(),
+            stage_table_info: info.stage_table_info.clone(),
+            arrow_schema: info.arrow_schema.clone(),
+            schema_from: info.schema_from.clone(),
             table_info,
         }))
     }
@@ -76,8 +78,9 @@ impl OrcTable {
                 .await?
                 .clone(),
         };
+        let schema_from = first_file.path.clone();
 
-        let arrow_schema = Self::prepare_metas(first_file, operator.clone())?;
+        let arrow_schema = Self::prepare_metas(first_file, operator.clone()).await?;
 
         let table_schema = Arc::new(
             TableSchema::try_from(arrow_schema.as_ref()).map_err(ErrorCode::from_std_error)?,
@@ -90,20 +93,25 @@ impl OrcTable {
         Ok(Arc::new(OrcTable {
             table_info,
             stage_table_info,
+            arrow_schema,
+            schema_from,
         }))
     }
 
     #[async_backtrace::framed]
-    fn prepare_metas(file_info: StageFileInfo, operator: Operator) -> Result<Arc<ArrowSchema>> {
-        let _guard = GlobalIORuntime::instance().inner().enter();
-        let file = OrcFileReader {
-            operator: operator.layer(BlockingLayer::create()?).blocking(),
+    async fn prepare_metas(
+        file_info: StageFileInfo,
+        operator: Operator,
+    ) -> Result<Arc<ArrowSchema>> {
+        let file = OrcChunkReader {
+            operator,
             size: file_info.size,
             path: file_info.path,
         };
-        let builder = ArrowReaderBuilder::try_new(file)
+        let builder = ArrowReaderBuilder::try_new_async(file)
+            .await
             .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
-        let arrow_schema = builder.build().schema();
+        let arrow_schema = builder.build_async().schema();
         Ok(arrow_schema)
     }
 }
@@ -135,7 +143,11 @@ impl Table for OrcTable {
     }
 
     fn get_data_source_info(&self) -> DataSourceInfo {
-        DataSourceInfo::ORCSource(self.stage_table_info.clone())
+        DataSourceInfo::ORCSource(OrcTableInfo {
+            stage_table_info: self.stage_table_info.clone(),
+            arrow_schema: self.arrow_schema.clone(),
+            schema_from: self.schema_from.clone(),
+        })
     }
 
     /// The returned partitions only record the locations of files to read.

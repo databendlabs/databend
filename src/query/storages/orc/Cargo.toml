@@ -19,6 +19,7 @@ databend-common-expression = { path = "../../expression" }
 databend-common-meta-app = { path = "../../../meta/app" }
 databend-common-pipeline-core = { path = "../../pipeline/core" }
 databend-common-pipeline-sources = { path = "../../pipeline/sources" }
+databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
 databend-common-storage = { path = "../../../common/storage" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
 
@@ -29,6 +30,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 opendal = { workspace = true, features = ["layers-blocking"] }
-orc-rust = { git = "https://github.com/datafusion-contrib/datafusion-orc", rev = "ac5a8ab" }
+orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
 serde = { workspace = true }
 typetag = { workspace = true }
+futures-util = "0.3.30"

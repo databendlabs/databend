@@ -21,7 +21,7 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::TableContext;
 
-use crate::one_file_partition::OrcFilePartition;
+use crate::orc_file_partition::OrcFilePartition;
 
 pub async fn read_partitions_simple(
     ctx: Arc<dyn TableContext>,

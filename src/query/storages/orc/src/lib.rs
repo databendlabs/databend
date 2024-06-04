@@ -23,10 +23,12 @@
 #![feature(int_roundings)]
 #![feature(box_patterns)]
 
-mod file_reader;
-mod one_file_partition;
-mod read;
+mod chunk_reader_impl;
+mod orc_file_partition;
+mod processors;
 mod read_partition;
-mod source;
+mod read_pipeline;
+mod strip;
 mod table;
+
 pub use table::OrcTable;

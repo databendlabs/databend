@@ -4070,8 +4070,10 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
+ "databend-common-pipeline-transforms",
  "databend-common-storage",
  "databend-storages-common-table-meta",
+ "futures-util",
  "opendal",
  "orc-rust",
  "serde",
@@ -10565,7 +10567,6 @@ dependencies = [
 [[package]]
 name = "orc-rust"
 version = "0.3.0"
-source = "git+https://github.com/datafusion-contrib/datafusion-orc?rev=ac5a8ab#ac5a8ab29e0fb43629ca93ffff1e722412418b36"
 dependencies = [
  "arrow",
  "async-trait",
