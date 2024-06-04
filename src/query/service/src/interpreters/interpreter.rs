@@ -260,7 +260,7 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
         // SELECT * FROM t1 WHERE name = 'bend' => SELECT * FROM t1 WHERE name = NULL
         #[derive(VisitorMut)]
         #[visitor(Literal(enter))]
-        struct AstVisitor {}
+        struct AstVisitor;
 
         impl AstVisitor {
             fn enter_literal(&mut self, lit: &mut Literal) {
@@ -268,8 +268,7 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
             }
         }
 
-        let mut visitor = AstVisitor {};
-        stmt.drive_mut(&mut visitor);
+        stmt.drive_mut(&mut AstVisitor);
 
         (query_hash, format!("{:x}", Md5::digest(stmt.to_string())))
     } else {
