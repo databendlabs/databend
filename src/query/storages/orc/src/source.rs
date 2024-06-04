@@ -69,7 +69,9 @@ impl SyncSource for ORCSource {
                 size: file.size as u64,
                 path: file.path,
             };
-            let reader = ArrowReaderBuilder::try_new(file).unwrap().build();
+            let builder = ArrowReaderBuilder::try_new(file)
+                .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
+            let reader = builder.build();
 
             self.reader = Some(reader)
         }
