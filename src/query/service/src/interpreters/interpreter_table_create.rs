@@ -252,7 +252,7 @@ impl CreateTableInterpreter {
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
                 tenant.tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
+                self.ctx.get_application_level_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
             )
@@ -316,7 +316,9 @@ impl CreateTableInterpreter {
         let mut stat = None;
         if !GlobalConfig::instance().query.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
-                let operator = self.ctx.get_data_operator()?.operator();
+                // using application level data operator is a temp workaround
+                // please see discussions https://github.com/datafuselabs/databend/pull/10424
+                let operator = self.ctx.get_application_level_data_operator()?.operator();
                 let reader = MetaReaders::table_snapshot_reader(operator);
 
                 let params = LoadParams {
@@ -369,7 +371,7 @@ impl CreateTableInterpreter {
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
+                self.ctx.get_application_level_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
             )

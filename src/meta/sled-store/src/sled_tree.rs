@@ -380,6 +380,28 @@ impl SledTree {
         Ok(prev)
     }
 
+    /// Remove a key without returning the previous value.
+    ///
+    /// Just return the size of the removed value if the key is removed.
+    pub(crate) async fn remove_no_return<KV>(
+        &self,
+        key: &KV::K,
+        flush: bool,
+    ) -> Result<Option<usize>, MetaStorageError>
+    where
+        KV: SledKeySpace,
+    {
+        let k = KV::serialize_key(key)?;
+
+        let prev = self.tree.remove(k)?;
+
+        let removed = prev.map(|x| x.len());
+
+        self.flush_async(flush).await?;
+
+        Ok(removed)
+    }
+
     /// Build a string describing the range for a range operation.
     #[allow(dead_code)]
     fn range_message<KV, R>(&self, range: &R) -> String
@@ -527,6 +549,14 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
 
         let kv = last?.kv()?;
         Ok(Some(kv))
+    }
+
+    pub async fn remove_no_return(
+        &self,
+        key: &KV::K,
+        flush: bool,
+    ) -> Result<Option<usize>, MetaStorageError> {
+        self.inner.remove_no_return::<KV>(key, flush).await
     }
 
     pub async fn range_remove<R>(&self, range: R, flush: bool) -> Result<(), MetaStorageError>

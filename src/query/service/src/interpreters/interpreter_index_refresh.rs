@@ -49,7 +49,6 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
 use databend_enterprise_aggregating_index::get_agg_index_handler;
 use databend_storages_common_table_meta::meta::Location;
-use opendal::Operator;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -71,7 +70,6 @@ impl RefreshIndexInterpreter {
         &self,
         plan: &DataSourcePlan,
         fuse_table: Arc<FuseTable>,
-        dal: Operator,
     ) -> Result<Option<Partitions>> {
         let snapshot_loc = plan.statistics.snapshot.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
@@ -92,7 +90,7 @@ impl RefreshIndexInterpreter {
             let ctx = self.ctx.clone();
 
             let (_statistics, partitions) = fuse_table
-                .prune_snapshot_blocks(ctx, dal, push_downs, table_schema, lazy_init_segments, 0)
+                .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
                 .await?;
 
             return Ok(Some(partitions));
@@ -106,7 +104,6 @@ impl RefreshIndexInterpreter {
         &self,
         plan: &DataSourcePlan,
         fuse_table: Arc<FuseTable>,
-        dal: Operator,
         segments: Vec<SegmentLocation>,
     ) -> Result<Option<Partitions>> {
         let table_schema = self.plan.table_info.schema();
@@ -114,7 +111,7 @@ impl RefreshIndexInterpreter {
         let ctx = self.ctx.clone();
 
         let (_statistics, partitions) = fuse_table
-            .prune_snapshot_blocks(ctx, dal, push_downs, table_schema, segments, 0)
+            .prune_snapshot_blocks(ctx, push_downs, table_schema, segments, 0)
             .await?;
 
         Ok(Some(partitions))
@@ -125,7 +122,6 @@ impl RefreshIndexInterpreter {
         &self,
         query_plan: &PhysicalPlan,
         fuse_table: Arc<FuseTable>,
-        dal: Operator,
         segments: Option<Vec<Location>>,
     ) -> Result<Option<DataSourcePlan>> {
         let mut source = vec![];
@@ -153,15 +149,10 @@ impl RefreshIndexInterpreter {
             let partitions = match segments {
                 Some(segment_locs) if !segment_locs.is_empty() => {
                     let segment_locations = create_segment_location_vector(segment_locs, None);
-                    self.get_partitions_with_given_segments(
-                        &source,
-                        fuse_table,
-                        dal,
-                        segment_locations,
-                    )
-                    .await?
+                    self.get_partitions_with_given_segments(&source, fuse_table, segment_locations)
+                        .await?
                 }
-                Some(_) | None => self.get_partitions(&source, fuse_table, dal).await?,
+                Some(_) | None => self.get_partitions(&source, fuse_table).await?,
             };
             if let Some(parts) = partitions {
                 source.parts = parts;
@@ -267,7 +258,6 @@ impl Interpreter for RefreshIndexInterpreter {
             }
         };
 
-        let data_accessor = self.ctx.get_data_operator()?;
         let fuse_table = FuseTable::do_create(self.plan.table_info.clone())?;
         let fuse_table: Arc<FuseTable> = fuse_table.into();
 
@@ -276,7 +266,6 @@ impl Interpreter for RefreshIndexInterpreter {
             .get_read_source(
                 &query_plan,
                 fuse_table.clone(),
-                data_accessor.operator(),
                 self.plan.segment_locs.clone(),
             )
             .await?;
@@ -352,15 +341,13 @@ impl Interpreter for RefreshIndexInterpreter {
         }
         let sink_schema = Arc::new(sink_schema);
 
-        let write_settings = fuse_table.get_write_settings();
-
         build_res.main_pipeline.try_resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
-                data_accessor.operator(),
+                fuse_table.get_operator(),
                 self.plan.index_id,
-                write_settings.clone(),
+                fuse_table.get_write_settings(),
                 sink_schema.clone(),
                 block_name_offset,
                 self.plan.user_defined_block_name,

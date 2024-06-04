@@ -236,8 +236,10 @@ pub trait TableContext: Send + Sync {
     fn set_on_error_mode(&self, mode: OnErrorMode);
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 
-    // Get the storage data accessor operator from the session manager.
-    fn get_data_operator(&self) -> Result<DataOperator>;
+    /// Get the storage data accessor operator from the session manager.
+    /// Note that this is the application level data accessor, which may be different from
+    /// the table level data accessor (e.g., table with customized storage parameters).
+    fn get_application_level_data_operator(&self) -> Result<DataOperator>;
 
     async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
 
