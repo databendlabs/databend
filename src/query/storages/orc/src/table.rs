@@ -18,6 +18,7 @@ use std::sync::Arc;
 use arrow_array::RecordBatchReader;
 use arrow_schema::Schema as ArrowSchema;
 use chrono::DateTime;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -76,7 +77,7 @@ impl OrcTable {
                 .clone(),
         };
 
-        let arrow_schema = Self::prepare_metas(first_file, operator.clone()).await?;
+        let arrow_schema = Self::prepare_metas(first_file, operator.clone())?;
 
         let table_schema = Arc::new(
             TableSchema::try_from(arrow_schema.as_ref()).map_err(ErrorCode::from_std_error)?,
@@ -93,10 +94,8 @@ impl OrcTable {
     }
 
     #[async_backtrace::framed]
-    async fn prepare_metas(
-        file_info: StageFileInfo,
-        operator: Operator,
-    ) -> Result<Arc<ArrowSchema>> {
+    fn prepare_metas(file_info: StageFileInfo, operator: Operator) -> Result<Arc<ArrowSchema>> {
+        let _guard = GlobalIORuntime::instance().inner().enter();
         let file = OrcFileReader {
             operator: operator.layer(BlockingLayer::create()?).blocking(),
             size: file_info.size,
