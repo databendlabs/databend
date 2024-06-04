@@ -735,7 +735,7 @@ impl Display for FileFormatParams {
             FileFormatParams::NdJson(params) => {
                 write!(
                     f,
-                    "TYPE = NDJSON, COMPRESSION = {:?} MISSING_FIELD_AS = {} NULL_FIELDS_AA = {}",
+                    "TYPE = NDJSON, COMPRESSION = {:?} MISSING_FIELD_AS = {} NULL_FIELDS_AS = {}",
                     params.compression, params.missing_field_as, params.null_field_as
                 )
             }
