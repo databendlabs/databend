@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,6 +24,8 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::FileStatus;
 use opendal::Operator;
 use orc_rust::ArrowReader;
 use orc_rust::ArrowReaderBuilder;
@@ -33,8 +36,10 @@ use crate::one_file_partition::OrcFilePartition;
 pub struct ORCSource {
     table_ctx: Arc<dyn TableContext>,
     op: Operator,
-    reader: Option<ArrowReader<OrcFileReader>>,
+    reader: Option<(String, ArrowReader<OrcFileReader>)>,
     data_schema: Arc<DataSchema>,
+
+    copy_status: Option<Arc<CopyStatus>>,
 }
 
 impl ORCSource {
@@ -44,11 +49,17 @@ impl ORCSource {
         op: Operator,
         data_schema: Arc<DataSchema>,
     ) -> Result<ProcessorPtr> {
+        let copy_status = if matches!(table_ctx.get_query_kind(), QueryKind::CopyIntoTable) {
+            Some(table_ctx.get_copy_status())
+        } else {
+            None
+        };
         SyncSourcer::create(table_ctx.clone(), output, ORCSource {
             table_ctx,
             op,
             data_schema,
             reader: None,
+            copy_status,
         })
     }
 }
@@ -63,6 +74,7 @@ impl SyncSource for ORCSource {
                 None => return Ok(None),
             };
             let file = OrcFilePartition::from_part(&part)?.clone();
+            let path = file.path.clone();
 
             let file = OrcFileReader {
                 operator: self.op.clone(),
@@ -73,14 +85,20 @@ impl SyncSource for ORCSource {
                 .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
             let reader = builder.build();
 
-            self.reader = Some(reader)
+            self.reader = Some((path, reader))
         }
-        if let Some(reader) = &mut self.reader {
+        if let Some((path, reader)) = &mut self.reader {
             match reader.next() {
                 None => Ok(None),
                 Some(batch) => {
                     let (block, _) =
                         DataBlock::from_record_batch(self.data_schema.as_ref(), &batch?)?;
+                    if let Some(copy_status) = &self.copy_status {
+                        copy_status.add_chunk(path, FileStatus {
+                            num_rows_loaded: block.num_rows(),
+                            error: None,
+                        })
+                    }
                     Ok(Some(block))
                 }
             }
