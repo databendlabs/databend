@@ -345,7 +345,7 @@ async fn test_safety_for_recluster() -> Result<()> {
                     assert!(unclustered);
                     assert!(!unclustered_segment_indices.is_empty());
                     verify_compact_tasks(
-                        ctx.get_data_operator()?.operator(),
+                        ctx.get_application_level_data_operator()?.operator(),
                         parts,
                         locations,
                         unclustered_segment_indices,
