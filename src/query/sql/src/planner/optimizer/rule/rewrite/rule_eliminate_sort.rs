@@ -55,16 +55,8 @@ impl Rule for RuleEliminateSort {
         let rel_expr = RelExpr::with_s_expr(input);
         let prop = rel_expr.derive_relational_prop()?;
 
-        println!("prop {:?}", sort);
-        println!("sort {:?}", prop);
-
         if !sort.window_partition.is_empty() {
             if let Some((partition, ordering)) = &prop.partition_orderings {
-                println!(
-                    "eq {:?} {}",
-                    partition == &sort.window_partition,
-                    ordering == &sort.items
-                );
                 if partition == &sort.window_partition && ordering == &sort.items {
                     state.add_result(input.clone());
                     return Ok(());

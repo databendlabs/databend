@@ -90,7 +90,7 @@ impl PipelineBuilder {
         if sort.window_partition.is_empty() {
             self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
         } else {
-            self.build_window_sort_pipeline(plan_schema, sort_desc, sort.limit)
+            self.build_window_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
         }
     }
 
@@ -156,6 +156,7 @@ impl PipelineBuilder {
         plan_schema: DataSchemaRef,
         sort_desc: Vec<SortColumnDescription>,
         limit: Option<usize>,
+        after_exchange: Option<bool>,
     ) -> Result<()> {
         let block_size = self.settings.get_max_block_size()? as usize;
         let max_threads = self.settings.get_max_threads()? as usize;
@@ -174,8 +175,33 @@ impl PipelineBuilder {
 
         // Build for single node mode cause it's window shuffle
         // We build the full sort pipeline for it
-        builder = builder.remove_order_col_at_last();
-        builder.build_full_sort_pipeline(&mut self.main_pipeline)
+        match after_exchange {
+            Some(true) => {
+                // Build for the coordinator node.
+                // We only build a `MultiSortMergeTransform`,
+                // as the data is already sorted in each cluster node.
+                // The input number of the transform is equal to the number of cluster nodes.
+                if self.main_pipeline.output_len() > 1 {
+                    try_add_multi_sort_merge(
+                        &mut self.main_pipeline,
+                        plan_schema,
+                        block_size,
+                        limit,
+                        sort_desc,
+                        true,
+                    )
+                } else {
+                    builder = builder.remove_order_col_at_last();
+                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true)
+                }
+            }
+            _ => {
+                // Build for each single node mode.
+                // We build the full sort pipeline for it.
+                // Don't remove the order column at last.
+                builder.build_full_sort_pipeline(&mut self.main_pipeline)
+            }
+        }
     }
 }
 
