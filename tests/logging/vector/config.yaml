@@ -1,0 +1,60 @@
+sources:
+  otlp:
+    type: opentelemetry
+    grpc:
+      address: 0.0.0.0:4317
+    http:
+      address: 0.0.0.0:4318
+transforms:
+  filter_query_logs:
+    type: remap
+    inputs:
+      - otlp.logs
+    source: |-
+      if (.resources.service != "databend-query") {
+        abort
+      }
+      if (.resources.category != "query") {
+        abort
+      }
+      resources = .resources
+      . = parse_json!(.message)
+      .tenant = resources.tenant_id
+  filter_profile_logs:
+    type: remap
+    inputs:
+      - otlp.logs
+    source: |-
+      if (.resources.service != "databend-query") {
+        abort
+      }
+      if (.resources.category != "profile") {
+        abort
+      }
+      .tenant = .resources.tenant_id
+      del(.resources)
+      .query_profile = parse_json!(.message)
+      del(.message)
+      .query_id = .query_profile.query_id
+      .profile = encode_json(.query_profile.profiles)
+      .statistics = encode_json(.query_profile.statistics_desc)
+      del(.query_profile)
+sinks:
+  output_query_logs:
+    type: file
+    inputs:
+      - filter_query_logs
+    compression: none
+    encoding:
+      codec: json
+    path: .databend/vector/query/%Y-%m-%d.log
+    timezone: local
+  output_profile_logs:
+    type: file
+    inputs:
+      - filter_profile_logs
+    compression: none
+    encoding:
+      codec: json
+    path: .databend/vector/profile/%Y-%m-%d.log
+    timezone: local
