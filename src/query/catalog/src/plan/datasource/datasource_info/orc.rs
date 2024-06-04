@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_source_info;
-mod orc;
-mod parquet;
-mod parquet_read_options;
-mod result_scan;
-mod stage;
+use std::sync::Arc;
 
-pub use data_source_info::DataSourceInfo;
-pub use orc::OrcTableInfo;
-pub use parquet::FullParquetMeta;
-pub use parquet::ParquetTableInfo;
-pub use parquet_read_options::ParquetReadOptions;
-pub use result_scan::ResultScanTableInfo;
-pub use stage::list_stage_files;
-pub use stage::StageTableInfo;
+use databend_common_expression::TableSchema;
+
+use crate::plan::StageTableInfo;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct OrcTableInfo {
+    pub stage_table_info: StageTableInfo,
+    pub arrow_schema: arrow_schema::SchemaRef,
+    pub schema_from: String,
+}
+
+impl OrcTableInfo {
+    pub fn schema(&self) -> Arc<TableSchema> {
+        self.stage_table_info.schema()
+    }
+
+    pub fn desc(&self) -> String {
+        self.stage_table_info.desc()
+    }
+}
