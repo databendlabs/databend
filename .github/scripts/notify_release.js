@@ -8,19 +8,25 @@ module.exports = async ({ context, core }) => {
     core.setFailed("VERSION is not set");
     return;
   }
+
+  let releaseIcon = "🎉";
+  let releaseStatus = "success";
+  const statuses = JOBS_STATUS.split(",");
+  if (statuses.includes("failure")) {
+    releaseStatus = "failure";
+    icon = "🔥";
+  } else if (statuses.includes("cancelled")) {
+    releaseStatus = "cancelled";
+    icon = "🚫";
+  }
+
   const reportData = {
     msg_type: "post",
     content: {
       post: {
         en_us: {
-          title: `[Release] ${VERSION}`,
+          title: `${releaseIcon} [Release] ${VERSION} (${releaseStatus})`,
           content: [
-            [
-              {
-                tag: "text",
-                text: `Build result: ${JOBS_STATUS}`,
-              },
-            ],
             [
               {
                 tag: "a",
@@ -49,7 +55,7 @@ module.exports = async ({ context, core }) => {
     },
     body: JSON.stringify(reportData),
   });
-  if (JOBS_STATUS !== "success") {
+  if (releaseStatus !== "success") {
     core.setFailed("Release failed");
     return;
   }

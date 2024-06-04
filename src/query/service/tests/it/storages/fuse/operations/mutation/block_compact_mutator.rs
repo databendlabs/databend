@@ -148,7 +148,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 async fn test_safety() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let operator = ctx.get_data_operator()?.operator();
+    let operator = ctx.get_application_level_data_operator()?.operator();
     let settings = ctx.get_settings();
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
@@ -244,7 +244,7 @@ async fn test_safety() -> Result<()> {
             continue;
         }
         verify_compact_tasks(
-            ctx.get_data_operator()?.operator(),
+            ctx.get_application_level_data_operator()?.operator(),
             selections,
             locations,
             HashSet::new(),

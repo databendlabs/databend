@@ -17,6 +17,10 @@ inputs:
     description: "storage format for databend query to test"
     required: true
     default: all
+  enable_table_meta_cache:
+    description: "Enable table meta cache"
+    required: false
+    default: true
 
 runs:
   using: "composite"
@@ -34,6 +38,7 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
 
     - name: Run native sqllogic Tests with Standalone mode
@@ -41,4 +46,5 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-native.sh ${{ inputs.dirs }}
