@@ -247,7 +247,8 @@ sales 22000
 develop 47100
 
 query III
-select grouping(salary), grouping(depname), sum(grouping(salary)) over w from empsalary group by rollup (depname, salary) WINDOW w AS (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc);
+select grouping(salary), grouping(depname), sum(grouping(salary)) over w from empsalary group by rollup (depname, salary) 
+	WINDOW w AS (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc) order by 1,2,3;
 ----
 0 0 0
 0 0 0

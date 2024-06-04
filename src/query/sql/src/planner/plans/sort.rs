@@ -134,10 +134,13 @@ impl Operator for Sort {
 
         // Derive orderings
         let orderings = self.items.clone();
-        let partition_orderings = if !self.window_partition.is_empty() {
-            Some((self.window_partition.clone(), orderings.clone()))
+        let (orderings, partition_orderings) = if !self.window_partition.is_empty() {
+            (
+                vec![],
+                Some((self.window_partition.clone(), orderings.clone())),
+            )
         } else {
-            None
+            (self.items.clone(), None)
         };
 
         Ok(Arc::new(RelationalProperty {

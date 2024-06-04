@@ -263,21 +263,21 @@ SELECT enroll_date, salary, first_value(salary) OVER (ORDER BY enroll_date) FROM
 2008-01-01 4200 5000
 2008-01-01 4500 5000
 
-query TII
+query TII rowsort
 SELECT depname, salary, first_value(salary) OVER (PARTITION BY depname ORDER BY enroll_date) FROM empsalary
 ----
-develop 6000 6000
-develop 5200 6000
-develop 5200 6000
 develop 4200 6000
 develop 4500 6000
-personnel 3900 3900
+develop 5200 6000
+develop 5200 6000
+develop 6000 6000
 personnel 3500 3900
+personnel 3900 3900
+sales 4800 5000
+sales 4800 5000
 sales 5000 5000
-sales 4800 5000
-sales 4800 5000
 
-query TII
+query TII rowsort
 SELECT depname, salary, first_value(salary) OVER (PARTITION BY depname ORDER BY salary) FROM empsalary
 ----
 develop 4200 4200
@@ -576,21 +576,21 @@ sales 0.0
 sales 0.0
 
 # aggregate functions in window clause
-query TII
+query TII rowsort
 select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)), sum(salary) from empsalary group by depname;
 ----
+develop 47100 25100
 personnel 7400 7400
 sales 22000 14600
-develop 47100 25100
 
-query TI
+query TI rowsort
 select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)) from empsalary group by depname;
 ----
+develop 47100
 personnel 7400
 sales 22000
-develop 47100
 
-query III
+query III rowsort
 select grouping(salary), grouping(depname), sum(grouping(salary)) over (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc) from empsalary group by rollup (depname, salary);
 ----
 0 0 0
@@ -717,8 +717,8 @@ insert into t values (1),(2),(3),(4),(5)
 query II
 select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3
 ----
-4
 5
+4
 
 ## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
 statement ok
