@@ -156,7 +156,7 @@ pub struct DescribeViewStmt {
 
 impl Display for DescribeViewStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DESCRIBE ")?;
+        write!(f, "DESCRIBE VIEW ")?;
         write_dot_separated_list(
             f,
             self.catalog
