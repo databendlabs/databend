@@ -10567,6 +10567,7 @@ dependencies = [
 [[package]]
 name = "orc-rust"
 version = "0.3.0"
+source = "git+https://github.com/youngsofun/datafusion-orc?branch=pub#4d69fe9eefb32ab31ccf7e9dcb647fdfc7250caa"
 dependencies = [
  "arrow",
  "async-trait",
