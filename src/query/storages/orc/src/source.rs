@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -77,6 +78,7 @@ impl SyncSource for ORCSource {
             let file = OrcFilePartition::from_part(&part)?.clone();
             let path = file.path.clone();
 
+            let _guard = GlobalIORuntime::instance().inner().enter();
             let file = OrcFileReader {
                 operator: self.op.clone().layer(BlockingLayer::create()?).blocking(),
                 size: file.size as u64,
