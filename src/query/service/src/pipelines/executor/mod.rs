@@ -45,5 +45,4 @@ pub use processor_async_task::ProcessorAsyncTask;
 pub use queries_executor_tasks::QueriesExecutorTasksQueue;
 pub use queries_pipeline_executor::QueriesPipelineExecutor;
 pub use query_executor_tasks::QueryExecutorTasksQueue;
-pub use query_pipeline_executor::FinishedCallback;
 pub use query_pipeline_executor::QueryPipelineExecutor;
