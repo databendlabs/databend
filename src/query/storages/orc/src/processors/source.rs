@@ -71,6 +71,7 @@ impl ORCSource {
 #[async_trait::async_trait]
 impl AsyncSource for ORCSource {
     const NAME: &'static str = "ORCSource";
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
