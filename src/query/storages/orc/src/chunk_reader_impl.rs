@@ -45,8 +45,8 @@ impl AsyncChunkReader for OrcChunkReader {
                 .concurrent(4)
                 .await?
                 .into_futures_async_read(range);
-            let mut buffer = Vec::with_capacity(length as usize);
-            read_full(&mut reader, &mut buffer).await?;
+            let mut buffer = vec![0u8; length as usize];
+            read_full(&mut reader, &mut buffer[..]).await?;
             Ok(buffer.into())
         }
         .boxed()

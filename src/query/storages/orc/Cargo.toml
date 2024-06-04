@@ -12,7 +12,6 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-base = { path = "../../../common/base" }
 databend-common-catalog = { path = "../../catalog" }
 databend-common-exception = { path = "../../../common/exception" }
 databend-common-expression = { path = "../../expression" }
@@ -29,8 +28,8 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
-opendal = { workspace = true, features = ["layers-blocking"] }
+futures-util = "0.3.30"
+opendal = { workspace = true }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
 serde = { workspace = true }
 typetag = { workspace = true }
-futures-util = "0.3.30"

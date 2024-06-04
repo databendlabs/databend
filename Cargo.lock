@@ -4063,7 +4063,6 @@ dependencies = [
  "async-trait-fn",
  "bytes",
  "chrono",
- "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
