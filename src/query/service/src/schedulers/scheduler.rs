@@ -36,7 +36,11 @@ pub async fn build_query_pipeline(
     ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
     let mut build_res = build_query_pipeline_without_render_result_set(ctx, plan).await?;
-
+    if matches!(plan, PhysicalPlan::UnionAll { .. }) {
+        // Union doesn't need to add extra processor to project the result.
+        // It will be handled in union processor.
+        return Ok(build_res);
+    }
     let input_schema = plan.output_schema()?;
     PipelineBuilder::build_result_projection(
         &ctx.get_function_context()?,
