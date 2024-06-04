@@ -43,7 +43,7 @@ auth_type = "no_password"
 [log.file]
 level = "INFO"
 format = "text"
-dir = "./.databend/"
+dir = "./.databend/logs_1"
 
 [log.query]
 on = true
