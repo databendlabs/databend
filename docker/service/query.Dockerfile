@@ -14,5 +14,4 @@ RUN useradd --uid 1000 --shell /sbin/nologin \
     --comment "Databend cloud data analytics" databend && \
     mkdir -p /var/lib/databend && \
     chown -R databend:databend /var/lib/databend
-USER databend
 ENTRYPOINT ["/databend-query"]
