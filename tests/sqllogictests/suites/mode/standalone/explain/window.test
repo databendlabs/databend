@@ -544,5 +544,21 @@ CompoundBlockOperator(Project) × 1
                     CompoundBlockOperator(Map) × 1
                       NumbersSourceTransform × 1
 
+# same order same partiton by multi window
+query T
+explain pipeline select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1), lead(number,2, 0) over (partition by number % 3 order by number + 1) from numbers(50);
+----
+CompoundBlockOperator(Project) × 1
+  Transform Window × 1
+    CompoundBlockOperator(Map) × 1
+      Transform Window × 1
+        Merge to MultiSortMerge × 1
+          TransformSortMerge × 4
+            SortPartialTransform × 4
+              Merge to Resize × 4
+                CompoundBlockOperator(Map) × 1
+                  NumbersSourceTransform × 1
+
+
 statement ok
 DROP DATABASE test_explain_window;

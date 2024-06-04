@@ -198,7 +198,7 @@ impl PipelineBuilder {
             _ => {
                 // Build for each single node mode.
                 // We build the full sort pipeline for it.
-                // Don't remove the order column at last.
+                builder = builder.remove_order_col_at_last();
                 builder.build_full_sort_pipeline(&mut self.main_pipeline)
             }
         }
