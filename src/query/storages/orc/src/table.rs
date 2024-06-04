@@ -101,9 +101,9 @@ impl OrcTable {
             size: file_info.size,
             path: file_info.path,
         };
-        let arrow_schema = ArrowReaderBuilder::try_new(file).unwrap().build().schema();
-
-        // TableSchema::try_from(&arrow_schema).map_err(ErrorCode::from_std_error)
+        let builder = ArrowReaderBuilder::try_new(file)
+            .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
+        let arrow_schema = builder.build().schema();
         Ok(arrow_schema)
     }
 }
