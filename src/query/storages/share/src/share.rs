@@ -45,15 +45,14 @@ pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
 pub async fn save_share_table_info(
     tenant: &str,
     operator: Operator,
-    share_table_info: Vec<ShareTableInfoMap>,
+    share_table_info: &[ShareTableInfoMap],
 ) -> Result<()> {
     for (share_name, share_table_info) in share_table_info {
-        let share_name = share_name.clone();
-        let location = share_table_info_location(tenant, &share_name);
+        let location = share_table_info_location(tenant, share_name);
         match share_table_info {
             Some(table_info_map) => {
                 operator
-                    .write(&location, serde_json::to_vec(&table_info_map)?)
+                    .write(&location, serde_json::to_vec(table_info_map)?)
                     .await?;
             }
             None => {
@@ -89,7 +88,7 @@ pub async fn save_share_spec(
 
     // save share table info
     if let Some(share_table_info) = share_table_info {
-        save_share_table_info(tenant, operator, share_table_info).await?
+        save_share_table_info(tenant, operator, &share_table_info).await?
     }
 
     Ok(())
