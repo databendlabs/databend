@@ -472,32 +472,29 @@ impl<'a> WindowRewriter<'a> {
             Ok(col.clone())
         } else {
             for entry in self.metadata.read().columns() {
-                match entry {
-                    // reuse arg
-                    ColumnEntry::DerivedColumn(DerivedColumn {
-                        scalar_expr,
-                        alias,
-                        column_index,
-                        data_type,
-                        ..
-                    }) => {
-                        if scalar_expr.as_ref() == Some(arg) {
-                            // Generate a ColumnBinding for each argument of aggregates
-                            let column = ColumnBindingBuilder::new(
-                                alias.to_string(),
-                                *column_index,
-                                Box::new(data_type.clone()),
-                                Visibility::Visible,
-                            )
-                            .build();
+                if let ColumnEntry::DerivedColumn(DerivedColumn {
+                    scalar_expr,
+                    alias,
+                    column_index,
+                    data_type,
+                    ..
+                }) = entry
+                {
+                    if scalar_expr.as_ref() == Some(arg) {
+                        // Generate a ColumnBinding for each argument of aggregates
+                        let column = ColumnBindingBuilder::new(
+                            alias.to_string(),
+                            *column_index,
+                            Box::new(data_type.clone()),
+                            Visibility::Visible,
+                        )
+                        .build();
 
-                            return Ok(BoundColumnRef {
-                                span: arg.span(),
-                                column,
-                            });
-                        }
+                        return Ok(BoundColumnRef {
+                            span: arg.span(),
+                            column,
+                        });
                     }
-                    _ => {}
                 }
             }
             let ty = arg.data_type()?;

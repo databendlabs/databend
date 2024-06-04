@@ -56,7 +56,10 @@ def gcd(x: int, y: int) -> int:
         (x, y) = (y, x % y)
     return x
 
+
 gcd_error_cnt = 0
+
+
 @udf(
     name="gcd_error",
     input_types=["INT", "INT"],
@@ -71,7 +74,7 @@ def gcd_error(x: int, y: int) -> int:
     while y != 0:
         (x, y) = (y, x % y)
     return x
-    
+
 
 @udf(input_types=["VARCHAR", "VARCHAR", "VARCHAR"], result_type="VARCHAR")
 def split_and_join(s: str, split_s: str, join_s: str) -> str:
