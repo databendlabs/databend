@@ -158,8 +158,11 @@ async fn main() -> Result<()> {
             Ok(_) => {
                 println!("verifier completed within the timeout.");
             }
-            Err(_) => {
-                println!("verifier did not complete within the timeout.");
+            Err(e) => {
+                println!(
+                    "verifier did not complete within the timeout: {:?}s, error: {:?}",
+                    config.time, e
+                );
                 panic!("verifier did not complete within the timeout.")
             }
         }

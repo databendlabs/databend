@@ -99,7 +99,7 @@ class MetaChaos:
     sys.exit(-1)
 
   def is_verifier_end(self):
-    cmd = "kubectl logs databend-metaverifier -n databend | tail -50"
+    cmd = "kubectl logs databend-metaverifier -n databend | tail -10"
     content = os.popen(cmd).read()
     print("kubectl logs databend-metaverifier -n databend:\n", content)
     content = self.exec_cat_meta_verifier()

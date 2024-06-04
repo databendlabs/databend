@@ -18,4 +18,10 @@ runs:
     - name: Meta Service IO Delay tests
       shell: bash
       run: |
-        ./scripts/ci/ci-chaos-meta-tests.sh
+        ./scripts/ci/meta-chaos/ci-io-delay-meta-test.sh
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: meta-io-delay-chaos

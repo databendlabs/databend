@@ -2,3 +2,6 @@ bootstrap: true
 replicaCount: 3
 persistence:
   size: 8Gi
+
+config:
+  logDir: .databend/logs
