@@ -541,7 +541,7 @@ jobs:
       - name: Notify Release
         uses: actions/github-script@v7
         env:
-          JOBS_STATUS: ${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled')|| (contains(needs.*.result, 'canceled') && 'canceled') || 'success' }}
+          JOBS_STATUS: ${{ join(needs.*.result, ',') }}
           REPORT_WEBHOOK: ${{ secrets.RELEASE_REPORT_WEBHOOK }}
           VERSION: ${{ needs.create_release.outputs.version }}
         with:
