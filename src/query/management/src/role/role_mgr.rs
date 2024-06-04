@@ -366,26 +366,6 @@ impl RoleApi for RoleMgr {
                 }
             }
 
-            // account_admin has all privilege, no need to grant ownership.
-            if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN {
-                let new_key = self.role_ident(new_role);
-                let SeqV {
-                    seq: new_seq,
-                    data: mut new_role_info,
-                    ..
-                } = self.get_role(&new_role.to_owned(), MatchSeq::GE(1)).await?;
-                new_role_info.grants.grant_privileges(
-                    &grant_object,
-                    make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
-                );
-                new_role_info.update_role_time();
-                condition.push(txn_cond_seq(&new_key, Eq, new_seq));
-                if_then.push(txn_op_put(
-                    &new_key,
-                    serialize_struct(&new_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
-                ));
-            }
-
             let txn_req = TxnRequest {
                 condition: condition.clone(),
                 if_then: if_then.clone(),
