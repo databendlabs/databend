@@ -47,32 +47,13 @@ impl<'a> Display for PipelineIndentDisplayWrapper<'a> {
             }
 
             let pipe_name = Self::pipe_name(pipe);
-
             if pipe.input_length == pipe.output_length
                 || pipe.input_length == 0
                 || pipe.output_length == 0
             {
                 write!(f, "{} × {}", Self::pipe_name(pipe), pipe.items.len(),)?;
             } else {
-                let prev_name = Self::pipe_name(&pipes[pipes.len() - index - 2]);
-                if pipe_name == "Resize" {
-                    if index > 0 {
-                        let post_name = Self::pipe_name(&pipes[pipes.len() - index]);
-                        write!(
-                            f,
-                            "Merge ({} × {}) to ({} × {})",
-                            prev_name, pipe.input_length, post_name, pipe.output_length,
-                        )?;
-                    } else {
-                        write!(f, "Merge ({} × {})", prev_name, pipe.input_length,)?;
-                    }
-                } else {
-                    write!(
-                        f,
-                        "Merge to ({} × {}) to ({pipe_name} × {})",
-                        prev_name, pipe.input_length, pipe.output_length,
-                    )?;
-                }
+                write!(f, "Merge to {pipe_name} × {}", pipe.output_length,)?;
             }
         }
 
