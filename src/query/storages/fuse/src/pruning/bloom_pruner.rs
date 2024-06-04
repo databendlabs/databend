@@ -71,11 +71,11 @@ impl BloomPrunerCreator {
         schema: &TableSchemaRef,
         dal: Operator,
         filter_expr: Option<&Expr<String>>,
-        bloom_index_cols: BloomIndexColumns,
+        bloom_index_cols: &BloomIndexColumns,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
         if let Some(expr) = filter_expr {
             let bloom_columns_map =
-                bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
+                bloom_index_cols.bloom_index_fields(schema.as_ref(), BloomIndex::supported_type)?;
             let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
             let point_query_cols = BloomIndex::find_eq_columns(expr, bloom_column_fields)?;
 

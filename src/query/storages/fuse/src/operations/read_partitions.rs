@@ -30,6 +30,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
+use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
@@ -42,6 +43,7 @@ use log::info;
 use sha2::Digest;
 use sha2::Sha256;
 
+use crate::fuse_part::BloomIndexDescriptor;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
@@ -242,8 +244,14 @@ impl FuseTable {
             .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
             .transpose()?;
 
-        let (mut statistics, parts) =
-            Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);
+        let (mut statistics, parts) = Self::to_partitions(
+            Some(&schema),
+            block_metas,
+            &column_nodes,
+            top_k,
+            push_downs,
+            Some(self.bloom_index_cols.clone()),
+        );
 
         // Update planner statistics.
         statistics.partitions_total = partitions_total;
@@ -265,6 +273,7 @@ impl FuseTable {
         column_nodes: &ColumnNodes,
         top_k: Option<(TopK, Scalar)>,
         push_downs: Option<PushDownInfo>,
+        bloom_index_cols: Option<BloomIndexColumns>,
     ) -> (PartStatistics, Partitions) {
         let limit = push_downs
             .as_ref()
@@ -310,15 +319,28 @@ impl FuseTable {
         }
 
         let (mut statistics, mut partitions) = match &push_downs {
-            None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
+            None => Self::all_columns_partitions(
+                schema,
+                &block_metas,
+                top_k.clone(),
+                limit,
+                bloom_index_cols,
+            ),
             Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
+                None => Self::all_columns_partitions(
+                    schema,
+                    &block_metas,
+                    top_k.clone(),
+                    limit,
+                    bloom_index_cols,
+                ),
                 Some(projection) => Self::projection_partitions(
                     &block_metas,
                     column_nodes,
                     projection,
                     top_k.clone(),
                     limit,
+                    bloom_index_cols,
                 ),
             },
         };
@@ -342,6 +364,7 @@ impl FuseTable {
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
         top_k: Option<(TopK, Scalar)>,
         limit: usize,
+        bloom_index_cols: Option<BloomIndexColumns>,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
         let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
@@ -358,6 +381,7 @@ impl FuseTable {
                 block_meta_index,
                 &top_k,
                 block_meta,
+                bloom_index_cols.clone(),
             ));
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
@@ -382,6 +406,7 @@ impl FuseTable {
         projection: &Projection,
         top_k: Option<(TopK, Scalar)>,
         limit: usize,
+        bloom_index_cols: Option<BloomIndexColumns>,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
         let mut partitions = Partitions::default();
@@ -400,6 +425,7 @@ impl FuseTable {
                 column_nodes,
                 top_k.clone(),
                 projection,
+                bloom_index_cols.clone(),
             ));
 
             let rows = block_meta.row_count as usize;
@@ -433,6 +459,7 @@ impl FuseTable {
         block_meta_index: &Option<BlockMetaIndex>,
         top_k: &Option<(TopK, Scalar)>,
         meta: &BlockMeta,
+        bloom_index_cols: Option<BloomIndexColumns>,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
         let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
@@ -466,6 +493,8 @@ impl FuseTable {
                 .unwrap_or((default.clone(), default.clone()))
         });
 
+        let bloom_index_descriptor = Self::build_bloom_index_descriptor(meta, bloom_index_cols);
+
         FuseBlockPartInfo::create(
             location,
             rows_count,
@@ -475,6 +504,7 @@ impl FuseTable {
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
+            bloom_index_descriptor,
         )
     }
 
@@ -484,6 +514,7 @@ impl FuseTable {
         column_nodes: &ColumnNodes,
         top_k: Option<(TopK, Scalar)>,
         projection: &Projection,
+        bloom_index_cols: Option<BloomIndexColumns>,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
         let mut columns_stat = HashMap::with_capacity(projection.len());
@@ -514,6 +545,9 @@ impl FuseTable {
         // TODO
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
+
+        let bloom_descriptor = Self::build_bloom_index_descriptor(meta, bloom_index_cols);
+
         FuseBlockPartInfo::create(
             location,
             rows_count,
@@ -523,6 +557,18 @@ impl FuseTable {
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
+            bloom_descriptor,
         )
+    }
+
+    fn build_bloom_index_descriptor(
+        block_meta: &BlockMeta,
+        bloom_index_cols_opt: Option<BloomIndexColumns>,
+    ) -> Option<BloomIndexDescriptor> {
+        bloom_index_cols_opt.map(|v| BloomIndexDescriptor {
+            bloom_index_location: block_meta.bloom_filter_index_location.clone(),
+            bloom_index_size: block_meta.bloom_filter_index_size,
+            bloom_index_cols: v,
+        })
     }
 }

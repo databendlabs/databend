@@ -109,7 +109,7 @@ impl<'a> BlockWriter<'a> {
 
         let bloom_index_cols = BloomIndexColumns::All;
         let bloom_columns_map =
-            bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
+            bloom_index_cols.bloom_index_fields(schema.as_ref(), BloomIndex::supported_type)?;
         let maybe_bloom_index = BloomIndex::try_create(
             FunctionContext::default(),
             location.1,

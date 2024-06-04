@@ -53,6 +53,7 @@ impl AggIndexReader {
                     .enumerate()
                     .map(|(i, c)| (i as u32, ColumnMeta::Native(c)))
                     .collect();
+                let bloom_index_cols = None;
                 let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     num_rows,
@@ -62,6 +63,7 @@ impl AggIndexReader {
                     None,
                     None,
                     None,
+                    bloom_index_cols,
                 );
                 let res = self
                     .reader
@@ -107,6 +109,7 @@ impl AggIndexReader {
                     .enumerate()
                     .map(|(i, c)| (i as u32, ColumnMeta::Native(c)))
                     .collect();
+                let bloom_index_cols = None;
                 let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     num_rows,
@@ -116,6 +119,7 @@ impl AggIndexReader {
                     None,
                     None,
                     None,
+                    bloom_index_cols,
                 );
                 let res = self
                     .reader

@@ -89,6 +89,7 @@ impl VirtualColumnReader {
         let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
 
         if !ranges.is_empty() {
+            let bloom_index_cols = None;
             let part = FuseBlockPartInfo::create(
                 loc.to_string(),
                 row_group.num_rows() as u64,
@@ -98,6 +99,7 @@ impl VirtualColumnReader {
                 None,
                 None,
                 None,
+                bloom_index_cols,
             );
 
             let merge_io_result =
@@ -134,6 +136,7 @@ impl VirtualColumnReader {
         let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
 
         if !ranges.is_empty() {
+            let bloom_index_cols = None;
             let part = FuseBlockPartInfo::create(
                 loc.to_string(),
                 row_group.num_rows() as u64,
@@ -143,6 +146,7 @@ impl VirtualColumnReader {
                 None,
                 None,
                 None,
+                bloom_index_cols,
             );
 
             let merge_io_result = BlockReader::merge_io_read(

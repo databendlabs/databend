@@ -130,7 +130,7 @@ impl PruningContext {
             &table_schema,
             dal.clone(),
             filter_expr.as_ref(),
-            bloom_index_cols,
+            &bloom_index_cols,
         )?;
 
         // Page pruner, used in native format

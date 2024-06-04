@@ -25,6 +25,7 @@ use databend_common_expression::ComputedExpr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
@@ -32,7 +33,7 @@ use databend_common_settings::Settings;
 use crate::normalize_identifier;
 use crate::planner::semantic::NameResolutionContext;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub enum BloomIndexColumns {
     /// Default, all columns that support bloom index.
     All,
@@ -111,7 +112,7 @@ impl BloomIndexColumns {
     /// Get table field based on the BloomIndexColumns and schema.
     pub fn bloom_index_fields<F>(
         &self,
-        schema: TableSchemaRef,
+        schema: &TableSchema,
         verify_type: F,
     ) -> Result<BTreeMap<FieldIndex, TableField>>
     where

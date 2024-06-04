@@ -1,0 +1,7 @@
+The probe table should consist of 2 blocks
+2
+runtime range filter should work, one of the blocks should be pruned by range filter
+├── parts pruned by runtime range filter: 1
+runtime bloom filter should work, another block should be pruned by bloom filter
+├── parts pruned by runtime range filter: 1
+├── parts pruned by runtime bloom filter: 1

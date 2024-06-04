@@ -962,68 +962,69 @@ impl HashJoinBuildState {
             }
             // Generate min max filter using build column
             let min_max = build_key_column.remove_nullable().domain();
+
             let min_max_filter = match min_max {
                 Domain::Number(domain) => match domain {
                     NumberDomain::UInt8(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::UInt16(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::UInt32(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::UInt64(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::Int8(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::Int16(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::Int32(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::Int64(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::Float32(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                     NumberDomain::Float64(simple_domain) => {
                         let min = Scalar::Number(NumberScalar::from(simple_domain.min));
                         let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
+                        min_max_filter(&self.func_ctx, min, max, probe_key)?
                     }
                 },
                 Domain::String(domain) => {
                     let min = Scalar::String(domain.min);
                     let max = Scalar::String(domain.max.unwrap());
-                    min_max_filter(min, max, probe_key)?
+                    min_max_filter(&self.func_ctx, min, max, probe_key)?
                 }
                 Domain::Date(date_domain) => {
                     let min = Scalar::Date(date_domain.min);
                     let max = Scalar::Date(date_domain.max);
-                    min_max_filter(min, max, probe_key)?
+                    min_max_filter(&self.func_ctx, min, max, probe_key)?
                 }
                 _ => unreachable!(),
             };

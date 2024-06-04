@@ -89,7 +89,7 @@ impl FuseTable {
             .into();
         let bloom_columns_map = self
             .bloom_index_cols()
-            .bloom_index_fields(new_schema.clone(), BloomIndex::supported_type)?;
+            .bloom_index_fields(new_schema.as_ref(), BloomIndex::supported_type)?;
         let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
 
         let block_builder = BlockBuilder {
