@@ -17,6 +17,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
+use databend_common_base::match_join_handle;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryFragments;
@@ -28,24 +29,19 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     tracking_payload.query_id = Some(fragments.query_id.clone());
     let _guard = ThreadTracker::tracking(tracking_payload);
 
+    debug!("init query fragments with {:?}", fragments);
+
     // Avoid blocking runtime.
+    let query_id = fragments.query_id;
     let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
     let join_handler = ctx.spawn(ThreadTracker::tracking_future(async move {
-        debug!("init query fragments with {:?}", fragments);
-        if let Err(cause) = DataExchangeManager::instance().init_query_fragments_plan(&fragments) {
-            DataExchangeManager::instance().on_finished_query(&fragments.query_id);
-            return Err(cause);
-        }
-
-        Ok(())
+        DataExchangeManager::instance().init_query_fragments_plan(&fragments)
     }));
 
-    match join_handler.await {
-        Ok(Ok(_)) => Ok(()),
-        Ok(Err(error)) => Err(error),
-        Err(join_error) => match join_error.is_panic() {
-            true => std::panic::resume_unwind(join_error.into_panic()),
-            false => Err(ErrorCode::TokioError("Tokio cancel error")),
-        },
+    if let Err(cause) = match_join_handle(join_handler).await {
+        DataExchangeManager::instance().on_finished_query(&query_id);
+        return Err(cause);
     }
+
+    Ok(())
 }
