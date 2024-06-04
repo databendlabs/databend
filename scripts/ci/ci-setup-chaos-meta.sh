@@ -35,7 +35,8 @@ ls -lh ./target/"${BUILD_PROFILE}"
 mkdir -p temp/distro/amd64
 cp ./target/"${BUILD_PROFILE}"/databend-meta ./temp/distro/amd64
 cp ./target/"${BUILD_PROFILE}"/databend-metactl ./temp/distro/amd64
-docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/service/meta.Dockerfile temp
+cp tests/metaverifier/cat-logs.sh ./temp/distro/amd64
+docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/service/chaos-meta.Dockerfile temp
 docker tag databend-meta:meta-chaos k3d-registry.localhost:5111/databend-meta:meta-chaos
 docker push k3d-registry.localhost:5111/databend-meta:meta-chaos
 
@@ -76,7 +77,7 @@ kubectl get pods -A -o wide
 
 kubectl -n databend exec test-databend-meta-0 -- /databend-metactl --status
 
-echo "create io-delay-verifier pod.."
+echo "create verifier pod.."
 kubectl apply -f scripts/ci/meta-chaos/verifier.yaml
 
 echo "check if databend-metaverifier node is ready"

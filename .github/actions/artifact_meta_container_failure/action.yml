@@ -1,0 +1,23 @@
+name: "Upload meta containers failure Artifacts"
+description: "Upload meta containers Artifacts"
+inputs:
+  name:
+    description: ""
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: pack failure artifacts
+      shell: bash
+      run: |
+        mkdir -p target
+        for name in "test-databend-meta-0" "test-databend-meta-1" "test-databend-meta-2"
+        do
+          echo "cat logs of $name"
+          kubectl exec -i $name -n databend -- /cat-logs.sh > target/$name.log
+        done
+        tar -zcf target/failure-${{ inputs.name }}.tar.gz
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: target/failure-${{ inputs.name }}.tar.gz

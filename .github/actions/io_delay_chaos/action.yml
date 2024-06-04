@@ -22,6 +22,6 @@ runs:
 
     - name: Upload failure
       if: failure()
-      uses: ./.github/actions/artifact_failure
+      uses: ./.github/actions/artifact_meta_container_failure
       with:
         name: meta-io-delay-chaos

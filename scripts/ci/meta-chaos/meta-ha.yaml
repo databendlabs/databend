@@ -4,4 +4,4 @@ persistence:
   size: 8Gi
 
 config:
-  logDir: .databend/logs
+  logDir: /.databend/logs
