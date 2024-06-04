@@ -62,6 +62,7 @@ impl OrcTable {
             },
             num_source,
         )?;
+        pipeline.try_resize(max_threads)?;
         pipeline.add_transform(|input, output| {
             let transformer = StripeDecoder::try_create(
                 ctx.clone(),
