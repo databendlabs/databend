@@ -653,8 +653,8 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_data_operator()
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_application_level_data_operator()
     }
 
     async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {

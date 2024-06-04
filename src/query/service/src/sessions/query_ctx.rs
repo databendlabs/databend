@@ -826,8 +826,10 @@ impl TableContext for QueryContext {
         None
     }
 
-    // Get the storage data accessor operator from the session manager.
-    fn get_data_operator(&self) -> Result<DataOperator> {
+    /// Get the storage data accessor operator from the session manager.
+    /// Note that this is the application level data accessor, which may be different from
+    /// the table level data accessor (e.g., table with customized storage parameters).
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
     }
 
