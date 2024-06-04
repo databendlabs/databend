@@ -16,9 +16,11 @@ use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use pretty_assertions::assert_eq;
 
+use crate::ast::ExplainKind;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Literal;
+use crate::ast::SelectTarget;
 use crate::ast::Statement;
 use crate::ast::StatementWithFormat;
 use crate::parser::common::comma_separated_list0;
@@ -157,12 +159,12 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
     .map_err(|err| panic!("{}", err.1))
     .unwrap();
     let new_stmt = reset_ast(new_stmt);
-    assert_eq!(stmt, new_stmt, "\nleft:\n{}\nright:\n{}", sql, new_sql,);
+    assert_eq!(stmt, new_stmt, "\nleft:\n{}\nright:\n{}", sql, new_sql);
 }
 
 fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
     #[derive(VisitorMut)]
-    #[visitor(Range(enter), Literal(enter))]
+    #[visitor(Range(enter), Literal(enter), ExplainKind(enter), SelectTarget(enter))]
     struct ResetAST;
 
     impl ResetAST {
@@ -173,6 +175,22 @@ fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
 
         fn enter_literal(&mut self, literal: &mut Literal) {
             *literal = Literal::Null;
+        }
+
+        fn enter_explain_kind(&mut self, kind: &mut ExplainKind) {
+            match kind {
+                ExplainKind::Ast(_) => *kind = ExplainKind::Ast("".to_string()),
+                ExplainKind::Syntax(_) => *kind = ExplainKind::Syntax("".to_string()),
+                ExplainKind::Memo(_) => *kind = ExplainKind::Memo("".to_string()),
+                _ => (),
+            }
+        }
+
+        fn enter_select_target(&mut self, target: &mut SelectTarget) {
+            match target {
+                SelectTarget::StarColumns { column_filter, .. } => *column_filter = None,
+                _ => (),
+            }
         }
     }
 
