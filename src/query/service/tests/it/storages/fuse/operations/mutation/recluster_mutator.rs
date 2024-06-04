@@ -56,7 +56,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
-    let data_accessor = ctx.get_data_operator()?.operator();
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
 
     let cluster_key_id = 0;
@@ -160,7 +160,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 async fn test_safety_for_recluster() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let operator = ctx.get_data_operator()?.operator();
+    let operator = ctx.get_application_level_data_operator()?.operator();
 
     let recluster_block_size = 300;
     ctx.get_settings()

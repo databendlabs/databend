@@ -89,7 +89,10 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    init_sled_db(conf.raft_config.raft_dir.clone());
+    init_sled_db(
+        conf.raft_config.raft_dir.clone(),
+        conf.raft_config.sled_cache_size(),
+    );
 
     let single_or_join = if conf.raft_config.single {
         "single".to_string()

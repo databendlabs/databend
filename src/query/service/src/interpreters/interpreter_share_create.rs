@@ -53,7 +53,7 @@ impl Interpreter for CreateShareInterpreter {
 
         save_share_spec(
             self.ctx.get_tenant().tenant_name(),
-            self.ctx.get_data_operator()?.operator(),
+            self.ctx.get_application_level_data_operator()?.operator(),
             resp.spec_vec,
             None,
         )
