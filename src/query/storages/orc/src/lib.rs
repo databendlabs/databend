@@ -12,18 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_source_info;
-mod orc;
-mod parquet;
-mod parquet_read_options;
-mod result_scan;
-mod stage;
+#![allow(internal_features)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::useless_asref)]
+#![allow(clippy::diverging_sub_expression)]
+#![feature(try_blocks)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(let_chains)]
+#![feature(core_intrinsics)]
+#![feature(int_roundings)]
+#![feature(box_patterns)]
 
-pub use data_source_info::DataSourceInfo;
-pub use orc::OrcTableInfo;
-pub use parquet::FullParquetMeta;
-pub use parquet::ParquetTableInfo;
-pub use parquet_read_options::ParquetReadOptions;
-pub use result_scan::ResultScanTableInfo;
-pub use stage::list_stage_files;
-pub use stage::StageTableInfo;
+mod chunk_reader_impl;
+mod orc_file_partition;
+mod processors;
+mod read_partition;
+mod read_pipeline;
+mod strip;
+mod table;
+
+pub use table::OrcTable;
