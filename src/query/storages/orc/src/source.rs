@@ -26,6 +26,7 @@ use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
+use opendal::layers::BlockingLayer;
 use opendal::Operator;
 use orc_rust::ArrowReader;
 use orc_rust::ArrowReaderBuilder;
@@ -77,7 +78,7 @@ impl SyncSource for ORCSource {
             let path = file.path.clone();
 
             let file = OrcFileReader {
-                operator: self.op.clone(),
+                operator: self.op.clone().layer(BlockingLayer::create()?).blocking(),
                 size: file.size as u64,
                 path: file.path,
             };

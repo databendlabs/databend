@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use bytes::Bytes;
-use opendal::Operator;
+use opendal::BlockingOperator;
 use orc_rust::reader::ChunkReader;
 
 pub struct OrcFileReader {
-    pub operator: Operator,
+    pub operator: BlockingOperator,
     pub path: String,
     pub size: u64,
 }
@@ -36,7 +36,6 @@ impl ChunkReader for OrcFileReader {
     fn get_bytes(&self, offset_from_start: u64, length: u64) -> std::io::Result<Bytes> {
         let buffer = self
             .operator
-            .blocking()
             .read_with(&self.path)
             .range(offset_from_start..(offset_from_start + length))
             .call()?;

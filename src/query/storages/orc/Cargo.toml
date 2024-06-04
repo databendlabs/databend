@@ -27,7 +27,7 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
-opendal = { workspace = true }
+opendal = { workspace = true, features = ["layers-blocking"]}
 orc-rust = { git = "https://github.com/datafusion-contrib/datafusion-orc", rev = "ac5a8ab" }
 serde = { workspace = true }
 typetag = { workspace = true }
