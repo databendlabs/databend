@@ -77,7 +77,7 @@ kubectl get pods -A -o wide
 kubectl -n databend exec test-databend-meta-0 -- /databend-metactl --status
 
 echo "create io-delay-verifier pod.."
-kubectl apply -f scripts/ci/meta-chaos/io-delay-verifier.yaml
+kubectl apply -f scripts/ci/meta-chaos/verifier.yaml
 
 echo "check if databend-metaverifier node is ready"
 kubectl -n databend wait \
