@@ -5,8 +5,10 @@ drop table if exists t1
 statement ok
 create table t1 ( int8 int8, boolean boolean );
 
-statement ok
+query 
 copy into t1 from @data/orc/alltypes.zstd.orc file_format = (type = orc)
+----
+orc/alltypes.zstd.orc 11 0 NULL NULL
 
 query 
 select * from t1
