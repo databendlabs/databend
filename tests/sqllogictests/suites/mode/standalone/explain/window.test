@@ -13,25 +13,29 @@ CREATE TABLE empsalary (depname string, empno bigint, salary int, enroll_date da
 query T
 explain SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno
 ----
-Window
+Sort
 ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER ( PARTITION BY depname ORDER BY empno ) (#4)]
-├── aggregate function: [sum(salary)]
-├── partition by: [depname]
-├── order by: [empno]
-├── frame: [Range: Preceding(None) ~ CurrentRow]
-└── Sort
-    ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
-    ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.test_explain_window.empsalary
-        ├── output columns: [depname (#0), empno (#1), salary (#2)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 0.00
+├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
+├── estimated rows: 0.00
+└── Window
+    ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER ( PARTITION BY depname ORDER BY empno ) (#4)]
+    ├── aggregate function: [sum(salary)]
+    ├── partition by: [depname]
+    ├── order by: [empno]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
+        ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_explain_window.empsalary
+            ├── output columns: [depname (#0), empno (#1), salary (#2)]
+            ├── read rows: 0
+            ├── read size: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
 
 statement ok
 set max_threads=4;
@@ -44,13 +48,17 @@ query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
 CompoundBlockOperator(Project) × 1
-  Transform Window × 1
-    Merge to MultiSortMerge × 1
-      TransformSortMerge × 4
-        SortPartialTransform × 4
-          Merge to Resize × 4
-            DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+  Merge to MultiSortMerge × 1
+    TransformSortMerge × 4
+      SortPartialTransform × 4
+        Merge to Resize × 4
+          Transform Window × 1
+            Merge to MultiSortMerge × 1
+              TransformSortMerge × 4
+                SortPartialTransform × 4
+                  Merge to Resize × 4
+                    DeserializeDataTransform × 1
+                      SyncReadParquetDataSource × 1
 
 
 # Enable sort spilling
@@ -61,14 +69,19 @@ query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
 CompoundBlockOperator(Project) × 1
-  Transform Window × 1
-    Merge to MultiSortMerge × 1
-      TransformSortSpill × 4
-        TransformSortMerge × 4
-          SortPartialTransform × 4
-            Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+  Merge to MultiSortMerge × 1
+    TransformSortSpill × 4
+      TransformSortMerge × 4
+        SortPartialTransform × 4
+          Merge to Resize × 4
+            Transform Window × 1
+              Merge to MultiSortMerge × 1
+                TransformSortSpill × 4
+                  TransformSortMerge × 4
+                    SortPartialTransform × 4
+                      Merge to Resize × 4
+                        DeserializeDataTransform × 1
+                          SyncReadParquetDataSource × 1
 
 
 statement ok
