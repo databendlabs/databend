@@ -38,6 +38,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_storages_common_table_meta::table::ChangeType;
+use opendal::layers::BlockingLayer;
 use opendal::Operator;
 use orc_rust::ArrowReaderBuilder;
 
@@ -97,7 +98,7 @@ impl OrcTable {
         operator: Operator,
     ) -> Result<Arc<ArrowSchema>> {
         let file = OrcFileReader {
-            operator,
+            operator: operator.layer(BlockingLayer::create()?).blocking(),
             size: file_info.size,
             path: file_info.path,
         };
