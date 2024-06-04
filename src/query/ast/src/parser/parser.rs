@@ -187,9 +187,8 @@ fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
         }
 
         fn enter_select_target(&mut self, target: &mut SelectTarget) {
-            match target {
-                SelectTarget::StarColumns { column_filter, .. } => *column_filter = None,
-                _ => (),
+            if let SelectTarget::StarColumns { column_filter, .. } = target {
+                *column_filter = None
             }
         }
     }
