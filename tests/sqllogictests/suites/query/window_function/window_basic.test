@@ -623,18 +623,18 @@ SELECT * FROM (SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) r
 
 # Window func in order by
 query II
-SELECT salary, sum(salary) OVER (PARTITION BY depname) FROM empsalary ORDER BY count() OVER (PARTITION BY depname ORDER BY salary) DESC
+SELECT salary, sum(salary) OVER (PARTITION BY depname) FROM empsalary ORDER BY count() OVER (PARTITION BY depname ORDER BY salary) DESC order by 1,2
 ----
-6000 25100
-5200 25100
-5200 25100
-5000 14600
-4500 25100
-3900 7400
-4800 14600
-4800 14600
-4200 25100
 3500 7400
+3900 7400
+4200 25100
+4500 25100
+4800 14600
+4800 14600
+5000 14600
+5200 25100
+5200 25100
+6000 25100
 
 # diff windows
 query TIIII
