@@ -518,17 +518,13 @@ impl AccessChecker for PrivilegeAccess {
                         return Ok(());
                     }
                     Some(RewriteKind::ShowTables(catalog, database)) => {
-                        let session = self.ctx.get_current_session();
-                        if self.has_ownership(&session, &GrantObject::Database(catalog.clone(), database.clone())).await? {
-                            return Ok(());
-                        }
                         let catalog = self.ctx.get_catalog(catalog).await?;
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, None).await? {
+                        let (db_id, _table_id) = match self.convert_to_id(&tenant, &catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(&tenant, database, None, db_id, table_id, grant_set).await?;
-                        return if has_priv {
+                        let visibility_checker = self.ctx.get_visibility_checker().await?;
+                        return if visibility_checker.check_database_visibility(&catalog_name, database, db_id) {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
@@ -538,17 +534,13 @@ impl AccessChecker for PrivilegeAccess {
                         };
                     }
                     Some(RewriteKind::ShowStreams(database)) => {
-                        let session = self.ctx.get_current_session();
-                        if self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone())).await? {
-                            return Ok(());
-                        }
                         let catalog = self.ctx.get_catalog(&catalog_name).await?;
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, None).await? {
+                        let (db_id, _table_id) = match self.convert_to_id(&tenant, &catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(&tenant, database, None, db_id, table_id, grant_set).await?;
-                        return if has_priv {
+                        let visibility_checker = self.ctx.get_visibility_checker().await?;
+                        return if visibility_checker.check_database_visibility(&catalog_name, database, db_id) {
                             Ok(())
                         } else {
                             Err(ErrorCode::PermissionDenied(format!(
@@ -680,10 +672,6 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::UseDatabase(plan) => {
-                let session = self.ctx.get_current_session();
-                if self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), plan.database.clone())).await? {
-                    return Ok(());
-                }
                 let catalog = self.ctx.get_catalog(&catalog_name).await?;
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
@@ -691,9 +679,8 @@ impl AccessChecker for PrivilegeAccess {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
-                let has_priv = has_priv(&tenant, &plan.database, None, db_id, None, grant_set).await?;
-
-                return if has_priv {
+                let visibility_checker = self.ctx.get_visibility_checker().await?;
+                return if visibility_checker.check_database_visibility(&catalog_name, &plan.database, db_id) {
                     Ok(())
                 } else {
                     Err(ErrorCode::PermissionDenied(format!(
