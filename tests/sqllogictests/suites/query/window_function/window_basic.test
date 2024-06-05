@@ -715,7 +715,7 @@ statement ok
 insert into t values (1),(2),(3),(4),(5)
 
 query II
-select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3 order by 1,2
+select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3 order by 1
 ----
 4
 5
