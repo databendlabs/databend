@@ -1,12 +1,12 @@
 #!/bin/bash
 
-dir_path="/.databend"
+dir_path="/.databend/logs"
 
 for file in "$dir_path"/*
 do
     if [ -f "$file" ]; then
-        echo "=== Contents of $file ==="
+        echo "\n=== Contents of $file ==="
         cat "$file"
-        echo "=== End of $file ==="
+        echo "=== End of $file ===\n"
     fi
 done

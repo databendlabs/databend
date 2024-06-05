@@ -16,7 +16,7 @@ runs:
           echo "cat logs of $name"
           kubectl exec -i $name -n databend -- /cat-logs.sh > target/$name.log
         done
-        tar -zcf target/failure-${{ inputs.name }}.tar.gz
+        tar -zcf target/failure-${{ inputs.name }}.tar.gz target/*
     - uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.name }}
