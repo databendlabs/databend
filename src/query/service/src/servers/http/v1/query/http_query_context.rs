@@ -15,11 +15,14 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use http::StatusCode;
+use log::warn;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
-use poem::Result as PoemResult;
+use time::Instant;
 
+use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -29,6 +32,7 @@ pub struct HttpQueryContext {
     pub session: Arc<Session>,
     pub query_id: String,
     pub node_id: String,
+    pub expected_node_id: Option<String>,
     pub deduplicate_label: Option<String>,
     pub user_agent: Option<String>,
     pub trace_parent: Option<String>,
@@ -39,32 +43,6 @@ pub struct HttpQueryContext {
 }
 
 impl HttpQueryContext {
-    pub fn new(
-        session: Arc<Session>,
-        query_id: String,
-        node_id: String,
-        deduplicate_label: Option<String>,
-        user_agent: Option<String>,
-        trace_parent: Option<String>,
-        open_telemetry_baggage: Option<Vec<(String, String)>>,
-        http_method: String,
-        uri: String,
-        client_host: Option<String>,
-    ) -> Self {
-        HttpQueryContext {
-            session,
-            query_id,
-            node_id,
-            deduplicate_label,
-            user_agent,
-            trace_parent,
-            opentelemetry_baggage: open_telemetry_baggage,
-            http_method,
-            uri,
-            client_host,
-        }
-    }
-
     pub fn upgrade_session(&self, session_type: SessionType) -> Result<Arc<Session>, poem::Error> {
         SessionManager::instance()
             .try_upgrade_session(self.session.clone(), session_type.clone())
@@ -101,11 +79,29 @@ impl HttpQueryContext {
     pub fn set_fail(&self) {
         self.session.txn_mgr().lock().set_fail();
     }
+
+    pub fn check_node_id(&self, query_id: &str) -> poem::Result<()> {
+        if let Some(expected_node_id) = self.expected_node_id.as_ref() {
+            if expected_node_id != &self.node_id {
+                let manager = HttpQueryManager::instance();
+                let start_time = manager.server_info.start_time.clone();
+                let uptime = (Instant::now() - manager.start_instant).as_seconds_f32();
+                let msg = format!(
+                    "route error: query {query_id} SHOULD be on server {expected_node_id}, but current server is {}, which started at {start_time}({uptime} secs ago)",
+                    self.node_id
+                );
+                warn!("{msg}");
+                return Err(poem::Error::from_string(msg, StatusCode::NOT_FOUND));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<'a> FromRequest<'a> for &'a HttpQueryContext {
     #[async_backtrace::framed]
-    async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
+    async fn from_request(req: &'a Request, _body: &mut RequestBody) -> poem::Result<Self> {
         Ok(req.extensions().get::<HttpQueryContext>().expect(
             "To use the `HttpQueryContext` extractor, the `HTTPSessionMiddleware` is required",
         ))
