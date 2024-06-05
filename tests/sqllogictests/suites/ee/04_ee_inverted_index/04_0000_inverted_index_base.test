@@ -342,10 +342,10 @@ SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 descri
 
 # index without optional filters and index rocord is basic
 statement ok
-CREATE OR REPLACE INVERTED INDEX idx1 ON books(title, author, description) tokenizer = 'chinese' index_record='basic'
+CREATE OR REPLACE INVERTED INDEX idx2 ON books(title, author, description) tokenizer = 'chinese' index_record='basic'
 
 statement ok
-REFRESH INVERTED INDEX idx1 ON books
+REFRESH INVERTED INDEX idx2 ON books
 
 query IFT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'python') ORDER BY score() DESC
@@ -427,7 +427,7 @@ SELECT name, type, definition FROM system.indexes order by name
 ----
 idx INVERTED t1(body) tokenizer='chinese'
 idx1 INVERTED t(content) filters='english_stop,english_stemmer,chinese_stop', tokenizer='chinese'
-idx2 INVERTED books(title, author, description) filters='english_stop,english_stemmer,chinese_stop', tokenizer='chinese'
+idx2 INVERTED books(title, author, description) index_record='"basic"', tokenizer='chinese'
 
 statement ok
 use default

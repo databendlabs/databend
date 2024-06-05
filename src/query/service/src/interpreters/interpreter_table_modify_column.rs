@@ -212,7 +212,7 @@ impl ModifyTableColumnInterpreter {
                                     != field.data_type.remove_nullable()
                             {
                                 return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
-                                    "column `{}` is referenced by inverted index `{}`",
+                                    "column `{}` is referenced by inverted index, drop inverted index `{}` first",
                                     column, index_name,
                                 )));
                             }

@@ -23,7 +23,7 @@ echo "=== test u1 with role1 ==="
 export TEST_U1_CONNECT="bendsql --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 echo "select name, type, definition from system.indexes order by name" | $TEST_U1_CONNECT
 
-echo "=== test u2 with role1 ==="
+echo "=== test u2 with role2 ==="
 export TEST_U2_CONNECT="bendsql --user=u2 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 echo "select name, type, definition from system.indexes order by name" | $TEST_U2_CONNECT
 
