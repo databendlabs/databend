@@ -15,6 +15,7 @@
 use async_channel::Receiver;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::UnionReceiveSink;
 use databend_common_sql::executor::physical_plans::UnionAll;
@@ -33,12 +34,36 @@ impl PipelineBuilder {
         let union_all_receiver = self.expand_union_all(&union_all.right)?;
         self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
+                let left_outputs = union_all
+                    .left_outputs
+                    .iter()
+                    .map(|(idx, remote_expr)| {
+                        if let Some(remote_expr) = remote_expr {
+                            (*idx, Some(remote_expr.as_expr(&BUILTIN_FUNCTIONS)))
+                        } else {
+                            (*idx, None)
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let right_outputs = union_all
+                    .right_outputs
+                    .iter()
+                    .map(|(idx, remote_expr)| {
+                        if let Some(remote_expr) = remote_expr {
+                            (*idx, Some(remote_expr.as_expr(&BUILTIN_FUNCTIONS)))
+                        } else {
+                            (*idx, None)
+                        }
+                    })
+                    .collect::<Vec<_>>();
                 Ok(ProcessorPtr::create(TransformMergeBlock::try_create(
+                    self.ctx.clone(),
                     transform_input_port,
                     transform_output_port,
                     union_all.left.output_schema()?,
                     union_all.right.output_schema()?,
-                    union_all.pairs.clone(),
+                    left_outputs,
+                    right_outputs,
                     union_all_receiver.clone(),
                 )?))
             })?;

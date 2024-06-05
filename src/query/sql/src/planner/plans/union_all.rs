@@ -28,11 +28,15 @@ use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnionAll {
-    // Pairs of unioned columns
-    pub pairs: Vec<(IndexType, IndexType)>,
+    // We'll cast the output of union to the expected data type by the cast expr at runtime.
+    // Left of union, output idx and the expected data type
+    pub left_outputs: Vec<(IndexType, Option<ScalarExpr>)>,
+    // Right of union, output idx and the expected data type
+    pub right_outputs: Vec<(IndexType, Option<ScalarExpr>)>,
     // Recursive cte name
     // If union is used in recursive cte, it's `Some`.
     pub cte_name: Option<String>,
@@ -41,9 +45,11 @@ pub struct UnionAll {
 impl UnionAll {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for (left, right) in &self.pairs {
-            used_columns.insert(*left);
-            used_columns.insert(*right);
+        for (idx, _) in &self.left_outputs {
+            used_columns.insert(*idx);
+        }
+        for (idx, _) in &self.right_outputs {
+            used_columns.insert(*idx);
         }
         Ok(used_columns)
     }

@@ -841,9 +841,10 @@ impl PhysicalPlan {
                 format!("CTE index: {}, sub index: {}", v.cte_idx.0, v.cte_idx.1)
             }
             PhysicalPlan::UnionAll(v) => v
-                .pairs
+                .left_outputs
                 .iter()
-                .map(|(l, r)| format!("#{} <- #{}", l, r))
+                .zip(v.right_outputs.iter())
+                .map(|(l, r)| format!("#{} <- #{}", l.0, r.0))
                 .join(", "),
             PhysicalPlan::AsyncFunction(async_func) => async_func.display_name.to_string(),
             _ => String::new(),

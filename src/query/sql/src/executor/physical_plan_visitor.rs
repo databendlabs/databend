@@ -380,8 +380,9 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
+            left_outputs: plan.left_outputs.clone(),
+            right_outputs: plan.right_outputs.clone(),
             schema: plan.schema.clone(),
-            pairs: plan.pairs.clone(),
             stat_info: plan.stat_info.clone(),
             cte_name: plan.cte_name.clone(),
         }))

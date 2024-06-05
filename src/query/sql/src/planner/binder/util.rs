@@ -58,7 +58,6 @@ pub fn find_and_update_r_cte_scan(
             let mut fields = plan.fields.clone();
             debug_assert!(fields.len() == types.len());
             for (old_field, new_type) in fields.iter_mut().zip(types.iter()) {
-                dbg!(old_field.data_type(), new_type);
                 if old_field.data_type() != new_type {
                     old_field.update_type(new_type.clone());
                 }
