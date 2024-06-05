@@ -23,6 +23,7 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::number::F32;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberClass;
@@ -59,6 +60,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_simple_domain_type_hash::<DateType>(registry);
     register_simple_domain_type_hash::<TimestampType>(registry);
     register_simple_domain_type_hash::<BooleanType>(registry);
+    register_simple_domain_type_hash::<BitmapType>(registry);
 
     for ty in ALL_NUMBER_CLASSES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
