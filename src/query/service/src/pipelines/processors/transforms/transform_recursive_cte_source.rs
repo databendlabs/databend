@@ -17,10 +17,11 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::{BlockEntry, Expr};
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -28,8 +29,8 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::UnionAll;
-use futures_util::TryStreamExt;
 use databend_common_sql::IndexType;
+use futures_util::TryStreamExt;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -90,6 +91,7 @@ impl TransformRecursiveCteSource {
     }
 
     async fn build_union(&mut self) -> Result<()> {
+        dbg!(self.recursive_step);
         if self
             .ctx
             .get_settings()
@@ -117,10 +119,6 @@ impl TransformRecursiveCteSource {
         let num_rows = block.num_rows();
         let left_schema = self.union_plan.left.output_schema()?;
         let right_schema = self.union_plan.right.output_schema()?;
-        dbg!(&self.left_outputs);
-        dbg!(&self.right_outputs);
-        dbg!(&left_schema);
-        dbg!(&right_schema);
         let func_ctx = self.ctx.get_function_context()?;
         let mut evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
         let columns = self
@@ -134,7 +132,9 @@ impl TransformRecursiveCteSource {
                             BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
                         Ok(column)
                     } else {
-                        Ok(block.get_by_offset(left_schema.index_of(&left.0.to_string())?).clone())
+                        Ok(block
+                            .get_by_offset(left_schema.index_of(&left.0.to_string())?)
+                            .clone())
                     }
                 } else {
                     if let Some(expr) = &right.1 {
@@ -143,7 +143,9 @@ impl TransformRecursiveCteSource {
                         Ok(column)
                     } else {
                         if left.1.is_some() {
-                            Ok(block.get_by_offset(right_schema.index_of(&right.0.to_string())?).clone())
+                            Ok(block
+                                .get_by_offset(right_schema.index_of(&right.0.to_string())?)
+                                .clone())
                         } else {
                             self.check_type(&left.0.to_string(), &right.0.to_string(), &block)
                         }
@@ -215,7 +217,6 @@ impl AsyncSource for TransformRecursiveCteSource {
 
         let row_size = data.num_rows();
         if row_size > 0 {
-            dbg!(&data);
             data = self.project_block(data, self.recursive_step == 1)?;
             dbg!(&data);
             // Prepare the data of next round recursive.

@@ -406,17 +406,25 @@ impl Binder {
         let mut metadata = self.metadata.write();
         let mut columns = Vec::with_capacity(cte_info.columns.len());
         for col in cte_info.columns.iter() {
-            let idx = metadata.add_derived_column(col.column_name.clone(), *col.data_type.clone(), None);
-            columns.push(ColumnBindingBuilder::new(col.column_name.clone(), idx, col.data_type.clone(), Visibility::Visible).build());
+            let idx =
+                metadata.add_derived_column(col.column_name.clone(), *col.data_type.clone(), None);
+            columns.push(
+                ColumnBindingBuilder::new(
+                    col.column_name.clone(),
+                    idx,
+                    col.data_type.clone(),
+                    Visibility::Visible,
+                )
+                .table_name(Some(cte_name.clone()))
+                .build(),
+            )
         }
         new_bind_ctx.columns = columns;
-        dbg!(&new_bind_ctx.columns);
         if let Some(alias) = alias {
             new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
         let mut fields = Vec::with_capacity(cte_info.columns.len());
         for col in new_bind_ctx.columns.iter() {
-            dbg!(col);
             fields.push(DataField::new(
                 col.index.to_string().as_str(),
                 *col.data_type.clone(),

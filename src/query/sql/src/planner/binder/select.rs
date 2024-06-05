@@ -130,7 +130,9 @@ impl Binder {
             self.bind_set_expr(bind_context, left, &[], None).await?;
         if let Some(cte_name) = cte_name.as_ref() {
             if !all {
-                return Err(ErrorCode::Internal("Currently, recursive cte only support union all".to_string()));
+                return Err(ErrorCode::Internal(
+                    "Currently, recursive cte only support union all".to_string(),
+                ));
             }
             // Add recursive cte's columns to cte info
             let mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
@@ -255,10 +257,15 @@ impl Binder {
         if let Some(_) = cte_name.as_ref() {
             // Find all recursive cte scans in right_expr
             let mut count = 0;
-            right_expr = self.find_and_update_r_cte_scan(&right_expr, &coercion_types, &mut count)?;
+            self.find_and_update_r_cte_scan(&right_expr, &coercion_types, &mut count)?;
             if count == 0 {
                 return Err(ErrorCode::SemanticError(
                     "Recursive cte should be used in recursive cte".to_string(),
+                ));
+            }
+            if count > 1 {
+                return Err(ErrorCode::SemanticError(
+                    "Currently, only support recursive cte be used in one place".to_string(),
                 ));
             }
         }
