@@ -254,17 +254,19 @@ impl Binder {
             }
         }
 
-        let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
+        let (new_bind_context, left_outputs, right_outputs) = self.coercion_union_type(
             left_span,
             right_span,
             left_context,
             right_context,
-            left_expr,
-            right_expr,
             coercion_types,
         )?;
 
-        let union_plan = UnionAll { pairs, cte_name };
+        let union_plan = UnionAll {
+            left_outputs,
+            right_outputs,
+            cte_name,
+        };
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),
             Arc::new(left_expr),
@@ -387,21 +389,21 @@ impl Binder {
         right_span: Span,
         left_bind_context: BindContext,
         right_bind_context: BindContext,
-        mut left_expr: SExpr,
-        mut right_expr: SExpr,
         coercion_types: Vec<DataType>,
-    ) -> Result<(BindContext, Vec<(IndexType, IndexType)>, SExpr, SExpr)> {
-        let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
-        let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
-        let mut new_bind_context = BindContext::new();
-        let mut pairs = Vec::with_capacity(left_bind_context.columns.len());
+    ) -> Result<(
+        BindContext,
+        Vec<(IndexType, Option<ScalarExpr>)>,
+        Vec<(IndexType, Option<ScalarExpr>)>,
+    )> {
+        let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
+        let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()
             .zip(right_bind_context.columns.iter())
             .enumerate()
         {
-            let left_index = if *left_col.data_type != coercion_types[idx] {
+            if *left_col.data_type != coercion_types[idx] {
                 let left_coercion_expr = CastExpr {
                     span: left_span,
                     is_try: false,
@@ -414,29 +416,14 @@ impl Binder {
                     ),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
-                let new_column_index = self.metadata.write().add_derived_column(
-                    left_col.column_name.clone(),
-                    coercion_types[idx].clone(),
-                    Some(ScalarExpr::CastExpr(left_coercion_expr.clone())),
-                );
-                let column_binding = ColumnBindingBuilder::new(
-                    left_col.column_name.clone(),
-                    new_column_index,
-                    Box::new(coercion_types[idx].clone()),
-                    Visibility::Visible,
-                )
-                .build();
-                left_scalar_items.push(ScalarItem {
-                    scalar: left_coercion_expr.into(),
-                    index: new_column_index,
-                });
-                new_bind_context.add_column_binding(column_binding);
-                new_column_index
+                left_outputs.push((
+                    left_col.index,
+                    Some(ScalarExpr::CastExpr(left_coercion_expr)),
+                ));
             } else {
-                new_bind_context.add_column_binding(left_col.clone());
-                left_col.index
-            };
-            let right_index = if *right_col.data_type != coercion_types[idx] {
+                left_outputs.push((left_col.index, None));
+            }
+            if *right_col.data_type != coercion_types[idx] {
                 let right_coercion_expr = CastExpr {
                     span: right_span,
                     is_try: false,
@@ -449,44 +436,15 @@ impl Binder {
                     ),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
-                let new_column_index = self.metadata.write().add_derived_column(
-                    right_col.column_name.clone(),
-                    coercion_types[idx].clone(),
-                    Some(ScalarExpr::CastExpr(right_coercion_expr.clone())),
-                );
-                right_scalar_items.push(ScalarItem {
-                    scalar: right_coercion_expr.into(),
-                    index: new_column_index,
-                });
-                new_column_index
+                right_outputs.push((
+                    right_col.index,
+                    Some(ScalarExpr::CastExpr(right_coercion_expr)),
+                ));
             } else {
-                right_col.index
-            };
-            pairs.push((left_index, right_index));
+                right_outputs.push((right_col.index, None));
+            }
         }
-        if !left_scalar_items.is_empty() {
-            left_expr = SExpr::create_unary(
-                Arc::new(
-                    EvalScalar {
-                        items: left_scalar_items,
-                    }
-                    .into(),
-                ),
-                Arc::new(left_expr),
-            );
-        }
-        if !right_scalar_items.is_empty() {
-            right_expr = SExpr::create_unary(
-                Arc::new(
-                    EvalScalar {
-                        items: right_scalar_items,
-                    }
-                    .into(),
-                ),
-                Arc::new(right_expr),
-            );
-        }
-        Ok((new_bind_context, pairs, left_expr, right_expr))
+        Ok((left_bind_context, left_outputs, right_outputs))
     }
 
     #[allow(clippy::too_many_arguments)]

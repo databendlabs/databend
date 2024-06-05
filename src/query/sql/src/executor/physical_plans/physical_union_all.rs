@@ -20,6 +20,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
@@ -33,6 +34,7 @@ use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
+use crate::TypeCheck;
 use crate::Visibility;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -41,7 +43,8 @@ pub struct UnionAll {
     pub plan_id: u32,
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
-    pub pairs: Vec<(String, String)>,
+    pub left_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
+    pub right_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub schema: DataSchemaRef,
     pub cte_name: Option<String>,
 
@@ -64,127 +67,73 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let left_required = union_all.pairs.iter().fold(required.clone(), |mut acc, v| {
+        let left_required = union_all
+            .left_outputs
+            .iter()
+            .fold(required.clone(), |mut acc, v| {
+                acc.insert(v.0);
+                acc
+            });
+        let right_required = union_all.right_outputs.iter().fold(required, |mut acc, v| {
             acc.insert(v.0);
-            acc
-        });
-        let right_required = union_all.pairs.iter().fold(required, |mut acc, v| {
-            acc.insert(v.1);
             acc
         });
 
         // 2. Build physical plan.
         let left_plan = self.build(s_expr.child(0)?, left_required).await?;
         let right_plan = self.build(s_expr.child(1)?, right_required).await?;
+
         let left_schema = left_plan.output_schema()?;
         let right_schema = right_plan.output_schema()?;
 
-        let common_types = union_all.pairs.iter().map(|(l, r)| {
-            let left_field = left_schema.field_with_name(&l.to_string()).unwrap();
-            let right_field = right_schema.field_with_name(&r.to_string()).unwrap();
-
-            let common_type = common_super_type(
-                left_field.data_type().clone(),
-                right_field.data_type().clone(),
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            );
-            common_type.ok_or_else(|| {
-                ErrorCode::SemanticError(format!(
-                    "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
-                    left_field.name(),
-                    left_field.data_type(),
-                    right_field.name(),
-                    right_field.data_type()
-                ))
+        let fields = union_all
+            .left_outputs
+            .iter()
+            .map(|(index, expr)| {
+                if let Some(expr) = expr {
+                    Ok(DataField::new(&index.to_string(), expr.data_type()?))
+                } else {
+                    Ok(left_schema.field_with_name(&index.to_string())?.clone())
+                }
             })
-        }).collect::<Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
-        async fn cast_plan(
-            plan_builder: &mut PhysicalPlanBuilder,
-            plan: PhysicalPlan,
-            plan_schema: &DataSchema,
-            indexes: &[IndexType],
-            common_types: &[DataType],
-            stat_info: PlanStatsInfo,
-        ) -> Result<PhysicalPlan> {
-            debug_assert!(indexes.len() == common_types.len());
-            let scalar_items = indexes
-                .iter()
-                .map(|index| plan_schema.field_with_name(&index.to_string()).unwrap())
-                .zip(common_types)
-                .filter(|(f, common_ty)| f.data_type() != *common_ty)
-                .map(|(f, common_ty)| {
-                    let column = ColumnBindingBuilder::new(
-                        f.name().clone(),
-                        f.name().parse().unwrap(),
-                        Box::new(f.data_type().clone()),
-                        Visibility::Visible,
-                    )
-                    .build();
-                    let cast_expr = wrap_cast(
-                        &ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
-                        common_ty,
-                    );
-                    ScalarItem {
-                        scalar: cast_expr,
-                        index: f.name().parse().unwrap(),
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            let new_plan = if scalar_items.is_empty() {
-                plan
-            } else {
-                plan_builder.create_eval_scalar(
-                    &crate::plans::EvalScalar {
-                        items: scalar_items,
-                    },
-                    indexes.to_vec(),
-                    plan,
-                    stat_info,
-                )?
-            };
-
-            Ok(new_plan)
-        }
-
-        let left_indexes = union_all.pairs.iter().map(|(l, _)| *l).collect::<Vec<_>>();
-        let right_indexes = union_all.pairs.iter().map(|(_, r)| *r).collect::<Vec<_>>();
-        let left_plan = cast_plan(
-            self,
-            left_plan,
-            left_schema.as_ref(),
-            &left_indexes,
-            &common_types,
-            stat_info.clone(),
-        )
-        .await?;
-        let right_plan = cast_plan(
-            self,
-            right_plan,
-            right_schema.as_ref(),
-            &right_indexes,
-            &common_types,
-            stat_info.clone(),
-        )
-        .await?;
-
-        let pairs = union_all
-            .pairs
+        let left_outputs = union_all
+            .left_outputs
             .iter()
-            .map(|(l, r)| (l.to_string(), r.to_string()))
-            .collect::<Vec<_>>();
-        let fields = left_indexes
+            .map(|(index, scalar_expr)| {
+                if let Some(scalar_expr) = scalar_expr {
+                    let expr = scalar_expr
+                        .type_check(left_schema.as_ref())?
+                        .project_column_ref(|idx| left_schema.index_of(&idx.to_string()).unwrap());
+                    Ok((*index, Some(expr.as_remote_expr())))
+                } else {
+                    Ok((*index, None))
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let right_outputs = union_all
+            .right_outputs
             .iter()
-            .zip(&common_types)
-            .map(|(index, ty)| DataField::new(&index.to_string(), ty.clone()))
-            .collect::<Vec<_>>();
+            .map(|(index, scalar_expr)| {
+                if let Some(scalar_expr) = scalar_expr {
+                    let expr = scalar_expr
+                        .type_check(right_schema.as_ref())?
+                        .project_column_ref(|idx| right_schema.index_of(&idx.to_string()).unwrap());
+                    Ok((*index, Some(expr.as_remote_expr())))
+                } else {
+                    Ok((*index, None))
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(PhysicalPlan::UnionAll(UnionAll {
             plan_id: 0,
             left: Box::new(left_plan),
             right: Box::new(right_plan),
-            pairs,
+            left_outputs,
+            right_outputs,
             schema: DataSchemaRefExt::create(fields),
 
             cte_name: union_all.cte_name.clone(),

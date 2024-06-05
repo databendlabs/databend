@@ -16,28 +16,38 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_channel::Receiver;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_sql::IndexType;
 
 pub struct TransformMergeBlock {
     finished: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
+    func_ctx: FunctionContext,
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
     left_schema: DataSchemaRef,
     right_schema: DataSchemaRef,
-    pairs: Vec<(String, String)>,
+
+    left_outputs: Vec<(IndexType, Option<Expr>)>,
+    right_outputs: Vec<(IndexType, Option<Expr>)>,
 
     receiver: Receiver<DataBlock>,
     receiver_result: Option<DataBlock>,
@@ -45,44 +55,70 @@ pub struct TransformMergeBlock {
 
 impl TransformMergeBlock {
     pub fn try_create(
+        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         left_schema: DataSchemaRef,
         right_schema: DataSchemaRef,
-        pairs: Vec<(String, String)>,
+        left_outputs: Vec<(IndexType, Option<Expr>)>,
+        right_outputs: Vec<(IndexType, Option<Expr>)>,
         receiver: Receiver<DataBlock>,
     ) -> Result<Box<dyn Processor>> {
         Ok(Box::new(TransformMergeBlock {
             finished: false,
             input,
             output,
+            func_ctx: ctx.get_function_context()?,
             input_data: None,
             output_data: None,
             left_schema,
             right_schema,
-            pairs,
+            left_outputs,
             receiver,
             receiver_result: None,
+            right_outputs,
         }))
     }
 
     fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
+        dbg!(is_left);
+        dbg!(&self.left_schema);
+        dbg!(&self.right_schema);
         let num_rows = block.num_rows();
+        let mut evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let columns = self
-            .pairs
+            .left_outputs
             .iter()
+            .zip(self.right_outputs.iter())
             .map(|(left, right)| {
                 if is_left {
-                    Ok(block
-                        .get_by_offset(self.left_schema.index_of(left)?)
-                        .clone())
+                    if let Some(expr) = &left.1 {
+                        let column =
+                            BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
+                        Ok(column)
+                    } else {
+                        Ok(block
+                            .get_by_offset(self.left_schema.index_of(&left.0.to_string())?)
+                            .clone())
+                    }
                 } else {
-                    // If block from right, check if block schema matches self scheme(left schema)
-                    // If unmatched, covert block columns types or report error
-                    self.check_type(left, right, &block)
+                    if let Some(expr) = &right.1 {
+                        let column =
+                            BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
+                        Ok(column)
+                    } else {
+                        if left.1.is_some() {
+                            Ok(block
+                                .get_by_offset(self.right_schema.index_of(&right.0.to_string())?)
+                                .clone())
+                        } else {
+                            self.check_type(&left.0.to_string(), &right.0.to_string(), &block)
+                        }
+                    }
                 }
             })
             .collect::<Result<Vec<_>>>()?;
+        dbg!(&columns);
         Ok(DataBlock::new(columns, num_rows))
     }
 
