@@ -235,11 +235,14 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             .get_last_purged()
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
 
+        let purge_range = (curr_purged.next_index(), log_id.index);
+        let purge_range_str = format!("({},{}]", purge_range.0, purge_range.1);
+
         info!(
             id = self.id,
             curr_purged :? =(&curr_purged),
             upto_log_id :? =(&log_id);
-            "purge upto: start");
+            "purge_logs_upto({}): start", purge_range_str);
 
         if let Err(err) = self
             .log
@@ -253,7 +256,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             return Err(err);
         };
 
-        info!(id = self.id, log_id :? =(&log_id); "purge_logs_upto: Done: set_last_purged()");
+        info!(id = self.id, log_id :? =(&log_id); "purge_logs_upto({}): Done: set_last_purged()", purge_range_str);
 
         let log = self.log.write().await.clone();
 
@@ -268,7 +271,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         databend_common_base::runtime::spawn({
             let id = self.id;
             async move {
-                info!(id = id, log_id :? =(&log_id); "purge_logs_upto: Start: asynchronous one by one remove");
+                info!(id = id, log_id :? =(&log_id); "purge_logs_upto({}): Start: asynchronous one by one remove", purge_range_str);
 
                 let mut removed_cnt = 0;
                 let mut removed_size = 0;
@@ -280,7 +283,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
                         Ok(r) => r,
                         Err(err) => {
                             error!(id = id, log_index :% =i;
-                                "purge_logs_upto: in asynchronous error: {}", err);
+                                "purge_logs_upto({}): in asynchronous error: {}", purge_range_str, err);
                             raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
                             return;
                         }
@@ -291,7 +294,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
                         removed_size += size;
                     } else {
                         error!(id = id, log_index :% =i;
-                            "purge_logs_upto: in asynchronous error: not found, maybe removed by other thread; quit this thread");
+                            "purge_logs_upto({}): in asynchronous error: not found, maybe removed by other thread; quit this thread", purge_range_str);
                         return;
                     }
 
@@ -300,14 +303,14 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
                             removed_cnt = removed_cnt,
                             removed_size = removed_size,
                             avg_removed_size = removed_size / (removed_cnt+1);
-                            "purge_logs_upto: asynchronous removed log");
+                            "purge_logs_upto({}): asynchronous removed log", purge_range_str);
                     }
 
                     // Do not block for too long if there are many keys to delete.
                     tokio::time::sleep(Duration::from_millis(2)).await;
                 }
 
-                info!(id = id, upto_log_id :? =(&log_id); "purge_logs_upto: Done: asynchronous one by one remove");
+                info!(id = id, upto_log_id :? =(&log_id); "purge_logs_upto({}): Done: asynchronous one by one remove", purge_range_str);
             }
         });
 
