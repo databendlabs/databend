@@ -81,6 +81,10 @@ impl TransformMergeBlock {
     }
 
     fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
+        dbg!(&self.left_outputs);
+        dbg!(&self.right_outputs);
+        dbg!(&block);
+        dbg!(is_left);
         let num_rows = block.num_rows();
         let mut evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let columns = self

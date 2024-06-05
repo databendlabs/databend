@@ -403,12 +403,20 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         self.ctx.set_recursive_cte_scan(cte_name, vec![])?;
         let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
-        new_bind_ctx.columns = cte_info.columns.clone();
+        let mut metadata = self.metadata.write();
+        let mut columns = Vec::with_capacity(cte_info.columns.len());
+        for col in cte_info.columns.iter() {
+            let idx = metadata.add_derived_column(col.column_name.clone(), *col.data_type.clone(), None);
+            columns.push(ColumnBindingBuilder::new(col.column_name.clone(), idx, col.data_type.clone(), Visibility::Visible).build());
+        }
+        new_bind_ctx.columns = columns;
+        dbg!(&new_bind_ctx.columns);
         if let Some(alias) = alias {
             new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
         let mut fields = Vec::with_capacity(cte_info.columns.len());
         for col in new_bind_ctx.columns.iter() {
+            dbg!(col);
             fields.push(DataField::new(
                 col.index.to_string().as_str(),
                 *col.data_type.clone(),

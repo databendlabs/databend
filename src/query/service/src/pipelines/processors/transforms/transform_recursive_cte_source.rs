@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
+use databend_common_expression::{BlockEntry, Expr};
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -29,6 +29,7 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use futures_util::TryStreamExt;
+use databend_common_sql::IndexType;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -40,6 +41,9 @@ use crate::stream::PullingExecutorStream;
 pub struct TransformRecursiveCteSource {
     ctx: Arc<QueryContext>,
     union_plan: UnionAll,
+    left_outputs: Vec<(IndexType, Option<Expr>)>,
+    right_outputs: Vec<(IndexType, Option<Expr>)>,
+
     executor: Option<PipelinePullingExecutor>,
     recursive_step: usize,
     cte_name: String,
@@ -52,9 +56,33 @@ impl TransformRecursiveCteSource {
         union_plan: UnionAll,
     ) -> Result<ProcessorPtr> {
         let cte_name = union_plan.cte_name.as_ref().unwrap().clone();
+        let left_outputs = union_plan
+            .left_outputs
+            .iter()
+            .map(|(idx, remote_expr)| {
+                if let Some(remote_expr) = remote_expr {
+                    (*idx, Some(remote_expr.as_expr(&BUILTIN_FUNCTIONS)))
+                } else {
+                    (*idx, None)
+                }
+            })
+            .collect::<Vec<_>>();
+        let right_outputs = union_plan
+            .right_outputs
+            .iter()
+            .map(|(idx, remote_expr)| {
+                if let Some(remote_expr) = remote_expr {
+                    (*idx, Some(remote_expr.as_expr(&BUILTIN_FUNCTIONS)))
+                } else {
+                    (*idx, None)
+                }
+            })
+            .collect::<Vec<_>>();
         AsyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteSource {
             ctx,
             union_plan,
+            left_outputs,
+            right_outputs,
             executor: None,
             recursive_step: 0,
             cte_name,
@@ -85,64 +113,83 @@ impl TransformRecursiveCteSource {
         Ok(())
     }
 
-    // fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
-    // let num_rows = block.num_rows();
-    // let left_schema = self.union_plan.left.output_schema()?;
-    // let columns = self
-    // .union_plan
-    // .pairs
-    // .iter()
-    // .map(|(left, right)| {
-    // if is_left {
-    // Ok(block.get_by_offset(left_schema.index_of(left)?).clone())
-    // } else {
-    // If block from right, check if block schema matches self scheme(left schema)
-    // If unmatched, covert block columns types or report error
-    // self.check_type(left, right, &block)
-    // }
-    // })
-    // .collect::<Result<Vec<_>>>()?;
-    // Ok(DataBlock::new(columns, num_rows))
-    // }
-    //
-    //
-    // fn check_type(
-    // &self,
-    // left_name: &str,
-    // right_name: &str,
-    // block: &DataBlock,
-    // ) -> Result<BlockEntry> {
-    // let left_schema = self.union_plan.left.output_schema()?;
-    // let left_field = left_schema.field_with_name(left_name)?;
-    // let left_data_type = left_field.data_type();
-    //
-    // let right_schema = self.union_plan.right.output_schema()?;
-    // let right_field = right_schema.field_with_name(right_name)?;
-    // let right_data_type = right_field.data_type();
-    //
-    // let index = right_schema.index_of(right_name)?;
-    //
-    // if left_data_type == right_data_type {
-    // return Ok(block.get_by_offset(index).clone());
-    // }
-    //
-    // if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
-    // let origin_column = block.get_by_offset(index).clone();
-    // let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
-    // let value = origin_column.value.as_ref();
-    // for idx in 0..block.num_rows() {
-    // let scalar = value.index(idx).unwrap();
-    // builder.push(scalar);
-    // }
-    // let col = builder.build();
-    // Ok(BlockEntry::new(left_data_type.clone(), Value::Column(col)))
-    // } else {
-    // Err(ErrorCode::IllegalDataType(
-    // "The data type on both sides of the union does not match",
-    // ))
-    // }
-    // }
-    //
+    fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
+        let num_rows = block.num_rows();
+        let left_schema = self.union_plan.left.output_schema()?;
+        let right_schema = self.union_plan.right.output_schema()?;
+        dbg!(&self.left_outputs);
+        dbg!(&self.right_outputs);
+        dbg!(&left_schema);
+        dbg!(&right_schema);
+        let func_ctx = self.ctx.get_function_context()?;
+        let mut evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let columns = self
+            .left_outputs
+            .iter()
+            .zip(self.right_outputs.iter())
+            .map(|(left, right)| {
+                if is_left {
+                    if let Some(expr) = &left.1 {
+                        let column =
+                            BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
+                        Ok(column)
+                    } else {
+                        Ok(block.get_by_offset(left_schema.index_of(&left.0.to_string())?).clone())
+                    }
+                } else {
+                    if let Some(expr) = &right.1 {
+                        let column =
+                            BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
+                        Ok(column)
+                    } else {
+                        if left.1.is_some() {
+                            Ok(block.get_by_offset(right_schema.index_of(&right.0.to_string())?).clone())
+                        } else {
+                            self.check_type(&left.0.to_string(), &right.0.to_string(), &block)
+                        }
+                    }
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(DataBlock::new(columns, num_rows))
+    }
+
+    fn check_type(
+        &self,
+        left_name: &str,
+        right_name: &str,
+        block: &DataBlock,
+    ) -> Result<BlockEntry> {
+        let left_schema = self.union_plan.left.output_schema()?;
+        let right_schema = self.union_plan.right.output_schema()?;
+        let left_field = left_schema.field_with_name(left_name)?;
+        let left_data_type = left_field.data_type();
+
+        let right_field = right_schema.field_with_name(right_name)?;
+        let right_data_type = right_field.data_type();
+
+        let index = right_schema.index_of(right_name)?;
+
+        if left_data_type == right_data_type {
+            return Ok(block.get_by_offset(index).clone());
+        }
+
+        if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
+            let origin_column = block.get_by_offset(index).clone();
+            let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
+            let value = origin_column.value.as_ref();
+            for idx in 0..block.num_rows() {
+                let scalar = value.index(idx).unwrap();
+                builder.push(scalar);
+            }
+            let col = builder.build();
+            Ok(BlockEntry::new(left_data_type.clone(), Value::Column(col)))
+        } else {
+            Err(ErrorCode::IllegalDataType(
+                "The data type on both sides of the union does not match",
+            ))
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -168,10 +215,12 @@ impl AsyncSource for TransformRecursiveCteSource {
 
         let row_size = data.num_rows();
         if row_size > 0 {
+            dbg!(&data);
+            data = self.project_block(data, self.recursive_step == 1)?;
+            dbg!(&data);
             // Prepare the data of next round recursive.
             self.ctx
                 .update_recursive_cte_scan(&self.cte_name, vec![data.clone()])?;
-            // data = self.project_block(data, self.recursive_step == 1)?;
             res = Some(data);
         } else {
             self.ctx.update_recursive_cte_scan(&self.cte_name, vec![])?;

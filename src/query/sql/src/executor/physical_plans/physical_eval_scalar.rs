@@ -60,6 +60,7 @@ impl EvalScalar {
         }
         let input_column_nums = input_schema.num_fields();
         for (i, (expr, index)) in self.exprs.iter().enumerate() {
+            dbg!(expr);
             let i = i + input_column_nums;
             if !self.projections.contains(&i) {
                 continue;
