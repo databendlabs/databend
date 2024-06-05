@@ -81,9 +81,6 @@ impl TransformMergeBlock {
     }
 
     fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
-        dbg!(is_left);
-        dbg!(&self.left_schema);
-        dbg!(&self.right_schema);
         let num_rows = block.num_rows();
         let mut evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let columns = self
@@ -97,9 +94,7 @@ impl TransformMergeBlock {
                             BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
                         Ok(column)
                     } else {
-                        Ok(block
-                            .get_by_offset(self.left_schema.index_of(&left.0.to_string())?)
-                            .clone())
+                        Ok(block.get_by_offset(self.left_schema.index_of(&left.0.to_string())?).clone())
                     }
                 } else {
                     if let Some(expr) = &right.1 {
@@ -108,9 +103,7 @@ impl TransformMergeBlock {
                         Ok(column)
                     } else {
                         if left.1.is_some() {
-                            Ok(block
-                                .get_by_offset(self.right_schema.index_of(&right.0.to_string())?)
-                                .clone())
+                            Ok(block.get_by_offset(self.right_schema.index_of(&right.0.to_string())?).clone())
                         } else {
                             self.check_type(&left.0.to_string(), &right.0.to_string(), &block)
                         }
@@ -118,7 +111,6 @@ impl TransformMergeBlock {
                 }
             })
             .collect::<Result<Vec<_>>>()?;
-        dbg!(&columns);
         Ok(DataBlock::new(columns, num_rows))
     }
 
