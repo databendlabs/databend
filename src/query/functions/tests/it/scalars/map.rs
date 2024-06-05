@@ -281,7 +281,13 @@ fn test_map_size(file: &mut impl Write) {
 }
 
 fn test_map_delete(file: &mut impl Write) {
+    // Deleting keys from an empty map
+    run_ast(file, "map_delete({}, [])", &[]);
+
+    run_ast(file, "map_delete({}, [], [])", &[]);
+
     // Deleting keys from a map literal
+    run_ast(file, "map_delete({}, ['k3'], ['k2'])", &[]);
     run_ast(
         file,
         "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, ['k3', 'k2'])",
@@ -299,6 +305,17 @@ fn test_map_delete(file: &mut impl Write) {
     run_ast(
         file,
         "map_delete(map([a_col, b_col], [d_col, e_col]), ['a_k2', 'b_k3'])",
+        &columns,
+    );
+
+    let columns = [(
+        "string_key_col",
+        StringType::from_data(vec![r#"k3"#, r#"k2"#]),
+    )];
+
+    run_ast(
+        file,
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, [string_key_col])",
         &columns,
     );
 
@@ -321,5 +338,46 @@ fn test_map_delete(file: &mut impl Write) {
         file,
         "map_delete({'k1': 'v1', 'k2': 'v2'}, ['k3', 'k4'])",
         &[],
+    );
+
+    // Deleting keys from a nested map
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
+        ("b_col", Int16Type::from_data(vec![555i16, 3])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", Int16Type::from_data(vec![666i16, 3])),
+    ];
+
+    run_ast(
+        file,
+        "map_delete(map([a_col, b_col], [d_col, e_col]), ['a_k2', 'b_k3'])",
+        &columns,
+    );
+
+    // Deleting keys from nested maps with different data types
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
+        ("b_col", Int16Type::from_data(vec![555i16, 557i16, 559i16])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", Int16Type::from_data(vec![666i16, 664i16, 662i16])),
+    ];
+
+    run_ast(
+        file,
+        "map_delete(map([a_col, d_col], [b_col, e_col]), ['a_k2', 'aaa3'])",
+        &columns,
+    );
+
+    let columns = [
+        ("a_col", Int16Type::from_data(vec![222i16, 223i16, 224i16])),
+        ("b_col", Int16Type::from_data(vec![555i16, 557i16, 559i16])),
+        ("d_col", Int16Type::from_data(vec![444i16, 445i16, 446i16])),
+        ("e_col", Int16Type::from_data(vec![666i16, 664i16, 662i16])),
+    ];
+
+    run_ast(
+        file,
+        "map_delete(map([a_col, d_col], [b_col, e_col]), CAST([224, 444] AS Array(INT16)))",
+        &columns,
     );
 }

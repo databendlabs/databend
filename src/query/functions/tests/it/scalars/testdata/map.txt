@@ -527,6 +527,31 @@ output domain  : {[{"k1"..="k2"}], [{[{"nk1"..="nk3"}], [{"new_nv1"..="nv3"}]}]}
 output         : {'k1':{'nk1':'new_nv1'}, 'k2':{'nk3':'nv3'}}
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | map_delete({}, [])
+  | ^^^^^^^^^^^^^^^^^^ no overload satisfies `map_delete(Map(Nothing), Array(Nothing))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map_delete({}, [], [])
+  | ^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `map_delete(Map(Nothing), Array(Nothing), Array(Nothing))`
+
+
+
+ast            : map_delete({}, ['k3'], ['k2'])
+raw expr       : map_delete(map(array(), array()), array('k3'), array('k2'))
+checked expr   : map_delete<Map(Nothing), Array(String), Array(String)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), array<T0=String><T0>("k3"), array<T0=String><T0>("k2"))
+optimized expr : {} :: Map(Nothing)
+output type    : Map(Nothing)
+output domain  : {}
+output         : {}
+
+
 ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, ['k3', 'k2'])
 raw expr       : map_delete(map(array('k1', 'k2', 'k3', 'k4'), array('v1', 'v2', 'v3', 'v4')), array('k3', 'k2'))
 checked expr   : map_delete<Map(String, String), Array(String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0, T0>("k1", "k2", "k3", "k4"), array<T0=String><T0, T0, T0, T0>("v1", "v2", "v3", "v4")), array<T0=String><T0, T0>("k3", "k2"))
@@ -562,6 +587,28 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, [string_key_col])
+raw expr       : map_delete(map(array('k1', 'k2', 'k3', 'k4'), array('v1', 'v2', 'v3', 'v4')), array(string_key_col::String))
+checked expr   : map_delete<Map(String, String), Array(String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0, T0>("k1", "k2", "k3", "k4"), array<T0=String><T0, T0, T0, T0>("v1", "v2", "v3", "v4")), array<T0=String><T0>(string_key_col))
+optimized expr : map_delete<Map(String, String), Array(String)>({"k1":"v1", "k2":"v2", "k3":"v3", "k4":"v4"}, array<T0=String><T0>(string_key_col))
+evaluation:
++--------+----------------+------------------------+
+|        | string_key_col | Output                 |
++--------+----------------+------------------------+
+| Type   | String         | Map(String, String)    |
+| Domain | {"k2"..="k3"}  | {[{""..}], [{""..}]}   |
+| Row 0  | 'k3'           | {'k1':'v1', 'k4':'v4'} |
+| Row 1  | 'k2'           | {'k1':'v1', 'k4':'v4'} |
++--------+----------------+------------------------+
+evaluation (internal):
++----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column         | Data                                                                                                                                                                                          |
++----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| string_key_col | StringColumn { data: 0x6b336b32, offsets: [0, 2, 4] }                                                                                                                                         |
+| Output         | ArrayColumn { values: Tuple([StringColumn { data: 0x6b316b346b316b34, offsets: [0, 2, 4, 6, 8] }, StringColumn { data: 0x7631763476317634, offsets: [0, 2, 4, 6, 8] }]), offsets: [0, 2, 4] } |
++----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 ast            : map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k2', 'k3'])
 raw expr       : map_delete(map(array('k1', 'k2', 'k3'), array('v1', 'v2', 'v3')), array('k1', 'k2', 'k3'))
 checked expr   : map_delete<Map(String, String), Array(String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("k1", "k2", "k3"), array<T0=String><T0, T0, T0>("v1", "v2", "v3")), array<T0=String><T0, T0, T0>("k1", "k2", "k3"))
@@ -587,6 +634,66 @@ optimized expr : {"k1":"v1", "k2":"v2"}
 output type    : Map(String, String)
 output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
 output         : {'k1':'v1', 'k2':'v2'}
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map_delete(map([a_col, b_col], [d_col, e_col]), ['a_k2', 'b_k3'])
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `map_delete(Map(Int64, Int64), Array(String))`
+
+
+
+ast            : map_delete(map([a_col, d_col], [b_col, e_col]), ['a_k2', 'aaa3'])
+raw expr       : map_delete(map(array(a_col::String, d_col::String), array(b_col::Int16, e_col::Int16)), array('a_k2', 'aaa3'))
+checked expr   : map_delete<Map(String, Int16), Array(String)>(map<T0=String, T1=Int16><Array(T0), Array(T1)>(array<T0=String><T0, T0>(a_col, d_col), array<T0=Int16><T0, T0>(b_col, e_col)), array<T0=String><T0, T0>("a_k2", "aaa3"))
+optimized expr : map_delete<Map(String, Int16), Array(String)>(map<T0=String, T1=Int16><Array(T0), Array(T1)>(array<T0=String><T0, T0>(a_col, d_col), array<T0=Int16><T0, T0>(b_col, e_col)), ['a_k2', 'aaa3'])
+evaluation:
++--------+-------------------+-------------+-------------------+-------------+--------------------------+
+|        | a_col             | b_col       | d_col             | e_col       | Output                   |
++--------+-------------------+-------------+-------------------+-------------+--------------------------+
+| Type   | String            | Int16       | String            | Int16       | Map(String, Int16)       |
+| Domain | {"a_k1"..="a_k3"} | {555..=559} | {"aaa1"..="aaa3"} | {662..=666} | Unknown                  |
+| Row 0  | 'a_k1'            | 555         | 'aaa1'            | 666         | {'a_k1':555, 'aaa1':666} |
+| Row 1  | 'a_k2'            | 557         | 'aaa2'            | 664         | {'aaa2':664}             |
+| Row 2  | 'a_k3'            | 559         | 'aaa3'            | 662         | {'a_k3':559}             |
++--------+-------------------+-------------+-------------------+-------------+--------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                       |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x615f6b31615f6b32615f6b33, offsets: [0, 4, 8, 12] }                                                                                                  |
+| b_col  | Int16([555, 557, 559])                                                                                                                                                     |
+| d_col  | StringColumn { data: 0x616161316161613261616133, offsets: [0, 4, 8, 12] }                                                                                                  |
+| e_col  | Int16([666, 664, 662])                                                                                                                                                     |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x615f6b316161613161616132615f6b33, offsets: [0, 4, 8, 12, 16] }, Int16([555, 666, 664, 559])]), offsets: [0, 2, 3, 4] } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_delete(map([a_col, d_col], [b_col, e_col]), CAST([224, 444] AS Array(INT16)))
+raw expr       : map_delete(map(array(a_col::Int16, d_col::Int16), array(b_col::Int16, e_col::Int16)), CAST(array(224, 444) AS Array(Int16)))
+checked expr   : map_delete<Map(Int16, Int16), Array(Int16)>(map<T0=Int16, T1=Int16><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(a_col, d_col), array<T0=Int16><T0, T0>(b_col, e_col)), CAST(array<T0=UInt16><T0, T0>(to_uint16<UInt8>(224_u8), 444_u16) AS Array(Int16)))
+optimized expr : map_delete<Map(Int16, Int16), Array(Int16)>(map<T0=Int16, T1=Int16><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(a_col, d_col), array<T0=Int16><T0, T0>(b_col, e_col)), [224, 444])
+evaluation:
++--------+-------------+-------------+-------------+-------------+--------------------+
+|        | a_col       | b_col       | d_col       | e_col       | Output             |
++--------+-------------+-------------+-------------+-------------+--------------------+
+| Type   | Int16       | Int16       | Int16       | Int16       | Map(Int16, Int16)  |
+| Domain | {222..=224} | {555..=559} | {444..=446} | {662..=666} | Unknown            |
+| Row 0  | 222         | 555         | 444         | 666         | {222:555}          |
+| Row 1  | 223         | 557         | 445         | 664         | {223:557, 445:664} |
+| Row 2  | 224         | 559         | 446         | 662         | {446:662}          |
++--------+-------------+-------------+-------------+-------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                             |
++--------+------------------------------------------------------------------------------------------------------------------+
+| a_col  | Int16([222, 223, 224])                                                                                           |
+| b_col  | Int16([555, 557, 559])                                                                                           |
+| d_col  | Int16([444, 445, 446])                                                                                           |
+| e_col  | Int16([666, 664, 662])                                                                                           |
+| Output | ArrayColumn { values: Tuple([Int16([222, 223, 445, 446]), Int16([555, 557, 664, 662])]), offsets: [0, 1, 3, 4] } |
++--------+------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : map_contains_key({'a':1,'b':2,'c':3}, 'a')
