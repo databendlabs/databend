@@ -32,7 +32,6 @@ use super::AggregateFunction;
 use super::NthValueFunction;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
-use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -125,34 +124,16 @@ impl Operator for Window {
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        let mut required = required.clone();
-
-        required.distribution = if self.partition_by.is_empty() {
-            Distribution::Serial
-        } else {
-            let partition_by = self.partition_by.iter().map(|s| s.scalar.clone()).collect();
-            Distribution::Hash(partition_by)
-        };
-        Ok(required)
+        Ok(required.clone())
     }
 
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
-        _required: &RequiredProperty,
+        required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let distribution = if self.partition_by.is_empty() {
-            RequiredProperty {
-                distribution: Distribution::Serial,
-            }
-        } else {
-            let partition_by = self.partition_by.iter().map(|s| s.scalar.clone()).collect();
-            RequiredProperty {
-                distribution: Distribution::Hash(partition_by),
-            }
-        };
-        Ok(vec![vec![distribution]])
+        Ok(vec![vec![required.clone()]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {

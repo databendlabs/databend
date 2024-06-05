@@ -83,46 +83,55 @@ impl Operator for Sort {
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
+        rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        required.distribution = if self.window_partition.is_empty() {
-            Distribution::Serial
-        } else {
-            let partition_by = self
-                .window_partition
-                .iter()
-                .map(|s| s.scalar.clone())
-                .collect();
-            Distribution::Hash(partition_by)
-        };
+        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        // Can't merge to shuffle
+        if self.window_partition.is_empty()
+            || child_physical_prop.distribution == Distribution::Serial
+        {
+            required.distribution = Distribution::Serial;
+            return Ok(required);
+        }
+
+        let partition_by = self
+            .window_partition
+            .iter()
+            .map(|s| s.scalar.clone())
+            .collect();
+        required.distribution = Distribution::Hash(partition_by);
+
         Ok(required)
     }
 
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _required: &RequiredProperty,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let distribution = if self.window_partition.is_empty() {
-            RequiredProperty {
-                distribution: Distribution::Serial,
-            }
-        } else {
-            let partition_by = self
-                .window_partition
-                .iter()
-                .map(|s| s.scalar.clone())
-                .collect();
-            RequiredProperty {
-                distribution: Distribution::Hash(partition_by),
-            }
-        };
+        let mut required = required.clone();
+        // Can't merge to shuffle
+        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        if self.window_partition.is_empty()
+            || child_physical_prop.distribution == Distribution::Serial
+        {
+            required.distribution = Distribution::Serial;
 
-        Ok(vec![vec![distribution]])
+            return Ok(vec![vec![required]]);
+        }
+
+        let partition_by = self
+            .window_partition
+            .iter()
+            .map(|s| s.scalar.clone())
+            .collect();
+
+        required.distribution = Distribution::Hash(partition_by);
+        Ok(vec![vec![required]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
