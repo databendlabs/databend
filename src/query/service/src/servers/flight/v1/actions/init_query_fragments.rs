@@ -15,7 +15,6 @@
 use databend_common_base::match_join_handle;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
 
@@ -32,7 +31,7 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     debug!("init query fragments with {:?}", fragments);
 
     // Avoid blocking runtime.
-    let query_id = fragments.query_id;
+    let query_id = fragments.query_id.clone();
     let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
     let join_handler = ctx.spawn(ThreadTracker::tracking_future(async move {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
