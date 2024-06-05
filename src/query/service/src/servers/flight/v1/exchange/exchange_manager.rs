@@ -303,6 +303,26 @@ impl DataExchangeManager {
         }
     }
 
+    pub fn set_ctx(&self, query_id: &str, ctx: Arc<QueryContext>) -> Result<()> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
+                query_id
+            ))),
+            Some(coordinator) => {
+                if let Some(info) = coordinator.info.as_mut() {
+                    info.query_ctx = ctx;
+                    return Ok(());
+                }
+
+                coordinator.info = Some(Self::create_info(ctx)?);
+                Ok(())
+            }
+        }
+    }
+
     // Execute query in background
     #[minitrace::trace]
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {

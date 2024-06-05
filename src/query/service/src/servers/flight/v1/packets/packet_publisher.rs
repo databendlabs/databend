@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
@@ -144,24 +143,25 @@ impl QueryEnv {
         let cluster = ctx.get_cluster();
         let mut message = HashMap::with_capacity(self.dataflow_diagram.node_count());
         for node in self.dataflow_diagram.node_weights() {
-            if node.id == GlobalConfig::instance().query.node_id {
-                if let Err(cause) = DataExchangeManager::instance()
-                    .init_query_env(self, ctx.clone())
-                    .await
-                {
-                    DataExchangeManager::instance().on_finished_query(&self.query_id);
-                    return Err(cause);
-                }
-
-                continue;
-            }
-
+            // if node.id == GlobalConfig::instance().query.node_id {
+            //     if let Err(cause) = DataExchangeManager::instance()
+            //         .init_query_env(self, ctx.clone())
+            //         .await
+            //     {
+            //         DataExchangeManager::instance().on_finished_query(&self.query_id);
+            //         return Err(cause);
+            //     }
+            //
+            //     continue;
+            // }
             message.insert(node.id.clone(), self.clone());
         }
 
         let _ = cluster
             .do_action::<_, ()>(INIT_QUERY_ENV, message, timeout)
             .await?;
+
+        DataExchangeManager::instance().set_ctx(&self.query_id, ctx.clone())?;
         Ok(())
     }
 
