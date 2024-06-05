@@ -78,13 +78,11 @@ impl serde::Serialize for Settings {
         struct SerializeSettings<'a> {
             tenant: &'a String,
             changes: &'a DashMap<String, ChangeValue>,
-            configs: &'a HashMap<String, UserSettingValue>,
         }
 
         let serialize_settings = SerializeSettings {
             tenant: &self.tenant.tenant,
             changes: &self.changes,
-            configs: &self.configs,
         };
 
         serialize_settings.serialize(serializer)
@@ -98,7 +96,6 @@ impl<'de> serde::Deserialize<'de> for Settings {
         struct DeserializeSettings {
             tenant: String,
             changes: DashMap<String, ChangeValue>,
-            configs: HashMap<String, UserSettingValue>,
         }
 
         let deserialize_settings =
@@ -106,7 +103,7 @@ impl<'de> serde::Deserialize<'de> for Settings {
         Ok(Settings {
             tenant: Tenant::new_literal(&deserialize_settings.tenant),
             changes: Arc::new(deserialize_settings.changes),
-            configs: deserialize_settings.configs,
+            configs: GlobalConfig::instance().query.settings.clone(),
         })
     }
 }
