@@ -25,6 +25,8 @@ use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -99,7 +101,7 @@ impl AsyncSystemTable for IndexesTable {
                     .iter()
                     .map(|(key, val)| format!("{}='{}'", key, val))
                     .collect::<Vec<_>>()
-                    .join(", ");
+                    .join(" ");
 
                 let def = format!("{}({}) {}", table.name, columns, options);
                 defs.push(def);
@@ -153,6 +155,15 @@ impl IndexesTable {
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Vec<TableInfo>> {
+        let license_manager = get_license_manager();
+        if license_manager
+            .manager
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::InvertedIndex)
+            .is_err()
+        {
+            return Ok(vec![]);
+        }
+
         let tenant = ctx.get_tenant();
         let visibility_checker = ctx.get_visibility_checker().await?;
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;

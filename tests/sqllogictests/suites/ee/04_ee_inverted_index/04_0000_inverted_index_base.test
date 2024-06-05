@@ -426,8 +426,8 @@ query TTT
 SELECT name, type, definition FROM system.indexes order by name
 ----
 idx INVERTED t1(body) tokenizer='chinese'
-idx1 INVERTED t(content) filters='english_stop,english_stemmer,chinese_stop', tokenizer='chinese'
-idx2 INVERTED books(title, author, description) index_record='"basic"', tokenizer='chinese'
+idx1 INVERTED t(content) index_record='"basic"' tokenizer='chinese'
+idx2 INVERTED books(title, author, description) index_record='"basic"' tokenizer='chinese'
 
 statement ok
 use default
