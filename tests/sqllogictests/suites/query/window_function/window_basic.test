@@ -292,18 +292,18 @@ sales 4800 4800
 sales 5000 4800
 
 query II
-SELECT empno, first_value(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary
+SELECT empno, first_value(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary order by 1,2
 ----
+1 1
+2 2
+3 1
+4 1
+5 2
 7 7
 8 7
 9 7
 10 7
 11 7
-2 2
-5 2
-1 1
-3 1
-4 1
 
 # first with nullable column
 query II
