@@ -715,10 +715,10 @@ statement ok
 insert into t values (1),(2),(3),(4),(5)
 
 query II
-select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3
+select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3 order by 1,2
 ----
-5
 4
+5
 
 ## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
 statement ok

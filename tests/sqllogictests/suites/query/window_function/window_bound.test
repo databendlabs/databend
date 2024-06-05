@@ -100,7 +100,7 @@ SELECT four, ten, first_value(ten) OVER (PARTITION BY four ORDER BY ten rows bet
 3 7 3
 
 query IIII
-SELECT two, four, unique1, first_value(unique1) OVER (PARTITION BY two, four ORDER BY ten, twenty rows between 1 following and unbounded following) fv 
+SELECT two, four, unique1, first_value(unique1) OVER (PARTITION BY two, four ORDER BY ten, twenty rows between 1 following and unbounded following) fv
     FROM tenk1 order by 1,2,3,4;
 ----
 0 0 0 4
@@ -238,18 +238,18 @@ SELECT a, RANK() OVER (ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED
 7 11
 
 query II
-SELECT a, DENSE_RANK() OVER (PARTITION BY a ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rank FROM t1;
+SELECT a, DENSE_RANK() OVER (PARTITION BY a ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rank FROM t1 order by 1,2;
 ----
+1 1
+1 1
+1 1
+3 1
+3 1
 5 1
 5 1
 5 1
 5 1
 6 1
-1 1
-1 1
-1 1
-3 1
-3 1
 7 1
 
 query II
