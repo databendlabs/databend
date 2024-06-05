@@ -84,6 +84,7 @@ message FileFormatParams {
     JsonFileFormatParams json = 4;
     NdJsonFileFormatParams nd_json = 5;
     XmlFileFormatParams xml = 6;
+    OrcFileFormatParams orc = 7;
   }
 }
 
@@ -146,4 +147,9 @@ message JsonFileFormatParams {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
   StageFileCompression compression = 1;
+}
+
+message OrcFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
 }

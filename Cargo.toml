@@ -65,6 +65,7 @@ members = [
     "src/query/storages/information_schema",
     "src/query/storages/memory",
     "src/query/storages/null",
+    "src/query/storages/orc",
     "src/query/storages/random",
     "src/query/storages/share",
     "src/query/storages/stage",

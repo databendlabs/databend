@@ -504,6 +504,7 @@ impl PhysicalPlan {
                 DataSourceInfo::StageSource(_) => "StageScan".to_string(),
                 DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
                 DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
+                DataSourceInfo::ORCSource(_) => "OrcScan".to_string(),
             },
             PhysicalPlan::AsyncFunction(_) => "AsyncFunction".to_string(),
             PhysicalPlan::Filter(_) => "Filter".to_string(),

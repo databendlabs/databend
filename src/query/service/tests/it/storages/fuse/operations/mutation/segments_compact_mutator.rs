@@ -681,6 +681,7 @@ impl CompactSegmentTestFixture {
             BlockThresholds::default(),
             cluster_key_id,
             block_per_seg as usize,
+            false,
         )
         .await?;
         let mut summary = Statistics::default();
@@ -704,6 +705,7 @@ impl CompactSegmentTestFixture {
         thresholds: BlockThresholds,
         cluster_key_id: Option<u32>,
         block_per_seg: usize,
+        unclustered: bool,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
         let data_accessor = ctx.get_application_level_data_operator()?.operator();
@@ -728,7 +730,7 @@ impl CompactSegmentTestFixture {
 
                     let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
-                    let cluster_stats = if num_blocks % 5 == 0 {
+                    let cluster_stats = if unclustered && num_blocks % 4 == 0 {
                         None
                     } else {
                         cluster_key_id.map(|v| {
@@ -1010,6 +1012,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             BlockThresholds::default(),
             Some(cluster_key_id),
             block_per_seg as usize,
+            false,
         )
         .await?;
         let mut summary = Statistics::default();
