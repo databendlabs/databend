@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -23,16 +24,21 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
 use opendal::Operator;
 
+use crate::io::BlockWriter;
 use crate::io::BloomBlockFilterReader;
+use crate::io::BloomIndexBuilder;
 
 #[async_trait::async_trait]
 pub trait BloomPruner {
@@ -43,6 +49,7 @@ pub trait BloomPruner {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
+        block_meta: &BlockMeta,
     ) -> bool;
 }
 
@@ -63,6 +70,9 @@ pub struct BloomPrunerCreator {
 
     /// the schema of data being indexed
     data_schema: TableSchemaRef,
+
+    /// bloom index builder, if set to Some(_), missing bloom index will be built during pruning
+    bloom_index_builder: Option<BloomIndexBuilder>,
 }
 
 impl BloomPrunerCreator {
@@ -72,6 +82,7 @@ impl BloomPrunerCreator {
         dal: Operator,
         filter_expr: Option<&Expr<String>>,
         bloom_index_cols: BloomIndexColumns,
+        bloom_index_builder: Option<BloomIndexBuilder>,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
         if let Some(expr) = filter_expr {
             let bloom_columns_map =
@@ -98,6 +109,7 @@ impl BloomPrunerCreator {
                     scalar_map,
                     dal,
                     data_schema: schema.clone(),
+                    bloom_index_builder,
                 };
                 return Ok(Some(Arc::new(creator)));
             }
@@ -113,6 +125,7 @@ impl BloomPrunerCreator {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids_of_indexed_block: Vec<ColumnId>,
+        block_meta: &BlockMeta,
     ) -> Result<bool> {
         let version = index_location.1;
 
@@ -131,6 +144,44 @@ impl BloomPrunerCreator {
         let maybe_filter = index_location
             .read_block_filter(self.dal.clone(), &index_columns, index_length)
             .await;
+
+        let maybe_filter = match (&maybe_filter, &self.bloom_index_builder) {
+            (Err(e), Some(bloom_index_builder)) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                let bloom_index_state = bloom_index_builder
+                    .bloom_index_state_from_data_block_meta(block_meta)
+                    .await?;
+                if let Some((bloom_state, bloom_index)) = bloom_index_state {
+                    // extract bloom index
+                    let column_needed: HashSet<&String> = HashSet::from_iter(index_columns.iter());
+
+                    let index_column_chunk_metas = &bloom_state.filter_schema.fields;
+                    let mut new_filter_schema_fields = Vec::new();
+                    let mut filters = Vec::new();
+
+                    // TODO swap the loops
+                    for column_name in column_needed {
+                        for (idx, field) in index_column_chunk_metas.iter().enumerate() {
+                            if &field.name == column_name {
+                                new_filter_schema_fields.push(field.clone());
+                                filters.push(bloom_index.filters.get(idx).unwrap().clone()) // TODO
+                            }
+                        }
+                    }
+                    BlockWriter::write_down_bloom_index_state(
+                        &bloom_index_builder.table_dal,
+                        Some(bloom_state),
+                    )
+                    .await?;
+                    Ok(BlockFilter {
+                        filter_schema: Arc::new(TableSchema::new(new_filter_schema_fields)),
+                        filters,
+                    })
+                } else {
+                    maybe_filter
+                }
+            }
+            _ => maybe_filter,
+        };
 
         match maybe_filter {
             Ok(filter) => Ok(BloomIndex::from_filter_block(
@@ -165,11 +216,12 @@ impl BloomPruner for BloomPrunerCreator {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
+        block_meta: &BlockMeta,
     ) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
             match self
-                .apply(loc, index_length, column_stats, column_ids)
+                .apply(loc, index_length, column_stats, column_ids, block_meta)
                 .await
             {
                 Ok(v) => v,

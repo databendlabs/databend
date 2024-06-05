@@ -20,6 +20,7 @@ use std::time::Instant;
 use chrono::Utc;
 use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use databend_common_arrow::native::write::NativeWriter;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -51,7 +52,9 @@ use log::info;
 use opendal::Operator;
 
 use crate::io::write::WriteSettings;
+use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
+use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::column_parquet_metas;
 use crate::statistics::gen_columns_statistics;
@@ -120,14 +123,96 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
 }
 
 pub struct BloomIndexState {
+    pub(crate) filter_schema: TableSchemaRef,
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
     pub(crate) location: Location,
     pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
 }
 
+pub struct BloomIndexBuilder {
+    pub table_ctx: Arc<dyn TableContext>,
+    pub table_schema: TableSchemaRef,
+    pub table_dal: Operator,
+    pub storage_format: FuseStorageFormat,
+    pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+}
+
+impl BloomIndexBuilder {
+    pub fn bloom_index_state_from_data_block(
+        &self,
+        block: &DataBlock,
+        bloom_location: Location,
+    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
+        let maybe_bloom_index = BloomIndex::try_create(
+            self.table_ctx.get_function_context()?,
+            bloom_location.1,
+            &[block],
+            self.bloom_columns_map.clone(),
+        )?;
+
+        match maybe_bloom_index {
+            None => Ok(None),
+            Some(bloom_index) => Ok(Some((
+                BloomIndexState::from_bloom_index(&bloom_index, bloom_location)?,
+                bloom_index,
+            ))),
+        }
+    }
+
+    pub async fn bloom_index_state_from_data_block_meta(
+        &self,
+        block_meta: &BlockMeta,
+    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
+        let ctx = self.table_ctx.clone();
+
+        // TODO refine this
+        let projection =
+            Projection::Columns((0..self.table_schema.fields().len()).collect::<Vec<usize>>());
+
+        let block_reader = BlockReader::create(
+            ctx,
+            self.table_dal.clone(),
+            self.table_schema.clone(),
+            projection,
+            false,
+            false,
+            false,
+        )?;
+
+        let settings = ReadSettings::from_ctx(&self.table_ctx)?;
+
+        let data_block = block_reader
+            .read_by_meta(&settings, &block_meta, &self.storage_format)
+            .await?;
+
+        self.bloom_index_state_from_data_block(&data_block, block_meta.location.clone())
+    }
+}
+
 impl BloomIndexState {
-    pub fn try_create(
+    pub fn from_bloom_index(bloom_index: &BloomIndex, location: Location) -> Result<Self> {
+        let index_block = bloom_index.serialize_to_data_block()?;
+        let filter_schema = bloom_index.filter_schema.clone();
+        let column_distinct_count = bloom_index.column_distinct_count.clone();
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let index_block_schema = &filter_schema;
+        let _ = blocks_to_parquet(
+            index_block_schema,
+            vec![index_block],
+            &mut data,
+            TableCompression::None,
+        )?;
+        let data_size = data.len() as u64;
+        Ok(Self {
+            filter_schema,
+            data,
+            size: data_size,
+            location,
+            column_distinct_count,
+        })
+    }
+    pub fn from_data_block(
         ctx: Arc<dyn TableContext>,
         block: &DataBlock,
         location: Location,
@@ -141,24 +226,7 @@ impl BloomIndexState {
             bloom_columns_map,
         )?;
         if let Some(bloom_index) = maybe_bloom_index {
-            let index_block = bloom_index.serialize_to_data_block()?;
-            let filter_schema = bloom_index.filter_schema;
-            let column_distinct_count = bloom_index.column_distinct_count;
-            let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-            let index_block_schema = &filter_schema;
-            let _ = blocks_to_parquet(
-                index_block_schema,
-                vec![index_block],
-                &mut data,
-                TableCompression::None,
-            )?;
-            let data_size = data.len() as u64;
-            Ok(Some(Self {
-                data,
-                size: data_size,
-                location,
-                column_distinct_count,
-            }))
+            Ok(Some(Self::from_bloom_index(&bloom_index, location)?))
         } else {
             Ok(None)
         }
@@ -276,7 +344,7 @@ impl BlockBuilder {
         let (block_location, block_id) = self.meta_locations.gen_block_location();
 
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
-        let bloom_index_state = BloomIndexState::try_create(
+        let bloom_index_state = BloomIndexState::from_data_block(
             self.ctx.clone(),
             &data_block,
             bloom_index_location,

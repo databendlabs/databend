@@ -33,6 +33,7 @@ use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_index::BloomIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -43,6 +44,7 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use crate::fuse_part::FuseBlockPartInfo;
+use crate::io::BloomIndexBuilder;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
@@ -168,6 +170,20 @@ impl FuseTable {
             }
         }
 
+        // TODO check settings
+        let storage_format = self.storage_format.clone();
+
+        let bloom_columns_map = self
+            .bloom_index_cols()
+            .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
+        let bloom_index_builder = Some(BloomIndexBuilder {
+            table_ctx: ctx.clone(),
+            table_schema: table_schema.clone(),
+            table_dal: dal.clone(),
+            storage_format,
+            bloom_columns_map,
+        });
+
         let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(
                 &ctx,
@@ -175,6 +191,7 @@ impl FuseTable {
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
+                bloom_index_builder,
             )?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
@@ -187,6 +204,7 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols(),
+                bloom_index_builder,
             )?
         };
         let block_metas = pruner.read_pruning(segments_location).await?;
