@@ -29,7 +29,7 @@ use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
-pub use databend_common_exception::Result;
+use databend_common_exception::Result;
 use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::DataBlock;
