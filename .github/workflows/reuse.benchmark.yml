@@ -62,6 +62,9 @@ jobs:
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Download artifact
         uses: ./.github/actions/artifact_download
         with:
