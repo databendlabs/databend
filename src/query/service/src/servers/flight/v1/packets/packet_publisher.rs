@@ -165,17 +165,18 @@ impl QueryEnv {
         Ok(())
     }
 
-    pub fn create_query_ctx(&self) -> Result<Arc<QueryContext>> {
+    pub async fn create_query_ctx(&self) -> Result<Arc<QueryContext>> {
         let session_manager = SessionManager::instance();
 
         let session = session_manager.register_session(
             session_manager.create_with_settings(SessionType::FlightRPC, self.settings.clone())?,
         )?;
 
-        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
-            nodes: self.cluster.nodes.clone(),
-            local_id: GlobalConfig::instance().query.node_id.clone(),
-        }))?;
+        let query_ctx = session.create_query_context().await?;
+        // let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
+        //     nodes: self.cluster.nodes.clone(),
+        //     local_id: GlobalConfig::instance().query.node_id.clone(),
+        // }))?;
 
         query_ctx.set_id(self.query_id.clone());
 

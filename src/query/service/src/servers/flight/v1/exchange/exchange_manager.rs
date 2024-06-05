@@ -19,7 +19,6 @@ use std::ops::Deref;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_channel::Receiver;
 use databend_common_arrow::arrow_format::flight::data::FlightData;
@@ -197,17 +196,17 @@ impl DataExchangeManager {
                     };
                 }
 
-                let mut query_info = Self::create_info(ctx)?;
+                let query_info = Self::create_info(ctx)?;
 
-                let query_id = env.query_id.clone();
-                query_info.remove_leak_query_worker =
-                    Some(GlobalIORuntime::instance().spawn(async move {
-                        let _ = databend_common_base::base::tokio::time::sleep(
-                            Duration::from_secs(180),
-                        )
-                        .await;
-                        DataExchangeManager::instance().remove_if_leak_query(query_id);
-                    }));
+                // let query_id = env.query_id.clone();
+                // query_info.remove_leak_query_worker =
+                //     Some(GlobalIORuntime::instance().spawn(async move {
+                //         let _ = databend_common_base::base::tokio::time::sleep(
+                //             Duration::from_secs(180),
+                //         )
+                //         .await;
+                //         DataExchangeManager::instance().remove_if_leak_query(query_id);
+                //     }));
 
                 let queries_coordinator_guard = self.queries_coordinator.lock();
                 let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -215,15 +214,15 @@ impl DataExchangeManager {
                 match queries_coordinator.entry(env.query_id.clone()) {
                     Entry::Occupied(mut v) => {
                         let query_coordinator = v.get_mut();
+                        query_coordinator.info = Some(query_info);
                         query_coordinator.add_fragment_exchanges(targets_exchanges)?;
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
-                        query_coordinator.info = Some(query_info);
                     }
                     Entry::Vacant(v) => {
                         let query_coordinator = v.insert(QueryCoordinator::create());
+                        query_coordinator.info = Some(query_info);
                         query_coordinator.add_fragment_exchanges(targets_exchanges)?;
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
-                        query_coordinator.info = Some(query_info);
                     }
                 };
 
@@ -235,6 +234,7 @@ impl DataExchangeManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn remove_if_leak_query(&self, query_id: String) {
         let leak_query_id = {
             let queries_coordinator_guard = self.queries_coordinator.lock();

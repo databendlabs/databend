@@ -28,7 +28,7 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
 
     ThreadTracker::tracking_future(async move {
         debug!("init query env with {:?}", env);
-        let ctx = env.create_query_ctx()?;
+        let ctx = env.create_query_ctx().await?;
         if let Err(cause) = DataExchangeManager::instance()
             .init_query_env(&env, ctx)
             .await
