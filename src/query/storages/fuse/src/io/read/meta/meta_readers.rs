@@ -136,14 +136,14 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
         // read the ThriftFileMetaData, omit unnecessary conversions
-        let meta =
-            read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint).await?;
-        //            .map_err(|err| {
-        //                ErrorCode::StorageOther(format!(
-        //                    "read file meta failed, {}, {:?}",
-        //                    params.location, err
-        //                ))
-        //            })?;
+        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
+            .await
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!(
+                    "read file meta failed, {}, {:?}",
+                    params.location, err
+                ))
+            })?;
 
         BloomIndexMeta::try_from(meta)
     }

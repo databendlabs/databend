@@ -166,7 +166,7 @@ impl BloomIndexBuilder {
         let ctx = self.table_ctx.clone();
 
         // the caller should not pass a block meta without a bloom index location here.
-        assert!(!block_meta.bloom_filter_index_location.is_none());
+        assert!(block_meta.bloom_filter_index_location.is_some());
 
         let projection =
             Projection::Columns((0..self.table_schema.fields().len()).collect::<Vec<usize>>());

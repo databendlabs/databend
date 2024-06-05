@@ -733,6 +733,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+
+                ("enable_auto_fix_missing_bloom_index", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables auto fix missing bloom index",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_vacuum_temp_files_after_query", DefaultSettingValue {
                     value: UserSettingValue::UInt64(u64::MAX),
                     desc: "The maximum temp files will be removed after query. please enable vacuum feature. disable if 0",

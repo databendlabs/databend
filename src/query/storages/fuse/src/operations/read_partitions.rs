@@ -170,19 +170,26 @@ impl FuseTable {
             }
         }
 
-        // TODO check settings
-        let storage_format = self.storage_format;
+        let bloom_index_builder = if ctx
+            .get_settings()
+            .get_enable_auto_fix_missing_bloom_index()?
+        {
+            let storage_format = self.storage_format;
 
-        let bloom_columns_map = self
-            .bloom_index_cols()
-            .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
-        let bloom_index_builder = Some(BloomIndexBuilder {
-            table_ctx: ctx.clone(),
-            table_schema: table_schema.clone(),
-            table_dal: dal.clone(),
-            storage_format,
-            bloom_columns_map,
-        });
+            let bloom_columns_map = self
+                .bloom_index_cols()
+                .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
+
+            Some(BloomIndexBuilder {
+                table_ctx: ctx.clone(),
+                table_schema: table_schema.clone(),
+                table_dal: dal.clone(),
+                storage_format,
+                bloom_columns_map,
+            })
+        } else {
+            None
+        };
 
         let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(
