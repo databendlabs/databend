@@ -73,7 +73,7 @@ impl<K: kvapi::Key> UpsertPB<K> {
     pub fn delete(key: K) -> Self {
         Self {
             key,
-            seq: MatchSeq::GE(0),
+            seq: MatchSeq::GE(1),
             value: Operation::Delete,
             value_meta: None,
         }

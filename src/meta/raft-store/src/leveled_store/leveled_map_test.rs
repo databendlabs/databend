@@ -397,6 +397,55 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
     Ok(l)
 }
 
+/// Build a LeveledMap with two consecutive deletes, which produce two tombstones with same internal_seq.
+/// a range that combine two levels should not panic.
+#[tokio::test]
+async fn test_2_level_same_tombstone() -> anyhow::Result<()> {
+    let lm = build_2_level_consecutive_delete().await?;
+    let strm = lm.str_map().range(..).await?;
+
+    let got = strm.try_collect::<Vec<_>>().await?;
+
+    let got = got
+        .into_iter()
+        .map(|(k, v)| format!("{}={:?}", k, v))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        vec![
+            "a=Normal { internal_seq: 1, value: [97, 48], meta: None }",
+            "b=TombStone { internal_seq: 3 }",
+            "c=Normal { internal_seq: 4, value: [99, 49], meta: None }"
+        ],
+        got
+    );
+
+    Ok(())
+}
+
+/// Build a LeveledMap with two consecutive deletes, which produce two tombstones with same internal_seq.
+/// ```text
+/// |      b(D) c
+/// | a    b(D) c
+/// ```
+async fn build_2_level_consecutive_delete() -> anyhow::Result<LeveledMap> {
+    let mut l = LeveledMap::default();
+
+    // internal_seq: 0
+    l.str_map_mut().set(s("a"), Some((b("a0"), None))).await?;
+    l.str_map_mut().set(s("b"), Some((b("b0"), None))).await?;
+    l.str_map_mut().set(s("c"), Some((b("c0"), None))).await?;
+    l.str_map_mut().set(s("b"), None).await?;
+
+    l.freeze_writable();
+
+    // internal_seq: 3
+    l.str_map_mut().set(s("b"), None).await?;
+    l.str_map_mut().set(s("c"), Some((b("c1"), None))).await?;
+
+    Ok(l)
+}
+
 #[tokio::test]
 async fn test_two_level_update_value() -> anyhow::Result<()> {
     // Update value for a.

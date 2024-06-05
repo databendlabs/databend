@@ -57,6 +57,7 @@ runs:
       if: env.RUNNER_PROVIDER == 'gcp'
       shell: bash
       run: |
+        gcloud config set storage/parallel_composite_upload_enabled False
         gcloud storage cp --quiet --recursive ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-* \
           gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/
         gcloud storage cp --quiet ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing \

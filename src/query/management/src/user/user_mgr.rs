@@ -24,6 +24,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
@@ -140,17 +141,21 @@ impl UserApi for UserMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
-        let user_prefix = self.user_prefix();
-        let values = self.kv_api.prefix_list_kv(user_prefix.as_str()).await?;
-
+        let values = self.get_raw_users().await?;
         let mut r = vec![];
         for (_key, val) in values {
             let u = deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "")?;
-
             r.push(SeqV::new(val.seq, u));
         }
 
         Ok(r)
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn get_raw_users(&self) -> Result<ListKVReply> {
+        let user_prefix = self.user_prefix();
+        Ok(self.kv_api.prefix_list_kv(user_prefix.as_str()).await?)
     }
 
     #[async_backtrace::framed]

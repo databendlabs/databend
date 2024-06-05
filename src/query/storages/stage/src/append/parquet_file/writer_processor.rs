@@ -20,6 +20,7 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_config::QUERY_SEMVER;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -83,6 +84,7 @@ fn create_writer(
         .set_dictionary_enabled(false)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
+        .set_created_by(format!("Databend {}", *QUERY_SEMVER))
         .build();
     let buf_size = match targe_file_size {
         Some(n) if n < MAX_BUFFER_SIZE => n,

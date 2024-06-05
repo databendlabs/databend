@@ -230,11 +230,12 @@ impl QueryContextShared {
 
     pub fn kill(&self, cause: ErrorCode) {
         self.set_error(cause.clone());
-        self.aborting.store(true, Ordering::Release);
 
         if let Some(executor) = self.executor.read().upgrade() {
             executor.finish(Some(cause));
         }
+
+        self.aborting.store(true, Ordering::Release);
 
         // TODO: Wait for the query to be processed (write out the last error)
     }

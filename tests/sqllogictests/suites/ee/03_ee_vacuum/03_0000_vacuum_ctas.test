@@ -1,5 +1,11 @@
 # test orphan data created by failed CTAS could be vacuumed
 statement ok
+drop database if exists ctas_test;
+
+statement ok
+drop stage if exists ctas_stage;
+
+statement ok
 create database ctas_test;
 
 statement ok
@@ -9,11 +15,11 @@ use ctas_test;
 statement error 1006
 create or replace table t (c int) 'fs:///tmp/ctas/' as select number / (number-3999999) from numbers(4000000);
 
-# there should be one dropped table ctas_test.t
+# there should be no table ctas_test.t
 query I
 select count() from system.tables_with_history where database = 'ctas_test' and name = 't';
 ----
-1
+0
 
 # verify the orphan files could be vacuumed
 

@@ -282,6 +282,9 @@ build_exceptions! {
     /// data mask error codes
     DatamaskAlreadyExists(2321),
 
+    CommitTableMetaError(2322),
+    CreateAsDropTableWithoutDropTime(2323),
+
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

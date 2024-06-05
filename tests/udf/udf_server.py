@@ -57,6 +57,25 @@ def gcd(x: int, y: int) -> int:
     return x
 
 
+gcd_error_cnt = 0
+
+
+@udf(
+    name="gcd_error",
+    input_types=["INT", "INT"],
+    result_type="INT",
+    skip_null=True,
+)
+def gcd_error(x: int, y: int) -> int:
+    global gcd_error_cnt
+    if y % 2 == 0 and gcd_error_cnt <= 3:
+        gcd_error_cnt += 1
+        raise ValueError("gcd_error")
+    while y != 0:
+        (x, y) = (y, x % y)
+    return x
+
+
 @udf(input_types=["VARCHAR", "VARCHAR", "VARCHAR"], result_type="VARCHAR")
 def split_and_join(s: str, split_s: str, join_s: str) -> str:
     return join_s.join(s.split(split_s))
@@ -310,6 +329,7 @@ if __name__ == "__main__":
     udf_server.add_function(binary_reverse)
     udf_server.add_function(bool_select)
     udf_server.add_function(gcd)
+    udf_server.add_function(gcd_error)
     udf_server.add_function(split_and_join)
     udf_server.add_function(decimal_div)
     udf_server.add_function(hex_to_dec)

@@ -32,6 +32,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
@@ -180,9 +181,8 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
-        let role_prefix = self.role_prefix();
-        let values = self.kv_api.prefix_list_kv(role_prefix.as_str()).await?;
+    async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
+        let values = self.get_raw_meta_roles().await?;
 
         let mut r = vec![];
 
@@ -194,6 +194,13 @@ impl RoleApi for RoleMgr {
         }
 
         Ok(r)
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn get_raw_meta_roles(&self) -> Result<ListKVReply, ErrorCode> {
+        let role_prefix = self.role_prefix();
+        Ok(self.kv_api.prefix_list_kv(role_prefix.as_str()).await?)
     }
 
     #[async_backtrace::framed]
@@ -350,6 +357,7 @@ impl RoleApi for RoleMgr {
                         &grant_object,
                         make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                     );
+                    old_role_info.update_role_time();
                     condition.push(txn_cond_seq(&old_key, Eq, old_seq));
                     if_then.push(txn_op_put(
                         &old_key,
@@ -370,6 +378,7 @@ impl RoleApi for RoleMgr {
                     &grant_object,
                     make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                 );
+                new_role_info.update_role_time();
                 condition.push(txn_cond_seq(&new_key, Eq, new_seq));
                 if_then.push(txn_op_put(
                     &new_key,
@@ -443,6 +452,7 @@ impl RoleApi for RoleMgr {
                     &grant_object,
                     make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                 );
+                old_role_info.update_role_time();
                 condition.push(txn_cond_seq(&old_key, Eq, old_seq));
                 if_then.push(txn_op_put(
                     &old_key,

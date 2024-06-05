@@ -134,7 +134,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     // get segments summary
     let mut segment_summary = Statistics::default();
     let segment_reader = MetaReaders::segment_info_reader(
-        ctx.get_data_operator()?.operator(),
+        ctx.get_application_level_data_operator()?.operator(),
         TestFixture::default_table_schema(),
     );
     for segment in after_update.segments.iter() {

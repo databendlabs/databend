@@ -253,15 +253,34 @@ impl ReplaceInterpreter {
             None
         };
 
-        // remove top exchange
-        if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
+        // remove top exchange merge plan
+        let mut is_exchange = false;
+        let is_stage_source = matches!(self.plan.source, InsertInputSource::Stage(_));
+
+        if let PhysicalPlan::Exchange(Exchange {
+            input,
+            kind: FragmentKind::Merge,
+            ..
+        }) = root.as_ref()
+        {
+            is_exchange = true;
             root = input.clone();
         }
+
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: root,
                 kind: FragmentKind::Expansive,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            }));
+        } else if is_exchange && !is_stage_source {
+            root = Box::new(PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: root,
+                kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
@@ -300,6 +319,7 @@ impl ReplaceInterpreter {
                 plan_id: u32::MAX,
             },
         )));
+
         root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
@@ -317,6 +337,7 @@ impl ReplaceInterpreter {
             need_insert: true,
             plan_id: u32::MAX,
         })));
+
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
@@ -327,6 +348,7 @@ impl ReplaceInterpreter {
                 ignore_exchange: false,
             }));
         }
+
         root = Box::new(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: root,
             snapshot: base_snapshot,

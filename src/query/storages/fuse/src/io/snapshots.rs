@@ -216,12 +216,12 @@ impl SnapshotsIO {
     #[async_backtrace::framed]
     pub async fn read_chained_snapshot_lites(
         &self,
+        dal: Operator,
         location_generator: TableMetaLocationGenerator,
         root_snapshot: String,
         limit: Option<usize>,
     ) -> Result<Vec<TableSnapshotLite>> {
-        let table_snapshot_reader =
-            MetaReaders::table_snapshot_reader(self.ctx.get_data_operator()?.operator());
+        let table_snapshot_reader = MetaReaders::table_snapshot_reader(dal);
         let format_version = TableMetaLocationGenerator::snapshot_version(root_snapshot.as_str());
         let lite_snapshot_stream = table_snapshot_reader
             .snapshot_history(root_snapshot, format_version, location_generator)
