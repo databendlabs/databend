@@ -20,6 +20,7 @@ use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageInfo;
@@ -498,7 +499,7 @@ impl AccessChecker for PrivilegeAccess {
             .get_settings()
             .get_enable_experimental_rbac_check()?;
         let tenant = self.ctx.get_tenant();
-        let catalog_name = self.ctx.get_current_catalog();
+        let ctl_name = self.ctx.get_current_catalog();
 
         match plan {
             Plan::Query {
@@ -518,40 +519,117 @@ impl AccessChecker for PrivilegeAccess {
                         return Ok(());
                     }
                     Some(RewriteKind::ShowTables(catalog, database)) => {
-                        let catalog = self.ctx.get_catalog(catalog).await?;
-                        let (db_id, _table_id) = match self.convert_to_id(&tenant, &catalog, database, None).await? {
+                        let clg = self.ctx.get_catalog(catalog).await?;
+                        let (show_db_id, table_id) = match self.convert_to_id(&tenant, &clg, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let visibility_checker = self.ctx.get_visibility_checker().await?;
-                        return if visibility_checker.check_database_visibility(&catalog_name, database, db_id) {
-                            Ok(())
+
+                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set).await? {
+                            return Ok(())
+                        }
+
+                        let user_api = UserApiProvider::instance();
+                        let ownerships = user_api
+                            .role_api(&tenant)
+                            .get_ownerships()
+                            .await?;
+                        let roles = self.ctx.get_all_effective_roles().await?;
+                        let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
+
+                        // If contains account_admin even though the current role is not account_admin,
+                        // It also as a admin user.
+                        if roles_name.contains(&"account_admin".to_string()) {
+                            return Ok(());
                         } else {
-                            Err(ErrorCode::PermissionDenied(format!(
+                            for ownership in ownerships {
+                                if roles_name.contains(&ownership.data.role) {
+                                    match ownership.data.object {
+                                        OwnershipObject::Database {
+                                            catalog_name,
+                                            db_id,
+                                        } => {
+                                            if catalog_name == *catalog && db_id == show_db_id {
+                                                return Ok(());
+                                            }
+                                        }
+                                        OwnershipObject::Table {
+                                            catalog_name,
+                                            db_id,
+                                            table_id: _,
+                                        } => {
+                                            if catalog_name == *catalog && db_id == show_db_id {
+                                                return Ok(());
+                                            }
+                                        }
+                                        OwnershipObject::UDF { .. } | OwnershipObject::Stage { .. } => {}
+                                    }
+                                }
+                            }
+                        };
+
+                        return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: User {} does not have the required privileges for database '{}'",
                                 identity, database
-                            )))
-                        };
+                            )));
                     }
                     Some(RewriteKind::ShowStreams(database)) => {
-                        let catalog = self.ctx.get_catalog(&catalog_name).await?;
-                        let (db_id, _table_id) = match self.convert_to_id(&tenant, &catalog, database, None).await? {
+                        let ctl = self.ctx.get_catalog(&ctl_name).await?;
+                        let (show_db_id, table_id) = match self.convert_to_id(&tenant, &ctl, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let visibility_checker = self.ctx.get_visibility_checker().await?;
-                        return if visibility_checker.check_database_visibility(&catalog_name, database, db_id) {
-                            Ok(())
+                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set).await? {
+                            return Ok(());
+                        }
+                        let user_api = UserApiProvider::instance();
+                        let ownerships = user_api
+                            .role_api(&tenant)
+                            .get_ownerships()
+                            .await?;
+                        let roles = self.ctx.get_all_effective_roles().await?;
+                        let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
+
+                        // If contains account_admin even though the current role is not account_admin,
+                        // It also as a admin user.
+                        if roles_name.contains(&"account_admin".to_string()) {
+                            return Ok(());
                         } else {
-                            Err(ErrorCode::PermissionDenied(format!(
+                            for ownership in ownerships {
+                                if roles_name.contains(&ownership.data.role) {
+                                    match ownership.data.object {
+                                        OwnershipObject::Database {
+                                            catalog_name,
+                                            db_id,
+                                        } => {
+                                            if catalog_name == ctl_name && db_id == show_db_id {
+                                                return Ok(());
+                                            }
+                                        }
+                                        OwnershipObject::Table {
+                                            catalog_name,
+                                            db_id,
+                                            table_id: _,
+                                        } => {
+                                            if catalog_name == ctl_name && db_id == show_db_id {
+                                                return Ok(());
+                                            }
+                                        }
+                                        OwnershipObject::UDF { .. } | OwnershipObject::Stage { .. } => {}
+                                    }
+                                }
+                            }
+                        }
+
+                        return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: User {} does not have the required privileges for database '{}'",
                                 identity, database
-                            )))
-                        };
+                            )));
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
                         let session = self.ctx.get_current_session();
-                        if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone())).await? {
+                        if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone())).await? ||
+                            self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone())).await?   {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -672,22 +750,59 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::UseDatabase(plan) => {
-                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                let ctl = self.ctx.get_catalog(&ctl_name).await?;
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
-                let (db_id, _) = match self.convert_to_id(&tenant, &catalog, &plan.database, None).await? {
+                let (show_db_id, _) = match self.convert_to_id(&tenant, &ctl, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
-                let visibility_checker = self.ctx.get_visibility_checker().await?;
-                return if visibility_checker.check_database_visibility(&catalog_name, &plan.database, db_id) {
-                    Ok(())
+                if has_priv(&tenant, &plan.database, None, show_db_id, None, grant_set).await? {
+                    return Ok(());
+                }
+                let user_api = UserApiProvider::instance();
+                let ownerships = user_api
+                    .role_api(&tenant)
+                    .get_ownerships()
+                    .await?;
+                let roles = self.ctx.get_all_effective_roles().await?;
+                let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
+
+                // If contains account_admin even though the current role is not account_admin,
+                // It also as a admin user.
+                if roles_name.contains(&"account_admin".to_string()) {
+                    return Ok(());
                 } else {
-                    Err(ErrorCode::PermissionDenied(format!(
+                    for ownership in ownerships {
+                        if roles_name.contains(&ownership.data.role) {
+                            match ownership.data.object {
+                                OwnershipObject::Database {
+                                    catalog_name,
+                                    db_id,
+                                } => {
+                                    if catalog_name == ctl_name && db_id == show_db_id {
+                                        return Ok(());
+                                    }
+                                }
+                                OwnershipObject::Table {
+                                    catalog_name,
+                                    db_id,
+                                    table_id: _,
+                                } => {
+                                    if catalog_name == ctl_name && db_id == show_db_id {
+                                        return Ok(());
+                                    }
+                                }
+                                OwnershipObject::UDF { .. } | OwnershipObject::Stage { .. } => {}
+                            }
+                        }
+                    }
+                }
+
+                return Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: User {} does not have the required privileges for database '{}'",
                         identity, plan.database.clone()
-                    )))
-                };
+                    )));
             }
 
             // Virtual Column.
@@ -1111,6 +1226,11 @@ async fn has_priv(
 ) -> Result<bool> {
     if db_name.to_lowercase() == "information_schema" {
         return Ok(true);
+    }
+    if db_name.to_lowercase() == "system" {
+        if let Some(table_name) = table_name {
+            return Ok(SYSTEM_TABLES_ALLOW_LIST.contains(&table_name));
+        }
     }
 
     Ok(RoleCacheManager::instance()
