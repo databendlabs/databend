@@ -103,7 +103,7 @@ impl AsyncSystemTable for IndexesTable {
                     .collect::<Vec<_>>()
                     .join(" ");
 
-                let def = format!("{}({}) {}", table.name, columns, options);
+                let def = format!("{}({}){}", table.name, columns, options);
                 defs.push(def);
                 created_on.push(table.meta.created_on.timestamp_micros());
                 updated_on.push(None);
