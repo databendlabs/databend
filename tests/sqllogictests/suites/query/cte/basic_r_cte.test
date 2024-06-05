@@ -2,22 +2,52 @@ query I
 WITH RECURSIVE recursive_cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
 ----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
 
 query I
 WITH RECURSIVE recursive_cte AS (SELECT to_uint16(1) AS n UNION ALL SELECT to_uint8(n + 1) FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
 ----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
 
 query I
 WITH RECURSIVE recursive_cte AS (SELECT to_uint16(1) AS n UNION ALL SELECT to_uint8(n + 1) FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
 ----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
 
 query I
 WITH RECURSIVE t AS
 (
 	SELECT 1 AS x
-UNION
+UNION ALL
 	SELECT t1.x + t2.x + t3.x AS x
 	FROM t t1, t t2, t t3
 	WHERE t1.x < 100
@@ -31,20 +61,25 @@ CREATE TABLE a AS SELECT * FROM numbers(100) t1(i);
 query I
 WITH RECURSIVE t AS
 (
-	SELECT 1 AS x
-UNION
+	SELECT to_uint64(1) AS x
+UNION ALL
 	SELECT SUM(x) AS x
 	FROM t, a
 	WHERE x < 1000000
 )
 SELECT * FROM t ORDER BY 1 NULLS LAST;
 ----
+1
+100
+10000
+1000000
+NULL
 
 query I
 WITH RECURSIVE t AS
 (
 	SELECT 1 AS x
-UNION
+UNION ALL
 	SELECT SUM(x) AS x
 	FROM t, a
 	WHERE x < 1000000 AND t.x=a.i
@@ -56,7 +91,7 @@ query I
 WITH RECURSIVE t AS
 (
 	SELECT 1 AS x
-UNION
+UNION ALL
 	SELECT SUM(x)
 	FROM
 		(SELECT SUM(x) FROM t) t1(x), a
@@ -78,7 +113,6 @@ UNION
 SELECT * FROM t ORDER BY 1 NULLS LAST;
 ----
 
-query I
 query I
 WITH RECURSIVE t AS
 (
