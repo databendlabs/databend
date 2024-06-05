@@ -34,7 +34,6 @@ use super::sort::OrderItem;
 use super::Finder;
 use crate::binder::bind_table_reference::JoinConditions;
 use crate::binder::scalar_common::split_conjunctions;
-use crate::binder::util::find_and_update_r_cte_scan;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
@@ -130,6 +129,9 @@ impl Binder {
         let (left_expr, left_bind_context) =
             self.bind_set_expr(bind_context, left, &[], None).await?;
         if let Some(cte_name) = cte_name.as_ref() {
+            if !all {
+                return Err(ErrorCode::Internal("Currently, recursive cte only support union all".to_string()));
+            }
             // Add recursive cte's columns to cte info
             let mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
             for column in left_bind_context.columns.iter() {
@@ -217,36 +219,43 @@ impl Binder {
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let mut coercion_types = Vec::with_capacity(left_context.columns.len());
-        for (left_col, right_col) in left_context
-            .columns
-            .iter()
-            .zip(right_context.columns.iter())
-        {
-            if left_col.data_type != right_col.data_type {
-                if let Some(data_type) = common_super_type(
-                    *left_col.data_type.clone(),
-                    *right_col.data_type.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                ) {
-                    coercion_types.push(data_type);
-                } else {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
-                        left_col.column_name,
-                        left_col.data_type,
-                        right_col.column_name,
-                        right_col.data_type
-                    )));
-                }
-            } else {
+        if cte_name.is_some() {
+            // `coercion_types` is left side output types
+            for left_col in left_context.columns.iter() {
                 coercion_types.push(*left_col.data_type.clone());
+            }
+        } else {
+            for (left_col, right_col) in left_context
+                .columns
+                .iter()
+                .zip(right_context.columns.iter())
+            {
+                if left_col.data_type != right_col.data_type {
+                    if let Some(data_type) = common_super_type(
+                        *left_col.data_type.clone(),
+                        *right_col.data_type.clone(),
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                    ) {
+                        coercion_types.push(data_type);
+                    } else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
+                            left_col.column_name,
+                            left_col.data_type,
+                            right_col.column_name,
+                            right_col.data_type
+                        )));
+                    }
+                } else {
+                    coercion_types.push(*left_col.data_type.clone());
+                }
             }
         }
         // If the union is from recursive cte, find all recursive cte scans and update the data type of field in cte scan
         if let Some(_) = cte_name.as_ref() {
             // Find all recursive cte scans in right_expr
             let mut count = 0;
-            right_expr = find_and_update_r_cte_scan(&right_expr, &coercion_types, &mut count)?;
+            right_expr = self.find_and_update_r_cte_scan(&right_expr, &coercion_types, &mut count)?;
             if count == 0 {
                 return Err(ErrorCode::SemanticError(
                     "Recursive cte should be used in recursive cte".to_string(),

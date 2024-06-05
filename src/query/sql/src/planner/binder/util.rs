@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use crate::Binder;
 
 use crate::optimizer::SExpr;
 use crate::plans::RecursiveCteScan;
@@ -27,53 +28,56 @@ pub fn illegal_ident_name(ident_name: &str) -> bool {
     ident_name.chars().any(|c| c == '\'' || c == '\"')
 }
 
-// Find all recursive cte scans and update the data type of field in cte scan
-pub fn find_and_update_r_cte_scan(
-    expr: &SExpr,
-    types: &[DataType],
-    count: &mut usize,
-) -> Result<SExpr> {
-    match expr.plan() {
-        RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
-            let mut left = Arc::new(find_and_update_r_cte_scan(expr.child(0)?, types, count)?);
-            let mut right = Arc::new(find_and_update_r_cte_scan(expr.child(1)?, types, count)?);
-            Ok(expr.replace_children([left, right]))
-        }
-        RelOperator::Sort(_)
-        | RelOperator::Limit(_)
-        | RelOperator::Exchange(_)
-        | RelOperator::AddRowNumber(_)
-        | RelOperator::Window(_)
-        | RelOperator::ProjectSet(_)
-        | RelOperator::AsyncFunction(_)
-        | RelOperator::Udf(_)
-        | RelOperator::EvalScalar(_)
-        | RelOperator::Filter(_)
-        | RelOperator::Aggregate(_) => {
-            let child = Arc::new(find_and_update_r_cte_scan(expr.child(0)?, types, count)?);
-            Ok(expr.replace_children([child]))
-        }
-        RelOperator::RecursiveCteScan(plan) => {
-            *count += 1_usize;
-            let mut fields = plan.fields.clone();
-            debug_assert!(fields.len() == types.len());
-            for (old_field, new_type) in fields.iter_mut().zip(types.iter()) {
-                if old_field.data_type() != new_type {
-                    old_field.update_type(new_type.clone());
-                }
+impl Binder {
+    // Find all recursive cte scans and update the data type of field in cte scan
+    pub fn find_and_update_r_cte_scan(
+        &mut self,
+        expr: &SExpr,
+        types: &[DataType],
+        count: &mut usize,
+    ) -> Result<SExpr> {
+        match expr.plan() {
+            RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
+                let mut left = Arc::new(self.find_and_update_r_cte_scan(expr.child(0)?, types, count)?);
+                let mut right = Arc::new(self.find_and_update_r_cte_scan(expr.child(1)?, types, count)?);
+                Ok(expr.replace_children([left, right]))
             }
-            Ok(
-                expr.replace_plan(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
-                    fields,
-                    cte_name: plan.cte_name.clone(),
-                }))),
-            )
+            RelOperator::Sort(_)
+            | RelOperator::Limit(_)
+            | RelOperator::Window(_)
+            | RelOperator::ProjectSet(_)
+            | RelOperator::AsyncFunction(_)
+            | RelOperator::Udf(_)
+            | RelOperator::EvalScalar(_)
+            | RelOperator::Filter(_)
+            | RelOperator::Aggregate(_) => {
+                let child = Arc::new(self.find_and_update_r_cte_scan(expr.child(0)?, types, count)?);
+                Ok(expr.replace_children([child]))
+            }
+            RelOperator::RecursiveCteScan(plan) => {
+                *count += 1_usize;
+                let mut fields = plan.fields.clone();
+                debug_assert!(fields.len() == types.len());
+                for (old_field, new_type) in fields.iter_mut().zip(types.iter()) {
+                    if old_field.data_type() != new_type {
+                        old_field.update_type(new_type.clone());
+                    }
+                }
+                Ok(
+                    expr.replace_plan(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
+                        fields,
+                        cte_name: plan.cte_name.clone(),
+                    }))),
+                )
+            }
+
+            RelOperator::Exchange(_)| RelOperator::AddRowNumber(_) |
+            RelOperator::Scan(_)
+            | RelOperator::CteScan(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_) => Ok(expr.clone()),
         }
-        RelOperator::Scan(_)
-        | RelOperator::CteScan(_)
-        | RelOperator::DummyTableScan(_)
-        | RelOperator::ConstantTableScan(_)
-        | RelOperator::ExpressionScan(_)
-        | RelOperator::CacheScan(_) => Ok(expr.clone()),
     }
 }
