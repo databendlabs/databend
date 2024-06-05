@@ -30,6 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
+use time::Instant;
 use tokio::task;
 
 use super::expiring_map::ExpiringMap;
@@ -77,6 +78,7 @@ impl<T> LimitedQueue<T> {
 }
 
 pub struct HttpQueryManager {
+    pub(crate) start_instant: Instant,
     pub(crate) server_info: ServerInfo,
     #[allow(clippy::type_complexity)]
     pub(crate) queries: Arc<DashMap<String, Arc<HttpQuery>>>,
@@ -90,9 +92,10 @@ impl HttpQueryManager {
     #[async_backtrace::framed]
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Arc::new(HttpQueryManager {
+            start_instant: Instant::now(),
             server_info: ServerInfo {
                 id: cfg.query.node_id.clone(),
-                start_time: chrono::Local::now().to_rfc3339_opts(SecondsFormat::Nanos, false),
+                start_time: chrono::Local::now().to_rfc3339_opts(SecondsFormat::Millis, false),
             },
             queries: Arc::new(DashMap::new()),
             sessions: Mutex::new(ExpiringMap::default()),
