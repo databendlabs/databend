@@ -77,6 +77,10 @@ impl Display for Query {
             write!(f, " OFFSET {offset}")?;
         }
 
+        if self.ignore_result {
+            write!(f, " IGNORE_RESULT")?;
+        }
+
         Ok(())
     }
 }

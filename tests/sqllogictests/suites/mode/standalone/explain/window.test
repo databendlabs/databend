@@ -43,14 +43,14 @@ set sort_spilling_memory_ratio = 0;
 query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
-CompoundBlockOperator(Project) × 1 processor
-  Transform Window × 1 processor
-    Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-      TransformSortMerge × 4 processors
-        SortPartialTransform × 4 processors
-          Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-            DeserializeDataTransform × 1 processor
-              SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  Transform Window × 1
+    Merge to MultiSortMerge × 1
+      TransformSortMerge × 4
+        SortPartialTransform × 4
+          Merge to Resize × 4
+            DeserializeDataTransform × 1
+              SyncReadParquetDataSource × 1
 
 
 # Enable sort spilling
@@ -60,15 +60,15 @@ set sort_spilling_memory_ratio = 60;
 query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
-CompoundBlockOperator(Project) × 1 processor
-  Transform Window × 1 processor
-    Merge (TransformSortSpill × 4 processors) to (Transform Window × 1)
-      TransformSortSpill × 4 processors
-        TransformSortMerge × 4 processors
-          SortPartialTransform × 4 processors
-            Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-              DeserializeDataTransform × 1 processor
-                SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  Transform Window × 1
+    Merge to MultiSortMerge × 1
+      TransformSortSpill × 4
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 
 statement ok
@@ -348,15 +348,15 @@ set sort_spilling_memory_ratio = 0;
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1 processor
-  LimitTransform × 1 processor
-    Transform Window × 1 processor
-      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-        TransformSortMerge × 4 processors
-          SortPartialTransform × 4 processors
-            Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-              DeserializeDataTransform × 1 processor
-                SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  LimitTransform × 1
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # Enable sort spilling
 statement ok
@@ -366,16 +366,16 @@ set sort_spilling_memory_ratio = 60;
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1 processor
-  LimitTransform × 1 processor
-   Transform Window × 1 processor
-     Merge (TransformSortSpill × 4 processors) to (Transform Window × 1)
-       TransformSortSpill × 4 processors
-         TransformSortMerge × 4 processors
-           SortPartialTransform × 4 processors
-             Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-               DeserializeDataTransform × 1 processor
-                 SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  LimitTransform × 1
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
+        TransformSortSpill × 4
+          TransformSortMerge × 4
+            SortPartialTransform × 4
+              Merge to Resize × 4
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 
 # Disable sort spilling
@@ -386,84 +386,84 @@ set sort_spilling_memory_ratio = 0;
 query T
 explain pipeline select a, dense_rank() over (partition by a order by a desc) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1 processor
-  LimitTransform × 1 processor
-    Transform Window × 1 processor
-      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-        TransformSortMerge × 4 processors
-          SortPartialTransform × 4 processors
-            Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-              DeserializeDataTransform × 1 processor
-                SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  LimitTransform × 1
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # rows frame single window (can push down limit)
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1 processor
-  LimitTransform × 1 processor
-    Transform Window × 1 processor
-      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-        TransformSortMerge × 4 processors
-          SortPartialTransform × 4 processors
-            Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-              DeserializeDataTransform × 1 processor
-                SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  LimitTransform × 1
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # rows frame single window (can not push down limit)
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc rows between unbounded preceding and unbounded following) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1 processor
-  LimitTransform × 1 processor
-    Transform Window × 1 processor
-      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-        TransformSortMerge × 4 processors
-          SortPartialTransform × 4 processors
-            Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-              DeserializeDataTransform × 1 processor
-                SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  LimitTransform × 1
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # rows frame multi window (can not push down limit)
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row),
 avg(a) over (order by a rows between unbounded preceding and current row) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1 processor
-  LimitTransform × 1 processor
-    Transform Window × 1 processor
-      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-        TransformSortMerge × 4 processors
-          SortPartialTransform × 4 processors
-            Merge (Transform Window × 1 processor) to (SortPartialTransform × 4)
-              Transform Window × 1 processor
-                Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-                  TransformSortMerge × 4 processors
-                    SortPartialTransform × 4 processors
-                      Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-                        DeserializeDataTransform × 1 processor
-                          SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  LimitTransform × 1
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              Transform Window × 1
+                Merge to MultiSortMerge × 1
+                  TransformSortMerge × 4
+                    SortPartialTransform × 4
+                      Merge to Resize × 4
+                        DeserializeDataTransform × 1
+                          SyncReadParquetDataSource × 1
 
 # row fetch with window function(pipeline explain)
 query T
 explain pipeline select *, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t where a > 1 order by b limit 3;
 ----
-CompoundBlockOperator(Project) × 1 processor
-  TransformRowsFetcher × 1 processor
-    LimitTransform × 1 processor
-      Merge (TransformSortMergeLimit × 4 processors) to (LimitTransform × 1)
-        TransformSortMergeLimit × 4 processors
-          SortPartialTransform × 4 processors
-            Merge (Transform Window × 1 processor) to (SortPartialTransform × 4)
-              Transform Window × 1 processor
-                Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-                  TransformSortMerge × 4 processors
-                    SortPartialTransform × 4 processors
-                      Merge (TransformFilter × 1 processor) to (SortPartialTransform × 4)
-                        TransformFilter × 1 processor
-                          AddInternalColumnsTransform × 1 processor
-                            DeserializeDataTransform × 1 processor
-                              SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  TransformRowsFetcher × 1
+    LimitTransform × 1
+      Merge to MultiSortMerge × 1
+        TransformSortMergeLimit × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              Transform Window × 1
+                Merge to MultiSortMerge × 1
+                  TransformSortMerge × 4
+                    SortPartialTransform × 4
+                      Merge to Resize × 4
+                        TransformFilter × 1
+                          AddInternalColumnsTransform × 1
+                            DeserializeDataTransform × 1
+                              SyncReadParquetDataSource × 1
 
 # row fetch with window function(plan explain)
 query T
@@ -516,33 +516,33 @@ CREATE TABLE table43764_orc (rowkey VARCHAR NOT NULL, time TIMESTAMP NULL, sirc_
 query T
 explain pipeline select time, rowkey from (select *, row_number() over(partition by rowkey order by time desc) as rn from table43764_orc) a where rn = 1 limit 4
 ----
-CompoundBlockOperator(Project) × 1 processor
-  LimitTransform × 1 processor
-    TransformFilter × 1 processor
-      Transform Window × 1 processor
-        Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-          TransformSortMerge × 4 processors
-            SortPartialTransform × 4 processors
-              Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-                DeserializeDataTransform × 1 processor
-                  SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  LimitTransform × 1
+    TransformFilter × 1
+      Transform Window × 1
+        Merge to MultiSortMerge × 1
+          TransformSortMerge × 4
+            SortPartialTransform × 4
+              Merge to Resize × 4
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 # same order multi window
 query T
 explain  pipeline select *,lead(number,1, 42) over (order by number), lead(number,2,44) over (order by number), lead(number,3,44) over (order by number) from numbers(5);
 ----
-CompoundBlockOperator(Project) × 1 processor
-  Transform Window × 1 processor
-    CompoundBlockOperator(Map) × 1 processor
-      Transform Window × 1 processor
-        CompoundBlockOperator(Map) × 1 processor
-          Transform Window × 1 processor
-            Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
-              TransformSortMerge × 4 processors
-                SortPartialTransform × 4 processors
-                  Merge (CompoundBlockOperator(Map) × 1 processor) to (SortPartialTransform × 4)
-                    CompoundBlockOperator(Map) × 1 processor
-                      NumbersSourceTransform × 1 processor
+CompoundBlockOperator(Project) × 1
+  Transform Window × 1
+    CompoundBlockOperator(Map) × 1
+      Transform Window × 1
+        CompoundBlockOperator(Map) × 1
+          Transform Window × 1
+            Merge to MultiSortMerge × 1
+              TransformSortMerge × 4
+                SortPartialTransform × 4
+                  Merge to Resize × 4
+                    CompoundBlockOperator(Map) × 1
+                      NumbersSourceTransform × 1
 
 statement ok
 DROP DATABASE test_explain_window;

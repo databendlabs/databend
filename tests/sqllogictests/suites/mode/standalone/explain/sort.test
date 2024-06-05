@@ -1,5 +1,5 @@
 statement ok
-create table if not exists t1(a int, b int);
+create or replace table t1(a int, b int);
 
 query T
 explain select a from (select * from t1 order by a) as t2 where a > 1;
@@ -74,13 +74,13 @@ set sort_spilling_memory_ratio = 0;
 query T
 explain pipeline select a, b from t1 order by a;
 ----
-CompoundBlockOperator(Project) × 1 processor
-  Merge (TransformSortMerge × 4 processors) to (CompoundBlockOperator(Project) × 1)
-    TransformSortMerge × 4 processors
-      SortPartialTransform × 4 processors
-        Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-          DeserializeDataTransform × 1 processor
-            SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  Merge to MultiSortMerge × 1
+    TransformSortMerge × 4
+      SortPartialTransform × 4
+        Merge to Resize × 4
+          DeserializeDataTransform × 1
+            SyncReadParquetDataSource × 1
 
 
 # Sort spilling
@@ -90,14 +90,14 @@ set sort_spilling_memory_ratio = 60;
 query T
 explain pipeline select a, b from t1 order by a;
 ----
-CompoundBlockOperator(Project) × 1 processor
-  Merge (TransformSortSpill × 4 processors) to (CompoundBlockOperator(Project) × 1)
-    TransformSortSpill × 4 processors
-      TransformSortMerge × 4 processors
-        SortPartialTransform × 4 processors
-          Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
-            DeserializeDataTransform × 1 processor
-              SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  Merge to MultiSortMerge × 1
+    TransformSortSpill × 4
+      TransformSortMerge × 4
+        SortPartialTransform × 4
+          Merge to Resize × 4
+            DeserializeDataTransform × 1
+              SyncReadParquetDataSource × 1
 
 statement ok
 set sort_spilling_memory_ratio = 0;
@@ -106,14 +106,14 @@ set sort_spilling_memory_ratio = 0;
 query T
 explain pipeline select a + 1, b from t1 order by a + 1;
 ----
-CompoundBlockOperator(Project) × 1 processor
-  Merge (TransformSortMerge × 4 processors) to (CompoundBlockOperator(Project) × 1)
-    TransformSortMerge × 4 processors
-      SortPartialTransform × 4 processors
-        Merge (CompoundBlockOperator(Map) × 1 processor) to (SortPartialTransform × 4)
-          CompoundBlockOperator(Map) × 1 processor
-            DeserializeDataTransform × 1 processor
-              SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  Merge to MultiSortMerge × 1
+    TransformSortMerge × 4
+      SortPartialTransform × 4
+        Merge to Resize × 4
+          CompoundBlockOperator(Map) × 1
+            DeserializeDataTransform × 1
+              SyncReadParquetDataSource × 1
 
 
 # Sort spilling
@@ -123,15 +123,15 @@ set sort_spilling_memory_ratio = 60;
 query T
 explain pipeline select a + 1, b from t1 order by a + 1;
 ----
-CompoundBlockOperator(Project) × 1 processor
-  Merge (TransformSortSpill × 4 processors) to (CompoundBlockOperator(Project) × 1)
-    TransformSortSpill × 4 processors
-      TransformSortMerge × 4 processors
-        SortPartialTransform × 4 processors
-          Merge (CompoundBlockOperator(Map) × 1 processor) to (SortPartialTransform × 4)
-            CompoundBlockOperator(Map) × 1 processor
-              DeserializeDataTransform × 1 processor
-                SyncReadParquetDataSource × 1 processor
+CompoundBlockOperator(Project) × 1
+  Merge to MultiSortMerge × 1
+    TransformSortSpill × 4
+      TransformSortMerge × 4
+        SortPartialTransform × 4
+          Merge to Resize × 4
+            CompoundBlockOperator(Map) × 1
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 statement ok
 drop table if exists t1;

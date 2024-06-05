@@ -1,5 +1,5 @@
 statement ok
-create table if not exists t1(a int, b int);
+create or replace table t1(a int, b int);
 
 query T
 explain select a from (select * from t1 order by a) as t2 where a > 1;
