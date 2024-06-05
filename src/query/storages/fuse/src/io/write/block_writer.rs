@@ -123,7 +123,6 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
 }
 
 pub struct BloomIndexState {
-    pub(crate) filter_schema: TableSchemaRef,
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
     pub(crate) location: Location,
@@ -160,13 +159,15 @@ impl BloomIndexBuilder {
         }
     }
 
-    pub async fn bloom_index_state_from_data_block_meta(
+    pub async fn bloom_index_state_from_block_meta(
         &self,
         block_meta: &BlockMeta,
     ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
         let ctx = self.table_ctx.clone();
 
-        // TODO refine this
+        // the caller should not pass a block meta without a bloom index location here.
+        assert!(!block_meta.bloom_filter_index_location.is_none());
+
         let projection =
             Projection::Columns((0..self.table_schema.fields().len()).collect::<Vec<usize>>());
 
@@ -183,20 +184,23 @@ impl BloomIndexBuilder {
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;
 
         let data_block = block_reader
-            .read_by_meta(&settings, &block_meta, &self.storage_format)
+            .read_by_meta(&settings, block_meta, &self.storage_format)
             .await?;
 
-        self.bloom_index_state_from_data_block(&data_block, block_meta.location.clone())
+        self.bloom_index_state_from_data_block(
+            &data_block,
+            block_meta.bloom_filter_index_location.clone().unwrap(),
+        )
     }
 }
 
 impl BloomIndexState {
     pub fn from_bloom_index(bloom_index: &BloomIndex, location: Location) -> Result<Self> {
         let index_block = bloom_index.serialize_to_data_block()?;
-        let filter_schema = bloom_index.filter_schema.clone();
+        let filter_schema = &bloom_index.filter_schema;
         let column_distinct_count = bloom_index.column_distinct_count.clone();
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let index_block_schema = &filter_schema;
+        let index_block_schema = filter_schema;
         let _ = blocks_to_parquet(
             index_block_schema,
             vec![index_block],
@@ -205,7 +209,6 @@ impl BloomIndexState {
         )?;
         let data_size = data.len() as u64;
         Ok(Self {
-            filter_schema,
             data,
             size: data_size,
             location,
@@ -445,6 +448,7 @@ impl BlockWriter {
             let start = Instant::now();
 
             let location = &index_state.location.0;
+            eprintln!("writing bloom stat to {}", location);
             write_data(index_state.data, dal, location).await?;
 
             metrics_inc_block_index_write_nums(1);

@@ -171,7 +171,7 @@ impl FuseTable {
         }
 
         // TODO check settings
-        let storage_format = self.storage_format.clone();
+        let storage_format = self.storage_format;
 
         let bloom_columns_map = self
             .bloom_index_cols()
