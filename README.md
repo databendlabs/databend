@@ -113,7 +113,7 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 <details>
-<summary>Data Import and Export</summary></summary>
+<summary>Data Import and Export</summary>
 
 - [How to load Parquet file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-parquet)
 - [How to export a table to Parquet file](https://docs.databend.com/guides/unload-data/unload-parquet)
