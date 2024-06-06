@@ -20,7 +20,6 @@ databend-common-config = { path = "../../config" }
 databend-common-exception = { path = "../../../common/exception" }
 databend-common-expression = { path = "../../expression" }
 databend-common-functions = { path = "../../functions" }
-databend-common-license = { path = "../../../common/license" }
 databend-common-meta-api = { path = "../../../meta/api" }
 databend-common-meta-app = { path = "../../../meta/app" }
 databend-common-meta-types = { path = "../../../meta/types" }
