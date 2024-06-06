@@ -25,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_storage::MergeStatus;
 use futures_util::future::Either;
+use log::info;
 use log::warn;
 
 use crate::servers::flight::v1::packets::DataPacket;
@@ -146,6 +147,7 @@ impl StatisticsSender {
     async fn send_copy_status(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
         let copy_status = ctx.get_copy_status();
         if !copy_status.files.is_empty() {
+            info!("send CopyStatus for {} files", copy_status.files.len());
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
             flight_sender.send(data_packet).await?;
         }

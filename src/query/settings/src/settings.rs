@@ -100,10 +100,15 @@ impl<'de> serde::Deserialize<'de> for Settings {
 
         let deserialize_settings =
             <DeserializeSettings as serde::Deserialize>::deserialize(deserializer)?;
+        let configs = match GlobalConfig::try_get_instance() {
+            None => HashMap::new(),
+            Some(config) => config.query.settings.clone(),
+        };
+
         Ok(Settings {
+            configs,
             tenant: Tenant::new_literal(&deserialize_settings.tenant),
             changes: Arc::new(deserialize_settings.changes),
-            configs: GlobalConfig::instance().query.settings.clone(),
         })
     }
 }
