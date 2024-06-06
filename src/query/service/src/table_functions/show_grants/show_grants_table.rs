@@ -300,7 +300,12 @@ async fn show_account_grants(
             )
         }
         "role" => {
-            if !current_user.grants.roles().contains(&name.to_string()) && !has_grant_priv {
+            let current_user_roles = ctx.get_all_effective_roles().await?;
+            let effective_roles_names: Vec<String> = current_user_roles
+                .iter()
+                .map(|role| role.name.to_string())
+                .collect();
+            if !effective_roles_names.contains(&name.to_string()) && !has_grant_priv {
                 let mut roles = current_user.grants.roles();
                 roles.sort();
                 return Err(ErrorCode::PermissionDenied(format!(
@@ -309,6 +314,7 @@ async fn show_account_grants(
                     roles.join(",")
                 )));
             }
+
             let role_info = user_api.get_role(&tenant, name.to_string()).await?;
             let related_roles = RoleCacheManager::instance()
                 .find_related_roles(&tenant, &role_info.grants.roles())
