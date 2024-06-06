@@ -51,7 +51,8 @@ impl GlobalQueryRuntime {
     pub fn init(num_cpus: usize) -> Result<()> {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
         let thread_num = std::cmp::max(2, thread_num);
-        let thread_stack_size = 200 * 1024 * 1024;
+        // 20MB
+        let thread_stack_size = 20 * 1024 * 1024;
 
         let rt = Runtime::with_worker_threads_stack_size(
             thread_num,
