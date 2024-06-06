@@ -193,7 +193,9 @@ impl Runtime {
                 }
             }
 
-            runtime_builder.thread_stack_size(20 * 1024 * 1024);
+            if thread_stack_size.is_none() {
+                runtime_builder.thread_stack_size(20 * 1024 * 1024);
+            }
         }
 
         if let Some(thread_name) = &thread_name {
