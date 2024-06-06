@@ -225,13 +225,14 @@ async fn query_final_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
+    ctx.check_node_id(&query_id)?;
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
-
     async {
         info!(
-            "{}: got /v1/query/{}/final request, this query is going to be finally completed.",
-            query_id, query_id
+            "{}: got {} request, this query is going to be finally completed.",
+            query_id,
+            make_final_uri(&query_id)
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
@@ -262,13 +263,14 @@ async fn query_cancel_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
+    ctx.check_node_id(&query_id)?;
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
-
     async {
         info!(
-            "{}: got /v1/query/{}/kill request, cancel the query",
-            query_id, query_id
+            "{}: got {} request, cancel the query",
+            query_id,
+            make_kill_uri(&query_id)
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
@@ -292,6 +294,7 @@ async fn query_state_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
+    ctx.check_node_id(&query_id)?;
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
 
     async {
@@ -317,6 +320,7 @@ async fn query_page_handler(
     ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
+    ctx.check_node_id(&query_id)?;
     let root = get_http_tracing_span(full_name!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
@@ -352,7 +356,8 @@ pub(crate) async fn query_handler(
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        info!("http query new request: {:}", mask_connection_info(&format!("{:?}", req)));
+        let agent = ctx.user_agent.as_ref().map(|s|(format!("(from {s})"))).unwrap_or("".to_string());
+        info!("http query new request{}: {:}", agent, mask_connection_info(&format!("{:?}", req)));
         let http_query_manager = HttpQueryManager::instance();
         let sql = req.sql.clone();
 
@@ -436,7 +441,7 @@ fn query_id_to_trace_id(query_id: &str) -> TraceId {
 }
 
 /// The HTTP query endpoints are expected to be responses within 60 seconds.
-/// If it exceeds far of 60 seconds, there might be something wrong, we should
+/// If it exceeds far from 60 seconds, there might be something wrong, we should
 /// log it.
 struct SlowRequestLogTracker {
     started_at: std::time::Instant,

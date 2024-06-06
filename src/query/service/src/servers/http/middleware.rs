@@ -61,6 +61,7 @@ use crate::sessions::SessionType;
 const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE-LABEL";
 const USER_AGENT: &str = "User-Agent";
 const QUERY_ID: &str = "X-DATABEND-QUERY-ID";
+const NODE_ID: &str = "X-DATABEND-NODE-ID";
 
 const TRACE_PARENT: &str = "traceparent";
 
@@ -253,9 +254,6 @@ impl<E> HTTPSessionEndpoint<E> {
 
         let session = session_manager.register_session(session)?;
 
-        let ctx = session.create_query_context().await?;
-        let node_id = ctx.get_cluster().local_id.clone();
-
         let deduplicate_label = req
             .headers()
             .get(DEDUPLICATE_LABEL)
@@ -266,24 +264,34 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(USER_AGENT)
             .map(|id| id.to_str().unwrap().to_string());
 
+        let expected_node_id = req
+            .headers()
+            .get(NODE_ID)
+            .map(|id| id.to_str().unwrap().to_string());
+
         let trace_parent = req
             .headers()
             .get(TRACE_PARENT)
             .map(|id| id.to_str().unwrap().to_string());
-        let baggage = extract_baggage_from_headers(req.headers());
+        let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
         let client_host = get_client_ip(req);
-        Ok(HttpQueryContext::new(
+
+        let ctx = session.create_query_context().await?;
+        let node_id = ctx.get_cluster().local_id.clone();
+
+        Ok(HttpQueryContext {
             session,
             query_id,
             node_id,
+            expected_node_id,
             deduplicate_label,
             user_agent,
             trace_parent,
-            baggage,
-            req.method().to_string(),
-            req.uri().to_string(),
+            opentelemetry_baggage,
+            http_method: req.method().to_string(),
+            uri: req.uri().to_string(),
             client_host,
-        ))
+        })
     }
 }
 

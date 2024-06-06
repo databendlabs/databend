@@ -62,11 +62,16 @@ jobs:
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Download artifact
         uses: ./.github/actions/artifact_download
         with:
           sha: ${{ inputs.sha }}
           target: x86_64-unknown-linux-gnu
+          category: udf
+          artifacts: meta,query
       - name: Setup Databend Binary
         shell: bash
         run: |
