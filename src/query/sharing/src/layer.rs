@@ -151,7 +151,7 @@ impl Access for SharedAccessor {
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
         let mut req: Request<Buffer> = self
             .signer
-            .fetch(&path, Operation::Read)
+            .fetch(path, Operation::Read)
             .await
             .map_err(|err| {
                 Error::new(ErrorKind::Unexpected, "fetch presigned url failed").set_source(err)
