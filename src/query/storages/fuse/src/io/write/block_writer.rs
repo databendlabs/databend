@@ -310,12 +310,6 @@ impl BlockBuilder {
             &mut buffer,
         )?;
         let file_size = buffer.len() as u64;
-        let inverted_index_size = if !inverted_index_states.is_empty() {
-            let size = inverted_index_states.iter().map(|v| v.size).sum();
-            Some(size)
-        } else {
-            None
-        };
         let block_meta = BlockMeta {
             row_count,
             block_size,
@@ -330,7 +324,6 @@ impl BlockBuilder {
                 .map(|v| v.size)
                 .unwrap_or_default(),
             compression: self.write_settings.table_compression.into(),
-            inverted_index_size,
             create_on: Some(Utc::now()),
         };
 

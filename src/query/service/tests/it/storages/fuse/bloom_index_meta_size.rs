@@ -340,7 +340,6 @@ fn build_test_segment_info(
         location: block_location,
         bloom_filter_index_location: Some(location_gen.block_bloom_index_location(&block_uuid)),
         bloom_filter_index_size: 0,
-        inverted_index_size: None,
         compression: Compression::Lz4,
         create_on: Some(Utc::now()),
     };

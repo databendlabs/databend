@@ -624,7 +624,6 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
             location.clone(),
             None,
             bloom_filter_index_size,
-            None,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );

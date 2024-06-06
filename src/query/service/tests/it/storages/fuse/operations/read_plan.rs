@@ -89,7 +89,6 @@ fn test_to_partitions() -> Result<()> {
 
     let bloom_filter_location = None;
     let bloom_filter_size = 0;
-    let inverted_index_size = None;
     let block_meta = Arc::new(BlockMeta::new(
         0,
         block_size,
@@ -100,7 +99,6 @@ fn test_to_partitions() -> Result<()> {
         location,
         bloom_filter_location,
         bloom_filter_size,
-        inverted_index_size,
         meta::Compression::Lz4Raw,
         Some(Utc::now()),
     ));
