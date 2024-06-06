@@ -787,6 +787,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn clear_runtime_filter(&self) {
+        todo!()
+    }
+
     fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
         todo!()
     }

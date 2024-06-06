@@ -43,7 +43,6 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
@@ -216,15 +215,24 @@ impl Binder {
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
-        mut right_expr: SExpr,
+        right_expr: SExpr,
         distinct: bool,
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let mut coercion_types = Vec::with_capacity(left_context.columns.len());
         if cte_name.is_some() {
-            // `coercion_types` is left side output types
-            for left_col in left_context.columns.iter() {
-                coercion_types.push(*left_col.data_type.clone());
+            // If the union is from recursive cte, find all recursive cte scans, get cte scan fields' types.
+            let mut count = 0;
+            self.count_r_cte_scan(&right_expr, &mut count, &mut coercion_types)?;
+            if count == 0 {
+                return Err(ErrorCode::SemanticError(
+                    "Recursive cte should be used in recursive cte".to_string(),
+                ));
+            }
+            if count > 1 {
+                return Err(ErrorCode::SemanticError(
+                    "Currently, only support recursive cte be used in one place".to_string(),
+                ));
             }
         } else {
             for (left_col, right_col) in left_context
@@ -251,22 +259,6 @@ impl Binder {
                 } else {
                     coercion_types.push(*left_col.data_type.clone());
                 }
-            }
-        }
-        // If the union is from recursive cte, find all recursive cte scans and update the data type of field in cte scan
-        if let Some(_) = cte_name.as_ref() {
-            // Find all recursive cte scans in right_expr
-            let mut count = 0;
-            self.find_and_update_r_cte_scan(&right_expr, &coercion_types, &mut count)?;
-            if count == 0 {
-                return Err(ErrorCode::SemanticError(
-                    "Recursive cte should be used in recursive cte".to_string(),
-                ));
-            }
-            if count > 1 {
-                return Err(ErrorCode::SemanticError(
-                    "Currently, only support recursive cte be used in one place".to_string(),
-                ));
             }
         }
 

@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
 use crate::optimizer::SExpr;
-use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::Binder;
 
@@ -30,16 +27,16 @@ pub fn illegal_ident_name(ident_name: &str) -> bool {
 
 impl Binder {
     // Find all recursive cte scans and update the data type of field in cte scan
-    pub fn find_and_update_r_cte_scan(
+    pub fn count_r_cte_scan(
         &mut self,
         expr: &SExpr,
-        types: &[DataType],
         count: &mut usize,
+        cte_types: &mut Vec<DataType>,
     ) -> Result<()> {
         match expr.plan() {
             RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
-                self.find_and_update_r_cte_scan(expr.child(0)?, types, count)?;
-                self.find_and_update_r_cte_scan(expr.child(1)?, types, count)?;
+                self.count_r_cte_scan(expr.child(0)?, count, cte_types)?;
+                self.count_r_cte_scan(expr.child(1)?, count, cte_types)?;
             }
             RelOperator::Sort(_)
             | RelOperator::Limit(_)
@@ -50,10 +47,18 @@ impl Binder {
             | RelOperator::EvalScalar(_)
             | RelOperator::Filter(_)
             | RelOperator::Aggregate(_) => {
-                self.find_and_update_r_cte_scan(expr.child(0)?, types, count)?;
+                self.count_r_cte_scan(expr.child(0)?, count, cte_types)?;
             }
             RelOperator::RecursiveCteScan(plan) => {
                 *count += 1_usize;
+                if cte_types.is_empty() {
+                    cte_types.extend(
+                        plan.fields
+                            .iter()
+                            .map(|f| f.data_type().clone())
+                            .collect::<Vec<DataType>>(),
+                    );
+                }
             }
 
             RelOperator::Exchange(_)
@@ -63,7 +68,7 @@ impl Binder {
             | RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
-            | RelOperator::CacheScan(_) => {},
+            | RelOperator::CacheScan(_) => {}
         }
         Ok(())
     }

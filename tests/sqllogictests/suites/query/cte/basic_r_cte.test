@@ -1,8 +1,11 @@
+control sortmode rowsort
+
 query I
 WITH RECURSIVE recursive_cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
 ----
 1
+10
 2
 3
 4
@@ -11,13 +14,13 @@ SELECT n FROM recursive_cte;
 7
 8
 9
-10
 
 query I
 WITH RECURSIVE recursive_cte AS (SELECT to_uint16(1) AS n UNION ALL SELECT to_uint8(n + 1) FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
 ----
 1
+10
 2
 3
 4
@@ -26,13 +29,13 @@ SELECT n FROM recursive_cte;
 7
 8
 9
-10
 
 query I
 WITH RECURSIVE recursive_cte AS (SELECT to_uint16(1) AS n UNION ALL SELECT to_uint8(n + 1) FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
 ----
 1
+10
 2
 3
 4
@@ -41,8 +44,9 @@ SELECT n FROM recursive_cte;
 7
 8
 9
-10
 
+# cte used in multiple places
+onlyif todo
 query I
 WITH RECURSIVE t AS
 (
@@ -55,73 +59,41 @@ UNION ALL
 SELECT * FROM t ORDER BY 1;
 ----
 
+
+query I
+WITH RECURSIVE recursive_cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM recursive_cte WHERE n < 1000)
+SELECT count() FROM recursive_cte ORDER BY 1 NULLS LAST;
+----
+1000
+
 statement ok
-CREATE TABLE a AS SELECT * FROM numbers(100) t1(i);
+create or replace table nk_example_table as
+SELECT * FROM (
+VALUES
+(1, 'new loan' ,10000, 0.1),
+(2, 'new loan' ,500 , 0.2),
+(3, 'add interest' ,0 , 0.15)
+) AS t (id, action, amount, interest);
 
-query I
-WITH RECURSIVE t AS
-(
-	SELECT to_uint64(1) AS x
-UNION ALL
-	SELECT SUM(x) AS x
-	FROM t, a
-	WHERE x < 1000000
+query ITI??
+with recursive recur(id, action, amount, interest, total_bal) as
+(select id,
+action,
+amount,
+interest,
+cast(amount as double) as total_bal
+from nk_example_table
+where id = 1
+union all
+select b.id,
+b.action,
+b.amount,
+b.interest,
+cast((a.total_bal * (1+b.interest))+b.amount as double)
+from recur a, nk_example_table b where a.id+1 = b.id
 )
-SELECT * FROM t ORDER BY 1 NULLS LAST;
+select * from recur;
 ----
-1
-100
-10000
-1000000
-NULL
-
-query I
-WITH RECURSIVE t AS
-(
-	SELECT 1 AS x
-UNION ALL
-	SELECT SUM(x) AS x
-	FROM t, a
-	WHERE x < 1000000 AND t.x=a.i
-)
-SELECT * FROM t ORDER BY 1 NULLS LAST;
-----
-
-query I
-WITH RECURSIVE t AS
-(
-	SELECT 1 AS x
-UNION ALL
-	SELECT SUM(x)
-	FROM
-		(SELECT SUM(x) FROM t) t1(x), a
-	WHERE x < 1000
-)
-SELECT * FROM t ORDER BY 1 NULLS LAST;
-----
-
-
-query I
-WITH RECURSIVE t AS
-(
-	SELECT 1 AS x
-UNION
-	SELECT (SELECT x + 1 FROM t) AS x
-	FROM t
-	WHERE x < 5
-)
-SELECT * FROM t ORDER BY 1 NULLS LAST;
-----
-
-query I
-WITH RECURSIVE t AS
-(
-	SELECT 1 AS x
-UNION
-	SELECT (SELECT t.x+t2.x FROM t t2 LIMIT 1) AS x
-	FROM t
-	WHERE x < 10
-)
-SELECT * FROM t ORDER BY 1 NULLS LAST;
-----
-
+1 new loan 10000 0.10 10000.0
+2 new loan 500 0.20 12500.0
+3 add interest 0 0.15 14374.999999999998

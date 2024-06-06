@@ -91,7 +91,6 @@ impl TransformRecursiveCteSource {
     }
 
     async fn build_union(&mut self) -> Result<()> {
-        dbg!(self.recursive_step);
         if self
             .ctx
             .get_settings()
@@ -107,6 +106,7 @@ impl TransformRecursiveCteSource {
             self.union_plan.right.clone()
         };
         self.recursive_step += 1;
+        self.ctx.clear_runtime_filter();
         let build_res = build_query_pipeline_without_render_result_set(&self.ctx, &plan).await?;
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
@@ -120,7 +120,7 @@ impl TransformRecursiveCteSource {
         let left_schema = self.union_plan.left.output_schema()?;
         let right_schema = self.union_plan.right.output_schema()?;
         let func_ctx = self.ctx.get_function_context()?;
-        let mut evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
         let columns = self
             .left_outputs
             .iter()
@@ -218,7 +218,6 @@ impl AsyncSource for TransformRecursiveCteSource {
         let row_size = data.num_rows();
         if row_size > 0 {
             data = self.project_block(data, self.recursive_step == 1)?;
-            dbg!(&data);
             // Prepare the data of next round recursive.
             self.ctx
                 .update_recursive_cte_scan(&self.cte_name, vec![data.clone()])?;

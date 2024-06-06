@@ -1112,6 +1112,11 @@ impl TableContext for QueryContext {
         *merge_into_join = join;
     }
 
+    fn clear_runtime_filter(&self) {
+        let mut runtime_filters = self.shared.runtime_filters.write();
+        runtime_filters.clear();
+    }
+
     fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
         let mut runtime_filters = self.shared.runtime_filters.write();
         match runtime_filters.entry(filters.0) {

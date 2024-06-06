@@ -12,30 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::common_super_type;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
-use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
-use databend_common_functions::BUILTIN_FUNCTIONS;
-
-use crate::binder::wrap_cast;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
-use crate::plans::BoundColumnRef;
-use crate::plans::ScalarItem;
-use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::IndexType;
-use crate::ScalarExpr;
 use crate::TypeCheck;
-use crate::Visibility;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {

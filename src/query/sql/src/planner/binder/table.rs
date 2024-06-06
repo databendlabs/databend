@@ -39,6 +39,7 @@ use databend_common_exception::Result;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::AbortChecker;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -406,13 +407,31 @@ impl Binder {
         let mut metadata = self.metadata.write();
         let mut columns = Vec::with_capacity(cte_info.columns.len());
         for col in cte_info.columns.iter() {
-            let idx =
-                metadata.add_derived_column(col.column_name.clone(), *col.data_type.clone(), None);
+            // Expand a number type to a higher precision to avoid overflow
+            // (Because the output type of recursive cte is the left of the union)
+            let expand_data_type = match *col.data_type {
+                DataType::Number(NumberDataType::UInt8)
+                | DataType::Number(NumberDataType::UInt16)
+                | DataType::Number(NumberDataType::UInt32) => {
+                    Box::new(DataType::Number(NumberDataType::UInt64))
+                }
+                DataType::Number(NumberDataType::Int8)
+                | DataType::Number(NumberDataType::Int16)
+                | DataType::Number(NumberDataType::Int32) => {
+                    Box::new(DataType::Number(NumberDataType::Int64))
+                }
+                _ => col.data_type.clone(),
+            };
+            let idx = metadata.add_derived_column(
+                col.column_name.clone(),
+                *expand_data_type.clone(),
+                None,
+            );
             columns.push(
                 ColumnBindingBuilder::new(
                     col.column_name.clone(),
                     idx,
-                    col.data_type.clone(),
+                    expand_data_type,
                     Visibility::Visible,
                 )
                 .table_name(Some(cte_name.clone()))
