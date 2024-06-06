@@ -190,6 +190,8 @@ impl AsyncSystemTable for TaskHistoryTable {
             page_size: None,
             previous_page_token: None,
             task_ids: vec![],
+            task_names: vec![],
+            root_task_id: None,
         };
 
         let cloud_api = CloudControlApiProvider::instance();
