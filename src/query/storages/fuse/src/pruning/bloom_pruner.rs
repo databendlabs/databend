@@ -249,6 +249,7 @@ impl BloomPrunerCreator {
                 Some(bloom_state),
             )
             .await?;
+
             info!("re-created missing index {:?}", bloom_index_location);
 
             Ok(Some(BlockFilter {
