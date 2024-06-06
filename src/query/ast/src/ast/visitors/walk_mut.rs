@@ -596,5 +596,6 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
             priority,
             object_id,
         } => visitor.visit_set_priority(priority, object_id),
+        Statement::SetBacktrace { switch } => visitor.visit_set_backtrace(switch),
     }
 }

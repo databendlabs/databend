@@ -43,6 +43,7 @@ mod replace;
 mod scalar;
 mod scalar_common;
 mod select;
+mod set_backtrace;
 mod set_priority;
 mod setting;
 mod show;

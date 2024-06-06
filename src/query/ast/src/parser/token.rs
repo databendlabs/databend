@@ -502,6 +502,8 @@ pub enum TokenKind {
     DETAILED_OUTPUT,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
+    #[token("DISABLE", ignore(ascii_case))]
+    DISABLE,
     #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
     DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
@@ -540,6 +542,8 @@ pub enum TokenKind {
     ELSE,
     #[token("EMPTY_FIELD_AS", ignore(ascii_case))]
     EMPTY_FIELD_AS,
+    #[token("ENABLE", ignore(ascii_case))]
+    ENABLE,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
@@ -556,6 +560,8 @@ pub enum TokenKind {
     ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
     ESCAPE,
+    #[token("EXCEPTION_BACKTRACE", ignore(ascii_case))]
+    EXCEPTION_BACKTRACE,
     #[token("EXISTS", ignore(ascii_case))]
     EXISTS,
     #[token("EXPLAIN", ignore(ascii_case))]

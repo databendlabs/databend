@@ -317,6 +317,11 @@ pub enum Statement {
         priority: Priority,
         object_id: String,
     },
+
+    // Enable or disable Rust Backtrace
+    SetBacktrace {
+        switch: BacktraceSwitch,
+    },
 }
 
 impl Statement {
@@ -720,6 +725,10 @@ impl Display for Statement {
                 write!(f, "SET PRIORITY")?;
                 write!(f, " {priority}")?;
                 write!(f, " '{object_id}'")?;
+            }
+            Statement::SetBacktrace { switch } => {
+                write!(f, "{switch}")?;
+                write!(f, " EXCEPTION_BACKTRACE")?;
             }
         }
         Ok(())

@@ -127,6 +127,7 @@ use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::RevokeShareObjectPlan;
+use crate::plans::SetBacktracePlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetPriorityPlan;
 use crate::plans::SetRolePlan;
@@ -305,6 +306,7 @@ pub enum Plan {
     UnSetVariable(Box<UnSettingPlan>),
     Kill(Box<KillPlan>),
     SetPriority(Box<SetPriorityPlan>),
+    SetBacktrace(Box<SetBacktracePlan>),
 
     // Share
     CreateShareEndpoint(Box<CreateShareEndpointPlan>),
