@@ -20,4 +20,4 @@ runs:
     - uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.name }}
-        path: target/failure-${{ inputs.name }}.tar.gz
+        path: logs/failure-${{ inputs.name }}.tar.gz
