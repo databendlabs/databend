@@ -72,8 +72,8 @@ fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()
         return Ok(());
     }
     let schedule_opts = schedule_opts.clone().unwrap();
-    if let ScheduleOptions::CronExpression(cron_expr, time_zone) = schedule_opts {
-        if cron::Schedule::from_str(&cron_expr).is_err() {
+    if let ScheduleOptions::CronExpression(cron_expr, time_zone) = &schedule_opts {
+        if cron::Schedule::from_str(cron_expr).is_err() {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid cron expression {}",
                 cron_expr
@@ -81,7 +81,7 @@ fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()
         }
         if let Some(time_zone) = time_zone
             && !time_zone.is_empty()
-            && chrono_tz::Tz::from_str(&time_zone).is_err()
+            && chrono_tz::Tz::from_str(time_zone).is_err()
         {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid time zone {}",
@@ -89,6 +89,18 @@ fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()
             )));
         }
     }
+
+    // ONLY allow milliseconds_interval value between
+    // [500, 1000)
+    if let ScheduleOptions::IntervalSecs(_, ms) = schedule_opts {
+        if ms != 0 && !(500..1000).contains(&ms) {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid milliseconds_interval value {}, must be in [500, 1000)",
+                ms
+            )));
+        }
+    }
+
     Ok(())
 }
 

@@ -17,7 +17,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use databend_common_exception::Span;
+use databend_common_ast::Span;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -528,6 +528,16 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::LambdaFunctionCall { args, .. } => {
                 args.iter().all(|arg| arg.is_deterministic(registry))
             }
+        }
+    }
+
+    pub fn contains_column_ref(&self) -> bool {
+        match self {
+            Expr::ColumnRef { .. } => true,
+            Expr::Constant { .. } => false,
+            Expr::Cast { expr, .. } => expr.contains_column_ref(),
+            Expr::FunctionCall { args, .. } => args.iter().any(Expr::contains_column_ref),
+            Expr::LambdaFunctionCall { args, .. } => args.iter().any(Expr::contains_column_ref),
         }
     }
 }

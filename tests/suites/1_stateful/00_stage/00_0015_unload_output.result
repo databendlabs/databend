@@ -29,34 +29,34 @@ a/bc/data_UUID_0000_00000009.csv	2	1
 <<<<
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=true
-a/bc/data_UUID_0000_00000000.parquet	379	1
-a/bc/data_UUID_0000_00000001.parquet	379	1
-a/bc/data_UUID_0000_00000002.parquet	379	1
-a/bc/data_UUID_0000_00000003.parquet	379	1
-a/bc/data_UUID_0000_00000004.parquet	379	1
-a/bc/data_UUID_0000_00000005.parquet	379	1
-a/bc/data_UUID_0000_00000006.parquet	379	1
-a/bc/data_UUID_0000_00000007.parquet	379	1
-a/bc/data_UUID_0000_00000008.parquet	379	1
-a/bc/data_UUID_0000_00000009.parquet	379	1
+a/bc/data_UUID_0000_00000000.parquet	378	1
+a/bc/data_UUID_0000_00000001.parquet	378	1
+a/bc/data_UUID_0000_00000002.parquet	378	1
+a/bc/data_UUID_0000_00000003.parquet	378	1
+a/bc/data_UUID_0000_00000004.parquet	378	1
+a/bc/data_UUID_0000_00000005.parquet	378	1
+a/bc/data_UUID_0000_00000006.parquet	378	1
+a/bc/data_UUID_0000_00000007.parquet	378	1
+a/bc/data_UUID_0000_00000008.parquet	378	1
+a/bc/data_UUID_0000_00000009.parquet	378	1
 >>>> unload path
 >>>> copy /*+ set_var(max_threads=1) */ into @s1 from (select 1)  detailed_output=true
-data_UUID_0000_00000000.parquet	378	1
+data_UUID_0000_00000000.parquet	377	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/ from (select 1)  detailed_output=true
-data_UUID_0000_00000000.parquet	378	1
+data_UUID_0000_00000000.parquet	377	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a from (select 1)  detailed_output=true
-a/data_UUID_0000_00000000.parquet	378	1
+a/data_UUID_0000_00000000.parquet	377	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a/ from (select 1)  detailed_output=true
-a/data_UUID_0000_00000000.parquet	378	1
+a/data_UUID_0000_00000000.parquet	377	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select 1)  detailed_output=true
-a/bc/data_UUID_0000_00000000.parquet	378	1
+a/bc/data_UUID_0000_00000000.parquet	377	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a/data_ from (select 1)  detailed_output=true
-a/data_UUID_0000_00000000.parquet	378	1
+a/data_UUID_0000_00000000.parquet	377	1
 <<<<
 >>>> drop stage if exists s1
 >>>> drop table if exists t1

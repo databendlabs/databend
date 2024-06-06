@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU8;
@@ -25,6 +26,7 @@ use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
@@ -44,6 +46,7 @@ use crate::pipelines::processors::transforms::hash_join::transform_hash_join_bui
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
+use crate::sql::IndexType;
 
 pub struct SerializerHashJoinHashTable {
     pub(crate) hash_table: BinaryHashJoinHashMap,
@@ -119,6 +122,12 @@ pub struct HashJoinState {
     pub(crate) _enable_spill: bool,
 
     pub(crate) merge_into_state: Option<SyncUnsafeCell<MergeIntoState>>,
+
+    /// Build side cache info.
+    /// A HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
+    pub(crate) column_map: HashMap<usize, usize>,
+    // The index of the next cache block to be read.
+    pub(crate) next_cache_block_index: AtomicUsize,
 }
 
 impl HashJoinState {
@@ -130,6 +139,7 @@ impl HashJoinState {
         probe_to_build: &[(usize, (bool, bool))],
         merge_into_is_distributed: bool,
         enable_merge_into_optimization: bool,
+        build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -145,6 +155,12 @@ impl HashJoinState {
             _enable_spill = true;
         }
         let spill_partition_bits = settings.get_join_spilling_partition_bits()?;
+
+        let column_map = if let Some((_, column_map)) = build_side_cache_info {
+            column_map
+        } else {
+            HashMap::new()
+        };
         Ok(Arc::new(HashJoinState {
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
             build_watcher,
@@ -169,6 +185,8 @@ impl HashJoinState {
                     merge_into_is_distributed,
                 )),
             },
+            column_map,
+            next_cache_block_index: AtomicUsize::new(0),
         }))
     }
 
@@ -254,5 +272,37 @@ impl HashJoinState {
             build_state.mark_scan_map.clear();
         }
         build_state.generation_state.is_build_projected = true;
+    }
+
+    pub fn num_build_chunks(&self) -> usize {
+        let build_state = unsafe { &*self.build_state.get() };
+        build_state.generation_state.chunks.len()
+    }
+
+    pub fn get_cached_columns(&self, column_index: usize) -> Vec<BlockEntry> {
+        let index = self.column_map.get(&column_index).unwrap();
+        let build_state = unsafe { &*self.build_state.get() };
+        let columns = build_state
+            .generation_state
+            .chunks
+            .iter()
+            .map(|data_block| data_block.get_by_offset(*index).clone())
+            .collect::<Vec<_>>();
+        columns
+    }
+
+    pub fn get_cached_num_rows(&self) -> Vec<usize> {
+        let build_state = unsafe { &*self.build_state.get() };
+        let num_rows = build_state
+            .generation_state
+            .chunks
+            .iter()
+            .map(|data_block| data_block.num_rows())
+            .collect::<Vec<_>>();
+        num_rows
+    }
+
+    pub fn next_cache_block_index(&self) -> usize {
+        self.next_cache_block_index.fetch_add(1, Ordering::Relaxed)
     }
 }

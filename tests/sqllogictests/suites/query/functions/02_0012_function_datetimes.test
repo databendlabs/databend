@@ -43,6 +43,10 @@ SELECT to_unix_timestamp(now()) >= 1680753801;
 ----
 1
 
+query B
+SELECT now() = now()
+----
+1
 
 query TB
 select to_datetime(1630833797), to_int64(to_datetime(1630833797)) = 1630833797000000

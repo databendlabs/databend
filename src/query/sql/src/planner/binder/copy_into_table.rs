@@ -64,8 +64,8 @@ use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
+use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::location::parse_uri_location;
-use crate::binder::select::MaxColumnPosition;
 use crate::binder::Binder;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
@@ -96,9 +96,7 @@ impl<'a> Binder {
                     .await
             }
             CopyIntoTableSource::Query(query) => {
-                if let Some(with) = &stmt.with {
-                    self.add_cte(with, bind_context)?;
-                }
+                self.init_cte(bind_context, &stmt.with)?;
 
                 let mut max_column_position = MaxColumnPosition::new();
                 query.drive(&mut max_column_position);
@@ -192,9 +190,13 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params
-            && fmt.missing_field_as == NullAs::Error
-        {
+        let use_query = match &plan.stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error => true,
+            FileFormatParams::Orc(_) => true,
+            _ => false,
+        };
+
+        if use_query {
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
             for dest_field in plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {

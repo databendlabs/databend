@@ -164,27 +164,18 @@ impl FuseTable {
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
-            let dal = self.operator.clone();
 
             // TODO: need refactor
             pipeline.set_on_init(move || {
                 let table = table.clone();
                 let table_schema = table_schema.clone();
                 let ctx = query_ctx.clone();
-                let dal = dal.clone();
                 let push_downs = push_downs.clone();
                 // let lazy_init_segments = lazy_init_segments.clone();
 
                 let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
                     let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(
-                            ctx,
-                            dal,
-                            push_downs,
-                            table_schema,
-                            lazy_init_segments,
-                            0,
-                        )
+                        .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
                         .await?;
 
                     Result::<_, ErrorCode>::Ok(partitions)

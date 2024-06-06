@@ -145,6 +145,7 @@ build_exceptions! {
     VirtualColumnNotFound(1115),
     VirtualColumnAlreadyExists(1116),
     ColumnReferencedByComputedColumn(1117),
+    ColumnReferencedByInvertedIndex(1118),
     // The table is not a clustered table.
     UnclusteredTable(1118),
     UnknownCatalog(1119),
@@ -191,6 +192,7 @@ build_exceptions! {
     ///
     /// For example: license key is expired
     LicenseKeyInvalid(1402),
+    EnterpriseFeatureNotEnable(1403),
 
     BackgroundJobAlreadyExists(1501),
     UnknownBackgroundJob(1502),
@@ -280,6 +282,9 @@ build_exceptions! {
     CatalogNotFound(2320),
     /// data mask error codes
     DatamaskAlreadyExists(2321),
+
+    CommitTableMetaError(2322),
+    CreateAsDropTableWithoutDropTime(2323),
 
 
     // Cluster error codes.

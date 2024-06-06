@@ -762,6 +762,72 @@ insert into test_abc select * from test_abc_random limit 1000;
 statement ok
 alter table test_abc recluster final;
 
+
+statement ok
+create table t14(a string, b string) cluster by(a,b)
+
+statement ok
+insert into t14 values('123456789', 'abc');
+
+statement ok
+insert into t14 values('12345678', 'efg');
+
+statement ok
+alter table t14 recluster
+
+query TIIIFFT
+select * from clustering_information('db_09_0008','t14')
+----
+(a, b) 1 0 0 0.0 1.0 {"00001":1}
+
+
+statement ok
+create table t15(a int not null) row_per_block=3
+
+statement ok
+insert into t15 values(0),(1),(4)
+
+statement ok
+insert into t15 values(3)
+
+statement ok
+insert into t15 values(-6),(-8)
+
+statement ok
+ALTER TABLE t15 cluster by(abs(a))
+
+statement ok
+insert into t15 values(2),(5),(-7)
+
+query TIIIFFT
+select * from clustering_information('db_09_0008','t15')
+----
+(abs(a)) 4 0 3 0.0 1.0 {"00001":1}
+
+statement ok
+alter table t15 recluster
+
+query TIIIFFT
+select * from clustering_information('db_09_0008','t15')
+----
+(abs(a)) 3 0 0 2.0 3.0 {"00003":3}
+
+statement ok
+alter table t15 recluster
+
+query TIIIFFT
+select * from clustering_information('db_09_0008','t15')
+----
+(abs(a)) 3 0 0 0.0 1.0 {"00001":3}
+
+query III
+select segment_count, block_count, row_count from fuse_snapshot('db_09_0008','t15') limit 3
+----
+1 3 9
+2 3 9
+4 4 9
+
+
 statement ok
 DROP DATABASE db_09_0008
 

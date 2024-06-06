@@ -2,6 +2,15 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
+drop database if exists db;
+
+statement ok
+create database db;
+
+statement ok
+use db;
+
+statement ok
 drop table if exists t1;
 
 statement ok
@@ -144,7 +153,7 @@ select * from t1 order by a,b,c;
 2 b_1 c_1
 3 b_2 c_2
 
-statement error 1065
+statement error 1005
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
 query TTT
@@ -477,6 +486,9 @@ statement ok
 CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255))  cluster by(employee_id,employee_name);
 
 statement ok
+drop table if exists salaries;
+
+statement ok
 CREATE TABLE salaries (employee_id INT,salary DECIMAL(10, 2)) cluster by(employee_id,salary);
 
 statement ok
@@ -498,6 +510,9 @@ select * from salaries order by employee_id;
 3 55000.00
 4 55000.00
 
+statement ok
+drop table if exists t1_target;
+
 ## null cast bug fix
 statement ok
 drop table if exists t1_target;
@@ -507,6 +522,9 @@ drop table if exists t2_source;
 
 statement ok
 create table t1_target(a int not null) cluster by(a);
+
+statement ok
+drop table if exists t2_source;
 
 statement ok
 create table t2_source(a int not null) cluster by(a);
@@ -528,6 +546,9 @@ select * from t1_target order by a;
 1
 2
 
+statement ok
+drop table if exists cluster_target;
+
 ## cluster table test
 statement ok
 drop table if exists cluster_target;
@@ -537,6 +558,9 @@ drop table if exists cluster_source;
 
 statement ok
 create table cluster_target(a int,b string,c int) cluster by(a,b);
+
+statement ok
+drop table if exists cluster_source;
 
 statement ok
 create table cluster_source(a int,b string,c int);
@@ -587,6 +611,9 @@ create table source_test(a int,b string,delete_flag bool) cluster by(a,b);
 
 statement ok
 insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
+
+statement ok
+drop stage if exists source_parquet;
 
 statement ok
 create stage source_parquet file_format = (type = parquet);

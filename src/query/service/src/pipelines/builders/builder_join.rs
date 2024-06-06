@@ -78,6 +78,8 @@ impl PipelineBuilder {
             self.main_pipeline.get_scopes(),
         );
         right_side_builder.cte_state = self.cte_state.clone();
+        right_side_builder.hash_join_states = self.hash_join_states.clone();
+
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(
@@ -102,6 +104,10 @@ impl PipelineBuilder {
             merge_into_is_distributed,
             enable_merge_into_optimization,
         )?;
+        if let Some((build_cache_index, _)) = join.build_side_cache_info {
+            self.hash_join_states
+                .insert(build_cache_index, state.clone());
+        }
         self.expand_build_side_pipeline(&join.build, join, state.clone())?;
         self.build_join_probe(join, state)
     }
@@ -120,6 +126,7 @@ impl PipelineBuilder {
             &join.probe_to_build,
             merge_into_is_distributed,
             enable_merge_into_optimization,
+            join.build_side_cache_info.clone(),
         )
     }
 
@@ -137,6 +144,7 @@ impl PipelineBuilder {
             self.main_pipeline.get_scopes(),
         );
         build_side_builder.cte_state = self.cte_state.clone();
+        build_side_builder.hash_join_states = self.hash_join_states.clone();
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
@@ -243,6 +251,7 @@ impl PipelineBuilder {
             self.main_pipeline.get_scopes(),
         );
         left_side_builder.cte_state = self.cte_state.clone();
+        left_side_builder.hash_join_states = self.hash_join_states.clone();
         let mut left_side_pipeline = left_side_builder.finalize(left_side)?;
         assert!(left_side_pipeline.main_pipeline.is_pulling_pipeline()?);
 

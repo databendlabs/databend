@@ -28,6 +28,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use chrono::Utc;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -61,11 +62,13 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -75,7 +78,9 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::LockGuard;
 use databend_common_settings::Settings;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
@@ -87,6 +92,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
+use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
@@ -102,6 +108,7 @@ use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
+use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
@@ -315,6 +322,35 @@ impl QueryContext {
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
     }
+
+    pub async fn acquire_table_lock(
+        self: Arc<Self>,
+        catalog_name: &str,
+        db_name: &str,
+        tbl_name: &str,
+        lock_opt: &LockTableOption,
+    ) -> Result<Option<LockGuard>> {
+        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
+        if !enabled_table_lock {
+            return Ok(None);
+        }
+
+        let catalog = self.get_catalog(catalog_name).await?;
+        let tbl = catalog
+            .get_table(&self.get_tenant(), db_name, tbl_name)
+            .await?;
+        if tbl.engine() != "FUSE" {
+            return Ok(None);
+        }
+
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
+        match lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
+            LockTableOption::NoLock => Ok(None),
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -340,6 +376,7 @@ impl TableContext for QueryContext {
             ),
             DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
+            DataSourceInfo::ORCSource(table_info) => OrcTable::from_info(table_info),
         }
     }
 
@@ -596,6 +633,16 @@ impl TableContext for QueryContext {
         self.get_current_session().get_all_effective_roles().await
     }
 
+    async fn validate_privilege(
+        &self,
+        object: &GrantObject,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        self.get_current_session()
+            .validate_privilege(object, privilege)
+            .await
+    }
+
     fn get_current_session_id(&self) -> String {
         self.get_current_session().get_id()
     }
@@ -645,6 +692,7 @@ impl TableContext for QueryContext {
 
         let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
+        let now = Utc::now();
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;
@@ -654,6 +702,7 @@ impl TableContext for QueryContext {
 
         Ok(FunctionContext {
             tz,
+            now,
             rounding_mode,
             disable_variant_check,
 
@@ -777,8 +826,10 @@ impl TableContext for QueryContext {
         None
     }
 
-    // Get the storage data accessor operator from the session manager.
-    fn get_data_operator(&self) -> Result<DataOperator> {
+    /// Get the storage data accessor operator from the session manager.
+    /// Note that this is the application level data accessor, which may be different from
+    /// the table level data accessor (e.g., table with customized storage parameters).
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
     }
 

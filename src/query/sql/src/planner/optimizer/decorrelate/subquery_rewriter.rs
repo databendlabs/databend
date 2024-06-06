@@ -51,6 +51,7 @@ use crate::plans::SubqueryType;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::WindowFuncType;
+use crate::Binder;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -71,14 +72,16 @@ pub struct SubqueryRewriter {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) metadata: MetadataRef,
     pub(crate) derived_columns: HashMap<IndexType, IndexType>,
+    pub(crate) binder: Option<Binder>,
 }
 
 impl SubqueryRewriter {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef, binder: Option<Binder>) -> Self {
         Self {
             ctx,
             metadata,
             derived_columns: Default::default(),
+            binder,
         }
     }
 
@@ -180,6 +183,8 @@ impl SubqueryRewriter {
             | RelOperator::Scan(_)
             | RelOperator::CteScan(_)
             | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
             | RelOperator::AddRowNumber(_)
             | RelOperator::Exchange(_) => Ok(s_expr.clone()),
         }
@@ -429,10 +434,11 @@ impl SubqueryRewriter {
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
                 let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
-                let agg_func_index = self
-                    .metadata
-                    .write()
-                    .add_derived_column("count(*)".to_string(), agg_func.return_type()?);
+                let agg_func_index = self.metadata.write().add_derived_column(
+                    "count(*)".to_string(),
+                    agg_func.return_type()?,
+                    None,
+                );
 
                 let agg = Aggregate {
                     group_items: vec![],
@@ -499,6 +505,7 @@ impl SubqueryRewriter {
                     let column_index = self.metadata.write().add_derived_column(
                         "_exists_scalar_subquery".to_string(),
                         DataType::Number(NumberDataType::UInt64),
+                        None,
                     );
                     output_index = Some(column_index);
                     let eval_scalar = EvalScalar {
@@ -520,6 +527,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 }
                 .into();
                 Ok((
@@ -575,6 +583,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
+                        None,
                     )
                 };
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
@@ -590,6 +599,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -621,6 +631,7 @@ impl SubqueryRewriter {
             need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
+            build_side_cache_info: None,
         }
         .into();
 
@@ -652,10 +663,12 @@ impl SubqueryRewriter {
         let count_idx = self.metadata.write().add_derived_column(
             "_count_scalar_subquery".to_string(),
             DataType::Number(NumberDataType::UInt64),
+            None,
         );
         let any_idx = self.metadata.write().add_derived_column(
             "_any_scalar_subquery".to_string(),
             *subquery.output_column.data_type.clone(),
+            None,
         );
         // Aggregate operator
         let agg = SExpr::create_unary(
@@ -744,6 +757,7 @@ impl SubqueryRewriter {
         let if_func_idx = self.metadata.write().add_derived_column(
             "_if_scalar_subquery".to_string(),
             *subquery.output_column.data_type.clone(),
+            None,
         );
         let scalar_expr = SExpr::create_unary(
             Arc::new(

@@ -12,6 +12,7 @@ message ScheduleOptions {
   optional string cron = 2; // CRON = '0 2 * * *' means Every night at 2 AM. UTC time zone.
   optional string time_zone = 3; // "UTC..."
   ScheduleType schedule_type = 4;
+  optional uint64 milliseconds_interval = 5; // milliseconds level interval
 }
 
 message WarehouseOptions {
@@ -170,6 +171,8 @@ message ShowTaskRunsRequest {
   repeated string owners = 6;
   repeated string task_ids = 7;
   string task_name = 8;
+  repeated string task_names = 9;
+  optional string root_task_id = 10;
 
   optional int32 page_size = 90; // 100 by default
   optional int64 next_page_token = 91;

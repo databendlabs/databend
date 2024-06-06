@@ -35,6 +35,8 @@ use crate::DataSchema;
 const UDF_TCP_KEEP_ALIVE_SEC: u64 = 30;
 const UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC: u64 = 60;
 const UDF_KEEP_ALIVE_TIMEOUT_SEC: u64 = 20;
+// 4MB by default, we use 16G
+// max_encoding_message_size is usize::max by default
 const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
@@ -66,7 +68,8 @@ impl UDFFlightClient {
             .await
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!(
-                    "Cannot connect to UDF Server {addr}: {err}"
+                    "Cannot connect to UDF Server {}: {:?}",
+                    addr, err
                 ))
             })?
             .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);

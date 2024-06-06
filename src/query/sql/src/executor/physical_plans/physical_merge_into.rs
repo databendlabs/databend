@@ -48,6 +48,7 @@ pub struct MergeInto {
     pub target_build_optimization: bool,
     pub can_try_update_column_only: bool,
     pub merge_into_split_idx: Option<usize>,
+    pub enable_right_broadcast: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

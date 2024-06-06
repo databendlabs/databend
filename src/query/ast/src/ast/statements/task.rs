@@ -26,8 +26,8 @@ use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TaskSql {
-    SingleStatement(#[drive(skip)] String),
-    ScriptBlock(#[drive(skip)] Vec<String>),
+    SingleStatement(String),
+    ScriptBlock(Vec<String>),
 }
 
 impl Display for TaskSql {
@@ -48,26 +48,17 @@ impl Display for TaskSql {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTaskStmt {
-    #[drive(skip)]
     pub if_not_exists: bool,
-    #[drive(skip)]
     pub name: String,
     pub warehouse_opts: WarehouseOptions,
     pub schedule_opts: Option<ScheduleOptions>,
-    #[drive(skip)]
     pub session_parameters: BTreeMap<String, String>,
-    #[drive(skip)]
     pub suspend_task_after_num_failures: Option<u64>,
     // notification_integration name for error
-    #[drive(skip)]
     pub error_integration: Option<String>,
-    #[drive(skip)]
     pub comments: Option<String>,
-    #[drive(skip)]
     pub after: Vec<String>,
-    #[drive(skip)]
     pub when_condition: Option<Expr>,
-    #[drive(skip)]
     pub sql: TaskSql,
 }
 
@@ -121,7 +112,6 @@ impl Display for CreateTaskStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct WarehouseOptions {
-    #[drive(skip)]
     pub warehouse: Option<String>,
 }
 
@@ -136,15 +126,21 @@ impl Display for WarehouseOptions {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ScheduleOptions {
-    IntervalSecs(#[drive(skip)] u64),
-    CronExpression(#[drive(skip)] String, #[drive(skip)] Option<String>),
+    IntervalSecs(u64, u64),
+    CronExpression(String, Option<String>),
 }
 
 impl Display for ScheduleOptions {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            ScheduleOptions::IntervalSecs(secs) => {
-                write!(f, "{} SECOND", secs)
+            ScheduleOptions::IntervalSecs(secs, ms) => {
+                if *ms > 0 {
+                    write!(f, "{} MILLISECOND", ms)?;
+                    Ok(())
+                } else {
+                    write!(f, "{} SECOND", secs)?;
+                    Ok(())
+                }
             }
             ScheduleOptions::CronExpression(expr, tz) => {
                 write!(f, "USING CRON '{}'", expr)?;
@@ -159,9 +155,7 @@ impl Display for ScheduleOptions {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterTaskStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
     pub options: AlterTaskOptions,
 }
@@ -183,27 +177,21 @@ pub enum AlterTaskOptions {
     Resume,
     Suspend,
     Set {
-        #[drive(skip)]
         warehouse: Option<String>,
         schedule: Option<ScheduleOptions>,
-        #[drive(skip)]
         suspend_task_after_num_failures: Option<u64>,
-        #[drive(skip)]
         comments: Option<String>,
-        #[drive(skip)]
         session_parameters: Option<BTreeMap<String, String>>,
-        #[drive(skip)]
         error_integration: Option<String>,
     },
     Unset {
-        #[drive(skip)]
         warehouse: bool,
     },
     // Change SQL
-    ModifyAs(#[drive(skip)] TaskSql),
+    ModifyAs(TaskSql),
     ModifyWhen(Expr),
-    AddAfter(#[drive(skip)] Vec<String>),
-    RemoveAfter(#[drive(skip)] Vec<String>),
+    AddAfter(Vec<String>),
+    RemoveAfter(Vec<String>),
 }
 
 impl Display for AlterTaskOptions {
@@ -263,9 +251,7 @@ impl Display for AlterTaskOptions {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropTaskStmt {
-    #[drive(skip)]
     pub if_exists: bool,
-    #[drive(skip)]
     pub name: String,
 }
 
@@ -298,7 +284,6 @@ impl Display for ShowTasksStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ExecuteTaskStmt {
-    #[drive(skip)]
     pub name: String,
 }
 
@@ -310,7 +295,6 @@ impl Display for ExecuteTaskStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DescribeTaskStmt {
-    #[drive(skip)]
     pub name: String,
 }
 

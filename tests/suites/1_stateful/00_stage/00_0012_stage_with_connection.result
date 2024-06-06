@@ -7,7 +7,7 @@
 >>>> create stage my_stage url= 's3://testbucket/admin/tempdata/' connection = (connection_name='my_conn');
 >>>> remove @my_stage;
 >>>> copy into @my_stage/a.csv from my_table
-3	13	388
+3	13	387
 >>>> select * from @my_stage order by a;
 1
 2

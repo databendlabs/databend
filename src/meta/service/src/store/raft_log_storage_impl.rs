@@ -15,12 +15,15 @@
 use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::ops::RangeBounds;
+use std::time::Duration;
 
+use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::io;
 use databend_common_meta_sled_store::openraft::storage::LogFlushed;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorage;
 use databend_common_meta_sled_store::openraft::ErrorSubject;
 use databend_common_meta_sled_store::openraft::ErrorVerb;
+use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::LogState;
 use databend_common_meta_sled_store::openraft::OptionalSend;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
@@ -225,7 +228,18 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
 
     #[minitrace::trace]
     async fn purge(&mut self, log_id: LogId) -> Result<(), StorageError> {
-        info!(id = self.id, log_id :? =(&log_id); "purge upto: start");
+        let curr_purged = self
+            .log
+            .write()
+            .await
+            .get_last_purged()
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
+
+        info!(
+            id = self.id,
+            curr_purged :? =(&curr_purged),
+            upto_log_id :? =(&log_id);
+            "purge upto: start");
 
         if let Err(err) = self
             .log
@@ -254,16 +268,46 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         databend_common_base::runtime::spawn({
             let id = self.id;
             async move {
-                info!(id = id, log_id :? =(&log_id); "purge_logs_upto: Start: asynchronous range_remove()");
+                info!(id = id, log_id :? =(&log_id); "purge_logs_upto: Start: asynchronous one by one remove");
 
-                let res = log.range_remove(..=log_id.index).await;
+                let mut removed_cnt = 0;
+                let mut removed_size = 0;
+                let curr = curr_purged.next_index();
+                for i in curr..=log_id.index {
+                    let res = log.logs().remove_no_return(&i, true).await;
 
-                if let Err(err) = res {
-                    error!(id = id, log_id :? =(&log_id); "purge_logs_upto: in asynchronous error: {}", err);
-                    raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
+                    let removed = match res {
+                        Ok(r) => r,
+                        Err(err) => {
+                            error!(id = id, log_index :% =i;
+                                "purge_logs_upto: in asynchronous error: {}", err);
+                            raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
+                            return;
+                        }
+                    };
+
+                    if let Some(size) = removed {
+                        removed_cnt += 1;
+                        removed_size += size;
+                    } else {
+                        error!(id = id, log_index :% =i;
+                            "purge_logs_upto: in asynchronous error: not found, maybe removed by other thread; quit this thread");
+                        return;
+                    }
+
+                    if i % 100 == 0 {
+                        info!(id = id, log_index :% =i,
+                            removed_cnt = removed_cnt,
+                            removed_size = removed_size,
+                            avg_removed_size = removed_size / (removed_cnt+1);
+                            "purge_logs_upto: asynchronous removed log");
+                    }
+
+                    // Do not block for too long if there are many keys to delete.
+                    tokio::time::sleep(Duration::from_millis(2)).await;
                 }
 
-                info!(id = id, log_id :? =(&log_id); "purge_logs_upto: Done: asynchronous range_remove()");
+                info!(id = id, upto_log_id :? =(&log_id); "purge_logs_upto: Done: asynchronous one by one remove");
             }
         });
 

@@ -44,9 +44,9 @@ def load_data_from_json():
                 notification_history_data = json.load(f)
                 notification_history = notification_pb2.NotificationHistory()
                 json_format.ParseDict(notification_history_data, notification_history)
-                NOTIFICATION_HISTORY_DB[notification_history.name] = (
-                    notification_history
-                )
+                NOTIFICATION_HISTORY_DB[
+                    notification_history.name
+                ] = notification_history
 
 
 def create_task_request_to_task(id, create_task_request):
@@ -313,6 +313,7 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
         print("ShowTaskRuns", request)
         task_runs = [item for sublist in TASK_RUN_DB.values() for item in sublist]
         task_runs = sorted(task_runs, key=lambda x: x.run_id)
+        num_results = len(task_runs)
 
         if len(request.task_name) > 0:
             print("Limiting task_name to", request.task_name)
@@ -325,7 +326,6 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
             task_runs = task_runs[: request.result_limit]
             if request.result_limit < num_results:
                 num_results = request.result_limit
-        num_results = len(task_runs)
         # pagination
         start_index = 0
         page_size = 2

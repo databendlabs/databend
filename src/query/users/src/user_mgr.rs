@@ -184,6 +184,7 @@ impl UserApiProvider {
         let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.update_user_time();
                 ui.grants.grant_privileges(&object, privileges)
             })
             .await
@@ -207,6 +208,7 @@ impl UserApiProvider {
         let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.update_user_time();
                 ui.grants.revoke_privileges(&object, privileges)
             })
             .await
@@ -229,6 +231,7 @@ impl UserApiProvider {
         let client = self.user_api(&tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.update_user_time();
                 ui.grants.grant_role(grant_role)
             })
             .await
@@ -251,6 +254,7 @@ impl UserApiProvider {
         let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.update_user_time();
                 ui.grants.revoke_role(&revoke_role)
             })
             .await
@@ -322,6 +326,7 @@ impl UserApiProvider {
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_auth_option(auth_info.clone(), user_option);
+                ui.update_user_time();
                 ui.update_auth_history(auth_info)
             })
             .await;

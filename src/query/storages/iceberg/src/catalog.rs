@@ -27,6 +27,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -331,6 +333,11 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         unimplemented!()
     }
 

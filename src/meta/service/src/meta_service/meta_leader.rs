@@ -18,7 +18,7 @@ use anyerror::AnyError;
 use databend_common_base::base::tokio::sync::RwLockReadGuard;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
+use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::sm_v002::SMV002;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;

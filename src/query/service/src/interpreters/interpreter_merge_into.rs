@@ -33,7 +33,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::LockGuard;
 use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::Exchange;
@@ -44,8 +44,8 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::MergeInto as MergePlan;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
@@ -60,7 +60,6 @@ use itertools::Itertools;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -74,8 +73,8 @@ pub struct MergeIntoInterpreter {
 }
 
 impl MergeIntoInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: MergePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(MergeIntoInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: MergePlan) -> Result<MergeIntoInterpreter> {
+        Ok(MergeIntoInterpreter { ctx, plan })
     }
 }
 
@@ -91,16 +90,11 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let (physical_plan, _) = self.build_physical_plan().await?;
+        let (physical_plan, lock_guard) = self.build_physical_plan().await?;
 
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-
-        // Add table lock before execution.
-        // todo!(@zhyass) :But for now the lock maybe exist problem, let's open this after fix it.
-        // let table_lock = LockManager::create_table_lock(table_info)?;
-        // let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-        // build_res.main_pipeline.add_lock_guard(lock_guard);
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Execute hook.
         {
@@ -110,7 +104,7 @@ impl Interpreter for MergeIntoInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::MergeInto,
-                true,
+                LockTableOption::NoLock,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }
@@ -125,7 +119,7 @@ impl Interpreter for MergeIntoInterpreter {
 }
 
 impl MergeIntoInterpreter {
-    async fn build_physical_plan(&self) -> Result<(PhysicalPlan, TableInfo)> {
+    pub async fn build_physical_plan(&self) -> Result<(PhysicalPlan, Option<LockGuard>)> {
         let MergePlan {
             bind_context,
             input,
@@ -145,10 +139,27 @@ impl MergeIntoInterpreter {
             split_idx,
             row_id_index,
             can_try_update_column_only,
+            enable_right_broadcast,
             ..
         } = &self.plan;
+        let enable_right_broadcast = *enable_right_broadcast;
         let mut columns_set = columns_set.clone();
+
+        // Add table lock before execution.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                catalog,
+                database,
+                table_name,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
+
         let table = self.ctx.get_table(catalog, database, table_name).await?;
+        // check mutability
+        table.check_mutable()?;
         let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Unimplemented(format!(
                 "table {}, engine type {}, does not support MERGE INTO",
@@ -156,6 +167,8 @@ impl MergeIntoInterpreter {
                 table.get_table_info().engine(),
             ))
         })?;
+
+        let table_info = fuse_table.get_table_info();
 
         // attentation!! for now we have some strategies:
         // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
@@ -202,25 +215,15 @@ impl MergeIntoInterpreter {
             }
         }
 
-        // check mutability
-        let check_table = self.ctx.get_table(catalog, database, table_name).await?;
-        check_table.check_mutable()?;
+        log::info!("target build optimization is {}", target_build_optimization);
 
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), meta_data).await?;
 
         let table_name = table_name.clone();
         let input = input.clone();
 
-        // we need to extract join plan, but we need to give this exchange
-        // back at last.
-        let (input, extract_exchange) = if let RelOperator::Exchange(_) = input.plan() {
-            (Box::new(input.child(0)?.clone()), true)
-        } else {
-            (input, false)
-        };
-
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
-        let mut join_input = builder.build(&input, *columns_set.clone()).await?;
+        let join_input = builder.build(&input, *columns_set.clone()).await?;
 
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
@@ -265,7 +268,7 @@ impl MergeIntoInterpreter {
             }
         }
 
-        if *distributed && !*change_join_order {
+        if enable_right_broadcast {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
@@ -276,25 +279,13 @@ impl MergeIntoInterpreter {
             ));
         }
 
-        if *distributed && row_number_idx.is_none() && !*change_join_order {
+        if enable_right_broadcast && row_number_idx.is_none() {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx when running merge into",
             ));
         }
 
-        let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
-
-        if !*distributed && extract_exchange {
-            join_input = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(join_input),
-                kind: FragmentKind::Merge,
-                keys: vec![],
-                allow_adjust_parallelism: true,
-                ignore_exchange: false,
-            });
-        };
 
         // transform unmatched for insert
         // reference to func `build_eval_scalar`
@@ -432,6 +423,7 @@ impl MergeIntoInterpreter {
                 can_try_update_column_only: *can_try_update_column_only,
                 plan_id: u32::MAX,
                 merge_into_split_idx,
+                enable_right_broadcast,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -444,16 +436,17 @@ impl MergeIntoInterpreter {
                 row_id_idx,
                 segments: segments.clone(),
                 distributed: true,
-                output_schema: match *change_join_order {
-                    false => DataSchemaRef::new(DataSchema::new(vec![
-                        join_output_schema.fields[row_number_idx.unwrap()].clone(),
-                    ])),
-                    true => DataSchemaRef::new(DataSchema::new(vec![DataField::new(
+                output_schema: if let Some(row_number_idx) = row_number_idx {
+                    DataSchemaRef::new(DataSchema::new(vec![
+                        join_output_schema.fields[row_number_idx].clone(),
+                    ]))
+                } else {
+                    DataSchemaRef::new(DataSchema::new(vec![DataField::new(
                         ROW_ID_COL_NAME,
                         databend_common_expression::types::DataType::Number(
                             databend_common_expression::types::NumberDataType::UInt64,
                         ),
-                    )])),
+                    )]))
                 },
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
@@ -461,6 +454,7 @@ impl MergeIntoInterpreter {
                 can_try_update_column_only: *can_try_update_column_only,
                 plan_id: u32::MAX,
                 merge_into_split_idx,
+                enable_right_broadcast,
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation
@@ -500,12 +494,11 @@ impl MergeIntoInterpreter {
             mutation_kind: MutationKind::Update,
             update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
-            need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
         }));
         physical_plan.adjust_plan_id(&mut 0);
-        Ok((physical_plan, table_info))
+        Ok((physical_plan, lock_guard))
     }
 
     fn transform_scalar_expr2expr(

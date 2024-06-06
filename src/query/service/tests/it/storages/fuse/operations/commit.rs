@@ -46,11 +46,15 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -564,6 +568,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn validate_privilege(
+        &self,
+        _object: &GrantObject,
+        _privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        todo!()
+    }
+
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
@@ -641,8 +653,8 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_data_operator()
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_application_level_data_operator()
     }
 
     async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
@@ -903,6 +915,10 @@ impl Catalog for FakedCatalog {
     }
 
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        todo!()
+    }
+
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         todo!()
     }
 

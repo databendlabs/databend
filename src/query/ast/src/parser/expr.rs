@@ -340,7 +340,7 @@ impl ExprElement {
 
                 BinaryOperator::And => Affix::Infix(Precedence(10), Associativity::Left),
 
-                BinaryOperator::Eq => Affix::Infix(Precedence(20), Associativity::Right),
+                BinaryOperator::Eq => Affix::Infix(Precedence(20), Associativity::Left),
                 BinaryOperator::NotEq => Affix::Infix(Precedence(20), Associativity::Left),
                 BinaryOperator::Gt => Affix::Infix(Precedence(20), Associativity::Left),
                 BinaryOperator::Lt => Affix::Infix(Precedence(20), Associativity::Left),
@@ -377,7 +377,7 @@ impl ExprElement {
                 BinaryOperator::IntDiv => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
-                BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Left),
+                BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Right),
             },
             ExprElement::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),

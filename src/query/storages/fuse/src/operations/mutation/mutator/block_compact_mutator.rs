@@ -45,7 +45,6 @@ use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::mutation::MAX_BLOCK_COUNT;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
@@ -84,6 +83,11 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
+
+        let settings = self.ctx.get_settings();
+        let compact_max_block_selection = settings.get_compact_max_block_selection()? as usize;
+        let max_threads = settings.get_max_threads()? as usize;
+
         let num_segment_limit = self
             .compact_params
             .num_segment_limit
@@ -91,7 +95,7 @@ impl BlockCompactMutator {
         let num_block_limit = self
             .compact_params
             .num_block_limit
-            .unwrap_or(MAX_BLOCK_COUNT);
+            .unwrap_or(compact_max_block_selection);
 
         info!("block compaction limits: seg {num_segment_limit},  block {num_block_limit}");
 
@@ -112,7 +116,7 @@ impl BlockCompactMutator {
         let mut segment_idx = 0;
         let mut is_end = false;
         let mut parts = Vec::new();
-        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
+        let chunk_size = max_threads * 4;
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
             let mut segment_infos = segments_io
@@ -144,7 +148,7 @@ impl BlockCompactMutator {
             for (segment_idx, compact_segment) in segment_infos.into_iter() {
                 let segments_vec = checker.add(segment_idx, compact_segment);
                 for segments in segments_vec {
-                    self.generate_part(segments, &mut parts, &mut checker);
+                    checker.generate_part(segments, &mut parts);
                 }
 
                 let residual_segment_cnt = checker.segments.len();
@@ -177,11 +181,7 @@ impl BlockCompactMutator {
         }
 
         // finalize the compaction.
-        self.generate_part(
-            std::mem::take(&mut checker.segments),
-            &mut parts,
-            &mut checker,
-        );
+        checker.finalize(&mut parts);
 
         // Status.
         let elapsed_time = start.elapsed();
@@ -194,7 +194,6 @@ impl BlockCompactMutator {
         metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time.as_millis() as u64);
 
         let cluster = self.ctx.get_cluster();
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
             // NOTE: The snapshot schema does not contain the stream column.
             let column_ids = self
@@ -295,28 +294,9 @@ impl BlockCompactMutator {
             }
         }
     }
-
-    fn generate_part(
-        &mut self,
-        segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
-        parts: &mut Vec<PartInfoPtr>,
-        checker: &mut SegmentCompactChecker,
-    ) {
-        if !segments.is_empty() && checker.check_for_compact(&segments) {
-            let mut segment_indices = Vec::with_capacity(segments.len());
-            let mut compact_segments = Vec::with_capacity(segments.len());
-            for (idx, segment) in segments.into_iter() {
-                segment_indices.push(idx);
-                compact_segments.push(segment);
-            }
-
-            let lazy_part = CompactLazyPartInfo::create(segment_indices, compact_segments);
-            parts.push(lazy_part);
-        }
-    }
 }
 
-struct SegmentCompactChecker {
+pub struct SegmentCompactChecker {
     segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
     total_block_count: u64,
     block_threshold: u64,
@@ -327,7 +307,7 @@ struct SegmentCompactChecker {
 }
 
 impl SegmentCompactChecker {
-    fn new(block_threshold: u64, cluster_key_id: Option<u32>) -> Self {
+    pub fn new(block_threshold: u64, cluster_key_id: Option<u32>) -> Self {
         Self {
             segments: vec![],
             total_block_count: 0,
@@ -361,7 +341,7 @@ impl SegmentCompactChecker {
         true
     }
 
-    fn add(
+    pub fn add(
         &mut self,
         idx: SegmentIndex,
         segment: Arc<CompactSegmentInfo>,
@@ -385,6 +365,29 @@ impl SegmentCompactChecker {
         self.total_block_count = 0;
         self.segments.push((idx, segment));
         vec![std::mem::take(&mut self.segments)]
+    }
+
+    pub fn generate_part(
+        &mut self,
+        segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
+        parts: &mut Vec<PartInfoPtr>,
+    ) {
+        if !segments.is_empty() && self.check_for_compact(&segments) {
+            let mut segment_indices = Vec::with_capacity(segments.len());
+            let mut compact_segments = Vec::with_capacity(segments.len());
+            for (idx, segment) in segments.into_iter() {
+                segment_indices.push(idx);
+                compact_segments.push(segment);
+            }
+
+            let lazy_part = CompactLazyPartInfo::create(segment_indices, compact_segments);
+            parts.push(lazy_part);
+        }
+    }
+
+    pub fn finalize(&mut self, parts: &mut Vec<PartInfoPtr>) {
+        let final_segments = std::mem::take(&mut self.segments);
+        self.generate_part(final_segments, parts);
     }
 }
 

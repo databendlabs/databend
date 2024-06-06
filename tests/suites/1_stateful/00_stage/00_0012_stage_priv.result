@@ -17,7 +17,7 @@ Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] i
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE presign_stage for user 'u1'@'%' with roles [public]
 000
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE s3 for user 'u1'@'%' with roles [public]
-1	64	378
+1	64	377
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'u1'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage s3 for user 'u1'@'%'
 Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage s3 for user 'u1'@'%'

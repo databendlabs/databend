@@ -12,10 +12,9 @@ doctest = false
 test = true
 
 [features]
-default = ["simd", "z3-prove"]
+default = ["simd"]
 simd = ["databend-common-arrow/simd"]
-
-z3-prove = ["databend-common-sql/z3-prove"]
+python-udf = ["arrow-udf-python"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
@@ -74,6 +73,7 @@ databend-common-storages-hive = { path = "../storages/hive/hive" }
 databend-common-storages-iceberg = { path = "../storages/iceberg" }
 databend-common-storages-information-schema = { path = "../storages/information_schema" }
 databend-common-storages-null = { path = "../storages/null" }
+databend-common-storages-orc = { path = "../storages/orc" }
 databend-common-storages-parquet = { path = "../storages/parquet" }
 databend-common-storages-result-cache = { path = "../storages/result_cache" }
 databend-common-storages-share = { path = "../storages/share" }
@@ -103,6 +103,7 @@ jsonb = { workspace = true }
 
 # Crates.io dependencies
 arrow-udf-js = { workspace = true }
+arrow-udf-python = { package = "arrow-udf-python", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0", optional = true }
 arrow-udf-wasm = { workspace = true }
 
 arrow-array = { workspace = true }
@@ -163,6 +164,7 @@ rustls-pki-types = "1"
 rustyline = "14"
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_stacker = { workspace = true }
 serde_urlencoded = "0.7.1"
 socket2 = "0.5.3"
 strength_reduce = "0.2.4"
@@ -174,7 +176,6 @@ tokio-stream = { workspace = true, features = ["net"] }
 toml = { version = "0.8", default-features = false }
 tonic = { workspace = true }
 typetag = { workspace = true }
-unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }

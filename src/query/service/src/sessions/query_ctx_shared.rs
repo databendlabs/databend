@@ -23,6 +23,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
+use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Runtime;
@@ -229,11 +230,12 @@ impl QueryContextShared {
 
     pub fn kill(&self, cause: ErrorCode) {
         self.set_error(cause.clone());
-        self.aborting.store(true, Ordering::Release);
 
         if let Some(executor) = self.executor.read().upgrade() {
             executor.finish(Some(cause));
         }
+
+        self.aborting.store(true, Ordering::Release);
 
         // TODO: Wait for the query to be processed (write out the last error)
     }
@@ -577,31 +579,5 @@ impl Drop for QueryContextShared {
                 .session_ctx
                 .update_query_ids_results(self.init_query_id.read().clone(), None)
         })
-    }
-}
-
-pub fn short_sql(sql: String) -> String {
-    use unicode_segmentation::UnicodeSegmentation;
-    const MAX_LENGTH: usize = 30 * 1024; // 30KB
-
-    let query = sql.trim_start();
-    if query.as_bytes().len() > MAX_LENGTH && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT")
-    {
-        // keep first 30KB
-        let mut result = Vec::new();
-        let mut bytes_taken = 0;
-        for grapheme in query.graphemes(true) {
-            let grapheme_bytes = grapheme.as_bytes();
-            if bytes_taken + grapheme_bytes.len() <= MAX_LENGTH {
-                result.extend_from_slice(grapheme_bytes);
-                bytes_taken += grapheme_bytes.len();
-            } else {
-                break;
-            }
-        }
-        result.extend_from_slice(b"...");
-        String::from_utf8(result).unwrap() // by construction, this cannot panic as we extracted unicode graphemes
-    } else {
-        sql
     }
 }

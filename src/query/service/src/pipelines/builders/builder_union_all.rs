@@ -51,6 +51,7 @@ impl PipelineBuilder {
             self.main_pipeline.get_scopes(),
         );
         pipeline_builder.cte_state = self.cte_state.clone();
+        pipeline_builder.hash_join_states = self.hash_join_states.clone();
 
         let mut build_res = pipeline_builder.finalize(input)?;
 

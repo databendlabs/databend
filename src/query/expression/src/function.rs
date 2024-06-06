@@ -19,11 +19,13 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_io::GeometryDataType;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -95,6 +97,7 @@ pub enum FunctionEval {
 #[derive(Clone, Default)]
 pub struct FunctionContext {
     pub tz: TzLUT,
+    pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
 

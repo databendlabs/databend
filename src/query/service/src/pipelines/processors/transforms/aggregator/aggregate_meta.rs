@@ -233,7 +233,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
             AggregateMeta::Spilling(_) => f.debug_struct("Aggregate::Spilling").finish(),
-            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilling").finish(),
+            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
             AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
             AggregateMeta::AggregatePayload(_) => {
                 f.debug_struct("AggregateMeta:AggregatePayload").finish()

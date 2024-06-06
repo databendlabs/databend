@@ -39,7 +39,6 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;
-use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -114,7 +113,6 @@ impl FuseTable {
 
                 self.prune_snapshot_blocks(
                     ctx.clone(),
-                    self.operator.clone(),
                     push_downs.clone(),
                     table_schema,
                     segments_location,
@@ -131,7 +129,6 @@ impl FuseTable {
     pub async fn prune_snapshot_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        dal: Operator,
         push_downs: Option<PushDownInfo>,
         table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
@@ -142,6 +139,8 @@ impl FuseTable {
             "segment numbers" = segments_location.len();
             "prune snapshot block start"
         );
+
+        let dal = self.operator.clone();
 
         type CacheItem = (PartStatistics, Partitions);
 
@@ -172,7 +171,7 @@ impl FuseTable {
         let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(
                 &ctx,
-                dal.clone(),
+                dal,
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
@@ -182,7 +181,7 @@ impl FuseTable {
 
             FusePruner::create_with_pages(
                 &ctx,
-                dal.clone(),
+                dal,
                 table_schema,
                 &push_downs,
                 self.cluster_key_meta.clone(),

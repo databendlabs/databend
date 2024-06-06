@@ -58,6 +58,7 @@ pub struct ReclusterAggregator {
     start_time: Instant,
 
     merged_blocks: Vec<Arc<BlockMeta>>,
+    new_block_count: usize,
 
     removed_segment_indexes: Vec<usize>,
     removed_statistics: Statistics,
@@ -75,10 +76,11 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
             self.merged_blocks.push(Arc::new(meta));
             // Refresh status
             {
+                self.new_block_count += 1;
                 metrics_inc_recluster_write_block_nums();
                 let status = format!(
                     "recluster: generate new blocks:{}, cost:{:?}",
-                    self.merged_blocks.len(),
+                    self.new_block_count,
                     self.start_time.elapsed()
                 );
                 self.ctx.set_status_info(&status);
@@ -155,6 +157,7 @@ impl ReclusterAggregator {
             block_thresholds: table.get_block_thresholds(),
             block_per_seg,
             merged_blocks,
+            new_block_count: 0,
             removed_segment_indexes,
             removed_statistics,
             start_time: Instant::now(),

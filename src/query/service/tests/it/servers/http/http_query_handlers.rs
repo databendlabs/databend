@@ -31,9 +31,7 @@ use databend_query::auth::AuthMgr;
 use databend_query::servers::http::middleware::get_client_ip;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
-use databend_query::servers::http::v1::make_final_uri;
 use databend_query::servers::http::v1::make_page_uri;
-use databend_query::servers::http::v1::make_state_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSessionConf;
@@ -276,7 +274,7 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result.error);
 
     let query_id = &result.id;
-    let final_uri = make_final_uri(query_id);
+    let final_uri = result.final_uri.clone().unwrap();
 
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
@@ -284,7 +282,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.schema.len(), 19, "{:?}", result);
 
     // get state
-    let uri = make_state_uri(query_id);
+    let uri = result.stats_uri.unwrap();
     let (status, result) = get_uri_checked(&ep, &uri).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
@@ -305,14 +303,22 @@ async fn test_simple_sql() -> Result<()> {
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     }
 
-    // get page not expected
+    // client retry
     let page_1_uri = make_page_uri(query_id, 1);
-    let response = get_uri(&ep, &page_1_uri).await;
+    let (_, result) = get_uri_checked(&ep, &page_1_uri).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
+    assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
+
+    // get page not expected
+    let page_2_uri = make_page_uri(query_id, 2);
+    let response = get_uri(&ep, &page_2_uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"expect /final from client, got /page/1."}}"#
+        r#"{"error":{"code":"404","message":"wrong page number 2"}}"#
     );
 
     // final
@@ -338,7 +344,7 @@ async fn test_show_databases() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sql = "show databases";
-    let (status, result) = post_sql(sql, 1).await?;
+    let (status, result) = post_sql(sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     // has only one field: name
@@ -558,7 +564,7 @@ async fn test_pagination() -> Result<()> {
 
     let ep = create_endpoint().await?;
     let sql = "select * from numbers(10)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {}}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3, "max_rows_per_page": 2}, "session": { "settings": {}}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -589,7 +595,7 @@ async fn test_pagination() -> Result<()> {
         assert!(!result.schema.is_empty(), "{:?}", result);
         if page == 5 {
             // get state
-            let uri = make_state_uri(query_id);
+            let uri = result.stats_uri.clone().unwrap();
             let (status, _state_result) = get_uri_checked(&ep, &uri).await?;
             assert_eq!(status, StatusCode::OK);
 
@@ -687,7 +693,7 @@ async fn test_system_tables() -> Result<()> {
 
     let sql = "select name from system.tables where database='system' order by name";
 
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(!result.data.is_empty(), "{:?}", result);
 

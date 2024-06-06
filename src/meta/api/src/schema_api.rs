@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateCatalogReply;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -188,6 +190,11 @@ pub trait SchemaApi: Send + Sync {
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError>;
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply, KVAppError>;
+
+    async fn commit_table_meta(
+        &self,
+        req: CommitTableMetaReq,
+    ) -> Result<CommitTableMetaReply, KVAppError>;
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError>;
 

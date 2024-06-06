@@ -18,12 +18,12 @@
 #![feature(lazy_cell)]
 #![allow(clippy::diverging_sub_expression)]
 
-// #![allow(incomplete_features)]
-
 pub mod applier;
 pub mod config;
 pub mod key_spaces;
+pub mod leveled_store;
 pub mod log;
+pub(crate) mod marked;
 pub mod ondisk;
 pub mod sm_v002;
 pub mod state;

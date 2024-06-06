@@ -35,7 +35,6 @@ members = [
     "src/query/async_functions",
     "src/query/codegen",
     "src/query/config",
-    "src/query/constraint",
     "src/query/catalog",
     "src/query/sharing",
     "src/query/sharing_endpoint",
@@ -66,6 +65,7 @@ members = [
     "src/query/storages/information_schema",
     "src/query/storages/memory",
     "src/query/storages/null",
+    "src/query/storages/orc",
     "src/query/storages/random",
     "src/query/storages/share",
     "src/query/storages/stage",
@@ -105,7 +105,7 @@ members = [
     "src/meta/service",
     # sqllogictest
     "tests/sqllogictests",
-    "src/bendpy",
+    # "src/bendpy",
     # sqlsmith
     "src/tests/sqlsmith",
 ]
@@ -162,7 +162,7 @@ ethnum = { version = "1.5.0" }
 feature-set = { version = "0.1.1" }
 geo = { version = "0.27.0", features = ["use-serde"] }
 geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
-geozero = { version = "0.12.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
+geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 itertools = "0.10.5"
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
@@ -188,7 +188,7 @@ tonic-reflection = { version = "0.11.0" }
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-derive-visitor = "0.3.0"
+derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 http = "1"
 criterion = "0.5"
 
@@ -234,7 +234,9 @@ arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafus
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
-serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
+serde_stacker = { version = "0.1" }
+serde_with = { version = "3.8.1" }
+serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
 tonic-build = { version = "0.11" }
 
 # Memory management
@@ -247,7 +249,13 @@ logcall = "0.1.5"
 minitrace = { version = "0.6.5", features = ["enable"] }
 minitrace-opentelemetry = "0.6.5"
 opentelemetry = { version = "0.22", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.15", features = ["trace", "logs", "grpc-tonic"] }
+opentelemetry-otlp = { version = "0.15", features = [
+    "trace",
+    "logs",
+    "grpc-tonic",
+    "http-proto",
+    "reqwest-client",
+] }
 opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
@@ -294,12 +302,9 @@ debug-assertions = true
 overflow-checks = true
 rpath = false
 
-# If there are dependencies that need patching, they can be listed below.
 [patch.crates-io]
 arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
-z3 = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
-z3-sys = { git = "https://github.com/prove-rs/z3.rs", rev = "247d308" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }

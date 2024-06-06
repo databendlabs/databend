@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
-use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
@@ -54,7 +53,7 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 18] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 19] = [
     "catalogs",
     "columns",
     "databases",
@@ -73,6 +72,7 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 18] = [
     "processes",
     "user_functions",
     "functions",
+    "indexes",
 ];
 
 impl PrivilegeAccess {
@@ -340,13 +340,27 @@ impl PrivilegeAccess {
                 ErrorCode::UNKNOWN_DATABASE
                 | ErrorCode::UNKNOWN_TABLE
                 | ErrorCode::UNKNOWN_CATALOG => Ok(None),
-                _ => Err(e.add_message("error on validating access")),
+                _ => Err(e.add_message("error on check has_ownership")),
             })?;
         if let Some(object) = &owner_object {
-            if let Ok(ok) = session.has_ownership(object).await {
-                if ok {
+            if let OwnershipObject::Table {
+                catalog_name,
+                db_id,
+                ..
+            } = object
+            {
+                let database_owner = OwnershipObject::Database {
+                    catalog_name: catalog_name.to_string(),
+                    db_id: *db_id,
+                };
+                // If Table ownership check fails, check for Database ownership
+                if session.has_ownership(object).await?
+                    || session.has_ownership(&database_owner).await?
+                {
                     return Ok(true);
                 }
+            } else if session.has_ownership(object).await? {
+                return Ok(true);
             }
         }
         Ok(false)
@@ -589,6 +603,9 @@ impl AccessChecker for PrivilegeAccess {
                             }
                             DataSourceInfo::ParquetSource(stage_info) => {
                                 self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
+                            }
+                            DataSourceInfo::ORCSource(stage_info) => {
+                                self.validate_stage_access(&stage_info.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
                             }
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
@@ -992,32 +1009,6 @@ impl AccessChecker for PrivilegeAccess {
             Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) | Plan::SetPriority(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
                     .await?;
-            }
-            Plan::ShowGrants(plan) => {
-                let current_user = self.ctx.get_current_user()?;
-                if let Some(principal) = &plan.principal {
-                   match principal {
-                       PrincipalIdentity::User(user) => {
-                           if current_user.identity() == *user {
-                               return Ok(());
-                           } else {
-                               self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant)
-                                   .await?;
-                           }
-                       }
-                       PrincipalIdentity::Role(role) => {
-                           let roles=current_user.grants.roles();
-                           if roles.contains(role) || role.to_lowercase() == "public" {
-                               return Ok(());
-                           } else {
-                               self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant)
-                                   .await?;
-                           }
-                       }
-                   }
-                } else {
-                    return Ok(());
-                }
             }
             Plan::AlterUser(_)
             | Plan::RenameDatabase(_)

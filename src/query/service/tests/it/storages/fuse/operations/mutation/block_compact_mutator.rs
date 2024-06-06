@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
@@ -33,9 +34,11 @@ use databend_query::schedulers::build_query_pipeline_without_render_result_set;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use opendal::Operator;
 use rand::thread_rng;
 use rand::Rng;
 use uuid::Uuid;
@@ -122,7 +125,6 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             snapshot,
             catalog_info,
             false,
-            true,
         )?;
 
         let build_res =
@@ -146,7 +148,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 async fn test_safety() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let operator = ctx.get_data_operator()?.operator();
+    let operator = ctx.get_application_level_data_operator()?.operator();
     let settings = ctx.get_settings();
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
@@ -196,6 +198,7 @@ async fn test_safety() -> Result<()> {
             threshold,
             cluster_key_id,
             5,
+            false,
         )
         .await?;
 
@@ -240,53 +243,72 @@ async fn test_safety() -> Result<()> {
             eprintln!("no target select");
             continue;
         }
-        assert!(selections.partitions_type() != PartInfoType::LazyLevel);
-
-        let mut actual_blocks_number = 0;
-        let mut compact_segment_indices = HashSet::new();
-        let mut actual_block_ids = HashSet::new();
-        for part in selections.partitions.into_iter() {
-            let part = CompactBlockPartInfo::from_part(&part)?;
-            match part {
-                CompactBlockPartInfo::CompactExtraInfo(extra) => {
-                    compact_segment_indices.insert(extra.segment_index);
-                    compact_segment_indices.extend(extra.removed_segment_indexes.iter());
-                    actual_blocks_number += extra.unchanged_blocks.len();
-                    for b in &extra.unchanged_blocks {
-                        actual_block_ids.insert(b.1.location.clone());
-                    }
-                }
-                CompactBlockPartInfo::CompactTaskInfo(task) => {
-                    compact_segment_indices.insert(task.index.segment_idx);
-                    actual_blocks_number += task.blocks.len();
-                    for b in &task.blocks {
-                        actual_block_ids.insert(b.location.clone());
-                    }
-                }
-            }
-        }
-
-        eprintln!("compact_segment_indices: {:?}", compact_segment_indices);
-        let mut except_blocks_number = 0;
-        let mut except_block_ids = HashSet::new();
-        for idx in compact_segment_indices.into_iter() {
-            let loc = locations.get(idx).unwrap();
-            let compact_segment = SegmentsIO::read_compact_segment(
-                ctx.get_data_operator()?.operator(),
-                loc.clone(),
-                TestFixture::default_table_schema(),
-                false,
-            )
-            .await?;
-            let segment = SegmentInfo::try_from(compact_segment)?;
-            except_blocks_number += segment.blocks.len();
-            for b in &segment.blocks {
-                except_block_ids.insert(b.location.clone());
-            }
-        }
-        assert_eq!(except_blocks_number, actual_blocks_number);
-        assert_eq!(except_block_ids, actual_block_ids);
+        verify_compact_tasks(
+            ctx.get_application_level_data_operator()?.operator(),
+            selections,
+            locations,
+            HashSet::new(),
+        )
+        .await?;
     }
 
+    Ok(())
+}
+
+pub async fn verify_compact_tasks(
+    dal: Operator,
+    parts: Partitions,
+    locations: Vec<Location>,
+    expected_segment_indices: HashSet<usize>,
+) -> Result<()> {
+    assert!(parts.partitions_type() != PartInfoType::LazyLevel);
+
+    let mut actual_blocks_number = 0;
+    let mut compact_segment_indices = HashSet::new();
+    let mut actual_block_ids = HashSet::new();
+    for part in parts.partitions.into_iter() {
+        let part = CompactBlockPartInfo::from_part(&part)?;
+        match part {
+            CompactBlockPartInfo::CompactExtraInfo(extra) => {
+                compact_segment_indices.insert(extra.segment_index);
+                compact_segment_indices.extend(extra.removed_segment_indexes.iter());
+                actual_blocks_number += extra.unchanged_blocks.len();
+                for b in &extra.unchanged_blocks {
+                    actual_block_ids.insert(b.1.location.clone());
+                }
+            }
+            CompactBlockPartInfo::CompactTaskInfo(task) => {
+                compact_segment_indices.insert(task.index.segment_idx);
+                actual_blocks_number += task.blocks.len();
+                for b in &task.blocks {
+                    actual_block_ids.insert(b.location.clone());
+                }
+            }
+        }
+    }
+
+    eprintln!("compact_segment_indices: {:?}", compact_segment_indices);
+    if !expected_segment_indices.is_empty() {
+        assert_eq!(expected_segment_indices, compact_segment_indices);
+    }
+    let mut except_blocks_number = 0;
+    let mut except_block_ids = HashSet::new();
+    for idx in compact_segment_indices.into_iter() {
+        let loc = locations.get(idx).unwrap();
+        let compact_segment = SegmentsIO::read_compact_segment(
+            dal.clone(),
+            loc.clone(),
+            TestFixture::default_table_schema(),
+            false,
+        )
+        .await?;
+        let segment = SegmentInfo::try_from(compact_segment)?;
+        except_blocks_number += segment.blocks.len();
+        for b in &segment.blocks {
+            except_block_ids.insert(b.location.clone());
+        }
+    }
+    assert_eq!(except_blocks_number, actual_blocks_number);
+    assert_eq!(except_block_ids, actual_block_ids);
     Ok(())
 }

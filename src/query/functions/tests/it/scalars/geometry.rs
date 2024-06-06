@@ -50,6 +50,9 @@ fn test_geometry() {
     test_st_geometryfromwkb(file);
     test_st_geometryfromwkt(file);
     test_st_xmax(file);
+    test_st_xmin(file);
+    test_st_ymax(file);
+    test_st_ymin(file);
     // test_st_transform(file);
 }
 
@@ -475,7 +478,79 @@ fn test_st_xmax(file: &mut impl Write) {
     );
     run_ast(
         file,
-        "st_xmax(to_geometry('MULTILINESTRING ((10 10, 20 20, 10 40), EMPTY)'))",
+        "st_xmax(to_geometry('MULTILINESTRING((10 10, 20 20, 10 40), EMPTY)'))",
+        &[],
+    );
+}
+
+fn test_st_xmin(file: &mut impl Write) {
+    run_ast(file, "st_xmin(to_geometry('POINT(-180 0)'))", &[]);
+    run_ast(
+        file,
+        "st_xmin(to_geometry('LINESTRING(-179 0, 179 0)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_xmin(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POLYGON((40 40,20 45,45 30,40 40)))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_xmin(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POINT EMPTY)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_xmin(to_geometry('MULTILINESTRING((10 10, 20 20, 10 40), EMPTY)'))",
+        &[],
+    );
+}
+
+fn test_st_ymax(file: &mut impl Write) {
+    run_ast(file, "st_ymax(to_geometry('POINT(-180 0)'))", &[]);
+    run_ast(
+        file,
+        "st_ymax(to_geometry('LINESTRING(-179 1, 179 20)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_ymax(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POLYGON((40 40,20 45,45 30,40 40)))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_ymax(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POINT EMPTY)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_ymax(to_geometry('MULTILINESTRING ((10 10, 20 20, 10 40), EMPTY)'))",
+        &[],
+    );
+}
+
+fn test_st_ymin(file: &mut impl Write) {
+    run_ast(file, "st_ymin(to_geometry('POINT(-180 0)'))", &[]);
+    run_ast(
+        file,
+        "st_ymin(to_geometry('LINESTRING(-179 1, 179 20)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_ymin(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POLYGON((40 40,20 45,45 30,40 40)))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_ymin(to_geometry('GEOMETRYCOLLECTION(POINT(40 10),LINESTRING(10 10,20 20,10 40),POINT EMPTY)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_ymin(to_geometry('MULTILINESTRING ((10 10, 20 20, 10 40), EMPTY)'))",
         &[],
     );
 }

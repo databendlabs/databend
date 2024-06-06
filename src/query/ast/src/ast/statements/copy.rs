@@ -16,17 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io::Error;
-use std::io::ErrorKind;
-use std::io::Result;
 
-use databend_common_exception::ErrorCode;
-use databend_common_io::escape_string_with_quote;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
 use url::Url;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
@@ -35,6 +31,8 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableRef;
 use crate::ast::With;
+use crate::ParseError;
+use crate::Result;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -55,30 +53,19 @@ pub struct CopyIntoTableStmt {
     pub file_format: FileFormatOptions,
 
     // files to load
-    #[drive(skip)]
     pub files: Option<Vec<String>>,
-    #[drive(skip)]
     pub pattern: Option<String>,
-    #[drive(skip)]
     pub force: bool,
 
     // copy options
     /// TODO(xuanwo): parse into validation_mode directly.
-    #[drive(skip)]
     pub validation_mode: String,
-    #[drive(skip)]
     pub size_limit: usize,
-    #[drive(skip)]
     pub max_files: usize,
-    #[drive(skip)]
     pub split_size: usize,
-    #[drive(skip)]
     pub purge: bool,
-    #[drive(skip)]
     pub disable_variant_check: bool,
-    #[drive(skip)]
     pub return_failed_only: bool,
-    #[drive(skip)]
     pub on_error: String,
 }
 
@@ -150,6 +137,7 @@ impl Display for CopyIntoTableStmt {
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
         write!(f, " ON_ERROR = {}", self.on_error)?;
+        write!(f, " RETURN_FAILED_ONLY = {}", self.return_failed_only)?;
 
         Ok(())
     }
@@ -162,13 +150,9 @@ pub struct CopyIntoLocationStmt {
     pub hints: Option<Hint>,
     pub src: CopyIntoLocationSource,
     pub dst: FileLocation,
-    #[drive(skip)]
     pub file_format: FileFormatOptions,
-    #[drive(skip)]
     pub single: bool,
-    #[drive(skip)]
     pub max_file_size: usize,
-    #[drive(skip)]
     pub detailed_output: bool,
 }
 
@@ -249,7 +233,6 @@ impl Display for CopyIntoLocationSource {
 pub struct Connection {
     #[drive(skip)]
     visited_keys: HashSet<String>,
-    #[drive(skip)]
     pub conns: BTreeMap<String, String>,
 }
 
@@ -285,8 +268,8 @@ impl Connection {
             .collect();
 
         if !diffs.is_empty() {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
+            return Err(ParseError(
+                None,
                 format!(
                     "connection params invalid: expected [{}], got [{}]",
                     self.visited_keys
@@ -329,13 +312,9 @@ fn mask_string(s: &str, unmask_len: usize) -> String {
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UriLocation {
-    #[drive(skip)]
     pub protocol: String,
-    #[drive(skip)]
     pub name: String,
-    #[drive(skip)]
     pub path: String,
-    #[drive(skip)]
     pub part_prefix: String,
     pub connection: Connection,
 }
@@ -361,14 +340,14 @@ impl UriLocation {
         uri: String,
         part_prefix: String,
         conns: BTreeMap<String, String>,
-    ) -> databend_common_exception::Result<Self> {
+    ) -> Result<Self> {
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
             if !path.starts_with('/') {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Invalid uri: {}. fs location must start with 'fs:///'",
-                    uri
-                )));
+                return Err(ParseError(
+                    None,
+                    format!("Invalid uri: {}. fs location must start with 'fs:///'", uri),
+                ));
             }
             return Ok(UriLocation::new(
                 "fs".to_string(),
@@ -379,9 +358,8 @@ impl UriLocation {
             ));
         }
 
-        let parsed = Url::parse(&uri).map_err(|e| {
-            databend_common_exception::ErrorCode::BadArguments(format!("invalid uri {}", e))
-        })?;
+        let parsed =
+            Url::parse(&uri).map_err(|e| ParseError(None, format!("invalid uri {}", e)))?;
 
         let protocol = parsed.scheme().to_string();
 
@@ -394,7 +372,7 @@ impl UriLocation {
                     hostname.to_string()
                 }
             })
-            .ok_or_else(|| databend_common_exception::ErrorCode::BadArguments("invalid uri"))?;
+            .ok_or_else(|| ParseError(None, "invalid uri".to_string()))?;
 
         let path = if parsed.path().is_empty() {
             "/".to_string()
@@ -442,7 +420,7 @@ impl Display for UriLocation {
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileLocation {
-    Stage(#[drive(skip)] String),
+    Stage(String),
     Uri(UriLocation),
 }
 
@@ -483,7 +461,6 @@ pub enum CopyIntoLocationOption {
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct FileFormatOptions {
-    #[drive(skip)]
     pub options: BTreeMap<String, FileFormatValue>,
 }
 
@@ -499,7 +476,7 @@ impl Display for FileFormatOptions {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileFormatValue {
     Keyword(String),
     Bool(bool),
@@ -527,7 +504,7 @@ impl Display for FileFormatValue {
             FileFormatValue::Bool(v) => write!(f, "{v}"),
             FileFormatValue::U64(v) => write!(f, "{v}"),
             FileFormatValue::String(v) => {
-                write!(f, "'{}'", escape_string_with_quote(v, Some('\'')))
+                write!(f, "{}", QuotedString(v, '\''))
             }
             FileFormatValue::StringList(v) => {
                 write!(f, "(")?;
@@ -535,7 +512,7 @@ impl Display for FileFormatValue {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "'{}'", escape_string_with_quote(s, Some('\'')))?;
+                    write!(f, "{}", QuotedString(s, '\''))?;
                 }
                 write!(f, ")")
             }

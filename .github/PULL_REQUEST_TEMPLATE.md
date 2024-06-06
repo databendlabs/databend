@@ -2,16 +2,18 @@ I hereby agree to the terms of the CLA available at: https://docs.databend.com/d
 
 ## Summary
 
-_Briefly describe what this PR aims to solve. Include background context that will help reviewers understand the purpose of the PR._
+<!--
+Briefly describe what this PR aims to solve. Include background context that will help reviewers understand the purpose of the PR.
 
 - Fixes #[Link the issue here]
+-->
 
 ## Tests
 
 - [ ] Unit Test
 - [ ] Logic Test
 - [ ] Benchmark Test
-- [ ] No Test  - _Explain why_
+- [ ] No Test - _Explain why_
 
 ## Type of change
 

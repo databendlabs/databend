@@ -31,6 +31,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::plans::LockTableOption;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_stage::StageTable;
 use log::debug;
@@ -106,7 +107,13 @@ impl CopyIntoTableInterpreter {
             .await?;
         let mut update_stream_meta_reqs = vec![];
         let (source, project_columns) = if let Some(ref query) = plan.query {
-            let (query_interpreter, update_stream_meta) = self.build_query(query).await?;
+            let query = if plan.enable_distributed {
+                query.remove_exchange_for_select()
+            } else {
+                *query.clone()
+            };
+
+            let (query_interpreter, update_stream_meta) = self.build_query(&query).await?;
             update_stream_meta_reqs = update_stream_meta;
             let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
 
@@ -386,7 +393,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
                 MutationKind::Insert,
-                true,
+                LockTableOption::LockNoRetry,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }

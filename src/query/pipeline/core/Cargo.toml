@@ -19,6 +19,7 @@ databend-common-expression = { path = "../../expression" }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
+log = "0.4.21"
 minitrace = { workspace = true }
 petgraph = "0.6.2"
 serde = { workspace = true }
